@@ -18,6 +18,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
+import { ErrorCode, ErrorMessages } from '@meeshy/shared/types/errors';
 import { SHARED_TRANSLATION_ERROR_CODES } from '@meeshy/shared/types/shared-translation';
 import { GLOBAL_ADULTS_ONLY_CODE } from '../../../services/messaging/conversationWriteAdmission';
 
@@ -290,6 +291,172 @@ describe('POST /conversations/:id/shared-translations — ce que la conversation
       const res = await post(h, shareBody());
 
       expect(res.statusCode).toBe(201);
+    });
+  });
+
+  // Un partage fait afficher une ligne sous le message de l'autre, et la diffusion
+  // nomme qui partage : à deux, c'est écrire à quelqu'un. L'envoi refuse entre deux
+  // membres qui se sont bloqués (`messages-send.ts`, `USER_BLOCKED`) ; le partage, qui
+  // en est un acte dérivé, ne contourne pas ce que l'envoi refuse.
+  describe('un blocage entre les deux membres d’une conversation directe', () => {
+    const THIRD_USER = '68b000000000000000000004';
+    const directScene = (conversation: Row = {}, sharer: Row = {}) => sceneWith({ conversation: { type: 'direct', ...conversation }, sharer });
+
+    it.each([
+      ['direct', 'le pair a bloqué le partageur', { [OTHER_USER_ID]: [USER_ID] }],
+      ['direct', 'le partageur a bloqué le pair', { [USER_ID]: [OTHER_USER_ID] }],
+      ['dm', 'le pair a bloqué le partageur', { [OTHER_USER_ID]: [USER_ID] }],
+      ['dm', 'le partageur a bloqué le pair', { [USER_ID]: [OTHER_USER_ID] }],
+    ])('refuse 403 `USER_BLOCKED` dans une conversation %s quand %s, sans rien ranger ni diffuser', async (type, _who, blocks) => {
+      const h = await buildApp({ store: directScene({ type }), blocks });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ success: false, code: ErrorCode.USER_BLOCKED, error: ErrorMessages[ErrorCode.USER_BLOCKED].en });
+      refusedWithoutTrace(h);
+    });
+
+    it('nomme le code que l’envoi nomme : les clients n’ont qu’un blocage à reconnaître', async () => {
+      const h = await buildApp({ store: directScene(), blocks: { [OTHER_USER_ID]: [USER_ID] } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.json().code).toBe('USER_BLOCKED');
+    });
+
+    it('laisse partager quand personne n’a bloqué personne — et a posé la question', async () => {
+      const h = await buildApp({ store: directScene(), blocks: { [OTHER_USER_ID]: [THIRD_USER] } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.blockLookups).toHaveLength(1);
+    });
+
+    it.each(['group', 'public'])('ne juge jamais un blocage dans une conversation %s, et ne lit rien pour cela', async (type) => {
+      const h = await buildApp({ store: sceneWith({ conversation: { type } }), blocks: { [OTHER_USER_ID]: [USER_ID] } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.blockLookups).toEqual([]);
+    });
+
+    it('ne juge pas un invité de lien partagé : il n’a pas de compte à bloquer, et son identifiant n’est pas celui d’un compte', async () => {
+      const h = await buildApp({
+        store: scene({
+          conversations: [conversationRow({ id: CONV_A, type: 'direct', encryptionMode: 'server' })],
+          participants: [participantRow({ id: SHARER, userId: USER_ID }), participantRow({ id: GUEST, userId: null, user: null })],
+        }),
+        authContext: guestAs(GUEST),
+        blocks: { [GUEST]: [USER_ID], [USER_ID]: [GUEST] },
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.blockLookups).toEqual([]);
+    });
+
+    it('ne juge pas l’autre membre quand il n’a pas de compte : rien à bloquer, rien à demander à la base', async () => {
+      const store = scene({
+        conversations: [conversationRow({ id: CONV_A, type: 'direct', encryptionMode: 'server' })],
+        participants: [participantRow({ id: SHARER, userId: USER_ID }), participantRow({ id: GUEST, userId: null, user: null })],
+      });
+      const h = await buildApp({ store, blocks: { [GUEST]: [USER_ID], [USER_ID]: [GUEST] } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+      expect(h.blockLookups).toEqual([]);
+    });
+
+    it('ne juge que les membres ACTIFS : celui qui est parti ne retient personne', async () => {
+      const store = scene({
+        conversations: [conversationRow({ id: CONV_A, type: 'direct', encryptionMode: 'server' })],
+        participants: [participantRow({ id: SHARER, userId: USER_ID }), participantRow({ id: PEER, userId: OTHER_USER_ID, isActive: false })],
+      });
+      const h = await buildApp({ store, blocks: { [OTHER_USER_ID]: [USER_ID] } });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(201);
+    });
+
+    it('répond 500 et ne range rien quand le blocage ne se lit pas — jamais « il n’est pas bloqué »', async () => {
+      const h = await buildApp({
+        store: directScene(),
+        prismaOverrides: (prisma) => ({
+          ...prisma,
+          user: {
+            findFirst: async () => {
+              throw new Error('mongo down');
+            },
+          },
+        }),
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(500);
+      refusedWithoutTrace(h);
+    });
+
+    it('répond 500 et ne range rien quand les membres de la conversation ne se lisent pas — jamais « il n’y a personne à qui se heurter »', async () => {
+      const h = await buildApp({
+        store: directScene(),
+        prismaOverrides: (prisma) => ({
+          ...prisma,
+          participant: {
+            ...prisma.participant,
+            findMany: async (args: Parameters<typeof prisma.participant.findMany>[0]) => {
+              if (Object.keys(args.select ?? {}).join() === 'userId') throw new Error('mongo down');
+              return prisma.participant.findMany(args);
+            },
+          },
+        }),
+      });
+
+      const res = await post(h, shareBody());
+
+      expect(res.statusCode).toBe(500);
+      refusedWithoutTrace(h);
+    });
+
+    describe('l’ordre des refus', () => {
+      const blocked = { [OTHER_USER_ID]: [USER_ID] };
+
+      it('vient APRÈS ce que la conversation admet : fermée, elle répond 410 même à un membre bloqué', async () => {
+        const h = await buildApp({ store: directScene({ isActive: false }), blocks: blocked });
+
+        const res = await post(h, shareBody());
+
+        expect(res.statusCode).toBe(410);
+      });
+
+      it('vient APRÈS le droit personnel d’écrire : privé de ce droit, le membre bloqué reçoit `WRITE_NOT_PERMITTED`', async () => {
+        const h = await buildApp({
+          store: directScene({}, { permissions: { ...ALL_RIGHTS, canSendMessages: false } }),
+          blocks: blocked,
+        });
+
+        const res = await post(h, shareBody());
+
+        expect(res.json()).toMatchObject({ code: 'WRITE_NOT_PERMITTED' });
+      });
+
+      it('vient AVANT les accusés de lecture : le membre bloqué qui les a coupés reçoit `USER_BLOCKED`', async () => {
+        const h = await buildApp({
+          store: directScene(),
+          blocks: blocked,
+          privacy: { documents: { [USER_ID]: { showReadReceipts: false } } },
+        });
+
+        const res = await post(h, shareBody());
+
+        expect(res.json()).toMatchObject({ code: ErrorCode.USER_BLOCKED });
+      });
     });
   });
 });

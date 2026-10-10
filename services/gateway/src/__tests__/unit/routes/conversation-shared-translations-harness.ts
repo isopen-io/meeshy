@@ -28,6 +28,11 @@
  * `UserPreferences` et les lignes héritées de `UserPreference`, et le cache du
  * module est vidé à chaque montage — il vit au niveau MODULE, et un réglage posé
  * par un témoin survivrait sinon au suivant.
+ *
+ * Les blocages passent de même par la VRAIE loi (`isBlockedBetween`) : la base porte
+ * `User.blockedUserIds` (`blocks`) et évalue la question qu'on lui pose, et
+ * `blockLookups` garde chaque question posée — un témoin « aucune lecture de
+ * blocage » (un groupe, un invité) n'a que lui pour tomber.
  */
 import Fastify from 'fastify';
 import rateLimit from '@fastify/rate-limit';
@@ -36,7 +41,7 @@ import {
   type SharedTranslationShareBudget,
 } from '../../../routes/conversations/shared-translations';
 import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
-import { projectDocument } from '../../helpers/find-first-honouring-where';
+import { findFirstHonouringWhere, projectDocument } from '../../helpers/find-first-honouring-where';
 import {
   CONV_A,
   CONV_B,
@@ -171,6 +176,14 @@ export type PrivacyFixture = {
   readonly legacyRows?: ReadonlyArray<{ readonly userId: string; readonly key: string; readonly value: string }>;
 };
 
+/**
+ * Ce que la base porte des BLOCAGES : `User.blockedUserIds` par compte, donc
+ * « A a bloqué B » s'écrit `{ [A]: [B] }`. `isBlockedBetween` pose UNE question
+ * (`user.findFirst`, un `OR` de deux `has`) que la base évalue : un sens ou l'autre
+ * suffit, comme en production.
+ */
+export type BlocksFixture = Readonly<Record<string, readonly string[]>>;
+
 type Ordering = Readonly<Record<string, 'asc' | 'desc'>>;
 
 const compareValues = (a: unknown, b: unknown): number => {
@@ -207,10 +220,14 @@ export type SharedTranslationRead = {
   readonly take?: number;
 };
 
-function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
+function database(store: Store, shares: Row[], privacy: PrivacyFixture, blocks: BlocksFixture) {
   const base = makePrisma(store);
   const issued = { next: 2 };
   const reads: SharedTranslationRead[] = [];
+  const blockLookups: Row[] = [];
+  const findBlocker = findFirstHonouringWhere(
+    Object.entries(blocks).map(([id, blockedUserIds]) => ({ id, blockedUserIds: [...blockedUserIds] })),
+  );
   const prisma = {
     ...base,
     message: {
@@ -229,6 +246,12 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
       findUnique: async (args: { where: { id: string }; select?: Select }) => selected(store.conversations.find((c) => c.id === args.where.id), args),
       findFirst: async (args: { where: Row; select?: Select }) => selected(store.conversations.find((c) => matchesWhere(c, args.where)), args),
       findMany: async (args: { where?: Row; take?: number; select?: Select }) => selectedAll(await base.conversation.findMany(args), args),
+    },
+    user: {
+      findFirst: async (args: Row) => {
+        blockLookups.push(args);
+        return findBlocker(args);
+      },
     },
     userPreferences: {
       findMany: async (args: { where: { userId: { in: string[] } } }) =>
@@ -290,7 +313,7 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
       },
     },
   };
-  return { prisma, reads };
+  return { prisma, reads, blockLookups };
 }
 
 export type HarnessPrisma = ReturnType<typeof database>['prisma'];
@@ -346,12 +369,14 @@ export async function buildApp(
     privacy?: PrivacyFixture;
     /** Le budget d'octets des partages — celui de la production par défaut. */
     shareBudget?: SharedTranslationShareBudget;
+    /** Les blocages stockés (`User.blockedUserIds`) — aucun par défaut. */
+    blocks?: BlocksFixture;
   } = {},
 ) {
   const store = params.store ?? scene();
   const shares = params.shares ?? [];
   clearPrivacyPreferencesCache();
-  const { prisma, reads } = database(store, shares, params.privacy ?? {});
+  const { prisma, reads, blockLookups } = database(store, shares, params.privacy ?? {}, params.blocks ?? {});
   const emitted: Emission[] = [];
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -384,7 +409,7 @@ export async function buildApp(
     ...(params.shareBudget ? { shareBudget: params.shareBudget } : {}),
   });
   await app.ready();
-  return { app, shares, emitted, reads };
+  return { app, shares, emitted, reads, blockLookups };
 }
 
 export type Harness = Awaited<ReturnType<typeof buildApp>>;

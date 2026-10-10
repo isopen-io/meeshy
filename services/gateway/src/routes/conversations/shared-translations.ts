@@ -19,11 +19,12 @@
  * ─── L'ORDRE DES REFUS (POST) ───────────────────────────────────────────────
  *
  * Le corps (400), la conversation (404), la participation (403), ce que la
- * conversation admet de lui (410, 403), son droit personnel d'écrire (403), ses
- * accusés de lecture coupés (403), le message et le droit de le LIRE (404),
- * puis ce qu'il EST : protégé (422), langue non normalisée (400), même langue
- * (422), dérivation refusée (422), version quittée (409) ; enfin le budget du
- * compte (429). Une fois la ligne rangée, la relecture du message la retire
+ * conversation admet de lui (410, 403), son droit personnel d'écrire (403), le
+ * blocage de l'autre membre d'une conversation directe (403), ses accusés de
+ * lecture coupés (403), le message et le droit de le LIRE (404), puis ce qu'il
+ * EST : protégé (422), langue non normalisée (400), même langue (422),
+ * dérivation refusée (422), version quittée (409) ; enfin le budget du compte
+ * (429). Une fois la ligne rangée, la relecture du message la retire
  * encore s'il a disparu (404), s'est fait protéger (422) ou a changé (409) : voir
  * la course avec les écrivains.
  *
@@ -48,6 +49,14 @@
  * d'écrire (`canSendMessages`, avec la surcharge que l'hôte pose sur un invité)
  * s'applique comme à l'envoi : seul un refus explicite bloque (403
  * `WRITE_NOT_PERMITTED`).
+ *
+ * Un blocage entre les deux membres d'une conversation DIRECTE, dans un sens ou
+ * dans l'autre, refuse aussi (403 `USER_BLOCKED`) : dire à quelqu'un qu'on a son
+ * message sous les yeux, c'est lui écrire, et l'envoi le lui refuse
+ * (`messages-send.ts`, même loi `isBlockedBetween`). Comme à l'envoi, seule une
+ * conversation directe est jugée, et seul un inscrit — un invité de lien n'a pas de
+ * compte à bloquer. Un blocage qui ne se lit pas répond 500 : jamais « il n'est
+ * pas bloqué ».
  *
  * ─── UN PARTAGE EST UN ACCUSÉ DE LECTURE ────────────────────────────────────
  *
@@ -131,6 +140,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { ErrorCode, ErrorMessages } from '@meeshy/shared/types/errors';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import {
   SHARED_TRANSLATION_ALGORITHM,
@@ -163,6 +173,7 @@ import { resolveParticipantRights, type ParticipantRightsOverride } from '../../
 import { loadPrivacyPreferencesCached } from '../../services/preferences/privacy-cache';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { translationReaders } from '../../socketio/translationReaders';
+import { isBlockedBetween } from '../../utils/blocking';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { createCustomRateLimiter, type RateLimiter } from '../../utils/rate-limiter';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response.js';
@@ -333,6 +344,35 @@ const sharerMayWrite = (sharer: SharerRow | null): boolean => {
   const rights = resolveParticipantRights({ permissions: sharer.permissions, anonymousSession: sharer.anonymousSession });
   return rights.canSendMessages !== false;
 };
+
+/** Une conversation directe a deux membres : la borne ne sert qu'à ne jamais charger une « directe » que des données corrompues rempliraient. */
+const DIRECT_CONVERSATION_MEMBERS_MAX = 2;
+
+const isDirectConversation = (conversation: { readonly type?: string | null }): boolean =>
+  conversation.type === 'direct' || conversation.type === 'dm';
+
+/**
+ * Un blocage, dans un sens ou dans l'autre, sépare-t-il le partageur de l'autre
+ * membre de la conversation ? Voir l'en-tête : seule une conversation DIRECTE est
+ * jugée, et seul un inscrit — l'identifiant d'un invité est un `Participant.id`, que
+ * `isBlockedBetween` chercherait parmi les comptes. Les membres se lisent ici, et
+ * ici seulement : une conversation de groupe n'en charge aucun.
+ */
+async function blockSeparatesFromDirectPeer(
+  prisma: PrismaClient,
+  params: { readonly conversationId: string; readonly conversation: { readonly type?: string | null }; readonly reader: HistoryReader },
+): Promise<boolean> {
+  const { conversationId, conversation, reader } = params;
+  if (reader.kind !== 'user' || !isDirectConversation(conversation)) return false;
+  const members = await prisma.participant.findMany({
+    where: { conversationId, isActive: true },
+    select: { userId: true },
+    take: DIRECT_CONVERSATION_MEMBERS_MAX,
+  });
+  const peers = members.flatMap(({ userId }) => (userId !== null && userId !== reader.userId ? [userId] : []));
+  const verdicts = await Promise.all(peers.map((peerId) => isBlockedBetween(prisma, reader.userId, peerId)));
+  return verdicts.some(Boolean);
+}
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -680,6 +720,10 @@ export function registerSharedTranslationRoutes(
 
       if (!sharerMayWrite(sharer)) {
         return sendForbidden(reply, 'Writing in this conversation is not permitted', { code: 'WRITE_NOT_PERMITTED' });
+      }
+
+      if (await blockSeparatesFromDirectPeer(prisma, { conversationId, conversation, reader })) {
+        return sendForbidden(reply, ErrorMessages[ErrorCode.USER_BLOCKED].en, { code: ErrorCode.USER_BLOCKED });
       }
 
       if (!(await sharerShowsReadReceipts(prisma, reader))) {
