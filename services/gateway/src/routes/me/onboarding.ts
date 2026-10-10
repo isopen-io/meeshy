@@ -23,6 +23,16 @@ import {
 } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { announcesCapability, appendVary, CLIENT_CAPABILITIES, CLIENT_CAPABILITIES_HEADER } from '../../utils/client-capabilities';
+
+/**
+ * #9927 — l'étape `age` et `viewerWriteRestriction` ne sont servis qu'au client
+ * qui annonce `X-Meeshy-Capabilities: onboarding-age` ; sans l'en-tête, la
+ * réponse est celle d'avant le lot (#9223). `Vary` le dit aux caches.
+ */
+const onboardingClientOf = (request: FastifyRequest) => ({
+  ageStepAware: announcesCapability(request.headers, CLIENT_CAPABILITIES.onboardingAge),
+});
 
 export type MeOnboardingRoutesOptions = {
   readonly now?: () => Date;
@@ -96,6 +106,9 @@ const onboardingResponseSchema = {
             friendship: { type: 'integer', minimum: 0 },
           },
         },
+        // #9927 — servi au seul client qui annonce `onboarding-age` (alors
+        // toujours : 'minor-global' ou null) ; absent pour tout autre client.
+        viewerWriteRestriction: { type: ['string', 'null'], enum: ['minor-global', null] },
       },
     },
   },
@@ -134,9 +147,10 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
       const userId = request.auth?.userId;
       if (!userId) return sendUnauthorized(reply, 'Authentication required', { code: AUTH_ERROR_CODES.UNAUTHORIZED });
       try {
-        const state = await service.getState(userId, now());
+        const state = await service.getState(userId, now(), onboardingClientOf(request));
         if (!state) return sendNotFound(reply, 'USER_NOT_FOUND');
         reply.header('Cache-Control', 'private, no-cache');
+        appendVary(reply, CLIENT_CAPABILITIES_HEADER);
         return sendSuccess(reply, state);
       } catch (error) {
         logError(fastify.log, '[GET /me/onboarding]', error);
@@ -166,9 +180,10 @@ export async function meOnboardingRoutes(fastify: FastifyInstance, options: MeOn
       const body = OnboardingPatchBodySchema.safeParse(request.body);
       if (!body.success) return sendBadRequest(reply, 'Invalid onboarding update', { code: 'VALIDATION_ERROR' });
       try {
-        const state = await service.recordStep(userId, body.data, now());
+        const state = await service.recordStep(userId, body.data, now(), onboardingClientOf(request));
         if (!state) return sendNotFound(reply, 'USER_NOT_FOUND');
         reply.header('Cache-Control', 'private, no-cache');
+        appendVary(reply, CLIENT_CAPABILITIES_HEADER);
         return sendSuccess(reply, state);
       } catch (error) {
         logError(fastify.log, '[PATCH /me/onboarding]', error);
