@@ -17,6 +17,10 @@
  *    contenus déguisés en audio (`worldGuestAttachments.ts`) : un seul qui
  *    passe bloque — ouvrir World Wide au monde entier sans compte ne doit pas
  *    ouvrir un hébergement de contenus arbitraires (audit #10000, #10029).
+ *    Les risques RÉSIDUELS que la garde laisse encore passer (une charge
+ *    arbitraire là où le parcours du conteneur audio ne lit pas, #10045) sont
+ *    rendus par leur nom et bloquent chacun tant que le porteur ne l'a pas
+ *    accepté (`acceptedResidualRisks`, #10057).
  *
  *  · `removeWorldSeed` — à blanc par défaut. `close` ferme la porte et la
  *    conversation (réversible, rien n'est supprimé : c'est le retour arrière
@@ -27,7 +31,11 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { WORLD_CONVERSATION_IDENTIFIER, WORLD_SHARE_LINK_IDENTIFIER } from '@meeshy/shared/types/world';
-import { openWorldGuestAttachmentDoors, type GuestAttachmentGuard } from './worldGuestAttachments';
+import {
+  openWorldGuestAttachmentDoors,
+  residualWorldGuestAttachmentDoors,
+  type GuestAttachmentGuard,
+} from './worldGuestAttachments';
 import {
   designateWorldReservedAccounts,
   type DesignatedAccount,
@@ -44,6 +52,8 @@ export type WorldSeedPreflight = {
   readonly conversation: 'absent' | 'present';
   readonly shareLink: 'absent' | 'present';
   readonly members: readonly WorldPreflightMember[];
+  /** Les risques résiduels que la garde des invités laisse passer, acceptés ou non. */
+  readonly residualRisks: readonly string[];
   readonly blockers: readonly string[];
 };
 
@@ -64,9 +74,16 @@ function guestAttachmentBlockers(guard: GuestAttachmentGuard | undefined): reado
   return open.length === 0 ? [] : [`guest-attachments-open:${open.join(',')}`];
 }
 
+function residualRiskBlockers(residualRisks: readonly string[], accepted: readonly string[]): readonly string[] {
+  const unaccepted = residualRisks.filter((risk) => !accepted.includes(risk));
+  return unaccepted.length === 0 ? [] : [`guest-attachments-residual-unaccepted:${unaccepted.join(',')}`];
+}
+
 export type WorldSeedPreflightOptions = {
   /** La garde des pièces jointes d'invité mise à l'épreuve — celle des chemins d'upload par défaut. */
   readonly guestAttachmentGuard?: GuestAttachmentGuard;
+  /** Les risques résiduels que le porteur a acceptés par leur nom (#10057) — aucun par défaut. */
+  readonly acceptedResidualRisks?: readonly string[];
 };
 
 export async function inspectWorldSeed(
@@ -81,12 +98,14 @@ export async function inspectWorldSeed(
   ]);
 
   const members = designated.map(presentMember);
+  const residualRisks = residualWorldGuestAttachmentDoors(options.guestAttachmentGuard);
   const blockers = [
     ...(conversation ? ['conversation-exists'] : []),
     ...(shareLink ? ['share-link-exists'] : []),
     ...members.map(memberBlocker).filter((blocker): blocker is string => blocker !== null),
     ...(identities.worldAdminEmails.length === 0 ? ['world-admin-not-configured'] : []),
     ...guestAttachmentBlockers(options.guestAttachmentGuard),
+    ...residualRiskBlockers(residualRisks, options.acceptedResidualRisks ?? []),
   ];
 
   return {
@@ -94,6 +113,7 @@ export async function inspectWorldSeed(
     conversation: conversation ? 'present' : 'absent',
     shareLink: shareLink ? 'present' : 'absent',
     members,
+    residualRisks,
     blockers,
   };
 }

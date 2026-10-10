@@ -23,6 +23,8 @@ import {
   countOnlineAnonymousParticipants
 } from './utils/prisma-queries';
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../../services/attachments/ContentSignature';
 import {
   conversationSummarySchema,
   messageSchema,
@@ -93,6 +95,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     allowAnonymousMessages: { type: 'boolean' },
                     allowAnonymousFiles: { type: 'boolean' },
                     allowAnonymousImages: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                     requireAccount: { type: 'boolean' },
                     requireEmail: { type: 'boolean' },
                     requireNickname: { type: 'boolean' },
@@ -369,6 +372,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
             allowAnonymousMessages: shareLink.allowAnonymousMessages,
             allowAnonymousFiles: shareLink.allowAnonymousFiles,
             allowAnonymousImages: shareLink.allowAnonymousImages,
+            allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
             requireAccount: shareLink.requireAccount,
             requireEmail: shareLink.requireEmail,
             requireNickname: shareLink.requireNickname,

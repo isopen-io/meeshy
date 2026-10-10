@@ -31,6 +31,7 @@ import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { foldedSectionUnread, isLensSectionFoldable } from '@/lib/lens/folded-unread';
 import { resolveLensSections, type LensSection as ResolvedLensSection, type LensSectionId } from '@/lib/lens/sections';
+import { pinWorldWide } from '@/lib/lens/world-pin';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
 import { webOriginOf } from '@/lib/links/web-origin';
@@ -410,13 +411,17 @@ export default function ConversationsScreen() {
    */
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const minute = useMinute();
-  const { visible, emptiness, sections } = useMemo(() => {
+  const { visible, emptiness, sections, world } = useMemo(() => {
     const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
+    /* WORLD WIDE SORT DES SECTIONS ET SE POSE EN CARTE AU-DESSUS D'ELLES
+       (#10004) — seulement si le filtre et la recherche la gardent. */
+    const pinned = pinWorldWide(kept);
     return {
       visible: ordered,
       emptiness: emptinessOf(conversations, ordered),
-      sections: resolveLensSections({ conversations: kept, overrides, now: new Date(), timeZone }),
+      world: pinned.world,
+      sections: resolveLensSections({ conversations: pinned.rest, overrides, now: new Date(), timeZone }),
     };
     // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
@@ -465,6 +470,47 @@ export default function ConversationsScreen() {
     enabled: paginationState === 'idle' && visible.length > 0,
     onReach: () => void list.fetchNextPage(),
   });
+
+  /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par la carte
+     World Wide épinglée en tête (#10004) : mêmes signaux, même scène. */
+  const lensRowOf = (c: (typeof conversations)[number], card = false) => (
+    <LensRow
+      key={c.id}
+      card={card}
+      conversation={c}
+      languages={readerLanguages}
+      viewerId={viewer.id ?? ''}
+      flags={effectiveFlagsOf(c, overrides)}
+      unreadCount={effectiveUnreadOf(c, overrides)}
+      onRowAction={rowAction}
+      typists={typists[c.id]}
+      peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
+      peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
+      peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
+      peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
+      engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
+      status={{
+        /**
+         * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
+         * `LentilleMagnifiableRow.isMagnified = scene.level > 0 &&
+         * election.electedId == id`
+         * (`Mode/LentilleMagnification.swift:435-437`) : la
+         * rangée élue ne reste MAGNIFIÉE visuellement qu'en scène
+         * ACTIVE. `level` retombe à 0 après `SCENE_REST_DELAY_MS`
+         * d'immobilité (`lens/scene.ts`) — sans ce gate, le
+         * supplément magnifié restait affiché indéfiniment après
+         * la fin du défilement.
+         */
+        magnified: level > 0 && focus === c.id,
+        /* La perspective est écrite par la scène directement dans le
+           style du nœud, à chaque image. Ces valeurs-ci ne sont que
+           l'état de DÉPART, avant la première passe. */
+        alpha: 1,
+        scale: 1,
+        breathing: 0,
+      }}
+    />
+  );
 
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
@@ -605,47 +651,12 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
+        {world === undefined ? null : lensRowOf(world, true)}
         {sections.map((section) => {
           const fold = foldOf(section);
           return (
           <LensSection key={section.id} id={section.id} {...(fold === undefined ? {} : { fold })}>
-            {section.conversations.map((c) => (
-              <LensRow
-                key={c.id}
-                conversation={c}
-                languages={readerLanguages}
-                viewerId={viewer.id ?? ''}
-                flags={effectiveFlagsOf(c, overrides)}
-                unreadCount={effectiveUnreadOf(c, overrides)}
-                onRowAction={rowAction}
-                typists={typists[c.id]}
-                peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
-                peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
-                peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
-                peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
-                engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
-                status={{
-                  /**
-                   * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
-                   * `LentilleMagnifiableRow.isMagnified = scene.level > 0 &&
-                   * election.electedId == id`
-                   * (`Mode/LentilleMagnification.swift:435-437`) : la
-                   * rangée élue ne reste MAGNIFIÉE visuellement qu'en scène
-                   * ACTIVE. `level` retombe à 0 après `SCENE_REST_DELAY_MS`
-                   * d'immobilité (`lens/scene.ts`) — sans ce gate, le
-                   * supplément magnifié restait affiché indéfiniment après
-                   * la fin du défilement.
-                   */
-                  magnified: level > 0 && focus === c.id,
-                  /* La perspective est écrite par la scène directement dans le
-                     style du nœud, à chaque image. Ces valeurs-ci ne sont que
-                     l'état de DÉPART, avant la première passe. */
-                  alpha: 1,
-                  scale: 1,
-                  breathing: 0,
-                }}
-              />
-            ))}
+            {section.conversations.map((c) => lensRowOf(c))}
           </LensSection>
           );
         })}
