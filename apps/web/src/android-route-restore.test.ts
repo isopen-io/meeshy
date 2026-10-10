@@ -38,7 +38,7 @@ describe('la coque retrouve l’écran ouvert quand Android la recrée (#10034)'
   const code = sansCommentaires(readFileSync(MAIN_ACTIVITY, 'utf8'));
 
   test('l’état sauvegardé garde l’adresse in-app de la WebView', () => {
-    const sauve = corpsDe(code, 'protected void onSaveInstanceState(Bundle');
+    const sauve = corpsDe(code, 'public void onSaveInstanceState(Bundle');
     expect(sauve).toContain('super.onSaveInstanceState(');
     expect(sauve).toContain('.getUrl()');
     expect(sauve).toContain('ShellRoute.restoreLink(');
