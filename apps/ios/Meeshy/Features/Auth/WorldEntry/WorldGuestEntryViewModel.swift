@@ -61,7 +61,7 @@ final class WorldGuestEntryViewModel: ObservableObject {
 
     private let world: WorldEntryProviding
     private let joiner: GuestLinkJoining
-    private let storedSession: (String) -> AnonymousSessionContext?
+    private let storedSession: @MainActor (String) -> AnonymousSessionContext?
 
     /// - Parameter initialEntry: l'entrée que l'écran de connexion a DÉJÀ
     ///   servie — le parcours s'ouvre sans attendre le réseau, qui revalide.
@@ -70,7 +70,7 @@ final class WorldGuestEntryViewModel: ObservableObject {
         world: WorldEntryProviding = WorldService.shared,
         joiner: GuestLinkJoining = WorldService.shared,
         deviceLanguage: String? = Locale.preferredLanguages.first,
-        storedSession: @escaping (String) -> AnonymousSessionContext? = { AnonymousSessionStore.load(linkId: $0) }
+        storedSession: @escaping @MainActor (String) -> AnonymousSessionContext? = { AnonymousSessionStore.load(linkId: $0) }
     ) {
         self.world = world
         self.joiner = joiner
