@@ -303,7 +303,7 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
 
     func test_chromeLayersStayMountedAroundTheContentHost() throws {
         let text = try source()
-        for layer in ["StoryProgressBarsView(", "StoryHeaderView(", "ReferenceNoteRow(",
+        for layer in ["StoryLiveProgressBars(", "StoryHeaderView(", "ReferenceNoteRow(",
                       "StoryActionSidebarView(", "makeCommentsOverlay()"] {
             XCTAssertTrue(
                 text.contains(layer),

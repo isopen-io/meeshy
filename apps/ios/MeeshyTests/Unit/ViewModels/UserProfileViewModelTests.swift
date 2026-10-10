@@ -1,6 +1,7 @@
 import XCTest
+import GRDB
 @testable import Meeshy
-import MeeshySDK
+@testable import MeeshySDK
 
 @MainActor
 final class UserProfileViewModelTests: XCTestCase {
@@ -10,6 +11,11 @@ final class UserProfileViewModelTests: XCTestCase {
     private var mockAuthManager: MockAuthManager!
     private var mockBlockService: MockBlockService!
     private var mockUserService: MockUserService!
+    /// La file est un singleton : ses témoins ne doivent dépendre ni de la base
+    /// qu'une autre suite lui a laissée (une base de dossier effacé refuse toute
+    /// écriture, et le blocage optimiste se défait), ni écrire dans celle de l'hôte.
+    private var outbox: DatabaseQueue!
+    private var previousOutbox: (any DatabaseWriter)?
 
     // MARK: - Lifecycle
 
@@ -18,13 +24,26 @@ final class UserProfileViewModelTests: XCTestCase {
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
         mockUserService = MockUserService()
+        previousOutbox = await OfflineQueue.shared.outboxPool
+        outbox = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: outbox)
+        await OfflineQueue.shared.configure(pool: outbox)
     }
 
     override func tearDown() async throws {
+        if let previousOutbox {
+            await OfflineQueue.shared.configure(pool: previousOutbox)
+        }
+        previousOutbox = nil
+        outbox = nil
         mockAuthManager = nil
         mockBlockService = nil
         mockUserService = nil
         try await super.tearDown()
+    }
+
+    private func enqueuedKinds() async throws -> [OutboxKind] {
+        try await outbox.read { db in try OutboxRecord.fetchAll(db).map(\.kind) }
     }
 
     // MARK: - Factory
@@ -217,7 +236,7 @@ final class UserProfileViewModelTests: XCTestCase {
     // obsolete ; this version only asserts the optimistic state flip,
     // which is the user-visible contract.
 
-    func test_blockUser_flipsIsBlockedOptimistically() async {
+    func test_blockUser_flipsIsBlockedOptimistically() async throws {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
         let sut = makeSUT()
         XCTAssertFalse(sut.isBlocked)
@@ -225,6 +244,8 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.blockUser()
 
         XCTAssertTrue(sut.isBlocked)
+        let kinds = try await enqueuedKinds()
+        XCTAssertEqual(kinds, [.blockUser], "le blocage part par la file, qui le rejoue jusqu'au serveur")
     }
 
     /// R6-4 — le block optimiste doit AUSSI flipper la blocklist canonique
@@ -242,7 +263,7 @@ final class UserProfileViewModelTests: XCTestCase {
             "block must flip the canonical BlockService blocklist read by swipe labels")
     }
 
-    func test_blockUser_skipsWhenUserIdIsNil() async {
+    func test_blockUser_skipsWhenUserIdIsNil() async throws {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
         let sut = makeSUT(userId: nil)
 
@@ -250,6 +271,8 @@ final class UserProfileViewModelTests: XCTestCase {
 
         // No user id → no mutation enqueued. The local state stays put.
         XCTAssertFalse(sut.isBlocked)
+        let kinds = try await enqueuedKinds()
+        XCTAssertEqual(kinds, [])
     }
 
     // MARK: - unblockUser Tests

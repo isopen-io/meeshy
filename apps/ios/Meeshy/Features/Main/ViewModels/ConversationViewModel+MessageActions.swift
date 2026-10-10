@@ -177,25 +177,17 @@ extension ConversationViewModel {
     func toggleAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {
         guard let mIdx = messageIndex(for: messageId),
               let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
-        var summary = messages[mIdx].attachments[aIdx].reactionSummary ?? [:]
-        var mine = messages[mIdx].attachments[aIdx].currentUserReactions ?? []
-        let remoteId = serverId(for: messageId)
-
-        if mine.contains(emoji) {
-            summary[emoji] = max(0, (summary[emoji] ?? 1) - 1)
-            if summary[emoji] == 0 { summary.removeValue(forKey: emoji) }
-            mine.removeAll { $0 == emoji }
-            messageSocket.removeAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
-        } else {
-            // Multi-reactions (2026-08-18) : les emojis s'empilent, par piece
-            // jointe comme partout — plus jamais de swap. Le retrait reste par
-            // emoji via la branche alreadyReacted.
-            summary[emoji] = (summary[emoji] ?? 0) + 1
-            mine.append(emoji)
-            messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
-        }
-        messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
-        messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+        // Multi-reactions (2026-08-18) : les emojis s'empilent, par piece
+        // jointe comme partout — plus jamais de swap. La bascule vit dans
+        // `AttachmentReactionToggle`, partagée avec la pièce hors fenêtre (#9910).
+        let outcome = AttachmentReactionToggle.apply(
+            emoji,
+            summary: messages[mIdx].attachments[aIdx].reactionSummary,
+            mine: messages[mIdx].attachments[aIdx].currentUserReactions
+        )
+        emitAttachmentReaction(outcome, attachmentId: attachmentId, remoteMessageId: serverId(for: messageId), emoji: emoji)
+        messages[mIdx].attachments[aIdx].reactionSummary = outcome.summary
+        messages[mIdx].attachments[aIdx].currentUserReactions = outcome.mine
         invalidateVisualAttachmentsProjection()
         // Persist the optimistic attachment-reaction through GRDB so it survives
         // a cold reload of the conversation — parité avec les réactions
@@ -203,6 +195,27 @@ extension ConversationViewModel {
         // pill optimiste vit uniquement en mémoire et disparaît dès que la conv
         // est rechargée (avant que le serveur ne re-broadcast le delta).
         persistAttachmentReactions(messageId: messageId, attachments: messages[mIdx].attachments)
+    }
+
+    /// **Réagir à une pièce que SEUL l'index des médias porte** (#9910) — son
+    /// porteur est hors de la fenêtre chargée, donc absent de `messages`. La
+    /// bascule est la MÊME ; l'émission part sur l'identifiant serveur du
+    /// porteur (l'index ne tient que des messages servis). La bascule est
+    /// rendue à l'hôte, qui repeint l'index (`ConversationMediaCatalog`).
+    @discardableResult
+    func toggleAttachmentReaction(outOfWindow piece: MessageAttachment, carrierId: String, emoji: String) -> AttachmentReactionToggle.Outcome {
+        let outcome = AttachmentReactionToggle.apply(emoji, summary: piece.reactionSummary, mine: piece.currentUserReactions)
+        emitAttachmentReaction(outcome, attachmentId: piece.id, remoteMessageId: carrierId, emoji: emoji)
+        return outcome
+    }
+
+    private func emitAttachmentReaction(_ outcome: AttachmentReactionToggle.Outcome, attachmentId: String,
+                                        remoteMessageId: String, emoji: String) {
+        if outcome.added {
+            messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteMessageId, emoji: emoji)
+        } else {
+            messageSocket.removeAttachmentReaction(attachmentId: attachmentId, messageId: remoteMessageId, emoji: emoji)
+        }
     }
 
     /// Applique un delta serveur : remplace le reactionSummary (comptes

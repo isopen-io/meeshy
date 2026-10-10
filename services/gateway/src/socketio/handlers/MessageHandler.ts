@@ -366,6 +366,7 @@ export class MessageHandler {
         originalLanguage: validated.originalLanguage,
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
@@ -596,6 +597,7 @@ export class MessageHandler {
         // lieu de l'icône média dans `protectedPreview`/`contentTypeIcon`.
         messageType: messageTypeFromMimeTypes(attachments.map((a) => a?.mimeType)) ?? 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,

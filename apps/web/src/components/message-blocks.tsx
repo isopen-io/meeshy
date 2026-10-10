@@ -721,6 +721,18 @@ export function Quote({
             <QuoteVideoStill src={still} />
           ) : null}
           {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-on-media" /> : null}
+          {/* « +N » (#9911) — les AUTRES pièces du message cité, sur la vignette
+              comme sur la grille du fil (`OverflowVeil`). */}
+          {media.more > 0 ? (
+            <span
+              data-quote-more={media.more}
+              aria-hidden
+              className="absolute inset-0 grid place-items-center text-caption font-bold text-on-media"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--color-media-backdrop) 50%, transparent)' }}
+            >
+              +{media.more}
+            </span>
+          ) : null}
         </QuoteOpenZone>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col items-start pe-2.5 ps-2">
@@ -753,6 +765,11 @@ export function Quote({
           >
             {preview.text}
           </span>
+          {media !== null && media.more > 0 && !hasThumb ? (
+            <span data-quote-more={media.more} aria-hidden className="ms-1 font-semibold" style={{ color: ink }}>
+              +{media.more}
+            </span>
+          ) : null}
           {/* LA DURÉE, quand elle existe — `detailsLabel` (`QuotedReplyPresentation
               .swift:107-151`) : « un ZÉRO n'est pas un fait », donc rien plutôt
               qu'un « 0:00 » qu'on croirait. La capsule d'un vocal porte la sienne. */}

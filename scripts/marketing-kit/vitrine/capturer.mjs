@@ -83,6 +83,18 @@ export const sourceDuMedia = (media, { video = preparerVideo, affiche = preparer
   }
 }
 
+// Le fond d'une story se résout par `StoryBackgroundLayer.directURLIfAny` : face à l'hôte injoignable, une adresse
+// relative n'y donne rien (`resolveMediaURL` refuse 127.0.0.1) et la story tourne sur sa roue d'attente. La photo de la
+// story est donc servie à son fichier déposé dans le conteneur — la forme `file://` que le lecteur lit telle quelle, celle
+// d'une story que son auteur vient de composer (#9904).
+export const storiesServiesEnLocal = (fixtures, dossier) => ({
+  ...fixtures,
+  stories: (fixtures.stories ?? []).map((story) => ({
+    ...story,
+    media: story.media.map((m) => ({ ...m, fileUrl: pathToFileURL(resolve(dossier, 'medias', m.fileName)).href })),
+  })),
+})
+
 const deposer = (fixtures, dossier) => {
   const medias = resolve(dossier, 'medias')
   rmSync(medias, { recursive: true, force: true })
@@ -139,7 +151,7 @@ export const preparerScene = ({ udid, lang, scene, theme, voix, etiquette, fil =
   }
   const court = scene === 'amour' ? vocalTropCourt(fixtures, lang) : null
   if (court) throw new Error(`${etiquette} : la piste ${court.lang} dure ${court.dureeMs} ms — elle serait finie avant la photo (minimum ${DUREE_MIN_VOCAL_MS} ms)`)
-  deposer(fixtures, dossier)
+  deposer(storiesServiesEnLocal(fixtures, dossier), dossier)
   return dossier
 }
 

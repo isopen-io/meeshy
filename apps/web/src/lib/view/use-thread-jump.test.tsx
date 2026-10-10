@@ -105,6 +105,20 @@ describe('useThreadJump — le saut de citation et sa mise en évidence (#7429, 
     expect(state().highlightedId).toBe('m3');
   });
 
+  test('#9911 — le saut d’une citation qui nomme une pièce met en évidence CETTE tuile', () => {
+    const journal: string[] = [];
+    const { state } = mount({ placed: placedOf(['m1', 'm2', 'm3']), mode: 'focal', journal });
+    act(() => {
+      state().jumpToMessage('m3', 'a-3');
+    });
+    expect(state().highlightedId).toBe('m3');
+    expect(state().highlightedPieceId).toBe('a-3');
+    act(() => {
+      state().jumpToMessage('m2');
+    });
+    expect(state().highlightedPieceId).toBeNull();
+  });
+
   test('le surlignage s’efface de lui-même après HIGHLIGHT_MS (1600 ms), et un second saut réarme le minuteur', () => {
     const journal: string[] = [];
     const { state } = mount({ placed: placedOf(['m1', 'm2']), mode: 'focal', journal });

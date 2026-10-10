@@ -13,6 +13,14 @@ public protocol AttachmentTranslationProviding: Sendable {
     ) async throws -> AttachmentTranslateResponse
 }
 
+/// Enveloppe de `DELETE /attachments/:id` (#9948). La passerelle sert
+/// `{ success, data: { message } }` ; une version antérieure servait
+/// `{ success, data: { deleted: true } }`. Seul `success` engage le client :
+/// `data` n'est pas décodé, donc les deux formes passent.
+public struct AttachmentDeleteResponse: Decodable, Sendable {
+    public let success: Bool
+}
+
 public final class AttachmentService: AttachmentTranslationProviding, @unchecked Sendable {
     public static let shared = AttachmentService()
     private let api: APIClientProviding
@@ -38,8 +46,11 @@ public final class AttachmentService: AttachmentTranslationProviding, @unchecked
     }
 
     public func delete(attachmentId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(
-            AttachmentsEndpoint.byAttachmentId(attachmentId: attachmentId)
+        let _: AttachmentDeleteResponse = try await api.request(
+            AttachmentsEndpoint.byAttachmentId(attachmentId: attachmentId),
+            method: "DELETE",
+            body: nil,
+            queryItems: nil
         )
     }
 

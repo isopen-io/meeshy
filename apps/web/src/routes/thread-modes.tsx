@@ -32,6 +32,7 @@ import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
+import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
 import { isAfterReadMessage } from '@/lib/view/after-read';
@@ -152,6 +153,7 @@ export function ThreadModes({
   readerLanguages,
   group,
   highlightedId,
+  highlightedPieceId = null,
   expiredIds,
   destroyingIds = EMPTY_IDS,
   jumpToMessage,
@@ -202,6 +204,8 @@ export function ThreadModes({
   readonly readerLanguages: readonly string[];
   readonly group: boolean;
   readonly highlightedId: string | null;
+  /** La tuile que la citation nommait (#9911) — la grille de médias la met en évidence au saut. */
+  readonly highlightedPieceId?: string | null;
   readonly expiredIds: ReadonlySet<string>;
   /**
    * LES RANGÉES EN TRAIN DE BRÛLER (#7468) — une destruction ANNONCÉE, par le
@@ -214,7 +218,7 @@ export function ThreadModes({
    * une surface en lecture pure (l'administration) n'a rien à animer.
    */
   readonly destroyingIds?: ReadonlySet<string>;
-  readonly jumpToMessage: (messageId: string) => void;
+  readonly jumpToMessage: (messageId: string, pieceId?: string) => void;
   /**
    * ## LES CAPACITÉS SONT OPTIONNELLES, ET UNE CAPACITÉ ABSENTE EST ABSENTE
    *
@@ -452,409 +456,411 @@ export function ThreadModes({
   const interfaceLanguage = currentInterfaceLanguage();
 
   return (
-    <RevealPhaseChannel publish={publishRevealPhase}>
-      {placed.length === 0 ? (
-        /*
-          L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
-          historique qui rend du blanc laisse croire à un chargement qui ne
-          finit pas — sur un réseau lent, c'est l'interprétation la plus
-          naturelle et la plus fausse.
-        */
-        <div className="grid flex-1 place-items-center px-8 text-center">
-          <div className="grid gap-2">
-            <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucun message pour l’instant
-            </p>
-            <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Écrivez le premier — il sera traduit dans la langue de chacun.
-            </p>
-          </div>
-        </div>
-      ) : null}
-
-      {/* LA TÊTE DU FIL (#6972) — AVANT le `<ol>`, donc au sommet du contenu
-          défilable : voir le doc-comment d'`OlderHead`. Jamais montée sur un
-          fil VIDE : une sentinelle qui intersecte immédiatement sur un écran
-          sans rangée déclencherait une rafale de requêtes pour un écran qui
-          restera vide (revue-correction #6195, le même défaut sur la
-          Lentille). */}
-      {older === undefined || placed.length === 0 ? null : (
-        <OlderHead state={older.state} sentinelRef={older.sentinelRef} />
-      )}
-
-      <ol
-        data-thread-rows={placed.length}
-        style={{
-          position: 'relative',
-          width: '100%',
-          flexShrink: 0,
-          marginBlockStart: 'auto',
-          height: virtualizer.getTotalSize(),
-        }}
-      >
-        {virtualizer.getVirtualItems().map((row) => {
-          const p = placed[row.index];
-          if (p === undefined) return null;
-          const isElected = scene.elected === p.message.id;
-          /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
-             rangée, réutilisée pour les deux peaux et pour l'horloge des
-             200 ms (`sendStartedAt`, § 5 étape 9). */
-          const rowDelivery = deliveryOf?.(p.message.id);
-          const rowStartedAt = startedAtOf?.(p.message.id);
-          const rowReason = reasonOf?.(p.message.id);
-          /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
-             #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
-             rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
-             Hors ligne (`rowReason === undefined`, D-16) n'est jamais
-             permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
-             appel n'est parti. */
-          const rowPermanent = rowDelivery === 'failed' && (permanentOf?.(p.message.id) ?? true);
-          const sendProps =
-            rowDelivery === undefined
-              ? {}
-              : {
-                  localDelivery: rowDelivery,
-                  /* PAS DE REPRISE SANS CAPACITÉ DE REPRISE (#6862) : `retry`
-                     absent ⇒ aucun `onRetry`, exactement comme un refus
-                     permanent. Le bouton disparaît ; la cause reste affichée.
-                     `permanentOf` absent retombe sur « permanent » pour la même
-                     raison — fail-closed sur l'affordance, jamais un bouton qui
-                     promet un rejeu que l'hôte ne sait pas jouer. */
-                  ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
-                  ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
-                  ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
-                };
-          /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
-             `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
-             message), « la mienne » (réactions), et l'état de sélection. */
-          const rowDisplayLanguage = displayLanguageOf?.(p.message.id);
-          const rowMyReactions = myReactionsOf?.(p.message.id);
-          const rowStoryRing = storyRingOf?.(p.message.sender?.userId ?? p.message.sender?.user?.id);
-          const rowSelected =
-            selection === null || selection === undefined ? undefined : selection.ids.includes(p.message.id);
-          /* Le verdict SERVI, jamais recalculé (voir la prop). */
-          const rowWithheld = contentWithheld?.(p.message.id) ?? false;
+    <HighlightedPieceContext.Provider value={highlightedPieceId}>
+      <RevealPhaseChannel publish={publishRevealPhase}>
+        {placed.length === 0 ? (
           /*
-           * LE LIBELLÉ D'ACCESSIBILITÉ (#5774, travail 2/3) — UN SEUL site,
-           * partagé par la rangée plate ET la bulle : `composeMessageLabel`
-           * (`lib/view/message-a11y-label.ts`), nourri du MÊME texte SERVI
-           * que celui que la rangée peint (`rowDisplayLanguage` inclus — un
-           * témoin de RANG se lit sur un rang ≠ 1 du Prisme, CLAUDE.md
-           * racine, leçon 261). Avant ce lot : `Message de ${sender}`, sans
-           * texte, sans citation, sans média, sans accusé, sans badge.
-           */
-          const rowPreferredLanguages =
-            rowDisplayLanguage === undefined ? readerLanguages : [rowDisplayLanguage, ...readerLanguages];
-          const rowServed = served({
-            preferredLanguages: rowPreferredLanguages,
-            originalLanguage: p.message.originalLanguage,
-            translations: p.message.translations,
-            original: p.message.content,
-          });
-          /* LA PROTECTION GOUVERNE LE LIBELLÉ (revue #5774) — la MÊME loi et
-             le MÊME `expiredIds` que les deux peaux consomment plus bas
-             (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
-             elle, `aria-label` annonçait EN CLAIR le texte que la rangée
-             floute ou remplace par un tombstone. */
-          /**
-           * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée ICI, une fois par
-           * rangée, et descendue aux deux peaux. C'est le SEUL site du
-           * chantier qui appelle la règle : une peau qui la recalculerait
-           * serait la jumelle que `ephemeral-reception.ts` existe pour
-           * empêcher.
-           *
-           * Le VERDICT de retrait, lui, a changé au lot #7468 : ce n'est plus
-           * « l'échéance est passée » mais la PHASE, qui insère une fenêtre de
-           * destruction entre les deux (voir juste dessous).
-           */
-          const rowIsMine = isMineOf(p.message, viewerId);
-          const rowDeadline = resolveEphemeralDeadline({ message: p.message, isMine: rowIsMine, now: renderNow });
-          /* CE QUE LA RANGÉE MONTRE À UNE CAPTURE (#9617, #9574) — `captureOf`. */
-          const rowCapture = isSystemMessage(p.message) ? {} : captureProps(p.message, renderNow, { isMine: rowIsMine });
-          /**
-           * TROIS PHASES, UNE LOI (#7468) — `destructionPhaseOf` tranche entre
-           * « visible », « en destruction » et « partie », et elle le fait sans
-           * état : la fenêtre se lit de l'échéance et de `renderNow`, si bien
-           * qu'un rendu déclenché par n'importe quoi d'autre (une frappe, un
-           * défilement) rend le même verdict que le tic du chrome. C'est ce qui
-           * empêche la rangée d'être coupée net entre l'échéance et l'annonce.
-           */
-          const rowPhase = destructionPhaseOf({
-            deadline: rowDeadline,
-            now: renderNow,
-            destroying: destroyingIds.has(p.message.id),
-            expired: expiredIds.has(p.message.id),
-          });
-          const rowExpired = rowPhase === 'gone';
-          const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
-          const rowAfterRead = isAfterReadMessage(p.message) && rowProtection !== 'deleted' && rowProtection !== 'expired';
-          /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
-             nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
-             pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
-             (`RevealPhaseChannel`, autour de ce rendu) et s'arrête dans
-             `revealPhases`. Tant qu'elle était omise, le défaut FERMÉ de
-             `composeMessageLabel` s'appliquait : une rangée voilée RÉVÉLÉE
-             peignait son contenu pendant que son nom accessible disait encore
-             « Contenu masqué » — et le texte peint étant `aria-hidden`
-             (`plainTextHidden`, #7032), un lecteur d'écran n'avait AUCUN
-             chemin vers ce qu'il venait de dévoiler.
+            L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
+            historique qui rend du blanc laisse croire à un chargement qui ne
+            finit pas — sur un réseau lent, c'est l'interprétation la plus
+            naturelle et la plus fausse.
+          */
+          <div className="grid flex-1 place-items-center px-8 text-center">
+            <div className="grid gap-2">
+              <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                Aucun message pour l’instant
+              </p>
+              <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+                Écrivez le premier — il sera traduit dans la langue de chacun.
+              </p>
+            </div>
+          </div>
+        ) : null}
 
-             ABSENT ⇒ `hidden` : le registre ne garde que ce qui s'écarte du
-             défaut (voir son doc-comment), si bien qu'une rangée au repos n'y
-             occupe aucune entrée. */
-          const rowLabel = composeMessageLabel({
-            message: p.message,
-            isMine: rowIsMine,
-            servedText: rowServed.text,
-            delivery: checkStatusOf(p.message, rowDelivery),
-            protection: rowProtection,
-            language: interfaceLanguage,
-            contentWithheld: rowWithheld,
-            phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
-          });
-          const rowSwipeOffer =
-            rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
-              ? undefined
-              : swipeActionsOf?.(p.message);
-          const rowSwipeActions =
-            rowSwipeOffer === undefined || onSwipeAction === undefined
-              ? undefined
-              : { ...rowSwipeOffer, onAction: (outcome: SwipeOutcome) => onSwipeAction(p.message.id, outcome) };
-          return (
-            <li
-              key={p.message.id}
-              data-index={row.index}
-              ref={virtualizer.measureElement}
-              style={{
-                position: 'absolute',
-                insetInlineStart: 0,
-                top: 0,
-                width: '100%',
-                transform: `translateY(${row.start}px)`,
-                /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
-                   les rangées se peignent dans l'ordre du DOM : les
-                   superpositions de l'élue qui DÉBORDENT vers le bas (bande de
-                   focus, tampon) passaient donc SOUS la rangée suivante.
-                   Mesuré : `elementFromPoint` au centre du drapeau de la bande
-                   rendait la rangée d'APRÈS — le contrôle était INATTEIGNABLE
-                   au doigt et à la souris, quoique présent et fonctionnel
-                   (correction de revue #5648). Élever la SEULE rangée élue
-                   suffit ; aucune autre ne porte de débord. */
-                ...(isElected ? { zIndex: 1 } : {}),
-              }}
-            >
-              {p.opensDay ? (
-                <div className="flex justify-center py-1.5">
-                  <span
-                    className="glass glass-card rounded-chip px-3 py-1 text-time font-semibold"
-                    style={{
-                      color: 'var(--color-day-ink)',
-                      border: '0.5px solid var(--color-day-hairline)',
-                    }}
-                  >
-                    {dayLabel(p.message.createdAt, { locale: readerLocale })}
-                  </span>
-                </div>
-              ) : null}
-              {p.message.id === unreadSeparatorMessageId ? (
-                <UnreadSeparator label={unreadSeparatorLabel(currentInterfaceLanguage(), unreadCount)} />
-              ) : null}
-              {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
-                  rangée plate, `bubbles` reste la bulle historique — D-7,
-                  D-8. `data-row` est le CANDIDAT d'élection de
-                  `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
-                  candidat SEULEMENT quand la scène est armée (mode focal) —
-                  et l'ANCRE du menu du message (#5814) : `useLongPress` vit
-                  UNE fois dans cet écran (`messageMenu.longPress`, motif
-                  délégation) et lit `dataset.row` au geste, jamais une
-                  instance par rangée virtualisée. En SÉLECTION (#5814,
-                  question 5), un tap bascule la coche au lieu d'ouvrir le
-                  menu (`onRowTap`, gardé côté hook). */}
-              {/* `exactOptionalPropertyTypes` (CLAUDE.md racine) : les trois
-                  props du menu ne se POSENT que quand elles ont une valeur —
-                  un `displayLanguage={undefined}` explicite est refusé au
-                  type-check, même discipline que `sendProps` deux blocs plus
-                  haut. */}
-              {/* PAS d'`aria-selected` (revue #5814) — l'attribut n'existe pas
-                  sur `role="article"`, et il était posé DEUX fois (ici et sur
-                  la racine de la rangée). L'état de sélection est porté par
-                  la COCHE de la rangée : un `role="checkbox"` réel, seul
-                  chemin CLAVIER vers la bascule. Le clic sur la rangée
-                  ENTIÈRE reste une commodité de souris/doigt. */}
-              {/* UN MESSAGE SYSTÈME NE PORTE NI `data-row`, NI `tabIndex`, NI
-                  LES GESTIONNAIRES D'APPUI LONG (revue-correction #5936,
-                  défaut BLOQUANT 4) — `data-row` est l'ANCRE que
-                  `useMessageMenu.openMenuFor` lit (`anchor.element.dataset
-                  .row`) et le CANDIDAT d'élection de la scène (§ doc-comment
-                  ci-dessus) : sans lui, aucun des deux n'atteint une rangée
-                  système, exactement comme iOS délègue les rangées système à
-                  `FocalSystemRows.view(…)`, jamais au menu de message
-                  (`FocalRow.swift:131-141`). Un appui long y ouvrait le MÊME
-                  menu « 😂 ❤️ 👍 😮 😢 🔥 ＋ · Sélectionner · Copier ·
-                  Composer · Plus… » qu'une prise de parole — dont AUCUN
-                  bouton n'avait d'effet (loi 4 prise en défaut : « un
-                  contrôle existe s'il a un EFFET »). Le geste propre à un
-                  résumé d'appel (détail d'appel, iOS) reste HORS tranche —
-                  ce lot fait seulement SORTIR les rangées système de la
-                  surface de gestes du message. `isSystemMessage` est le
-                  SITE UNIQUE de cette loi (`lib/view/message-badges.ts`),
-                  déjà consommé par `systemRowOf`/`composeMessageLabel`. */}
-              {/* `tabIndex` ET les gestionnaires d'appui long vont ENSEMBLE
-                  (#6862) : un `tabIndex={0}` sans geste est une halte de
-                  tabulation qui n'ouvre rien — le clavier s'arrêterait sur
-                  chaque rangée pour ne rien pouvoir faire. `data-row` reste
-                  posé sans eux : c'est aussi le CANDIDAT d'élection de la
-                  scène, qui n'a besoin d'aucun geste. */}
-              {/* L'EFFET DE DESTRUCTION SE POSE ICI (#7468), sur le nœud qui
-                  enveloppe LES DEUX peaux — jamais dans `FocalRow` ni dans
-                  `Bubble`, qui l'auraient alors câblé chacune et laissé le mode
-                  suivant sans rien. `.ephemeral-destroying` porte la combustion
-                  ET le repli de la hauteur (`grid-template-rows: 1fr → 0fr`),
-                  que le virtualiseur suit par son `ResizeObserver` : les
-                  voisins se resserrent à mesure, sans saut de liste. Avec
-                  `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
-              <div
-                {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
-                {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
-                {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
-                {...sealedProps(p.message, Date.now())}
-                {...rowCapture}
-                {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
-                role="article"
-                aria-label={rowLabel}
-                {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
-                {...(rowSelected === undefined || onRowTap === undefined
-                  ? {}
-                  : { onClick: () => onRowTap(p.message.id) })}
+        {/* LA TÊTE DU FIL (#6972) — AVANT le `<ol>`, donc au sommet du contenu
+            défilable : voir le doc-comment d'`OlderHead`. Jamais montée sur un
+            fil VIDE : une sentinelle qui intersecte immédiatement sur un écran
+            sans rangée déclencherait une rafale de requêtes pour un écran qui
+            restera vide (revue-correction #6195, le même défaut sur la
+            Lentille). */}
+        {older === undefined || placed.length === 0 ? null : (
+          <OlderHead state={older.state} sentinelRef={older.sentinelRef} />
+        )}
+
+        <ol
+          data-thread-rows={placed.length}
+          style={{
+            position: 'relative',
+            width: '100%',
+            flexShrink: 0,
+            marginBlockStart: 'auto',
+            height: virtualizer.getTotalSize(),
+          }}
+        >
+          {virtualizer.getVirtualItems().map((row) => {
+            const p = placed[row.index];
+            if (p === undefined) return null;
+            const isElected = scene.elected === p.message.id;
+            /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
+               rangée, réutilisée pour les deux peaux et pour l'horloge des
+               200 ms (`sendStartedAt`, § 5 étape 9). */
+            const rowDelivery = deliveryOf?.(p.message.id);
+            const rowStartedAt = startedAtOf?.(p.message.id);
+            const rowReason = reasonOf?.(p.message.id);
+            /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
+               #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
+               rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
+               Hors ligne (`rowReason === undefined`, D-16) n'est jamais
+               permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
+               appel n'est parti. */
+            const rowPermanent = rowDelivery === 'failed' && (permanentOf?.(p.message.id) ?? true);
+            const sendProps =
+              rowDelivery === undefined
+                ? {}
+                : {
+                    localDelivery: rowDelivery,
+                    /* PAS DE REPRISE SANS CAPACITÉ DE REPRISE (#6862) : `retry`
+                       absent ⇒ aucun `onRetry`, exactement comme un refus
+                       permanent. Le bouton disparaît ; la cause reste affichée.
+                       `permanentOf` absent retombe sur « permanent » pour la même
+                       raison — fail-closed sur l'affordance, jamais un bouton qui
+                       promet un rejeu que l'hôte ne sait pas jouer. */
+                    ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
+                    ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
+                    ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
+                  };
+            /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
+               `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
+               message), « la mienne » (réactions), et l'état de sélection. */
+            const rowDisplayLanguage = displayLanguageOf?.(p.message.id);
+            const rowMyReactions = myReactionsOf?.(p.message.id);
+            const rowStoryRing = storyRingOf?.(p.message.sender?.userId ?? p.message.sender?.user?.id);
+            const rowSelected =
+              selection === null || selection === undefined ? undefined : selection.ids.includes(p.message.id);
+            /* Le verdict SERVI, jamais recalculé (voir la prop). */
+            const rowWithheld = contentWithheld?.(p.message.id) ?? false;
+            /*
+             * LE LIBELLÉ D'ACCESSIBILITÉ (#5774, travail 2/3) — UN SEUL site,
+             * partagé par la rangée plate ET la bulle : `composeMessageLabel`
+             * (`lib/view/message-a11y-label.ts`), nourri du MÊME texte SERVI
+             * que celui que la rangée peint (`rowDisplayLanguage` inclus — un
+             * témoin de RANG se lit sur un rang ≠ 1 du Prisme, CLAUDE.md
+             * racine, leçon 261). Avant ce lot : `Message de ${sender}`, sans
+             * texte, sans citation, sans média, sans accusé, sans badge.
+             */
+            const rowPreferredLanguages =
+              rowDisplayLanguage === undefined ? readerLanguages : [rowDisplayLanguage, ...readerLanguages];
+            const rowServed = served({
+              preferredLanguages: rowPreferredLanguages,
+              originalLanguage: p.message.originalLanguage,
+              translations: p.message.translations,
+              original: p.message.content,
+            });
+            /* LA PROTECTION GOUVERNE LE LIBELLÉ (revue #5774) — la MÊME loi et
+               le MÊME `expiredIds` que les deux peaux consomment plus bas
+               (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
+               elle, `aria-label` annonçait EN CLAIR le texte que la rangée
+               floute ou remplace par un tombstone. */
+            /**
+             * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée ICI, une fois par
+             * rangée, et descendue aux deux peaux. C'est le SEUL site du
+             * chantier qui appelle la règle : une peau qui la recalculerait
+             * serait la jumelle que `ephemeral-reception.ts` existe pour
+             * empêcher.
+             *
+             * Le VERDICT de retrait, lui, a changé au lot #7468 : ce n'est plus
+             * « l'échéance est passée » mais la PHASE, qui insère une fenêtre de
+             * destruction entre les deux (voir juste dessous).
+             */
+            const rowIsMine = isMineOf(p.message, viewerId);
+            const rowDeadline = resolveEphemeralDeadline({ message: p.message, isMine: rowIsMine, now: renderNow });
+            /* CE QUE LA RANGÉE MONTRE À UNE CAPTURE (#9617, #9574) — `captureOf`. */
+            const rowCapture = isSystemMessage(p.message) ? {} : captureProps(p.message, renderNow, { isMine: rowIsMine });
+            /**
+             * TROIS PHASES, UNE LOI (#7468) — `destructionPhaseOf` tranche entre
+             * « visible », « en destruction » et « partie », et elle le fait sans
+             * état : la fenêtre se lit de l'échéance et de `renderNow`, si bien
+             * qu'un rendu déclenché par n'importe quoi d'autre (une frappe, un
+             * défilement) rend le même verdict que le tic du chrome. C'est ce qui
+             * empêche la rangée d'être coupée net entre l'échéance et l'annonce.
+             */
+            const rowPhase = destructionPhaseOf({
+              deadline: rowDeadline,
+              now: renderNow,
+              destroying: destroyingIds.has(p.message.id),
+              expired: expiredIds.has(p.message.id),
+            });
+            const rowExpired = rowPhase === 'gone';
+            const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
+            const rowAfterRead = isAfterReadMessage(p.message) && rowProtection !== 'deleted' && rowProtection !== 'expired';
+            /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
+               nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
+               pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
+               (`RevealPhaseChannel`, autour de ce rendu) et s'arrête dans
+               `revealPhases`. Tant qu'elle était omise, le défaut FERMÉ de
+               `composeMessageLabel` s'appliquait : une rangée voilée RÉVÉLÉE
+               peignait son contenu pendant que son nom accessible disait encore
+               « Contenu masqué » — et le texte peint étant `aria-hidden`
+               (`plainTextHidden`, #7032), un lecteur d'écran n'avait AUCUN
+               chemin vers ce qu'il venait de dévoiler.
+
+               ABSENT ⇒ `hidden` : le registre ne garde que ce qui s'écarte du
+               défaut (voir son doc-comment), si bien qu'une rangée au repos n'y
+               occupe aucune entrée. */
+            const rowLabel = composeMessageLabel({
+              message: p.message,
+              isMine: rowIsMine,
+              servedText: rowServed.text,
+              delivery: checkStatusOf(p.message, rowDelivery),
+              protection: rowProtection,
+              language: interfaceLanguage,
+              contentWithheld: rowWithheld,
+              phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
+            });
+            const rowSwipeOffer =
+              rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
+                ? undefined
+                : swipeActionsOf?.(p.message);
+            const rowSwipeActions =
+              rowSwipeOffer === undefined || onSwipeAction === undefined
+                ? undefined
+                : { ...rowSwipeOffer, onAction: (outcome: SwipeOutcome) => onSwipeAction(p.message.id, outcome) };
+            return (
+              <li
+                key={p.message.id}
+                data-index={row.index}
+                ref={virtualizer.measureElement}
+                style={{
+                  position: 'absolute',
+                  insetInlineStart: 0,
+                  top: 0,
+                  width: '100%',
+                  transform: `translateY(${row.start}px)`,
+                  /* CHAQUE rangée est un CONTEXTE D'EMPILEMENT (`transform`), et
+                     les rangées se peignent dans l'ordre du DOM : les
+                     superpositions de l'élue qui DÉBORDENT vers le bas (bande de
+                     focus, tampon) passaient donc SOUS la rangée suivante.
+                     Mesuré : `elementFromPoint` au centre du drapeau de la bande
+                     rendait la rangée d'APRÈS — le contrôle était INATTEIGNABLE
+                     au doigt et à la souris, quoique présent et fonctionnel
+                     (correction de revue #5648). Élever la SEULE rangée élue
+                     suffit ; aucune autre ne porte de débord. */
+                  ...(isElected ? { zIndex: 1 } : {}),
+                }}
               >
-                {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
-                    LES DEUX peaux — même raison que la destruction ci-dessus :
-                    un mode ajouté demain les joue sans rien câbler. */}
-                {/* LE DÉPLIAGE D'UN MESSAGE LONG (#8147) : même nœud, même
-                    raison — le verre, la loupe et l'atténuation des voisins
-                    valent pour toutes les peaux. */}
-                {/* LE FILIGRANE DE LA FLAMME-ŒIL (#8304) — sur le nœud des
-                    DEUX peaux, comme la destruction : tous les modes le
-                    reçoivent, et il remplace la pastille de décompte. */}
-                {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
-                {rowCapture['data-capture'] === undefined ? null : (
-                  <CaptureShieldHold
-                    messageId={p.message.id}
-                    conversationId={p.message.conversationId}
-                    verdict={rowCapture['data-capture']}
-                    declared
-                  />
-                )}
-                {rowAfterRead ? (
-                  <AfterReadWatermark
-                    reach={afterReadReachOf({
-                      flat: usesFlatRow(mode),
-                      mediaOnly: p.message.content.trim() === '' && (p.message.attachments?.length ?? 0) > 0,
-                    })}
-                  />
+                {p.opensDay ? (
+                  <div className="flex justify-center py-1.5">
+                    <span
+                      className="glass glass-card rounded-chip px-3 py-1 text-time font-semibold"
+                      style={{
+                        color: 'var(--color-day-ink)',
+                        border: '0.5px solid var(--color-day-hairline)',
+                      }}
+                    >
+                      {dayLabel(p.message.createdAt, { locale: readerLocale })}
+                    </span>
+                  </div>
                 ) : null}
-                <MessageSwipe
-                  actions={rowSwipeActions}
-                  flat={usesFlatRow(mode)}
-                  isMine={rowIsMine}
-                  attachments={p.message.attachments}
-                  createdAt={p.message.createdAt}
-                  locale={readerLocale}
+                {p.message.id === unreadSeparatorMessageId ? (
+                  <UnreadSeparator label={unreadSeparatorLabel(currentInterfaceLanguage(), unreadCount)} />
+                ) : null}
+                {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
+                    rangée plate, `bubbles` reste la bulle historique — D-7,
+                    D-8. `data-row` est le CANDIDAT d'élection de
+                    `reading-mode/scene.ts` (#5648) — posé sur CHAQUE rangée,
+                    candidat SEULEMENT quand la scène est armée (mode focal) —
+                    et l'ANCRE du menu du message (#5814) : `useLongPress` vit
+                    UNE fois dans cet écran (`messageMenu.longPress`, motif
+                    délégation) et lit `dataset.row` au geste, jamais une
+                    instance par rangée virtualisée. En SÉLECTION (#5814,
+                    question 5), un tap bascule la coche au lieu d'ouvrir le
+                    menu (`onRowTap`, gardé côté hook). */}
+                {/* `exactOptionalPropertyTypes` (CLAUDE.md racine) : les trois
+                    props du menu ne se POSENT que quand elles ont une valeur —
+                    un `displayLanguage={undefined}` explicite est refusé au
+                    type-check, même discipline que `sendProps` deux blocs plus
+                    haut. */}
+                {/* PAS d'`aria-selected` (revue #5814) — l'attribut n'existe pas
+                    sur `role="article"`, et il était posé DEUX fois (ici et sur
+                    la racine de la rangée). L'état de sélection est porté par
+                    la COCHE de la rangée : un `role="checkbox"` réel, seul
+                    chemin CLAVIER vers la bascule. Le clic sur la rangée
+                    ENTIÈRE reste une commodité de souris/doigt. */}
+                {/* UN MESSAGE SYSTÈME NE PORTE NI `data-row`, NI `tabIndex`, NI
+                    LES GESTIONNAIRES D'APPUI LONG (revue-correction #5936,
+                    défaut BLOQUANT 4) — `data-row` est l'ANCRE que
+                    `useMessageMenu.openMenuFor` lit (`anchor.element.dataset
+                    .row`) et le CANDIDAT d'élection de la scène (§ doc-comment
+                    ci-dessus) : sans lui, aucun des deux n'atteint une rangée
+                    système, exactement comme iOS délègue les rangées système à
+                    `FocalSystemRows.view(…)`, jamais au menu de message
+                    (`FocalRow.swift:131-141`). Un appui long y ouvrait le MÊME
+                    menu « 😂 ❤️ 👍 😮 😢 🔥 ＋ · Sélectionner · Copier ·
+                    Composer · Plus… » qu'une prise de parole — dont AUCUN
+                    bouton n'avait d'effet (loi 4 prise en défaut : « un
+                    contrôle existe s'il a un EFFET »). Le geste propre à un
+                    résumé d'appel (détail d'appel, iOS) reste HORS tranche —
+                    ce lot fait seulement SORTIR les rangées système de la
+                    surface de gestes du message. `isSystemMessage` est le
+                    SITE UNIQUE de cette loi (`lib/view/message-badges.ts`),
+                    déjà consommé par `systemRowOf`/`composeMessageLabel`. */}
+                {/* `tabIndex` ET les gestionnaires d'appui long vont ENSEMBLE
+                    (#6862) : un `tabIndex={0}` sans geste est une halte de
+                    tabulation qui n'ouvre rien — le clavier s'arrêterait sur
+                    chaque rangée pour ne rien pouvoir faire. `data-row` reste
+                    posé sans eux : c'est aussi le CANDIDAT d'élection de la
+                    scène, qui n'a besoin d'aucun geste. */}
+                {/* L'EFFET DE DESTRUCTION SE POSE ICI (#7468), sur le nœud qui
+                    enveloppe LES DEUX peaux — jamais dans `FocalRow` ni dans
+                    `Bubble`, qui l'auraient alors câblé chacune et laissé le mode
+                    suivant sans rien. `.ephemeral-destroying` porte la combustion
+                    ET le repli de la hauteur (`grid-template-rows: 1fr → 0fr`),
+                    que le virtualiseur suit par son `ResizeObserver` : les
+                    voisins se resserrent à mesure, sans saut de liste. Avec
+                    `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
+                <div
+                  {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
+                  {...(rowAfterRead ? { style: { position: 'relative', isolation: 'isolate' } } : {})}
+                  {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
+                  {...sealedProps(p.message, Date.now())}
+                  {...rowCapture}
+                  {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
+                  role="article"
+                  aria-label={rowLabel}
+                  {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
+                  {...(rowSelected === undefined || onRowTap === undefined
+                    ? {}
+                    : { onClick: () => onRowTap(p.message.id) })}
                 >
-                <UnfoldStage messageId={p.message.id}>
-                  <MessageEffectsHost effectFlags={p.message.effectFlags}>
-                    {usesFlatRow(mode) ? (
-                      <FocalRow
-                        mode={mode}
-                        place={p}
-                        languages={readerLanguages}
-                        viewerId={viewerId}
-                        onJumpToMessage={jumpToMessage}
-                        highlighted={highlightedId === p.message.id}
-                        elected={isElected}
-                        expired={rowExpired}
-                        ephemeralDeadline={rowDeadline}
-                        revealable={!rowWithheld}
-                        {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                        {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                        {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                        {...(onPickLanguage === undefined
-                          ? {}
-                          : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                        {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                        {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                        {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                        {...(rowSelected === undefined || onRowTap === undefined
-                          ? {}
-                          : { selected: rowSelected, onToggleSelect: onRowTap })}
-                        {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
-                        {...sendProps}
-                      />
-                    ) : (
-                      <Bubble
-                        place={p}
-                        languages={readerLanguages}
-                        isGrouped={group}
-                        viewerId={viewerId}
-                        onJumpToMessage={jumpToMessage}
-                        highlighted={highlightedId === p.message.id}
-                        expired={rowExpired}
-                        ephemeralDeadline={rowDeadline}
-                        revealable={!rowWithheld}
-                        {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
-                        {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
-                        {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                        {...(onPickLanguage === undefined
-                          ? {}
-                          : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
-                        {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                        {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                        {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
-                        {...(rowSelected === undefined || onRowTap === undefined
-                          ? {}
-                          : { selected: rowSelected, onToggleSelect: onRowTap })}
-                        {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
-                        {...sendProps}
-                      />
-                    )}
-                  </MessageEffectsHost>
-                </UnfoldStage>
-                </MessageSwipe>
-              </div>
-              {rowNoteOf?.(p.message.id) ?? null}
-            </li>
-          );
-        })}
-      </ol>
+                  {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
+                      LES DEUX peaux — même raison que la destruction ci-dessus :
+                      un mode ajouté demain les joue sans rien câbler. */}
+                  {/* LE DÉPLIAGE D'UN MESSAGE LONG (#8147) : même nœud, même
+                      raison — le verre, la loupe et l'atténuation des voisins
+                      valent pour toutes les peaux. */}
+                  {/* LE FILIGRANE DE LA FLAMME-ŒIL (#8304) — sur le nœud des
+                      DEUX peaux, comme la destruction : tous les modes le
+                      reçoivent, et il remplace la pastille de décompte. */}
+                  {rowAfterRead && !rowIsMine ? <AfterReadSeenProbe messageId={p.message.id} /> : null}
+                  {rowCapture['data-capture'] === undefined ? null : (
+                    <CaptureShieldHold
+                      messageId={p.message.id}
+                      conversationId={p.message.conversationId}
+                      verdict={rowCapture['data-capture']}
+                      declared
+                    />
+                  )}
+                  {rowAfterRead ? (
+                    <AfterReadWatermark
+                      reach={afterReadReachOf({
+                        flat: usesFlatRow(mode),
+                        mediaOnly: p.message.content.trim() === '' && (p.message.attachments?.length ?? 0) > 0,
+                      })}
+                    />
+                  ) : null}
+                  <MessageSwipe
+                    actions={rowSwipeActions}
+                    flat={usesFlatRow(mode)}
+                    isMine={rowIsMine}
+                    attachments={p.message.attachments}
+                    createdAt={p.message.createdAt}
+                    locale={readerLocale}
+                  >
+                  <UnfoldStage messageId={p.message.id}>
+                    <MessageEffectsHost effectFlags={p.message.effectFlags}>
+                      {usesFlatRow(mode) ? (
+                        <FocalRow
+                          mode={mode}
+                          place={p}
+                          languages={readerLanguages}
+                          viewerId={viewerId}
+                          onJumpToMessage={jumpToMessage}
+                          highlighted={highlightedId === p.message.id}
+                          elected={isElected}
+                          expired={rowExpired}
+                          ephemeralDeadline={rowDeadline}
+                          revealable={!rowWithheld}
+                          {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                          {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                          {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                          {...(onPickLanguage === undefined
+                            ? {}
+                            : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                          {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                          {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowSelected === undefined || onRowTap === undefined
+                            ? {}
+                            : { selected: rowSelected, onToggleSelect: onRowTap })}
+                          {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
+                          {...sendProps}
+                        />
+                      ) : (
+                        <Bubble
+                          place={p}
+                          languages={readerLanguages}
+                          isGrouped={group}
+                          viewerId={viewerId}
+                          onJumpToMessage={jumpToMessage}
+                          highlighted={highlightedId === p.message.id}
+                          expired={rowExpired}
+                          ephemeralDeadline={rowDeadline}
+                          revealable={!rowWithheld}
+                          {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                          {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
+                          {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
+                          {...(onPickLanguage === undefined
+                            ? {}
+                            : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
+                          {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
+                          {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
+                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowSelected === undefined || onRowTap === undefined
+                            ? {}
+                            : { selected: rowSelected, onToggleSelect: onRowTap })}
+                          {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
+                          {...sendProps}
+                        />
+                      )}
+                    </MessageEffectsHost>
+                  </UnfoldStage>
+                  </MessageSwipe>
+                </div>
+                {rowNoteOf?.(p.message.id) ?? null}
+              </li>
+            );
+          })}
+        </ol>
 
-      {/* LA SENTINELLE DE PIED (#7201, W1) — symétrique d'`OlderHead` : un
-          pixel APRÈS la dernière rangée, jamais dans le flux typographique
-          (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
-          une rangée — même garde que la tête : une sentinelle qui intersecte
-          IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
-      {newer === undefined || placed.length === 0 ? null : (
-        <OlderHead state={newer.state} sentinelRef={newer.sentinelRef} edge="newer" />
-      )}
+        {/* LA SENTINELLE DE PIED (#7201, W1) — symétrique d'`OlderHead` : un
+            pixel APRÈS la dernière rangée, jamais dans le flux typographique
+            (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
+            une rangée — même garde que la tête : une sentinelle qui intersecte
+            IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
+        {newer === undefined || placed.length === 0 ? null : (
+          <OlderHead state={newer.state} sentinelRef={newer.sentinelRef} edge="newer" />
+        )}
 
-      {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
-        <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
-      )}
+        {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
+          <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
+        )}
 
-      {/* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
-          pas un overlay : il pousse le fil comme le ferait un message, donc
-          l'arrivee du vrai message ne fait sauter aucune ligne. Extraite dans
-          `components/typing-roster-cell.tsx` (#6171, G1) — le ROSTER ENTIER,
-          jamais le seul premier frappeur ; doc-comment complet là-bas.
-          `flat` (revue-correction #6171, défaut 4) — SEUL site de montage :
-          Focal/Script (le mode PAR DÉFAUT, D-7) rendent la pastille + les
-          trois points SANS capsule ni libellé visible, miroir
-          `TypingIndicatorBubble(isFlat: readingMode != .bubbles)`. */}
-      <TypingRosterCell
-        typists={typists}
-        accent={accent}
-        flat={usesFlatRow(mode)}
-        {...(typistAvatarOf === undefined ? {} : { avatarOf: typistAvatarOf })}
-      />
-    </RevealPhaseChannel>
+        {/* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
+            pas un overlay : il pousse le fil comme le ferait un message, donc
+            l'arrivee du vrai message ne fait sauter aucune ligne. Extraite dans
+            `components/typing-roster-cell.tsx` (#6171, G1) — le ROSTER ENTIER,
+            jamais le seul premier frappeur ; doc-comment complet là-bas.
+            `flat` (revue-correction #6171, défaut 4) — SEUL site de montage :
+            Focal/Script (le mode PAR DÉFAUT, D-7) rendent la pastille + les
+            trois points SANS capsule ni libellé visible, miroir
+            `TypingIndicatorBubble(isFlat: readingMode != .bubbles)`. */}
+        <TypingRosterCell
+          typists={typists}
+          accent={accent}
+          flat={usesFlatRow(mode)}
+          {...(typistAvatarOf === undefined ? {} : { avatarOf: typistAvatarOf })}
+        />
+      </RevealPhaseChannel>
+    </HighlightedPieceContext.Provider>
   );
 }

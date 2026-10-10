@@ -178,6 +178,9 @@ extension ConversationView {
                     systemImage: "info.circle"
                 )
             }
+        case .wholeMessage, .replyToPiece, .deletePiece:
+            // Le menu d'une PIÈCE seulement (#9907, #9908) — jamais servi ici.
+            EmptyView()
         }
     }
 }

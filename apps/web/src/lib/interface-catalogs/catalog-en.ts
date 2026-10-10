@@ -30,7 +30,6 @@ import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
-import enSoundsMine from './catalog-en-sounds-mine';
 import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
@@ -51,16 +50,6 @@ const en = {
   'message.excerpt.protected': 'protected content',
   'a11y.message.menu.subject': 'Actions for the message from {author}: {excerpt}',
 
-  'selection.toolbar': 'Message selection',
-  'selection.cancel': 'Cancel',
-  'selection.count': '{count} selected',
-  'forward.title': 'Forward to…',
-  'forward.empty': 'No conversation',
-  'forward.search.label': 'Search a conversation',
-  'forward.search.placeholder': 'Search',
-  'forward.announce.sent': 'Message forwarded',
-  'forward.announce.sentMany': '{count} messages forwarded',
-  'forward.announce.failed': 'Forwarding failed',
   'forward.refusal.viewOnce': 'A view-once message can’t be forwarded',
   'forward.refusal.unavailable': 'The original message is no longer available: nothing to forward',
 
@@ -260,7 +249,6 @@ const en = {
   'feed.gesture.pending': 'Action not confirmed — offline',
   'feed.share.error': 'Error sharing post',
   'feed.share.copied': 'Link copied — just paste it.',
-  'feed.share.text': 'A post on Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'My links',
@@ -641,7 +629,6 @@ const en = {
   'discover.blocked.empty.title': 'No blocked users',
   'discover.blocked.empty.subtitle': 'People you block will appear here.',
   'discover.unknown': 'Unknown',
-  'discover.loading': 'Loading',
   'discover.allLoaded': 'The whole list is loaded',
   'discover.error.title': 'This list could not be loaded',
   'discover.error.body': 'Check your connection and try again.',
@@ -696,8 +683,6 @@ const en = {
   'links.detail.disable': 'Deactivate',
   'links.detail.activate': 'Activate',
   'links.detail.stats': 'Statistics',
-  'links.detail.stats.uses': 'Uses',
-  'links.detail.stats.max': 'Maximum',
   'links.detail.info': 'Information',
   'links.detail.identifier': 'Identifier',
   'links.detail.createdAt': 'Created',
@@ -771,8 +756,6 @@ const en = {
   'feed.scene.mosaic.more': 'Scene {index}, and {count} more',
   'feed.scene.mosaic.video': 'Scene {index}, video',
   'feed.scene.shared_by': 'Scene shared by {author}',
-  'feed.scene.open.fullscreen': 'Double-tap to view fullscreen',
-  'feed.scene.open.post': 'Double-tap to open the post',
   'feed.scene.sound.muted': 'Sound muted',
   'feed.scene.count': '{count} scenes',
   'scene.fullscreen.play': 'Resume all',
@@ -788,7 +771,6 @@ const en = {
      as CanvasV3 like iOS. */
   'story.studio.title': 'New story',
   'story.studio.cancel': 'Cancel',
-  'story.studio.publish': 'Publish',
   'story.studio.publishing': 'Publishing…',
   'story.studio.publish.waiting': 'Waiting for network…',
   'story.studio.publishing.progress': 'Publishing {current}/{total}…',
@@ -819,7 +801,6 @@ const en = {
   'story.studio.text.label': 'Story text',
   'story.studio.text.placeholder': 'Add text',
   'story.studio.hint.duration': 'A story stays visible for twenty hours.',
-  'story.studio.error.upload': 'The file could not be sent.',
   'story.studio.error.publish': 'The story could not be published.',
   'story.studio.refusal.title': 'An account is required to create a story.',
   'story.studio.refusal.login': 'Log in',
@@ -840,8 +821,6 @@ const en = {
   'story.studio.text.add': 'Add text',
   'story.studio.object.text': 'Text {index}',
   'story.studio.object.overlay': 'Layer',
-  'story.studio.object.select': 'Select {name}',
-  'story.studio.objects.label': 'Scene objects',
   'story.studio.overlay.add': 'Place an image on the scene',
   'story.studio.overlay.label': 'Layer',
   'story.studio.overlay.remove': 'Remove the layer',
@@ -911,8 +890,6 @@ const en = {
   'story.studio.pose.rotateLeft': 'Rotate left',
   'story.studio.pose.rotateRight': 'Rotate right',
   'story.studio.pose.reset': 'Recentre',
-  'story.studio.pose.handle': 'Move {name} — arrows to move, + and − to resize, [ and ] to rotate',
-  'story.studio.pose.grip': 'Resize and rotate {name}',
 
   /* THE STUDIO'S AUDIENCE SHEET (#7683) — the six PostVisibility values,
      mirroring PostVisibility.swift (packages/MeeshySDK). */
@@ -1004,7 +981,6 @@ const en = {
   'comment.refused.session': 'Session expired — sign in again.',
   'comment.refused.right': 'This action isn’t open to you.',
   'comment.like.limit': 'Five reactions per person at most.',
-  'feed.action.comment': 'Comment',
 
   'admin.title': 'Administration',
 
@@ -1124,7 +1100,7 @@ const en = {
   ...enMessageCard,
   ...enConversationCard,
   ...enStoriesMine,
-  ...enSoundsMine,
+  'settings.tools.sounds': 'My sounds',
   ...enContactCard,
   ...enQuote,
   ...enCommentRow,

@@ -94,6 +94,13 @@ export type QuotedMedia = {
    * n'existe alors pas, et le toucher reste « aller au message ».
    */
   readonly openable: Attachment | null;
+  /**
+   * LES AUTRES PIÈCES DU MESSAGE CITÉ (#9911) — la citation d'un message ENTIER
+   * à sept photos en montre une et en compte six de plus (« +6 »). `0` quand
+   * la citation vise UNE pièce (nommée ou seule), ou que le message est
+   * protégé : le nombre de pièces décrit un contenu qu'on n'a pas le droit de voir.
+   */
+  readonly more: number;
 };
 
 /**
@@ -141,7 +148,8 @@ export type QuotedPreview = {
  * { attachmentId, kind }` (`servedQuotedMessage.ts`), que `decode.ts` laisse
  * passer tel quel sur la citation. Elle prime ici comme `citing` prime sur le
  * représentatif côté iOS ; une pièce nommée que la citation ne porte plus
- * (retirée, masquée pièce par pièce) retombe sur la première.
+ * (retirée, masquée pièce par pièce) ne retombe JAMAIS sur la première
+ * (#9911, `vanishedKindOf`).
  */
 const namedPieceIdOf = (quoted: object): string | undefined => {
   const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
@@ -150,16 +158,40 @@ const namedPieceIdOf = (quoted: object): string | undefined => {
   return typeof id === 'string' && id !== '' ? id : undefined;
 };
 
-/** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
-export const representativeOf = (
-  quoted: Pick<Message, 'attachments'>,
-): { readonly attachment: Attachment; readonly single: boolean } | undefined => {
-  const namedId = namedPieceIdOf(quoted);
-  const named = namedId === undefined ? undefined : quoted.attachments?.find((a) => a.id === namedId);
-  if (named !== undefined) return { attachment: named, single: true };
-  const first = quoted.attachments?.[0];
-  return first === undefined ? undefined : { attachment: first, single: quoted.attachments?.length === 1 };
+/**
+ * LA CITATION D'UNE PIÈCE DISPARUE (#9911) — la pièce nommée n'est plus sur
+ * le message cité (retirée, masquée pièce par pièce) : la citation ne montre
+ * JAMAIS sa voisine à sa place, comme iOS. Il ne reste que sa NATURE, gravée
+ * dans l'instantané de la passerelle (`attachmentReplyTo.kind`) ; un lieu,
+ * que le web ne range pas en pièce jointe, et une nature inconnue se disent
+ * « Fichier ».
+ */
+const VANISHED_KINDS: Readonly<Record<string, QuotedMediaKind>> = { image: 'image', video: 'video', audio: 'audio' };
+
+const vanishedKindOf = (quoted: object): QuotedMediaKind => {
+  const named: unknown = (quoted as { readonly attachmentReplyTo?: unknown }).attachmentReplyTo;
+  const kind: unknown = named !== null && typeof named === 'object' ? (named as { readonly kind?: unknown }).kind : undefined;
+  return (typeof kind === 'string' ? VANISHED_KINDS[kind] : undefined) ?? 'file';
 };
+
+export type QuotedRepresentative =
+  | { readonly attachment: Attachment; readonly single: boolean; readonly more: number }
+  | { readonly vanished: QuotedMediaKind };
+
+/** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
+export const representativeOf = (quoted: Pick<Message, 'attachments'>): QuotedRepresentative | undefined => {
+  const namedId = namedPieceIdOf(quoted);
+  if (namedId !== undefined) {
+    const named = quoted.attachments?.find((a) => a.id === namedId);
+    return named === undefined ? { vanished: vanishedKindOf(quoted) } : { attachment: named, single: true, more: 0 };
+  }
+  const first = quoted.attachments?.[0];
+  const count = quoted.attachments?.length ?? 0;
+  return first === undefined ? undefined : { attachment: first, single: count === 1, more: Math.max(0, count - 1) };
+};
+
+/** La pièce que nomme une citation (#9911) — le saut au message cité met en évidence SA tuile. */
+export const quotedPieceIdOf = (quoted: object): string | undefined => namedPieceIdOf(quoted);
 
 /**
  * `quotedThumbnailUrl` (`ConversationViewModel+ReplyReference.swift:171-173`) :
@@ -194,13 +226,27 @@ const thumbnailOf = (attachment: Attachment, kind: QuotedMediaKind): string | nu
  * dépôt divulgue déjà l'icône de type d'un contenu protégé
  * (`protectedPreview` → `contentTypeIcon`).
  */
+const vanishedMediaOf = (kind: QuotedMediaKind, interfaceLanguage: InterfaceLanguage): QuotedMedia => ({
+  kind,
+  label: translate(interfaceLanguage, QUOTED_KIND_KEY[kind]),
+  thumbnailSrc: null,
+  placeholderSrc: null,
+  durationLabel: null,
+  timebased: kind === 'video' || kind === 'audio',
+  frame: null,
+  fileSrc: null,
+  openable: null,
+  more: 0,
+});
+
 const mediaOf = (params: {
   readonly attachment: Attachment;
   readonly single: boolean;
+  readonly more: number;
   readonly messageIsProtected: boolean;
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedMedia => {
-  const { attachment, single, messageIsProtected, interfaceLanguage } = params;
+  const { attachment, single, more, messageIsProtected, interfaceLanguage } = params;
   /* UNE CARTE DE VISITE SE DIT PAR SON CONTACT (#8122), jamais « Fichier » ni
      `contact_<UUID>_….vcf` — `contactCardLabelOf` est le site unique. */
   const contactLabel = contactCardLabelOf(attachment, interfaceLanguage);
@@ -218,6 +264,7 @@ const mediaOf = (params: {
     frame: framed ? frameOf(attachment) : null,
     fileSrc: mayTravel && timebased && hasFile(attachment) ? attachmentSrc(attachment.fileUrl) : null,
     openable: mayTravel && OPENABLE_KINDS.has(kind) && hasFile(attachment) ? attachment : null,
+    more: messageIsProtected ? 0 : more,
   };
 };
 
@@ -269,7 +316,12 @@ export function quotedPreviewOf(params: {
   }
   const messageIsProtected = quotedIsProtected(quoted);
   const piece = representativeOf(quoted);
-  const media = piece === undefined ? null : mediaOf({ ...piece, messageIsProtected, interfaceLanguage });
+  const media =
+    piece === undefined
+      ? null
+      : 'vanished' in piece
+        ? vanishedMediaOf(piece.vanished, interfaceLanguage)
+        : mediaOf({ ...piece, messageIsProtected, interfaceLanguage });
 
   /* UN PLACEHOLDER NE SE TRADUIT PAS. La passerelle retire déjà les
      traductions d'une citation protégée (`servedQuotedMessage`), mais ce
