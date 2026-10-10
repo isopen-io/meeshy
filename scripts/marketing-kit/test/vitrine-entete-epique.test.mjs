@@ -10,7 +10,7 @@ import { TEXTES_ENTETE } from '../textes/entete-epique.mjs'
 import { tailleDeLoupe } from '../vitrine/entete-epique-page.mjs'
 import {
   DUREE_S, FPS, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, REPERES, SONS, TEMPS_S, CIBLE_LUFS, CRETE_DBTP,
-  SONS_DE_COUP, argumentsDeMixage, entreeDuPlan, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
+  ETIREMENT, FONDU_DE_JOINTURE_S, SONS_DE_COUP, argumentsDeMixage, entreeDuPlan, filtreDeLaMusique, morceauxDeLaMusique, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
   planDeLEntete, recaler, titreDeSignature,
 } from '../vitrine/entete-epique-plan.mjs'
 import { ANCIENS_ENTETES, deposerLEntete, nomDuFichier, sourceVerifiee } from '../vitrine/entete-epique.mjs'
@@ -24,6 +24,8 @@ const prises = () => ({
   'interaction-defilement': { clip: '/c/defilement.mp4', rapport: rapport({ 'reel-1': 0, 'reel-2': 2200, 'reel-3': 4500, 'reel-4': 6800 }) },
   'interaction-story': { clip: '/c/story.mp4', rapport: rapport({ ouverture: 0, story: 950 }) },
   'interaction-vocal': { clip: '/c/vocal.mp4', rapport: rapport({ original: 0, traduction: 2730 }), repereY: 1562 },
+  'interaction-invite': { clip: '/c/invite.mp4', rapport: rapport({ invitation: 0, 'sans-compte': 1500, formulaire: 2900 }) },
+  'interaction-liens': { clip: '/c/liens.mp4', rapport: rapport({ hub: 0, liste: 2000, fiche: 3700 }) },
   'jeu-frappe': { clip: '/c/frappe.mp4', rapport: rapport(), mouvementMs: 40 },
   'jeu-coffre': { clip: '/c/coffre.mp4', rapport: rapport(), mouvementMs: 30 },
   'jeu-niveau': { clip: '/c/niveau.mp4', rapport: rapport(), mouvementMs: 20 },
@@ -33,11 +35,11 @@ const nomDeFiche = (lang) => readFileSync(resolve(METADATA, appStoreLocale(lang)
 const plan = (lang) => planDeLEntete({ lang, prises: prises(), nomDeFiche: nomDeFiche(lang) })
 
 describe('l’en-tête épique : la forme exigée par Apple (#9904)', () => {
-  test('3840×1646, 30 i/s, 23 s : dans la plage de 20 à 25 s voulue et dans celle de 5 à 30 s d’Apple', () => {
+  test('3840×1646, 30 i/s, 30 s : la limite d’Apple (5 à 30 s), atteinte sans la dépasser', () => {
     expect([LARGEUR, HAUTEUR]).toEqual(SPECS['entete-video'].tailles[0])
     expect(SPECS['entete-video'].cadences.exactes).toContain(FPS)
-    expect(DUREE_S).toBeGreaterThanOrEqual(20)
-    expect(DUREE_S).toBeLessThanOrEqual(25)
+    expect(DUREE_S).toBe(30)
+    expect(DUREE_S).toBeLessThanOrEqual(SPECS['entete-video'].dureeS[1])
     expect(IMAGES).toBe(DUREE_S * FPS)
   })
 
@@ -56,19 +58,37 @@ describe('l’en-tête épique : le montage suit la musique (#9904)', () => {
     PLANS.slice(0, -1).forEach((p, i) => expect(PLANS[i + 1].de).toBe(p.a))
     for (const p of PLANS) expect(Number.isInteger(p.de)).toBe(true)
     const actes = [...new Set(PLANS.map((p) => p.acte))]
-    expect(actes).toEqual(['reels', 'story', 'vocal', 'jeu', 'signature'])
+    expect(actes).toEqual(['reels', 'story', 'vocal', 'lien', 'jeu', 'signature'])
     for (const acte of actes) expect(PLANS.find((p) => p.acte === acte).de % 4).toBe(0)
     expect(enSecondes(PLANS.at(-1).de)).toBeLessThan(DUREE_S - 1.5)
   })
 
-  test('quatre réels, puis la story, le vocal, et le jeu dans l’ordre frappe → coffre → niveau → rang', () => {
-    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'reel-4', 'story', 'vocal', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
+  test('quatre réels, la story, le vocal, le lien (invitation, arrivées, business), puis le jeu dans l’ordre frappe → coffre → niveau → rang', () => {
+    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'reel-4', 'story', 'vocal', 'invite', 'arrivees', 'business', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
+  })
+
+  test('les quatre actes d’origine gardent leurs 23 s, le lien dure 7 s juste : 30 s', () => {
+    const duree = (acte) => PLANS.filter((p) => p.acte === acte).reduce((n, p) => n + (p.a === null ? DUREE_S - enSecondes(p.de) : enSecondes(p.a) - enSecondes(p.de)), 0)
+    expect(duree('lien')).toBeCloseTo(7, 6)
+    expect(duree('reels') + duree('story') + duree('vocal') + duree('jeu') + duree('signature')).toBeCloseTo(23, 6)
+    expect(enSecondes(PLANS.find((p) => p.acte === 'jeu').de) - enSecondes(PLANS.find((p) => p.acte === 'lien').de)).toBeCloseTo(7, 6)
+  })
+
+  test('la musique : trois morceaux contigus du fichier, le lien étiré de 1,4 % à 7 s, la somme fait 30 s', () => {
+    const [avant, lien, apres] = morceauxDeLaMusique()
+    expect(lien.deS).toBeCloseTo(avant.aS - FONDU_DE_JOINTURE_S, 6)
+    expect(apres.deS).toBeCloseTo(lien.aS - FONDU_DE_JOINTURE_S * lien.tempo, 6)
+    expect(lien.tempo).toBeCloseTo((16 * TEMPS_S) / 7, 6)
+    expect(Math.abs(1 - lien.tempo)).toBeLessThan(0.015)
+    const longueurs = [avant, lien, apres].map((m) => (m.aS - m.deS) / m.tempo)
+    expect(longueurs.reduce((n, l) => n + l, 0) - 2 * FONDU_DE_JOINTURE_S).toBeCloseTo(DUREE_S, 6)
+    expect(filtreDeLaMusique()).toContain(`atempo=${lien.tempo.toFixed(6)}`)
   })
 
   test('l’extrait part sur un premier temps et le jeu entre sur le sommet du morceau (69,7 s)', () => {
     const jeu = PLANS.find((p) => p.acte === 'jeu')
-    expect(MUSIQUE.debutS + enSecondes(jeu.de)).toBeCloseTo(69.69, 1)
-    expect(MUSIQUE.debutS + DUREE_S).toBeLessThan(118)
+    expect(MUSIQUE.debutS + jeu.de * TEMPS_S).toBeCloseTo(69.69, 1)
+    expect(morceauxDeLaMusique().at(-1).aS).toBeLessThan(118)
     expect(TEMPS_S).toBeCloseTo(60 / 139, 6)
   })
 
@@ -82,7 +102,7 @@ describe('l’en-tête épique : le montage suit la musique (#9904)', () => {
     }
     for (const s of Object.values(SONS)) expect(s.licence).toBe('https://mixkit.co/license/#sfxFree')
     expect(MUSIQUE.licence).toBe('https://mixkit.co/license/#musicFree')
-    expect(REPERES.filter((r) => r.son === 'impact').map((r) => r.temps)).toEqual([0, 48])
+    expect(REPERES.filter((r) => r.son === 'impact').map((r) => r.temps)).toEqual([0, 64])
   })
 
   test('le coup du marteau tombe sur l’instant où la prise le montre', () => {
@@ -193,9 +213,11 @@ describe('l’en-tête épique : la caméra et la loupe (#9904)', () => {
     const p = plan('fr')
     const images = Object.fromEntries(p.plans.filter((x) => x.clip).map((x) => [x.id, { dossier: `images/${x.id}`, nombre: 60 }]))
     const m = modeleDeLaPage({ plan: p, images })
-    expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', 'poing', 'fouet', 'fouet', 'fouet', 'fouet', 'fouet', 'fouet'])
-    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'frappe', 'coffre', 'niveau', 'rang'])
-    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'frappe', 'coffre', 'niveau'])
+    expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', 'poing', ...Array(9).fill('fouet')])
+    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'arrivees', 'frappe', 'coffre', 'niveau', 'rang'])
+    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'invite', 'arrivees', 'business', 'frappe', 'coffre', 'niveau'])
+    expect(m.temps[0]).toBe(0)
+    expect(m.temps.at(-1)).toBeLessThan(DUREE_S)
     expect(m.citations).toHaveLength(4)
     expect(m.coups.length).toBeGreaterThanOrEqual(5)
     expect(m.signature.titre).toBe('Parle au monde entier')
@@ -206,7 +228,7 @@ describe('l’en-tête épique : le mixage (#9904)', () => {
   test('la musique est l’extrait du plan, chaque effet est posé à son départ, rien n’est normalisé par entrée', () => {
     const p = plan('fr')
     const f = filtreDeMixage({ reperes: p.reperes })
-    expect(f).toContain(`atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)}`)
+    expect(f).toContain(filtreDeLaMusique())
     expect(f).toContain(`amix=inputs=${p.reperes.length}:duration=longest:normalize=0`)
     expect(f).toContain('[m][cle]sidechaincompress')
     const coups = p.reperes.filter((r) => SONS_DE_COUP.has(r.son)).length
