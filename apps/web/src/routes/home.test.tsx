@@ -63,7 +63,10 @@ describe('/ sur le web, servie par la coquille (#10002)', () => {
   test('l’application installée (PWA d’avant #10002, start_url sur /) ouvre /chats sans peindre la landing', async () => {
     globalThis.fetch = answer(500, null);
     const realMatchMedia = window.matchMedia;
-    window.matchMedia = (query: string) => Object.assign(realMatchMedia.call(window, query), { matches: query === '(display-mode: standalone)' });
+    window.matchMedia = (query: string) => {
+      const real = realMatchMedia.call(window, query);
+      return Object.create(real, { matches: { value: query === '(display-mode: standalone)' } });
+    };
     try {
       const before = window.history.length;
       const host = await mount(<HomeScreen />);
