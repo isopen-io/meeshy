@@ -239,10 +239,13 @@ export function servedQuotedMessage(
     served['attachments'] = servedQuotedAttachments(quoted, quoted.attachments);
   }
 
-  // #9915 — Toujours POSÉE : un message protégé ne dit pas combien de pièces
-  // il cache, et la clé écrase ce que le site d'appel a pu répandre.
+  // #9915 — Toujours POSÉES : un message protégé ne dit pas combien de pièces
+  // il cache. `_count` est le compte BRUT de Prisma que le chemin socket
+  // répand avant cette projection (`MessageHandler` → `inputs.replyTo`) : il
+  // est écrasé ici, fail-closed, et seul le compte servi sort.
   const tileCount = quoted._count?.attachments;
   served['visualAttachmentCount'] = !isProtected && typeof tileCount === 'number' ? tileCount : undefined;
+  served['_count'] = undefined;
 
   return served;
 }
@@ -267,6 +270,7 @@ function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
     validatedMentions: [],
     attachmentReplyTo: undefined,
     visualAttachmentCount: undefined,
+    _count: undefined,
   };
 }
 

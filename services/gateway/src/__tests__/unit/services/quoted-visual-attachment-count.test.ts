@@ -19,6 +19,8 @@ import fastJson from 'fast-json-stringify';
 import { messageSchema } from '@meeshy/shared/types/api-schemas';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
 import { QUOTED_VISUAL_ATTACHMENT_COUNT } from '../../../services/attachments/attachmentIncludes';
+import { buildMessageNewPayload } from '../../../socketio/messageNewPayload';
+import { withSealedQuote } from '../../../services/messaging/servedQuotedMessage';
 
 const piece = (rang: number) => ({
   id: `507f1f77bcf86cd79943900${rang}`,
@@ -97,5 +99,54 @@ describe('les lectures de la citation comptent les tuiles (#9915)', () => {
   ])('%s demande le compte à côté des quatre pièces', (relative) => {
     const source = readFileSync(join(root, relative), 'utf8');
     expect(source).toContain('...QUOTED_VISUAL_ATTACHMENT_COUNT');
+  });
+});
+
+/**
+ * Le chemin SOCKET répand la ligne Prisma BRUTE du message cité
+ * (`MessageHandler` : `inputs.replyTo` = `message.replyTo` hissé) avant la
+ * projection protégée : le `_count` de Prisma voyagerait tel quel si
+ * `servedQuotedMessage` ne l'écrasait pas. Citation de six photos protégée :
+ * ni compte servi, ni compte brut, ni pièce en clair.
+ */
+describe('message:new — le compte ne fuit jamais d’une citation protégée (#9915)', () => {
+  const payloadQuoting = (quoted: Record<string, unknown>) =>
+    buildMessageNewPayload(
+      {
+        id: '507f1f77bcf86cd799439011',
+        conversationId: '507f1f77bcf86cd799439012',
+        senderId: '507f1f77bcf86cd799439013',
+        content: 'je réponds',
+        originalLanguage: 'fr',
+        messageType: 'text',
+        createdAt: new Date('2026-10-10T08:00:00Z'),
+        replyTo: quoted,
+      } as never,
+      { conversationId: '507f1f77bcf86cd799439012', translations: [], attachments: [], replyTo: quoted },
+    ).replyTo as Record<string, unknown>;
+
+  it.each([
+    ['à vue unique', { isViewOnce: true }],
+    ['flouté', { isBlurred: true }],
+    ['chiffré', { isEncrypted: true }],
+    ['supprimé', { deletedAt: new Date('2026-10-10T07:00:00Z') }],
+  ])('message cité %s : ni visualAttachmentCount, ni _count, ni URL de pièce', (_label, protection) => {
+    const wire = JSON.parse(JSON.stringify(payloadQuoting(quotedLot(protection))));
+    expect(wire).not.toHaveProperty('visualAttachmentCount');
+    expect(wire).not.toHaveProperty('_count');
+    expect(JSON.stringify(wire)).not.toContain('https://cdn/piece-');
+  });
+
+  it('citation scellée a posteriori (withSealedQuote) : rien de compté', () => {
+    const sealed = withSealedQuote({ replyTo: { ...quotedLot(), visualAttachmentCount: 6 } }, new Date('2026-10-10T09:00:00Z'));
+    const wire = JSON.parse(JSON.stringify(sealed.replyTo));
+    expect(wire).not.toHaveProperty('visualAttachmentCount');
+    expect(wire).not.toHaveProperty('_count');
+  });
+
+  it('message cité en clair : le compte servi part, le compte brut non', () => {
+    const wire = JSON.parse(JSON.stringify(payloadQuoting(quotedLot())));
+    expect(wire.visualAttachmentCount).toBe(6);
+    expect(wire).not.toHaveProperty('_count');
   });
 });
