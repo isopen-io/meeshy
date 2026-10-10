@@ -21,7 +21,7 @@ struct GameBlockModelsTests {
         #expect(block.treasury.tier == .bourse)
         #expect(block.treasury.next?.key == .escarcelle)
         #expect(block.mint.number == 13)
-        #expect(block.mint.price == 1294)
+        #expect(block.mint.price == 1587)
         #expect(block.mint.edition == .silver)
         #expect(block.missions.items.count == 3)
         #expect(block.missions.items[0].isCompleted)
@@ -29,7 +29,10 @@ struct GameBlockModelsTests {
         #expect(block.missions.items[2].signal == .axis(.post))
         #expect(block.chest.status == .locked)
         #expect(block.chest.reward == nil)
-        #expect(block.chest.odds == GameChest.odds)
+        // Le coffre de la fixture est celui d'un serveur d'avant #10011 : quatre champs, rien de plus.
+        #expect(block.chest.odds == ChestOdds(minPoints: 60, maxPoints: 200, fragment: 1.0 / 6.0, freeze: 0.05))
+        #expect(block.chest.today == nil)
+        #expect(block.chest.meeshFragments == nil)
         #expect(block.flame.form == .braise)
         #expect(block.flame.status == .lit)
         #expect(block.boosts.tailwind == 1.25)
@@ -117,6 +120,29 @@ struct GameBlockModelsTests {
         let block = try #require(GameBlock.parse(Data(patched.utf8)))
         #expect(block.chest.status == .claimed)
         #expect(block.chest.reward == DailyChest(points: 112, fragment: true, freeze: false))
+    }
+
+    @Test("un coffre d'aujourd'hui dit son contenu certain, ses bornes et les fragments en poche (#10011)")
+    func chestSaysItsContentBeforeOpening() throws {
+        let patched = GameBlockFixture.json.replacingOccurrences(
+            of: "\"freeze\":0.05},\"reward\":null",
+            with: "\"freeze\":0.05,\"minGlory\":10,\"maxGlory\":1000,\"minMeeshFragments\":1,\"maxMeeshFragments\":4,\"meeshFragmentsPerMeesh\":5},\"reward\":null,\"today\":{\"points\":1750,\"glory\":175,\"meeshFragments\":1},\"meeshFragments\":{\"held\":7,\"perMeesh\":5}"
+        )
+        let block = try #require(GameBlock.parse(Data(patched.utf8)))
+        #expect(block.chest.today == ChestContent(points: 1750, glory: 175, meeshFragments: 1))
+        #expect(block.chest.meeshFragments == MeeshFragmentProgress(held: 7, perMeesh: 5))
+        #expect(block.chest.odds.maxGlory == 1000)
+        #expect(block.chest.odds.meeshFragmentsPerMeesh == 5)
+    }
+
+    @Test("un contenu du jour illisible tombe seul : le bloc reste lu")
+    func unreadableChestContentFallsAlone() throws {
+        let patched = GameBlockFixture.json.replacingOccurrences(
+            of: "\"freeze\":0.05},\"reward\":null",
+            with: "\"freeze\":0.05},\"reward\":null,\"today\":{\"points\":\"beaucoup\"}"
+        )
+        let block = try #require(GameBlock.parse(Data(patched.utf8)))
+        #expect(block.chest.today == nil)
     }
 
     @Test("le bloc survit à un aller-retour par le cache")

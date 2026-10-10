@@ -47,6 +47,7 @@ describe('game.vectors.json ne diverge pas de la loi', () => {
         'level-record',
         'mint-price',
         'mint-preview',
+        'mint-fragments',
         'glory-standing',
         'glory-gain',
         'treasury',

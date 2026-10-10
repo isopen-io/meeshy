@@ -135,7 +135,7 @@ describe('le coffre', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
     expect(page).toMatch(/Faites \d \/ 3/);
-    expect(page).toMatch(/60 à 200 points/);
+    expect(page).toMatch(/100 à 10 000 points/);
     expect(page).toContain('1 chance sur 6');
     expect(page).toContain('1 chance sur 20');
   });
@@ -165,6 +165,29 @@ describe('le coffre', () => {
     expect(html.match(/data-game-reward/g)).toHaveLength(3);
     expect(text(html)).toContain('+120 points');
     expect(html).not.toContain('data-game-chest-open');
+  });
+
+  test('dit son contenu CERTAIN avant l’ouverture : celui de l’effort des missions du jour (#10011)', () => {
+    const html = renderToStaticMarkup(<GameMissions {...props()} />);
+    expect(html).toContain('data-game-chest-today');
+    expect(text(html)).toContain('+481 Gloire');
+    expect(text(html)).toContain('2 fragments de Meesh');
+  });
+
+  test('ouvert après #10011 : les points, la Gloire, les fragments de Meesh et le gel montent un à un', () => {
+    const html = renderToStaticMarkup(
+      <GameMissions {...done({ chestClaimed: true, chestReward: { points: 1750, fragment: true, freeze: true, glory: 175, meeshFragments: 2 } })} />,
+    );
+    expect(html.match(/data-game-reward/g)).toHaveLength(4);
+    expect(text(html)).toContain('+175 Gloire');
+    expect(text(html)).toContain('2 fragments de Meesh');
+    expect(html).not.toContain('data-game-chest-today');
+  });
+
+  test('dit les fragments en poche vers une frappe gratuite, quand la passerelle les sert', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...props({ meeshFragments: { earned: 3, spent: 0 } })} />));
+    expect(page).toContain('3 / 5 fragments pour une frappe gratuite');
+    expect(renderToStaticMarkup(<GameMissions {...props()} />)).not.toContain('data-game-chest-fragments');
   });
 
   test('en cours d’ouverture : le coffre s’ouvre déjà, le contenu est attendu', () => {

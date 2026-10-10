@@ -136,6 +136,10 @@ export type MeeshMintResult = {
   readonly gloryGained?: number;
   readonly levelBefore?: number;
   readonly levelAfter?: number;
+  /** La frappe GRATUITE (#10011) : payée de cinq fragments de Meesh, son prix vaut 0. */
+  readonly paidWith?: 'points' | 'fragments';
+  readonly fragmentsSpent?: number;
+  readonly meeshFragments?: { readonly held: number; readonly perMeesh: number };
 };
 
 export async function mintMeesh(
@@ -147,6 +151,23 @@ export async function mintMeesh(
     method: 'POST',
     path: MEESH_MINT_PATH,
     body: { requestId },
+    ...(signal !== undefined ? { signal } : {}),
+  });
+}
+
+/**
+ * LA FRAPPE GRATUITE — cinq fragments de Meesh au lieu des points (#10011). Même adresse, même idempotence ; le
+ * serveur refuse sans rien écrire (`INSUFFICIENT_FRAGMENTS`) quand il en manque.
+ */
+export async function mintMeeshWithFragments(
+  transport: HttpTransport,
+  requestId: string,
+  signal?: AbortSignal,
+): Promise<ApiResult<MeeshMintResult>> {
+  return transport.request<MeeshMintResult>({
+    method: 'POST',
+    path: MEESH_MINT_PATH,
+    body: { requestId, payWith: 'fragments' },
     ...(signal !== undefined ? { signal } : {}),
   });
 }

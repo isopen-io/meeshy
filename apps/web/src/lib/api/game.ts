@@ -137,8 +137,20 @@ const isMissions = (value: unknown): boolean =>
     rerollAvailable: isBool,
   });
 
+/** La Gloire et les fragments de Meesh (#10011) S'AJOUTENT : un coffre d'avant eux, ou un ancien serveur, ne les porte pas. */
 const isChestReward = (value: unknown): boolean =>
-  shape(value, { points: (v) => isInt(v), fragment: isBool, freeze: isBool });
+  shape(value, {
+    points: (v) => isInt(v),
+    fragment: isBool,
+    freeze: isBool,
+    glory: optional((v) => isInt(v)),
+    meeshFragments: optional((v) => isInt(v)),
+  });
+
+const isChestContent = (value: unknown): boolean =>
+  shape(value, { points: (v) => isInt(v), glory: (v) => isInt(v), meeshFragments: (v) => isInt(v) });
+
+const isMeeshFragments = (value: unknown): boolean => shape(value, { held: (v) => isInt(v), perMeesh: (v) => isInt(v, 1) });
 
 const isChest = (value: unknown): boolean =>
   shape(value, {
@@ -149,9 +161,35 @@ const isChest = (value: unknown): boolean =>
         maxPoints: (n) => isInt(n),
         fragment: isFraction,
         freeze: isFraction,
+        minGlory: optional((n) => isInt(n)),
+        maxGlory: optional((n) => isInt(n)),
+        minMeeshFragments: optional((n) => isInt(n)),
+        maxMeeshFragments: optional((n) => isInt(n)),
+        meeshFragmentsPerMeesh: optional((n) => isInt(n, 1)),
       }),
     reward: orNull(isChestReward),
   });
+
+const isFragmentMintOffer = (value: unknown): boolean =>
+  shape(value, { cost: (v) => isInt(v, 1), held: (v) => isInt(v), canMint: isBool, missingFragments: (v) => isInt(v) });
+
+/**
+ * Le contenu du jour, les fragments en poche et la frappe gratuite (#10011) sont des APPOINTS : illisibles, ils
+ * tombent seuls (comme le contrat Zod, `.catch(undefined)`), sans faire refuser le bloc.
+ */
+const withReadableAppoints = (block: GameBlock): GameBlock => {
+  const { today, meeshFragments, ...chest } = block.chest;
+  const { withFragments, ...mint } = block.mint;
+  return {
+    ...block,
+    mint: { ...mint, ...(withFragments !== undefined && isFragmentMintOffer(withFragments) ? { withFragments } : {}) },
+    chest: {
+      ...chest,
+      ...(today === null || (today !== undefined && isChestContent(today)) ? { today } : {}),
+      ...(meeshFragments !== undefined && isMeeshFragments(meeshFragments) ? { meeshFragments } : {}),
+    },
+  };
+};
 
 const isFlame = (value: unknown): boolean =>
   shape(value, {
@@ -198,7 +236,7 @@ const isGameBlock = (value: unknown): value is GameBlock =>
  * `readGameExtensions` : une extension illisible tombe, le bloc survit (#9526).
  */
 export const readGameBlock = (value: unknown): GameBlockV2 | null =>
-  isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
+  isGameBlock(value) ? { ...withoutExtensions(withReadableAppoints(value)), ...readGameExtensions(value) } : null;
 
 const API_PREFIX = '/api/v1';
 
@@ -235,6 +273,7 @@ const isChestResponse = (data: unknown): data is ChestClaimResponse =>
     status: isOneOf(['claimed', 'already-claimed']),
     reward: isChestReward,
     score: (v) => isInt(v),
+    meeshFragments: optional(isMeeshFragments),
   });
 
 const isFreezeResponse = (data: unknown): data is FlameFreezeResponse =>

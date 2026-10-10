@@ -116,12 +116,12 @@ describe('GET /me/engagement — le bloc game', () => {
     await app.close();
   });
 
-  it('`meesh.mintCost` sert le prix de la PROCHAINE pièce : la 11e coûte 1 294, pour les anciens clients aussi', async () => {
+  it('`meesh.mintCost` sert le prix de la PROCHAINE pièce : la 11e coûte 1 587, pour les anciens clients aussi', async () => {
     const app = await buildApp(async () => null, 10);
 
     const { data } = (await get(app)).json();
 
-    expect(data.meesh.mintCost).toBe(1294);
+    expect(data.meesh.mintCost).toBe(1587);
     await app.close();
   });
 });

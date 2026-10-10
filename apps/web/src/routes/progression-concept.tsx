@@ -130,6 +130,7 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
             celebration={actions.celebration}
             strikeKey={actions.strikeKey}
             onMint={actions.mint}
+            {...(actions.mintWithFragments === undefined ? {} : { onMintWithFragments: actions.mintWithFragments })}
           />
         );
       }
