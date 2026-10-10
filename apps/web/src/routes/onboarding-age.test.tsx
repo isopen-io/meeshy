@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { ageBlockedNotice } from '@/components/age-blocked';
 import { sessionStore } from '@/lib/api/session';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createActMounter, typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -23,7 +25,7 @@ const { mount, unmountAll, click } = createActMounter();
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/onboarding' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadOnboardingCatalog('fr');
+  await Promise.all([loadOnboardingCatalog('fr'), loadInterfaceCatalog('fr')]);
 });
 
 afterAll(async () => {
@@ -140,8 +142,10 @@ describe('la date part, la passerelle tranche', () => {
     expect(host.querySelector('h1')?.textContent).toBe('Meeshy est réservé aux 13 ans et plus');
     expect(action(host, 'skipAll')).toBeNull();
     expect(signOuts()).toBe(0);
+    expect(ageBlockedNotice.pending()).toBe(true);
     await click(action(host, 'age.refused.confirm'));
     expect(signOuts()).toBe(1);
+    expect(ageBlockedNotice.pending()).toBe(false);
     expect(patches).toEqual([]);
   });
 });

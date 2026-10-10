@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react';
 
+import { translate } from '@/lib/i18n-catalog';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { birthDateBounds, birthDateVerdict } from '@/lib/onboarding/age';
 
@@ -129,19 +130,21 @@ export function AgeCard({
  * **MOINS DE 13 ANS** — la passerelle n'a rien écrit (422) ; l'écran le dit
  * sobrement, sans retour possible au parcours, et « Compris » ferme la
  * session. Il reste monté jusqu'au geste : déconnecter d'abord ferait partir
- * la garde de session vers la connexion avant que la phrase soit lue.
+ * la garde de session vers la connexion avant que la phrase soit lue. Ses
+ * textes sont ceux de la connexion refusée (`components/age-blocked.tsx`) :
+ * la même phrase à chaque porte.
  */
 export function AgeRefusal({ host, onConfirm }: { readonly host: CardHost; readonly onConfirm: () => void }) {
   const lang = host.lang;
   return (
     <CardFrame
       step="age-refused"
-      title={translateOnboarding(lang, 'onboarding.age.below.title')}
-      body={translateOnboarding(lang, 'onboarding.age.below.body')}
+      title={translate(lang, 'age.blocked.title')}
+      body={translate(lang, 'age.blocked.body')}
       illustration={<AgeIllustration />}
       actions={
         <PrimaryButton id="age.refused.confirm" onClick={onConfirm}>
-          {translateOnboarding(lang, 'onboarding.age.below.confirm')}
+          {translate(lang, 'age.blocked.confirm')}
         </PrimaryButton>
       }
     />

@@ -5,6 +5,7 @@ import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
 
+import { ageBlockedNotice } from '@/components/age-blocked';
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
 import {
@@ -423,6 +424,7 @@ export function OnboardingJourney({
       if (outcome.kind === 'invalid' || outcome.kind === 'failed') return outcome.kind;
       if (!alive.current || context === null) return 'done';
       if (outcome.kind === 'below-minimum') {
+        ageBlockedNotice.raise();
         setRefused(true);
         return 'done';
       }
@@ -479,7 +481,13 @@ export function OnboardingJourney({
       <main data-onboarding className="onb" dir={lang === 'ar' ? 'rtl' : 'ltr'} aria-label={translateOnboarding(lang, 'onboarding.title')}>
         <div className="onb-backdrop" aria-hidden="true" />
         <div className="onb-stage">
-          <AgeRefusal host={host} onConfirm={() => void deps.signOut()} />
+          <AgeRefusal
+            host={host}
+            onConfirm={() => {
+              ageBlockedNotice.drop();
+              void deps.signOut();
+            }}
+          />
         </div>
       </main>
     );

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { safeReturnPath } from '@/lib/view/magic-link';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AgeBlocked, isAgeBelowMinimum } from './age-blocked';
 import { AuthColumn } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
@@ -17,7 +19,7 @@ import { Glyph, GlyphSvg } from './glyph';
  * `MeeshyApp.swift:1019-1034`) — cet écran ne fait que naviguer ensuite.
  */
 
-type ValidationState = 'validating' | 'invalid' | 'offline' | 'done';
+type ValidationState = 'validating' | 'invalid' | 'offline' | 'age-blocked' | 'done';
 
 export function MagicLinkValidation({
   token,
@@ -50,6 +52,10 @@ export function MagicLinkValidation({
         }
         setState('done');
         go(safeReturnPath(returnUrl), true);
+        return;
+      }
+      if (isAgeBelowMinimum(result)) {
+        setState('age-blocked');
         return;
       }
       if (result.status === 0) {
@@ -112,6 +118,8 @@ export function MagicLinkValidation({
           </div>
         </>
       ) : null}
+
+      {state === 'age-blocked' ? <AgeBlocked language={currentInterfaceLanguage()} onConfirm={() => go(href('login'), true)} /> : null}
 
       {state === 'offline' ? (
         <>

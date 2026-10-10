@@ -19,6 +19,7 @@ import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 import { PasswordInput } from '@/components/password-input';
 import { DeviceAccountList } from '@/components/device-account-list';
+import { AgeBlocked, ageBlockedNotice, isAgeBelowMinimum } from '@/components/age-blocked';
 import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
 import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
 import { translate } from '@/lib/i18n-catalog';
@@ -180,6 +181,9 @@ export function LoginDoors({
   const [focused, setFocused] = useState<'username' | 'password' | 'code' | null>(null);
   const [isSubmitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  /* MOINS DE 13 ANS (#9928) : un 403 `AGE_BELOW_MINIMUM` n'est pas un échec à réessayer. */
+  const [ageBlocked, setAgeBlocked] = useState(() => ageBlockedNotice.pending());
+  useEffect(() => ageBlockedNotice.drop(), []);
 
   const language = currentInterfaceLanguage();
   const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
@@ -228,6 +232,11 @@ export function LoginDoors({
     setErrorMessage(null);
     const result = await passwordLogin({ username, password, ...(offersKeepSignedIn ? { rememberDevice: keepSignedIn } : {}) });
     setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
     if (!result.ok) {
       setErrorMessage(placeLoginFailure(result).message);
       return;
@@ -254,6 +263,13 @@ export function LoginDoors({
     setErrorMessage(null);
     const result = await auth.completeTwoFactor(twoFactorCode);
     setSubmitting(false);
+    if (!result.ok && isAgeBelowMinimum(result)) {
+      sessionStore.getState().clearSession();
+      setTwoFactorCode('');
+      setPassword('');
+      setAgeBlocked(true);
+      return;
+    }
     if (!result.ok) setErrorMessage(placeLoginFailure(result).message);
   }
 
@@ -261,6 +277,14 @@ export function LoginDoors({
     sessionStore.getState().clearSession();
     setTwoFactorCode('');
     setErrorMessage(null);
+  }
+
+  if (ageBlocked) {
+    return (
+      <AuthColumn className="justify-center gap-6 px-8">
+        <AgeBlocked language={language} onConfirm={() => setAgeBlocked(false)} />
+      </AuthColumn>
+    );
   }
 
   return (

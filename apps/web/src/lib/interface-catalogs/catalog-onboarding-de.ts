@@ -41,9 +41,6 @@ const de = {
   'onboarding.age.tooOld': 'Prüfe das Jahr deines Geburtsdatums.',
   'onboarding.age.invalid': 'Dieses Datum wurde nicht angenommen. Prüfe es.',
   'onboarding.age.failed': 'Dein Datum wurde nicht gespeichert. Versuch es noch einmal.',
-  'onboarding.age.below.title': 'Meeshy ist ab 13 Jahren',
-  'onboarding.age.below.body': 'Dieses Konto kann erst ab 13 Jahren genutzt werden. Du wirst abgemeldet.',
-  'onboarding.age.below.confirm': 'Verstanden',
 
   'onboarding.global.title': 'Sag Hallo zur Welt',
   'onboarding.global.body': 'Meeshy Global ist der Treffpunkt für alle. Sag einfach Hallo, ganz ohne Druck.',

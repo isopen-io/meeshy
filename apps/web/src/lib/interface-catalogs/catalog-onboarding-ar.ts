@@ -41,9 +41,6 @@ const ar = {
   'onboarding.age.tooOld': 'تحقّق من سنة ميلادك.',
   'onboarding.age.invalid': 'لم يُقبل هذا التاريخ. تحقّق منه.',
   'onboarding.age.failed': 'لم يُحفظ تاريخك. حاول مجددًا.',
-  'onboarding.age.below.title': 'Meeshy مخصّص لمن هم في سن 13 عامًا فأكثر',
-  'onboarding.age.below.body': 'لا يمكن استخدام هذا الحساب قبل بلوغك 13 عامًا. سيتم تسجيل خروجك.',
-  'onboarding.age.below.confirm': 'فهمت',
 
   'onboarding.global.title': 'قل مرحبًا للعالم',
   'onboarding.global.body': 'Meeshy Global هو الصالون الذي يلتقي فيه الجميع. ألقِ التحية بلا ضغط.',
