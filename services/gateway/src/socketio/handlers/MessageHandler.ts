@@ -869,11 +869,10 @@ export class MessageHandler {
         return;
       }
 
-      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
-      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
-      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
-      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
-      // pour les quatre transports.
+      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
+      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
+      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
+      // tel quel : la version de source d'une traduction partagée en est l'ISO.
       await applyMessageEditEffects(this.prisma, {
         id: message.id,
         conversationId: message.conversationId,
@@ -881,6 +880,7 @@ export class MessageHandler {
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: editedContent,
+        editedAt,
       });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin

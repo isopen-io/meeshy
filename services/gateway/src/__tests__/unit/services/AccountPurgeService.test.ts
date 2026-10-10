@@ -14,6 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -35,6 +36,9 @@ function fakePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // Les traductions partagées (#9899) : un compte sans participant.
+    participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    sharedTranslation: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     // Le jeu (#9384) : des collections vides, comme un compte qui n'a jamais joué.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
@@ -77,7 +81,84 @@ describe('purgeAccountIsolatedData', () => {
       addressBookContactsDeleted: 0,
       contactJoinNoticesDeleted: 0,
       arrivalAnnouncementsDeleted: 0,
+      sharedTranslationsDeleted: 0,
     });
+  });
+});
+
+/**
+ * Une traduction partagée (#9899) est la version scellée d'un message que les
+ * appareils des membres se passent par la passerelle ; `sharedById` est le
+ * `Participant.id` de celui qui l'a partagée. La purge du compte la laissait
+ * derrière : la contribution d'un compte supprimé restait servie, scellée mais
+ * lisible pour qui détenait la clé, aussi longtemps que la base la gardait.
+ *
+ * Le double de la table APPLIQUE le `where` : ces témoins lisent les lignes qui
+ * RESTENT.
+ */
+describe('purgeAccountIsolatedData — traductions partagées', () => {
+  const AUTRE_UTILISATEUR = '507f1f77bcf86cd799439022';
+  const PARTICIPANT_EN_A = '507f1f77bcf86cd799439b01';
+  const PARTICIPANT_EN_B = '507f1f77bcf86cd799439b02';
+  const PARTICIPANT_D_UN_AUTRE = '507f1f77bcf86cd799439b99';
+
+  const participants = [
+    { id: PARTICIPANT_EN_A, userId: USER_ID },
+    { id: PARTICIPANT_EN_B, userId: USER_ID },
+    { id: PARTICIPANT_D_UN_AUTRE, userId: AUTRE_UTILISATEUR },
+  ];
+
+  const prismaWith = (table: ReturnType<typeof sharedTranslationTable>) =>
+    fakePrisma({
+      participant: {
+        findMany: jest.fn<any>(async ({ where }: { where: { userId: string } }) =>
+          participants.filter((participant) => participant.userId === where.userId),
+        ),
+      },
+      sharedTranslation: table.delegate,
+    });
+
+  it("efface ce que les participants du compte avaient partagé, dans toutes ses conversations", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'dans-A', sharedById: PARTICIPANT_EN_A }),
+      sharedTranslationRow({ id: 'dans-B', sharedById: PARTICIPANT_EN_B }),
+    ]);
+
+    await purgeAccountIsolatedData(prismaWith(table), USER_ID);
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("laisse ce que d'AUTRES participants ont partagé — y compris sur les messages du compte", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'du-compte', sharedById: PARTICIPANT_EN_A }),
+      sharedTranslationRow({ id: "d'un-autre", sharedById: PARTICIPANT_D_UN_AUTRE }),
+    ]);
+
+    await purgeAccountIsolatedData(prismaWith(table), USER_ID);
+
+    expect(table.remainingIds()).toEqual(["d'un-autre"]);
+  });
+
+  it('le dit dans son bilan, et une seconde passe ne trouve plus rien (idempotent)', async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ sharedById: PARTICIPANT_EN_A }),
+      sharedTranslationRow({ sharedById: PARTICIPANT_EN_B, targetLanguage: 'en' }),
+    ]);
+    const prisma = prismaWith(table);
+
+    const first = await purgeAccountIsolatedData(prisma, USER_ID);
+    const second = await purgeAccountIsolatedData(prisma, USER_ID);
+
+    expect(first.sharedTranslationsDeleted).toBe(2);
+    expect(second.sharedTranslationsDeleted).toBe(0);
+  });
+
+  it("une panne PROPAGE, comme celle des autres suppressions : l'appelant la journalise et rejoue la purge", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ sharedById: PARTICIPANT_EN_A })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await expect(purgeAccountIsolatedData(prismaWith(table), USER_ID)).rejects.toThrow('mongo down');
   });
 });
 
