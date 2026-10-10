@@ -4,7 +4,6 @@ import type { StudioChromeCatalogSlice } from './catalog-fr-studio-chrome';
 const arStudioChrome = {
   'story.studio.more': 'خيارات أخرى',
   'story.studio.preview': 'معاينة',
-  'story.studio.preview.close': 'إغلاق المعاينة',
   'story.studio.page.remove.current': 'حذف هذا المشهد',
   'story.studio.postText': 'نص المنشور',
   'story.studio.postText.placeholder': 'اكتب نص المنشور…',
@@ -16,7 +15,6 @@ const arStudioChrome = {
   'story.studio.tile.frame': 'الإطار',
   'story.studio.undo': 'تراجع',
   'story.studio.redo': 'إعادة',
-  'story.studio.frame': 'الإطار',
   'story.studio.frame.media': 'الوسائط',
   'story.studio.frame.around': 'حول الوسائط',
   'story.studio.frame.fit': 'ملاءمة',
@@ -62,7 +60,6 @@ const arStudioChrome = {
   'story.studio.object.duplicate': 'تكرار',
   'story.studio.object.edit': 'تعديل',
   'story.studio.object.remove': 'إزالة',
-  'story.studio.edit.done': 'حسنًا',
   'story.studio.pose.left': 'إلى اليسار',
   'story.studio.pose.right': 'إلى اليمين',
   'story.studio.pose.up': 'إلى الأعلى',

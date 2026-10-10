@@ -16,7 +16,6 @@ const enIdentity = {
   'avatar.menu.view_story': 'View story',
   'avatar.menu.conversation_details': 'Conversation details',
   'conversation.details.title': 'Conversation details',
-  'conversation.details.open': 'View details of {name}',
   'conversation.details.type.direct': 'Private chat',
   'conversation.details.type.group': 'Group',
   'conversation.details.type.public': 'Public conversation',

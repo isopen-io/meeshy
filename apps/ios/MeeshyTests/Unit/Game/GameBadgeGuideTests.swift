@@ -227,10 +227,14 @@ final class GameBadgeGuideTests: XCTestCase {
         let rendu = RenderedScreen(GameRulesPage(focusedRule: nil, focusedSection: .badges), size: CGSize(width: 402, height: 9000))
         ecran = rendu
 
-        let vus = rendu.identifiers
-        XCTAssertTrue(vus.contains(GameRulesPage.sectionID(.badges)), "la section badges manque au carnet. Vus : \(vus)")
+        // Le harnais rend la main dès que l'arbre dit UN identifiant — celui de la page, posé avant son contenu
+        // sur un hôte lent (CI 38043332830 : « Vus : [game.rules.page, game.rules.page] »). On attend donc chaque
+        // élément attendu, sous un plafond : une section absente reste rouge.
+        XCTAssertNotNil(rendu.frame(of: GameRulesPage.sectionID(.badges)),
+                        "la section badges manque au carnet. Vus : \(rendu.identifiers)")
         for axis in EngagementAxisKey.allCases {
-            XCTAssertTrue(vus.contains("game.rules.badges.axis.\(axis.rawValue)"), "\(axis.rawValue) manque à la section badges")
+            XCTAssertNotNil(rendu.frame(of: "game.rules.badges.axis.\(axis.rawValue)", borne: 5),
+                            "\(axis.rawValue) manque à la section badges. Vus : \(rendu.identifiers)")
         }
     }
 

@@ -8,7 +8,6 @@ const deConversationCard = {
   'conversation.card.messages.one': '{count} Nachricht',
   'conversation.card.messages.other': '{count} Nachrichten',
   'conversation.card.languages': 'Gesprochene Sprachen',
-  'conversation.card.join': 'Beitreten',
   'conversation.card.joinAnonymously': 'Anonym beitreten',
   'conversation.card.open': 'Öffnen',
   'conversation.card.leave': 'Verlassen',

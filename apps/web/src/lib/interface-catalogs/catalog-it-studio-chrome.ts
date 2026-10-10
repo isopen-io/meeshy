@@ -4,7 +4,6 @@ import type { StudioChromeCatalogSlice } from './catalog-fr-studio-chrome';
 const itStudioChrome = {
   'story.studio.more': 'Altre opzioni',
   'story.studio.preview': 'Anteprima',
-  'story.studio.preview.close': 'Chiudi l’anteprima',
   'story.studio.page.remove.current': 'Elimina questa scena',
   'story.studio.postText': 'Testo del post',
   'story.studio.postText.placeholder': 'Scrivi il testo del post…',
@@ -16,7 +15,6 @@ const itStudioChrome = {
   'story.studio.tile.frame': 'Cornice',
   'story.studio.undo': 'Annulla',
   'story.studio.redo': 'Ripristina',
-  'story.studio.frame': 'Cornice',
   'story.studio.frame.media': 'Il media',
   'story.studio.frame.around': 'Intorno al media',
   'story.studio.frame.fit': 'Adatta',
@@ -62,7 +60,6 @@ const itStudioChrome = {
   'story.studio.object.duplicate': 'Duplica',
   'story.studio.object.edit': 'Modifica',
   'story.studio.object.remove': 'Rimuovi',
-  'story.studio.edit.done': 'OK',
   'story.studio.pose.left': 'A sinistra',
   'story.studio.pose.right': 'A destra',
   'story.studio.pose.up': 'In alto',
