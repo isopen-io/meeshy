@@ -77,7 +77,11 @@ export const ONBOARDING_STEPS = ['languages', 'email', 'age', 'global', 'story',
  * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */
 export const ONBOARDING_COMPLETION_STEPS = ['languages', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
-type ExhaustiveSteps = [OnboardingStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
+/* `age` (#9927) est au contrat partagé mais pas encore dans ce parcours : la passerelle ne
+   la sert qu'au client qui annonce `X-Meeshy-Capabilities: onboarding-age`, et sa carte arrive
+   avec #9928. Purement de TYPE, ce gabarit ne pèse rien dans la première peinture. */
+type ServedStepId = Exclude<OnboardingStepId, 'age'>;
+type ExhaustiveSteps = [ServedStepId] extends [(typeof ONBOARDING_STEPS)[number]] ? true : never;
 const stepsAreExhaustive: ExhaustiveSteps = true;
 void stepsAreExhaustive;
 
@@ -118,7 +122,11 @@ const Served = z.strictObject({
 });
 
 type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
-const sameShape: SameShape<z.infer<typeof Served>, OnboardingState> = true;
+type ServedState = Omit<OnboardingState, 'seenSteps' | 'prefilledSteps' | 'viewerWriteRestriction'> & {
+  seenSteps: ServedStepId[];
+  prefilledSteps: ServedStepId[];
+};
+const sameShape: SameShape<z.infer<typeof Served>, ServedState> = true;
 void sameShape;
 
 export function decodeOnboardingState(raw: unknown): OnboardingState | null {

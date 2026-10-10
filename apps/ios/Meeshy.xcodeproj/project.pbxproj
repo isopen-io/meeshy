@@ -1504,6 +1504,7 @@
 		7D06CD3D3619F975DD891F21 /* ConversationInfoSheetHeaderMenuLocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A36ECBE28C52F4820CB11CB2 /* ConversationInfoSheetHeaderMenuLocalizationTests.swift */; };
 		7D0703B42A7362E2CF1F50F5 /* AdaptiveRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DE232F8ADAE39199D778806 /* AdaptiveRootView.swift */; };
 		7D11DC1F748DE425E73D651C /* GameMintHeroTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C342202758B52608C2D6488C /* GameMintHeroTests.swift */; };
+		7D2B058F4B2CA4035F4CBFFD /* VitrineInteractionsLiens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF0B6D65C3C4F58E2B60C5E /* VitrineInteractionsLiens.swift */; };
 		7D613E38BC36E3DC82CD7572 /* StoryViewerReactionRollbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FDA47A6ADD260AB074111EC /* StoryViewerReactionRollbackTests.swift */; };
 		7D6FB68FB50AEB4C41096ACC /* BubbleSecondaryContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC5625A3FFF7FFD71902EC57 /* BubbleSecondaryContent.swift */; };
 		7D76B8E1B92DDF76CFC51284 /* SyncPillTimerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFCC70097A7ECD4ED83C1CB0 /* SyncPillTimerStateTests.swift */; };
@@ -2732,6 +2733,7 @@
 		E356147C253FF0ED075C458E /* PeerRepaintOpenSurfacesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D478EC15A6F2FC57A802C9FD /* PeerRepaintOpenSurfacesTests.swift */; };
 		E361231BB8C96DD687620EE6 /* PostDetailView+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA96FE4677B6D8E45C5C6B4C /* PostDetailView+Canvas.swift */; };
 		E362BCF17A611568064636DB /* ReelSceneRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1D80B9763E6A31DF7E9650A /* ReelSceneRoutingTests.swift */; };
+		E36686D153A37D13EBA4375D /* VitrineLiensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11AC4444F47BDF9A78C3BE84 /* VitrineLiensTests.swift */; };
 		E36B9BDDE6BED3F21A085B93 /* MeeshyComposerHost+Animated.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D93035E371C922108859B38 /* MeeshyComposerHost+Animated.swift */; };
 		E37083F0438CED23DEC0CA35 /* GallerySceneScrubber.swift in Sources */ = {isa = PBXBuildFile; fileRef = B035C3D28AA9C1E91084C700 /* GallerySceneScrubber.swift */; };
 		E372D7374248A6ED01D0E18A /* ComposerMoodSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DC2F10794039EDAB28957B /* ComposerMoodSurface.swift */; };
@@ -3312,6 +3314,7 @@
 		0C94A900A303C90881FC818D /* CameraModel+Recording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CameraModel+Recording.swift"; sourceTree = "<group>"; };
 		0CC4AA0ADB72BD8D313DF8AC /* ComposeLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposeLanguageTests.swift; sourceTree = "<group>"; };
 		0CE97CDC0D9E967CE21E8D1B /* GamePhotoOfferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoOfferView.swift; sourceTree = "<group>"; };
+		0CF0B6D65C3C4F58E2B60C5E /* VitrineInteractionsLiens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineInteractionsLiens.swift; sourceTree = "<group>"; };
 		0D1A4197AA812E9A746B3BAA /* GamePhotoCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCoordinator.swift; sourceTree = "<group>"; };
 		0D218074EE027B958057E149 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
 		0D3D8782CFED9EFFA4271C2B /* ComposerCaptureFocusGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureFocusGeometry.swift; sourceTree = "<group>"; };
@@ -3361,6 +3364,7 @@
 		117A7B5499C53D8B3D5332B4 /* ComposerCapturePhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCapturePhaseTests.swift; sourceTree = "<group>"; };
 		1186A67AF3496D57A908C9C9 /* RequestsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RequestsViewModel.swift; sourceTree = "<group>"; };
 		1189CE77AA93B858A88F233D /* CommentQuotedMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentQuotedMediaTests.swift; sourceTree = "<group>"; };
+		11AC4444F47BDF9A78C3BE84 /* VitrineLiensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitrineLiensTests.swift; sourceTree = "<group>"; };
 		11BC1F2EE651F2343D679028 /* StoryProgressBarsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryProgressBarsView.swift; sourceTree = "<group>"; };
 		11C3300DA7AF6355C180603F /* NearbyDiscoverabilityControlFoldGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NearbyDiscoverabilityControlFoldGuardTests.swift; sourceTree = "<group>"; };
 		11CED982E43D3989D890A4FF /* ComposerCaretAfterProgrammaticWriteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaretAfterProgrammaticWriteTests.swift; sourceTree = "<group>"; };
@@ -7083,6 +7087,7 @@
 				F300451D6ADDBF5C13049BDF /* VitrineInteractionsTests.swift */,
 				8D292AE8AEAC7647648FAC7C /* VitrineJeuTests.swift */,
 				5E8FCC558951BA451F0F87DC /* VitrineLaunchTests.swift */,
+				11AC4444F47BDF9A78C3BE84 /* VitrineLiensTests.swift */,
 				19960CAB7301D1D820DF742E /* VitrineReelTests.swift */,
 				9F3AC3E66659E5FBE9610230 /* VitrineRenduTests.swift */,
 				B30241030DA1447D06C7482E /* VitrineSeederTests.swift */,
@@ -9648,6 +9653,7 @@
 				77D7CE1454EEFE9F00FE0AFC /* VitrineInteractions.swift */,
 				28E4AC4DC33FF2BB0F9AF3C3 /* VitrineInteractionsComposeur.swift */,
 				C6D617FB019CFB2E0515DEAF /* VitrineInteractionsEntete.swift */,
+				0CF0B6D65C3C4F58E2B60C5E /* VitrineInteractionsLiens.swift */,
 				5C9B0510F3F33EBBF645B292 /* VitrineInteractionsPost.swift */,
 				FA7FFDEE31894BE413FF6DD8 /* VitrineInteractionsReel.swift */,
 				25D8A924AA4BFDD1B0A8B93F /* VitrineJeu.swift */,
@@ -10082,9 +10088,9 @@
 			sourceTree = "<group>";
 		};
 		ED468E0EE7FC2876B3E735CA /* Bubble */ = {
-				E3C7AD0E47B6478E097E73DA /* AttachmentReactionPickerOverlay.swift */,
 			isa = PBXGroup;
 			children = (
+				E3C7AD0E47B6478E097E73DA /* AttachmentReactionPickerOverlay.swift */,
 				0327327AFEAB2172F21A1564 /* AudioBubbleRouter.swift */,
 				FDDF15A8DA45DB357ACAD0DC /* AudioCarouselView.swift */,
 				C53F0A5069E0FC64C23F67C6 /* BubbleAttachmentView.swift */,
@@ -12158,6 +12164,7 @@
 				BEE8C610A3DC6F29953A0FAD /* VitrineInteractions.swift in Sources */,
 				11EB9F3CB37B1FC332188FFB /* VitrineInteractionsComposeur.swift in Sources */,
 				533188448DAF87F51AAF25CD /* VitrineInteractionsEntete.swift in Sources */,
+				7D2B058F4B2CA4035F4CBFFD /* VitrineInteractionsLiens.swift in Sources */,
 				612871AE9A5465824980A4C9 /* VitrineInteractionsPost.swift in Sources */,
 				39468E1B81CA642582B2505F /* VitrineInteractionsReel.swift in Sources */,
 				99F9EBBA06F30C57B69B8CCD /* VitrineJeu.swift in Sources */,
@@ -13632,6 +13639,7 @@
 				5E713B6AC334505885B9BD47 /* VitrineInteractionsTests.swift in Sources */,
 				BD2A81DBF732B9C3F964D52A /* VitrineJeuTests.swift in Sources */,
 				F273AED9F4C7CF468E88AF85 /* VitrineLaunchTests.swift in Sources */,
+				E36686D153A37D13EBA4375D /* VitrineLiensTests.swift in Sources */,
 				1699E74ED21AF8537A4E3DE2 /* VitrineReelTests.swift in Sources */,
 				4EFCA1003C81D289A6B03EE7 /* VitrineRenduTests.swift in Sources */,
 				170B5465E73BEEA7DD2E73E8 /* VitrineSeederTests.swift in Sources */,

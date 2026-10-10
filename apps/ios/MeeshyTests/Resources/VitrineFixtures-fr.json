@@ -2691,6 +2691,317 @@
      }
     ]
    }
+  ],
+  "879278d7719eae1bede01e6d": [
+   {
+    "id": "b79c559e652fe41fefffb0a8",
+    "conversationId": "879278d7719eae1bede01e6d",
+    "senderId": "4bd190a8ed53f2534559f6a4",
+    "createdAt": "2026-09-30T11:41:00.000Z",
+    "sender": {
+     "id": "4bd190a8ed53f2534559f6a4",
+     "username": "Coruja 🦉",
+     "displayName": "Coruja 🦉",
+     "type": "anonymous"
+    },
+    "content": "Sinceramente? O bolo de domingo estava salgado demais 😅",
+    "originalLanguage": "pt",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "34b13ef74a3e6c3ff00a3a7e",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "fr",
+      "translatedContent": "Franchement ? Le gâteau de dimanche était bien trop salé 😅",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "dd64570f3f6dfd26058bd4df",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "en",
+      "translatedContent": "Honestly? Sunday’s cake was way too salty 😅",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "5546fd92d5e66a1c9ce9054c",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "es",
+      "translatedContent": "¿Sinceramente? El pastel del domingo estaba demasiado salado 😅",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "6c4e47fdcb602dee6949c7fe",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "de",
+      "translatedContent": "Ehrlich? Der Sonntagskuchen war viel zu salzig 😅",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "2d316553e5ce2c5af65feea8",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "it",
+      "translatedContent": "Sinceramente? La torta di domenica era troppo salata 😅",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "568eddeb3bb5241fca97cfae",
+      "messageId": "b79c559e652fe41fefffb0a8",
+      "targetLanguage": "ar",
+      "translatedContent": "بصراحة؟ كعكة يوم الأحد كانت مالحة جدًا 😅",
+      "sourceLanguage": "pt"
+     }
+    ]
+   },
+   {
+    "id": "f83f1a5449c75ddefd989cf5",
+    "conversationId": "879278d7719eae1bede01e6d",
+    "senderId": "8b9988cf8541dc1c07474cfb",
+    "createdAt": "2026-09-30T11:44:00.000Z",
+    "sender": {
+     "id": "8b9988cf8541dc1c07474cfb",
+     "username": "여우 🦊",
+     "displayName": "여우 🦊",
+     "type": "anonymous"
+    },
+    "content": "솔직히 다음 가족 여행은 바다로 가고 싶어 🏖️",
+    "originalLanguage": "ko",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "b69c0dac84bf0aa53fc83812",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "fr",
+      "translatedContent": "Pour être honnête, le prochain voyage en famille, je le veux à la mer 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "db315d78a96e79a84d3df059",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "en",
+      "translatedContent": "To be honest, I want the next family trip to be by the sea 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "2ef2e97e03a9bca74e4557ad",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "es",
+      "translatedContent": "La verdad, quiero que el próximo viaje familiar sea a la playa 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "00dad5540c57277a0b047ebb",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "de",
+      "translatedContent": "Ehrlich gesagt will ich die nächste Familienreise ans Meer 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "7f5c75e5f4e754711e945baa",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "it",
+      "translatedContent": "A dire il vero, il prossimo viaggio di famiglia lo voglio al mare 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "c0e2462d88381b3235b1723e",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "pt",
+      "translatedContent": "Pra ser sincero, quero a próxima viagem em família na praia 🏖️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "3859db263f0271008d658b50",
+      "messageId": "f83f1a5449c75ddefd989cf5",
+      "targetLanguage": "ar",
+      "translatedContent": "بصراحة، أريد رحلة العائلة القادمة إلى البحر 🏖️",
+      "sourceLanguage": "ko"
+     }
+    ]
+   },
+   {
+    "id": "7e984e1472f191fbb0e1c40b",
+    "conversationId": "879278d7719eae1bede01e6d",
+    "senderId": "63d4832e7465fb24ed251210",
+    "createdAt": "2026-09-30T11:47:00.000Z",
+    "sender": {
+     "id": "63d4832e7465fb24ed251210",
+     "username": "Panda 🐼",
+     "displayName": "Panda 🐼",
+     "type": "anonymous"
+    },
+    "content": "Deberías abrir tu canal de cocina. ¡Lo petarías! 🍳",
+    "originalLanguage": "es",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "514b131c7766623046116578",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "fr",
+      "translatedContent": "Tu devrais lancer ta chaîne de cuisine. Tu cartonnerais ! 🍳",
+      "sourceLanguage": "es"
+     },
+     {
+      "id": "d518c2c09cac215bdf200cf9",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "en",
+      "translatedContent": "You should start your cooking channel. You’d smash it! 🍳",
+      "sourceLanguage": "es"
+     },
+     {
+      "id": "aae46ccbc125c336da350f42",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "de",
+      "translatedContent": "Du solltest deinen Kochkanal starten. Du würdest abräumen! 🍳",
+      "sourceLanguage": "es"
+     },
+     {
+      "id": "c9cd145b276fc2cafed82879",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "it",
+      "translatedContent": "Dovresti aprire il tuo canale di cucina. Spaccheresti! 🍳",
+      "sourceLanguage": "es"
+     },
+     {
+      "id": "6a101cb87150a3d026456d63",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "pt",
+      "translatedContent": "Você devia abrir seu canal de culinária. Ia bombar! 🍳",
+      "sourceLanguage": "es"
+     },
+     {
+      "id": "46ba9d092509b7696376188c",
+      "messageId": "7e984e1472f191fbb0e1c40b",
+      "targetLanguage": "ar",
+      "translatedContent": "يجب أن تطلق قناة الطبخ الخاصة بك. ستنجح بقوة! 🍳",
+      "sourceLanguage": "es"
+     }
+    ]
+   },
+   {
+    "id": "94a9d953979dfb841e3846a8",
+    "conversationId": "879278d7719eae1bede01e6d",
+    "senderId": "b8ad2589cadccc2abef7eec7",
+    "createdAt": "2026-09-30T11:50:00.000Z",
+    "sender": {
+     "id": "b8ad2589cadccc2abef7eec7",
+     "username": "Koala 🐨",
+     "displayName": "Koala 🐨",
+     "type": "anonymous"
+    },
+    "content": "Ich vermisse unsere Spieleabende. Freitag? 🎲",
+    "originalLanguage": "de",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "d50e9f5b2ddcd95a1b9edfab",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "fr",
+      "translatedContent": "Nos soirées jeux me manquent. Vendredi ? 🎲",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "18f8df389786edb96185fd16",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "en",
+      "translatedContent": "I miss our game nights. Friday? 🎲",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "b11cbd480c2f5f93b471a906",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "es",
+      "translatedContent": "Echo de menos nuestras noches de juegos. ¿El viernes? 🎲",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "280a04f1e1121fde66246586",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "it",
+      "translatedContent": "Mi mancano le nostre serate giochi. Venerdì? 🎲",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "06c92e466736182b7e890785",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "pt",
+      "translatedContent": "Sinto falta das nossas noites de jogos. Sexta? 🎲",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "8ca03356c19a040cd406b7be",
+      "messageId": "94a9d953979dfb841e3846a8",
+      "targetLanguage": "ar",
+      "translatedContent": "أشتاق إلى سهرات الألعاب. الجمعة؟ 🎲",
+      "sourceLanguage": "de"
+     }
+    ]
+   },
+   {
+    "id": "5ffdc84e1342bbffd99aeb0c",
+    "conversationId": "879278d7719eae1bede01e6d",
+    "senderId": "da132e84b8f981677f81f57d",
+    "createdAt": "2026-09-30T11:53:00.000Z",
+    "sender": {
+     "id": "da132e84b8f981677f81f57d",
+     "username": "うさぎ 🐰",
+     "displayName": "うさぎ 🐰",
+     "type": "anonymous"
+    },
+    "content": "誕生日パーティー、サプライズにしようよ 🤫🎂",
+    "originalLanguage": "ja",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "e3cde468ab9de94a60d9c99a",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "fr",
+      "translatedContent": "Et si on faisait de l’anniversaire une surprise ? 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "fe87d21245a94b008a8a3d70",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "en",
+      "translatedContent": "Let’s make the birthday party a surprise 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "ea2682acaab2ac28aed8cf3c",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "es",
+      "translatedContent": "¿Y si hacemos la fiesta de cumpleaños sorpresa? 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "e773c446d13d71199f4094ae",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "de",
+      "translatedContent": "Lass uns die Geburtstagsparty zur Überraschung machen 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "e86205a31c4e49e1eb17c377",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "it",
+      "translatedContent": "Facciamo della festa di compleanno una sorpresa 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "2d12bc79b14fc28595d8c0d5",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "pt",
+      "translatedContent": "Bora fazer a festa de aniversário surpresa? 🤫🎂",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "25085472b47d170fb5aa55a6",
+      "messageId": "5ffdc84e1342bbffd99aeb0c",
+      "targetLanguage": "ar",
+      "translatedContent": "ما رأيكم أن نجعل حفلة عيد الميلاد مفاجأة؟ 🤫🎂",
+      "sourceLanguage": "ja"
+     }
+    ]
+   }
   ]
  },
  "progression": {
@@ -2906,7 +3217,8 @@
  "modesDeLecture": {
   "cd2497b0ef23413bae5c43f9": "script",
   "5f4ae64a155d6b8f9eb31f06": "script",
-  "ca4fa0732bd34cb8c64b7ed7": "bubbles"
+  "ca4fa0732bd34cb8c64b7ed7": "bubbles",
+  "879278d7719eae1bede01e6d": "script"
  },
  "medias": [
   {
@@ -3504,6 +3816,268 @@
    }
   }
  ],
+ "conversationsDeScene": {
+  "interaction-sonde": [
+   {
+    "id": "879278d7719eae1bede01e6d",
+    "type": "group",
+    "title": "Dis-moi tout 🤫",
+    "memberCount": 6,
+    "unreadCount": 0,
+    "isMember": true,
+    "createdAt": "2026-09-27T12:00:00.000Z",
+    "updatedAt": "2026-09-30T11:53:00.000Z",
+    "lastMessage": {
+     "id": "5ffdc84e1342bbffd99aeb0c",
+     "content": "誕生日パーティー、サプライズにしようよ 🤫🎂",
+     "senderId": "da132e84b8f981677f81f57d",
+     "createdAt": "2026-09-30T11:53:00.000Z",
+     "messageType": "text",
+     "sender": {
+      "id": "da132e84b8f981677f81f57d",
+      "username": "うさぎ 🐰",
+      "displayName": "うさぎ 🐰",
+      "type": "anonymous"
+     }
+    },
+    "lastMessageTranslations": {
+     "fr": "Et si on faisait de l’anniversaire une surprise ? 🤫🎂",
+     "en": "Let’s make the birthday party a surprise 🤫🎂",
+     "es": "¿Y si hacemos la fiesta de cumpleaños sorpresa? 🤫🎂",
+     "de": "Lass uns die Geburtstagsparty zur Überraschung machen 🤫🎂",
+     "it": "Facciamo della festa di compleanno una sorpresa 🤫🎂",
+     "pt": "Bora fazer a festa de aniversário surpresa? 🤫🎂",
+     "ar": "ما رأيكم أن نجعل حفلة عيد الميلاد مفاجأة؟ 🤫🎂"
+    },
+    "lastMessageOriginalLanguage": "ja",
+    "lastMessageAt": "2026-09-30T11:53:00.000Z"
+   }
+  ],
+  "interaction-sav": [
+   {
+    "id": "b24fcada141bd2a687059d91",
+    "type": "group",
+    "title": "SAV Lampe torche",
+    "memberCount": 18,
+    "unreadCount": 3,
+    "isMember": true,
+    "createdAt": "2026-09-10T12:00:00.000Z",
+    "updatedAt": "2026-09-30T11:59:30.000Z",
+    "lastMessage": {
+     "id": "77e6d07a9f32eb9d97f6dc9d",
+     "content": "Ist die Lampe wasserdicht? 🔦",
+     "senderId": "883af879ab86fd215aa3dc7e",
+     "createdAt": "2026-09-30T11:59:30.000Z",
+     "messageType": "text",
+     "sender": {
+      "id": "883af879ab86fd215aa3dc7e",
+      "username": "Max",
+      "displayName": "Max",
+      "type": "anonymous"
+     }
+    },
+    "lastMessageTranslations": {
+     "fr": "La lampe est-elle étanche ? 🔦",
+     "en": "Is the flashlight waterproof? 🔦",
+     "es": "¿La linterna es resistente al agua? 🔦",
+     "it": "La torcia è impermeabile? 🔦",
+     "pt": "A lanterna é à prova d’água? 🔦",
+     "ar": "هل المصباح مقاوم للماء؟ 🔦"
+    },
+    "lastMessageOriginalLanguage": "de",
+    "lastMessageAt": "2026-09-30T11:59:30.000Z"
+   },
+   {
+    "id": "be714b813bcfadd099006357",
+    "type": "group",
+    "title": "SAV Ordinateur portable",
+    "memberCount": 25,
+    "unreadCount": 2,
+    "isMember": true,
+    "createdAt": "2026-09-10T12:00:00.000Z",
+    "updatedAt": "2026-09-30T11:59:09.000Z",
+    "lastMessage": {
+     "id": "5f035d178ae21efa2dc35d7a",
+     "content": "保証は何年ですか？💻",
+     "senderId": "608ebd7c749f909ace63f7da",
+     "createdAt": "2026-09-30T11:59:09.000Z",
+     "messageType": "text",
+     "sender": {
+      "id": "608ebd7c749f909ace63f7da",
+      "username": "Yuki",
+      "displayName": "Yuki",
+      "type": "anonymous"
+     }
+    },
+    "lastMessageTranslations": {
+     "fr": "La garantie dure combien d’années ? 💻",
+     "en": "How many years is the warranty? 💻",
+     "es": "¿Cuántos años de garantía tiene? 💻",
+     "de": "Wie viele Jahre Garantie gibt es? 💻",
+     "it": "Quanti anni dura la garanzia? 💻",
+     "pt": "Quantos anos de garantia? 💻",
+     "ar": "كم سنة مدة الضمان؟ 💻"
+    },
+    "lastMessageOriginalLanguage": "ja",
+    "lastMessageAt": "2026-09-30T11:59:09.000Z"
+   },
+   {
+    "id": "1c5ecb618f17b07d16f18237",
+    "type": "group",
+    "title": "SAV Sylorion",
+    "memberCount": 32,
+    "unreadCount": 1,
+    "isMember": true,
+    "createdAt": "2026-09-10T12:00:00.000Z",
+    "updatedAt": "2026-09-30T11:58:48.000Z",
+    "lastMessage": {
+     "id": "14d8e1e45f662d92b6f6ad21",
+     "content": "Do you ship to Ghana? 📦",
+     "senderId": "243ca2c33003a8a56794bcf7",
+     "createdAt": "2026-09-30T11:58:48.000Z",
+     "messageType": "text",
+     "sender": {
+      "id": "243ca2c33003a8a56794bcf7",
+      "username": "Grace",
+      "displayName": "Grace",
+      "type": "anonymous"
+     }
+    },
+    "lastMessageTranslations": {
+     "fr": "Vous livrez au Ghana ? 📦",
+     "es": "¿Envían a Ghana? 📦",
+     "de": "Liefert ihr nach Ghana? 📦",
+     "it": "Spedite in Ghana? 📦",
+     "pt": "Vocês entregam em Gana? 📦",
+     "ar": "هل تشحنون إلى غانا؟ 📦"
+    },
+    "lastMessageOriginalLanguage": "en",
+    "lastMessageAt": "2026-09-30T11:58:48.000Z"
+   },
+   {
+    "id": "351a7745dfc7e7830766b263",
+    "type": "group",
+    "title": "SAV Services",
+    "memberCount": 39,
+    "unreadCount": 1,
+    "isMember": true,
+    "createdAt": "2026-09-10T12:00:00.000Z",
+    "updatedAt": "2026-09-30T11:58:27.000Z",
+    "lastMessage": {
+     "id": "1027400425e43919efdabd74",
+     "content": "هل يمكنني حجز موعد يوم السبت؟ 📅",
+     "senderId": "682ab65fa4f2b7aecd356e8f",
+     "createdAt": "2026-09-30T11:58:27.000Z",
+     "messageType": "text",
+     "sender": {
+      "id": "682ab65fa4f2b7aecd356e8f",
+      "username": "Salma",
+      "displayName": "Salma",
+      "type": "anonymous"
+     }
+    },
+    "lastMessageTranslations": {
+     "fr": "Je peux réserver un rendez-vous samedi ? 📅",
+     "en": "Can I book an appointment on Saturday? 📅",
+     "es": "¿Puedo reservar una cita el sábado? 📅",
+     "de": "Kann ich einen Termin am Samstag buchen? 📅",
+     "it": "Posso prenotare un appuntamento sabato? 📅",
+     "pt": "Posso marcar um horário no sábado? 📅"
+    },
+    "lastMessageOriginalLanguage": "ar",
+    "lastMessageAt": "2026-09-30T11:58:27.000Z"
+   }
+  ]
+ },
+ "lienSav": {
+  "id": "968864c54ccc5632896e96a4",
+  "linkId": "sav-lampe-torche",
+  "name": "SAV Lampe torche",
+  "currentUses": 41,
+  "currentConcurrentUsers": 3,
+  "requireAccount": false,
+  "requireNickname": false,
+  "requireEmail": false,
+  "requireBirthday": false,
+  "allowedLanguages": [],
+  "allowAnonymousMessages": true,
+  "allowAnonymousImages": true,
+  "allowAnonymousFiles": false,
+  "allowViewHistory": true,
+  "conversation": {
+   "id": "b24fcada141bd2a687059d91",
+   "title": "SAV Lampe torche",
+   "type": "group",
+   "createdAt": "2026-09-10T12:00:00.000Z"
+  },
+  "creator": {
+   "id": "b6ce6229c69bf522abfc25cd",
+   "username": "kwame.m",
+   "displayName": "Kwame Mensah",
+   "firstName": "Kwame",
+   "lastName": "Mensah"
+  },
+  "stats": {
+   "totalParticipants": 42,
+   "memberCount": 42,
+   "anonymousCount": 37,
+   "languageCount": 5,
+   "spokenLanguages": [
+    "fr",
+    "de",
+    "ja",
+    "en",
+    "ar"
+   ]
+  }
+ },
+ "liensDAffiliation": [
+  {
+   "id": "9e1e8a18384ed9d1175bc803",
+   "token": "qr-boutique",
+   "name": "QR en boutique",
+   "affiliateLink": "https://meeshy.me/join?affiliate=qr-boutique",
+   "maxUses": null,
+   "currentUses": 96,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-31T12:00:00.000Z",
+   "_count": {
+    "affiliations": 96
+   },
+   "clickCount": 1284
+  },
+  {
+   "id": "c37afc253ebdafd1581a086c",
+   "token": "bio-instagram",
+   "name": "Bio Instagram",
+   "affiliateLink": "https://meeshy.me/join?affiliate=bio-instagram",
+   "maxUses": null,
+   "currentUses": 41,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-22T12:00:00.000Z",
+   "_count": {
+    "affiliations": 41
+   },
+   "clickCount": 642
+  },
+  {
+   "id": "1d23d44729414713ca3aac71",
+   "token": "salon-lisbonne",
+   "name": "Salon de Lisbonne",
+   "affiliateLink": "https://meeshy.me/join?affiliate=salon-lisbonne",
+   "maxUses": null,
+   "currentUses": 18,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-13T12:00:00.000Z",
+   "_count": {
+    "affiliations": 18
+   },
+   "clickCount": 219
+  }
+ ],
  "scenes": {
   "global": {
    "conversationId": "cd2497b0ef23413bae5c43f9"
@@ -3525,6 +4099,9 @@
    "conversationId": "cbf409287826cb1890ad69f7",
    "messageId": "218ec1f8829769d5dc330ed9",
    "attachmentId": "f78df06ab4d29794c78ace72"
+  },
+  "interaction-sonde": {
+   "conversationId": "879278d7719eae1bede01e6d"
   }
  }
 }

@@ -114,3 +114,30 @@ describe('GET /conversations/:id — ce qui survit à la sérialisation', () => 
     );
   });
 });
+
+// #9927 — la restriction d'écriture du lecteur, et l'archivage de Global pour
+// un mineur, doivent ATTEINDRE le client : sans déclaration, le sérialiseur
+// les retirerait en silence et un ancien comme un nouveau client verraient
+// Global ouverte en écriture.
+describe('viewerWriteRestriction — ce qui survit à la sérialisation (#9927)', () => {
+  const minorGlobalRow = {
+    ...listRowFromHandler,
+    type: 'global',
+    viewerWriteRestriction: 'minor-global',
+    userPreferences: [{ isPinned: false, isMuted: false, isArchived: true, tags: [] }],
+  };
+
+  it('la liste sert minor-global et Global archivée', () => {
+    const row = serializeList(minorGlobalRow);
+    expect(row.viewerWriteRestriction).toBe('minor-global');
+    expect(row.userPreferences[0].isArchived).toBe(true);
+  });
+
+  it('la liste sert null quand aucune restriction ne s’applique', () => {
+    expect(serializeList({ ...listRowFromHandler, viewerWriteRestriction: null }).viewerWriteRestriction).toBeNull();
+  });
+
+  it('le détail sert minor-global', () => {
+    expect(serializeDetail({ ...detailFromHandler, viewerWriteRestriction: 'minor-global' }).viewerWriteRestriction).toBe('minor-global');
+  });
+});
