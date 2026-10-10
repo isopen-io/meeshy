@@ -494,70 +494,66 @@ async function runScheme(colorScheme) {
       `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
     );
 
-    /* ── 7 sexies. #8643 — ÉCRIRE RÉDUIT LA SCÈNE AU-DESSUS DE LA BARRE, LE
-           REPLI ⌄ VIT DANS LA PLAQUE, LIRE FLOUTE LA SCÈNE ─────────────────
-       Le champ a le focus : la liste se retire, la scène revient NETTE et se
-       réduit pour tenir ENTIÈRE au-dessus de la feuille (bord bas de la scène
-       ≤ bord haut de la feuille) ; le ⌄ est DANS la plaque du champ, à son
-       angle haut-droit. Replier rend la lecture : la liste revient, la scène
-       reprend sa taille et se floute. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'writing', null, { timeout: 1500 })
-      .catch(() => undefined);
-    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
-      .catch(() => undefined);
-    const ecriture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-yield]');
-      const sheet = document.querySelector('[data-story-comments-sheet]');
-      const plate = document.querySelector('[data-comment-plate]');
-      const fold = document.querySelector('[data-comment-fold]');
-      const list = document.querySelector('[data-comment-thread-list]');
-      if (layer === null || sheet === null || plate === null || fold === null || list === null) return { manque: true };
-      const [l, s, p, f] = [layer, sheet, plate, fold].map((el) => el.getBoundingClientRect());
-      return {
-        etat: layer.getAttribute('data-scene-yields'),
-        filtre: getComputedStyle(layer).filter,
-        basScene: Math.round(l.bottom),
-        hautFeuille: Math.round(s.top),
-        echelle: Math.round((l.height / layer.offsetHeight) * 100) / 100,
-        listeCachee: list.hidden,
-        foldDansPlaque: f.top >= p.top - 0.5 && f.right <= p.right + 0.5 && f.left >= p.left - 0.5,
-        foldAngle: Math.abs(f.top - p.top) <= 1 && Math.abs(f.right - p.right) <= 1,
-      };
-    });
+    /* ── 7 sexies. #9894 (jumelle de #9893) — LA ZONE DE COMMENTAIRES MONTE
+           AVEC LE COMPOSEUR, LE CHEVRON ⌄ TOUT À DROITE LA FAIT REDESCENDRE ──
+       Le champ a le focus (Chromium de bureau : aucun clavier virtuel) : la
+       zone est HAUTE (`open`, 78 % du cadre), la liste RESTE visible et la
+       scène reste floutée derrière elle — écrire ne la réduit plus (#8643 ne
+       vaut plus que pour les Réels). Le ⌄ est le DERNIER contrôle de la
+       rangée, à droite de l'envoi. Le replier : la zone redescend (`folded`),
+       la bulle paraît, la liste et le brouillon restent. */
+    const zoneSettled = (want) =>
+      page
+        .waitForFunction(
+          (stage) => {
+            const sheet = document.querySelector('[data-story-comments-sheet]');
+            return sheet?.getAttribute('data-comments-zone') === stage && sheet.getAnimations().length === 0;
+          },
+          want,
+          { timeout: 1500 },
+        )
+        .catch(() => undefined);
+    await zoneSettled('open');
+    const zoneOf = () =>
+      page.evaluate(() => {
+        const layer = document.querySelector('[data-story-scene-yield]');
+        const sheet = document.querySelector('[data-story-comments-sheet]');
+        const send = document.querySelector('[data-comment-send]');
+        const fold = document.querySelector('[data-comment-fold]');
+        const list = document.querySelector('[data-comment-thread-list]');
+        if (layer === null || !(sheet instanceof HTMLElement) || list === null) return { manque: true };
+        const frame = sheet.offsetParent instanceof HTMLElement ? sheet.offsetParent.clientHeight : window.innerHeight;
+        const s = send?.getBoundingClientRect() ?? null;
+        const f = fold?.getBoundingClientRect() ?? null;
+        return {
+          zone: sheet.getAttribute('data-comments-zone'),
+          etat: layer.getAttribute('data-scene-yields'),
+          filtre: getComputedStyle(layer).filter,
+          transform: getComputedStyle(layer).transform,
+          part: Math.round((sheet.getBoundingClientRect().height / frame) * 100) / 100,
+          listeCachee: list.hidden,
+          foldADroite: s !== null && f !== null && f.left >= s.right - 0.5 && fold?.closest('[data-comment-plate]') === null,
+          foldTaille: f === null ? null : [Math.round(f.width), Math.round(f.height)],
+          bulle: document.querySelector('[data-comment-unfold]') !== null,
+          brouillon: document.querySelector('[data-comment-field]')?.value ?? null,
+        };
+      });
+    const ecriture = await zoneOf();
     check(
-      ecriture.etat === 'writing' && ecriture.filtre === 'none' && ecriture.basScene <= ecriture.hautFeuille && ecriture.echelle < 1 && ecriture.listeCachee,
-      `${tag} st-amie-2 : champ pris, la scène doit être NETTE, réduite et ENTIÈRE au-dessus de la feuille, la liste retirée (#8643) — ${JSON.stringify(ecriture)}`,
+      ecriture.zone === 'open' && ecriture.part >= 0.75 && ecriture.listeCachee === false && ecriture.etat === 'reading' && /blur\(/.test(ecriture.filtre ?? '') && ecriture.transform === 'none',
+      `${tag} st-amie-2 : champ pris, la zone de commentaires doit être HAUTE (≥ 75 % du cadre), la liste visible, la scène floutée et non réduite (#9894) — ${JSON.stringify(ecriture)}`,
     );
     check(
-      ecriture.foldDansPlaque && ecriture.foldAngle,
-      `${tag} st-amie-2 : le repli ⌄ doit vivre DANS la plaque du champ, à son angle haut-droit (#8643) — ${JSON.stringify(ecriture)}`,
+      ecriture.foldADroite && ecriture.foldTaille?.[0] >= 44 && ecriture.foldTaille?.[1] >= 44,
+      `${tag} st-amie-2 : le chevron ⌄ doit être TOUT À DROITE du composeur, après l'envoi, hors de la plaque, cible de 44 px (#9894) — ${JSON.stringify(ecriture)}`,
     );
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-ecrire-${colorScheme}-${viewport.width}.png` });
     await page.click('[data-comment-fold]');
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAttribute('data-scene-yields') === 'reading', null, { timeout: 1500 })
-      .catch(() => undefined);
-    /* La TRANSITION finie, jamais un délai : la géométrie lue en vol serait celle d'une scène à mi-réduction. */
-    await page
-      .waitForFunction(() => document.querySelector('[data-story-scene-yield]')?.getAnimations().length === 0, null, { timeout: 1500 })
-      .catch(() => undefined);
-    const lecture = await page.evaluate(() => {
-      const layer = document.querySelector('[data-story-scene-yield]');
-      return {
-        etat: layer?.getAttribute('data-scene-yields') ?? null,
-        filtre: layer === null ? null : getComputedStyle(layer).filter,
-        transform: layer === null ? null : getComputedStyle(layer).transform,
-        listeCachee: document.querySelector('[data-comment-thread-list]')?.hidden ?? null,
-        fold: document.querySelector('[data-comment-fold]') !== null,
-        brouillon: document.querySelector('[data-comment-field]')?.value ?? null,
-      };
-    });
+    await zoneSettled('folded');
+    const lecture = await zoneOf();
     check(
-      lecture.etat === 'reading' && /blur\(/.test(lecture.filtre ?? '') && lecture.transform === 'none' && lecture.listeCachee === false && !lecture.fold && lecture.brouillon === typed,
-      `${tag} st-amie-2 : replier (⌄) rend la lecture — scène pleine et floutée, liste revenue, brouillon gardé (#8643) — ${JSON.stringify(lecture)}`,
+      lecture.zone === 'folded' && lecture.part < ecriture.part && lecture.bulle && lecture.listeCachee === false && lecture.brouillon === typed && /blur\(/.test(lecture.filtre ?? ''),
+      `${tag} st-amie-2 : replier (⌄) fait redescendre la zone en bulle — liste et brouillon gardés, scène floutée (#9894) — ${JSON.stringify(lecture)}`,
     );
     if (SHOT_DIR !== null) await page.screenshot({ path: `${SHOT_DIR}/story-lire-${colorScheme}-${viewport.width}.png` });
 
