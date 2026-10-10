@@ -12,6 +12,7 @@ const deNotificationRow = {
   'notifications.row.media.video': '🎥 Video',
   'notifications.row.media.audio': '🎵 Audio',
   'notifications.row.expired': 'abgelaufen',
+  'notifications.row.directMessage': 'Private Nachricht',
   'notifications.row.milestone.level': 'Stufe {level}',
   'notifications.row.milestone.streak': '{days} Tage in Folge',
   'notifications.row.milestone.badgeReason': 'Abzeichen freigeschaltet · Stufe {threshold}',

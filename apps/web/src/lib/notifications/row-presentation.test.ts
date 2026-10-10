@@ -113,7 +113,7 @@ describe('les messages — le groupe en pied, jamais répété', () => {
       }),
     );
     expect(row.body).toBe('On se voit à 18 h ?');
-    expect(row.footer).toEqual({ kind: 'conversation', text: 'Les amateurs' });
+    expect(row.footer).toEqual({ kind: 'conversation', scope: 'group', text: 'Les amateurs' });
   });
 
   test('un corps qui répète le titre se tait ; un groupe qui répète le titre aussi', () => {
@@ -129,10 +129,10 @@ describe('les messages — le groupe en pied, jamais répété', () => {
     expect(row.footer).toBeNull();
   });
 
-  test('une conversation directe n’a pas de pied de groupe ; le sous-titre serveur tient lieu de pied', () => {
+  test('une conversation directe se dit « Message privé » (#9992) ; hors conversation, le sous-titre serveur tient lieu de pied', () => {
     const direct = present(record({ type: 'new_message', title: 'Grace', content: 'Salut', context: { conversationId: 'c1', conversationTitle: 'Grace', conversationType: 'direct' } }));
     const plain = present(record({ type: 'friend_accepted', title: 'Awa a accepté', content: '', subtitle: 'Vous êtes maintenant amis', context: {} }));
-    expect(direct.footer).toBeNull();
+    expect(direct.footer).toEqual({ kind: 'conversation', scope: 'direct', text: 'Message privé' });
     expect(plain.footer).toEqual({ kind: 'plain', text: 'Vous êtes maintenant amis' });
   });
 });

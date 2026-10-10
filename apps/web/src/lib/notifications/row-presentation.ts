@@ -6,7 +6,7 @@ import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AXIS_GLYPHS, type ProgressionGlyph } from '@/lib/view/progression';
 
-import { notificationTitle, type NotificationRecord } from './record';
+import { MESSAGE_NOTIFICATION_TYPES, notificationTitle, type NotificationRecord } from './record';
 
 /**
  * **CE QU'UNE LIGNE DE LA CLOCHE AFFICHE** (#8727) — miroir de
@@ -38,8 +38,11 @@ export type MilestoneGlyph = ProgressionGlyph | 'trophy' | 'star' | 'fire';
  */
 export type RowLeading = { readonly kind: 'avatar' } | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph } | { readonly kind: 'game' };
 
+/** Où un message a été écrit : un groupe nommé, ou une conversation privée (#9992). */
+export type ConversationScope = 'group' | 'direct';
+
 export type RowFooter =
-  | { readonly kind: 'conversation'; readonly text: string }
+  | { readonly kind: 'conversation'; readonly scope: ConversationScope; readonly text: string }
   | { readonly kind: 'content'; readonly content: ContentKind; readonly text: string; readonly expired: boolean }
   | { readonly kind: 'plain'; readonly text: string };
 
@@ -142,12 +145,23 @@ function contentFooter(notification: NotificationRecord, shown: readonly string[
   return { kind: 'content', content, text, expired };
 }
 
-function conversationOrPlainFooter(notification: NotificationRecord, shown: readonly string[]): RowFooter | null {
+function conversationFooter(notification: NotificationRecord, language: InterfaceLanguage): RowFooter | null {
   const { conversationTitle, conversationType } = notification.context;
-  const group = conversationType !== undefined && conversationType !== 'direct' ? firstFilled(conversationTitle) : null;
+  if (conversationType === 'direct') {
+    return MESSAGE_NOTIFICATION_TYPES.has(notification.type)
+      ? { kind: 'conversation', scope: 'direct', text: translateNotificationRow(language, 'notifications.row.directMessage') }
+      : null;
+  }
+  const group = conversationType === undefined ? null : firstFilled(conversationTitle);
+  return group === null ? null : { kind: 'conversation', scope: 'group', text: group };
+}
+
+function conversationOrPlainFooter(notification: NotificationRecord, shown: readonly string[], language: InterfaceLanguage): RowFooter | null {
   const footer: RowFooter | null =
-    group !== null ? { kind: 'conversation', text: group } : notification.subtitle === undefined ? null : { kind: 'plain', text: notification.subtitle };
-  return footer !== null && shown.some((text) => repeatsText(footer.text, text)) ? null : footer;
+    conversationFooter(notification, language) ?? (notification.subtitle === undefined ? null : { kind: 'plain', text: notification.subtitle });
+  if (footer === null) return null;
+  if (footer.kind === 'conversation' && footer.scope === 'direct') return footer;
+  return shown.some((text) => repeatsText(footer.text, text)) ? null : footer;
 }
 
 type Parts = { readonly body: string | null; readonly quote: string | null; readonly social: boolean };
@@ -241,7 +255,7 @@ export function notificationRowPresentation(notification: NotificationRecord, op
   const parts = partsOf(notification, options.language);
   const [, body = null, quote = null] = distinctTexts([title, parts.body, parts.quote]);
   const shown = [title, body, quote].filter((text): text is string => text !== null);
-  const footer = parts.social ? contentFooter(notification, shown, options) : conversationOrPlainFooter(notification, shown);
+  const footer = parts.social ? contentFooter(notification, shown, options) : conversationOrPlainFooter(notification, shown, options.language);
   const leading: RowLeading = isGameNotificationType(notification.type) && notification.actor === null ? { kind: 'game' } : { kind: 'avatar' };
   return { leading, title, body, quote, footer };
 }
