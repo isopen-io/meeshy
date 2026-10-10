@@ -6,7 +6,6 @@
  */
 const frComposerAttach = {
   'composer.attach.group': 'Types de pièces jointes',
-  'composer.attach.handle': 'Poignée du panneau',
   'composer.attach.photo': 'Photos',
   'composer.attach.photo.action': 'Choisir des photos',
   'composer.attach.camera': 'Caméra',
@@ -31,7 +30,6 @@ const frComposerAttach = {
   'composer.mic.unavailable': 'Micro indisponible sur cet appareil',
   'composer.openSettings': 'Réglages',
   'composer.location.chip': 'LIEU',
-  'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Envoyer un sticker',

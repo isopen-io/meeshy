@@ -40,7 +40,6 @@ import frCallCaptions from './catalog-fr-call-captions';
 import frCallRecording from './catalog-fr-call-recording';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
-import frSoundsMine from './catalog-fr-sounds-mine';
 import frFeedPost from './catalog-fr-feed-post';
 import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
@@ -61,16 +60,6 @@ const fr = {
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
-  'selection.toolbar': 'Sélection de messages',
-  'selection.cancel': 'Annuler',
-  'selection.count': '{count} sélectionnés',
-  'forward.title': 'Transférer à…',
-  'forward.empty': 'Aucune conversation',
-  'forward.search.label': 'Rechercher une conversation',
-  'forward.search.placeholder': 'Rechercher',
-  'forward.announce.sent': 'Message transféré',
-  'forward.announce.sentMany': '{count} messages transférés',
-  'forward.announce.failed': 'Le transfert a échoué',
   'forward.refusal.viewOnce': 'Un message à vue unique ne peut pas être transféré',
   'forward.refusal.unavailable': 'Le message d’origine n’est plus disponible : rien à transférer',
 
@@ -249,7 +238,6 @@ const fr = {
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',
   'feed.share.error': 'Impossible de partager la publication',
   'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
-  'feed.share.text': 'Une publication sur Meeshy',
 
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
@@ -638,7 +626,6 @@ const fr = {
   'discover.blocked.empty.title': 'Aucun utilisateur bloqué',
   'discover.blocked.empty.subtitle': 'Les personnes que vous bloquez apparaîtront ici.',
   'discover.unknown': 'Inconnu',
-  'discover.loading': 'Chargement',
   'discover.allLoaded': 'Toute la liste est chargée',
   'discover.error.title': 'Cette liste n’a pas pu être chargée',
   'discover.error.body': 'Vérifiez votre connexion puis réessayez.',
@@ -701,8 +688,6 @@ const fr = {
   'links.detail.disable': 'Désactiver',
   'links.detail.activate': 'Activer',
   'links.detail.stats': 'Statistiques',
-  'links.detail.stats.uses': 'Utilisations',
-  'links.detail.stats.max': 'Maximum',
   'links.detail.info': 'Informations',
   'links.detail.identifier': 'Identifiant',
   'links.detail.createdAt': 'Créé le',
@@ -778,8 +763,6 @@ const fr = {
   'feed.scene.mosaic.more': 'Scène {index}, et {count} de plus',
   'feed.scene.mosaic.video': 'Scène {index}, vidéo',
   'feed.scene.shared_by': 'Scène partagée par {author}',
-  'feed.scene.open.fullscreen': 'Touche deux fois pour voir en plein écran',
-  'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
   'scene.fullscreen.play': 'Tout reprendre',
@@ -799,7 +782,6 @@ const fr = {
      comme iOS. */
   'story.studio.title': 'Nouvelle story',
   'story.studio.cancel': 'Annuler',
-  'story.studio.publish': 'Publier',
   'story.studio.publishing': 'Publication…',
   'story.studio.publish.waiting': 'En attente du réseau…',
   'story.studio.publishing.progress': 'Publication {current}/{total}…',
@@ -830,7 +812,6 @@ const fr = {
   'story.studio.text.label': 'Texte de la story',
   'story.studio.text.placeholder': 'Ajouter du texte',
   'story.studio.hint.duration': 'Une story reste visible vingt heures.',
-  'story.studio.error.upload': 'Le fichier n’a pas pu être envoyé.',
   'story.studio.error.publish': 'La story n’a pas pu être publiée.',
   'story.studio.refusal.title': 'Un compte est nécessaire pour créer une story.',
   'story.studio.refusal.login': 'Se connecter',
@@ -851,8 +832,6 @@ const fr = {
   'story.studio.text.add': 'Ajouter un texte',
   'story.studio.object.text': 'Texte {index}',
   'story.studio.object.overlay': 'Calque',
-  'story.studio.object.select': 'Sélectionner {name}',
-  'story.studio.objects.label': 'Objets de la scène',
   'story.studio.overlay.add': 'Poser une image sur la scène',
   'story.studio.overlay.label': 'Calque',
   'story.studio.overlay.remove': 'Retirer le calque',
@@ -925,8 +904,6 @@ const fr = {
   'story.studio.pose.rotateLeft': 'Tourner à gauche',
   'story.studio.pose.rotateRight': 'Tourner à droite',
   'story.studio.pose.reset': 'Recentrer',
-  'story.studio.pose.handle': 'Déplacer {name} — flèches pour déplacer, + et − pour la taille, [ et ] pour tourner',
-  'story.studio.pose.grip': 'Redimensionner et faire tourner {name}',
 
   /* LA FEUILLE D'AUDIENCE DU STUDIO (#7683) — les six PostVisibility,
      miroir de PostVisibility.swift (packages/MeeshySDK). */
@@ -1039,7 +1016,6 @@ const fr = {
   'comment.refused.session': 'Session expirée — reconnectez-vous.',
   'comment.refused.right': 'Ce geste ne vous est pas ouvert.',
   'comment.like.limit': 'Cinq réactions au maximum par personne.',
-  'feed.action.comment': 'Commenter',
 
   'admin.title': 'Administration',
 
@@ -1143,7 +1119,7 @@ const fr = {
   'message.detail.language.original': '{language} (original)',
 
   ...frStoriesMine,
-  ...frSoundsMine,
+  'settings.tools.sounds': 'Mes sons',
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,

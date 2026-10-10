@@ -1,7 +1,7 @@
-/** « MES SONS » (#9848) — tranche du catalogue `catalog-ar.ts`. Voir le
- * doc-comment de `catalog-fr-sounds-mine.ts`. */
-const arSoundsMine = {
-  'settings.tools.sounds': 'أصواتي',
+import type { SoundsMineCatalog } from '@/lib/i18n-sounds-mine-catalog';
+
+/** « MES SONS » (#9848) — voir le doc-comment de `catalog-sounds-mine-fr.ts`. */
+const ar = {
   'soundsMine.title': 'أصواتي',
   'soundsMine.back': 'العودة إلى الإعدادات',
   'soundsMine.empty.title': 'لا توجد أصوات في مكتبتك',
@@ -19,6 +19,6 @@ const arSoundsMine = {
   'soundsMine.remove.success': 'تمت إزالة الصوت من مكتبتك',
   'soundsMine.remove.failure': 'تعذّرت إزالة الصوت. حاول مرة أخرى.',
   'soundsMine.offline': 'غير متصل — يمكنك إزالته عند عودة الشبكة.',
-};
+} satisfies SoundsMineCatalog;
 
-export default arSoundsMine;
+export default ar;

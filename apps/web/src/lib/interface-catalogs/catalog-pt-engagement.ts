@@ -11,8 +11,6 @@ const ptEngagement = {
   'engagement.pill.total.one': '{total} ponto ganho nesta conversa',
   'engagement.pill.total.other': '{total} pontos ganhos nesta conversa',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.pill.open': 'Abrir meu progresso',
-  'engagement.flame.label': '{count} pontos hoje — toque para ocultar a chama',
   'engagement.post.points.one': 'Esta publicação te rendeu {count} ponto',
   'engagement.post.points.other': 'Esta publicação te rendeu {count} pontos',
 } as const;
