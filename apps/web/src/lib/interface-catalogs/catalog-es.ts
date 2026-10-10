@@ -30,7 +30,6 @@ import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esConversationCard from './catalog-es-conversation-card';
 import esStoriesMine from './catalog-es-stories-mine';
-import esSoundsMine from './catalog-es-sounds-mine';
 import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
 import esCommentRow from './catalog-es-comment-row';
@@ -51,16 +50,6 @@ const es = {
   'message.excerpt.protected': 'contenido protegido',
   'a11y.message.menu.subject': 'Acciones del mensaje de {author}: {excerpt}',
 
-  'selection.toolbar': 'Selección de mensajes',
-  'selection.cancel': 'Cancelar',
-  'selection.count': '{count} seleccionados',
-  'forward.title': 'Reenviar a…',
-  'forward.empty': 'Ninguna conversación',
-  'forward.search.label': 'Buscar una conversación',
-  'forward.search.placeholder': 'Buscar',
-  'forward.announce.sent': 'Mensaje reenviado',
-  'forward.announce.sentMany': '{count} mensajes reenviados',
-  'forward.announce.failed': 'No se pudo reenviar',
   'forward.refusal.viewOnce': 'Un mensaje de visualización única no se puede reenviar',
   'forward.refusal.unavailable': 'El mensaje original ya no está disponible: nada que reenviar',
 
@@ -260,7 +249,6 @@ const es = {
   'feed.gesture.pending': 'Acción no confirmada — sin conexión',
   'feed.share.error': 'Error al compartir la publicación',
   'feed.share.copied': 'Enlace copiado — ya solo queda pegarlo.',
-  'feed.share.text': 'Una publicación en Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'Mis enlaces',
@@ -641,7 +629,6 @@ const es = {
   'discover.blocked.empty.title': 'Ningún usuario bloqueado',
   'discover.blocked.empty.subtitle': 'Las personas que bloquees aparecerán aquí.',
   'discover.unknown': 'Desconocido',
-  'discover.loading': 'Cargando',
   'discover.allLoaded': 'La lista completa está cargada',
   'discover.error.title': 'No se pudo cargar esta lista',
   'discover.error.body': 'Comprueba tu conexión y vuelve a intentarlo.',
@@ -696,8 +683,6 @@ const es = {
   'links.detail.disable': 'Desactivar',
   'links.detail.activate': 'Activar',
   'links.detail.stats': 'Estadísticas',
-  'links.detail.stats.uses': 'Usos',
-  'links.detail.stats.max': 'Máximo',
   'links.detail.info': 'Información',
   'links.detail.identifier': 'Identificador',
   'links.detail.createdAt': 'Creado el',
@@ -771,8 +756,6 @@ const es = {
   'feed.scene.mosaic.more': 'Escena {index}, y {count} más',
   'feed.scene.mosaic.video': 'Escena {index}, vídeo',
   'feed.scene.shared_by': 'Escena compartida por {author}',
-  'feed.scene.open.fullscreen': 'Toca dos veces para ver en pantalla completa',
-  'feed.scene.open.post': 'Toca dos veces para abrir la publicación',
   'feed.scene.sound.muted': 'Sonido silenciado',
   'feed.scene.count': '{count} escenas',
   'scene.fullscreen.play': 'Reanudar todo',
@@ -788,7 +771,6 @@ const es = {
      publicada en CanvasV3 como en iOS. */
   'story.studio.title': 'Nueva historia',
   'story.studio.cancel': 'Cancelar',
-  'story.studio.publish': 'Publicar',
   'story.studio.publishing': 'Publicando…',
   'story.studio.publish.waiting': 'Esperando la red…',
   'story.studio.publishing.progress': 'Publicando {current}/{total}…',
@@ -819,7 +801,6 @@ const es = {
   'story.studio.text.label': 'Texto de la historia',
   'story.studio.text.placeholder': 'Añadir texto',
   'story.studio.hint.duration': 'Una historia permanece visible veinte horas.',
-  'story.studio.error.upload': 'No se pudo enviar el archivo.',
   'story.studio.error.publish': 'No se pudo publicar la historia.',
   'story.studio.refusal.title': 'Se necesita una cuenta para crear una historia.',
   'story.studio.refusal.login': 'Iniciar sesión',
@@ -840,8 +821,6 @@ const es = {
   'story.studio.text.add': 'Añadir texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Capa',
-  'story.studio.object.select': 'Seleccionar {name}',
-  'story.studio.objects.label': 'Objetos de la escena',
   'story.studio.overlay.add': 'Colocar una imagen en la escena',
   'story.studio.overlay.label': 'Capa',
   'story.studio.overlay.remove': 'Quitar la capa',
@@ -911,8 +890,6 @@ const es = {
   'story.studio.pose.rotateLeft': 'Girar a la izquierda',
   'story.studio.pose.rotateRight': 'Girar a la derecha',
   'story.studio.pose.reset': 'Recentrar',
-  'story.studio.pose.handle': 'Mover {name} — flechas para mover, + y − para el tamaño, [ y ] para girar',
-  'story.studio.pose.grip': 'Redimensionar y girar {name}',
 
   /* LA HOJA DE AUDIENCIA DEL ESTUDIO (#7683) — los seis PostVisibility,
      reflejo de PostVisibility.swift (packages/MeeshySDK). */
@@ -1004,7 +981,6 @@ const es = {
   'comment.refused.session': 'Sesión caducada: vuelve a iniciar sesión.',
   'comment.refused.right': 'Esta acción no está disponible para ti.',
   'comment.like.limit': 'Cinco reacciones como máximo por persona.',
-  'feed.action.comment': 'Comentar',
 
   'admin.title': 'Administración',
 
@@ -1124,7 +1100,7 @@ const es = {
   ...esMessageCard,
   ...esConversationCard,
   ...esStoriesMine,
-  ...esSoundsMine,
+  'settings.tools.sounds': 'Mis sonidos',
   ...esContactCard,
   ...esQuote,
   ...esCommentRow,

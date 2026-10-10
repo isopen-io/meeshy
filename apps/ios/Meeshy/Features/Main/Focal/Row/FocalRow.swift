@@ -546,6 +546,7 @@ struct FocalRow: View {
                 messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
                 onMediaTap: actions.onMediaTap,
                 onConsumeViewOnce: actions.onConsumeViewOnce,
+                onReactToAttachment: actions.onReactToAttachment,
                 maxWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
             )
         }

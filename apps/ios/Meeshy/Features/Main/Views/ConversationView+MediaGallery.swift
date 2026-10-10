@@ -144,7 +144,9 @@ struct ConversationMediaGalleryLayer: ViewModifier {
             // la règle d'offre lit la loi de sortie (#9573), donc la pièce d'une
             // flamme ou d'une vue unique n'a pas ce bouton.
             composableMedia: { carrier(of: $0).map(ComposableAttachment.offers(message:)) ?? false },
-            reactableMedia: { catalog.snapshot.isLoaded($0.id) }
+            // #9910 — toute pièce dont le porteur est connu se réagit : la
+            // fenêtre par le ViewModel, l'index par le catalogue qui la repeint.
+            reactableMedia: { catalog.snapshot.carrier(ofAttachment: $0.id) != nil }
         )
         .onAppear(perform: openCatalog)
         .onReceive(viewModel.$messages) { messages in
@@ -254,13 +256,24 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     /// (`AttachmentReaction` est indexée sur le couple pièce + message). Il ne
     /// devient jamais la CIBLE : `toggleReaction(messageId:)` — la réaction du
     /// message — n'est pas appelée ici.
+    ///
+    /// **Hors de la fenêtre chargée aussi** (#9910) : la pièce feuilletée depuis
+    /// l'index des médias n'a pas de porteur dans `viewModel.messages`, et le
+    /// geste ne faisait rien. Son porteur vient alors de l'index, la bascule
+    /// est la même, et le catalogue la repeint.
     private func reactToMedia(_ attachment: MessageAttachment, _ emoji: String) {
-        guard let porteur = viewModel.messages.first(where: { message in
+        if let porteur = viewModel.messages.first(where: { message in
             message.attachments.contains { $0.id == attachment.id }
-        }) else { return }
-        viewModel.toggleAttachmentReaction(attachmentId: attachment.id,
-                                           messageId: porteur.id,
-                                           emoji: emoji)
+        }) {
+            viewModel.toggleAttachmentReaction(attachmentId: attachment.id,
+                                               messageId: porteur.id,
+                                               emoji: emoji)
+            return
+        }
+        guard let indexe = catalog.snapshot.carrier(ofAttachment: attachment.id),
+              let piece = indexe.attachments.first(where: { $0.id == attachment.id }) else { return }
+        let bascule = viewModel.toggleAttachmentReaction(outOfWindow: piece, carrierId: indexe.id, emoji: emoji)
+        catalog.applyReaction(bascule, toAttachment: attachment.id)
     }
 
     /// La galerie est DÉMONTÉE : le meuble peut prendre sa place.

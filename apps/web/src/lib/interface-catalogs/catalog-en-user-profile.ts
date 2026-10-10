@@ -5,7 +5,6 @@ const enUserProfile = {
   'userProfile.self.edit': 'Edit my profile',
   'userProfile.title': 'Profile',
   'userProfile.loading': 'Loading profile',
-  'userProfile.section.publications': 'POSTS',
   'userProfile.section.relation': 'CONNECTION',
   'userProfile.section.conversations': 'CONVERSATIONS',
   'userProfile.conversations.empty': 'No conversation in common',

@@ -319,7 +319,7 @@ extension StoryViewerView {
                         groupTransition(forward: true) {
                             currentGroupIndex += 1
                             currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
@@ -327,7 +327,7 @@ extension StoryViewerView {
                         groupTransition(forward: false) {
                             currentGroupIndex -= 1
                             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else {
                         // Snap back — animate groupSlide to 0. La face du cube
@@ -469,7 +469,7 @@ extension StoryViewerView {
         if currentStoryIndex < group.stories.count - 1 {
             crossFadeStory {
                 currentStoryIndex += 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex < groups.count - 1 {
             if isPreviewMode {
@@ -479,7 +479,7 @@ extension StoryViewerView {
             groupTransition(forward: true) {
                 currentGroupIndex += 1
                 currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progress = 0
+                progressClock.reset()
             }
         } else {
             if isPreviewMode {
@@ -496,13 +496,13 @@ extension StoryViewerView {
         if currentStoryIndex > 0 {
             crossFadeStory {
                 currentStoryIndex -= 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex > 0 {
             groupTransition(forward: false) {
                 currentGroupIndex -= 1
                 currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progress = 0
+                progressClock.reset()
             }
         }
     }
@@ -662,7 +662,7 @@ extension StoryViewerView {
     /// L'agrégat de pause (`shouldPauseTimer`) et la boucle vivent dans
     /// `StoryViewerView+PlaybackHold.swift` (#9821).
     func startTimer() {
-        progress = 0
+        progressClock.reset()
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false

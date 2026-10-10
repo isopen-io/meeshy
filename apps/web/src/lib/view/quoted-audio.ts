@@ -58,7 +58,8 @@ export function quotedAudioOf(params: {
   const { quoted, readerLanguages, now } = params;
   if (quoted.deletedAt !== undefined && quoted.deletedAt !== null) return null;
   if (quotedIsProtected(quoted) || hasExpired(quoted.expiresAt, now)) return null;
-  const piece = representativeOf(quoted)?.attachment;
+  const representative = representativeOf(quoted);
+  const piece = representative === undefined || 'vanished' in representative ? undefined : representative.attachment;
   if (piece === undefined || kindOf(piece) !== 'audio' || quotedIsProtected(piece)) return null;
   if (piece.fileUrl === undefined || piece.fileUrl.trim() === '') return null;
 

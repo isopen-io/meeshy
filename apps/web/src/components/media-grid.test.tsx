@@ -18,6 +18,8 @@ import type { Attachment } from '@/lib/api/types';
 import { sizesFor } from '@/lib/api/media-url';
 import { mediaGridCellSizes, mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
 
+import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
+
 import { MediaGrid } from './media-grid';
 
 /**
@@ -437,5 +439,49 @@ describe('MediaGrid — la tuile protégée reste lisible sur la boîte noire (#
     expect(masked![1]).toContain('var(--accent) 10%, var(--ios-surface))');
     expect(masked![1]).not.toContain('transparent');
     expect(masked![1]).toContain('color:var(--color-ios-ink)');
+  });
+});
+
+/**
+ * #9907, #9911 — CHAQUE CASE SE NOMME (`data-piece`) : l'appui long sur une
+ * tuile vise SA pièce, et le saut d'une citation qui nomme une pièce met en
+ * évidence SA tuile. Une pièce au-delà de la quatrième, que la grille ne
+ * montre pas, s'éclaire sur la case « +N » qui la contient.
+ */
+describe('MediaGrid — chaque case se nomme, la tuile citée s’éclaire (#9907, #9911)', () => {
+  const render = (items: readonly Attachment[], highlighted: string | null) =>
+    renderToStaticMarkup(
+      <HighlightedPieceContext.Provider value={highlighted}>
+        <MediaGrid items={items} frame="box" languages={['fr']} fallbackLanguage="fr" onOpen={() => {}} />
+      </HighlightedPieceContext.Provider>,
+    );
+
+  test('chaque case visible porte l’identifiant de sa pièce', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const html = render(items, null);
+    for (const piece of items) expect(html).toContain(`data-piece="${piece.id}"`);
+    expect(html).not.toContain('data-piece-highlighted');
+  });
+
+  test('la case de la pièce citée est mise en évidence, et elle seule', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const html = render(items, items[2]!.id);
+    expect(html.match(/data-piece-highlighted/g)?.length).toBe(1);
+    expect(html).toMatch(new RegExp(`data-piece="${items[2]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[2]!.id}"`));
+  });
+
+  test('la mise en évidence d’une pièce MASQUÉE ne révèle rien : la case garde son substitut, sans fichier', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID).map((a) => ({ ...a, isBlurred: true }));
+    const html = render(items, items[2]!.id);
+    expect(html).toContain('data-piece-highlighted');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<video');
+  });
+
+  test('une pièce cachée derrière « +N » éclaire la case « +N »', () => {
+    const items = attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID);
+    const html = render(items, items[5]!.id);
+    expect(html.match(/data-piece-highlighted/g)?.length).toBe(1);
+    expect(html).toMatch(new RegExp(`data-piece="${items[3]!.id}"[^>]*data-piece-highlighted|data-piece-highlighted[^>]*data-piece="${items[3]!.id}"`));
   });
 });

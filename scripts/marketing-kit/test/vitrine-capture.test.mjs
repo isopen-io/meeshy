@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
-import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
+import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, storiesServiesEnLocal, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
 import { exporterVitrine } from '../vitrine/fixtures.mjs'
 
 describe('capture des vrais écrans (#8855)', () => {
@@ -100,5 +100,14 @@ describe('capture des vrais écrans (#8855)', () => {
     let regards = 0
     await attendreLeSignal({ existe: () => ++regards > 2, maintenant: () => 0, dormir: async () => {}, etiquette: 'x' })
     expect(regards).toBe(3)
+  })
+
+  test('la photo d’une story est servie à son fichier déposé : le fond d’une story ne résout pas une adresse relative face à l’hôte mort', () => {
+    const f = exporterVitrine({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z') })
+    const servies = storiesServiesEnLocal(f, '/conteneur/Documents/vitrine')
+    const [media] = servies.stories[0].media
+    expect(media.fileUrl).toBe(`file:///conteneur/Documents/vitrine/medias/${media.fileName}`)
+    expect(servies.posts).toEqual(f.posts)
+    expect(f.stories[0].media[0].fileUrl).toMatch(/^\/api\/v1\//)
   })
 })
