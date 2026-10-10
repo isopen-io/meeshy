@@ -15,6 +15,36 @@ public protocol SoundLibraryServiceProviding: Sendable {
     func rename(soundId: String, title: String) async throws -> APISound
     /// « Page du son » — les publications qui l'utilisent.
     func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage
+    /// Retire un son de SA bibliothèque (#9848). Les publications qui
+    /// l'utilisent déjà continuent de le jouer ; il ne s'ajoute plus à une
+    /// nouvelle.
+    func remove(soundId: String) async throws -> SoundRemoval
+}
+
+/// Réponse de `DELETE /sounds/:id` — le son retiré et le nombre de
+/// publications qui le jouent encore. Rien d'autre ne sort : `contentHash`
+/// reste côté serveur.
+public struct SoundRemoval: Decodable, Sendable, Equatable {
+    public let id: String
+    /// ISO 8601, tel que servi. Gardé en chaîne : le client ne s'en sert que
+    /// pour savoir que le retrait a eu lieu.
+    public let deletedAt: String?
+    public let postCount: Int
+
+    public init(id: String, deletedAt: String?, postCount: Int) {
+        self.id = id
+        self.deletedAt = deletedAt
+        self.postCount = postCount
+    }
+
+    enum CodingKeys: String, CodingKey { case id, deletedAt, postCount }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        deletedAt = try c.decodeIfPresent(String.self, forKey: .deletedAt)
+        postCount = try c.decodeIfPresent(Int.self, forKey: .postCount) ?? 0
+    }
 }
 
 public struct SoundPostPage: Sendable {
@@ -103,6 +133,15 @@ public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked
             SoundsEndpoint.byIdPosts(id: soundId), method: "GET", body: nil, queryItems: items
         )
         return SoundPostPage(posts: response.data, nextCursor: response.pagination?.nextCursorDate)
+    }
+
+    /// Retirer un son de sa bibliothèque. Idempotent côté serveur : un second
+    /// appel (rejeu, double geste) rend la même réponse.
+    public func remove(soundId: String) async throws -> SoundRemoval {
+        let response: APIResponse<SoundRemoval> = try await api.request(
+            SoundsEndpoint.byId(id: soundId), method: "DELETE", body: nil, queryItems: nil
+        )
+        return response.data
     }
 
     /// Filtre local sur le titre ET le pseudo — même règle que la recherche

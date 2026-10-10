@@ -244,6 +244,11 @@ export const ROUTES = {
      est littéral et aucune adresse paramétrée à deux segments n'existe sous
      `/me`. */
   bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
+  /* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur et le retrait
+     d'un son, atteinte depuis Réglages › Outils. Sous `/me` pour la raison des
+     enregistrées : `GET sounds.mine` rend 401 sans session, d'où `soundsMine`
+     dans `PRIVATE_ROUTES`. Adresse NEUVE — le legacy n'avait pas cet écran. */
+  soundsMine: { pattern: '/me/sounds', screen: () => import('@/routes/sounds-mine') },
   /* LES MESSAGES FAVORIS (#7286) — miroir `Route.starredMessages`
      (`Router.swift`), atteinte depuis Réglages › Outils, en PREMIÈRE rangée,
      comme sur iOS. Sous `/me` pour la raison des enregistrées : un corpus qui

@@ -40,6 +40,7 @@ import frCallCaptions from './catalog-fr-call-captions';
 import frCallRecording from './catalog-fr-call-recording';
 import frSignup from './catalog-fr-signup';
 import frStoriesMine from './catalog-fr-stories-mine';
+import frSoundsMine from './catalog-fr-sounds-mine';
 import frFeedPost from './catalog-fr-feed-post';
 import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
@@ -1142,6 +1143,7 @@ const fr = {
   'message.detail.language.original': '{language} (original)',
 
   ...frStoriesMine,
+  ...frSoundsMine,
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,

@@ -30,6 +30,7 @@ import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
+import itSoundsMine from './catalog-it-sounds-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
@@ -1123,6 +1124,7 @@ const it = {
   ...itMessageCard,
   ...itConversationCard,
   ...itStoriesMine,
+  ...itSoundsMine,
   ...itContactCard,
   ...itQuote,
   ...itCommentRow,
