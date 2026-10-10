@@ -212,6 +212,7 @@ export function ThreadHeader({
         {preview ? null : (
           <Link
             to="list"
+            data-thread-back=""
             className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
             style={{ color: 'var(--accent)' }}
             aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}

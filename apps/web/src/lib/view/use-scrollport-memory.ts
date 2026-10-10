@@ -1,4 +1,4 @@
-import { useLayoutEffect, type RefObject } from 'react';
+import { createContext, useContext, useLayoutEffect, type RefObject } from 'react';
 
 /**
  * LA MÉMOIRE DE SCROLLPORT (#5893, § 0 de la spécification) — le routeur
@@ -32,8 +32,18 @@ export function scrollportMemoryKeyOf(): string {
   return typeof window === 'undefined' ? '' : window.location.pathname + window.location.search;
 }
 
+/**
+ * L'ADRESSE DONT UN ÉCRAN TIENT LIEU QUAND IL VIT À CÔTÉ D'UN AUTRE (#10073)
+ * — la liste montée à gauche du fil, sur grand écran, reste la liste quelle
+ * que soit l'adresse du fil : sans cette portée, sa clé suivrait `/c/:id` à
+ * chaque re-rendu et une conversation déjà visitée lui rendrait la position
+ * qu'elle avait ALORS — un saut sous le pointeur.
+ */
+export const ScrollportKeyScope = createContext<string | null>(null);
+
 export function useScrollportMemory(ref: RefObject<HTMLElement | null>): void {
-  const key = scrollportMemoryKeyOf();
+  const scoped = useContext(ScrollportKeyScope);
+  const key = scoped ?? scrollportMemoryKeyOf();
 
   // `useLayoutEffect` — la position est reposée AVANT que le navigateur ne
   // peigne le scrollport neuf : un `useEffect` laisserait une image en haut

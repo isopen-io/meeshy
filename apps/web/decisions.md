@@ -5060,3 +5060,25 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Kotlin natif** : rien (gel). **iOS** : le parcours invité depuis l'écran de connexion est l'affaire de #10003.
 
 **Témoins.** `landing/landing.test.tsx` (balises par langue, script rejoué par son texte : session, langue, `GET /world` contre `worldEntrySchema`, 404, entrée encodée), `landing/landing-static.test.ts` (sitemap, robots, nginx, service worker, manifeste, images 1200 × 630), `landing/landing-routes.test.ts` et `routes/home.test.tsx` (`/chats`, `/` dans la coque et sur le web), `scripts/check-bascule-recette.mjs` (la recette sert la landing sur `/`).
+
+## D-185 — Sur grand écran, la liste et le fil côte à côte : un CADRE du routeur garde la liste montée, les adresses ne changent pas (2026-10-11, #10073)
+
+**Contexte.** Sur ordinateur, ouvrir une conversation faisait quitter la liste : `/chats` et `/c/:id` sont deux écrans découpés qui se remplacent, et `<Screen key={routeKey}>` démonte l'un pour monter l'autre.
+
+**Décision.** Le routeur accepte une option `frame` (`lib/router.tsx`) : un composant rendu à la MÊME position de l'arbre pour toutes les routes, qui reçoit l'écran routé et `screenOf(clé)` — l'écran découpé d'une autre route, même `lazy`, même chunk. `routes/split-frame.tsx` s'en sert :
+
+- **Quand** : `matchMedia('(min-width: 1024px)')` observé par `useSyncExternalStore` (aucun écouteur `resize`), route `list` ou `thread`, session qui n'est PAS celle d'un invité de lien (World Wide sans compte : pas de liste, fil seul). Sinon le cadre rend l'écran routé tel quel — sous 1024 px rien ne change, coque Android comprise.
+- **Quoi** : la liste à gauche (24rem, filet `--color-ios-hairline`), montée UNE fois sous sa propre limite `Suspense` ; à droite le fil (l'élément routé, avec sa clé — changer de conversation remonte le FIL, jamais la liste) ou, sur `/chats`, l'état « choisissez une conversation » (`split-empty-pane.tsx`, chargé à la demande).
+- **Les adresses ne changent pas** : lien profond, retour arrière et rechargement rendent la même vue, puisqu'elle se DÉDUIT de l'adresse et de la largeur.
+- **La rangée ouverte** porte `aria-current="page"` et `data-active` (peau teintée à l'accent, `lens-row-meta.css`) — par `useIsCurrentPath`, un booléen observé : une navigation ne re-rend que les deux rangées dont la réponse change.
+- **Le défilement de la liste** est gardé par le montage lui-même ; `ScrollportKeyScope` (`use-scrollport-memory.ts`) fixe sa clé de mémoire à `/chats`, sinon un re-rendu sous `/c/:id` lui aurait rendu la position d'une ancienne visite.
+- **La colonne du fil (#10072)** se calcule déjà sur la largeur du VOLET : `100%` y est celle du bloc conteneur. Pas de container query : `container-type` crée un bloc conteneur pour `position: fixed` et aurait enfermé visionneuse, appel et voiles plein écran dans le volet. Dans le volet, le chevron de retour se retire (`thread-column.css`, `[data-split-detail] [data-thread-back]`).
+- **Libellés** : une table synchrone de sept langues dans le chunk du volet vide (discipline `lib/skip-link.ts`) — le catalogue de démarrage n'est pas touché.
+
+**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande.
+
+**Limites assumées.** Franchir 1024 px pendant la lecture d'un fil remonte le fil (la structure de l'arbre change) — les brouillons persistés n'en souffrent pas. Les menus flottants suivent toujours la route (`showsFloatingMenus`) : présents sur `/chats`, absents sur `/c/:id`, comme au téléphone.
+
+**Kotlin natif** : rien (gel). **iOS** : l'iPad a son `NavigationSplitView` ; rien à reporter.
+
+**Témoins.** `routes/split-frame.test.tsx` (1024 px : liste ET fil, état vide sur `/chats`, liste montée une seule fois au fil des navigations, retour arrière, autre route jamais scindée ; sous 1024 px un seul écran ; bascule au franchissement ; invité ; sept langues ; `aria-current` sur la seule rangée ouverte), `styles/thread-column.test.tsx` (retrait du chevron), `routes/safe-area.test.ts` (exemption motivée du cadre).

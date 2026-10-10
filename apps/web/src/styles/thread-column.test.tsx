@@ -45,11 +45,18 @@ const ruleIn = (block: string, selector: string): string => {
 
 const TABLET = '(min-width: 768px)';
 const WIDE = '(min-width: 1280px)';
+const SPLIT = '(min-width: 1024px)';
 
 describe('la feuille de la colonne ne touche pas au téléphone', () => {
-  test('aucune règle hors des deux requêtes média', () => {
-    const outside = [TABLET, WIDE].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
+  test('aucune règle hors des requêtes média', () => {
+    const outside = [TABLET, WIDE, SPLIT].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
     expect(outside.trim()).toBe('');
+  });
+});
+
+describe('dans le volet du cadre scindé (#10073)', () => {
+  test('le retour vers la liste se retire, la liste étant à côté', () => {
+    expect(ruleIn(mediaBlock(SPLIT), '[data-split-detail] [data-thread-back]')).toContain('display: none');
   });
 });
 

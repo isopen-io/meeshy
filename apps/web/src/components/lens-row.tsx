@@ -15,7 +15,8 @@ import { isRowCallAction, type RowActionId } from '@/lib/view/row-actions';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
-import { Link } from '@/routes/route-table';
+import { useIsCurrentPath } from '@/lib/router';
+import { Link, href } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
 import { Glyph } from './glyph';
@@ -166,6 +167,10 @@ function LensRowImpl({
   card = false,
 }: LensRowProps) {
   const unread = unreadCount > 0;
+  /* LA CONVERSATION OUVERTE À CÔTÉ (#10073) — sur grand écran, la liste reste
+     montée à gauche du fil : sa rangée se marque. Un booléen observé, pas
+     l'adresse — seules les deux rangées dont la réponse change re-rendent. */
+  const active = useIsCurrentPath(href('thread', { conversation: conversation.id }));
   /**
    * LE FONDU DE SOURDINE NE PORTE QUE SUR LE CHROME — #5559 défauts 1/8
    * (contraste). Il vivait sur le `<li>` ENTIER (`opacity: MUTED_OPACITY`) :
@@ -298,6 +303,7 @@ function LensRowImpl({
          */
         className={`lens-row${card ? ' lens-row--card' : ''} absolute inset-x-0 flex items-center gap-3 ps-3 pe-12`}
         {...(card ? { 'data-world-card': '' } : {})}
+        {...(active ? { 'data-active': '' } : {})}
         style={withAccent(accent, {
           top: -OVERHANG,
           height: VISUAL_HEIGHT,
@@ -368,6 +374,7 @@ function LensRowImpl({
           to="thread"
           params={{ conversation: conversation.id }}
           className="flex min-w-0 flex-1 flex-col justify-center"
+          {...(active ? { 'aria-current': 'page' as const } : {})}
         >
           {/*
             LE SUPPLÉMENT, premier volet : la catégorie et les étiquettes. Il est

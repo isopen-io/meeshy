@@ -7,6 +7,7 @@ import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog'
 import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
+import { SplitFrame } from '@/routes/split-frame';
 
 /**
  * LA TABLE DES ROUTES — le seul endroit du depot qui connait les adresses.
@@ -657,4 +658,7 @@ export function NotFound() {
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
 export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+  /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
+     1024 px, le cadre rend l'écran routé tel quel. */
+  frame: SplitFrame,
 });
