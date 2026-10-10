@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import Fastify from 'fastify';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -133,8 +133,20 @@ describe('épingler / dépingler remonte la conversation pour tous (#9026)', () 
 
 // #9927 — épingler (ou dépingler) dans Meeshy Global met un message en avant
 // pour TOUT le salon : c'est y écrire. Un mineur déclaré ne le fait pas.
+
+/** Horloge FIGÉE (#9927) : une date de naissance comparée à l'horloge murale rougirait le jour où l'âge change. */
+const FROZEN_NOW = new Date('2026-10-10T12:00:00.000Z');
+const yearsBeforeFrozenNow = (years: number): Date =>
+  new Date(Date.UTC(FROZEN_NOW.getUTCFullYear() - years, FROZEN_NOW.getUTCMonth(), FROZEN_NOW.getUTCDate()));
+const freezeClock = () => jest.useFakeTimers({
+  doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'performance', 'hrtime'],
+  now: FROZEN_NOW,
+});
+
 describe('épingler / dépingler dans Global — un mineur déclaré en est exclu (#9927)', () => {
+  afterEach(() => { jest.useRealTimers(); });
   beforeEach(() => {
+    freezeClock();
     mockAnnounce.mockReset();
     mockAnnounce.mockResolvedValue(undefined);
     mockResolveConversationId.mockResolvedValue(CONV_ID);
@@ -142,7 +154,7 @@ describe('épingler / dépingler dans Global — un mineur déclaré en est excl
   });
 
   it.each(['PUT', 'DELETE'] as const)('%s refusé à un mineur de 15 ans : 403 GLOBAL_ADULTS_ONLY, rien n’est écrit', async (method) => {
-    const { app, prisma } = await buildApp({ conversationType: 'global', birthDate: new Date('2011-01-01T00:00:00.000Z') });
+    const { app, prisma } = await buildApp({ conversationType: 'global', birthDate: yearsBeforeFrozenNow(15) });
     try {
       const res = await app.inject({ method, url });
       expect(res.statusCode).toBe(403);
@@ -165,7 +177,7 @@ describe('épingler / dépingler dans Global — un mineur déclaré en est excl
   });
 
   it('un mineur épingle hors de Global, sans que sa date de naissance soit lue', async () => {
-    const { app, prisma } = await buildApp({ conversationType: 'group', birthDate: new Date('2011-01-01T00:00:00.000Z') });
+    const { app, prisma } = await buildApp({ conversationType: 'group', birthDate: yearsBeforeFrozenNow(15) });
     try {
       const res = await app.inject({ method: 'PUT', url });
       expect(res.statusCode).toBe(200);

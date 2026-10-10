@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -70,9 +70,21 @@ async function buildApp(params: { readonly type: string; readonly birthDate: Dat
   return { app, prisma };
 }
 
-const TEEN = new Date('2010-02-01T00:00:00.000Z');
+
+/** Horloge FIGÉE (#9927) : une date de naissance comparée à l'horloge murale rougirait le jour où l'âge change. */
+const FROZEN_NOW = new Date('2026-10-10T12:00:00.000Z');
+const yearsBeforeFrozenNow = (years: number): Date =>
+  new Date(Date.UTC(FROZEN_NOW.getUTCFullYear() - years, FROZEN_NOW.getUTCMonth(), FROZEN_NOW.getUTCDate()));
+const freezeClock = () => jest.useFakeTimers({
+  doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'performance', 'hrtime'],
+  now: FROZEN_NOW,
+});
+const TEEN = yearsBeforeFrozenNow(15);
 
 describe('GET /conversations/:id — viewerWriteRestriction (#9927)', () => {
+  beforeEach(() => { freezeClock(); });
+  afterEach(() => { jest.useRealTimers(); });
+
   it('mineur déclaré dans Global : minor-global', async () => {
     const { app } = await buildApp({ type: 'global', birthDate: TEEN });
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}` });

@@ -74,7 +74,9 @@ describe('VoiceProfileService.updateConsent — la date de naissance ne se redé
 
   it('n’écrit pas une date de moins de 13 ans', async () => {
     const { service, updateMany, state } = setup(null);
-    await service.updateConsent('u1', { voiceRecordingConsent: true, birthDate: '2020-01-01' });
+    const now = new Date();
+    const fiveYearsAgo = `${now.getUTCFullYear() - 5}-01-01`;
+    await service.updateConsent('u1', { voiceRecordingConsent: true, birthDate: fiveYearsAgo });
     expect(updateMany).not.toHaveBeenCalled();
     expect(state.birthDate).toBeNull();
   });
