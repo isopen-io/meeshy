@@ -120,9 +120,18 @@ extension StoryCanvasUIView {
     /// `MediaSessionCoordinator` (RC4.3). Refcounted; the boolean keeps this
     /// view's request/release at exactly one claim.
     func requestPlaybackSessionIfNeeded() {
+        guard StoryAudioActivationPolicy.shouldActivate(
+            hasClips: audioMixer.activeClipCount > 0 || audioMixer.backgroundClipCount > 0,
+            hasSoundingVideo: slideHasSoundingVideo,
+            mute: isAudioMuted) else { return }
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
         Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+    }
+
+    var slideHasSoundingVideo: Bool {
+        StoryAudioAvailability.videosNeedingAudioProbe(effects: slide.effects)
+            .contains { videoHasAudioTrack[$0.id] != false }
     }
 
     /// Balances `requestPlaybackSessionIfNeeded()`.
@@ -184,6 +193,10 @@ extension StoryCanvasUIView {
         // les clips audio en `.edit`. Le prefetcher hors-écran (`.edit` sans le
         // flag) reste silencieux.
         guard mode == .play || (mode == .edit && playsAudioInEditMode) else { return }
+        guard StoryAudioActivationPolicy.shouldPrepare(mute: isAudioMuted, muteIsLocked: muteIsLocked) else {
+            slideHasSchedulableAudio = false
+            return
+        }
         // Gate sur la COMPOSITION : `configure(audios:urls:)` démonte les clips
         // en place et recharge les `AVAudioFile`, donc un pass par frappe
         // clavier relançait le son. Seuls un ajout/retrait d'objet, un
@@ -393,7 +406,9 @@ extension StoryCanvasUIView {
     /// - watchdog `playbackStallWatchdogSeconds` en secours absolu côté
     ///   `applyPlaybackHealth`.
     func isSlideAudioPending() -> Bool {
-        guard slideHasSchedulableAudio else { return false }
+        guard StoryAudioActivationPolicy.shouldActivate(hasClips: slideHasSchedulableAudio,
+                                                        hasSoundingVideo: false,
+                                                        mute: isAudioMuted) else { return false }
         guard !MediaSessionCoordinator.shared.isCallActive else { return false }
         return !audioMixer.hasStartedPlayback(slideKey: currentSlideKey)
     }
@@ -448,5 +463,7 @@ extension StoryCanvasUIView {
         audioMixer.setMute(false)
         forEachMediaLayer { $0.isMuted = false }
         backgroundLayer.isMuted = false
+        guard !audioMixer.hasStartedPlayback(slideKey: currentSlideKey) else { return }
+        startAudioPlayback()
     }
 }

@@ -45,6 +45,7 @@ final class StoryAudioActivationPolicyTests: XCTestCase {
                        "une passe silencieuse ne démarre aucun moteur : elle reste une passe, pas une retenue")
     }
 
+    @MainActor
     func test_leContexte_garde_sonVerrou_quandLaLangueChange() {
         let carte = StoryReaderContext(preferredLanguages: ["fr"], mute: true, locksMute: true)
         XCTAssertTrue(carte.withPreferredLanguages(["en"]).locksMute)

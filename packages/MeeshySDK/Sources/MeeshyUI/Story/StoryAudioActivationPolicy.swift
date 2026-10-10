@@ -3,14 +3,14 @@ import Foundation
 nonisolated enum StoryAudioActivationPolicy {
 
     static func shouldPrepare(mute: Bool, muteIsLocked: Bool) -> Bool {
-        true
+        !(mute && muteIsLocked)
     }
 
     static func shouldActivate(hasClips: Bool, hasSoundingVideo: Bool, mute: Bool) -> Bool {
-        true
+        !mute && (hasClips || hasSoundingVideo)
     }
 
     static func shouldHoldEngine(hasClips: Bool, isMuted: Bool) -> Bool {
-        false
+        hasClips && isMuted
     }
 }
