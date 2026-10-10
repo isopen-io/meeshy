@@ -190,47 +190,45 @@ export type SharedTranslationRouteOptions = {
   readonly shareBudget?: SharedTranslationShareBudget;
 };
 
+/** Le seau d'un geste, par COMPTE : un invité de lien partagé compte par son `Participant.id`. */
+const sharedTranslationsCallerKey = (gesture: 'share' | 'read') => (request: FastifyRequest) => {
+  const authContext = (request as UnifiedAuthRequest).authContext;
+  return `shared-translations:${gesture}:${authContext?.userId ?? `ip:${request.ip}`}`;
+};
+
 /**
- * Un plafond par COMPTE et par minute, pour `@fastify/rate-limit`.
+ * Le plafond des partages. Un appareil partage au plus une traduction par
+ * message reçu de sa fenêtre récente (quarante sur iOS) : cent vingt laissent
+ * ouvrir plusieurs conversations d'affilée.
  *
  * `hook: 'preHandler'` : l'identité est posée en `preValidation`, une phase plus
  * tardive que l'`onRequest` par défaut du plugin, qui compterait l'adresse.
  * `skipOnError: false` : la config de route hérite sinon du `skipOnError: true`
  * du limiteur global, et une panne du magasin de compteurs ouvrirait le plafond.
  */
-const perAccountRateLimit = (params: { readonly max: number; readonly gesture: string; readonly error: string }) => ({
-  max: params.max,
+export const SHARED_TRANSLATION_SHARE_RATE_LIMIT = {
+  max: 120,
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
   skipOnError: false,
-  keyGenerator: (request: FastifyRequest) => {
-    const authContext = (request as UnifiedAuthRequest).authContext;
-    return `shared-translations:${params.gesture}:${authContext?.userId ?? `ip:${request.ip}`}`;
-  },
-  errorResponseBuilder: () => ({ success: false, error: params.error, statusCode: 429 }),
-});
-
-/**
- * Le plafond des partages. Un appareil partage au plus une traduction par
- * message reçu de sa fenêtre récente (quarante sur iOS) : cent vingt laissent
- * ouvrir plusieurs conversations d'affilée.
- */
-export const SHARED_TRANSLATION_SHARE_RATE_LIMIT = perAccountRateLimit({
-  max: 120,
-  gesture: 'share',
-  error: 'Too many shared translations. Please slow down.',
-});
+  keyGenerator: sharedTranslationsCallerKey('share'),
+  errorResponseBuilder: () => ({ success: false, error: 'Too many shared translations. Please slow down.', statusCode: 429 }),
+};
 
 /**
  * Le plafond des lectures. Un appareil lit les traductions partagées en ouvrant
  * une conversation, par lots de cent messages, et deux fois au plus par
  * message : soixante laissent parcourir plusieurs conversations à la minute.
+ * Mêmes `hook` et `skipOnError` que le plafond des partages, pour les mêmes raisons.
  */
-export const SHARED_TRANSLATION_READ_RATE_LIMIT = perAccountRateLimit({
+export const SHARED_TRANSLATION_READ_RATE_LIMIT = {
   max: 60,
-  gesture: 'read',
-  error: 'Too many shared translation reads. Please slow down.',
-});
+  timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
+  keyGenerator: sharedTranslationsCallerKey('read'),
+  errorResponseBuilder: () => ({ success: false, error: 'Too many shared translation reads. Please slow down.', statusCode: 429 }),
+};
 
 /** Ce qu'il faut du message pour juger le droit de lire, la protection, la langue, la dérivation et la version. */
 const SHARED_TRANSLATION_MESSAGE_SELECT = {
