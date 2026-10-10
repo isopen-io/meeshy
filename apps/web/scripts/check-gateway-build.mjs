@@ -286,7 +286,7 @@ async function main() {
     // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
     // un octet réel vers un serveur de production depuis ce gate (#5793).
     await page.route('**/socket.io/**', (route) => route.abort());
-    await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/chats`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
     check(requests.length === 0, `sans session, aucune requête /api/v1/conversations (obtenu : ${requests.length})`);
@@ -347,7 +347,7 @@ async function main() {
     const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
 
     // Le squelette doit être peint AVANT la résolution (800 ms) — on le
     // mesure tôt, avant d'attendre les rangées réelles.
@@ -422,7 +422,7 @@ async function main() {
     // --- 3. /login avec une session ⇒ /  ---------------------------------
     await page.goto(`${base}/login`, { waitUntil: 'networkidle' });
     const pathAfterLogin = await page.evaluate(() => window.location.pathname);
-    check(pathAfterLogin === '/', `/login avec une session active redirige vers / (obtenu : ${pathAfterLogin})`);
+    check(pathAfterLogin === '/chats', `/login avec une session active redirige vers /chats (obtenu : ${pathAfterLogin})`);
 
     await context.close();
   }
@@ -448,7 +448,7 @@ async function main() {
     });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
     check((await page.locator('[data-row]').count()) === 30, 'page 2b : la page 1 rend bien 30 rangées avant le défilement');
 
@@ -514,7 +514,7 @@ async function main() {
     });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
     check((await page.locator('[data-row]').count()) === 30, 'page 2c : 30 rangées avant le tirer');
     check(block2cCounts.get('') === 1, 'page 2c : une seule requête de conversations avant le tirer');
@@ -650,7 +650,7 @@ async function main() {
         body: JSON.stringify({ success: true, data: [] }),
       });
     });
-    await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/chats`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
     /**
@@ -786,7 +786,7 @@ async function main() {
         body: JSON.stringify({ success: false, error: 'Internal server error' }),
       });
     });
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#contenu [role="alert"]', { timeout: 20000 });
 
     const busy = await page.locator('#contenu[aria-busy="true"]').count();

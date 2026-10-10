@@ -23,6 +23,17 @@
       "source": "RELEVE 2026-09-30 (#8877) — mesure (`bun run build`) : /about 9,94 Ko sur dev, 10,03 Ko avec la charte visuelle iOS. L'ecart (~90 octets gzip par page) vient des 16 cotes d'echelle neuves (MeeshySpacing/Radius/Font) que generate-from-ios.mjs publie dans ios.css, que toute page institutionnelle inline — meme regle que les pas deja publies sans consommateur web. 10,5 garde un gate (0,5 Ko de croissance) sur le modele de first_paint.kb. HISTORIQUE — Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
     }
   },
+  "landing_page": {
+    "subject": "chaque LANDING prerendue de meeshy.me (/, /en, /es, /pt, /de, /it, /ar), gzip -9 — le document HTML complet, feuille INLINEE et script de la page compris (scripts/prerender-landing.tsx, #10002). Une langue a la fois : un visiteur n'en lit qu'une.",
+    "read_by": [
+      "apps/web/scripts/prerender-landing.tsx"
+    ],
+    "kb": {
+      "value": null,
+      "status": "A POSER A LA LIVRAISON DE #10002 -- valeur mesuree par `bun run build`, arrondie au Ko SUPERIEUR + 1 Ko de marge, puis A CONFIRMER PAR LE PORTEUR",
+      "source": "La landing remplace la liste sur / (#10002) : elle ne touche pas first_paint.kb (la coquille de l'application, index.html, reste servie a toutes les autres adresses et ne change pas de poids), et porte donc son PROPRE plafond, sur le modele de institutional_page.kb. Tant que la valeur est null, le prerendu mesure et l'annonce sans rougir."
+    }
+  },
   "on_demand_chunks": {
     "subject": "chunks CHARGES A LA DEMANDE (import() differe), gzip -9 -- hors premiere peinture par construction (#5695). Chaque entree nomme le PATTERN de fichier qu'elle borne (prefixe du chunk produit par Vite) ; measure-weight.mjs rougit si AUCUN fichier ne matche (un lazy() casse inline le module, sans erreur ailleurs) ou si la somme depasse la valeur.",
     "summary": {

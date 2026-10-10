@@ -10,6 +10,7 @@ Disallow: /settings
 Disallow: /notifications
 Disallow: /conversation
 Disallow: /conversations
+Disallow: /chats
 Disallow: /chat
 Disallow: /call
 Disallow: /feed
@@ -50,6 +51,7 @@ Disallow: /settings
 Disallow: /notifications
 Disallow: /conversation
 Disallow: /conversations
+Disallow: /chats
 Disallow: /chat
 Disallow: /call
 Disallow: /feed

@@ -70,7 +70,7 @@ describe('/share', () => {
     signIn();
     const { opened, navigations } = await mount();
     expect(opened).toEqual([{ intent: 'share', payload: { kind: 'text', text: 'Bonjour' } }]);
-    expect(navigations).toEqual(['/']);
+    expect(navigations).toEqual(['/chats']);
   });
 
   test('pas connecté : envoie à la connexion et garde le partage pour le retour', async () => {

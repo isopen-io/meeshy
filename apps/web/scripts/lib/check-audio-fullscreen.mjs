@@ -319,7 +319,7 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
 
   // ===== B2 — ailleurs, il reparaît sous « Reprendre l'appel », sans le chevaucher =====
   await page.evaluate(() => {
-    history.pushState({}, '', '/');
+    history.pushState({}, '', '/chats');
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await mini.waitFor({ state: 'visible', timeout: 8000 });
@@ -388,7 +388,7 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
 
   // ===== B5 — hors du fil, « Fermer le lecteur » le retire =====
   await page.evaluate(() => {
-    history.pushState({}, '', '/');
+    history.pushState({}, '', '/chats');
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await mini.waitFor({ state: 'visible', timeout: 8000 });

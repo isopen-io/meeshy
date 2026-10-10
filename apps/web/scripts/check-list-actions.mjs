@@ -154,7 +154,7 @@ const menuItem = (label) => `[role="menu"] [role="menuitem"]:text-is("${label}")
 const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const page = await context.newPage();
-await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
 await page.waitForTimeout(300);
 
@@ -476,7 +476,7 @@ await page.close();
 await context.close();
 const light = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR' });
 const pageLight = await light.newPage();
-await pageLight.goto(`${BASE}/`, { waitUntil: 'load' });
+await pageLight.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await pageLight.waitForSelector('[data-row]');
 await pageLight.waitForTimeout(200);
 const mutedLight = await pageLight.$eval('[data-row="c-annonces"] .avatar-root', (el) => Number(getComputedStyle(el).opacity));
@@ -519,7 +519,7 @@ const touchContext = await browser.newContext({
   locale: 'fr-FR',
 });
 const touchPage = await touchContext.newPage();
-await touchPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await touchPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await touchPage.waitForSelector('[data-row]');
 await touchPage.waitForTimeout(300);
 
@@ -588,7 +588,7 @@ await touchContext.close();
  */
 const shortContext = await browser.newContext({ viewport: { width: 390, height: 640 }, colorScheme: 'dark', locale: 'fr-FR' });
 const shortPage = await shortContext.newPage();
-await shortPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await shortPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await shortPage.waitForSelector('[data-row]');
 await shortPage.waitForTimeout(300);
 
@@ -642,7 +642,7 @@ await shortContext.close();
  */
 const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
 const enTetePage = await enTeteContext.newPage();
-await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
 await enTetePage.waitForTimeout(300);
 
@@ -774,7 +774,7 @@ check(
   premierAuteur !== null && surLecteur.auteur === premierAuteur,
   `le lecteur ouvert est celui de l'auteur TAPÉ, pas d'un autre (attendu « ${premierAuteur} », obtenu « ${surLecteur.auteur} »)`,
 );
-await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
 
 /** 1) « Créer un lien de partage » ⇒ une feuille OUVERTE, et choisir une
@@ -823,13 +823,13 @@ const resultats = await enTetePage.locator('ul li button').count();
 check(resultats >= 1, `deux caractères rendent au moins un contact cliquable (obtenu : ${resultats})`);
 
 /** 4) « Progression » ⇒ sa route répond aussi. */
-await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
+await enTetePage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
 await enTetePage.click('header a[aria-label^="Progression"]');
 await enTetePage.waitForTimeout(400);
 const apresProgression = await enTetePage.evaluate(() => window.location.pathname);
 check(
-  apresProgression !== '/',
+  apresProgression !== '/chats',
   `« Progression » quitte la liste (obtenu : ${apresProgression})`,
 );
 
@@ -857,7 +857,7 @@ await enTeteContext.close();
  */
 const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'fr-FR' });
 const bottomPage = await bottomContext.newPage();
-await bottomPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await bottomPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await bottomPage.waitForSelector('[data-row]');
 await bottomPage.waitForTimeout(300);
 
@@ -942,7 +942,7 @@ for (const scheme of ['light', 'dark']) {
   ]) {
     const callContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, locale: 'fr-FR' });
     const callPage = await callContext.newPage();
-    await callPage.goto(`${BASE}/`, { waitUntil: 'load' });
+    await callPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
     await callPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
     const name = await callPage.$eval(`[data-row="${SUBJECT}"] [data-name]`, (el) => (el.textContent ?? '').trim());
     await callPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
@@ -957,7 +957,7 @@ for (const scheme of ['light', 'dark']) {
       .waitForSelector('[data-call-screen]', { timeout: 5000 })
       .then(() => callPage.$eval('[data-call-screen]', (el) => el.getAttribute('aria-label')), () => null);
     check(
-      screen === `Appel avec ${name}` && new URL(callPage.url()).pathname === '/',
+      screen === `Appel avec ${name}` && new URL(callPage.url()).pathname === '/chats',
       `${scheme} : « ${label} » depuis le menu ouvre l'écran d'appel (${media}) vers « ${name} », au-dessus de la liste (${screen})`,
     );
     await callContext.close();
@@ -968,7 +968,7 @@ for (const scheme of ['light', 'dark']) {
 {
   const enContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', locale: 'en-US' });
   const enPage = await enContext.newPage();
-  await enPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await enPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await enPage.waitForSelector(`[data-row="${SUBJECT}"] [data-name]`);
   await enPage.click(`[data-row="${SUBJECT}"] [data-name]`, { button: 'right' });
   const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
