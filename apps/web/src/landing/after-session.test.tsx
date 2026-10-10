@@ -6,6 +6,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { landingAfterSession } from '@/lib/session-guard';
 import { href } from '@/routes/route-table';
+import { landingAfterRegistration } from '@/routes/signup';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -46,6 +47,11 @@ describe('après connexion, la liste (#10002)', () => {
   test('`next` sur `/` (la liste d’avant #10002) mène à la liste, pas à la landing', () => {
     expect(landingAfterSession('/', href('list'))).toBe('/chats');
     expect(landingAfterSession('/c/abc', href('list'))).toBe('/c/abc');
+  });
+
+  test('un compte qui vient de s’inscrire avec `next` sur `/` va à l’accueil post-inscription, pas à la landing', () => {
+    expect(landingAfterRegistration({ next: '/' })).toBe(href('onboarding'));
+    expect(landingAfterRegistration({ next: '/chat/mshy_x' })).toBe('/chat/mshy_x');
   });
 
   test('un lien magique sans `returnUrl` ouvre /chats', async () => {

@@ -60,7 +60,7 @@ import {
 } from '@/lib/view/signup-phases';
 import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { forgetReferralCode } from '@/lib/view/referral-memory';
-import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
+import { landingAfterSession, safeNextPath, sessionNextPath } from '@/lib/session-guard';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -117,7 +117,7 @@ type FocusedField = SignupField | 'referral' | null;
  * de grâce (#8238) — l'écran du code n'est plus une étape.
  */
 export function landingAfterRegistration(input: { readonly next: string | null }): string {
-  return safeNextPath(input.next) ?? href('onboarding');
+  return sessionNextPath(input.next) ?? href('onboarding');
 }
 
 /** `next` lu sur l'ADRESSE plutôt que par `useSearch()` : l'écran est monté
