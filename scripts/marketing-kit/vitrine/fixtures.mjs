@@ -6,6 +6,7 @@ import { KIT_LANGS } from '../lib/locales.mjs'
 import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
 import { REELS_DROLES, STORIES_DE_L_ENTETE } from '../textes/reels.mjs'
+import { SAV, SONDE } from '../textes/liens.mjs'
 import { VIDEO_DU_REEL, afficheMedia, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
 
 export const VERSION_FIXTURES = 2
@@ -591,43 +592,59 @@ const lienInvitation = (lang, maintenant) => {
   }
 }
 
-// « Mes liens » du lecteur (#9904), au format de la passerelle (`GET /links`, `/links/stats`, `/links/:id/stats`) : le lien
-// du « Nova Club », ses visites, ses arrivées — dont celles SANS compte — et les langues des arrivants (le kit,
-// `DEMO.lienInvitation`), plus deux liens plus modestes. Les arrivées récentes sont des membres fictifs du kit.
-const ARRIVANTS = [['sofi.romero', false], ['minjun.p', true], ['aiko.t', true], ['lucas.olv', false], ['yusuf.h', true]]
+// Le LIEN (#9904). « Dis-moi tout » : la conversation d'un lien anonyme partagé aux proches, où chacun écrit SANS compte
+// (`sender.type: 'anonymous'`), dans sa langue — le lecteur la lit dans la sienne. Un message écrit dans la langue du
+// lecteur n'y figure pas : la scène montre des traductions.
+export const ID_SONDE = oid('conv:sonde')
 
-export const mesLiens = (lang, maintenant) => {
-  const L = DEMO.lienInvitation
-  const nova = {
-    id: oid('share:nova'), linkId: L.identifiant, identifier: L.identifiant, name: L.groupe, isActive: true,
-    currentUses: L.arrivees, maxUses: null, expiresAt: null, createdAt: new Date(`${L.cree}T10:00:00.000Z`).toISOString(),
-    conversationTitle: L.groupe, allowAnonymousMessages: true, allowViewHistory: true, requireAccount: false,
-  }
-  const autres = [
-    { cle: 'lisboa', id: LIEN_LISBOA, titre: DEMO.drole.titre, uses: 38, jours: 12 },
-    { cle: 'debat', id: 'pizza-night', titre: DEMO.debat.titre, uses: 21, jours: 20 },
-  ].map((a) => ({
-    id: oid(`share:${a.cle}`), linkId: a.id, identifier: a.id, name: a.titre, isActive: true, currentUses: a.uses, maxUses: null,
-    expiresAt: null, createdAt: iso(maintenant, a.jours * JOUR), conversationTitle: a.titre, allowAnonymousMessages: true,
-  }))
-  const liens = [nova, ...autres]
-  const parLangue = L.langues.map(([language, part]) => ({ language, count: Math.round((L.arrivees * part) / 100) }))
-  const arrivals = parLangue.reduce((n, l) => n + l.count, 0)
-  const recentes = ARRIVANTS.filter(([pseudo]) => pseudo !== lecteurDe(lang).pseudo).map(([pseudo, anonyme], i) => {
-    const p = profilDe(pseudo)
-    return {
-      participantId: oid(`arrivee:${pseudo}`), displayName: anonyme ? p.prenom : `${p.prenom} ${p.nom}`, isAnonymous: anonyme,
-      language: p.lang, joinedAt: iso(maintenant, 6 + i * 23),
-    }
-  })
+const expediteurAnonyme = (conversationId, pseudo) => ({
+  id: oid(`anon:${conversationId}:${pseudo}`), username: pseudo, displayName: pseudo, type: 'anonymous',
+})
+
+export const messagesDeLaSonde = (lang, maintenant) => SONDE.messages.filter((m) => m.lang !== lang).map((m, i, tous) => {
+  const id = oid(`msg:${ID_SONDE}:${m.id}`)
+  const minutes = 4 + (tous.length - i) * 3
   return {
-    liens,
-    stats: { totalLinks: liens.length, activeLinks: liens.length, totalUses: liens.reduce((n, l) => n + l.currentUses, 0) },
-    arrivees: {
-      [nova.linkId]: {
-        visits: L.clics, arrivals, anonymousArrivals: L.sansCompte, arrivalsByLanguage: parLangue, arrivalsByCountry: [], recentArrivals: recentes,
-      },
-    },
+    id, conversationId: ID_SONDE, senderId: expediteurAnonyme(ID_SONDE, m.pseudo).id, createdAt: iso(maintenant, minutes),
+    sender: expediteurAnonyme(ID_SONDE, m.pseudo), content: m.textes[m.lang], originalLanguage: m.lang, messageType: 'text',
+    translations: traductions(id, { lang: m.lang, translations: Object.fromEntries(Object.entries(m.textes).filter(([l]) => l !== m.lang)) }),
+  }
+})
+
+const conversationDeLaSonde = (lang, maintenant, messages) => ({
+  id: ID_SONDE, type: 'group', title: SONDE.titre[lang], memberCount: messages.length + 1, unreadCount: 0, isMember: true,
+  createdAt: iso(maintenant, 3 * JOUR), updatedAt: messages.at(-1).createdAt, ...ligneDe(messages.at(-1)),
+})
+
+// Les conversations de SAV : une par produit, la dernière question d'un client SANS compte, dans sa langue.
+export const ID_SAV = (cle) => oid(`conv:sav:${cle}`)
+
+const conversationsDuSav = (lang, maintenant) => SAV.map((c, i) => {
+  const id = ID_SAV(c.cle)
+  const client = expediteurAnonyme(id, c.client)
+  // Plus récentes que tout le reste de la liste (le vocal d'« amour » a 2 min) : elles s'affichent en tête.
+  const minutes = 0.5 + i * 0.35
+  return {
+    id, type: 'group', title: c.titre[lang], memberCount: 18 + i * 7, unreadCount: 3 - Math.min(i, 2), isMember: true,
+    createdAt: iso(maintenant, 20 * JOUR), updatedAt: iso(maintenant, minutes),
+    lastMessage: { id: oid(`last:${id}`), content: c.textes[c.lang], senderId: client.id, createdAt: iso(maintenant, minutes), messageType: 'text', sender: client },
+    lastMessageTranslations: Object.fromEntries(Object.entries(c.textes).filter(([l]) => l !== c.lang)),
+    lastMessageOriginalLanguage: c.lang,
+    lastMessageAt: iso(maintenant, minutes),
+  }
+})
+
+// Le lien du premier SAV, tel qu'un client sans compte l'ouvre (`GET /links/:id`) : c'est le lecteur qui l'a créé.
+const lienDuSav = (lang, maintenant) => {
+  const c = SAV[0]
+  const langues = [...new Set([lang, ...SAV.map((x) => x.lang)])]
+  return {
+    id: oid(`link:${c.lien}`), linkId: c.lien, name: c.titre[lang], currentUses: 41, currentConcurrentUsers: 3,
+    requireAccount: false, requireNickname: false, requireEmail: false, requireBirthday: false, allowedLanguages: [],
+    allowAnonymousMessages: true, allowAnonymousImages: true, allowAnonymousFiles: false, allowViewHistory: true,
+    conversation: { id: ID_SAV(c.cle), title: c.titre[lang], type: 'group', createdAt: iso(maintenant, 20 * JOUR) },
+    creator: identite(lecteurDe(lang)),
+    stats: { totalParticipants: 42, memberCount: 42, anonymousCount: 37, languageCount: langues.length, spokenLanguages: langues },
   }
 }
 
@@ -641,20 +658,25 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
   }
   const lesPosts = posts(maintenant)
   const lesStories = storiesDeLEntete(lang, maintenant)
+  const sonde = messagesDeLaSonde(lang, maintenant)
   return {
     version: VERSION_FIXTURES,
     lang,
     lecteur: utilisateur(lecteurDe(lang), maintenant),
     conversations: conversations(lang, maintenant, fils),
-    messages: fils,
+    messages: { ...fils, [ID_SONDE]: sonde },
     progression: progression(maintenant),
     lienInvitation: lienInvitation(lang, maintenant),
-    modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles' },
+    modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles', [ID_SONDE]: 'script' },
     medias: mediasDe({ lang, fils, lesPosts, lesStories }),
     posts: lesPosts,
     reels: reelsDroles(lang, maintenant),
     stories: lesStories,
-    mesLiens: mesLiens(lang, maintenant),
-    scenes: scenes(lang, fils),
+    conversationsDeScene: {
+      'interaction-sonde': [conversationDeLaSonde(lang, maintenant, sonde)],
+      'interaction-sav': conversationsDuSav(lang, maintenant),
+    },
+    lienSav: lienDuSav(lang, maintenant),
+    scenes: { ...scenes(lang, fils), 'interaction-sonde': { conversationId: ID_SONDE } },
   }
 }

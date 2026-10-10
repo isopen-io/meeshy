@@ -36,36 +36,41 @@ export const TEXTES_ENTETE = {
       de: 'transkribiert und übersetzt', it: 'trascritti e tradotti', pt: 'transcritos e traduzidos', ar: 'مكتوبة ومترجمة',
     },
   },
-  // Le LIEN (#9904) : rejoindre sans compte, voir qui arrive par son lien, gérer ses liens. Aucun sondage : l'app n'en a pas.
-  invite: {
+  // Le LIEN (#9904, précisé par le porteur) : sonder ses proches par un lien anonyme (une conversation, PAS un sondage),
+  // une conversation de SAV et un lien par produit, et les clients qui y écrivent sans compte — le web les sert sans
+  // installer l'app (`/chat/:link`).
+  sonde: {
     titre: {
-      fr: 'Rejoins sans compte', en: 'Join without an account', es: 'Únete sin cuenta', de: 'Ohne Konto beitreten',
-      it: 'Entra senza account', pt: 'Entre sem conta', ar: 'انضم بدون حساب',
+      fr: 'Sonde tes proches', en: 'Ask your loved ones', es: 'Pregunta a los tuyos', de: 'Frag deine Liebsten',
+      it: 'Chiedi ai tuoi cari', pt: 'Pergunte aos seus', ar: 'اسأل أحبّاءك',
     },
     sousTitre: {
-      fr: 'Un lien suffit', en: 'One link is all it takes', es: 'Basta con un enlace', de: 'Ein Link genügt',
-      it: 'Basta un link', pt: 'Basta um link', ar: 'رابط واحد يكفي',
+      fr: 'Un lien anonyme : chacun dit tout, dans sa langue', en: 'One anonymous link: everyone speaks freely, in their own language',
+      es: 'Un enlace anónimo: cada uno lo dice todo, en su idioma', de: 'Ein anonymer Link: Jeder sagt alles, in seiner Sprache',
+      it: 'Un link anonimo: ognuno dice tutto, nella sua lingua', pt: 'Um link anônimo: cada um diz tudo, no próprio idioma',
+      ar: 'رابط مجهول: كلٌّ يقول ما يريد، بلغته',
     },
   },
-  arrivees: {
-    titre: {
-      fr: 'Vois qui arrive', en: 'See who’s coming', es: 'Mira quién llega', de: 'Sieh, wer kommt',
-      it: 'Guarda chi arriva', pt: 'Veja quem chega', ar: 'شاهد من يصل',
-    },
-    sousTitre: {
-      fr: 'Sans compte, dans sa langue', en: 'No account, in their own language', es: 'Sin cuenta, en su idioma',
-      de: 'Ohne Konto, in seiner Sprache', it: 'Senza account, nella sua lingua', pt: 'Sem conta, no próprio idioma',
-      ar: 'بدون حساب، وبلغته',
-    },
-  },
-  business: {
+  sav: {
     titre: {
       fr: 'Gère ton business', en: 'Run your business', es: 'Gestiona tu negocio', de: 'Führe dein Business',
       it: 'Gestisci il tuo business', pt: 'Gerencie seu negócio', ar: 'أدِر أعمالك',
     },
     sousTitre: {
-      fr: 'avec un seul lien', en: 'with a single link', es: 'con un solo enlace', de: 'mit einem einzigen Link',
-      it: 'con un solo link', pt: 'com um único link', ar: 'برابط واحد',
+      fr: 'Un SAV et un lien par produit', en: 'One support chat and one link per product', es: 'Un soporte y un enlace por producto',
+      de: 'Ein Support-Chat und ein Link pro Produkt', it: 'Un’assistenza e un link per prodotto', pt: 'Um suporte e um link por produto',
+      ar: 'دعم ورابط لكل منتج',
+    },
+  },
+  invite: {
+    titre: {
+      fr: 'Tes clients écrivent', en: 'Your customers write in', es: 'Tus clientes escriben', de: 'Deine Kunden schreiben',
+      it: 'I tuoi clienti scrivono', pt: 'Seus clientes escrevem', ar: 'عملاؤك يكتبون',
+    },
+    sousTitre: {
+      fr: 'Sans compte, même depuis leur navigateur', en: 'No account, even from their browser', es: 'Sin cuenta, incluso desde su navegador',
+      de: 'Ohne Konto, sogar im Browser', it: 'Senza account, anche dal browser', pt: 'Sem conta, até pelo navegador',
+      ar: 'بدون حساب، حتى من المتصفح',
     },
   },
   frappe: { titre: sansPoint(LEGENDES_APERCUS['jeu-frappe']) },

@@ -107,20 +107,19 @@ export const PLANS = [
     loupe: { x: 30, y: 1545, largeur: 940, hauteur: 480 }, repere: { y: 1562 },
   },
   {
-    id: 'invite', acte: 'lien', de: 32, a: 39, cote: 'gauche',
-    prise: { famille: 'interaction', scene: 'interaction-invite' }, ancre: { etape: 'invitation', decalageS: -0.1 },
+    id: 'sonde', acte: 'lien', de: 32, a: 38, cote: 'gauche',
+    prise: { famille: 'interaction', scene: 'interaction-sonde' }, ancre: { etape: 'ecran', decalageS: -0.6 },
+    camera: { de: fenetre(660, 1700, 1.05), a: fenetre(660, 1750, 1.15) },
+  },
+  {
+    id: 'sav', acte: 'lien', de: 38, a: 43, cote: 'droite',
+    prise: { famille: 'interaction', scene: 'interaction-sav' }, ancre: { etape: 'ecran', decalageS: 0 },
+    camera: { de: fenetre(660, 1400, 1), a: fenetre(660, 1300, 1.12) },
+  },
+  {
+    id: 'invite', acte: 'lien', de: 43, a: 48, cote: 'gauche',
+    prise: { famille: 'interaction', scene: 'interaction-invite' }, ancre: { etape: 'invitation', decalageS: 0.4 },
     camera: { de: fenetre(660, 1500, 1), a: fenetre(660, 1560, 1.08) },
-  },
-  {
-    id: 'arrivees', acte: 'lien', de: 39, a: 44, cote: 'droite',
-    prise: { famille: 'interaction', scene: 'interaction-liens' }, ancre: { etape: 'fiche', decalageS: -0.2 },
-    camera: { de: fenetre(660, 1500, 1), a: fenetre(660, 1500, 1.08) },
-    loupe: { x: 40, y: 900, largeur: 1240, hauteur: 720 },
-  },
-  {
-    id: 'business', acte: 'lien', de: 44, a: 48, cote: 'gauche',
-    prise: { famille: 'interaction', scene: 'interaction-liens' }, ancre: { etape: 'hub', decalageS: 0.1 },
-    camera: { de: fenetre(660, 1500, 1), a: fenetre(660, 1460, 1.1) },
   },
   {
     id: 'frappe', acte: 'jeu', de: 48, a: 52, cote: 'gauche',
@@ -160,7 +159,7 @@ export const REPERES = [
   { son: 'souffle', temps: 20, gainDb: -4 },
   { son: 'scintille', plan: 'vocal', etape: 'traduction', gainDb: -6 },
   { son: 'souffle', temps: 32, gainDb: -4 },
-  ...[39, 44].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
+  ...[38, 43].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
   { son: 'frappe', plan: 'frappe', retardS: 0.52, gainDb: 0 },
   { son: 'piece', plan: 'frappe', retardS: 1.0, gainDb: -2 },
   { son: 'balayage', temps: 52, gainDb: -6 },
@@ -383,7 +382,7 @@ export const dispositionDuPlan = ({ cote, loupe }) => {
 }
 
 const COUPS = { frappe: 1.4, piece: 0.6, coffre: 1, niveau: 0.9, rang: 1, impact: 2 }
-const FLASHS = { story: 0.45, vocal: 0.45, invite: 0.45, frappe: 0.55 }
+const FLASHS = { story: 0.45, vocal: 0.45, sonde: 0.45, frappe: 0.55 }
 
 // `images` : { [planId]: { dossier, nombre } } — les images extraites de chaque plan.
 export const modeleDeLaPage = ({ plan, images }) => {
@@ -416,7 +415,7 @@ export const modeleDeLaPage = ({ plan, images }) => {
     }, reels[0]),
     avecPose({ id: 'story', debutS: story.debutS, finS: story.finS, cote: story.cote, titre: story.titre, sousTitre: story.sousTitre, langues: story.langues, puceS: story.etapesS.story }, story),
     avecPose({ id: 'vocal', debutS: vocal.debutS, finS: vocal.finS, cote: vocal.cote, titre: vocal.titre, sousTitre: vocal.sousTitre, langues: vocal.langues, puceS: 0.25, basculeS: Number((vocal.debutS + vocal.basculeS).toFixed(3)) }, vocal),
-    ...['invite', 'arrivees', 'business'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, sousTitre: p.sousTitre }, p) }),
+    ...['sonde', 'sav', 'invite'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, sousTitre: p.sousTitre }, p) }),
     ...['frappe', 'coffre'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, slam: true }, p) }),
     avecPose({ id: 'niveau', debutS: niveau.debutS, finS: rang.finS, cote: niveau.cote, titre: niveau.titre, slam: true, sousTitre: rang.sousTitre, sousTitreS: Number((rang.debutS - niveau.debutS + 0.25).toFixed(3)) }, niveau),
   ]
