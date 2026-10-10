@@ -237,3 +237,15 @@ describe('la vidéo de statut : la page (#9988)', () => {
     }
   })
 })
+
+describe('la vidéo de statut : les textes de publication (#9988)', () => {
+  test('TEXTES.md donne, pour chaque langue, la légende, le titre et la description', async () => {
+    const { textesDePublication } = await import('../vitrine/statut-amour.mjs')
+    const md = textesDePublication()
+    KIT_LANGS.forEach((lang) => {
+      expect(md).toContain(nomDuFichier(lang))
+      expect(md).toContain(PUBLICATION[lang].statut)
+      expect(md).toContain(PUBLICATION[lang].titre)
+    })
+  })
+})
