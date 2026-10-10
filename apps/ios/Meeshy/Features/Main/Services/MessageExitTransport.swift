@@ -23,13 +23,14 @@ enum MessageExitTransport {
     /// La requête d'enregistrement de la pièce que le menu désigne — la pièce
     /// VISÉE quand il y en a une (#9908), sinon la première qui n'est pas un
     /// lieu —, ou `nil` quand la loi de sortie la retient. Une pièce visée
-    /// protégée (vue unique, flou, chiffrement) ne s'enregistre jamais.
+    /// protégée — elle ou son MESSAGE (vue unique, flou, chiffrement,
+    /// flamme) — ne s'enregistre jamais.
     static func saveRequest(for message: Message, piece attachmentId: String? = nil) -> MediaSaveRequest? {
         guard message.exitOffer.offers(.save),
               let attachment = message.attachments.first(where: { candidate in
                   guard candidate.type != .location else { return false }
                   guard let attachmentId else { return true }
-                  return candidate.id == attachmentId && !ComposableAttachment.isProtected(candidate)
+                  return candidate.id == attachmentId && !MessagePieceTarget.isProtected(candidate, in: message)
               }) else { return nil }
         return MediaSaveRequest(
             kind: attachment.kind,

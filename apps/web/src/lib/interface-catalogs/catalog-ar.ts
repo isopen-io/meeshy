@@ -31,7 +31,6 @@ import arEphemeral from './catalog-ar-ephemeral';
 import arWriteRestriction from './catalog-ar-write-restriction';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
-import arSoundsMine from './catalog-ar-sounds-mine';
 import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
@@ -52,16 +51,6 @@ const ar = {
   'message.excerpt.protected': 'محتوى محمي',
   'a11y.message.menu.subject': 'إجراءات رسالة {author}: {excerpt}',
 
-  'selection.toolbar': 'تحديد الرسائل',
-  'selection.cancel': 'إلغاء',
-  'selection.count': 'تم تحديد {count}',
-  'forward.title': 'إعادة التوجيه إلى…',
-  'forward.empty': 'لا توجد محادثة',
-  'forward.search.label': 'البحث عن محادثة',
-  'forward.search.placeholder': 'بحث',
-  'forward.announce.sent': 'تمت إعادة توجيه الرسالة',
-  'forward.announce.sentMany': 'تمت إعادة توجيه {count} رسائل',
-  'forward.announce.failed': 'تعذّرت إعادة التوجيه',
   'forward.refusal.viewOnce': 'لا يمكن إعادة توجيه رسالة تُعرض مرة واحدة',
   'forward.refusal.unavailable': 'الرسالة الأصلية لم تعد متاحة: لا شيء لإعادة توجيهه',
 
@@ -261,7 +250,6 @@ const ar = {
   'feed.gesture.pending': 'لم يتم تأكيد الإجراء — غير متصل',
   'feed.share.error': 'تعذّرت مشاركة المنشور',
   'feed.share.copied': 'تم نسخ الرابط — لم يتبقَّ سوى لصقه.',
-  'feed.share.text': 'منشور على Meeshy',
 
   'root.menu.feed': 'التدفق',
   'root.menu.links': 'روابطي',
@@ -640,7 +628,6 @@ const ar = {
   'discover.blocked.empty.title': 'لا يوجد مستخدمون محظورون',
   'discover.blocked.empty.subtitle': 'سيظهر هنا الأشخاص الذين تحظرهم.',
   'discover.unknown': 'مجهول',
-  'discover.loading': 'جارٍ التحميل',
   'discover.allLoaded': 'تم تحميل القائمة كاملة',
   'discover.error.title': 'تعذّر تحميل هذه القائمة',
   'discover.error.body': 'تحقّق من اتصالك ثم أعد المحاولة.',
@@ -695,8 +682,6 @@ const ar = {
   'links.detail.disable': 'تعطيل',
   'links.detail.activate': 'تفعيل',
   'links.detail.stats': 'الإحصاءات',
-  'links.detail.stats.uses': 'مرات الاستخدام',
-  'links.detail.stats.max': 'الحد الأقصى',
   'links.detail.info': 'المعلومات',
   'links.detail.identifier': 'المعرّف',
   'links.detail.createdAt': 'تاريخ الإنشاء',
@@ -770,8 +755,6 @@ const ar = {
   'feed.scene.mosaic.more': 'المشهد {index}، و{count} أخرى',
   'feed.scene.mosaic.video': 'المشهد {index}، فيديو',
   'feed.scene.shared_by': 'مشهد شاركه {author}',
-  'feed.scene.open.fullscreen': 'اضغط مرتين للعرض بملء الشاشة',
-  'feed.scene.open.post': 'اضغط مرتين لفتح المنشور',
   'feed.scene.sound.muted': 'الصوت مكتوم',
   'feed.scene.count': '{count} مشاهد',
   'scene.fullscreen.play': 'استئناف الكل',
@@ -786,7 +769,6 @@ const ar = {
      بواسطة المحرك المشترك، تُنشر بصيغة CanvasV3 مثل iOS. */
   'story.studio.title': 'قصة جديدة',
   'story.studio.cancel': 'إلغاء',
-  'story.studio.publish': 'نشر',
   'story.studio.publishing': 'جارٍ النشر…',
   'story.studio.publish.waiting': 'في انتظار الشبكة…',
   'story.studio.publishing.progress': 'نشر {current}/{total}…',
@@ -817,7 +799,6 @@ const ar = {
   'story.studio.text.label': 'نص القصة',
   'story.studio.text.placeholder': 'إضافة نص',
   'story.studio.hint.duration': 'تبقى القصة مرئية لمدة عشرين ساعة.',
-  'story.studio.error.upload': 'تعذّر إرسال الملف.',
   'story.studio.error.publish': 'تعذّر نشر القصة.',
   'story.studio.refusal.title': 'يلزم حساب لإنشاء قصة.',
   'story.studio.refusal.login': 'تسجيل الدخول',
@@ -838,8 +819,6 @@ const ar = {
   'story.studio.text.add': 'إضافة نص',
   'story.studio.object.text': 'نص {index}',
   'story.studio.object.overlay': 'طبقة',
-  'story.studio.object.select': 'تحديد {name}',
-  'story.studio.objects.label': 'عناصر المشهد',
   'story.studio.overlay.add': 'ضع صورة على المشهد',
   'story.studio.overlay.label': 'طبقة',
   'story.studio.overlay.remove': 'إزالة الطبقة',
@@ -909,8 +888,6 @@ const ar = {
   'story.studio.pose.rotateLeft': 'تدوير لليسار',
   'story.studio.pose.rotateRight': 'تدوير لليمين',
   'story.studio.pose.reset': 'إعادة التوسيط',
-  'story.studio.pose.handle': 'تحريك {name} — الأسهم للتحريك، + و − للحجم، [ و ] للتدوير',
-  'story.studio.pose.grip': 'تغيير حجم {name} وتدويره',
 
   /* ورقة جمهور الاستوديو (#7683) — القيم الست لـ PostVisibility،
      مرآة PostVisibility.swift (packages/MeeshySDK). */
@@ -1002,7 +979,6 @@ const ar = {
   'comment.refused.session': 'انتهت الجلسة — سجّل الدخول من جديد.',
   'comment.refused.right': 'هذا الإجراء غير متاح لك.',
   'comment.like.limit': 'خمسة تفاعلات كحد أقصى لكل شخص.',
-  'feed.action.comment': 'تعليق',
 
   'admin.title': 'الإدارة',
 
@@ -1123,7 +1099,7 @@ const ar = {
   ...arMessageCard,
   ...arConversationCard,
   ...arStoriesMine,
-  ...arSoundsMine,
+  'settings.tools.sounds': 'أصواتي',
   ...arContactCard,
   ...arQuote,
   ...arCommentRow,

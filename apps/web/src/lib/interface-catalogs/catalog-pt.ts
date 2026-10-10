@@ -31,7 +31,6 @@ import ptEphemeral from './catalog-pt-ephemeral';
 import ptWriteRestriction from './catalog-pt-write-restriction';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
-import ptSoundsMine from './catalog-pt-sounds-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
@@ -56,16 +55,6 @@ const pt = {
   'message.excerpt.protected': 'conteúdo protegido',
   'a11y.message.menu.subject': 'Ações da mensagem de {author}: {excerpt}',
 
-  'selection.toolbar': 'Seleção de mensagens',
-  'selection.cancel': 'Cancelar',
-  'selection.count': '{count} selecionadas',
-  'forward.title': 'Encaminhar para…',
-  'forward.empty': 'Nenhuma conversa',
-  'forward.search.label': 'Procurar uma conversa',
-  'forward.search.placeholder': 'Procurar',
-  'forward.announce.sent': 'Mensagem encaminhada',
-  'forward.announce.sentMany': '{count} mensagens encaminhadas',
-  'forward.announce.failed': 'Falha ao encaminhar',
   'forward.refusal.viewOnce': 'Uma mensagem de visualização única não pode ser encaminhada',
   'forward.refusal.unavailable': 'A mensagem original já não está disponível: nada para encaminhar',
 
@@ -265,7 +254,6 @@ const pt = {
   'feed.gesture.pending': 'Ação não confirmada — offline',
   'feed.share.error': 'Erro ao compartilhar a publicação',
   'feed.share.copied': 'Link copiado — é só colar.',
-  'feed.share.text': 'Uma publicação no Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'Meus links',
@@ -646,7 +634,6 @@ const pt = {
   'discover.blocked.empty.title': 'Nenhum usuário bloqueado',
   'discover.blocked.empty.subtitle': 'As pessoas que você bloquear aparecerão aqui.',
   'discover.unknown': 'Desconhecido',
-  'discover.loading': 'Carregando',
   'discover.allLoaded': 'A lista inteira foi carregada',
   'discover.error.title': 'Não foi possível carregar esta lista',
   'discover.error.body': 'Verifique sua conexão e tente novamente.',
@@ -701,8 +688,6 @@ const pt = {
   'links.detail.disable': 'Desativar',
   'links.detail.activate': 'Ativar',
   'links.detail.stats': 'Estatísticas',
-  'links.detail.stats.uses': 'Usos',
-  'links.detail.stats.max': 'Máximo',
   'links.detail.info': 'Informações',
   'links.detail.identifier': 'Identificador',
   'links.detail.createdAt': 'Criado em',
@@ -776,8 +761,6 @@ const pt = {
   'feed.scene.mosaic.more': 'Cena {index} e mais {count}',
   'feed.scene.mosaic.video': 'Cena {index}, vídeo',
   'feed.scene.shared_by': 'Cena compartilhada por {author}',
-  'feed.scene.open.fullscreen': 'Toque duas vezes para ver em tela cheia',
-  'feed.scene.open.post': 'Toque duas vezes para abrir a publicação',
   'feed.scene.sound.muted': 'Som mudo',
   'feed.scene.count': '{count} cenas',
   'scene.fullscreen.play': 'Retomar tudo',
@@ -793,7 +776,6 @@ const pt = {
      CanvasV3 como no iOS. */
   'story.studio.title': 'Nova story',
   'story.studio.cancel': 'Cancelar',
-  'story.studio.publish': 'Publicar',
   'story.studio.publishing': 'A publicar…',
   'story.studio.publish.waiting': 'À espera da rede…',
   'story.studio.publishing.progress': 'Publicando {current}/{total}…',
@@ -824,7 +806,6 @@ const pt = {
   'story.studio.text.label': 'Texto da story',
   'story.studio.text.placeholder': 'Adicionar texto',
   'story.studio.hint.duration': 'Uma story permanece visível durante vinte horas.',
-  'story.studio.error.upload': 'O ficheiro não pôde ser enviado.',
   'story.studio.error.publish': 'A story não pôde ser publicada.',
   'story.studio.refusal.title': 'É necessária uma conta para criar uma story.',
   'story.studio.refusal.login': 'Iniciar sessão',
@@ -845,8 +826,6 @@ const pt = {
   'story.studio.text.add': 'Adicionar texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Camada',
-  'story.studio.object.select': 'Selecionar {name}',
-  'story.studio.objects.label': 'Objetos da cena',
   'story.studio.overlay.add': 'Colocar uma imagem na cena',
   'story.studio.overlay.label': 'Camada',
   'story.studio.overlay.remove': 'Remover a camada',
@@ -916,8 +895,6 @@ const pt = {
   'story.studio.pose.rotateLeft': 'Girar à esquerda',
   'story.studio.pose.rotateRight': 'Girar à direita',
   'story.studio.pose.reset': 'Recentrar',
-  'story.studio.pose.handle': 'Mover {name} — setas para mover, + e − para o tamanho, [ e ] para girar',
-  'story.studio.pose.grip': 'Redimensionar e girar {name}',
 
   /* A FOLHA DE AUDIÊNCIA DO ESTÚDIO (#7683) — os seis PostVisibility,
      espelho de PostVisibility.swift (packages/MeeshySDK). */
@@ -1009,7 +986,6 @@ const pt = {
   'comment.refused.session': 'Sessão expirada — inicie sessão novamente.',
   'comment.refused.right': 'Esta ação não lhe está aberta.',
   'comment.like.limit': 'No máximo cinco reações por pessoa.',
-  'feed.action.comment': 'Comentar',
 
   'admin.title': 'Administração',
 
@@ -1130,7 +1106,7 @@ const pt = {
   ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,
-  ...ptSoundsMine,
+  'settings.tools.sounds': 'Meus sons',
   ...ptContactCard,
   ...ptQuote,
   ...ptCommentRow,
