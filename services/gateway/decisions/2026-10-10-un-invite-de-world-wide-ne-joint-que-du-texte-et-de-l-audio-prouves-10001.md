@@ -19,3 +19,9 @@
 C'est un hébergement anonyme borné à 25 Mio, servi en `audio/*` avec `nosniff`. Seul un transcodage (ffmpeg isolé et borné, `-map 0:a:0 -map_metadata -1`, l'original jamais servi) rendrait vraie la phrase « rien d'autre que du son » (#10045).
 
 **L'acceptation de ce risque en production appartient au porteur (#10057).** Le pré-vol rend les quatre cas démontrés dans `residualRisks` et bloque tant qu'ils ne figurent pas dans `WORLD_GUEST_RESIDUAL_RISKS_ACCEPTED`. Quand la garde se resserre, un cas qu'elle refuse sort de la liste de lui-même ; le témoin `guestAttachmentKinds.test.ts` tombe alors et demande de le déplacer dans le corpus bloquant.
+
+### Preuve de livraison (2026-10-10)
+
+- `prisma generate` + build de `@meeshy/shared` verts ; `tsc --noEmit` du gateway vert.
+- 31 suites ciblées (garde des familles, pré-vol World Wide, upload REST et dépôt de texte, tus, identité d'upload anonyme, `MessagingService` dont transfert et diffusion, `POST /conversations/:id/messages`, termes du lien, récupération des liens) : 512 tests verts.
+- Un texte d'invité au plafond de 25 Mio se juge en ~80 ms (1 079 ms et ~400 Mo avec l'ancien tableau par caractère) ; le témoin borne à 700 ms pour tenir sous la charge parallèle de jest.
