@@ -87,6 +87,8 @@ const isSettled = (step: OnboardingStepId, context: JourneyContext): boolean =>
  * serveur dit l'adresse NON vérifiée — un serveur muet ne la propose pas.
  */
 export const isOffered = (step: OnboardingStepId, context: Pick<JourneyContext, 'state' | 'progress' | 'notificationsAskable'>): boolean => {
+  // #9927 — l'étape d'âge existe au contrat ; sa carte arrive avec #9928.
+  if (step === 'age') return false;
   if (step === 'email') return context.state.emailVerified === false;
   if (step === 'notifications') return context.notificationsAskable && producedSomething(context);
   return true;

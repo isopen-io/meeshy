@@ -34,7 +34,7 @@ const PATH = meEndpoints.onboarding;
 
 /** L'ordre du parcours — le même que `ONBOARDING_STEP_IDS` (shared), lu sans
  * importer `zod`. `satisfies` + `ExhaustiveSteps` le tiennent complet. */
-export const ONBOARDING_STEPS = ['languages', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
+export const ONBOARDING_STEPS = ['languages', 'age', 'email', 'global', 'story', 'friends', 'notifications'] as const satisfies readonly OnboardingStepId[];
 
 /** Les étapes dont la vue clôt le parcours — `ONBOARDING_COMPLETION_STEP_IDS`
  * (shared) : `email`, proposée au seul courriel non vérifié, n'en est pas. */
@@ -71,6 +71,8 @@ const Served = z.strictObject({
   canPublishStory: z.optional(z.boolean()),
   pendingFriendRequests: z.optional(Count),
   stepRewards: z.optional(StepRewards),
+  // #9927 — servi au seul mineur déclaré : Global en lecture seule.
+  viewerWriteRestriction: z.optional(z.nullable(z.enum(['minor-global']))),
 });
 
 type SameShape<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;

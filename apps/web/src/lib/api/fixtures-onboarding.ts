@@ -46,7 +46,8 @@ export function fixturePatchOnboarding(body: OnboardingPatchBody): OnboardingSta
   }
   const seen = new Set<string>([...state.seenSteps, body.step]);
   const seenSteps = ONBOARDING_STEPS.filter((id) => seen.has(id));
-  state = seenSteps.length === ONBOARDING_STEPS.length ? finished({ ...state, seenSteps }) : { ...state, seenSteps };
+  const allSeen = ONBOARDING_STEPS.every((id) => id === 'age' || seen.has(id));
+  state = allSeen ? finished({ ...state, seenSteps }) : { ...state, seenSteps };
   return state;
 }
 

@@ -70,6 +70,14 @@ describe('decodeOnboardingState — la frontière', () => {
     expect(decodeOnboardingState(served({ stepRewards: { global: 1, story: 1 } }))).toBeNull();
   });
 
+  test('#9927 — l’étape d’âge et la restriction de Global se lisent, et leur absence aussi', () => {
+    const minor = decodeOnboardingState(served({ seenSteps: ['languages', 'age'], viewerWriteRestriction: 'minor-global' }));
+    expect(minor?.seenSteps).toEqual(['languages', 'age']);
+    expect(minor?.viewerWriteRestriction).toBe('minor-global');
+    expect(decodeOnboardingState(served())?.viewerWriteRestriction).toBeUndefined();
+    expect(decodeOnboardingState(served({ viewerWriteRestriction: 'adult' }))).toBeNull();
+  });
+
   test('une étape inconnue rend la charge ILLISIBLE, jamais une étape devinée', () => {
     expect(decodeOnboardingState(served({ seenSteps: ['languages', 'bonus'] }))).toBeNull();
   });
