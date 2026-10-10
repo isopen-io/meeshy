@@ -58,6 +58,44 @@ export async function loadGuestAttachmentKinds(
   return guestAttachmentKindsOf({ conversation });
 }
 
+/**
+ * Ce qu'un envoi fait PORTER à son message : les pièces rattachées, mais aussi
+ * celles qu'un TRANSFERT (`forwardedFromId`) ou une DIFFUSION
+ * (`copyAttachmentsFromMessageId`) recopie depuis sa source
+ * (`MessageProcessor.handleAttachments`) avec l'expéditeur pour auteur. Une
+ * garde qui ne lirait que `attachmentIds` laisserait un invité de World Wide
+ * faire porter une image à son message en transférant celui d'un compte
+ * (#10051). L'union est volontaire : quelle que soit la branche que la copie
+ * prend, rien de ce qu'elle peut recopier n'échappe à la garde.
+ */
+export type CarriedAttachments = {
+  readonly attachmentIds?: readonly string[];
+  readonly forwardedFromId?: string;
+  readonly copyAttachmentsFromMessageId?: string;
+};
+
+export function carriesAttachments(carried: CarriedAttachments): boolean {
+  return Boolean(carried.attachmentIds?.length || carried.forwardedFromId || carried.copyAttachmentsFromMessageId);
+}
+
+export async function loadCarriedAttachmentMimeTypes(
+  prisma: Pick<PrismaClient, 'messageAttachment'>,
+  carried: CarriedAttachments,
+): Promise<readonly (string | null)[]> {
+  const sourceMessageIds = [carried.forwardedFromId, carried.copyAttachmentsFromMessageId]
+    .filter((id): id is string => Boolean(id));
+  const clauses = [
+    ...(carried.attachmentIds?.length ? [{ id: { in: [...carried.attachmentIds] } }] : []),
+    ...(sourceMessageIds.length ? [{ messageId: { in: sourceMessageIds } }] : []),
+  ];
+  if (clauses.length === 0) return [];
+  const attachments = await prisma.messageAttachment.findMany({
+    where: { OR: clauses },
+    select: { mimeType: true },
+  });
+  return attachments.map((attachment) => attachment.mimeType);
+}
+
 /** Le refus, ou `null` quand chaque pièce peut être rattachée. */
 export function attachmentSendRefusal(params: {
   readonly mimeTypes: readonly (string | null | undefined)[];
