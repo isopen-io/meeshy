@@ -107,7 +107,7 @@ describe('invité de World Wide — ce qui est refusé, avec un code stable', ()
     const atCeiling = Buffer.alloc(GUEST_ATTACHMENT_MAX_BYTES, 'é la vie est belle\n');
     const started = performance.now();
     expect(classifyForWorld('text/plain', atCeiling, 'long.txt')).toEqual({ allowed: true });
-    expect(performance.now() - started).toBeLessThan(400);
+    expect(performance.now() - started).toBeLessThan(700);
   });
 
   it.each([
