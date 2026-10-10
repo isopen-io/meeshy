@@ -4,10 +4,13 @@ import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { commentsZoneOf, commentsZoneStageOf, type CommentsComposerPresence, type CommentsZone, type CommentsZoneStage } from '@/lib/view/comments-zone';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import type { WritingBar } from '@/lib/view/use-comments-sheet-host';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
+import { useVirtualKeyboard } from '@/lib/view/use-virtual-keyboard';
 import { useKeyboardInset, useWritingBarReport } from '@/lib/view/use-writing-bar';
 
 /**
@@ -59,16 +62,37 @@ export type PublicationCommentsSheetProps = {
   /** ON ÉCRIT (#8643) : la feuille rapporte sa barre à l'hôte, qui réduit sa
    * scène au-dessus d'elle ; `null` quand on revient à la lecture. */
   readonly onWritingBar?: (bar: WritingBar | null) => void;
+  /**
+   * **LA ZONE MONTE AVEC LE COMPOSEUR** (#9894, lecteur de stories) — composeur
+   * visible, la zone de commentaires monte ; clavier virtuel ouvert, elle
+   * occupe tout l'espace libre au-dessus de lui ; replié en bulle, elle
+   * redescend (`lib/view/comments-zone.ts`). La liste ne se retire plus et la
+   * scène n'est plus réduite : aucune barre n'est rapportée. Absent (lecteur
+   * des Réels) : la loi d'écriture de #8643.
+   */
+  readonly risesWithComposer?: boolean;
 };
 
-export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: PublicationCommentsSheetProps) {
+/** LE CLAVIER ET LE COMPOSEUR FONT LA ZONE (#9894) — `null` hors lecteur de stories. */
+function useRisingZone(rises: boolean): { readonly stage: CommentsZoneStage; readonly zone: CommentsZone; readonly onComposerChange: (presence: CommentsComposerPresence) => void } | null {
+  const [composer, setComposer] = useState<CommentsComposerPresence>('open');
+  const keyboard = useVirtualKeyboard(rises);
+  if (!rises) return null;
+  const stage = commentsZoneStageOf({ composer, keyboardOpen: keyboard.open });
+  return { stage, zone: commentsZoneOf({ stage, keyboardInset: keyboard.inset, reducedMotion: prefersReducedMotion() }), onComposerChange: setComposer };
+}
+
+export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesWithComposer = false }: PublicationCommentsSheetProps) {
   const language = currentInterfaceLanguage();
   const panneau = useRef<HTMLDivElement | null>(null);
-  /* ÉCRIRE (#8643, jumelle de #8642) : la liste se retire — la scène réduite
-     prend sa place au-dessus du composeur —, la feuille se pose au-dessus du
-     clavier virtuel, et sa barre est rapportée à l'hôte. Replier (⌄) ou
-     envoyer rend la lecture. */
-  const [writing, setWriting] = useState(false);
+  /* ÉCRIRE (#8643, jumelle de #8642) — lecteur des Réels : la liste se
+     retire — la scène réduite prend sa place au-dessus du composeur —, la
+     feuille se pose au-dessus du clavier virtuel, et sa barre est rapportée à
+     l'hôte. Replier (⌄) ou envoyer rend la lecture. Lecteur de stories
+     (#9894) : la zone monte au lieu de se retirer (`useRisingZone`). */
+  const [focused, setWriting] = useState(false);
+  const rising = useRisingZone(risesWithComposer);
+  const writing = focused && rising === null;
   const keyboardInset = useKeyboardInset(writing);
   useWritingBarReport({ sheet: panneau, writing, keyboardInset, report: onWritingBar });
   /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
@@ -120,6 +144,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: Publ
          élargi ce lot à des gates qu'il ne touche pas, pour un gain nul (les
          DEUX hôtes ont un contrat IDENTIQUE sur cet attribut). */
       data-story-comments-sheet={postId}
+      data-comments-zone={rising?.stage}
       role="dialog"
       /**
        * **PAS D'`aria-modal` : CETTE FEUILLE N'EST PAS UNE MODALE, ET ELLE NE
@@ -154,7 +179,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: Publ
       onPointerUp={(e) => e.stopPropagation()}
       className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden"
       style={{
-        maxHeight: '68%',
+        ...(rising === null ? { maxHeight: '68%' } : { height: rising.zone.height, transition: rising.zone.transition }),
         /* `--color-ios-surface`, et JAMAIS `--color-ios-bg` : ce second nom
            n'existe dans AUCUNE feuille (mesuré — `src/styles/ios.css` déclare
            `--color-ios-surface`, dérivé de `--ios-surface`). Une variable
@@ -173,8 +198,8 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: Publ
            posée au bas d’un écran plein cadre sous `viewport-fit=cover`, la
            feuille laissait son composeur SOUS l'indicateur d'accueil d'un
            iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        bottom: writing ? keyboardInset : 0,
+        paddingBottom: rising?.zone.paddingBottom ?? 'env(safe-area-inset-bottom, 0px)',
+        bottom: rising?.zone.bottom ?? (writing ? keyboardInset : 0),
         borderTopLeftRadius: 18,
         borderTopRightRadius: 18,
         zIndex: 3,
@@ -195,7 +220,13 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar }: Publ
           <Glyph name="x" size={16} />
         </button>
       </div>
-      <CommentThread postId={postId} onWritingChange={setWriting} foldOnSend listHidden={writing} />
+      <CommentThread
+        postId={postId}
+        onWritingChange={setWriting}
+        foldOnSend
+        listHidden={writing}
+        {...(rising === null ? {} : { onComposerChange: rising.onComposerChange })}
+      />
     </div>
   );
 }

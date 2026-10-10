@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CommentComposer, type CommentComposerResult, type CommentUploadReport } from '@/components/comment-composer';
@@ -23,6 +23,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
+import type { CommentsComposerPresence } from '@/lib/view/comments-zone';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { useMentionSource } from '@/lib/view/mention-source';
@@ -60,6 +61,12 @@ export type CommentThreadProps = {
   readonly onWritingChange?: (writing: boolean) => void;
   readonly foldOnSend?: boolean;
   readonly listHidden?: boolean;
+  /**
+   * **LA PRÉSENCE DU COMPOSEUR** (#9894) — absent (visiteur anonyme), replié
+   * en bulle, ou visible : le lecteur de stories en fait monter sa zone de
+   * commentaires (`lib/view/comments-zone.ts`).
+   */
+  readonly onComposerChange?: (presence: CommentsComposerPresence) => void;
   /** Le téléversement d'une photo ou d'une vidéo jointe (#9167) — injectable
    * pour les témoins ; la production monte en TUS, contexte `comment`. */
   readonly uploadMedia?: CommentMediaUpload;
@@ -72,6 +79,7 @@ export function CommentThread({
   onWritingChange,
   foldOnSend = false,
   listHidden = false,
+  onComposerChange,
   uploadMedia: injectedUpload,
 }: CommentThreadProps) {
   const language = currentInterfaceLanguage();
@@ -346,6 +354,13 @@ export function CommentThread({
      `registeredUser` (`comments.ts`), exactement comme le composeur. */
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
   const viewerId = viewer.id ?? '';
+  const [composerFolded, setComposerFolded] = useState(false);
+  const presence: CommentsComposerPresence = !canWrite ? 'absent' : composerFolded ? 'folded' : 'open';
+  const reportPresence = useRef(onComposerChange);
+  reportPresence.current = onComposerChange;
+  useEffect(() => {
+    reportPresence.current?.(presence);
+  }, [presence]);
 
   const gestures = useMemo<CommentGestureHandlers | undefined>(
     () =>
@@ -459,6 +474,7 @@ export function CommentThread({
         replyTo={replyTarget}
         onCancelReply={() => setReplyTarget(null)}
         {...(onWritingChange === undefined ? {} : { onWritingChange })}
+        onFoldChange={setComposerFolded}
         foldOnSend={foldOnSend}
       />
       <p role="status" aria-live="polite" className="sr-only" data-comment-thread-notice="">
