@@ -3,7 +3,12 @@
  * `docs/product/jeu-meeshy-conception.html` § II.7.
  *
  * Le calendrier est DONNÉ, pas lu sur une horloge : la saison 1 ouvre le lundi
- * 2026-10-12, les saisons s'enchaînent sans trou de 56 jours. Les semaines de
+ * 2026-12-21 et ferme le dimanche 2027-02-14 à 20 h, puis les saisons
+ * s'enchaînent sans trou de 56 jours. Elle devait ouvrir le lundi 2026-10-12 :
+ * le porteur l'a repoussée le 2026-10-10 (#10014), et a retenu le lundi 21
+ * plutôt que le dimanche 20 demandé, parce qu'une saison commence avec une
+ * semaine de ligue. Avant cette date, `seasonAt` rend `null` : le bloc Jeu sert
+ * alors la saison À VENIR (`upcomingSeason`), jamais un vide. Les semaines de
  * saison sont celles des ligues (lundi local, fermeture dimanche 20 h) : un
  * moment passé la fermeture du dernier dimanche est déjà dans la saison
  * suivante (`seasonOfMoment`).
@@ -24,7 +29,7 @@ import { GLORY_POINTS } from './glory.js';
 import { leagueWeekOfMoment, type LeagueMoment } from './league.js';
 import type { MissionDifficulty } from './missions.js';
 
-export const SEASON_ONE_START = '2026-10-12';
+export const SEASON_ONE_START = '2026-12-21';
 export const SEASON_WEEKS = 8;
 export const SEASON_DAYS = SEASON_WEEKS * 7;
 export const SEASON_STEPS = 40;
@@ -91,6 +96,17 @@ export const seasonOfMoment = (moment: LeagueMoment): number | null => seasonAt(
 
 export const isSeasonOpen = (params: { readonly season: number; readonly dayKey: string }): boolean =>
   seasonAt(params.dayKey) === Math.trunc(params.season);
+
+/**
+ * La saison À VENIR (#10014) : avant l'ouverture de la première, la saison 1 —
+ * son numéro, son thème, ses dates — pour que l'écran dise « la saison 1 ouvre
+ * le lundi 21 décembre » plutôt qu'un vide. `null` dès qu'une saison est
+ * ouverte : elles s'enchaînent sans trou, il n'y a plus d'attente à annoncer.
+ * Une donnée de CALENDRIER, la même pour tous : rien de la présence de quiconque.
+ */
+export function upcomingSeason(moment: LeagueMoment): SeasonCalendar | null {
+  return seasonOfMoment(moment) === null ? seasonCalendar(1) : null;
+}
 
 export type SeasonStarSource = MissionDifficulty | 'duo';
 
