@@ -360,31 +360,29 @@ export class MessagingService {
               )
             : 'fr');
 
-      // 4.4. Admission de la CITATION (#6601) — `replyToId` doit désigner un
-      //      message VIVANT de CETTE conversation. Posé ICI pour la même
-      //      raison que l'admission du transfert juste en dessous : les trois
-      //      transports d'envoi (REST, socket texte, socket pièces jointes)
-      //      convergent sur `handleMessage`, seul site qui voit
-      //      `conversationId` déjà résolu sans jamais faire confiance au
-      //      client. Un garde par transport aurait fait grossir
-      //      `MessageHandler.ts` — déjà hors budget (#4426) — pour une règle
-      //      qui n'a besoin de vivre qu'une fois.
+      // 4.4. Admission de la CITATION (#6601) et de sa PIÈCE NOMMÉE (#9909)
+      //      — `replyToId` doit désigner un message VIVANT de CETTE
+      //      conversation, et une pièce citée en plus doit appartenir à ce
+      //      message. Posé ICI parce que les trois transports d'envoi (REST,
+      //      socket texte, socket pièces jointes) convergent sur
+      //      `handleMessage`, seul site qui voit `conversationId` déjà résolu
+      //      sans jamais faire confiance au client.
       //
-      //      La route REST relit la MÊME garde plus tôt (`messages-send.ts`),
-      //      avec la pièce jointe nommée en plus : elle a besoin de
-      //      l'instantané `{attachmentId, kind}` qu'`admitAttachmentReply`
-      //      rend, pour le graver dans `metadata.attachmentReplyTo`. Ici on ne
-      //      revérifie que le lien message-cité → conversation — gratuit pour
-      //      un envoi qui ne cite personne, et redondant mais inoffensif pour
-      //      la route REST qui l'a déjà fait (une lecture par identifiant).
+      //      La requête est ensuite RÉÉCRITE avec l'instantané ADMIS : ce que
+      //      le transport a reçu (nature déclarée comprise) n'atteint jamais
+      //      `metadata.attachmentReplyTo`, seule la nature relue du MIME y
+      //      entre. La route REST relit la même garde plus tôt pour répondre
+      //      en 400 ; la seconde lecture est redondante mais inoffensive.
       const citation = await admitAttachmentReply(this.prisma, {
         conversationId,
-        replyToId: request.replyToId
+        replyToId: request.replyToId,
+        attachmentReplyTo: request.attachmentReplyTo
       });
       if (!citation.ok) {
         logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
         return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
       }
+      request = { ...request, attachmentReplyTo: citation.snapshot ?? undefined };
 
       // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
       //      le second champ de citation. `storyReplyToId` gèle l'instantané du

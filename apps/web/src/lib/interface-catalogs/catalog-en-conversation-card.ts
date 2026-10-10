@@ -8,7 +8,6 @@ const enConversationCard = {
   'conversation.card.messages.one': '{count} message',
   'conversation.card.messages.other': '{count} messages',
   'conversation.card.languages': 'Spoken languages',
-  'conversation.card.join': 'Join',
   'conversation.card.joinAnonymously': 'Join anonymously',
   'conversation.card.open': 'Open',
   'conversation.card.leave': 'Leave',

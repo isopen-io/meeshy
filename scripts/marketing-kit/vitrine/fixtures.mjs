@@ -5,7 +5,9 @@ import { createHash } from 'node:crypto'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { VIDEO_DU_REEL, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
+import { REELS_DROLES, STORIES_DE_L_ENTETE } from '../textes/reels.mjs'
+import { SAV, SONDE } from '../textes/liens.mjs'
+import { VIDEO_DU_REEL, afficheMedia, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
 
 export const VERSION_FIXTURES = 2
 
@@ -411,18 +413,101 @@ const posts = (maintenant) =>
     }
   })
 
+// Les réels drôles de l'en-tête (#9904), tels que `GET /posts/feed/reels` les sert : une vraie vidéo, son affiche, la
+// légende écrite par son auteur dans SA langue et traduite dans les sept langues de lecture. L'auteur qui parle la langue
+// du lecteur cède la parole à son remplaçant : le spectateur lit toujours une légende traduite.
+export const auteurDuReel = (reel, lang) => {
+  const auteur = reel.auteurs.map(profilDe).find((p) => p.lang !== lang)
+  if (!auteur) throw new Error(`${reel.id} : aucun auteur hors de la langue ${lang}`)
+  return auteur
+}
+
+const reelsDroles = (lang, maintenant) =>
+  REELS_DROLES.map((reel, i) => {
+    const auteur = auteurDuReel(reel, lang)
+    const video = videoMedia(reel.video)
+    const affiche = afficheMedia(reel.video)
+    const minutes = 12 + i * 9
+    return {
+      id: oid(`reel:${reel.id}`),
+      type: 'REEL',
+      visibility: 'PUBLIC',
+      content: reel.textes[auteur.lang],
+      originalLanguage: auteur.lang,
+      createdAt: iso(maintenant, minutes),
+      updatedAt: iso(maintenant, minutes),
+      author: identite(auteur),
+      likeCount: 1840 - i * 377,
+      commentCount: 96 - i * 17,
+      repostCount: 0,
+      viewCount: 23_400 - i * 4_100,
+      bookmarkCount: 0,
+      shareCount: 41 - i * 6,
+      reactionSummary: { '😂': 1240 - i * 260, '❤️': 600 - i * 117 },
+      media: [{
+        id: oid(`reel-media:${reel.id}`), fileName: video.fichier, originalName: video.fichier, mimeType: 'video/mp4',
+        fileUrl: video.url, thumbnailUrl: affiche.url, width: video.width, height: video.height, duration: video.dureeMs, order: 0,
+      }],
+      translations: Object.fromEntries(Object.entries(reel.textes).filter(([l]) => l !== auteur.lang).map(([cible, text]) => [cible, { text }])),
+    }
+  })
+
+// La story que la scène `interaction-story` ouvre (#9904) : une photo, et sur la scène le texte de son auteur, dans SA
+// langue, avec ses traductions — le lecteur la lit dans la sienne. Elle expire dans 23 h.
+export const storyDeLEntete = (lang) => {
+  const story = STORIES_DE_L_ENTETE.map((id) => DEMO.story.find((s) => s.id === id)).find((s) => profilDe(s.auteur).lang !== lang)
+  if (!story) throw new Error(`aucune story hors de la langue ${lang}`)
+  return story
+}
+
+const storiesDeLEntete = (lang, maintenant) => {
+  const story = storyDeLEntete(lang)
+  const photo = photoMedia(story.photo)
+  const minutes = 25
+  return [{
+    id: oid(`story:${story.id}`),
+    type: 'STORY',
+    visibility: 'PUBLIC',
+    content: null,
+    originalLanguage: story.lang,
+    createdAt: iso(maintenant, minutes),
+    updatedAt: iso(maintenant, minutes),
+    expiresAt: iso(maintenant, minutes - 23 * 60),
+    author: identite(profilDe(story.auteur)),
+    likeCount: 64,
+    commentCount: 0,
+    repostCount: 0,
+    viewCount: 212,
+    bookmarkCount: 0,
+    shareCount: 0,
+    media: [{
+      id: oid(`story-media:${story.id}`), fileName: photo.fichier, originalName: photo.fichier, mimeType: 'image/jpeg',
+      fileSize: photo.taille, fileUrl: photo.url, width: photo.width, height: photo.height, order: 0,
+    }],
+    storyEffects: {
+      textObjects: [{
+        id: oid(`story-texte:${story.id}`), text: story.text, sourceLanguage: story.lang, translations: story.translations,
+        x: 0.5, y: 0.7, scale: 1, rotation: 0, zIndex: 1, fontSize: 84, textStyle: 'bold', textColor: 'FFFFFF',
+        textAlign: 'center',
+      }],
+    },
+  }]
+}
+
 const photoDuFichier = (fichier) => Object.keys(CREDITS).find((nom) => CREDITS[nom].fichier === fichier)
 
 // Tout ce que les messages et les posts désignent : le script de capture le dépose, l'app le range.
-const mediasDe = ({ lang, fils, lesPosts }) => {
+const mediasDe = ({ lang, fils, lesPosts, lesStories }) => {
   const images = [
     ...Object.values(fils).flat().flatMap((m) => m.attachments ?? []).filter((a) => a.mimeType === 'image/jpeg'),
     ...lesPosts.flatMap((p) => p.media),
+    ...lesStories.flatMap((s) => s.media),
   ]
   const { original, pistes } = mediasDuVocal(lang)
   const commentaire = mediasDuCommentaireVocal(lang)
   return [...new Set(images.map((a) => a.fileName))].map((fichier) => photoMedia(photoDuFichier(fichier)))
     .concat([original, ...pistes, commentaire.original, ...commentaire.pistes, videoMedia(VIDEO_DU_REEL)])
+    .concat(REELS_DROLES.flatMap((r) => [videoMedia(r.video), afficheMedia(r.video)]))
 }
 
 // Ce que chaque scène ouvre (spec § 3) : sa conversation, et le message ou la pièce qu'elle met en avant.
@@ -507,6 +592,62 @@ const lienInvitation = (lang, maintenant) => {
   }
 }
 
+// Le LIEN (#9904). « Dis-moi tout » : la conversation d'un lien anonyme partagé aux proches, où chacun écrit SANS compte
+// (`sender.type: 'anonymous'`), dans sa langue — le lecteur la lit dans la sienne. Un message écrit dans la langue du
+// lecteur n'y figure pas : la scène montre des traductions.
+export const ID_SONDE = oid('conv:sonde')
+
+const expediteurAnonyme = (conversationId, pseudo) => ({
+  id: oid(`anon:${conversationId}:${pseudo}`), username: pseudo, displayName: pseudo, type: 'anonymous',
+})
+
+export const messagesDeLaSonde = (lang, maintenant) => SONDE.messages.filter((m) => m.lang !== lang).map((m, i, tous) => {
+  const id = oid(`msg:${ID_SONDE}:${m.id}`)
+  const minutes = 4 + (tous.length - i) * 3
+  return {
+    id, conversationId: ID_SONDE, senderId: expediteurAnonyme(ID_SONDE, m.pseudo).id, createdAt: iso(maintenant, minutes),
+    sender: expediteurAnonyme(ID_SONDE, m.pseudo), content: m.textes[m.lang], originalLanguage: m.lang, messageType: 'text',
+    translations: traductions(id, { lang: m.lang, translations: Object.fromEntries(Object.entries(m.textes).filter(([l]) => l !== m.lang)) }),
+  }
+})
+
+const conversationDeLaSonde = (lang, maintenant, messages) => ({
+  id: ID_SONDE, type: 'group', title: SONDE.titre[lang], memberCount: messages.length + 1, unreadCount: 0, isMember: true,
+  createdAt: iso(maintenant, 3 * JOUR), updatedAt: messages.at(-1).createdAt, ...ligneDe(messages.at(-1)),
+})
+
+// Les conversations de SAV : une par produit, la dernière question d'un client SANS compte, dans sa langue.
+export const ID_SAV = (cle) => oid(`conv:sav:${cle}`)
+
+const conversationsDuSav = (lang, maintenant) => SAV.map((c, i) => {
+  const id = ID_SAV(c.cle)
+  const client = expediteurAnonyme(id, c.client)
+  // Plus récentes que tout le reste de la liste (le vocal d'« amour » a 2 min) : elles s'affichent en tête.
+  const minutes = 0.5 + i * 0.35
+  return {
+    id, type: 'group', title: c.titre[lang], memberCount: 18 + i * 7, unreadCount: 3 - Math.min(i, 2), isMember: true,
+    createdAt: iso(maintenant, 20 * JOUR), updatedAt: iso(maintenant, minutes),
+    lastMessage: { id: oid(`last:${id}`), content: c.textes[c.lang], senderId: client.id, createdAt: iso(maintenant, minutes), messageType: 'text', sender: client },
+    lastMessageTranslations: Object.fromEntries(Object.entries(c.textes).filter(([l]) => l !== c.lang)),
+    lastMessageOriginalLanguage: c.lang,
+    lastMessageAt: iso(maintenant, minutes),
+  }
+})
+
+// Le lien du premier SAV, tel qu'un client sans compte l'ouvre (`GET /links/:id`) : c'est le lecteur qui l'a créé.
+const lienDuSav = (lang, maintenant) => {
+  const c = SAV[0]
+  const langues = [...new Set([lang, ...SAV.map((x) => x.lang)])]
+  return {
+    id: oid(`link:${c.lien}`), linkId: c.lien, name: c.titre[lang], currentUses: 41, currentConcurrentUsers: 3,
+    requireAccount: false, requireNickname: false, requireEmail: false, requireBirthday: false, allowedLanguages: [],
+    allowAnonymousMessages: true, allowAnonymousImages: true, allowAnonymousFiles: false, allowViewHistory: true,
+    conversation: { id: ID_SAV(c.cle), title: c.titre[lang], type: 'group', createdAt: iso(maintenant, 20 * JOUR) },
+    creator: identite(lecteurDe(lang)),
+    stats: { totalParticipants: 42, memberCount: 42, anonymousCount: 37, languageCount: langues.length, spokenLanguages: langues },
+  }
+}
+
 export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
   if (!KIT_LANGS.includes(lang)) throw new Error(`langue hors kit : ${lang}`)
   const fils = {
@@ -516,17 +657,26 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
     [ID_NOVA]: [commentaireVocal({ lang, maintenant, mesures })],
   }
   const lesPosts = posts(maintenant)
+  const lesStories = storiesDeLEntete(lang, maintenant)
+  const sonde = messagesDeLaSonde(lang, maintenant)
   return {
     version: VERSION_FIXTURES,
     lang,
     lecteur: utilisateur(lecteurDe(lang), maintenant),
     conversations: conversations(lang, maintenant, fils),
-    messages: fils,
+    messages: { ...fils, [ID_SONDE]: sonde },
     progression: progression(maintenant),
     lienInvitation: lienInvitation(lang, maintenant),
-    modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles' },
-    medias: mediasDe({ lang, fils, lesPosts }),
+    modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles', [ID_SONDE]: 'script' },
+    medias: mediasDe({ lang, fils, lesPosts, lesStories }),
     posts: lesPosts,
-    scenes: scenes(lang, fils),
+    reels: reelsDroles(lang, maintenant),
+    stories: lesStories,
+    conversationsDeScene: {
+      'interaction-sonde': [conversationDeLaSonde(lang, maintenant, sonde)],
+      'interaction-sav': conversationsDuSav(lang, maintenant),
+    },
+    lienSav: lienDuSav(lang, maintenant),
+    scenes: { ...scenes(lang, fils), 'interaction-sonde': { conversationId: ID_SONDE } },
   }
 }

@@ -43,10 +43,11 @@ final class StoryViewerProgressIsolationGuardTests: XCTestCase {
     /// les remises à zéro (début, changement de story, boucle) — elles passent
     /// par l'horloge. Seul `RevealCircleShape` garde une `progress` à lui :
     /// son `animatableData` (`progress = newValue`) est l'interpolation de la
-    /// forme, pas le temps de la story.
+    /// forme, pas le temps de la story. Une constante locale (`let progress =`,
+    /// l'anneau d'enregistrement du rail) n'est pas un état et n'est pas visée.
     func test_theViewer_neverAssignsAProgressValue() throws {
         let unit = try Self.viewerUnit()
-        let writes = try Self.matches(#"(?<![\w.])progress\s*(=|\+=)(?!=)(?!\s*newValue\b)"#, in: unit)
+        let writes = try Self.matches(#"(?<![\w.])(?<!let )(?<!var )progress\s*(=|\+=)(?!=)(?!\s*newValue\b)"#, in: unit)
         XCTAssertEqual(writes, [], "un tick ou une remise à zéro ne doit écrire aucun état du lecteur")
     }
 

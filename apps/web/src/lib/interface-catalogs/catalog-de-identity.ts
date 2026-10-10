@@ -16,7 +16,6 @@ const deIdentity = {
   'avatar.menu.view_story': 'Story ansehen',
   'avatar.menu.conversation_details': 'Details der Unterhaltung',
   'conversation.details.title': 'Details der Unterhaltung',
-  'conversation.details.open': 'Details von {name} ansehen',
   'conversation.details.type.direct': 'Privater Chat',
   'conversation.details.type.group': 'Gruppe',
   'conversation.details.type.public': 'Öffentliche Unterhaltung',

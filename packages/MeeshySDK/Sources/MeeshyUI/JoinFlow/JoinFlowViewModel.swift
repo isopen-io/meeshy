@@ -50,6 +50,9 @@ public final class JoinFlowViewModel: ObservableObject {
     /// Vitrine App Store (#8855, DEBUG uniquement) : prévenue quand l'aperçu d'un lien est servi,
     /// pour que la capture attende l'accueil RENDU (#8921). `nil` hors vitrine.
     nonisolated(unsafe) public static var debugOnPreviewShown: (@MainActor @Sendable () -> Void)?
+    /// Vitrine (#9904, DEBUG uniquement) : le même instant, avec le parcours lui-même — la scène y fait le choix
+    /// « sans compte » qu'un toucher ferait (`proceedToForm`). `nil` hors vitrine.
+    nonisolated(unsafe) public static var debugOnPreviewServed: (@MainActor @Sendable (JoinFlowViewModel) -> Void)?
     #endif
     private let identifier: String
     public let entry: Entry
@@ -72,7 +75,10 @@ public final class JoinFlowViewModel: ObservableObject {
             linkInfo = info
             phase = entry == .anonymousForm ? .form : .preview
             #if DEBUG
-            if phase == .preview { Self.debugOnPreviewShown?() }
+            if phase == .preview {
+                Self.debugOnPreviewShown?()
+                Self.debugOnPreviewServed?(self)
+            }
             #endif
         } catch let error as MeeshyError {
             let message: String

@@ -120,7 +120,8 @@ struct OverlayPreviewMediaGrid: View {
 }
 
 /// Une pièce masquée : aucun pixel du média, le seul pictogramme du flou.
-private struct MaskedMediaTile: View {
+/// Partagée avec l'aperçu d'UNE pièce (`MessagePieceOverlay`, #9907).
+struct MaskedMediaTile: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.85)

@@ -16,7 +16,6 @@ const arIdentity = {
   'avatar.menu.view_story': 'عرض القصة',
   'avatar.menu.conversation_details': 'تفاصيل المحادثة',
   'conversation.details.title': 'تفاصيل المحادثة',
-  'conversation.details.open': 'عرض تفاصيل {name}',
   'conversation.details.type.direct': 'محادثة خاصة',
   'conversation.details.type.group': 'مجموعة',
   'conversation.details.type.public': 'محادثة عامة',
