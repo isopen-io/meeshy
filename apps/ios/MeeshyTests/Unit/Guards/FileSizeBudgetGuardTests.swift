@@ -586,7 +586,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // démontage…), toutes sous le budget, sans changer une ligne de comportement. Il
     // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
     // pesait à la sortie.
-    private static let legacyLineCeiling = 35_776
+    //
+    // #9893 — 35 776 → 35 722 (−54). La liste des commentaires d'une story ne
+    // calcule plus sa place elle-même (réserve constante de 92/142 pt, fractions
+    // 42/62 %, clavier observé) : la loi `StoryCommentsZone` la pose sur le
+    // composeur, et `StoryViewerView+Content.swift` (−53) et `StoryViewerView.swift`
+    // (−1) perdent ce qu'elle remplace. Les hôtes RESTENT en dette.
+    private static let legacyLineCeiling = 35_722
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

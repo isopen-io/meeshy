@@ -1662,7 +1662,7 @@ struct StoryCardView: View {
             // are visible. Background story stays interactable (tap to pause,
             // long-press) through the overlay's transparent surface.
             if showCommentsOverlay {
-                makeCommentsOverlay().equatable()
+                makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()
                     // Le UIViewRepresentable du canvas expanse le ZStack parent
                     // au-delà du viewport (même cause que Layer 7 header et
                     // Layer 8 sidebar, cf. note ligne ~1024). Sans contrainte de

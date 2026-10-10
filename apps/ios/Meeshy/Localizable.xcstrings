@@ -172807,6 +172807,53 @@
         }
       }
     },
+    "story.composer.fold.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يغلق لوحة المفاتيح ويطوي منطقة التعليق في فقاعة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt die Tastatur und klappt den Kommentarbereich zu einer Blase ein"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Closes the keyboard and folds the comment area into a bubble"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cierra el teclado y pliega la zona de comentarios en una burbuja"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferme le clavier et replie la zone de commentaire en bulle"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiude la tastiera e riduce l’area dei commenti a una bolla"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fecha o teclado e recolhe a área de comentários em uma bolha"
+          }
+        }
+      }
+    },
     "story.composer.unfold": {
       "extractionState": "manual",
       "localizations": {
@@ -172850,6 +172897,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar a área de comentários"
+          }
+        }
+      }
+    },
+    "story.composer.unfold.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يعيد فتح منطقة التعليق دون فتح لوحة المفاتيح"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet den Kommentarbereich wieder, ohne die Tastatur zu öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reopens the comment area without opening the keyboard"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a abrir la zona de comentarios sin abrir el teclado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rouvre la zone de commentaire sans ouvrir le clavier"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riapre l’area dei commenti senza aprire la tastiera"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reabre a área de comentários sem abrir o teclado"
           }
         }
       }

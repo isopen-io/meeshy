@@ -36,6 +36,32 @@ extension StoryCardView {
             isComposerShown: chromeVisible)
     }
 
+    /// **Ce que la carte dit du composeur à la liste des commentaires**
+    /// (#9893) : son état (absent, replié, déplié, soulevé), sa hauteur
+    /// mesurée et ce qui le soulève. Le panneau d'émojis soulève la plaque
+    /// comme le clavier ; il ne compte pas dans la hauteur de la plaque.
+    func commentsZoneReading(geometry: GeometryProxy) -> StoryCommentsZone.ComposerReading { // internal for cross-file extension access
+        let isFolded = composerFoldPresentation == .folded
+        let panel = showTextEmojiPicker && !isFolded ? emojiPanelHeight(geometry) : 0
+        let lift = panel > 0
+            ? composerBottomPadding(geometry) + panel
+            : (keyboard.isVisible ? keyboard.height : 0)
+        return StoryCommentsZone.ComposerReading(
+            state: StoryCommentsZone.state(hasComposer: !isOwnStory || replyingToStoryComment != nil,
+                                           isShown: chromeVisible,
+                                           presentation: composerFoldPresentation,
+                                           keyboardHeight: lift),
+            composerHeight: composerBlockHeight.map { max($0 - panel, 0) },
+            keyboardHeight: lift,
+            windowHeight: geometry.size.height,
+            topReserved: topInset + 100)
+    }
+
+    /// Le panneau d'émojis prend la place du clavier, à sa dernière hauteur.
+    private func emojiPanelHeight(_ geometry: GeometryProxy) -> CGFloat {
+        max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260)
+    }
+
     @ViewBuilder
     func composerLayer(geometry: GeometryProxy) -> some View { // internal for cross-file extension access
         VStack(spacing: 0) {
@@ -83,8 +109,11 @@ extension StoryCardView {
         // le bloc se cadre sur l'écran réel et reste centré — même principe que
         // le pin `.frame(width: geometry.size.width)` du header et du sidebar.
         .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
+        // Pas d'`.animation(value: keyboard.height)` ici : le composeur suit
+        // le clavier dans la transaction de `KeyboardObserver` (sa durée), la
+        // MÊME que la liste des commentaires — une courbe propre à chacun les
+        // désynchronisait (#9893).
         .padding(.bottom, composerBottomPadding(geometry))
-        .animation(.easeInOut(duration: 0.25), value: keyboard.height)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
         // Glissement vers le BAS à la disparition + fondu. L'offset 240pt
         // couvre l'ensemble composer + picker emoji + safe area inférieure
@@ -96,7 +125,15 @@ extension StoryCardView {
         .opacity(chromeVisible ? 1 : 0)
         .allowsHitTesting(chromeVisible)
         .onPreferenceChange(StoryComposerBlockHeightKey.self) { height in
-            composerBlockHeight = height
+            // La première mesure est sèche ; les suivantes (repli, bannière de
+            // réponse, plaque qui grandit) déplacent la liste sans saut.
+            guard composerBlockHeight != nil else {
+                composerBlockHeight = height
+                return
+            }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                composerBlockHeight = height
+            }
         }
         // « Répondre » depuis le rail demande le focus : un composeur replié
         // se rouvre pour le recevoir.
@@ -155,7 +192,7 @@ extension StoryCardView {
                         emojiToInject = emoji
                     }
                 )
-                .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
+                .frame(height: emojiPanelHeight(geometry))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -185,19 +222,24 @@ extension StoryCardView {
             }
     }
 
+    /// Le ⌄ (et le glissé bas) : ferme le clavier s'il est ouvert ET replie
+    /// le composeur en bulle (#9893).
     private func foldComposer() {
-        dismissComposer()
-        HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            isComposerFolded = true
-        }
+        applyComposerTap(StoryComposerFold.chevronTapped)
     }
 
+    /// La bulle rouvre le composeur, sans rouvrir le clavier.
     private func unfoldComposer() {
+        applyComposerTap(StoryComposerFold.bubbleTapped)
+    }
+
+    private func applyComposerTap(_ tap: StoryComposerFold.Tap) {
+        if tap.resignsKeyboard { dismissComposer() }
         HapticFeedback.light()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            isComposerFolded = false
+            isComposerFolded = tap.userFolded
         }
+        if tap.focusesField { composerFocusTrigger = true }
     }
 
     /// **Le ⌄ vit DANS la plaque de verre** (#8642) : le lecteur ne le peint
@@ -209,6 +251,8 @@ extension StoryCardView {
             symbol: StoryComposerFold.foldSymbol,
             label: String(localized: "story.composer.fold",
                           defaultValue: "Masquer la zone de commentaire", bundle: .main),
+            hint: String(localized: "story.composer.fold.hint",
+                         defaultValue: "Ferme le clavier et replie la zone de commentaire en bulle", bundle: .main),
             action: foldComposer)
     }
 
@@ -226,5 +270,7 @@ extension StoryCardView {
         .frame(maxWidth: .infinity)
         .accessibilityLabel(String(localized: "story.composer.unfold",
                                    defaultValue: "Afficher la zone de commentaire", bundle: .main))
+        .accessibilityHint(String(localized: "story.composer.unfold.hint",
+                                  defaultValue: "Rouvre la zone de commentaire sans ouvrir le clavier", bundle: .main))
     }
 }

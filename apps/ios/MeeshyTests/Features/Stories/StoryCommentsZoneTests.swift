@@ -184,7 +184,14 @@ final class StoryCommentsZoneTests: XCTestCase {
         let layer = AppSourceGuard.stripComments(try String(
             contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8))
         XCTAssertTrue(layer.contains("StoryCommentsZone.state("))
-        XCTAssertTrue(layer.contains("StoryCommentsZone.frame("))
+        XCTAssertTrue(layer.contains("StoryCommentsZone.ComposerReading("))
+        let host = AppSourceGuard.stripComments(try String(
+            contentsOf: views.appendingPathComponent("StoryCommentsOverlayHost.swift"), encoding: .utf8))
+        XCTAssertTrue(host.contains("reading.frame(safeBottom: inputs.safeBottom)"),
+                      "l'hôte ne calcule rien : il remet la lecture du composeur à la loi")
+        let canvas = AppSourceGuard.stripComments(try String(
+            contentsOf: views.appendingPathComponent("StoryViewerView+Canvas.swift"), encoding: .utf8))
+        XCTAssertTrue(canvas.contains(".placed(commentsZoneReading(geometry: geometry))"))
         XCTAssertTrue(layer.contains("StoryComposerFold.chevronTapped"))
         XCTAssertTrue(layer.contains("StoryComposerFold.bubbleTapped"))
 

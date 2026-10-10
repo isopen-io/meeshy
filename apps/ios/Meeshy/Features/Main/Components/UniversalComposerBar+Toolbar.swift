@@ -138,6 +138,7 @@ extension UniversalComposerBar {
         .buttonStyle(.plain)
         .padding(.vertical, -7)
         .accessibilityLabel(fold.label)
+        .accessibilityHint(fold.hint ?? "")
     }
 
     /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
@@ -265,6 +266,7 @@ nonisolated enum ComposerGlassDoors {
 struct ComposerFoldControl {
     let symbol: String
     let label: String
+    var hint: String? = nil
     let action: () -> Void
 }
 

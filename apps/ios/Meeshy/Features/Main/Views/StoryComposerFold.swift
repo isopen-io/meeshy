@@ -105,7 +105,10 @@ nonisolated enum StoryComposerFold {
         let focusesField: Bool
     }
 
-    static let chevronTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
+    /// Le ⌄ ferme le clavier s'il est ouvert ET replie le composeur en bulle.
+    static let chevronTapped = Tap(userFolded: true, resignsKeyboard: true, focusesField: false)
+    /// La bulle rouvre le composeur, sans rouvrir le clavier : écrire reste un
+    /// second geste, que l'utilisateur choisit.
     static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
 
     static let foldSymbol = "chevron.down"
