@@ -166,6 +166,19 @@ describe('chemins : l’arborescence andp, sous out/appstore', () => {
   })
 })
 
+describe('dépôt : un nom unique par fichier dans la bibliothèque App Store', () => {
+  // App Store Connect refuse deux médias du même nom dans la bibliothèque, toutes langues confondues
+  // (« Reference name '01-jeu.mp4' is already in use », envoi du 2026-10-10) : le nom porte la langue et l'appareil.
+  test('chaque aperçu, en-tête et visuel de recherche porte sa langue et son appareil, et garde son ordre', async () => {
+    const { destinationDe } = await import('../vitrine/monter-depot.mjs')
+    const nom = (sortie) => destinationDe({ sortie, metadata: '/x' }).split('/').slice(3).join('/')
+    expect(nom({ type: 'apercu', lang: 'fr', appareil: 'iphone', chemin: '/o/01-jeu.mp4' })).toBe('previews/IPHONE_67/01-jeu-fr-FR-iphone.mp4')
+    expect(nom({ type: 'apercu', lang: 'pt', appareil: 'ipad', chemin: '/o/02-interactions.mp4' })).toBe('previews/IPAD_PRO_3GEN_129/02-interactions-pt-BR-ipad.mp4')
+    expect(nom({ type: 'entete', lang: 'ar', chemin: '/o/01-entete.mp4' })).toBe('product_page_header/01-entete-ar-SA.mp4')
+    expect(nom({ type: 'recherche', lang: 'it', chemin: '/o/01-recherche.png' })).toBe('search_results/01-recherche-it.png')
+  })
+})
+
 describe('textes : aucune promesse que l’app ne tient pas', () => {
   const INTERDITS = [
     /\b80\s*\+|\b200\s+langues/i,
