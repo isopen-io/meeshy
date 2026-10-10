@@ -432,7 +432,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // désormais `MeEndpoint.birthDate` (`BirthDateService.setBirthDate`) — l'entrée
 // n'est plus morte, comme annoncé ci-dessus. Valeur MESURÉE sur l'arbre fusionné
 // avec `dev` du 2026-10-10.
-const BASELINE_DEAD_ENTRIES = 291;
+// 291 -> 292 (#10000, 2026-10-10) : `WorldEndpoint.root` (`GET /api/v1/world`),
+// GÉNÉRÉE depuis `route-manifest.json` par `916e564ac9` sans relever cette
+// référence — la jumelle Swift de `world.root`. PRÉMATURÉE : aucune vue iOS ne
+// lit encore l'entrée publique de World Wide. Valeur MESURÉE le 2026-10-10.
+const BASELINE_DEAD_ENTRIES = 292;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
