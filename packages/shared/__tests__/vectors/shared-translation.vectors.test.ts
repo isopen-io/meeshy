@@ -2,11 +2,14 @@
  * Vecteurs inter-plateformes du scellement d'une traduction partagée (#9899).
  *
  * `fixtures/shared-translation/seal.vectors.json` est le CONTRAT : ce fichier le
- * produit en EXÉCUTANT `utils/shared-translation-seal.ts` (nonce fixé, jamais à
- * la main) et le rejoue ; `SharedTranslationSealVectorTests.swift` (MeeshySDK)
- * le rejoue avec CryptoKit — il ouvre chaque `payload`, rescelle `innerJson`
- * avec le même nonce et doit retrouver le même `payload` octet pour octet, et
- * n'ouvre aucun des `rejections`. Sur divergence, c'est le TS qui a raison.
+ * produit en EXÉCUTANT les primitives de `utils/shared-translation-seal.ts`
+ * (clé, données associées, JSON canonique) sous un nonce fixé — le module, lui,
+ * ne laisse aucun appelant choisir son nonce —, puis vérifie que le module ouvre
+ * chaque cas et n'ouvre aucun refus. `SharedTranslationSealVectorTests.swift`
+ * (MeeshySDK) le rejoue avec CryptoKit — il ouvre chaque `payload`, rescelle
+ * `innerJson` avec le même nonce et doit retrouver le même `payload` octet pour
+ * octet, et n'ouvre aucun des `rejections`. Sur divergence, c'est le TS qui a
+ * raison.
  *
  * Régénération voulue : `UPDATE_SHARED_TRANSLATION_VECTORS=1 npx vitest run __tests__/vectors/shared-translation.vectors.test.ts`.
  *
@@ -24,7 +27,6 @@ import {
   deriveSharedTranslationKey,
   fromBase64,
   openSharedTranslation,
-  sealSharedTranslation,
   sharedTranslationAad,
   sharedTranslationSourceDigest,
   toBase64,
@@ -124,16 +126,31 @@ const bindingOf = (input: Pick<CaseInput, 'conversationId' | 'messageId' | 'targ
 const keyOf = (input: Pick<CaseInput, 'kdf' | 'secret'>): SharedTranslationKeySource =>
   input.kdf === 'message-secret' ? { kdf: 'message-secret', secret: fromBase64(input.secret ?? '') } : { kdf: 'message-content' };
 
+const encoder = new TextEncoder();
+
+/** Le scellement du module, recomposé sous un nonce fixé : base64(nonce ‖ AES-256-GCM(clé, données associées, JSON canonique)). */
+const sealedUnderFixedNonce = async (params: { readonly key: Uint8Array<ArrayBuffer>; readonly aad: string; readonly innerJson: string; readonly nonce: Uint8Array<ArrayBuffer> }): Promise<string> => {
+  const aesKey = await globalThis.crypto.subtle.importKey('raw', params.key, 'AES-GCM', false, ['encrypt']);
+  const sealed = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: params.nonce, additionalData: encoder.encode(params.aad), tagLength: 128 },
+    aesKey,
+    encoder.encode(params.innerJson),
+  );
+  return toBase64(Uint8Array.from([...params.nonce, ...new Uint8Array(sealed)]));
+};
+
 const evaluate = async (input: CaseInput): Promise<CaseExpected> => {
   const binding = bindingOf(input);
   const sourceDigest = await sharedTranslationSourceDigest(input.sourceContent);
-  const envelope = await sealSharedTranslation({ binding, key: keyOf(input), inner: input.inner, nonce: fromBase64(input.nonce) });
+  const key = await deriveSharedTranslationKey(binding, keyOf(input));
+  const aad = sharedTranslationAad(binding, input.kdf, sourceDigest);
+  const innerJson = canonicalSharedTranslationInner(input.inner);
   return {
     sourceDigest,
-    key: toBase64(await deriveSharedTranslationKey(binding, keyOf(input))),
-    aad: sharedTranslationAad(binding, input.kdf, sourceDigest),
-    innerJson: canonicalSharedTranslationInner(input.inner),
-    payload: envelope.payload,
+    key: toBase64(key),
+    aad,
+    innerJson,
+    payload: await sealedUnderFixedNonce({ key, aad, innerJson, nonce: fromBase64(input.nonce) }),
   };
 };
 
@@ -141,6 +158,16 @@ const tampered = (payload: string): string => {
   const bytes = fromBase64(payload);
   const last = bytes.length - 1;
   return toBase64(bytes.map((byte, index) => (index === last ? byte ^ 0x01 : byte)));
+};
+
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** Les mêmes octets sous un remplissage aux bits non nuls : un décodeur indulgent les lirait. */
+const dirtyPadding = (payload: string): string => {
+  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0;
+  if (padding === 0) throw new Error('le cas de référence se termine par un remplissage');
+  const at = payload.length - padding - 1;
+  return `${payload.slice(0, at)}${BASE64_ALPHABET.charAt(BASE64_ALPHABET.indexOf(payload.charAt(at)) + 1)}${payload.slice(at + 1)}`;
 };
 
 const rejectionsOf = (cases: VectorFile['cases']): readonly Rejection[] => {
@@ -168,6 +195,12 @@ const rejectionsOf = (cases: VectorFile['cases']): readonly Rejection[] => {
       open: { ...base, kdf: 'message-secret', secret: SECRET, envelope: { ...base.envelope, kdf: 'message-secret' } },
     },
     { _label: 'un autre secret', open: { ...secretBase, secret: toBase64(Uint8Array.from({ length: 32 }, () => 7)) } },
+    { _label: 'un base64 aux bits de remplissage non nuls', open: { ...base, envelope: { ...base.envelope, payload: dirtyPadding(base.envelope.payload) } } },
+    { _label: 'un base64 sans son remplissage', open: { ...base, envelope: { ...base.envelope, payload: base.envelope.payload.replace(/=+$/, '') } } },
+    {
+      _label: 'un base64 coupé d’un retour à la ligne',
+      open: { ...base, envelope: { ...base.envelope, payload: `${base.envelope.payload.slice(0, 64)}\n${base.envelope.payload.slice(64)}` } },
+    },
   ];
 };
 
@@ -186,7 +219,7 @@ const loaded = (): VectorFile => JSON.parse(readFileSync(FILE, 'utf-8')) as Vect
 describe('seal.vectors.json — le scellement partagé par le web et iOS', () => {
   it('porte ses cas et ses refus — jamais de vert silencieux', () => {
     expect(loaded().cases.length).toBeGreaterThanOrEqual(5);
-    expect(loaded().rejections.length).toBeGreaterThanOrEqual(7);
+    expect(loaded().rejections.length).toBeGreaterThanOrEqual(10);
   });
 
   it('est exactement ce que le module produit', async () => {

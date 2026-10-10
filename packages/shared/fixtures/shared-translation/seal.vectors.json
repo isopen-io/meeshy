@@ -245,6 +245,57 @@
           "payload": "AAECAwQFBgcICQoLhWR2GDtwnuM0nklQv4KycSAy3TuO+uFKZl9VMOdyp6J2eU3d2dqDMZL0phdtm0pYf5q+EDy0DBFGnylkXkXm4a5qIdHHH9Os4c4ZexIOvhnM/d8pcfac3bj3D6PYR6SzGtyVZozkDw=="
         }
       }
+    },
+    {
+      "_label": "un base64 aux bits de remplissage non nuls",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqx=="
+        }
+      }
+    },
+    {
+      "_label": "un base64 sans son remplissage",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw"
+        }
+      }
+    },
+    {
+      "_label": "un base64 coupé d’un retour à la ligne",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml\n0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
     }
   ]
 }

@@ -12,21 +12,34 @@
  *   = le texte original en NFC (`message-content`) ou le secret du message
  *   (`message-secret`) ;
  * - scellement : AES-256-GCM, nonce aléatoire de 12 octets, tag de 16 ;
- *   `payload` = base64(nonce ‖ chiffré ‖ tag) — la forme `combined` de CryptoKit ;
+ *   `payload` = base64 CANONIQUE de (nonce ‖ chiffré ‖ tag) — la forme
+ *   `combined` de CryptoKit. Aucun appelant ne choisit le nonce : les vecteurs
+ *   composent leur propre scellement à nonce fixé, à partir des primitives
+ *   exportées ici ;
  * - données associées : `meeshy-shared-translation/v1|<kdf>|<conversationId>|<messageId>|<targetLanguage>|<sha256 hex du texte original en NFC>`.
  *   Elles lient l'enveloppe à UN message, UNE langue et UN état du texte : la
  *   traduction d'un message depuis modifié ne s'ouvre plus, et l'empreinte ne
  *   voyage jamais (le serveur pourrait la comparer à des messages devinés).
  *
- * Ouvrir ne lève jamais : toute enveloppe illisible, altérée, d'une autre
- * langue ou d'un autre état du texte rend `null`, et l'appareil garde ce qu'il
- * avait.
+ * Les champs liés (conversation, message, langue) ne peuvent porter aucun
+ * séparateur : un identifiant, une langue, rien d'autre — sceller lève, ouvrir
+ * rend `null`. Le texte scellé et le texte source sont bien formés (aucune
+ * moitié de paire de substitution seule), sans quoi deux appareils ne liraient
+ * pas les mêmes octets.
+ *
+ * Ouvrir ne lève jamais : toute enveloppe illisible, altérée, autrement écrite,
+ * d'une autre langue ou d'un autre état du texte rend `null`, et l'appareil
+ * garde ce qu'il avait.
  */
 
 import {
   SHARED_TRANSLATION_ALGORITHM,
   SHARED_TRANSLATION_LIMITS,
   SHARED_TRANSLATION_PROTOCOL,
+  isCanonicalSharedTranslationPayload,
+  isSharedTranslationLanguage,
+  isSharedTranslationObjectId,
+  isWellFormedSharedTranslationText,
   sharedTranslationInnerSchema,
   type SharedTranslationEnvelope,
   type SharedTranslationInner,
@@ -76,6 +89,12 @@ export const sharedTranslationAad = (binding: SharedTranslationBinding, kdf: Sha
 export const canonicalSharedTranslationInner = (inner: SharedTranslationInner): string =>
   JSON.stringify({ engine: inner.engine, sourceLanguage: inner.sourceLanguage, text: inner.text, v: 1 });
 
+const isSoundBinding = (binding: SharedTranslationBinding): boolean =>
+  isSharedTranslationObjectId(binding.conversationId) &&
+  isSharedTranslationObjectId(binding.messageId) &&
+  isSharedTranslationLanguage(binding.targetLanguage) &&
+  isWellFormedSharedTranslationText(binding.sourceContent);
+
 const keyMaterial = (binding: SharedTranslationBinding, source: SharedTranslationKeySource): Uint8Array<ArrayBuffer> => {
   if (source.kdf === 'message-secret') {
     if (source.secret.length !== SHARED_TRANSLATION_LIMITS.secretLength) throw new Error('le secret du message fait 32 octets');
@@ -107,19 +126,18 @@ const aesKey = async (binding: SharedTranslationBinding, source: SharedTranslati
   subtle().importKey('raw', await deriveSharedTranslationKey(binding, source), 'AES-GCM', false, [usage]);
 
 /**
- * Scelle une traduction. `nonce` n'est fixé que par les vecteurs : en usage,
- * il est tiré au hasard. Lève si la traduction dépasse ce que la passerelle
- * accepte — l'appareil ne partage pas alors, et garde sa traduction.
+ * Scelle une traduction sous un nonce tiré au hasard. Lève si la liaison est
+ * mal formée, ou si la traduction dépasse ce que la passerelle accepte —
+ * l'appareil ne partage pas alors, et garde sa traduction.
  */
 export async function sealSharedTranslation(params: {
   readonly binding: SharedTranslationBinding;
   readonly key: SharedTranslationKeySource;
   readonly inner: SharedTranslationInner;
-  readonly nonce?: Uint8Array;
 }): Promise<SharedTranslationEnvelope> {
   const { binding, key, inner } = params;
-  const nonce = new Uint8Array(params.nonce ?? globalThis.crypto.getRandomValues(new Uint8Array(SHARED_TRANSLATION_LIMITS.nonceLength)));
-  if (nonce.length !== SHARED_TRANSLATION_LIMITS.nonceLength) throw new Error('le nonce fait 12 octets');
+  if (!isSoundBinding(binding)) throw new Error('la traduction se lie à un message, une conversation et une langue bien formés');
+  const nonce = globalThis.crypto.getRandomValues(new Uint8Array(SHARED_TRANSLATION_LIMITS.nonceLength));
   const plaintext = sharedTranslationInnerSchema.parse(inner);
   const aad = sharedTranslationAad(binding, key.kdf, await sharedTranslationSourceDigest(binding.sourceContent));
   const sealed = await subtle().encrypt(
@@ -160,7 +178,9 @@ export async function openSharedTranslation(params: {
   readonly key: SharedTranslationKeySource;
   readonly envelope: SharedTranslationEnvelope;
 }): Promise<SharedTranslationInner | null> {
-  if (params.envelope.v !== 1 || params.envelope.alg !== SHARED_TRANSLATION_ALGORITHM || params.envelope.kdf !== params.key.kdf) return null;
+  const { envelope } = params;
+  if (envelope.v !== 1 || envelope.alg !== SHARED_TRANSLATION_ALGORITHM || envelope.kdf !== params.key.kdf) return null;
+  if (typeof envelope.payload !== 'string' || !isCanonicalSharedTranslationPayload(envelope.payload) || !isSoundBinding(params.binding)) return null;
   try {
     return await decryptedInner(params);
   } catch {
