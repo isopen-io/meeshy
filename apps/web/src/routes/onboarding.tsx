@@ -1,13 +1,21 @@
 import { useQuery, type QueryClient } from '@tanstack/react-query';
-import type { OnboardingStepId, OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
+import type { OnboardingStepOutcome, OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import '@/styles/onboarding.css';
 
+import { endRevokedSession } from '@/lib/api/account-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
-import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps } from '@/lib/api/onboarding';
+import {
+  ONBOARDING_QUERY_KEY,
+  ONBOARDING_STEPS,
+  onboardingQueryOptions,
+  type OnboardingDeps,
+  type OnboardingState,
+  type OnboardingStepId,
+} from '@/lib/api/onboarding';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
@@ -18,7 +26,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
+import { declareAge, finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
 import { observeCredit } from '@/lib/onboarding/credit';
 import { resendOwnVerification } from '@/lib/onboarding/resend-verification';
 import { createGreetingSender } from '@/lib/onboarding/greeting-send';
@@ -58,6 +66,7 @@ import {
   type LanguagesSave,
   type ResendLink,
 } from './onboarding-cards';
+import { AgeCard, type AgeSubmit } from './onboarding-age';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
@@ -80,6 +89,9 @@ import { href, navigate } from './route-table';
  *   l'accusé qui la fonde.
  * - **L'étape 5 n'existe que si 2, 3 ou 4 a produit quelque chose**, et la
  *   fenêtre système ne s'ouvre QUE sur « Oui ».
+ * - **L'âge se demande sans s'imposer** (#9928, D-182) : la carte se passe,
+ *   la passerelle seule juge la date, et sa réponse dit la carte suivante —
+ *   Meeshy Global n'est pas proposée à un compte qu'elle ferme en écriture.
  */
 
 export type OnboardingScreenDeps = {
@@ -110,6 +122,8 @@ export type OnboardingScreenDeps = {
   readonly resendVerification: () => Promise<boolean>;
   /** Le retour du studio n'est crédité qu'avec sa preuve (`story-return.ts`). */
   readonly takeStoryProof: (storyId: string) => boolean;
+  /** Ferme la session — sur le 422 d'une date sous 13 ans (#9928). */
+  readonly signOut: () => Promise<void>;
   readonly random: () => number;
   readonly navigate: (path: string, replace?: boolean) => void;
 };
@@ -165,6 +179,10 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   },
   resendVerification: () => (apiDeps.source === 'fixtures' ? Promise.resolve(false) : resendOwnVerification(apiDeps.transport)),
   takeStoryProof: storyReturn.take,
+  /* La passerelle a DÉJÀ révoqué toutes les sessions avec son 422 : reste à
+     finir celle-ci ici, comme un 401 le ferait (`endRevokedSession`, déjà du
+     socle), caches du compte compris. */
+  signOut: async () => endRevokedSession(sessionStore),
   random: Math.random,
   navigate,
 };
@@ -217,7 +235,7 @@ function journeyPositions(context: JourneyContext, current: JourneyStep): { read
   const offered = ONBOARDING_STEPS.filter(
     (step) => step === current || (!context.state.prefilledSteps.includes(step) && isOffered(step, context)),
   );
-  const index = current === 'recap' ? offered.length : (offered as readonly JourneyStep[]).indexOf(current) + 1;
+  const index = current === 'recap' ? offered.length : offered.indexOf(current) + 1;
   return { position: Math.max(1, index), count: Math.max(1, offered.length) };
 }
 
@@ -264,6 +282,7 @@ export function OnboardingJourney({
   const [askable] = useState(() => deps.notificationsAskable());
   const [step, setStep] = useState<JourneyStep | null>(null);
   const [storyPublished, setStoryPublished] = useState(false);
+  const [today] = useState(() => new Date());
   const { flight, bump, travelling, announcement, celebrate } = useRewardFlight(lang);
   const actionDeps: OnboardingActionDeps = useMemo(() => ({ ...deps.api, queryClient: deps.queryClient }), [deps.api, deps.queryClient]);
 
@@ -396,6 +415,31 @@ export function OnboardingJourney({
     [record, context],
   );
 
+  /* L'ÂGE (#9928) — la réponse DIT la carte suivante : l'étape d'après se
+     calcule sur l'état que la déclaration vient d'écrire au cache (Global
+     fermée à un mineur), jamais sur celui du rendu qui a lancé l'envoi. */
+  const submitAge = useCallback(
+    async (birthDate: string): Promise<AgeSubmit> => {
+      const outcome = await declareAge(actionDeps, birthDate);
+      if (outcome.kind === 'invalid' || outcome.kind === 'failed') return outcome.kind;
+      if (!alive.current || context === null) return 'done';
+      /* MOINS DE 13 ANS : la passerelle a écrit la date et révoqué les
+         sessions. Celle-ci finit ici, et la connexion s'ouvre sur l'écran qui
+         le dit (`?motif=age`) — le même qu'à chaque porte refusée ensuite. */
+      if (outcome.kind === 'below-minimum') {
+        leaving.current = true;
+        await deps.signOut();
+        deps.navigate(href('login', undefined, { motif: 'age' }), true);
+        return 'done';
+      }
+      const served = deps.queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY) ?? context.state;
+      record('age', 'done');
+      setStep(nextStepAfter('age', { ...context, state: served, progress: progressNow.current }));
+      return 'done';
+    },
+    [actionDeps, context, deps, record],
+  );
+
   const reward = useCallback(
     (step: OnboardingStepId) => {
       const before = progressNow.current.score?.last;
@@ -489,6 +533,8 @@ export function OnboardingJourney({
           />
         ) : step === 'email' ? (
           <EmailCard host={host} resend={resend} onLater={() => advance('email', 'skipped')} />
+        ) : step === 'age' ? (
+          <AgeCard host={host} today={today} submit={submitAge} onSkip={() => advance('age', 'skipped')} />
         ) : step === 'global' ? (
           <GlobalCard
             host={host}

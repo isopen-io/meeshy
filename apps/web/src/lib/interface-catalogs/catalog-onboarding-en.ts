@@ -31,6 +31,12 @@ const en = {
   'onboarding.email.sent': 'Link sent. Open it, then come back here.',
   'onboarding.email.failed': 'The link didn’t go out. Try again.',
 
+  'onboarding.age.title': 'Your date of birth',
+  'onboarding.age.body': 'So we can suggest the right spaces for you. You can skip this.',
+  'onboarding.age.skip': 'Skip',
+  'onboarding.age.check': 'Check your date of birth.',
+  'onboarding.age.failed': 'Your date wasn’t saved. Try again.',
+
   'onboarding.global.title': 'Say hi to the world',
   'onboarding.global.body': 'Meeshy Global is where everyone hangs out. Drop a hi, no pressure.',
   'onboarding.global.field': 'Your hi, editable',

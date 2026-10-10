@@ -291,11 +291,10 @@ extension ConversationListView {
                 )
             }
 
-            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), même
-            // source que le filtre `.archived` ; jamais `conversation.isActive`
-            // (flag de cycle de vie serveur, indépendant de l'archivage).
+            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), jamais `isActive`.
+            // Global d'un mineur reste aux archives : aucune bascule (#9929).
             let isArchivedConv = conversation.userState.isArchived
-            Button {
+            if !conversation.isArchiveImposed { Button {
                 HapticFeedback.medium()
                 if isArchivedConv {
                     Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
@@ -309,7 +308,7 @@ extension ConversationListView {
                         : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
                     systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
                 )
-            }
+            } }
 
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
             // (I-075), qui forçait Focal pour une seule ouverture, est retiré
@@ -572,7 +571,7 @@ extension ConversationListView {
                         currentSectionId: conversation.userState.sectionId,
                         canInvite: canCreateShareLink(for: conversation),
                         isLocked: ConversationLockManager.shared.isLocked(conversation.id),
-                        isArchived: conversation.userState.isArchived,
+                        isArchived: conversation.userState.isArchived, canToggleArchive: !conversation.isArchiveImposed,
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
                         canRename: conversation.type != .direct,

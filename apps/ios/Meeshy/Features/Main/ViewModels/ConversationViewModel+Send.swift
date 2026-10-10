@@ -716,6 +716,10 @@ extension ConversationViewModel {
             // ~10s socket fallback + outbox retry — mark the row failed and tell
             // the user. Outgoing blocks are already gated by the composer zone;
             // this catches incoming blocks the client can't see ahead of time.
+            if let restriction = ConversationWriteRestriction(refusal: error), restriction.closesComposer {
+                await withdrawRefusedMessage(tempId: tempId, restriction: restriction)
+                return false
+            }
             if error.isUserBlockedError {
                 Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
                 _ = try? await messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))

@@ -201,6 +201,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.isViewOnceEnabled
         _ = vm.armedReplyContagion
         _ = vm.lastUnreadMessage
+        _ = vm.learnedWriteRestriction
         _ = vm.listenedAttachmentIds
         _ = vm.mentionController
         _ = vm.messageTranscriptions

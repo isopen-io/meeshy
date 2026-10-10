@@ -5,6 +5,12 @@ import { Link } from '@/routes/route-table';
 import { AuthAmbient } from './auth-chrome';
 import { Glyph } from './glyph';
 
+/* L'écran des moins de 13 ans (#9928) voyage avec la géométrie des pages
+   d'accès : seules ces pages le montrent, et passer par ce module le range
+   dans leur chunk commun au lieu d'en ouvrir un de plus, dont le nom
+   pèserait sur la première peinture (budgets.json › first_paint). */
+export { AgeBlocked, isAgeBelowMinimum } from './age-blocked';
+
 /**
  * LA GÉOMÉTRIE DES PAGES D'ACCÈS — celle de la connexion, écrite UNE fois
  * (#6643, D-72).

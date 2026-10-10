@@ -29,6 +29,7 @@ import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
+import arWriteRestriction from './catalog-ar-write-restriction';
 import arConversationCard from './catalog-ar-conversation-card';
 import arStoriesMine from './catalog-ar-stories-mine';
 import arContactCard from './catalog-ar-contact-card';
@@ -1094,6 +1095,7 @@ const ar = {
   ...arMentions,
   ...arStudioChrome,
   ...arEphemeral,
+  ...arWriteRestriction,
   ...arGallery,
   ...arDeviceTranslation,
   ...arMessageCard,

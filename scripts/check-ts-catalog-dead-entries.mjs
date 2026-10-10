@@ -423,11 +423,7 @@ export const callersIn = (contents, nsNames) => {
 // (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
 // 275 → 274 (2026-10-10, #9945) : une entrée morte de moins, consommée par les lots
 // #9906-#9911 (pièce visée). Valeur MESURÉE le 2026-10-10.
-// 274 → 275 (2026-10-10, #9927) : `me.birthDate` (`PUT /me/birth-date`), GÉNÉRÉE
-// depuis `route-manifest.json` avec la route — prématurée : son appelant est livré par
-// #9938 (feat/web-age-global-minor-9928), qui ramène la référence à 274. Valeur
-// MESURÉE le 2026-10-10.
-const BASELINE_DEAD_ENTRIES = 275;
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
