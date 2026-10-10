@@ -906,6 +906,15 @@
         "source": "Mesure du 2026-10-09 (`bun run build` puis gzip -9) : 3,03 Ko pour les SEPT catalogues de la feuille « Vues » enrichie (cles `viewerEngagement.*` : ce que chaque personne a fait, le detail d une personne, l etat vide et le refus d une publication). Charges AVEC la feuille (`preparePublicationViewersSheet`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_message_pieces": {
+      "pattern": "^assets/catalog-message-pieces-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #9907, NON ARBITREE",
+        "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,77 Ko gzip -9 pour les SEPT catalogues du menu d une piece (cles `message.piece.*` : repondre a la piece, l enregistrer, la transferer, la supprimer, « Tout le message », son defilement « Photo 3 sur 7 »). Charges avec le fil (`useMessageMenu`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Hors du catalogue d interface, deja au-dessus de son plafond sur dev (183,9 Ko) avant ce lot. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. La premiere peinture ne bouge pas (90 Ko sur dev, 89,98 apres)."
+      }
+    },
     "send_sheet_screen": {
       "pattern": "^assets/send-sheet-screen-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
