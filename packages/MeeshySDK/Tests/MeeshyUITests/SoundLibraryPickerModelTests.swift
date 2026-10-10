@@ -244,6 +244,9 @@ final class SoundLibraryPickerModelTests: XCTestCase {
             func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage {
                 throw URLError(.notConnectedToInternet)
             }
+            func remove(soundId: String) async throws -> SoundRemoval {
+                throw URLError(.notConnectedToInternet)
+            }
         }
         let model = SoundLibraryPickerModel(service: Failing())
         await model.reload()
