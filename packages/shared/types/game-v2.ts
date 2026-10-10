@@ -139,6 +139,18 @@ export const gameSeasonBlockSchema = z.object({
   sealPrice: nonNegativeInt,
 });
 
+/**
+ * La saison À VENIR (#10014) : servie tant qu'aucune saison n'est ouverte (`season: null`),
+ * pour que l'écran annonce la date d'ouverture plutôt qu'un vide. Une donnée de calendrier,
+ * la même pour tous — jamais rien de la présence d'autrui.
+ */
+export const gameUpcomingSeasonBlockSchema = z.object({
+  number: z.number().int().min(1),
+  themeKey: z.string().min(1),
+  startDay: dayKey,
+  endDay: dayKey,
+});
+
 export const gameTrophyItemSchema = z.object({ key: trophyKeySchema, awardedAt: isoDate });
 
 export const gameTrophiesBlockSchema = z.object({
@@ -193,6 +205,7 @@ export const gameBlockExtensionShape = {
   league: gameLeagueBlockSchema.optional().catch(undefined),
   duo: gameDuoBlockSchema.optional().catch(undefined),
   season: gameSeasonBlockSchema.nullable().optional().catch(undefined),
+  seasonUpcoming: gameUpcomingSeasonBlockSchema.nullable().optional().catch(undefined),
   trophies: gameTrophiesBlockSchema.optional().catch(undefined),
   atlas: gameAtlasBlockSchema.optional().catch(undefined),
   prestige: gamePrestigeBlockSchema.optional().catch(undefined),
@@ -398,6 +411,7 @@ export const prestigeResponseSchema = z.object({
 export type GameLeagueBlock = z.infer<typeof gameLeagueBlockSchema>;
 export type GameDuoBlock = z.infer<typeof gameDuoBlockSchema>;
 export type GameSeasonBlock = z.infer<typeof gameSeasonBlockSchema>;
+export type GameUpcomingSeasonBlock = z.infer<typeof gameUpcomingSeasonBlockSchema>;
 export type GameTrophyItem = z.infer<typeof gameTrophyItemSchema>;
 export type GameVisitorTrophyItem = z.infer<typeof gameVisitorTrophyItemSchema>;
 export type GameTrophiesBlock = z.infer<typeof gameTrophiesBlockSchema>;
