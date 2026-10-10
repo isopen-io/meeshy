@@ -43,4 +43,23 @@ public class AppLocaleRulesTest {
         assertNull(AppLocaleRules.target("de", "es", true));
         assertNull(AppLocaleRules.target(null, "", true));
     }
+
+    @Test
+    public void belowAndroid13TheServicesReadTheStoredChoice() {
+        assertEquals("de", AppLocaleRules.serviceLocale(32, "de"));
+        assertEquals("ar", AppLocaleRules.serviceLocale(24, "ar"));
+    }
+
+    @Test
+    public void fromAndroid13TheSystemAppliesItToEveryContext() {
+        assertNull(AppLocaleRules.serviceLocale(33, "de"));
+        assertNull(AppLocaleRules.serviceLocale(35, "de"));
+    }
+
+    @Test
+    public void noStoredOrAnUnreadableChoiceKeepsThePhoneLanguage() {
+        assertNull(AppLocaleRules.serviceLocale(30, ""));
+        assertNull(AppLocaleRules.serviceLocale(30, null));
+        assertNull(AppLocaleRules.serviceLocale(30, "sw"));
+    }
 }
