@@ -417,3 +417,9 @@ apps/ios/fastlane/screenshots/
 
 # Production marketing (vidéos, voix, captures) — hors dépôt, volontairement
 /Marketing/
+
+# Médias de la fiche App Store : produits par scripts/marketing-kit/vitrine/monter.mjs, envoyés par andp, jamais versionnés (#9807, #9811)
+apps/ios/fastlane/metadata/*/previews/
+apps/ios/fastlane/metadata/*/product_page_header/
+apps/ios/fastlane/metadata/*/search_results/
+apps/ios/fastlane/metadata/*/screenshots/
