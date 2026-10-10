@@ -379,7 +379,9 @@ export async function buildApp(
   const { prisma, reads, blockLookups } = database(store, shares, params.privacy ?? {}, params.blocks ?? {});
   const emitted: Emission[] = [];
 
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  // Le `bodyLimit` du serveur de production (`server.ts`, pour les fichiers audio) : la
+  // borne propre à la route est alors la seule qui retienne un corps de plusieurs Mio.
+  const app = Fastify({ logger: false, bodyLimit: 50 * 1024 * 1024, ajv: { customOptions: { strict: false } } });
   const io = {
     to: (room: string | string[]) => {
       if (params.io === 'throwing') throw new Error('socket adapter down');

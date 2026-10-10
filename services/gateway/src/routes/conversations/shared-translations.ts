@@ -28,6 +28,11 @@
  * encore s'il a disparu (404), s'est fait protéger (422) ou a changé (409) : voir
  * la course avec les écrivains.
  *
+ * Avant eux tous, la TAILLE du corps : au-delà de
+ * `SHARED_TRANSLATION_BODY_LIMIT_BYTES` (65 536 octets), 413. Fastify lit le corps
+ * avant l'authentification et avant le plafond par compte, et le serveur en
+ * accepte 50 Mio pour ses fichiers audio.
+ *
  * Le droit de LIRE le message précède tout verdict qui en dirait quelque chose :
  * un 422 « message protégé », « même langue », « dérivation refusée » ou un 409
  * « version quittée » apprendrait à un membre qu'un message qu'il ne lit pas
@@ -195,6 +200,17 @@ export const SHARED_TRANSLATION_SHARE_BUDGET: SharedTranslationShareBudget = { p
 
 /** Au-delà, l'enveloppe est rangée et servie par le `GET`, jamais diffusée à la room (voir l'en-tête). */
 export const SHARED_TRANSLATION_BROADCAST_MAX_PAYLOAD = 8_192;
+
+/**
+ * Le plus gros corps que le `POST` lit, en octets. La plus grosse demande VALIDE —
+ * une enveloppe de 40 Kio (`SHARED_TRANSLATION_LIMITS.payloadMaxLength`) et ses
+ * quatre champs — en pèse un peu plus de 41 Kio : la borne laisse la marge d'un JSON
+ * mis en forme, et rien de plus. Le serveur accepte 50 Mio (ses fichiers audio) et
+ * lit le corps AVANT l'authentification et le plafond par compte, qui tournent plus
+ * tard : sans borne propre à la route, n'importe qui lui fait parser des mégaoctets
+ * pour un partage de 40 Kio.
+ */
+export const SHARED_TRANSLATION_BODY_LIMIT_BYTES = 65_536;
 
 export type SharedTranslationRouteOptions = {
   readonly now?: () => Date;
@@ -683,6 +699,7 @@ export function registerSharedTranslationRoutes(
       },
     },
     config: { rateLimit: SHARED_TRANSLATION_SHARE_RATE_LIMIT },
+    bodyLimit: SHARED_TRANSLATION_BODY_LIMIT_BYTES,
     preValidation: [participantAuth as never],
   }, async (request, reply) => {
     try {

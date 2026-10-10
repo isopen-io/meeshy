@@ -1,19 +1,28 @@
 /**
  * `/conversations/:id/shared-translations` — ce que la route plafonne (#9899).
  *
- * Deux plafonds par minute, chacun épinglé à son CHIFFRE : les partages (120 par
- * minute et par compte) et les lectures (60 par minute et par compte).
+ * Trois plafonds, chacun épinglé à son CHIFFRE : le corps de la demande (65 536
+ * octets), les partages (120 par minute et par compte) et les lectures (60 par
+ * minute et par compte).
  *
  * Les témoins de débit de la suite principale comptent jusqu'à
  * `SHARED_TRANSLATION_SHARE_RATE_LIMIT.max`, la constante qu'ils mesurent :
  * décupler le plafond ne les fait pas tomber. Ceux-ci écrivent le chiffre — un
  * plafond est une décision, et la changer doit faire rougir un témoin.
  *
+ * Le corps est lu AVANT toute authentification et avant le limiteur par compte
+ * (qui tourne en `preHandler`) : le serveur accepte 50 Mio pour ses fichiers audio,
+ * et sans borne propre à la route n'importe qui lui ferait parser des dizaines de
+ * mégaoctets de JSON pour une enveloppe de 40 Kio. La borne tient la plus grosse
+ * demande VALIDE avec de la marge, et rien de plus.
+ *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest, afterEach } from '@jest/globals';
+import { SHARED_TRANSLATION_LIMITS } from '@meeshy/shared/types/shared-translation';
 import {
+  SHARED_TRANSLATION_BODY_LIMIT_BYTES,
   SHARED_TRANSLATION_READ_RATE_LIMIT,
   SHARED_TRANSLATION_SHARE_RATE_LIMIT,
 } from '../../../routes/conversations/shared-translations';
@@ -24,17 +33,87 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import {
+  EDITED_AT,
   GUEST,
   buildApp,
+  envelope,
   guestAs,
+  message,
   registeredAs,
+  scene,
   shareBody,
   type Harness,
+  type Row,
 } from './conversation-shared-translations-harness';
 import { CONV_A, HARNESS_NOW, MSG_1, OTHER_USER_ID, USER_ID } from './me/starred-messages-harness';
 
 afterEach(() => {
   jest.restoreAllMocks();
+});
+
+describe('POST /conversations/:id/shared-translations — le corps de la demande est borné', () => {
+  const BODY_LIMIT = 65_536;
+  const url = `/conversations/${CONV_A}/shared-translations`;
+
+  /** Un corps JSON de `bytes` octets EXACTEMENT : JSON admet des espaces après la valeur. */
+  const bodyOfBytes = (bytes: number, body: Row = shareBody()): string => {
+    const json = JSON.stringify(body);
+    return `${json}${' '.repeat(bytes - Buffer.byteLength(json))}`;
+  };
+
+  const postRaw = (h: Harness, payload: string) =>
+    h.app.inject({ method: 'POST', url, headers: { 'content-type': 'application/json' }, payload });
+
+  /** La plus grosse enveloppe que le contrat admet : le maximum de caractères base64, sans remplissage. */
+  const largestPayload = Buffer.alloc((SHARED_TRANSLATION_LIMITS.payloadMaxLength / 4) * 3, 1).toString('base64');
+  const largestValidShare = shareBody({
+    sourceVersion: EDITED_AT.toISOString(),
+    envelope: envelope({ payload: largestPayload }),
+  });
+
+  it('fixe la borne exportée à 65 536 octets', () => {
+    expect(SHARED_TRANSLATION_BODY_LIMIT_BYTES).toBe(BODY_LIMIT);
+  });
+
+  it('accepte un corps de 65 536 octets', async () => {
+    const h = await buildApp();
+
+    const res = await postRaw(h, bodyOfBytes(BODY_LIMIT));
+
+    expect(res.statusCode).toBe(201);
+    expect(h.shares).toHaveLength(1);
+  });
+
+  it('refuse 413 un corps d’UN octet de plus, sans rien ranger ni diffuser', async () => {
+    const h = await buildApp();
+
+    const res = await postRaw(h, bodyOfBytes(BODY_LIMIT + 1));
+
+    expect(res.statusCode).toBe(413);
+    expect(h.shares).toEqual([]);
+    expect(h.emitted).toEqual([]);
+  });
+
+  it('refuse 413 un corps de plusieurs mégaoctets, que le serveur seul (50 Mio) laisserait entrer', async () => {
+    const h = await buildApp();
+
+    const res = await postRaw(h, bodyOfBytes(2 * 1024 * 1024));
+
+    expect(res.statusCode).toBe(413);
+    expect(h.shares).toEqual([]);
+  });
+
+  it('laisse passer le plus gros partage VALIDE, avec de la marge', async () => {
+    const h = await buildApp({ store: scene({ messages: [message({ editedAt: EDITED_AT })] }) });
+    const bytes = Buffer.byteLength(JSON.stringify(largestValidShare));
+
+    const res = await postRaw(h, JSON.stringify(largestValidShare));
+
+    expect(bytes).toBeGreaterThan(SHARED_TRANSLATION_LIMITS.payloadMaxLength);
+    expect(bytes).toBeLessThan(BODY_LIMIT);
+    expect(res.statusCode).toBe(201);
+    expect(h.shares.map((row) => String(row.payload).length)).toEqual([SHARED_TRANSLATION_LIMITS.payloadMaxLength]);
+  });
 });
 
 describe('/conversations/:id/shared-translations — les plafonds par minute se comptent par COMPTE', () => {
