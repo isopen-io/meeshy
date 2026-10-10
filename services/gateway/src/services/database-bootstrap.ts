@@ -26,7 +26,9 @@
  *     la base fraîchement semée et la base héritée passent par le MÊME site ;
  *  4. World Wide (#10000) en dernier : son créateur (`meeshy`) et ses
  *     administrateurs doivent déjà exister, et la production — peuplée, donc
- *     porte fermée — ne l'a pas encore.
+ *     porte fermée — ne l'a pas encore. L'étape n'écrit que sur
+ *     `WORLD_SEED_ENABLED=true` (`InitService.ensureWorldConversation`) : en
+ *     production, ce drapeau attend le feu vert du porteur.
  */
 
 export type DatabaseBootstrapSteps = {

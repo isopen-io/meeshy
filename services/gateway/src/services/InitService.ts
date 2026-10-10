@@ -10,6 +10,7 @@ import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation-primitives'
 import { UserAuditAction } from '@meeshy/shared/types';
 import { maySeedEmailVerification, seedAccountEmail, seedAccounts, type SeedAccount } from './seed-accounts';
 import { ensureWorldConversation } from './world/worldConversation';
+import { isWorldSeedEnabled, worldReservedIdentitiesFromEnv } from './world/worldReservedMembers';
 
 /**
  * Les trois comptes de bootstrap (#3623) — `bigboss123`/`admin123` étaient un
@@ -423,8 +424,13 @@ export class InitService {
   }
 
   /**
-   * World Wide (#10000) — la conversation publique et son lien `mshy_world`, à
-   * CHAQUE boot (`world/worldConversation.ts` en porte la loi).
+   * World Wide (#10000) — la conversation publique et son lien `mshy_world`
+   * (`world/worldConversation.ts` en porte la loi).
+   *
+   * Derrière un interrupteur EXPLICITE, `WORLD_SEED_ENABLED=true` : promouvoir
+   * le code ne doit pas écrire en production. Le porteur l'active après le
+   * pré-vol en lecture seule (`scripts/world-seed-preflight.ts`) et une
+   * sauvegarde vérifiée ; toute autre valeur laisse la base intacte.
    *
    * NON FATALE, à l'inverse des index ci-dessus : un index manquant casse des
    * routes existantes, alors qu'un World Wide absent ne retire que la porte
@@ -433,8 +439,12 @@ export class InitService {
    * réessaie (le seed est idempotent).
    */
   async ensureWorldConversation(): Promise<void> {
+    if (!isWorldSeedEnabled()) {
+      logger.info('[INIT] World Wide non semée — WORLD_SEED_ENABLED≠true, aucune écriture');
+      return;
+    }
     try {
-      await ensureWorldConversation({ prisma: this.prisma, logger });
+      await ensureWorldConversation({ prisma: this.prisma, logger, identities: worldReservedIdentitiesFromEnv() });
     } catch (error) {
       logger.error(
         '[INIT] ❌ World Wide non semée — la landing n\'offrira aucune entrée invité tant qu\'un démarrage ne l\'aura pas posée',
