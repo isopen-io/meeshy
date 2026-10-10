@@ -1813,10 +1813,8 @@ struct ConversationView: View {
                         selectionToolbar
                     } else if let blockedId = blockedDirectParticipantId {
                         blockedComposerZone(userId: blockedId)
-                    } else if viewModel.isConversationClosed {
-                        closedConversationBanner
                     } else {
-                        themedComposer
+                        composerOrReadOnlyZone
                     }
                     // Panneau emoji inline — glisse vers le haut À LA PLACE DU
                     // CLAVIER, donc EN DESSOUS de la barre de composition (jamais

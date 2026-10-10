@@ -19,6 +19,7 @@ struct OnboardingCardView: View {
     var body: some View {
         switch model.card {
         case .step(.languages): languages
+        case .step(.age): OnboardingAgeCard(model: model, isDark: isDark)
         case .step(.email): email
         case .step(.global): global
         case .step(.story): story

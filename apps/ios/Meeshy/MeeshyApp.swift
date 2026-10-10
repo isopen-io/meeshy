@@ -247,6 +247,7 @@ struct MeeshyApp: App {
                 // invisible. La forme n'a pas changé ; sa PLACE peut désormais
                 // se répéter sans se recopier.
                 .feedbackToastOverlay()
+                .ageGateOverlay()
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
