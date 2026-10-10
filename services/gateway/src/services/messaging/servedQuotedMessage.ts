@@ -62,6 +62,9 @@ export type QuotedMessageRow = {
   readonly id?: string;
   readonly translations?: unknown;
   readonly attachments?: unknown;
+  /// #9915 — `_count.attachments` lu avec `QUOTED_VISUAL_ATTACHMENT_COUNT` :
+  /// les tuiles du message cité, au-delà des quatre pièces servies.
+  readonly _count?: { readonly attachments?: number } | null;
 };
 
 /**
@@ -236,6 +239,11 @@ export function servedQuotedMessage(
     served['attachments'] = servedQuotedAttachments(quoted, quoted.attachments);
   }
 
+  // #9915 — Toujours POSÉE : un message protégé ne dit pas combien de pièces
+  // il cache, et la clé écrase ce que le site d'appel a pu répandre.
+  const tileCount = quoted._count?.attachments;
+  served['visualAttachmentCount'] = !isProtected && typeof tileCount === 'number' ? tileCount : undefined;
+
   return served;
 }
 
@@ -258,6 +266,7 @@ function servedDeletedQuote(deletedAt: Date | string): Record<string, unknown> {
     sticker: undefined,
     validatedMentions: [],
     attachmentReplyTo: undefined,
+    visualAttachmentCount: undefined,
   };
 }
 

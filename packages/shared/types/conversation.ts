@@ -130,6 +130,12 @@ export interface Message {
   // ===== REPONSE & FORWARDING =====
   readonly replyToId?: string;
   readonly replyTo?: Message;
+  /**
+   * #9915 — sur un message CITÉ (`replyTo`) seulement : le nombre total de
+   * photos et vidéos qu'il porte, quand la passerelle n'en sert que quatre.
+   * Absent pour un message protégé, et chez une passerelle antérieure.
+   */
+  readonly visualAttachmentCount?: number;
   /** ID du post cité (status/story/reel/post) quand le message répond à un post. Snapshot figé dans `metadata.postReplyTo`. @see schema.prisma */
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
