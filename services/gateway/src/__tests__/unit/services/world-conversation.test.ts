@@ -590,8 +590,8 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const unverified = makeDb({ users: [MEESHY, { ...ADMIN, role: 'USER' }, { ...JCNM, emailVerifiedAt: null }] });
     const unconfigured = makeDb();
 
-    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES);
-    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] });
+    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] }, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(flawed.ready).toBe(false);
     expect(flawed.blockers).toEqual(['admin:platform-role', 'world-admin-1:email-unverified']);

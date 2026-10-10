@@ -81,13 +81,16 @@ export type WorldSeedReport = {
  *
  * `allowedAttachmentKinds` le dit aux clients, qui filtrent leur sélecteur ;
  * ce qui le GARANTIT est la garde de `ContentSignature.ts`
- * (`classifyAnonymousAttachment`), qui décode le contenu ENTIER sur tus et REST
- * et relit la famille de chaque pièce à l'envoi (REST, socket). Elle se décide
+ * (`classifyAnonymousAttachment`), qui parcourt le contenu ENTIER sur tus et
+ * REST et relit la famille de chaque pièce à l'envoi (REST, socket), pièces
+ * recopiées par un transfert ou une diffusion comprises (#10051). Elle se décide
  * sur la CONVERSATION (`GUEST_ATTACHMENT_KIND_CEILINGS`, #10029) : un lien qui
  * ne dit rien n'ouvre pas davantage, et ni `allowAnonymousFiles` ni les droits
  * gravés à l'entrée (`link-admission.ts`) n'y entrent. Le pré-vol
  * (`inspectWorldSeed`) la met à l'épreuve de contenus déguisés et bloque si
- * l'un passe.
+ * l'un passe ; il nomme aussi les risques résiduels qu'elle laisse passer (une
+ * charge arbitraire dans un conteneur audio, #10045) et bloque tant que le
+ * porteur ne les a pas acceptés (#10057).
  *
  * `allowAnonymousFiles` reste semé FERMÉ : la porte des fichiers génériques ne
  * s'ouvre pas, la liste des familles la remplace. `allowViewHistory: false` :
