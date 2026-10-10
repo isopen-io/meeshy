@@ -119,7 +119,7 @@ public class MainActivity extends BridgeActivity {
     boolean floatVideo(int width, int height) {
         boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
         if (!FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, true, supported)) return false;
-        int[] aspect = FullscreenPictureInPicture.aspect(width, height);
+        int[] aspect = CallShellRules.pictureInPictureAspect(width, height);
         floatAspect = aspect == null ? null : new Rational(aspect[0], aspect[1]);
         if (fullscreenView != null) return enterFloat();
         floatOnFullscreen = true;
