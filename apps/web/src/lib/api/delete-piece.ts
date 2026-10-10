@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { byAttachmentId } from '@meeshy/shared/api/endpoints/attachments';
+import * as attachmentsEndpoints from '@meeshy/shared/api/endpoints/attachments';
 
 import type { HttpRequest, ApiResult } from '@/lib/api/http';
 import { patchMediaHubMessages } from '@/lib/api/media-hub-cache';
@@ -41,7 +41,7 @@ export async function performPieceDelete(params: {
     patchMediaHubMessages(queryClient, conversationId, onMessage(change));
   };
   apply((m) => withoutPiece(m, attachmentId));
-  const result = await transport.request<unknown>({ method: 'DELETE', path: byAttachmentId(attachmentId) });
+  const result = await transport.request<unknown>({ method: 'DELETE', path: attachmentsEndpoints.byAttachmentId(attachmentId) });
   if (result.ok) return 'ok';
   apply((m) => withPieceRestored(m, piece, index));
   return result.status === 0 ? 'offline' : 'refused';

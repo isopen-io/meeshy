@@ -36,6 +36,54 @@ export const TEXTES_ENTETE = {
       de: 'transkribiert und übersetzt', it: 'trascritti e tradotti', pt: 'transcritos e traduzidos', ar: 'مكتوبة ومترجمة',
     },
   },
+  // Le LIEN (#9904, précisé par le porteur) : sonder ses proches par un lien anonyme (une conversation, PAS un sondage),
+  // une conversation de SAV et un lien par produit, et les clients qui y écrivent sans compte — le web les sert sans
+  // installer l'app (`/chat/:link`).
+  sonde: {
+    titre: {
+      fr: 'Sonde tes proches', en: 'Ask your loved ones', es: 'Pregunta a los tuyos', de: 'Frag deine Liebsten',
+      it: 'Chiedi ai tuoi cari', pt: 'Pergunte aos seus', ar: 'اسأل أحبّاءك',
+    },
+    sousTitre: {
+      fr: 'Un lien anonyme : chacun dit tout, dans sa langue', en: 'One anonymous link: everyone speaks freely, in their own language',
+      es: 'Un enlace anónimo: cada uno lo dice todo, en su idioma', de: 'Ein anonymer Link: Jeder sagt alles, in seiner Sprache',
+      it: 'Un link anonimo: ognuno dice tutto, nella sua lingua', pt: 'Um link anônimo: cada um diz tudo, no próprio idioma',
+      ar: 'رابط مجهول: كلٌّ يقول ما يريد، بلغته',
+    },
+  },
+  sav: {
+    titre: {
+      fr: 'Gère ton business', en: 'Run your business', es: 'Gestiona tu negocio', de: 'Führe dein Business',
+      it: 'Gestisci il tuo business', pt: 'Gerencie seu negócio', ar: 'أدِر أعمالك',
+    },
+    sousTitre: {
+      fr: 'Un SAV et un lien par produit', en: 'One support chat and one link per product', es: 'Un soporte y un enlace por producto',
+      de: 'Ein Support-Chat und ein Link pro Produkt', it: 'Un’assistenza e un link per prodotto', pt: 'Um suporte e um link por produto',
+      ar: 'دعم ورابط لكل منتج',
+    },
+  },
+  invite: {
+    titre: {
+      fr: 'Tes clients écrivent', en: 'Your customers write in', es: 'Tus clientes escriben', de: 'Deine Kunden schreiben',
+      it: 'I tuoi clienti scrivono', pt: 'Seus clientes escrevem', ar: 'عملاؤك يكتبون',
+    },
+    sousTitre: {
+      fr: 'Sans compte, même depuis leur navigateur', en: 'No account, even from their browser', es: 'Sin cuenta, incluso desde su navegador',
+      de: 'Ohne Konto, sogar im Browser', it: 'Senza account, anche dal browser', pt: 'Sem conta, até pelo navegador',
+      ar: 'بدون حساب، حتى من المتصفح',
+    },
+  },
+  liens: {
+    titre: {
+      fr: 'Suis tes liens', en: 'Track your links', es: 'Sigue tus enlaces', de: 'Behalte deine Links im Blick',
+      it: 'Segui i tuoi link', pt: 'Acompanhe seus links', ar: 'تابع روابطك',
+    },
+    sousTitre: {
+      fr: 'Clics, inscrits, affiliation', en: 'Clicks, sign-ups, affiliates', es: 'Clics, registros, afiliación',
+      de: 'Klicks, Anmeldungen, Partnerlinks', it: 'Clic, iscritti, affiliazione', pt: 'Cliques, cadastros, afiliação',
+      ar: 'النقرات والتسجيلات والإحالات',
+    },
+  },
   frappe: { titre: sansPoint(LEGENDES_APERCUS['jeu-frappe']) },
   coffre: { titre: sansPoint(LEGENDES_APERCUS['jeu-coffre']) },
   niveau: { titre: sansPoint(LEGENDES_APERCUS['jeu-niveau']) },

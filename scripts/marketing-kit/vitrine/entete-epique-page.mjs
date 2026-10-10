@@ -101,8 +101,9 @@ const ECLATS = P.coups.map((c) => ({ ...c, grains: Array.from({ length: c.force 
 // L'impulsion du tempo : chaque temps éclaire, la mesure plus fort.
 const impulsion = (t) => {
   if (t < 0) return 0
-  const k = Math.floor(t / T)
-  const u = t - k * T
+  let k = 0
+  while (k + 1 < P.temps.length && P.temps[k + 1] <= t) k += 1
+  const u = t - P.temps[k]
   return Math.exp(-u / 0.16) * (k % 4 === 0 ? 1 : 0.45)
 }
 

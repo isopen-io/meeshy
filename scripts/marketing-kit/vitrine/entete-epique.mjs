@@ -7,7 +7,7 @@
 //
 // Le plan est déclaré dans entete-epique-plan.mjs ; chaque image est posée par la page entete-epique-page.mjs et rendue
 // par Chromium (JPEG 95, 3840×1646) dans ffmpeg ; le son est la musique plus les effets, mixés à -16 LUFS. Sorties :
-// out/appstore/<locale>/product_page_header/02-entete-epique-<locale>.mp4, contrôlée contre la spécification Apple.
+// out/appstore/<locale>/product_page_header/03-entete-epique-<locale>.mp4, contrôlée contre la spécification Apple.
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, resolve } from 'node:path'
@@ -24,9 +24,9 @@ import {
 } from './entete-epique-plan.mjs'
 
 export const CACHE_SONS = resolve(SORTIE, 'vitrine', 'sons')
-export const nomDuFichier = (lang) => `02-entete-epique-${appStoreLocale(lang)}.mp4`
+export const nomDuFichier = (lang) => `03-entete-epique-${appStoreLocale(lang)}.mp4`
 // Les en-têtes que ce dépôt remplace : l'ancien fondu de cartes, et toute version précédente de celui-ci.
-export const ANCIENS_ENTETES = /^(01-entete(-[A-Za-z-]+)?|02-entete-epique-[A-Za-z-]+)\.(mp4|png)$/
+export const ANCIENS_ENTETES = /^(01-entete(-[A-Za-z-]+)?|0[23]-entete-epique-[A-Za-z-]+)\.(mp4|png)$/
 
 const ffmpeg = (args) => execFileSync('ffmpeg', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
 

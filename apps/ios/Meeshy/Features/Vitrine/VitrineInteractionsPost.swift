@@ -43,6 +43,10 @@ extension VitrineInteractions {
             VitrineReel.installer(lecteur: f.lecteur)
             return
         }
+        if interaction == .liens {
+            try await rangerLAffiliation(f)
+            return
+        }
         guard [.commentaireAudio, .emojiPost].contains(interaction) else { return }
         guard let post = postCommente(f) else { throw VitrineInteractionsErreur.aucunPost }
         try await CacheCoordinator.shared.feed.save([post], for: post.id)
