@@ -990,17 +990,17 @@
     "conversations": {
       "pattern": "^assets/conversations-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
-        "value": null,
-        "status": "CREEE PAR #10004, A RELEVER SUR LA MESURE DE LIVRAISON",
-        "source": "L'ecran de LISTE (`routes/conversations.tsx`, `route-table.tsx` § list) n'avait aucun plafond propre : il n'etait borne que par la somme `on_demand_gzip_9_bytes`, qui ne designe personne. #10004 y ajoute la carte World Wide epinglee (`lens/world-pin.ts`, la variante `card` de `LensRow`, sa peau dans `lens-row-meta.css`). Entree CREEE ici sans valeur (`null` : `measure-weight.mjs` mesure et RAPPORTE le chunk, rougit s'il ne trouve AUCUN fichier, ne plafonne pas) : le lot s'est developpe sans build, la mesure appartient a l'etape de livraison serialisee (`bun run build` puis `node scripts/measure-weight.mjs`). Ce jour-la, la valeur se pose selon la regle de la premiere mesure : arrondi au Ko SUPERIEUR + 1 Ko de marge. Ne JAMAIS y ecrire une estimation."
+        "value": 25,
+        "status": "MESUREE PAR BUILD LOCAL A LA LIVRAISON DE #10004 -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-10 a la livraison de #10004 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 23,29 Ko pour les DEUX fichiers que le motif designe -- le chunk de la route (21,14 Ko) et le module de synchronisation des conversations que Vite nomme aussi `conversations-` (2,06 Ko) ; le motif ne peut pas les separer, le plafond borne donc leur somme. Arrondi au Ko SUPERIEUR (24) + 1 Ko de marge. HISTORIQUE : L'ecran de LISTE (`routes/conversations.tsx`, `route-table.tsx` § list) n'avait aucun plafond propre : il n'etait borne que par la somme `on_demand_gzip_9_bytes`, qui ne designe personne. #10004 y ajoute la carte World Wide epinglee (`lens/world-pin.ts`, la variante `card` de `LensRow`, sa peau dans `lens-row-meta.css`). Entree CREEE ici sans valeur (`null` : `measure-weight.mjs` mesure et RAPPORTE le chunk, rougit s'il ne trouve AUCUN fichier, ne plafonne pas) : le lot s'est developpe sans build, la mesure appartient a l'etape de livraison serialisee (`bun run build` puis `node scripts/measure-weight.mjs`). Ce jour-la, la valeur se pose selon la regle de la premiere mesure : arrondi au Ko SUPERIEUR + 1 Ko de marge. Ne JAMAIS y ecrire une estimation."
       }
     },
     "thread": {
       "pattern": "^assets/thread-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
-        "value": null,
-        "status": "CREEE PAR #10004, A RELEVER SUR LA MESURE DE LIVRAISON",
-        "source": "L'ecran du FIL (`routes/thread.tsx`, `route-table.tsx` § thread) n'avait aucun plafond propre. Le motif borne le chunk de la ROUTE et lui seul : `thread-` suivi EXACTEMENT du hachage de 7 (`vite.config.ts` § chunkFileNames), donc jamais `thread-media-viewer-`, `thread-sheets-` ni aucun voisin (temoin `components/conversation-look.test.tsx`). #10004 y ajoute le nom d'auteur teinte (`lib/view/author-ink.ts`), la pastille de langue (`lib/view/author-language-chip.ts`), les cartes vocal/fichier (`lib/view/file-badge.ts`) et `styles/conversation-look.css` ; la lueur d'accent est du CSS pur (`thread-scene.css`). Entree CREEE sans valeur (`null`) pour la meme raison que `conversations` ci-dessus : la valeur se pose sur la mesure de l'etape de livraison, arrondi au Ko SUPERIEUR + 1 Ko de marge, jamais sur une estimation."
+        "value": 42,
+        "status": "MESUREE PAR BUILD LOCAL A LA LIVRAISON DE #10004 -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-10 a la livraison de #10004 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 40,02 Ko pour le seul chunk de la route du fil. Arrondi au Ko SUPERIEUR (41) + 1 Ko de marge. HISTORIQUE : L'ecran du FIL (`routes/thread.tsx`, `route-table.tsx` § thread) n'avait aucun plafond propre. Le motif borne le chunk de la ROUTE et lui seul : `thread-` suivi EXACTEMENT du hachage de 7 (`vite.config.ts` § chunkFileNames), donc jamais `thread-media-viewer-`, `thread-sheets-` ni aucun voisin (temoin `components/conversation-look.test.tsx`). #10004 y ajoute le nom d'auteur teinte (`lib/view/author-ink.ts`), la pastille de langue (`lib/view/author-language-chip.ts`), les cartes vocal/fichier (`lib/view/file-badge.ts`) et `styles/conversation-look.css` ; la lueur d'accent est du CSS pur (`thread-scene.css`). Entree CREEE sans valeur (`null`) pour la meme raison que `conversations` ci-dessus : la valeur se pose sur la mesure de l'etape de livraison, arrondi au Ko SUPERIEUR + 1 Ko de marge, jamais sur une estimation."
       }
     }
   },
