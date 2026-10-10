@@ -771,6 +771,18 @@ describe('recordView', () => {
   });
 });
 
+// ─── getPostViews / getPostInteractions — la porte ─────────────────────────────
+
+describe.each(['getPostViews', 'getPostInteractions'] as const)('%s — la porte', (method) => {
+  it.each([
+    ['user is not the author', { authorId: 'other', type: 'STORY' }],
+    ['the author asks about a POST — he only sees the counts (decision 2026-10-09)', { type: 'POST' }],
+  ])('throws FORBIDDEN when %s', async (_label, post) => {
+    const { sut } = makeSut(makePrisma({ postFindFirst: makePost(post) }));
+    await expect(sut[method]('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
+  });
+});
+
 // ─── getPostViews ─────────────────────────────────────────────────────────────
 
 describe('getPostViews', () => {
@@ -779,20 +791,6 @@ describe('getPostViews', () => {
     const { sut } = makeSut(prisma);
 
     expect(await sut.getPostViews('post-1', 'user-1')).toBeNull();
-  });
-
-  it('throws FORBIDDEN when user is not the author', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other', type: 'STORY' }) });
-    const { sut } = makeSut(prisma);
-
-    await expect(sut.getPostViews('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
-  });
-
-  it('throws FORBIDDEN to the author of a POST — he only sees the counts (decision 2026-10-09)', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ type: 'POST' }) });
-    const { sut } = makeSut(prisma);
-
-    await expect(sut.getPostViews('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
   });
 
   it('returns paginated views with total and hasMore', async () => {
@@ -825,20 +823,6 @@ describe('getPostInteractions', () => {
     const { sut } = makeSut(prisma);
 
     expect(await sut.getPostInteractions('post-1', 'user-1')).toBeNull();
-  });
-
-  it('throws FORBIDDEN when user is not the author', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ authorId: 'other', type: 'STORY' }) });
-    const { sut } = makeSut(prisma);
-
-    await expect(sut.getPostInteractions('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
-  });
-
-  it('throws FORBIDDEN to the author of a POST — he only sees the counts (decision 2026-10-09)', async () => {
-    const prisma = makePrisma({ postFindFirst: makePost({ type: 'POST' }) });
-    const { sut } = makeSut(prisma);
-
-    await expect(sut.getPostInteractions('post-1', 'user-1')).rejects.toThrow('FORBIDDEN');
   });
 
   // La réaction est lue dans la TABLE `PostReaction`, jamais dans le tableau

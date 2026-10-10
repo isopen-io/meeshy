@@ -62,7 +62,7 @@ final class VoicePlaybackLiveActivityCoordinator {
 
     private static var wording: VoicePlaybackActivityLaw.Wording {
         VoicePlaybackActivityLaw.Wording(
-            voiceMessage: String(localized: "liveActivity.playback.voiceMessage", defaultValue: "Message vocal", bundle: .main),
+            voiceMessage: MediaKindLabel.voiceMessageTitle(),
             protectedMessage: String(localized: "liveActivity.playback.protected", defaultValue: "Message protégé", bundle: .main)
         )
     }

@@ -91,7 +91,7 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func applyAttachmentUpdate(",
         ]),
         ("ConversationViewModel+AudioQueue.swift", [
-            "func playAudio(attachmentId:", "func audioQueueTail(after:",
+            "func playAudio(attachmentId:", "func audioQueueTail(after attachmentId:",
             "func queuedAudio(for attachment:",
         ]),
     ]
@@ -216,19 +216,24 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
     /// élargir le corpus de la garde concernée dans le même commit — comme
     /// `ConversationCatchUpLawTests` le fait déjà pour
     /// `MessageListViewController+SeenTracking.swift`.
+    ///
+    /// La file d'auto-avance et sa piste EFFECTIVE ont rejoint
+    /// `ConversationViewModel+AudioQueue.swift` avec l'îlot dynamique (#9783) ;
+    /// `FocalMatrixWiringGuardTests` a élargi son corpus à ce fichier dans le même
+    /// lot : ces deux ancres s'y lisent désormais, là où la garde tierce les cherche.
     func test_host_keepsWhatThreeOtherSourceGuardsPinToIt() throws {
-        let host = try source(Self.host)
-        let anchors: [(anchor: String, guardName: String)] = [
-            ("requestPermissionsThenStartCall", "PermissionGateSourceGuardTests"),
-            ("fileUrl: effectiveAudioTrackUrl(for: attachment, message: message)", "FocalMatrixWiringGuardTests"),
-            ("audioCoordinator.syncActiveTrack(", "FocalMatrixWiringGuardTests"),
-            ("trackUrlResolver:", "FocalMatrixWiringGuardTests"),
-            ("ConversationCatchUpLaw.caughtUpId(", "ConversationCatchUpLawTests"),
+        let audioQueue = "ConversationViewModel+AudioQueue.swift"
+        let anchors: [(file: String, anchor: String, guardName: String)] = [
+            (Self.host, "requestPermissionsThenStartCall", "PermissionGateSourceGuardTests"),
+            (audioQueue, "fileUrl: served.url", "FocalMatrixWiringGuardTests"),
+            (Self.host, "audioCoordinator.syncActiveTrack(", "FocalMatrixWiringGuardTests"),
+            (audioQueue, "trackUrlResolver:", "FocalMatrixWiringGuardTests"),
+            (Self.host, "ConversationCatchUpLaw.caughtUpId(", "ConversationCatchUpLawTests"),
         ]
         for entry in anchors {
             XCTAssertTrue(
-                host.contains(entry.anchor),
-                "`\(entry.anchor)` a quitté \(Self.host) : \(entry.guardName) l'y cherche PAR SON "
+                try source(entry.file).contains(entry.anchor),
+                "`\(entry.anchor)` a quitté \(entry.file) : \(entry.guardName) l'y cherche PAR SON "
                 + "CHEMIN et deviendrait muette sur un câblage qu'elle protège. Déplacer ce code "
                 + "impose d'élargir le corpus de cette garde dans le MÊME commit."
             )

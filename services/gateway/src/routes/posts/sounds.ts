@@ -7,7 +7,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { authorSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { loadSoundStats, EMPTY_SOUND_STATS, type SoundStats } from '../../services/posts/soundStats';
-import { NOT_MUTED_WHERE } from '../../services/posts/soundFormats';
+import { NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE } from '../../services/posts/soundFormats';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
 import { depreciee } from '../../utils/deprecation';
 
@@ -125,6 +125,9 @@ export async function chargerPostsParSon(
   params: { cursor?: string; limit: number },
 ): Promise<SoundPostsFeedResult> {
   const { cursor, limit } = params;
+  if (await sonRetireDeLaBibliotheque(prisma, soundId)) {
+    return { data: [], pagination: { limit, hasMore: false, nextCursor: null } };
+  }
 
   // `SoundUsage.postId` est une chaîne nue, sans relation Prisma vers `Post` :
   // la jointure est impossible, d'où ces deux temps.
@@ -226,6 +229,26 @@ export async function chargerPostsParSon(
   };
 }
 
+/**
+ * La page d'un son RETIRÉ de la bibliothèque (#9848) se vide sur ses DEUX
+ * adresses (`/sounds/:id/posts` et `/social/posts?scope=sound`). Vide, et pas
+ * 410 : un son inconnu y rend déjà une page vide, et cette page ne doit être
+ * l'oracle d'existence de rien (#4146). Les posts eux-mêmes restent lisibles
+ * là où ils vivent.
+ *
+ * Ouvert sur l'échec : cette lecture ne garde aucun secret (la page ne sert que
+ * des posts PUBLICS), elle n'est qu'une cohérence — une base qui ne répond pas
+ * ne doit pas faire tomber la page d'un son vivant.
+ */
+async function sonRetireDeLaBibliotheque(prisma: PrismaClient, soundId: string): Promise<boolean> {
+  try {
+    const sound = await prisma.sound.findUnique({ where: { id: soundId }, select: { deletedAt: true } });
+    return Boolean(sound?.deletedAt);
+  } catch {
+    return false;
+  }
+}
+
 // #4346 — `/sounds/:id/posts` devient un ALIAS déprécié de `scope=sound`. Le
 // `soundId` voyage dans le CHEMIN historique : le successeur est une FONCTION
 // de la requête (comme `author`/`community` dans feed.ts), `encodeURIComponent`
@@ -235,6 +258,21 @@ export async function chargerPostsParSon(
 // `/sounds/:id` (GET/PATCH) NE SONT PAS concernées : seule la « page du son »
 // (liste de posts) entre dans le périmètre de #4346.
 const SOUND_SCOPE_DEPUIS = '2026-08-30';
+
+/**
+ * Qui peut retirer un son de la bibliothèque (#9848) : son auteur, et le rang
+ * d'administration (ADMIN, BIGBOSS) pour la modération. FERMÉ par défaut — un
+ * rôle absent, inconnu ou inférieur (MODERATOR, AUDIT, ANALYST) ne passe pas.
+ */
+const SOUND_REMOVAL_ADMIN_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'BIGBOSS']);
+
+export function mayRemoveSound(
+  actor: { readonly id: string; readonly role?: unknown },
+  sound: { readonly uploaderId: string },
+): boolean {
+  if (typeof actor.id === 'string' && actor.id.length > 0 && actor.id === sound.uploaderId) return true;
+  return typeof actor.role === 'string' && SOUND_REMOVAL_ADMIN_ROLES.has(actor.role);
+}
 
 export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {
   fastify.get('/sounds/mine', {
@@ -250,7 +288,7 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     const rows = await prisma.sound.findMany({
       where: {
         uploaderId: ctx.registeredUser.id,
-        AND: [NOT_MUTED_WHERE],
+        AND: [NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE],
         ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
       },
       orderBy: { createdAt: 'desc' },
@@ -296,6 +334,11 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     if ((sound as { mutedAt?: Date | null }).mutedAt) {
       return sendError(reply, 410, 'Sound is no longer available', { code: 'SOUND_MUTED' });
     }
+    // Retiré de la bibliothèque (#9848) : sa page disparaît pour tout le monde,
+    // auteur compris. Les posts qui l'utilisent, eux, le jouent toujours.
+    if ((sound as { deletedAt?: Date | null }).deletedAt) {
+      return sendError(reply, 410, 'Sound was removed from the library', { code: 'SOUND_DELETED' });
+    }
     const stats = await loadSoundStats(prisma, [request.params.id]);
     return sendSuccess(reply, toDTO(s, stats.get(request.params.id)));
   });
@@ -311,10 +354,11 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     if (!parsed.success) return sendBadRequest(reply, 'Invalid body', { code: 'VALIDATION_ERROR' });
 
     const sound = await prisma.sound.findUnique({
-      where: { id: request.params.id }, select: { id: true, uploaderId: true },
+      where: { id: request.params.id }, select: { id: true, uploaderId: true, deletedAt: true },
     });
     if (!sound) return sendNotFound(reply, 'Sound not found', { code: 'SOUND_NOT_FOUND' });
     if (sound.uploaderId !== ctx.registeredUser.id) return sendForbidden(reply, 'Not the sound owner', { code: 'NOT_SOUND_OWNER' });
+    if (sound.deletedAt) return sendError(reply, 410, 'Sound was removed from the library', { code: 'SOUND_DELETED' });
 
     // Écriture CHAMP PAR CHAMP. Aujourd'hui `data: parsed.data` serait
     // ÉQUIVALENT — Zod omet les clés absentes de l'entrée, il n'écrit pas
@@ -334,6 +378,61 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     // utilisations · 340 lectures » à 0/0 sous les yeux de l'auteur.
     const stats = await loadSoundStats(prisma, [request.params.id]);
     return sendSuccess(reply, toDTO(updated as unknown as Record<string, unknown>, stats.get(request.params.id)));
+  });
+
+  /**
+   * Retirer un son de SA bibliothèque (#9848).
+   *
+   * LOGIQUE, jamais physique : `deletedAt` le sort de toutes les listes et
+   * `recordBorrowed` refuse tout NOUVEL emprunt, mais la ligne, le fichier et
+   * les `SoundUsage` restent — les posts déjà publiés, ceux des autres
+   * compris, continuent de le jouer (`GET /static/:filename` ne lit que
+   * `mutedAt`). La ligne survivante est aussi ce qui empêche une extraction
+   * suivante du même contenu de le recréer (`@@unique([uploaderId,
+   * contentHash])`).
+   *
+   * AUTORISATION D'ABORD, état ensuite (même règle que le GET) : un tiers
+   * reçoit 403 que le son soit vivant ou déjà retiré. Idempotent pour qui en a
+   * le droit — un rejeu de la file hors ligne garde la date du premier retrait.
+   *
+   * La réponse dit combien de publications le jouent encore (`postCount`,
+   * même ensemble que la page du son) : le client l'affiche avant de
+   * confirmer, depuis la ligne qu'il a déjà, et l'actualise ici.
+   */
+  fastify.delete<{ Params: { id: string } }>('/sounds/:id', {
+    preValidation: [requiredAuth],
+    config: { rateLimit: createSoundRouteRateLimitConfig('delete') },
+  }, async (request, reply) => {
+    const ctx = (request as unknown as UnifiedAuthRequest).authContext;
+    if (!ctx?.registeredUser) return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+    if (!OBJECT_ID.test(request.params.id)) return sendBadRequest(reply, 'Invalid sound id', { code: 'VALIDATION_ERROR' });
+
+    const sound = await prisma.sound.findUnique({
+      where: { id: request.params.id }, select: { id: true, uploaderId: true, deletedAt: true },
+    });
+    if (!sound) return sendNotFound(reply, 'Sound not found', { code: 'SOUND_NOT_FOUND' });
+    const actor = ctx.registeredUser as { id: string; role?: unknown };
+    if (!mayRemoveSound(actor, sound)) {
+      return sendForbidden(reply, 'Not the sound owner', { code: 'NOT_SOUND_OWNER' });
+    }
+
+    // Écriture CONDITIONNÉE à l'absence de `deletedAt` : deux retraits
+    // simultanés ne réécrivent pas la date du premier. On relit ensuite la date
+    // qui a gagné.
+    const deletedAt = sound.deletedAt ?? await (async () => {
+      await prisma.sound.updateMany({
+        where: { id: request.params.id, ...NOT_DELETED_SOUND_WHERE }, data: { deletedAt: new Date() },
+      });
+      const after = await prisma.sound.findUnique({ where: { id: request.params.id }, select: { deletedAt: true } });
+      return after?.deletedAt ?? null;
+    })();
+
+    const stats = await loadSoundStats(prisma, [request.params.id]);
+    return sendSuccess(reply, {
+      id: sound.id,
+      deletedAt: deletedAt ? deletedAt.toISOString() : null,
+      postCount: (stats.get(request.params.id) ?? EMPTY_SOUND_STATS).postCount,
+    });
   });
 
   /**

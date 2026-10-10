@@ -231,6 +231,27 @@ describe('/story/st-mienne?scope=mine — l’auteur explore sa propre story', (
   });
 });
 
+describe('/story/st-mienne — la feuille « Vues » sur une story FIGÉE', () => {
+  /* La pause voulue (Espace) tient sous la feuille (#9821) : un toucher sur une
+     ligne de « Vues » ouvre le détail de la personne (#9727), il ne relance
+     jamais la story qu'on a figée en dessous — la feuille est une couche,
+     comme celle des commentaires. */
+  test('toucher une ligne de « Vues » laisse la story figée', async () => {
+    const host = await mountAt('/story/st-mienne?scope=mine');
+    await act(async () => {
+      window.dispatchEvent(new window.KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    });
+    expect(host.querySelector('[data-story-scene]')?.getAttribute('data-story-paused')).toBe('true');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-story-action="views"]')!.click());
+    const row = await waitFor(host, '[data-story-viewer-open]');
+    await act(async () => {
+      row.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 400 }));
+      row.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, clientX: 200, clientY: 400 }));
+    });
+    expect(host.querySelector('[data-story-scene]')?.getAttribute('data-story-paused')).toBe('true');
+  });
+});
+
 describe('/story/st-amie-2 — une story monolingue', () => {
   test('aucun bouton Traductions', async () => {
     const host = await mountAt('/story/st-amie-2');

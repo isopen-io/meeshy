@@ -13,6 +13,8 @@ nonisolated enum VitrineInteractionsErreur: Error {
 extension VitrineInteractions {
     /// La montée du vocal : la ligne optimiste se montre en cours d'envoi.
     static let monteeDuVocal: Duration = .milliseconds(900)
+    /// Le commentaire créé se pose dans la liste, puis le doigt l'amène dans la vue.
+    static let avantLeDefilement: Duration = .milliseconds(300)
     /// Whisper rend la transcription…
     static let avantLaTranscription: Duration = .milliseconds(1300)
     /// … puis NLLB et la synthèse, les pistes traduites.
@@ -72,6 +74,11 @@ extension VitrineInteractions {
         envoyer(copie, vocal.duree)
         _ = await serveur.attendreLaCreation()
         VitrineTournage.etape("creation")
+        try? await Task.sleep(for: avantLeDefilement)
+        guard let montrer = VitrineRendu.shared.montrerLesCommentaires else {
+            fatalError("Vitrine « \(scene.rawValue) » : le détail du post n'a pas prêté son défilement")
+        }
+        montrer()
         try? await Task.sleep(for: avantLaTranscription)
         VitrineTournage.etape("transcription")
         if let transcription = serveur.transcriptionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(transcription) }

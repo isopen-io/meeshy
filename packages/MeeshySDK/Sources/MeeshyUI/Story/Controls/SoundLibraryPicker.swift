@@ -26,6 +26,9 @@ public struct SoundLibraryPicker: View {
     @State private var renameDraft: String = ""
     /// Son dont on regarde la page. `nil` = aucune page ouverte.
     @State private var detailSound: APISound?
+    /// Retrait demandé depuis la page du son : la confirmation attend que la
+    /// feuille soit FERMÉE — présentée pendant sa fermeture, SwiftUI l'avalerait.
+    @State private var pendingRemoval: APISound?
 
     public init(service: SoundLibraryServiceProviding = SoundLibraryService.shared,
                 onPick: @escaping (APISound) -> Void,
@@ -57,7 +60,12 @@ public struct SoundLibraryPicker: View {
         // Sans ça, fermer la feuille pendant un aperçu laissait le son tourner
         // par-dessus le composer.
         .onDisappear { model.stopPreview() }
-        .sheet(item: $detailSound) { sound in
+        .sheet(item: $detailSound, onDismiss: {
+            if let sound = pendingRemoval {
+                pendingRemoval = nil
+                model.beginRemove(sound)
+            }
+        }) { sound in
             SoundDetailView(
                 sound: sound,
                 onUse: {
@@ -67,7 +75,13 @@ public struct SoundLibraryPicker: View {
                     detailSound = nil
                     onPick($0)
                 },
-                onClose: { detailSound = nil }
+                onClose: { detailSound = nil },
+                // Seulement sur « Mes sons » : la page d'un son d'autrui
+                // n'offre pas ce geste.
+                onRemove: model.canRemove ? { sound in
+                    pendingRemoval = sound
+                    detailSound = nil
+                } : nil
             )
         }
         .alert(String(localized: "story.sound.library.renameTitle",
@@ -93,6 +107,27 @@ public struct SoundLibraryPicker: View {
             Text(String(localized: "story.sound.library.renameHint",
                         defaultValue: "Ce titre sera visible par tous ceux qui découvrent ce son. Laissez vide pour revenir au libellé par défaut.",
                         bundle: .module))
+        }
+        // #9848 — confirmation du retrait. Le message dit combien de
+        // publications le jouent encore : elles continueront de le jouer.
+        .confirmationDialog(
+            String(localized: "story.sound.library.removeTitle",
+                   defaultValue: "Retirer ce son de votre bibliothèque ?", bundle: .module),
+            isPresented: Binding(get: { model.removing != nil },
+                                 set: { if !$0 { model.removing = nil } }),
+            titleVisibility: .visible,
+            presenting: model.removing
+        ) { sound in
+            Button(String(localized: "story.sound.library.removeConfirm",
+                          defaultValue: "Retirer", bundle: .module), role: .destructive) {
+                Task { await model.confirmRemove(sound) }
+            }
+            Button(String(localized: "story.composer.cancel",
+                          defaultValue: "Annuler", bundle: .module), role: .cancel) {
+                model.removing = nil
+            }
+        } message: { sound in
+            Text(SoundLibraryPickerModel.removalMessage(for: sound))
         }
         .onReceive(model.$renaming.compactMap { $0 }) { sound in
             // Pré-remplir avec le titre courant : renommer, c'est corriger, pas
@@ -140,6 +175,14 @@ public struct SoundLibraryPicker: View {
 
     @ViewBuilder
     private var content: some View {
+        if model.removalFailed {
+            Label(String(localized: "story.sound.library.removeFailed",
+                         defaultValue: "Le son n'a pas pu être retiré. Réessayez.", bundle: .module),
+                  systemImage: "exclamationmark.triangle.fill")
+                .font(.system(size: MeeshyFont.footnoteSize))
+                .foregroundStyle(MeeshyColors.error)
+                .padding(.horizontal, MeeshySpacing.lg)
+        }
         if model.isLoading && model.sounds.isEmpty {
             Spacer(); ProgressView(); Spacer()
         } else if model.sounds.isEmpty {
@@ -166,6 +209,26 @@ public struct SoundLibraryPicker: View {
                     .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
+                    // #9848 — retirer un de SES sons : balayage ou appui long (que
+                    // VoiceOver expose en actions). Les deux mènent à la même confirmation.
+                    // Sans `role: .destructive` : ce rôle fait animer la sortie
+                    // de la ligne AVANT la confirmation, puis la ramène si
+                    // l'utilisateur annule.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        if model.canRemove {
+                            Button { model.beginRemove(sound) } label: {
+                                Label(removeLabel, systemImage: "trash")
+                            }
+                            .tint(MeeshyColors.error)
+                        }
+                    }
+                    .contextMenu {
+                        if model.canRemove {
+                            Button(role: .destructive) { model.beginRemove(sound) } label: {
+                                Label(removeLabel, systemImage: "trash")
+                            }
+                        }
+                    }
                 }
                 if model.canLoadMore {
                     ProgressView()
@@ -177,6 +240,11 @@ public struct SoundLibraryPicker: View {
             }
             .listStyle(.plain)
         }
+    }
+
+    private var removeLabel: String {
+        String(localized: "story.sound.library.remove",
+               defaultValue: "Retirer de ma bibliothèque", bundle: .module)
     }
 
     private var emptyState: some View {

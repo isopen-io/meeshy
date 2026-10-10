@@ -53,6 +53,14 @@ nonisolated enum MediaKindLabel {
         }
     }
 
+    /// Le nom d'un message vocal, SANS emoji, pour une surface qui le pose en
+    /// TITRE à côté de son propre glyphe — l'îlot dynamique et l'activité en
+    /// direct d'un vocal en lecture (#9783). Même mot que ``summary(_:bundle:locale:)``
+    /// pour `.audio`, sans l'emoji qu'une icône double déjà.
+    static func voiceMessageTitle(bundle: Bundle = .main, locale: Locale = .current) -> String {
+        String(localized: "liveActivity.playback.voiceMessage", defaultValue: "Message vocal", bundle: bundle, locale: locale)
+    }
+
     // MARK: - Registre APERÇU
 
     /// Étiquette PRÉFIXÉE de son emoji, pour un aperçu qui tient seul sur une

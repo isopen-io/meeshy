@@ -10,10 +10,17 @@ final class FakeSoundLibraryService: SoundLibraryServiceProviding, @unchecked Se
     var mineResult: SoundPage = SoundPage(sounds: [], nextCursor: nil)
     var trendingResult: [APISound] = []
     var renameResult: APISound?
+    /// #9848 — `nil` = le serveur refuse le retrait.
+    var removeResult: SoundRemoval?
+    /// Quand vrai, `remove` reste suspendu jusqu'à `releaseRemoval()` — c'est
+    /// ce qui rend la mise à jour OPTIMISTE observable avant la réponse.
+    var removalBlocksUntilReleased = false
 
     private(set) var mineCalls: [(query: String?, cursor: Date?)] = []
     private(set) var trendingCalls: [String?] = []
     private(set) var renameCalls: [(String, String)] = []
+    private(set) var removeCalls: [String] = []
+    private var removalGate: CheckedContinuation<Void, Never>?
 
     func mySounds(query: String?, cursor: Date?, limit: Int) async throws -> SoundPage {
         mineCalls.append((query, cursor))
@@ -36,6 +43,21 @@ final class FakeSoundLibraryService: SoundLibraryServiceProviding, @unchecked Se
     func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage {
         SoundPostPage(posts: [], nextCursor: nil)
     }
+
+    func remove(soundId: String) async throws -> SoundRemoval {
+        removeCalls.append(soundId)
+        if removalBlocksUntilReleased {
+            await withCheckedContinuation { removalGate = $0 }
+        }
+        guard let removeResult else { throw URLError(.notConnectedToInternet) }
+        return removeResult
+    }
+
+    /// Vrai une fois `remove` suspendu sur sa porte — avant, `releaseRemoval()`
+    /// n'aurait rien à relâcher et le témoin resterait suspendu.
+    var isRemovalWaiting: Bool { removalGate != nil }
+
+    func releaseRemoval() { removalGate?.resume(); removalGate = nil }
 }
 
 func makeSound(id: String = "s1", title: String = "", usageCount: Int = 0,
@@ -220,6 +242,9 @@ final class SoundLibraryPickerModelTests: XCTestCase {
                 throw URLError(.badURL)
             }
             func posts(soundId: String, cursor: Date?, limit: Int) async throws -> SoundPostPage {
+                throw URLError(.notConnectedToInternet)
+            }
+            func remove(soundId: String) async throws -> SoundRemoval {
                 throw URLError(.notConnectedToInternet)
             }
         }

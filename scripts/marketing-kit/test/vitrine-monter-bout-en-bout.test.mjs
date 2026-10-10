@@ -152,10 +152,10 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
   test('--deposer copie chaque fichier à sa place andp, nommé pour l’ordre, et rien d’autre', () => {
     const metadata = join(dossier, 'metadata')
     const copies = deposer({ sorties: controlerSorties(sorties), langs: ['fr'], appareils: [], apercus: [], creatifs: true, entete: 'video', metadata })
-    expect(copies.map((c) => c.relatif).sort()).toEqual(['fr-FR/product_page_header/01-entete.mp4', 'fr-FR/search_results/01-recherche.png'])
+    expect(copies.map((c) => c.relatif).sort()).toEqual(['fr-FR/product_page_header/01-entete-fr-FR.mp4', 'fr-FR/search_results/01-recherche-fr-FR.png'])
     const avecApercus = deposer({ sorties, langs: ['fr'], appareils: ['iphone'], apercus: [apercuDe('jeu')], creatifs: false, metadata })
-    expect(avecApercus.map((c) => c.relatif)).toEqual(['fr-FR/previews/IPHONE_67/01-jeu.mp4'])
-    expect(existsSync(join(metadata, 'fr-FR/previews/IPHONE_67/01-jeu.mp4'))).toBe(true)
+    expect(avecApercus.map((c) => c.relatif)).toEqual(['fr-FR/previews/IPHONE_67/01-jeu-fr-FR-iphone.mp4'])
+    expect(existsSync(join(metadata, 'fr-FR/previews/IPHONE_67/01-jeu-fr-FR-iphone.mp4'))).toBe(true)
     expect(existsSync(join(metadata, 'fr-FR/previews/IPAD_PRO_3GEN_129/02-interactions.mp4'))).toBe(false)
   }, LENT)
 
@@ -163,8 +163,8 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
     const metadata = join(dossier, 'metadata-image')
     deposer({ sorties, langs: ['fr'], appareils: [], apercus: [], entete: 'video', metadata })
     deposer({ sorties, langs: ['fr'], appareils: [], apercus: [], entete: 'image', metadata })
-    expect(existsSync(join(metadata, 'fr-FR/product_page_header/01-entete.png'))).toBe(true)
-    expect(existsSync(join(metadata, 'fr-FR/product_page_header/01-entete.mp4'))).toBe(false)
+    expect(existsSync(join(metadata, 'fr-FR/product_page_header/01-entete-fr-FR.png'))).toBe(true)
+    expect(existsSync(join(metadata, 'fr-FR/product_page_header/01-entete-fr-FR.mp4'))).toBe(false)
   }, LENT)
 
   test('une sortie non conforme bloque TOUT le dépôt — rien n’est copié', () => {
@@ -182,7 +182,7 @@ describe.skipIf(!ffmpegPresent)('montage de bout en bout sur des prises synthét
 
   test('les destinations suivent les dossiers andp', () => {
     expect(destinationDe({ sortie: { type: 'apercu', lang: 'ar', appareil: 'ipad', chemin: '/a/02-interactions.mp4' }, metadata: '/m' }))
-      .toBe('/m/ar-SA/previews/IPAD_PRO_3GEN_129/02-interactions.mp4')
+      .toBe('/m/ar-SA/previews/IPAD_PRO_3GEN_129/02-interactions-ar-SA-ipad.mp4')
   })
 })
 

@@ -7,17 +7,28 @@ import { controler } from '../lib/conformite.mjs'
 import { appStoreLocale } from '../lib/locales.mjs'
 import { APERCUS, APPAREILS_APERCU, FASTLANE_METADATA } from './apercus.mjs'
 
-// Les seuls fichiers que ce dépôt possède : il les remplace, et ne touche à rien d'autre du dossier.
+// Les seuls fichiers que ce dépôt possède : il les remplace, et ne touche à rien d'autre du dossier. Un fichier
+// géré garde la racine de son nom (`01-jeu`, `01-entete`…), suivie ou non de sa langue et de son appareil.
+const racines = (noms) => new Set(noms.map((n) => basename(n, extname(n))))
 const GERES = {
-  previews: new Set(APERCUS.map((a) => a.fichier)),
-  product_page_header: new Set(['01-entete.mp4', '01-entete.png']),
-  search_results: new Set(['01-recherche.png']),
+  previews: racines(APERCUS.map((a) => a.fichier)),
+  product_page_header: racines(['01-entete.mp4']),
+  search_results: racines(['01-recherche.png']),
+}
+const estGere = (geres, nom) => [...(geres ?? [])].some((r) => nom === `${r}${extname(nom)}` || nom.startsWith(`${r}-`))
+
+// App Store Connect refuse deux médias du même nom dans sa bibliothèque, toutes langues confondues : le nom
+// déposé porte la langue et, pour un aperçu, l'appareil. La racine numérotée en tête garde l'ordre d'affichage.
+const nomDepose = (sortie) => {
+  const ext = extname(sortie.chemin)
+  const appareil = sortie.type === 'apercu' ? `-${sortie.appareil}` : ''
+  return `${basename(sortie.chemin, ext)}-${appStoreLocale(sortie.lang)}${appareil}${ext}`
 }
 
 export const destinationDe = ({ sortie, metadata = FASTLANE_METADATA }) => {
-  if (sortie.type === 'apercu') return resolve(metadata, appStoreLocale(sortie.lang), 'previews', APPAREILS_APERCU[sortie.appareil].dossier, basename(sortie.chemin))
-  if (sortie.type === 'entete') return resolve(metadata, appStoreLocale(sortie.lang), 'product_page_header', basename(sortie.chemin))
-  if (sortie.type === 'recherche') return resolve(metadata, appStoreLocale(sortie.lang), 'search_results', basename(sortie.chemin))
+  if (sortie.type === 'apercu') return resolve(metadata, appStoreLocale(sortie.lang), 'previews', APPAREILS_APERCU[sortie.appareil].dossier, nomDepose(sortie))
+  if (sortie.type === 'entete') return resolve(metadata, appStoreLocale(sortie.lang), 'product_page_header', nomDepose(sortie))
+  if (sortie.type === 'recherche') return resolve(metadata, appStoreLocale(sortie.lang), 'search_results', nomDepose(sortie))
   throw new Error(`sortie inconnue « ${sortie.type} »`)
 }
 
@@ -40,7 +51,7 @@ export const manquesAuDepot = ({ sorties, langs, appareils, apercus = APERCUS, c
 const retirerLesFichiersGeres = (dossier) => {
   if (!existsSync(dossier)) return
   const geres = GERES[basename(dirname(dossier))] ?? GERES[basename(dossier)]
-  for (const nom of readdirSync(dossier)) if (geres?.has(nom)) rmSync(resolve(dossier, nom))
+  for (const nom of readdirSync(dossier)) if (estGere(geres, nom)) rmSync(resolve(dossier, nom))
 }
 
 // `sorties` : les fichiers produits ({ type, lang, appareil?, apercu?, forme?, chemin, spec, statut }).

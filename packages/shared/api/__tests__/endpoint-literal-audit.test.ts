@@ -89,6 +89,25 @@ describe("l'appariement dénonce ce qui n'est pas servi, et RIEN d'autre", () =>
     expect(unmatchedEndpointLiterals(sites, catégories, '/api/v1')).toEqual([]);
   });
 
+  /**
+   * Le joker FINAL d'une route Fastify (`/attachments/file/*`) sert tout le
+   * reste du chemin, sur autant de segments qu'il en faut : un fichier rangé
+   * sous `vitrine/televerses/…` est servi. Un `:param`, lui, ne vaut qu'UN
+   * segment (témoin précédent).
+   */
+  it('le joker final d’une route sert tout le reste du chemin, et seulement sous son préfixe', () => {
+    const servi = ['/api/v1/attachments/file/*'];
+    expect(
+      unmatchedEndpointLiterals([{ file: 'X.swift', line: 1, literal: '/api/v1/attachments/file/vitrine/televerses' }], servi, '/api/v1')
+    ).toEqual([]);
+    expect(
+      unmatchedEndpointLiterals([{ file: 'X.swift', line: 1, literal: '/api/v1/attachments/other/vitrine' }], servi, '/api/v1')
+    ).toHaveLength(1);
+    expect(
+      unmatchedEndpointLiterals([{ file: 'X.swift', line: 1, literal: '/api/v1/attachments/file' }], servi, '/api/v1')
+    ).toHaveLength(1);
+  });
+
   it("mais un segment interpolé ne fabrique pas une route d'une AUTRE forme", () => {
     const sites: EndpointLiteralSite[] = [
       { file: 'X.swift', line: 1, literal: '/me/preferences/\\(a)/\\(b)' },

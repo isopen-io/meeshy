@@ -166,6 +166,19 @@ describe('chemins : l’arborescence andp, sous out/appstore', () => {
   })
 })
 
+describe('dépôt : un nom unique par fichier dans la bibliothèque App Store', () => {
+  // App Store Connect refuse deux médias du même nom dans la bibliothèque, toutes langues confondues
+  // (« Reference name '01-jeu.mp4' is already in use », envoi du 2026-10-10) : le nom porte la langue et l'appareil.
+  test('chaque aperçu, en-tête et visuel de recherche porte sa langue et son appareil, et garde son ordre', async () => {
+    const { destinationDe } = await import('../vitrine/monter-depot.mjs')
+    const nom = (sortie) => destinationDe({ sortie, metadata: '/x' }).split('/').slice(3).join('/')
+    expect(nom({ type: 'apercu', lang: 'fr', appareil: 'iphone', chemin: '/o/01-jeu.mp4' })).toBe('previews/IPHONE_67/01-jeu-fr-FR-iphone.mp4')
+    expect(nom({ type: 'apercu', lang: 'pt', appareil: 'ipad', chemin: '/o/02-interactions.mp4' })).toBe('previews/IPAD_PRO_3GEN_129/02-interactions-pt-BR-ipad.mp4')
+    expect(nom({ type: 'entete', lang: 'ar', chemin: '/o/01-entete.mp4' })).toBe('product_page_header/01-entete-ar-SA.mp4')
+    expect(nom({ type: 'recherche', lang: 'it', chemin: '/o/01-recherche.png' })).toBe('search_results/01-recherche-it.png')
+  })
+})
+
 describe('textes : aucune promesse que l’app ne tient pas', () => {
   const INTERDITS = [
     /\b80\s*\+|\b200\s+langues/i,
@@ -196,12 +209,30 @@ describe('cadrage : la caméra va où l’action se joue', async () => {
     expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone' })).toEqual(CADRAGES['jeu-rang'].iphone)
     expect(cadrageDe({ scene: 'jeu-niveau', appareil: 'iphone' })).toEqual(CADRAGES['jeu-niveau'].iphone)
     expect(cadrageDe({ scene: 'jeu-coffre', appareil: 'iphone' })).toEqual(CADRAGES['jeu-coffre'].iphone)
-    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toBeNull()
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'ipad' })).toEqual(CADRAGES['jeu-rang'].ipad)
+    expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'ipad' })).toBeNull()
     expect(cadrageDe({ scene: 'jeu-badge', appareil: 'iphone' })).toEqual(CADRAGES['jeu-badge'].iphone)
     expect(cadrageDe({ scene: 'interaction-sticker', appareil: 'iphone' })).toBeNull()
-    for (const [scene, { iphone }] of Object.entries(CADRAGES)) {
-      if (iphone) expect({ scene, dansLEcran: iphone.x >= 0 && iphone.y >= 0 && iphone.x + iphone.largeur <= 1320 && iphone.y + iphone.hauteur <= 2868 }).toEqual({ scene, dansLEcran: true })
+    // En arabe, l'écran est en miroir : le rectangle se retourne, sa largeur et sa hauteur ne changent pas.
+    const rang = CADRAGES['jeu-rang'].iphone
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'ar' })).toEqual({ ...rang, x: 1320 - rang.x - rang.largeur })
+    expect(cadrageDe({ scene: 'jeu-rang', appareil: 'iphone', langue: 'de' })).toEqual(rang)
+    const ecrans = { iphone: [1320, 2868], ipad: [2064, 2752] }
+    for (const [scene, parAppareil] of Object.entries(CADRAGES)) {
+      for (const [appareil, r] of Object.entries(parAppareil)) {
+        const [l, h] = ecrans[appareil]
+        expect({ scene, appareil, dansLEcran: r.x >= 0 && r.y >= 0 && r.x + r.largeur <= l && r.y + r.hauteur <= h })
+          .toEqual({ scene, appareil, dansLEcran: true })
+      }
     }
+  })
+
+  test('la caméra d’un plan arabe vise l’action retournée : l’écran est en miroir', async () => {
+    const { cameraDuPlan } = await import('../vitrine/monter.mjs')
+    const clip = { largeur: 1320, hauteur: 2868 }
+    const camera = (langue) => cameraDuPlan({ scene: 'jeu-rang', appareil: 'iphone', langue, clip, rognageHaut: ROGNAGE_HAUT.iphone })
+    expect(camera('ar')).not.toEqual(camera('fr'))
+    expect(camera('de')).toEqual(camera('fr'))
   })
 
   test('zoom borné à ×2,2 : 600 px natifs sur un iPhone de 1320 ; la borne suit la taille du clip', () => {

@@ -86,6 +86,20 @@ export const NOT_MUTED_WHERE = {
 };
 
 /**
+ * Prédicat Prisma-Mongo « son non retiré de la bibliothèque » (#9848), à
+ * composer dans un `AND` à côté de `NOT_MUTED_WHERE`. Même forme isSet-safe,
+ * pour la même raison : aucun chemin de création ne pose `deletedAt`, et
+ * `deletedAt: null` seul ne matche pas un champ ABSENT.
+ *
+ * Il gouverne les LISTES (« Mes sons », bibliothèque publique, recherche).
+ * Jamais la diffusion : `GET /static/:filename` ne lit que `mutedAt`, pour que
+ * les posts déjà publiés continuent de jouer un son que son auteur a retiré.
+ */
+export const NOT_DELETED_SOUND_WHERE = {
+  OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+};
+
+/**
  * Préfixe des URL servies par `GET /static/:filename`.
  *
  * Partagé pour que la recherche « ce fichier est-il coupé ? » soit une ÉGALITÉ

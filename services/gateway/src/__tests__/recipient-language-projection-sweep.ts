@@ -52,7 +52,7 @@
  * `complete`** : un balayage négatif doit se tromper du côté qui accuse. Un tel
  * site doit donc être EXEMPTÉ explicitement, avec sa raison — c'est le geste
  * qui force la question plutôt que de la laisser tomber dans un silence.
- * `EXEMPTIONS` porte l'unique cas du dépôt.
+ * `EXEMPTIONS` porte les cas du dépôt.
  *
  * Deux limites de mécanique, dites avec leur conséquence :
  *
@@ -99,6 +99,12 @@ export const EXEMPTIONS: Readonly<Record<string, string>> = {
     "la SSOT elle-même : ses appels internes portent sur SES PROPRES paramètres, " +
     "dont la projection appartient à ses appelants — c'est-à-dire à tout ce que " +
     'ce balayage mesure par ailleurs.',
+  'services/linkUnfurl/page.ts':
+    "l'aperçu d'un lien est une fonction PURE (`composeLinkUnfurl`) dont la source " +
+    'arrive en paramètre d’une fonction exportée, appelée depuis la route : la chaîne ' +
+    'sort du fichier. Sa requête, `loadLinkUnfurlSource`, vit dans le même fichier et ' +
+    'étale `...RECIPIENT_LANG_SELECT` sous `creator` — le témoin de cette exemption ' +
+    'le relit dans la source.',
 };
 
 export type VerdictDeProjection = 'complete' | 'etroite' | 'non-resolue';

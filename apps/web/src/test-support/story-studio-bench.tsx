@@ -282,6 +282,9 @@ export function harness(options: {
       api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
       upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },
       drafts: options.drafts ?? createStudioDraftStore(null),
+      // Les miniatures d'effet liraient le fond par le RÉSEAU réel (#9828) : le
+      // banc rend aussitôt « pas de rendu réduit », la tuile peint le fond lui-même.
+      thumbnails: async () => null,
     },
   };
 }

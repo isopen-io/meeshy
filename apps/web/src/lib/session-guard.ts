@@ -78,6 +78,12 @@ export type RouteKey =
    */
   | 'starredMessages'
   /**
+   * « MES SONS » (#9848) — PRIVÉE : `GET sounds.mine` et `DELETE sounds.byId`
+   * exigent un compte inscrit. Publique par défaut, elle peindrait un écran
+   * qui reçoit un 401 en silence.
+   */
+  | 'soundsMine'
+  /**
    * L'ACCUEIL POST-INSCRIPTION (#7729) — PRIVÉE : `GET`/`PATCH
    * /me/onboarding` exigent une session, et un parcours dont chaque carte
    * crédite un COMPTE n'a rien à offrir à un visiteur ni à l'invité d'un lien.
@@ -330,6 +336,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'bookmarks',
   /* LES MESSAGES FAVORIS (#7286) — voir la raison écrite sur `RouteKey`. */
   'starredMessages',
+  /* « MES SONS » (#9848) — voir la raison écrite sur `RouteKey`. */
+  'soundsMine',
   /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
   'onboarding',
   'stories',

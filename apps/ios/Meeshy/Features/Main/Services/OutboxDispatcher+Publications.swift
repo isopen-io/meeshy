@@ -288,8 +288,9 @@ extension OutboxDispatcher {
         )
         #if DEBUG
         // La vitrine (#9820) : elle crée le post et l'annonce au fil quand elle est installée ; sinon la requête part.
-        let televerses = zip(uploadedSourceIndexes, zip(uploadedIds, uploadedUrls)).map { index, piece in
-            VitrineTeleverse(id: piece.0, url: piece.1, mimeType: payload.declaredMimeType(at: index) ?? "application/octet-stream")
+        let televerses = zip(zip(uploadedSourceIndexes, uploadedLocalPaths), zip(uploadedIds, uploadedUrls)).map { source, piece in
+            VitrineTeleverse(id: piece.0, url: piece.1, mimeType: payload.declaredMimeType(at: source.0) ?? "application/octet-stream",
+                             fichierLocal: URL(fileURLWithPath: source.1))
         }
         let dejaServi = try await VitrineReel.creerSiInstallee(body, televerses: televerses) != nil
         #else

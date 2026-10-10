@@ -44,6 +44,14 @@ private struct KeepsReplyTargetInView: ViewModifier {
                 withAnimation(animation) { proxy.scrollTo(target, anchor: CommentReplyFocus.anchor) }
             }
         }
+        #if DEBUG
+        // La vitrine (#9810) : le commentaire envoyé est ramené dans la vue, comme le doigt le ferait.
+        .onAppear {
+            VitrineRendu.shared.commentairesAffiches {
+                withAnimation(.easeInOut(duration: 0.45)) { proxy.scrollTo("commentsSection", anchor: .top) }
+            }
+        }
+        #endif
     }
 }
 

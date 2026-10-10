@@ -408,18 +408,23 @@ export class SoundCaptureService {
 
     const sounds = await this.prisma.sound.findMany({
       where: { id: { in: borrowed.map((t) => t.soundId!) } },
-      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true, durationMs: true },
+      select: { id: true, isPublic: true, uploaderId: true, mutedAt: true, deletedAt: true, durationMs: true },
     });
     const byId = new Map(sounds.map((s) => [s.id, s]));
     const allowed = new Set(
       sounds
-        .filter((s) => !s.mutedAt && (s.isPublic || s.uploaderId === ctx.authorId))
+        .filter((s) => !s.mutedAt && !s.deletedAt && (s.isPublic || s.uploaderId === ctx.authorId))
         .map((s) => s.id),
     );
+    // Un son RETIRÉ de la bibliothèque (#9848) ne s'emprunte plus dans un
+    // NOUVEAU post — mais une republication d'un post qui l'utilisait déjà
+    // garde son usage : retirer un son ne casse rien sous les pieds d'un
+    // lecteur. Lu seulement s'il y a un son retiré dans le lot.
+    const alreadyLinked = await this.alreadyLinkedRemovedSounds(ctx, sounds);
 
     for (const track of borrowed) {
-      if (!allowed.has(track.soundId!)) {
-        log.warn('soundId refusé (privé, coupé ou inexistant)', { postId: ctx.postId, soundId: track.soundId });
+      if (!allowed.has(track.soundId!) && !alreadyLinked.has(`${track.soundId}:${track.trackId}`)) {
+        log.warn('soundId refusé (privé, coupé, retiré ou inexistant)', { postId: ctx.postId, soundId: track.soundId });
         continue;
       }
       // La part réellement utilisée ne peut pas dépasser la durée réelle du
@@ -432,6 +437,27 @@ export class SoundCaptureService {
         : track;
       await this.recordUsage(ctx, track.soundId!, clamped);
     }
+  }
+
+  /**
+   * Couples `soundId:trackId` de CE post déjà liés à un son retiré — seuls
+   * autorisés à traverser `recordBorrowed` malgré `deletedAt`. Un son coupé
+   * (`mutedAt`) ou devenu privé n'en profite pas : seul le retrait par
+   * l'auteur épargne les posts existants.
+   */
+  private async alreadyLinkedRemovedSounds(
+    ctx: CaptureContext,
+    sounds: ReadonlyArray<{ id: string; isPublic: boolean; uploaderId: string; mutedAt: Date | null; deletedAt: Date | null }>,
+  ): Promise<Set<string>> {
+    const removed = sounds
+      .filter((s) => s.deletedAt && !s.mutedAt && (s.isPublic || s.uploaderId === ctx.authorId))
+      .map((s) => s.id);
+    if (removed.length === 0) return new Set();
+    const linked = await this.prisma.soundUsage.findMany({
+      where: { postId: ctx.postId, soundId: { in: removed } },
+      select: { soundId: true, trackId: true },
+    });
+    return new Set(linked.map((u) => `${u.soundId}:${u.trackId}`));
   }
 
   /**
@@ -533,8 +559,15 @@ export class SoundCaptureService {
       const hash = await SoundCaptureService.hashFile(extracted);
       const existing = await this.prisma.sound.findFirst({
         where: { uploaderId: ctx.authorId, contentHash: hash },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
+      if (existing?.deletedAt) {
+        // Retiré par son auteur (#9848) : ni recréé (la ligne occupe encore
+        // `@@unique([uploaderId, contentHash])`), ni ressuscité, ni relié.
+        log.info('contenu d\'un son retiré de la bibliothèque — capture ignorée',
+          { postId: ctx.postId, trackId: track.trackId, soundId: existing.id });
+        return;
+      }
       if (existing) {
         await this.recordUsage(ctx, existing.id, track);
         return;
@@ -609,8 +642,15 @@ export class SoundCaptureService {
 
       const existing = await this.prisma.sound.findFirst({
         where: { uploaderId: ctx.authorId, contentHash: hash },
-        select: { id: true },
+        select: { id: true, deletedAt: true },
       });
+      if (existing?.deletedAt) {
+        // Retiré par son auteur (#9848) : ni recréé (la ligne occupe encore
+        // `@@unique([uploaderId, contentHash])`), ni ressuscité, ni relié.
+        log.info('contenu d\'un son retiré de la bibliothèque — capture ignorée',
+          { postId: ctx.postId, trackId: track.trackId, soundId: existing.id });
+        return;
+      }
       if (existing) {
         await this.recordUsage(ctx, existing.id, track);
         return;

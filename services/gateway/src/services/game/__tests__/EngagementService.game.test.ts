@@ -8,7 +8,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
 import { EngagementService } from '../../engagement/EngagementService';
 import { fakeGameDb, seedUser, USER, OTHER, writeConflict, type FakeGameDb } from './fakeGameDb';
@@ -29,14 +29,45 @@ const service = (db: FakeGameDb) =>
 
 const counter = (db: FakeGameDb, axisKey = 'content.text_message') => db.engagementCounter.rows.find((r) => r.axisKey === axisKey);
 
+/**
+ * L'horloge est FIGÉE (seule `Date` est simulée) : le tirage des missions du jour
+ * dépend de la clé du jour, et le 2026-10-10 il sort « send-texts » à objectif 1,
+ * qu'un seul message achève et paie sur l'axe du texte — l'instant retenu est
+ * celui du run de CI qui l'a révélé.
+ */
+const FROZEN_NOW = new Date('2026-10-10T00:13:00.000Z');
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: FROZEN_NOW,
+    doNotFake: ['hrtime', 'nextTick', 'performance', 'queueMicrotask', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'],
+  });
+});
+afterAll(() => {
+  jest.useRealTimers();
+});
+
 const today = () => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()));
 const daysAgo = (n: number) => new Date(today().getTime() - n * 24 * 60 * 60 * 1000);
 const dayKeyOf = (d: Date) => d.toISOString().slice(0, 10);
+
+/**
+ * Les missions du jour déjà tirées, toutes sur un autre geste que le message :
+ * le crédit observé est celui du SEUL geste, quel que soit le tirage du jour.
+ */
+const missionsAwaitOtherGestures = (db: FakeGameDb) =>
+  db.dailyMission.rows.push(
+    ...[0, 1, 2].map((slot) => ({
+      id: `m-other-${slot}`, userId: USER, dayKey: dayKeyOf(today()), slot, templateKey: 'publish-posts', difficulty: 'easy',
+      signal: 'axis:content.post', prism: false, target: 2, progress: 0, reward: 60, glory: 0, seen: [],
+      completedAt: null, paidPoints: null, rerolledAt: null,
+    })),
+  );
 
 describe('Vent arrière — +25 % tant que le niveau est sous le niveau record', () => {
   it('un geste sous le niveau record crédite 25 % de plus, au compteur ET au score (même montant)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 10 * 10 * 10, levelRecord: 15 });
+    missionsAwaitOtherGestures(db);
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -48,6 +79,7 @@ describe('Vent arrière — +25 % tant que le niveau est sous le niveau record',
   it('au niveau record, aucun bonus', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 100 * 15 * 15, levelRecord: 15 });
+    missionsAwaitOtherGestures(db);
 
     await service(db).recordActivity(USER, 'content.text_message');
 
@@ -68,6 +100,7 @@ describe('le frein de l’entre-soi sur les messages', () => {
   const pair = (db: FakeGameDb, dayCount: number) => {
     seedUser(db, { engagementScore: 100 * 7 * 7, levelRecord: 7 });
     seedUser(db, {}, OTHER);
+    missionsAwaitOtherGestures(db);
     db.participant.rows.push(
       { id: 'p1', conversationId: CONV, userId: USER, isActive: true },
       { id: 'p2', conversationId: CONV, userId: OTHER, isActive: true },

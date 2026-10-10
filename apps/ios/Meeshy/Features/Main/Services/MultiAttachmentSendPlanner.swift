@@ -9,8 +9,10 @@ import MeeshySDK
 /// - Attachments are grouped by type bucket : `.audio` vs `.visual`
 ///   (image|video|file). One message per non-empty group.
 /// - Group order follows the first-appearance order of each bucket.
-/// - Text is ALWAYS a separate message, sent LAST (never an inline caption
-///   on the composer path).
+/// - Text rides the VISUAL group as its caption (#9860) : 5 photos + a
+///   caption are ONE message, like every other client sends them. Without a
+///   visual group (audio only, or no attachment) the text stays its own
+///   message, sent LAST — spec 2026-05-30 A2 for the voice-note case.
 /// - A reply/forward reference is carried by the FIRST planned message only.
 enum MultiAttachmentSendPlanner {
 
@@ -25,6 +27,8 @@ enum MultiAttachmentSendPlanner {
         let attachments: [MeeshyMessageAttachment]
         let text: String?
         let carriesReply: Bool
+
+        var messageContent: String { text ?? "" }
     }
 
     private static func bucket(for type: MeeshyMessageAttachment.AttachmentType) -> Kind {
@@ -50,13 +54,21 @@ enum MultiAttachmentSendPlanner {
             grouped[b, default: []].append(att)
         }
 
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let caption: String? = trimmed.isEmpty ? nil : trimmed
+        let captionRidesVisual = caption != nil && grouped[.visual] != nil
+
         var planned: [PlannedMessage] = orderedBuckets.map { b in
-            PlannedMessage(kind: b, attachments: grouped[b] ?? [], text: nil, carriesReply: false)
+            PlannedMessage(
+                kind: b,
+                attachments: grouped[b] ?? [],
+                text: b == .visual ? caption : nil,
+                carriesReply: false
+            )
         }
 
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            planned.append(PlannedMessage(kind: .text, attachments: [], text: trimmed, carriesReply: false))
+        if let caption, !captionRidesVisual {
+            planned.append(PlannedMessage(kind: .text, attachments: [], text: caption, carriesReply: false))
         }
 
         if hasReply, !planned.isEmpty {
