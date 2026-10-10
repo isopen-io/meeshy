@@ -451,10 +451,20 @@ fileprivate struct BubbleGridCell: View {
         // photo voisine ; en HAUT à gauche, le bas portant la barre de lecture
         // et les contrôles du lecteur.
         .overlay(alignment: .topLeading) { reactionsBadge }
-        // #9907/#9910 — la réaction d'une vidéo passe par l'aperçu de la pièce :
-        // un double tap y ferait partir la lecture ou le plein écran.
+        // Recette du 2026-10-10 : sans geste à elle, le double tap d'une vidéo
+        // tombait sur celui de la cellule et ouvrait le menu d'édition du
+        // message. Il ouvre le sélecteur de CETTE pièce, comme la photo.
+        .modifier(QuickReactionDoubleTap(isEnabled: canReactPerImage) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
         .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
         .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
