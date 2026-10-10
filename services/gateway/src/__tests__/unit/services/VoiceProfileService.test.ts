@@ -58,7 +58,8 @@ class MockZMQClient extends EventEmitter {
 const mockPrisma = {
   user: {
     findUnique: jest.fn() as jest.Mock<any>,
-    update: jest.fn() as jest.Mock<any>
+    update: jest.fn() as jest.Mock<any>,
+    updateMany: jest.fn(async () => ({ count: 1 })) as jest.Mock<any>
   },
   userFeature: {
     findUnique: jest.fn() as jest.Mock<any>,
@@ -269,14 +270,10 @@ describe('VoiceProfileService', () => {
       });
 
       expect(result.success).toBe(true);
-      // birthDate et ageVerifiedAt vont tous deux dans user.update
-      expect(mockPrisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'user-123' },
-        data: expect.objectContaining({
-          birthDate: expect.any(Date),
-          ageVerifiedAt: expect.any(Date)
-        }),
-        select: expect.any(Object)
+      // #9927 — birthDate et ageVerifiedAt partent par l'écriture CONDITIONNÉE (une seule fois)
+      expect(mockPrisma.user.updateMany).toHaveBeenCalledWith({
+        where: { id: 'user-123', OR: [{ birthDate: null }, { birthDate: { isSet: false } }] },
+        data: { birthDate: expect.any(Date), ageVerifiedAt: expect.any(Date) }
       });
     });
 
@@ -301,8 +298,6 @@ describe('VoiceProfileService', () => {
         data: expect.objectContaining({
           voiceProfileConsentAt: expect.any(Date),
           voiceCloningEnabledAt: expect.any(Date),
-          ageVerifiedAt: expect.any(Date),
-          birthDate: expect.any(Date),
           voiceDataConsentAt: expect.any(Date),
           dataProcessingConsentAt: expect.any(Date)
         }),

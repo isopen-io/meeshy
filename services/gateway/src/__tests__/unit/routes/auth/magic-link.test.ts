@@ -188,6 +188,8 @@ function makeFindFirst(sessionsValides: Set<string>) {
 function makePrisma(overrides: Record<string, any> = {}) {
   const { sessionsValides = new Set([SID_COURANTE]), ...rest } = overrides as any;
   return {
+    // #9927 — `/refresh` lit la date de naissance (porte de l'âge minimal).
+    user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: null }) },
     userSession: {
       findFirst: makeFindFirst(sessionsValides as Set<string>),
       update: jest.fn<any>().mockResolvedValue({}),

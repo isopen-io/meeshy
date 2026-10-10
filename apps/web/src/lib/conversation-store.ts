@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import { flagsOf, type ConversationFlags } from './api/preferences';
 import type { Conversation } from './api/types';
 import { unreadOf } from './view/conversation';
+import { servedWriteRestriction } from './write-restriction';
 
 /**
  * L'ÉTAT OPTIMISTE DES ACTIONS DE RANGÉE (#5559 §5.4) — épingler, sourdine,
@@ -121,7 +122,10 @@ export const conversationStore = createStore<ConversationStoreState>((set) => ({
 export function effectiveFlagsOf(conversation: Conversation, overrides: Overrides): ConversationFlags {
   const wire = flagsOf(conversation);
   const override = overrides[conversation.id]?.flags;
-  return override === undefined ? wire : { ...wire, ...override };
+  const merged = override === undefined ? wire : { ...wire, ...override };
+  /* L'ARCHIVE IMPOSÉE GAGNE (#9928) : Global fermée à un mineur reste aux
+     archives quoi que disent sa préférence ou un override optimiste. */
+  return servedWriteRestriction(conversation) === 'minor-global' ? { ...merged, isArchived: true, archiveLocked: true } : merged;
 }
 
 export function effectiveUnreadOf(conversation: Conversation, overrides: Overrides): number {

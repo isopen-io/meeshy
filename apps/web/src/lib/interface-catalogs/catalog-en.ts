@@ -28,6 +28,7 @@ import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
+import enWriteRestriction from './catalog-en-write-restriction';
 import enConversationCard from './catalog-en-conversation-card';
 import enStoriesMine from './catalog-en-stories-mine';
 import enContactCard from './catalog-en-contact-card';
@@ -1096,6 +1097,7 @@ const en = {
   ...enMentions,
   ...enStudioChrome,
   ...enEphemeral,
+  ...enWriteRestriction,
   ...enGallery,
   ...enMessageCard,
   ...enConversationCard,
