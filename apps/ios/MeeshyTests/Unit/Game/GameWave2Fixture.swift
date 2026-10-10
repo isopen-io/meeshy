@@ -76,13 +76,18 @@ enum GameWave2Fixture {
 
     static func game(
         league: GameLeagueBlock? = league(), duo: GameDuoBlock? = duo(), season: GameSeasonBlock? = season(),
+        seasonUpcoming: GameUpcomingSeasonBlock? = nil,
         held: Int = 12
     ) -> GameBlock {
         GameFixture.game(held: held).replacing(wave2: GameWave2(
             league: league, duo: duo, season: season, trophies: trophies, atlas: atlas,
-            prestige: GamePrestigeBlock(stars: 0, max: 5, canPrestige: false, gloryOnPass: 1000), visibility: visibility
+            prestige: GamePrestigeBlock(stars: 0, max: 5, canPrestige: false, gloryOnPass: 1000), visibility: visibility,
+            seasonUpcoming: seasonUpcoming
         ))
     }
+
+    /// La saison 1 à venir, telle que la passerelle la sert avant le lundi 2026-12-21 (#10014).
+    static let upcoming = GameUpcomingSeasonBlock(number: 1, themeKey: "language:fr", startDay: "2026-12-21", endDay: "2027-02-14")
 
     static func state(_ game: GameBlock = game(), balance: Int = 12) -> GameState {
         GameState(game: game, meesh: GameFixture.meesh(balance: balance))

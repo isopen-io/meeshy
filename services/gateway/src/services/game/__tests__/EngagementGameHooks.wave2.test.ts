@@ -50,22 +50,38 @@ describe('un signal de jeu', () => {
 });
 
 describe('une mission achevée', () => {
-  it('donne ses étoiles à la saison (1 · 1 · 2 · 3 selon la difficulté)', async () => {
-    const { db, hooks } = setup();
+  const seedMissions = (db: ReturnType<typeof setup>['db'], dayKey: string, at: Date) => {
     db.dailyMission.rows.push({
-      id: 'm1', userId: USER, dayKey: '2026-10-14', slot: 0, templateKey: 't', difficulty: 'hard', signal: 'axis:tool.reaction',
-      prism: false, target: 1, progress: 0, reward: 50, glory: 0, seen: [], completedAt: null, paidPoints: null, rerolledAt: null, createdAt: NOW,
+      id: 'm1', userId: USER, dayKey, slot: 0, templateKey: 't', difficulty: 'hard', signal: 'axis:tool.reaction',
+      prism: false, target: 1, progress: 0, reward: 50, glory: 0, seen: [], completedAt: null, paidPoints: null, rerolledAt: null, createdAt: at,
     });
     db.dailyMission.rows.push(
-      { id: 'm2', userId: USER, dayKey: '2026-10-14', slot: 1, templateKey: 't2', difficulty: 'easy', signal: 'x', prism: false, target: 9, progress: 0, reward: 10, glory: 0, seen: [], completedAt: null, createdAt: NOW },
-      { id: 'm3', userId: USER, dayKey: '2026-10-14', slot: 2, templateKey: 't3', difficulty: 'medium', signal: 'y', prism: false, target: 9, progress: 0, reward: 10, glory: 0, seen: [], completedAt: null, createdAt: NOW },
+      { id: 'm2', userId: USER, dayKey, slot: 1, templateKey: 't2', difficulty: 'easy', signal: 'x', prism: false, target: 9, progress: 0, reward: 10, glory: 0, seen: [], completedAt: null, createdAt: at },
+      { id: 'm3', userId: USER, dayKey, slot: 2, templateKey: 't3', difficulty: 'medium', signal: 'y', prism: false, target: 9, progress: 0, reward: 10, glory: 0, seen: [], completedAt: null, createdAt: at },
     );
+  };
 
-    await hooks.missions.onSignal(USER, 'axis:tool.reaction', { now: NOW, dayKey: '2026-10-14', timezone: 'UTC', record: 20 });
+  it('donne ses étoiles à la saison (1 · 1 · 2 · 3 selon la difficulté)', async () => {
+    const { db, hooks } = setup();
+    // La saison 1 ouvre le lundi 2026-12-21 (#10014).
+    const inSeason = new Date('2026-12-23T12:00:00Z');
+    seedMissions(db, '2026-12-23', inSeason);
+
+    await hooks.missions.onSignal(USER, 'axis:tool.reaction', { now: inSeason, dayKey: '2026-12-23', timezone: 'UTC', record: 20 });
 
     expect(db.dailyMission.rows[0]!.completedAt).not.toBeNull();
     expect(db.gameSeason.rows).toHaveLength(1);
     expect(db.gameSeason.rows[0]).toMatchObject({ userId: USER, number: 1, stars: 2 });
+  });
+
+  it('avant la saison 1, s’achève et paie sans graver d’étoile de saison (#10014)', async () => {
+    const { db, hooks } = setup();
+    seedMissions(db, '2026-10-14', NOW);
+
+    await hooks.missions.onSignal(USER, 'axis:tool.reaction', { now: NOW, dayKey: '2026-10-14', timezone: 'UTC', record: 20 });
+
+    expect(db.dailyMission.rows[0]!.completedAt).not.toBeNull();
+    expect(db.gameSeason.rows).toHaveLength(0);
   });
 });
 

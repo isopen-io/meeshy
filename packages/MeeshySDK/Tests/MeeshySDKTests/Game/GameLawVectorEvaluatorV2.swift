@@ -295,6 +295,7 @@ extension GameLawVectorEvaluator {
             "season": .optionalInt(GameSeason.season(at: at.dayKey)),
             "week": .optionalInt(GameSeason.week(at: at.dayKey)),
             "seasonOfMoment": .optionalInt(GameSeason.season(of: at)),
+            "upcoming": .optionalString(GameSeason.upcoming(of: at)?.startDay),
         ])
     }
 

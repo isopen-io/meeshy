@@ -521,6 +521,7 @@ const it = {
   'game.season.claim': 'Riscatta la tappa {step}',
   'game.season.completed': 'Percorso completato: una coppa, un badge datato e {glory} di Gloria.',
   'game.season.none': 'Nessuna stagione è aperta al momento. La prossima inizia presto.',
+  'game.season.upcoming': 'La stagione {number} si apre il {date}.',
   'game.season.seal.title': 'Fila Sigillo',
   'game.season.seal.body': 'Il Sigillo è puramente decorativo: un oggetto da collezione ogni {every} tappe, senza effetto sul gioco.',
   'game.season.seal.buy': 'Prendi il Sigillo · {price}',

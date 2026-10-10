@@ -140,7 +140,7 @@ describe('l\'extension du bloc game', () => {
     expect(parsed).not.toBeNull();
     expect(parsed?.league).toBeUndefined();
     expect(parsed?.atlas).toBeUndefined();
-    expect(parsed?.season?.number).toBe(1);
+    expect(parsed?.seasonUpcoming?.number).toBe(1);
     expect(parsed?.level.level).toBe(11);
   });
 
@@ -203,12 +203,14 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
   });
 
   it('sert l\'étape de saison et la prochaine récompense à réclamer', () => {
-    const season = buildGameBlockExtras(extrasFacts()).season;
+    const extras = buildGameBlockExtras(extrasFacts({ today: '2026-12-23' }));
+    const season = extras.season;
+    expect(extras.seasonUpcoming).toBeNull();
     expect(season).toMatchObject({
       number: 1,
       themeKey: 'language:fr',
-      startDay: '2026-10-12',
-      endDay: '2026-12-06',
+      startDay: '2026-12-21',
+      endDay: '2027-02-14',
       week: 1,
       stars: 25,
       steps: 6,
@@ -222,8 +224,36 @@ describe('le duo, la saison, les trophées, l\'Atlas et le Prestige dans le bloc
     expect(season?.nextReward).toEqual({ step: 3, reward: { kind: 'points', amount: 100 } });
   });
 
-  it('ne sert pas de saison avant la première', () => {
-    expect(buildGameBlockExtras(extrasFacts({ today: '2026-10-05' })).season).toBeNull();
+  it('ne sert pas de saison ouverte avant la première, mais annonce la saison 1 du lundi 21 décembre (#10014)', () => {
+    const before = buildGameBlockExtras(extrasFacts({ today: '2026-10-14' }));
+    expect(before.season).toBeNull();
+    expect(before.seasonUpcoming).toEqual({ number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' });
+  });
+
+  it('annonce la saison à venir jusqu\'à la fermeture du dimanche 20 h, puis sert la saison ouverte', () => {
+    const lastMinute = buildGameBlockExtras(extrasFacts({ today: '2026-12-20', minuteOfDay: 1199 }));
+    expect(lastMinute.season).toBeNull();
+    expect(lastMinute.seasonUpcoming?.startDay).toBe('2026-12-21');
+    const opened = buildGameBlockExtras(extrasFacts({ today: '2026-12-20', minuteOfDay: 1200 }));
+    expect(opened.seasonUpcoming).toBeNull();
+    expect(opened.season).toMatchObject({ number: 1, week: 1 });
+  });
+
+  it('sert la même saison à venir à tous : rien du joueur ni d\'autrui n\'y entre', () => {
+    const mine = buildGameBlockExtras(extrasFacts({ today: '2026-11-02' })).seasonUpcoming;
+    const someoneElse = buildGameBlockExtras(
+      extrasFacts({ today: '2026-11-02', userId: 'other', score: 5, season: { stars: 0, claimedSteps: [], sealOwned: true } }),
+    ).seasonUpcoming;
+    expect(someoneElse).toEqual(mine);
+    expect(Object.keys(mine ?? {}).sort()).toEqual(['endDay', 'number', 'startDay', 'themeKey']);
+  });
+
+  it('se lit par le schéma du bloc, et un ancien client l\'ignore', () => {
+    const block = buildGameBlock(baseFacts({ extras: extrasFacts({ today: '2026-10-14' }) }));
+    expect(parseGameBlock(block)?.seasonUpcoming).toEqual({ number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' });
+    const garbled = parseGameBlock({ ...block, seasonUpcoming: { number: 0 } });
+    expect(garbled).not.toBeNull();
+    expect(garbled?.seasonUpcoming).toBeUndefined();
   });
 
   it('range la vitrine, résume l\'Atlas et dit si le Prestige s\'offre', () => {
