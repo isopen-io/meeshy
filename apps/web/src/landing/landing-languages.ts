@@ -28,6 +28,14 @@ export function landingPath(language: LandingLanguage): string {
   return language === ROOT_LANDING_LANGUAGE ? '/' : `/${language}`;
 }
 
+/**
+ * LA LISTE DES CONVERSATIONS (`href('list')`), où l'application INSTALLÉE ouvre
+ * quand elle démarre encore sur `/`. Une chaîne et non `href` : le prérendu ne
+ * charge pas la table des routes (écrans à la demande, globales de build). Son
+ * témoin la confronte à `href('list')` (`landing-routes.test.ts`).
+ */
+export const LANDING_APP_PATH = '/chats';
+
 /** Toutes les adresses, par langue — ce que le sélecteur et le script de la page suivent. */
 export function landingPaths(): Readonly<Record<LandingLanguage, string>> {
   return {

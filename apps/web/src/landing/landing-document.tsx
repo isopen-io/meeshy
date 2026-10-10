@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BRAND_LOGO_PATH } from '@/lib/brand';
 
-import { landingBoot, type LandingBootConfig } from './landing-boot';
+import { isInstalledApp, landingBoot, type LandingBootConfig } from './landing-boot';
 import { LANDING_COPY } from './landing-copy';
 import {
   LANDING_LANGUAGES,
@@ -51,7 +51,7 @@ const escapeHtml = (value: string): string =>
 const inlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
 
 export function landingBootScript(config: LandingBootConfig): string {
-  return `(${landingBoot.toString()})(window,${inlineJson(config)});`;
+  return `(function(){${isInstalledApp.toString()};(${landingBoot.toString()})(window,${inlineJson(config)});})();`;
 }
 
 export function landingStructuredData(language: LandingLanguage, origin: string): unknown {

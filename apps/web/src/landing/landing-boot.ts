@@ -13,11 +13,15 @@
  *     l'application ;
  *  4. lire `GET /world` (#10000) : l'effectif, la clé de jonction, ou
  *     l'absence d'entrée ouverte — et masquer alors l'entrée ;
- *  5. faire entrer le nom saisi dans World Wide.
+ *  5. faire entrer le nom saisi dans World Wide ;
+ *  6. rendre la LISTE à l'application INSTALLÉE (`appPath`) : une PWA posée
+ *     avant #10002 garde `start_url: '/'` (iOS ne relit jamais le manifeste),
+ *     et `/` y désignait la liste — elle ne doit pas s'ouvrir sur la landing.
  *
  * LA FONCTION EST AUTONOME, et c'est un contrat : le prérendu l'inline par son
  * TEXTE (`landingBootScript`), elle ne peut donc rien lire hors de ses
- * paramètres — ni import, ni constante de module. La même fonction sert l'écran
+ * paramètres — ni import, ni constante de module —, à UNE exception près :
+ * `isInstalledApp`, inlinée par son texte à côté d'elle. La même fonction sert l'écran
  * `/` de l'application (`routes/home.tsx`), qui l'appelle directement.
  *
  * Deux règles partagées y sont réécrites faute d'import, chacune JUMELLE GARDÉE
@@ -34,6 +38,7 @@ export type LandingBootConfig = {
   readonly sessionKey: string;
   readonly languageKey: string;
   readonly entryTemplate: string;
+  readonly appPath: string;
   readonly presence: string;
 };
 
@@ -41,6 +46,18 @@ export type LandingBootOptions = {
   readonly scope?: ParentNode;
   readonly phase?: 'all' | 'head' | 'body';
 };
+
+/**
+ * L'APPLICATION INSTALLÉE — écran d'accueil (`display-mode: standalone`) ou
+ * Safari iOS (`navigator.standalone`), la même lecture que `client-session.ts`.
+ * `routes/home.tsx` l'appelle avant de peindre ; le prérendu l'inline par son
+ * TEXTE à côté de `landingBoot` (`landingBootScript`), seule fonction que
+ * celle-ci peut nommer hors de ses paramètres.
+ */
+export function isInstalledApp(win: Window & typeof globalThis): boolean {
+  const media = typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches;
+  return media || Reflect.get(win.navigator ?? {}, 'standalone') === true;
+}
 
 export function landingBoot(win: Window & typeof globalThis, config: LandingBootConfig, options?: LandingBootOptions): void {
   const doc = win.document;
@@ -71,6 +88,10 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
 
   const head = (): void => {
     doc.documentElement.setAttribute('data-session', sessionOf(read(config.sessionKey)));
+    if (isInstalledApp(win)) {
+      win.location.replace(config.appPath);
+      return;
+    }
     if (config.language !== config.rootLanguage) return;
     const chosen = read(config.languageKey);
     const target = chosen === null ? undefined : config.paths[chosen];
