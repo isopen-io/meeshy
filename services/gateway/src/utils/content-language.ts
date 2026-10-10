@@ -27,8 +27,15 @@ const WORDS: ReadonlyArray<readonly [string, ReadonlySet<string>]> = [
 const NOT_PROSE = /(?:https?:\/\/|www\.)\S+|[@#]\S+/giu;
 const WORD = /\p{L}+/gu;
 
-export function detectContentLanguage(text: string): string {
-  if (!text) return 'en';
+/**
+ * La langue que le texte PROUVE, ou `null` quand il ne prouve rien : aucune
+ * écriture reconnue, aucun mot de vocabulaire. « Story recette B 9743 r2 »
+ * ne contient pas un seul mot connu ; en tirer « en » inventait une langue,
+ * et un français devenait sa propre cible de traduction (#9861). Un appelant
+ * qui connaît la langue déclarée de l'auteur la préfère à ce silence.
+ */
+export function measureContentLanguage(text: string): string | null {
+  if (!text) return null;
   const script = SCRIPTS.find(([, pattern]) => pattern.test(text));
   if (script) return script[0];
 
@@ -38,5 +45,9 @@ export function detectContentLanguage(text: string): string {
     score: words.filter((word) => vocabulary.has(word)).length,
   }));
   const best = scored.reduce((winner, candidate) => (candidate.score > winner.score ? candidate : winner));
-  return best.score > 0 ? best.lang : 'en';
+  return best.score > 0 ? best.lang : null;
+}
+
+export function detectContentLanguage(text: string): string {
+  return measureContentLanguage(text) ?? 'en';
 }
