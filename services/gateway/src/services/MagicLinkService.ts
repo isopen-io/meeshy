@@ -11,6 +11,7 @@
  * - Automatic session creation with full context
  */
 
+import { AgeBelowMinimumError } from '../errors/custom-errors';
 import crypto from 'crypto';
 import { passwordSettingsUrl, profileEditUrl } from './email/account-identity-block';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -570,6 +571,7 @@ export class MagicLinkService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }

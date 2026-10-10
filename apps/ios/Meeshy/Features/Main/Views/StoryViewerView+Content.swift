@@ -837,7 +837,7 @@ extension StoryViewerView {
         // to the backend so the comment graph stays correct, but rendering
         // does not yet visually indent replies. See SOTA audit Pilier 19.
         let currentUser = AuthManager.shared.currentUser
-        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let authorId: String = currentUser?.id ?? ""
         // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
         // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et

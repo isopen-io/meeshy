@@ -1,10 +1,10 @@
 import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
-import { loadGameScreenCatalog } from '@/lib/i18n-game-catalog';
+import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -119,6 +119,12 @@ const adminEngagementScaleScreen = () =>
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
    `translateOnboarding` lève sur un catalogue non chargé. */
+/* LE CHARGEUR DES CATALOGUES DU JEU (#9928, première peinture) — sa table de
+   28 `import()` entrait dans le module d'entrée pour des routes que la
+   première peinture ne sert jamais : il se charge avec elles. */
+const loadGameScreenCatalog = (language: InterfaceLanguage, screen: GameScreen): Promise<void> =>
+  import('@/lib/i18n-game-catalog').then((catalogs) => catalogs.loadGameScreenCatalog(language, screen));
+
 const onboardingScreen = () =>
   Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 

@@ -7,7 +7,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import Fastify from 'fastify';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -41,16 +41,21 @@ const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 const MESSAGE_ID = '507f1f77bcf86cd799439033';
 
-async function buildApp(options: { exists?: boolean; withSocket?: boolean } = {}) {
+async function buildApp(options: { exists?: boolean; withSocket?: boolean; conversationType?: string; birthDate?: Date | null } = {}) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const io = { to: jest.fn(() => ({ emit: jest.fn() })) };
   const manager = { getIO: () => io, enqueueOfflineMessageMutation: jest.fn(async () => undefined) };
   if (options.withSocket) app.decorate('socketIOHandler', { getManager: () => manager } as never);
   const prisma = {
     message: {
-      findFirst: jest.fn<any>().mockResolvedValue(options.exists === false ? null : { id: MESSAGE_ID, pinnedAt: null }),
+      findFirst: jest.fn<any>().mockResolvedValue(
+        options.exists === false
+          ? null
+          : { id: MESSAGE_ID, pinnedAt: null, ...(options.conversationType ? { conversation: { type: options.conversationType } } : {}) }
+      ),
       update: jest.fn<any>().mockResolvedValue({}),
     },
+    user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: options.birthDate ?? null }) },
   };
   const auth = async (req: any) => {
     req.authContext = { type: 'user', isAuthenticated: true, isAnonymous: false, userId: USER_ID };
@@ -120,6 +125,63 @@ describe('épingler / dépingler remonte la conversation pour tous (#9026)', () 
       const res = await app.inject({ method: 'DELETE', url });
       await flush();
       expect(res.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+// #9927 — épingler (ou dépingler) dans Meeshy Global met un message en avant
+// pour TOUT le salon : c'est y écrire. Un mineur déclaré ne le fait pas.
+
+/** Horloge FIGÉE (#9927) : une date de naissance comparée à l'horloge murale rougirait le jour où l'âge change. */
+const FROZEN_NOW = new Date('2026-10-10T12:00:00.000Z');
+const yearsBeforeFrozenNow = (years: number): Date =>
+  new Date(Date.UTC(FROZEN_NOW.getUTCFullYear() - years, FROZEN_NOW.getUTCMonth(), FROZEN_NOW.getUTCDate()));
+const freezeClock = () => jest.useFakeTimers({
+  doNotFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask', 'performance', 'hrtime'],
+  now: FROZEN_NOW,
+});
+
+describe('épingler / dépingler dans Global — un mineur déclaré en est exclu (#9927)', () => {
+  afterEach(() => { jest.useRealTimers(); });
+  beforeEach(() => {
+    freezeClock();
+    mockAnnounce.mockReset();
+    mockAnnounce.mockResolvedValue(undefined);
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+  });
+
+  it.each(['PUT', 'DELETE'] as const)('%s refusé à un mineur de 15 ans : 403 GLOBAL_ADULTS_ONLY, rien n’est écrit', async (method) => {
+    const { app, prisma } = await buildApp({ conversationType: 'global', birthDate: yearsBeforeFrozenNow(15) });
+    try {
+      const res = await app.inject({ method, url });
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toMatchObject({ success: false, code: 'GLOBAL_ADULTS_ONLY' });
+      expect(prisma.message.update).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un majeur, ou un âge non déclaré, épingle dans Global', async () => {
+    const { app, prisma } = await buildApp({ conversationType: 'global', birthDate: null });
+    try {
+      const res = await app.inject({ method: 'PUT', url });
+      expect(res.statusCode).toBe(200);
+      expect(prisma.message.update).toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('un mineur épingle hors de Global, sans que sa date de naissance soit lue', async () => {
+    const { app, prisma } = await buildApp({ conversationType: 'group', birthDate: yearsBeforeFrozenNow(15) });
+    try {
+      const res = await app.inject({ method: 'PUT', url });
+      expect(res.statusCode).toBe(200);
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
     } finally {
       await app.close();
     }
