@@ -93,7 +93,7 @@ export const PLANS = [
     id: 'vocal', acte: 'vocal', de: 20, a: 32, cote: 'droite',
     prise: { famille: 'interaction', scene: 'interaction-vocal' }, ancre: { etape: 'original', decalageS: -0.3 },
     camera: { de: fenetre(660, 1700, 1.05), a: fenetre(620, 1780, 1.18) },
-    loupe: { x: 30, y: 1525, largeur: 940, hauteur: 500 }, repere: { y: 1562 },
+    loupe: { x: 30, y: 1545, largeur: 940, hauteur: 480 }, repere: { y: 1562 },
   },
   {
     id: 'frappe', acte: 'jeu', de: 32, a: 36, cote: 'gauche',
