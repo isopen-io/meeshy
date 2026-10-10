@@ -161,19 +161,29 @@ public struct FullscreenMoreMenu<Content: View>: View {
 
     private let tone: FullscreenChromeTone
     private let isBusy: Bool
+    private let onPresentationChange: ((Bool) -> Void)?
     private let content: Content
 
+    /// `onPresentationChange` dit l'ouverture (`true`) et la fermeture
+    /// (`false`) du menu : un `Menu` n'a aucun état observable, mais son
+    /// contenu n'apparaît qu'à l'ouverture et disparaît à la fermeture. Un
+    /// lecteur qui doit savoir que son menu est ouvert (une story qui boucle
+    /// au lieu d'avancer, #9821) l'écoute.
     public init(tone: FullscreenChromeTone = .onMedia,
                 isBusy: Bool = false,
+                onPresentationChange: ((Bool) -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.tone = tone
         self.isBusy = isBusy
+        self.onPresentationChange = onPresentationChange
         self.content = content()
     }
 
     public var body: some View {
         Menu {
             content
+                .onAppear { onPresentationChange?(true) }
+                .onDisappear { onPresentationChange?(false) }
         } label: {
             if isBusy {
                 ProgressView()

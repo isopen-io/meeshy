@@ -46,8 +46,8 @@ nonisolated enum StoryPlaybackHold: Equatable {
 ///   republier en post, lieu plein écran) — elle ne joue pas son son derrière.
 /// - `interrupted` : un appel direct (qui sonne ou se tient) ou un événement du
 ///   jeu (célébration d'un palier, sa carte photo) passe devant elle.
-/// - `engaged` : commentaires, composition, options, langues, légende,
-///   transcription, feuilles posées sur la story — elle boucle.
+/// - `engaged` : commentaires, composition, menu « … » ouvert, options,
+///   langues, légende, transcription, feuilles posées sur la story — elle boucle.
 nonisolated struct StoryPlaybackCauses: Equatable {
     var explicitPause = false
     var reacting = false
@@ -74,7 +74,7 @@ extension StoryViewerView {
                 || showCommentsOverlay || showLanguageOptions || showFullLanguagePicker
                 || isCaptionExpanded || showAudioTranscript
                 || showViewersSheet || showExportShareSheet || sharedContentWrapper != nil
-                || showReportSheet || selectedProfileUser != nil
+                || showReportSheet || selectedProfileUser != nil || isOptionsMenuOpen
         )
     }
 
@@ -136,5 +136,28 @@ extension View {
 
     func storyLoopRestart(pass: Int, scrubber: ScenePlaybackScrubber) -> some View {
         modifier(StoryLoopRestart(pass: pass, scrubber: scrubber))
+    }
+}
+
+// MARK: - Le menu « … » ouvert : une cause de boucle (#9821)
+
+/// Un `Menu` SwiftUI n'a aucun état observable. L'en-tête, reconstruit à
+/// chaque tick de la barre, ne peut pas le tenir : il le REMONTE au lecteur
+/// par l'environnement, comme il demande le composer (`meeshyComposeSeedRequest`).
+/// `nil` hors du lecteur (aperçu du composer) : rien à retenir.
+private struct StoryOptionsMenuPresenceKey: EnvironmentKey {
+    static let defaultValue: ((Bool) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var storyOptionsMenuPresenceChange: ((Bool) -> Void)? {
+        get { self[StoryOptionsMenuPresenceKey.self] }
+        set { self[StoryOptionsMenuPresenceKey.self] = newValue }
+    }
+}
+
+extension View {
+    func storyOptionsMenuPresence(_ isOpen: Binding<Bool>) -> some View {
+        environment(\.storyOptionsMenuPresenceChange, { isOpen.wrappedValue = $0 })
     }
 }

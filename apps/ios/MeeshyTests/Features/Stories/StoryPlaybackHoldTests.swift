@@ -221,3 +221,45 @@ final class StoryPlaybackInterruptionTests: XCTestCase {
         XCTAssertTrue(modifier.contains("GameMomentPresence.shared.$isPresented"))
     }
 }
+
+// MARK: - Le menu « … » ouvert fait BOUCLER la story (#9821, recette 2026-10-10)
+
+/// Recette au simulateur du 2026-10-10 : menu « … » ouvert, la story AVANÇAIT
+/// (18 → 30 → 43 %), passait à la suivante, puis le lecteur se FERMAIT sous le
+/// menu encore ouvert. Un `Menu` SwiftUI n'a aucun état observable : il
+/// n'était donc rangé dans AUCUNE cause, et la fin de la story avançait.
+@MainActor
+final class StoryOptionsMenuLoopTests: XCTestCase {
+
+    /// Le menu ouvert est une cause de BOUCLE : à la fin, la story repart à son
+    /// début, elle ne passe pas à la suivante et ne ferme pas le lecteur.
+    func test_theOpenOptionsMenu_loopsTheStory() throws {
+        let causes = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
+                                                       from: "var playbackCauses: StoryPlaybackCauses {")
+        let engaged = try XCTUnwrap(causes.range(of: "engaged:"))
+        XCTAssertTrue(causes[engaged.upperBound...].contains("isOptionsMenuOpen"),
+                      "Le menu « … » ouvert doit être une cause de boucle, pas de pause.")
+        let hold = StoryPlaybackHold.resolve(StoryPlaybackCauses(engaged: true))
+        XCTAssertEqual(hold, .loop)
+        XCTAssertEqual(StoryPlaybackHold.endAction(for: hold), .restartInPlace)
+    }
+
+    /// Le menu DÉCLARE son ouverture : le bouton « … » de l'en-tête la remonte
+    /// au lecteur, qui la tient dans son état.
+    func test_theHeaderMenu_declaresItsPresentation_toTheViewer() throws {
+        let header = try StoryPlaybackHoldSource.header()
+        XCTAssertTrue(header.contains("FullscreenMoreMenu(onPresentationChange: optionsMenuPresenceChange)"))
+        XCTAssertTrue(header.contains("@Environment(\\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange"))
+        XCTAssertTrue(try StoryPlaybackHoldSource.viewer().contains(".storyOptionsMenuPresence($isOptionsMenuOpen)"))
+    }
+
+    /// Le bouton partagé de MeeshyUI sait dire qu'il est ouvert : le contenu
+    /// d'un `Menu` n'apparaît qu'à son ouverture et disparaît à sa fermeture.
+    func test_theSharedMoreMenu_reportsOpeningAndClosing() throws {
+        let menu = try StoryPlaybackHoldSource.read(
+            "../../packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenChromeButton.swift")
+        let body = try StoryPlaybackHoldSource.block(menu, from: "public struct FullscreenMoreMenu<Content: View>: View {")
+        XCTAssertTrue(body.contains(".onAppear { onPresentationChange?(true) }"))
+        XCTAssertTrue(body.contains(".onDisappear { onPresentationChange?(false) }"))
+    }
+}

@@ -119,6 +119,9 @@ struct StoryHeaderView: View {
     /// aussi ce qui tient l'aperçu du composer hors du menu : il monte le
     /// lecteur SANS conteneur, donc sans hôte de présentation.
     @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+    /// Le menu « … » ouvert fait BOUCLER la story (#9821) : l'en-tête le dit au
+    /// lecteur, qui seul survit aux ticks de la barre.
+    @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
 
     /// La cible résolue pour la slide COURANTE. Cachée pour la MÊME raison que
     /// `savableStickers` juste en dessous : l'en-tête est reconstruit à chaque
@@ -300,7 +303,7 @@ struct StoryHeaderView: View {
             Spacer(minLength: 0)
 
             // Options menu (three dots)
-            FullscreenMoreMenu {
+            FullscreenMoreMenu(onPresentationChange: optionsMenuPresenceChange) {
                 // Toggle mode plein écran (session-scoped) — pertinent quelle
                 // que soit la propriété de la story. Placé en tête du menu
                 // pour être accessible immédiatement, avec un `Divider`
