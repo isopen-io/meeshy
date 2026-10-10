@@ -100,6 +100,26 @@ describe('invité de World Wide — ce qui est refusé, avec un code stable', ()
     });
   });
 
+  it('juge un texte au plafond sans geler la passerelle — ni un tableau par caractère, ni une seconde de boucle bloquée', () => {
+    const atCeiling = Buffer.alloc(GUEST_ATTACHMENT_MAX_BYTES, 'é la vie est belle\n');
+    const started = performance.now();
+    expect(classifyForWorld('text/plain', atCeiling, 'long.txt')).toEqual({ allowed: true });
+    expect(performance.now() - started).toBeLessThan(400);
+  });
+
+  it.each([
+    ['un caractère de contrôle C0 (échappement)', 'abc\u001bdef'],
+    ['un caractère de contrôle C1', 'abc\u0085def'],
+    ['le caractère DEL', 'abc\u007fdef'],
+    ['une tabulation verticale', 'abc\u000bdef'],
+  ])('refuse un texte portant %s', (_label, text) => {
+    expect(classifyForWorld('text/plain', Buffer.from(text, 'utf-8'), 'a.txt')).toMatchObject(refused);
+  });
+
+  it('accepte un texte à tabulations, sauts de page et fins de ligne Windows', () => {
+    expect(classifyForWorld('text/plain', Buffer.from('a\tb\fc\r\nd', 'utf-8'), 'a.txt')).toEqual({ allowed: true });
+  });
+
   it('ne laisse pas un lien de World Wide rouvrir une famille que la conversation ne permet pas', () => {
     expect(classifyForWorld('application/pdf', PDF_DOCUMENT, 'doc.pdf', worldGuestLink({ allowedAttachmentKinds: ['pdf', 'image'] }))).toMatchObject(
       refused,
