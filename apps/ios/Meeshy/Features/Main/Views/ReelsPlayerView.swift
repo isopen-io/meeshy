@@ -422,7 +422,7 @@ struct ReelsPlayerView: View {
                         }
                 )
 
-            FullscreenTopBar(onClose: onClose) {
+            FullscreenTopBar(exit: .back, onClose: onClose) {
                 if let reel = currentReel {
                     SceneSaveProgressButton(jobKey: reel.id)
                     ReelMoreOptionsMenu(

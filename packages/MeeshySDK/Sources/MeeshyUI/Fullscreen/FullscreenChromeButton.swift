@@ -130,24 +130,53 @@ public struct FullscreenChromeButton: View {
 
 /// **La porte de sortie** — `xmark`, au bord de DÉBUT de lecture de la barre haute
 /// (à gauche, à droite en arabe), la même dans chaque visualiseur.
+public nonisolated enum FullscreenExitStyle: Sendable, Equatable {
+    case close
+    case back
+
+    public var systemImage: String {
+        switch self {
+        case .close: FullscreenChromeSymbol.close
+        case .back: FullscreenChromeSymbol.back
+        }
+    }
+
+    public var labelKey: String {
+        switch self {
+        case .close: "common.close"
+        case .back: "common.back"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .close: String(localized: "common.close", defaultValue: "Fermer", bundle: .module)
+        case .back: String(localized: "common.back", defaultValue: "Retour", bundle: .module)
+        }
+    }
+}
+
 public struct FullscreenCloseButton: View {
 
     private let tone: FullscreenChromeTone
+    private let exit: FullscreenExitStyle
     private let hint: String?
     private let action: () -> Void
 
     public init(tone: FullscreenChromeTone = .onMedia,
+                exit: FullscreenExitStyle = .close,
                 hint: String? = nil,
                 action: @escaping () -> Void) {
         self.tone = tone
+        self.exit = exit
         self.hint = hint
         self.action = action
     }
 
     public var body: some View {
         FullscreenChromeButton(
-            systemImage: FullscreenChromeSymbol.close,
-            label: String(localized: "common.close", defaultValue: "Fermer", bundle: .module),
+            systemImage: exit.systemImage,
+            label: exit.label,
             hint: hint,
             tone: tone,
             action: action
