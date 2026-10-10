@@ -41,9 +41,9 @@ jest.mock('../../preferences/privacy-cache', () => ({
   loadPrivacyPreferencesCached: async (_prisma: unknown, ids: string[]) => new Map(ids.map((id) => [id, {}])),
 }));
 
-/** Un jour de la saison 1, dans le fuseau UTC des comptes de la fausse base. */
-const NOW = new Date('2026-10-20T09:00:00Z');
-const DAY = '2026-10-20';
+/** Un jour de la saison 1 (ouverte le lundi 2026-12-21, #10014), dans le fuseau UTC des comptes de la fausse base. */
+const NOW = new Date('2026-12-22T09:00:00Z');
+const DAY = '2026-12-22';
 const CONV = '68b000000000000000000001';
 
 type Ctx = { readonly db: FakeGameDb; readonly engagement: EngagementService };
@@ -108,7 +108,7 @@ const world = (): Ctx => {
     { id: 'p-1', conversationId: CONV, userId: USER, isActive: true },
     { id: 'p-2', conversationId: CONV, userId: OTHER, isActive: true },
   );
-  db.message.rows.push({ id: 'msg-1', createdAt: new Date('2026-10-20T08:50:00Z') });
+  db.message.rows.push({ id: 'msg-1', createdAt: new Date('2026-12-22T08:50:00Z') });
   const engagement = new EngagementService(db.prisma, { scale: { current: async () => DEFAULT_ENGAGEMENT_SCALE }, emitIO: () => undefined });
   return { db, engagement };
 };
