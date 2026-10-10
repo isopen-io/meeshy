@@ -6,9 +6,18 @@
  * (`conversation`, la ligne `participant` du partageur, `sharedTranslation`).
  * Elle applique l'unicité du triplet `(messageId, targetLanguage, sourceVersion)`
  * comme l'index unique de la production : `create` lève `P2002` sur un doublon.
- * Sa lecture des traductions trie selon `orderBy` et ne rend, sous un `select`,
- * que les colonnes demandées : une route qui servirait une enveloppe qu'elle n'a
- * pas lue tomberait ici comme en production.
+ * Sa lecture des traductions trie selon `orderBy`.
+ *
+ * Les lectures de `message`, `participant`, `conversation` et `sharedTranslation`
+ * ne rendent, sous un `select`, que ce qu'il demande — `true` garde une colonne,
+ * `{ select }` descend dans une relation, une liste est filtrée par son `where`
+ * puis projetée (`projectDocument`, la règle de `findFirstHonouringWhere`). La
+ * base de base rend des lignes ENTIÈRES : un `select` auquel il manque une colonne
+ * lue par la route (l'état terminal d'une conversation, le rang du partageur, la
+ * version d'un message) y passait au vert, alors que la production lit
+ * `undefined`. Une route qui servirait une enveloppe qu'elle n'a pas lue, ou
+ * déciderait sur une colonne qu'elle n'a pas demandée, tombe ici comme en
+ * production.
  *
  * La route est montée avec la VRAIE résolution d'identifiant de conversation :
  * `conversationRow()` porte l'identifiant lisible `mshy_equipe`, qui est donc
@@ -27,6 +36,7 @@ import {
   type SharedTranslationShareBudget,
 } from '../../../routes/conversations/shared-translations';
 import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
+import { projectDocument } from '../../helpers/find-first-honouring-where';
 import {
   CONV_A,
   HARNESS_NOW,
@@ -156,9 +166,13 @@ const ordered = (rows: readonly Row[], orderBy: Ordering | readonly Ordering[] |
   );
 };
 
+type Select = Readonly<Record<string, unknown>>;
+
 /** Ce que Prisma rend sous un `select` : les seules colonnes demandées — un double qui rend tout cacherait une colonne qu'on n'a pas lue. */
-const projected = (row: Row, select: Readonly<Record<string, boolean>> | undefined): Row =>
-  select === undefined ? row : Object.fromEntries(Object.entries(select).filter(([, wanted]) => wanted).map(([key]) => [key, row[key]]));
+const selected = (row: Row | null | undefined, args: { readonly select?: Select }): Row | null =>
+  row ? projectDocument(row, { select: args.select }) : null;
+
+const selectedAll = (rows: readonly Row[], args: { readonly select?: Select }): Row[] => rows.map((row) => projectDocument(row, { select: args.select }));
 
 export type SharedTranslationRead = {
   readonly where?: Row;
@@ -173,14 +187,22 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
   const reads: SharedTranslationRead[] = [];
   const prisma = {
     ...base,
+    message: {
+      ...base.message,
+      findUnique: async (args: { where: { id: string }; select?: Select }) => selected(await base.message.findUnique(args), args),
+      findMany: async (args: { where?: Row; take?: number; select?: Select }) => selectedAll(await base.message.findMany(args), args),
+    },
     participant: {
       ...base.participant,
-      findUnique: async (args: { where: { id: string } }) => store.participants.find((p) => p.id === args.where.id) ?? null,
+      findUnique: async (args: { where: { id: string }; select?: Select }) => selected(store.participants.find((p) => p.id === args.where.id), args),
+      findFirst: async (args: { where?: Row; select?: Select }) => selected(await base.participant.findFirst(args), args),
+      findMany: async (args: { where?: Row; take?: number; select?: Select }) => selectedAll(await base.participant.findMany(args), args),
     },
     conversation: {
       ...base.conversation,
-      findUnique: async (args: { where: { id: string } }) => store.conversations.find((c) => c.id === args.where.id) ?? null,
-      findFirst: async (args: { where: Row }) => store.conversations.find((c) => matchesWhere(c, args.where)) ?? null,
+      findUnique: async (args: { where: { id: string }; select?: Select }) => selected(store.conversations.find((c) => c.id === args.where.id), args),
+      findFirst: async (args: { where: Row; select?: Select }) => selected(store.conversations.find((c) => matchesWhere(c, args.where)), args),
+      findMany: async (args: { where?: Row; take?: number; select?: Select }) => selectedAll(await base.conversation.findMany(args), args),
     },
     userPreferences: {
       findMany: async (args: { where: { userId: { in: string[] } } }) =>
@@ -231,10 +253,13 @@ function database(store: Store, shares: Row[], privacy: PrivacyFixture) {
       },
       findMany: async (args: SharedTranslationRead) => {
         reads.push(args);
-        const rows = ordered(
-          shares.filter((row) => matchesWhere(row, args.where)),
-          args.orderBy,
-        ).map((row) => projected(row, args.select));
+        const rows = selectedAll(
+          ordered(
+            shares.filter((row) => matchesWhere(row, args.where)),
+            args.orderBy,
+          ),
+          args,
+        );
         return typeof args.take === 'number' ? rows.slice(0, args.take) : rows;
       },
     },
