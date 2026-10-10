@@ -77,6 +77,15 @@ export function m4aVoice(): Buffer {
   return isoFile('M4A ', ['soun']);
 }
 
+/** Un M4A valide dont la boîte `mdat`, posée en dernier, se termine par une archive ZIP. */
+export function m4aWithZipInLastBox(): Buffer {
+  return Buffer.concat([
+    box('ftyp', ascii('M4A '), u32be(0), ascii('M4A isommp42')),
+    box('moov', box('mvhd', Buffer.alloc(100)), trak('soun')),
+    box('mdat', Buffer.alloc(512, 0x11), EMPTY_ZIP),
+  ]);
+}
+
 /** Une vidéo MP4 (piste image + piste son), que l'on déclarera `audio/mp4`. */
 export function mp4Video(): Buffer {
   return isoFile('isom', ['vide', 'soun']);
