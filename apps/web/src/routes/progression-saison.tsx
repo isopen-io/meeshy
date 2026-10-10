@@ -28,6 +28,7 @@ export function SaisonBody({ progress, actions, online }: { readonly progress: E
   return (
     <GameSeason
       season={game.season}
+      upcoming={game.seasonUpcoming ?? null}
       held={game.treasury.held}
       online={online}
       claimingStep={actions.claimStep.vars ?? null}

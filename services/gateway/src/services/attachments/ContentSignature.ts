@@ -79,6 +79,8 @@
  * déclaration mérite d'être crue — rôles différents, ne pas fusionner.
  */
 
+import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
+
 /**
  * Nombre d'octets de tête suffisant pour évaluer TOUTES les signatures
  * ci-dessous (la plus profonde lit jusqu'à l'octet 16, plus la fenêtre de
@@ -325,7 +327,21 @@ export function verifyDeclaredMimeType(declaredMimeType: string, buffer: Buffer)
 export type ShareLinkAnonymousFlags = {
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
+  /** La conversation que le lien ouvre — les deux chemins d'upload la lisent (World Wide, ci-dessous). */
+  readonly conversation?: { readonly identifier: string } | null;
 };
+
+/**
+ * WORLD WIDE (#10000) — un invité n'y joint RIEN, audio compris, tant que la
+ * garde décodante de #10001 / #10029 n'est pas livrée. L'exemption « voix »
+ * ci-dessous se mérite sur un en-tête seul : deux octets de synchro MPEG
+ * suivis de n'importe quelle charge, ou une vidéo MP4 déclarée `audio/mp4`,
+ * passent. Ouvert au monde entier sans compte, c'est un hébergement de
+ * contenus arbitraires. La décision porte sur la CONVERSATION, jamais sur les
+ * drapeaux du lien ni sur les droits gravés à l'entrée (`link-admission.ts`) :
+ * un invité entré sous d'autres termes est couvert, à chaque envoi.
+ */
+export const WORLD_GUEST_ATTACHMENTS_CLOSED_REASON = 'Attachments are not open to guests of World Wide yet';
 
 export type AnonymousAttachmentVerdict =
   | { readonly allowed: true }
@@ -347,6 +363,10 @@ export function classifyAnonymousAttachment(
   buffer: Buffer,
   shareLink: ShareLinkAnonymousFlags
 ): AnonymousAttachmentVerdict {
+  if (shareLink.conversation?.identifier === WORLD_CONVERSATION_IDENTIFIER) {
+    return { allowed: false, reason: WORLD_GUEST_ATTACHMENTS_CLOSED_REASON };
+  }
+
   const normalizedMimeType = declaredMimeType.toLowerCase();
   const declaresImage = normalizedMimeType.startsWith('image/');
   const declaresAudio = normalizedMimeType.startsWith('audio/');
