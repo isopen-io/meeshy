@@ -20,8 +20,15 @@ import {
   resolveAnonymousUploadIdentity,
   fetchShareLinkAnonymousFlags,
   readFilePrefix,
+  classifyGuestFileOnDisk,
+  guestRefusalResponse,
 } from '../../services/attachments/AnonymousUploadIdentity';
-import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentNeedsFullContent,
+  verifyDeclaredMimeType,
+  RECOMMENDED_SIGNATURE_PREFIX_BYTES,
+} from '../../services/attachments/ContentSignature';
 import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from '../../services/attachments/uploadMimeType';
 import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
@@ -560,13 +567,18 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
 
           // Mêmes octets que la vérification globale ci-dessus (#5615) — pas
-          // de second aller-retour disque pour le même préfixe.
-          const verdict = classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
+          // de second aller-retour disque pour le même préfixe… sauf quand le
+          // lien liste ses familles (#10001, World Wide) : un préfixe ne
+          // prouve rien, la garde relit le fichier ENTIER, borné par
+          // `GUEST_ATTACHMENT_MAX_BYTES` avant toute lecture.
+          const verdict = guestAttachmentNeedsFullContent(shareLinkFlags)
+            ? await classifyGuestFileOnDisk({ filePath: destPath, mimeType, fileName: filename, shareLink: shareLinkFlags })
+            : classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
           if (verdict.allowed === false) {
             await fs.unlink(destPath).catch((err) =>
               logger.debug('[TUS] Anonymous message attachment cleanup failed (policy)', { destPath, err }));
             logger.warn(`[TUS] Anonymous message attachment REFUSED — ${verdict.reason} (userId=${userId})`);
-            throw { status_code: 403, body: `${verdict.reason}\n` };
+            throw guestRefusalResponse(verdict);
           }
         }
 

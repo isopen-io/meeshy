@@ -23,7 +23,8 @@
 
 import { promises as fs } from 'fs';
 import { hashSessionToken } from '../../utils/session-token.js';
-import type { ShareLinkAnonymousFlags } from './ContentSignature.js';
+import { GUEST_ATTACHMENT_MAX_BYTES, GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict, type ShareLinkAnonymousFlags } from './ContentSignature.js';
 
 export interface AnonymousUploadIdentityPrisma {
   participant: {
@@ -35,7 +36,12 @@ export interface AnonymousUploadIdentityPrisma {
   conversationShareLink: {
     findUnique(args: {
       where: { id: string };
-      select: { allowAnonymousFiles: true; allowAnonymousImages: true; conversation: { select: { identifier: true } } };
+      select: {
+        allowAnonymousFiles: true;
+        allowAnonymousImages: true;
+        allowedAttachmentKinds: true;
+        conversation: { select: { identifier: true } };
+      };
     }): Promise<ShareLinkAnonymousFlags | null>;
   };
 }
@@ -92,7 +98,7 @@ export async function fetchShareLinkAnonymousFlags(
   if (!shareLinkId) return null;
   return prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
-    select: { allowAnonymousFiles: true, allowAnonymousImages: true, conversation: { select: { identifier: true } } },
+    select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
   });
 }
 
@@ -116,4 +122,43 @@ export async function readFilePrefix(filePath: string, length: number): Promise<
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * La garde des familles d'un invité (#10001) sur un fichier déjà écrit sur
+ * disque : elle lit le fichier ENTIER — un préfixe ne prouve rien —, après en
+ * avoir borné la taille sans le charger (`GUEST_ATTACHMENT_MAX_BYTES`), puisque
+ * le chemin resumable accepte jusqu'à 4 Go.
+ */
+export async function classifyGuestFileOnDisk(params: {
+  readonly filePath: string;
+  readonly mimeType: string;
+  readonly fileName: string;
+  readonly shareLink: ShareLinkAnonymousFlags;
+}): Promise<AnonymousAttachmentVerdict> {
+  const { size } = await fs.stat(params.filePath);
+  if (size > GUEST_ATTACHMENT_MAX_BYTES) {
+    return {
+      allowed: false,
+      reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
+      code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
+    };
+  }
+  const content = await fs.readFile(params.filePath);
+  return classifyAnonymousAttachment(params.mimeType, content, params.shareLink, { fileName: params.fileName });
+}
+
+/**
+ * Le refus d'un invité tel que `@tus/server` le renvoie : l'enveloppe d'erreur
+ * de l'API (`{ success, error, message, code }`) pour que le client lise le
+ * code stable, 413 pour un fichier trop lourd, 403 sinon. Un refus sans code
+ * (lien sans liste de familles) garde son corps texte d'avant.
+ */
+export function guestRefusalResponse(
+  verdict: Extract<AnonymousAttachmentVerdict, { allowed: false }>,
+): { readonly status_code: number; readonly body: string } {
+  if (!verdict.code) return { status_code: 403, body: `${verdict.reason}\n` };
+  const status = verdict.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE ? 413 : 403;
+  const envelope = { success: false, error: verdict.reason, message: verdict.reason, code: verdict.code };
+  return { status_code: status, body: `${JSON.stringify(envelope)}\n` };
 }
