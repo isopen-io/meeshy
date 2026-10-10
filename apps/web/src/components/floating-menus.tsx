@@ -14,6 +14,7 @@ import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requ
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
+import { belowScreenTop } from '@/lib/view/safe-area';
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
@@ -224,7 +225,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
       style={
         {
           '--float-side': `${FLOATING_SIDE}px`,
-          '--float-top': `calc(var(--safe-top, env(safe-area-inset-top, 0px)) + ${FLOATING_TOP}px)`,
+          '--float-top': belowScreenTop(FLOATING_TOP),
         } as React.CSSProperties
       }
     >

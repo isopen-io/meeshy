@@ -229,6 +229,14 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
               {time}
             </span>
           </span>
+          {banner.context === null ? null : (
+            <span data-banner-context={banner.context.scope} className="flex min-w-0 items-center gap-1.5 text-chip font-medium" style={{ color: 'var(--color-ios-ink-2)' }}>
+              <span aria-hidden="true" className="grid shrink-0 place-items-center" style={{ color: accent }}>
+                <GlyphSvg glyph={banner.context.scope === 'direct' ? GLYPHS.user : GLYPHS.users} size={12} />
+              </span>
+              <span className="truncate">{banner.context.text}</span>
+            </span>
+          )}
           {banner.body === null && banner.content === null && thumbnailOf(notification) === undefined ? null : (
             <span className="flex min-w-0 items-center gap-2">
               <ContentTile notification={notification} banner={banner} accent={accent} />

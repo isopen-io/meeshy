@@ -9,6 +9,7 @@ const deComposerAttach = {
   'composer.attach.camera.action': 'Foto aufnehmen',
   'composer.attach.file': 'Datei',
   'composer.attach.file.action': 'Datei auswählen',
+  'composer.drop.veil': 'Zum Anhängen loslassen',
   'composer.attach.contact': 'Kontakt',
   'composer.attach.contact.action': 'Kontakt teilen',
   'composer.contact.failed': 'Dieser Kontakt kann nicht geteilt werden',

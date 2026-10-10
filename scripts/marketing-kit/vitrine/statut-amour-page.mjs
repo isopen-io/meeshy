@@ -359,8 +359,8 @@ const poserFilet = (copie, t) => {
 
 // c) La poussée : le nouveau titre arrive du bord, heurte l'ancien et le pousse, carte comprise, hors de l'écran.
 const poussee = (t) => {
-  const avant = lin(t, T_POUSSE - 0.24, T_POUSSE)
-  const apres = lin(t, T_POUSSE, T_POUSSE + 0.42)
+  const avant = lin(t, T_POUSSE - 0.32, T_POUSSE)
+  const apres = lin(t, T_POUSSE, T_POUSSE + 0.6)
   const xNouveau = t < T_POUSSE ? mix(-W - 220, -W, easeIn(avant)) : mix(-W, 0, easeOut(apres))
   return { xNouveau: xNouveau * SENS, xAncien: Math.max(0, xNouveau + W) * SENS, choc: t >= T_POUSSE ? Math.exp(-(t - T_POUSSE) / 0.12) : 0 }
 }
@@ -369,9 +369,9 @@ const poussee = (t) => {
 const FESTIN = M.festin
 const morsures = (t) => FESTIN.bouchees.map((b, i) => ({ i, age: t - b })).filter((m) => m.age >= 0)
 const MORSURES = [
-  { x: 0.02, y: 0.55, r: 62 },
-  { x: 0.98, y: 0.3, r: 70 },
-  { x: 0.3, y: 0.02, r: 74 },
+  { x: 0.02, y: 0.5, r: 70 },
+  { x: 0.98, y: 0.56, r: 74 },
+  { x: 0.02, y: 0.78, r: 82 },
 ]
 const masqueDeMorsures = (t) => {
   const faites = morsures(t)
@@ -387,7 +387,7 @@ const masqueDeMorsures = (t) => {
 
 // ── Les particules : réactions, miettes, cœurs ─────────────────────────────────────────────────────────
 const cFx = $('fx').getContext('2d')
-const MIETTES = FESTIN.bouchees.map((b, i) => ({ instantS: b, x: i === 0 ? 150 : i === 1 ? 400 : 270, y: i === 2 ? 330 : 560, grains: Array.from({ length: 26 }, () => ({ a: alea() * 6.283, v: 60 + alea() * 220, r: 2 + alea() * 4, c: ['#FFFFFF', '#FBCFE8', '#C4B5FD', '#F472B6'][Math.floor(alea() * 4)] })) }))
+const MIETTES = FESTIN.bouchees.map((b, i) => ({ instantS: b, x: (i === 1) !== RTL ? 410 : 130, y: i === 2 ? 760 : 600, grains: Array.from({ length: 26 }, () => ({ a: alea() * 6.283, v: 60 + alea() * 220, r: 2 + alea() * 4, c: ['#FFFFFF', '#FBCFE8', '#C4B5FD', '#F472B6'][Math.floor(alea() * 4)] })) }))
 const ECLATS_COEUR = M.eclats.map((e) => ({ ...e, grains: Array.from({ length: 16 }, () => ({ a: alea() * 6.283, v: 70 + alea() * 160, r: 5 + alea() * 7 })) }))
 const poserFx = (t) => {
   cFx.setTransform(F, 0, 0, F, 0, 0); cFx.clearRect(0, 0, W, H)
@@ -464,12 +464,12 @@ const poserGloutons = (t) => {
       return croque && a > 0 && a < 0.32 ? Math.max(acc, Math.sin((a / 0.32) * Math.PI)) : acc
     }, 0)
     const depart = easeIn(lin(t, fin - 0.12, fin + 0.25))
-    const x = 270 + cote * (mix(380, 150, clamp(arrivee, 0, 1.1)) - 60 * elan) + cote * depart * 40
+    const x = 270 + cote * (mix(380, 160, clamp(arrivee, 0, 1.1)) - 95 * elan) + cote * depart * 40
     const y = 600 - depart * 120
-    const taille = 250
+    const taille = 270
     el.style.left = (x - taille / 2) + 'px'; el.style.top = (y - taille / 2) + 'px'
     el.style.width = el.style.height = taille + 'px'
-    el.style.transform = 'scale(' + ((1 + 0.12 * elan) * (1 - depart)) + ',' + ((1 - 0.1 * elan) * (1 - depart)) + ') scaleX(' + (cote < 0 ? 1 : -1) + ') rotate(' + (-cote * 10 * elan) + 'deg)'
+    el.style.transform = 'scale(' + ((1 + 0.22 * elan) * (1 - depart)) + ',' + ((1 - 0.12 * elan) * (1 - depart)) + ') scaleX(' + (cote < 0 ? 1 : -1) + ') rotate(' + (-cote * 10 * elan) + 'deg)'
     el.style.opacity = String(clamp(arrivee * 2, 0, 1))
   })
 }
@@ -507,8 +507,8 @@ window.poser = async (t) => {
     let fenetre
     if (p.id === 'rire') fenetre = [0, T_ECLAIR + 0.7]
     else if (p.id === 'amis') fenetre = [T_ECLAIR - 0.01, T_TOILE + 0.5]
-    else if (p.id === 'complices') fenetre = [T_TOILE - 0.15, T_POUSSE + 0.45]
-    else fenetre = [T_POUSSE - 0.26, FESTIN.finS]
+    else if (p.id === 'complices') fenetre = [T_TOILE - 0.15, T_POUSSE + 0.65]
+    else fenetre = [T_POUSSE - 0.34, FESTIN.finS]
     copies.forEach((copie, c) => {
       const visible = t >= fenetre[0] && t < fenetre[1] && !(c === 1 && t < T_ECLAIR)
       copie.el.style.display = visible ? 'block' : 'none'
@@ -540,7 +540,7 @@ window.poser = async (t) => {
         const u = easeOut(lin(t, T_TOILE - 0.15, T_TOILE + 0.45))
         extra.dy = (1 - u) * 760; extra.rx = (1 - u) * 26
         decalageTitres = 0.2
-        if (t >= T_POUSSE - 0.24) {
+        if (t >= T_POUSSE - 0.32) {
           transforme = 'translateX(' + pousse.xAncien + 'px)'
           copie.titres.style.transform = 'scaleX(' + (1 - 0.16 * pousse.choc) + ')'
           copie.titres.style.transformOrigin = RTL ? '0% 50%' : '100% 50%'
@@ -552,8 +552,8 @@ window.poser = async (t) => {
           copie.chip.style.transform = 'rotate(' + (-6 * SENS) + 'deg) scale(' + mix(0.3, 1, uc) * (1 + 0.04 * impulsion(t)) + ')'
         }
       } else if (p.id === 'amour') {
-        if (t < T_POUSSE + 0.42) transforme = 'translateX(' + pousse.xNouveau + 'px)'
-        copie.titres.style.transform = 'translateX(' + (SENS * 40 * (1 - easeOut(lin(t, T_POUSSE - 0.24, T_POUSSE + 0.42)))) + 'px)'
+        if (t < T_POUSSE + 0.6) transforme = 'translateX(' + pousse.xNouveau + 'px)'
+        copie.titres.style.transform = 'translateX(' + (SENS * 40 * (1 - easeOut(lin(t, T_POUSSE - 0.32, T_POUSSE + 0.6)))) + 'px)'
         decalageTitres = -0.25
         const avale = easeIn(lin(t, FESTIN.bouchees[2], FESTIN.bouchees[2] + 0.28))
         extra.echelle = 1 - avale
@@ -622,7 +622,7 @@ export const modeleDeLaPage = ({ plan, images, ecrans }) => {
       { instantS: 12.75, x: 160, y: 760 },
       { instantS: 14.75, x: 400, y: 760, couleur: '#FB7185' },
       { instantS: 17.4, x: 140, y: 760 },
-      { instantS: 22.95, x: 270, y: 700, couleur: '#FDE68A' },
+      { instantS: 22.95, x: 250, y: 690, couleur: '#FDE68A' },
       { instantS: 23.0, x: 270, y: 700 },
     ],
     lueurs: [

@@ -95,12 +95,12 @@ export const PLANS = [
   {
     id: 'amis', de: 12, a: 23, sortie: 'toiles',
     kit: 'amitie', revelations: [0.55, 1.25, 1.95, 2.65, 3.35],
-    camera: { de: fenetre(660, 1880, 1.4), a: fenetre(660, 1990, 1.55) },
+    camera: { de: fenetre(660, 1560, 1.04), a: fenetre(660, 1900, 1.07) },
   },
   {
     id: 'complices', de: 23, a: 34, sortie: 'poussee',
     prise: { famille: 'interaction', scene: 'interaction-vocal' }, ancre: { etape: 'original', decalageS: -0.4 },
-    camera: { de: fenetre(660, 1500, 1.1), a: fenetre(660, 1800, 1.55) }, repere: { y: 1562 },
+    camera: { de: fenetre(620, 1500, 1.1), a: fenetre(500, 1800, 1.35) }, repere: { y: 1562 },
   },
   {
     id: 'amour', de: 34, a: 43, sortie: 'festin',
@@ -124,7 +124,7 @@ export const AMOUREUX = [
   { id: 'bisou', sticker: 'duo-meo-bisou', de: 14.3, a: 16.45, x: 410, y: 852, taille: 230, depuis: 'cote' },
   { id: 'fleurs', sticker: 'duo-mee-fleurs', de: 17.0, a: 18.9, x: 130, y: 852, taille: 230, depuis: 'cote' },
   { id: 'calin', sticker: 'duo-meo-calin', de: 18.9, a: 20.8, x: 410, y: 852, taille: 230, depuis: 'cote' },
-  { id: 'bague', sticker: 'duo-mee-bague', de: 22.6, a: 25, x: 270, y: 760, taille: 300, depuis: 'bas' },
+  { id: 'bague', sticker: 'duo-mee-bague', de: 22.6, a: 25, x: 270, y: 745, taille: 390, depuis: 'bas' },
 ]
 
 // Les deux gloutons du festin : Mee à gauche, Meo à droite (retournés en arabe).

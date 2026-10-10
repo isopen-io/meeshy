@@ -157,3 +157,29 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
     parked.clear();
   };
 }
+
+/**
+ * **LE CASQUE DÉBRANCHÉ MET LA VIDÉO EN PAUSE** (#9985) — Chrome Android met
+ * en pause le média qui joue quand un casque se débranche ou se déconnecte ;
+ * la WebView de la coque ne le fait pas, et la vidéo repartait sur le
+ * haut-parleur. La coque signale le débranchement (`becomingNoisy`) ; un
+ * navigateur, ou une coque plus ancienne, n'écoute rien.
+ */
+export function shellNoisy(coque: CoqueNative | undefined = coqueCourante()): PlaybackHold['onPauseRequested'] {
+  return ecoute(coque, 'becomingNoisy');
+}
+
+/**
+ * Chaque vidéo qui s'entend se met en pause. Les vocaux suivent la « Pause »
+ * de la coque (#9946) ; le flux d'un appel (`srcObject`) n'est jamais touché.
+ */
+export function pauseVideosWhenNoisy(
+  root: Pick<ParentNode, 'querySelectorAll'>,
+  onNoisy: PlaybackHold['onPauseRequested'],
+): () => void {
+  return onNoisy(() => {
+    for (const video of root.querySelectorAll('video')) {
+      if (!video.paused && !video.ended && !video.muted && video.srcObject == null) video.pause();
+    }
+  });
+}

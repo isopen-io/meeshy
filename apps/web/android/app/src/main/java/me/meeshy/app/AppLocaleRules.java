@@ -25,4 +25,14 @@ final class AppLocaleRules {
         if (ifUnset && !now.isEmpty()) return null;
         return wanted.equals(now) ? null : wanted;
     }
+
+    /**
+     * #9841 — la langue qu'un service applique lui-meme a ses textes. Des
+     * Android 13, le systeme pose la langue de l'application sur tous ses
+     * contextes ; avant, AppCompat ne la pose que sur les activites.
+     */
+    static String serviceLocale(int sdk, String stored) {
+        if (sdk >= 33 || stored == null || !SUPPORTED.contains(stored)) return null;
+        return stored;
+    }
 }

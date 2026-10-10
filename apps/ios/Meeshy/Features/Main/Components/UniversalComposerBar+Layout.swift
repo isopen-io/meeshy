@@ -206,6 +206,20 @@ extension UniversalComposerBar {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
+            // Pendant la prise, la barre d'outils s'efface ; un hôte qui le
+            // demande garde son ⌄ seul, tout à droite (#9893).
+            if let fold = resolvedFoldControl,
+               ComposerFoldPlacement.rowDuringRecording(isRecording: effectiveIsRecording,
+                                                        survivesRecording: fold.survivesRecording) {
+                HStack {
+                    Spacer(minLength: 0)
+                    foldButton(fold)
+                }
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xsPlus)
+                .transition(.opacity)
+            }
+
             // Composer row — either the recording bar (full-width pill, iMessage-style)
             // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
             if effectiveIsRecording {

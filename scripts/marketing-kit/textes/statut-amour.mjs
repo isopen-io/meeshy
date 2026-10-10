@@ -74,7 +74,7 @@ export const AMITIE_JAPONAIS = {
 // titre et une description pour YouTube Shorts. Chacun pousse vers l'inscription sur meeshy.me.
 export const PUBLICATION = {
   fr: {
-    statut: 'On a commencé par un fou rire. Maintenant, ils comptent les jours 🥹 Ta moitié parle peut-être une autre langue : Meeshy traduit tout. 👉 meeshy.me',
+    statut: 'Ça a commencé par un fou rire. Maintenant, ils comptent les jours 🥹 Ta moitié parle peut-être une autre langue : Meeshy traduit tout. 👉 meeshy.me',
     titre: 'Il parlait coréen. Elle, pas un mot. 12 jours plus tard… ❤️ #Meeshy',
     description: 'D’abord on rigole, puis on devient amis, puis complices… puis l’amour. Sur Meeshy, chaque message, chaque vocal et chaque story se lisent dans ta langue : la distance et la langue ne comptent plus.\n\nTrouve ta moitié. Commence par en rire. Inscris-toi gratuitement : https://meeshy.me\n\n#Meeshy #amour #rencontre #traduction #shorts',
   },

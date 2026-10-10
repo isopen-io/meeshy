@@ -270,6 +270,15 @@ final class MediaChromeRailTests: XCTestCase {
             .appendingPathComponent(chemin), encoding: .utf8)
     }
 
+    func test_leLecteurDeReels_seQuitteParUnRetour_etLaStoryParUneCroix() throws {
+        let page = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        XCTAssertTrue(page.contains("FullscreenTopBar(exit: .back, onClose: onClose)"))
+        XCTAssertTrue(page.contains("onClose()"), "le glissement depuis le bord de début de lecture ferme toujours le lecteur")
+
+        let story = try source("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        XCTAssertFalse(story.contains("exit: .back"))
+    }
+
     /// Le voile que la mesure compose est celui que la page PEINT, et les deux rails
     /// portent la décision par glyphe.
     func test_lesDeuxRails_sontCablesSurLaDecisionParGlyphe() throws {

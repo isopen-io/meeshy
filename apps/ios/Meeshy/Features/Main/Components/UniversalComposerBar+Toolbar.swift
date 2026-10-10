@@ -125,7 +125,7 @@ extension UniversalComposerBar {
     /// de la plaque ; il ferme désormais la rangée d'outils, dont la bande
     /// `trailing` ne défile jamais — Dynamic Type ne peut pas le pousser hors de
     /// l'écran. Glyphe au format des outils (30 pt), cible de 44 pt.
-    private func foldButton(_ fold: ComposerFoldControl) -> some View {
+    func foldButton(_ fold: ComposerFoldControl) -> some View {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
@@ -138,6 +138,7 @@ extension UniversalComposerBar {
         .buttonStyle(.plain)
         .padding(.vertical, -7)
         .accessibilityLabel(fold.label)
+        .accessibilityHint(fold.hint ?? "")
     }
 
     /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
@@ -189,19 +190,9 @@ extension UniversalComposerBar {
         return Menu {
             ForEach(choices, content: asyncRenderRowContent)
         } label: {
-            HStack(spacing: MeeshySpacing.xxs) {
-                Text(currentLangOption.flag)
-                    .font(.caption)
-                Text(currentLangOption.code.uppercased())
-                    .font(.caption2).fontWeight(.semibold)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-            }
-            .fixedSize()
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
-            .foregroundColor(iconTint)
+            ComposerLanguagePillLabel(flag: currentLangOption.flag, code: currentLangOption.code)
+                .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+                .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)
@@ -246,6 +237,16 @@ extension UniversalComposerBar {
 /// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
 /// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
 /// épaisseur perçue (#9173).
+/// **Le ⌄ pendant une prise vocale** (#9893). La barre d'outils, qui le porte,
+/// s'efface pendant l'enregistrement. Un hôte qui le demande
+/// (`ComposerFoldControl.survivesRecording`) garde le ⌄ seul, tout à droite,
+/// sur une rangée à lui ; les autres (fils, posts) gardent la barre nue.
+nonisolated enum ComposerFoldPlacement {
+    static func rowDuringRecording(isRecording: Bool, survivesRecording: Bool) -> Bool {
+        isRecording && survivesRecording
+    }
+}
+
 nonisolated enum ComposerGlassDoors {
     static let glyphWeight: Font.Weight = .regular
 
@@ -260,11 +261,87 @@ nonisolated enum ComposerGlassDoors {
     }
 }
 
+/// **La pastille de langue : le drapeau, et le code en petit DESSOUS** (#9954,
+/// directive porteur 2026-10-10). Sur une ligne, « 🇫🇷 FR » élargissait la
+/// pastille ; empilés, drapeau réduit et code minuscule tiennent dans la
+/// hauteur qu'avait la ligne.
+///
+/// La hauteur ne se devine pas, elle se REPREND : un drapeau `.caption`
+/// invisible et sans largeur donne à la pastille exactement la hauteur de
+/// l'ancienne ligne, à toute taille de texte. La pile mord sur la marge
+/// verticale (`ComposerLanguagePillMetrics.bleed`) sans jamais la dépasser, et
+/// Dynamic Type la borne pour qu'elle ne pousse pas la barre.
+struct ComposerLanguagePillLabel: View {
+    let flag: String
+    let code: String
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ZStack {
+                Text(flag)
+                    .font(.caption)
+                    .fixedSize()
+                    .frame(width: 0)
+                    .hidden()
+                ComposerStackedLanguageMark(flag: flag, code: code.uppercased())
+                    .padding(.vertical, -ComposerLanguagePillMetrics.bleed)
+                    .dynamicTypeSize(...ComposerLanguagePillMetrics.largestTextSize)
+            }
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.bold))
+        }
+        .fixedSize()
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+    }
+}
+
+/// Le drapeau et son code, l'un sur l'autre, serrés.
+struct ComposerStackedLanguageMark: View {
+    let flag: String
+    let code: String
+
+    @ScaledMetric(relativeTo: .caption) private var flagSize: CGFloat = ComposerLanguagePillMetrics.flagSize
+    @ScaledMetric(relativeTo: .caption2) private var codeSize: CGFloat = ComposerLanguagePillMetrics.codeSize
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        VStack(spacing: ComposerLanguagePillMetrics.lineSpacing) {
+            Text(flag)
+                .font(.system(size: flagSize))
+            Text(code)
+                .font(.system(size: codeSize, weight: .bold))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+nonisolated enum ComposerLanguagePillMetrics {
+    static let flagSize: CGFloat = 10
+    static let codeSize: CGFloat = 7
+    static let lineSpacing: CGFloat = -2
+    static let bleed: CGFloat = MeeshySpacing.xs - 1
+    static let largestTextSize: DynamicTypeSize = .xLarge
+}
+
 /// Le repli qu'un hôte confie à la barre (#8642) : son glyphe, son libellé
 /// VoiceOver et son geste. La barre le pose ; l'hôte décide QUAND il existe.
 struct ComposerFoldControl {
     let symbol: String
     let label: String
+    var hint: String? = nil
+    /// Le ⌄ reste visible pendant une prise vocale (`ComposerFoldPlacement`).
+    var survivesRecording: Bool = false
     let action: () -> Void
 }
 

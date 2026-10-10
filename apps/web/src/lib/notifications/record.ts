@@ -247,3 +247,41 @@ export function decodeNotifications(raw: unknown): readonly NotificationRecord[]
 export function notificationTitle(notification: NotificationRecord): string {
   return notification.title ?? notification.actor?.displayName ?? notification.actor?.username ?? 'Meeshy';
 }
+
+/**
+ * Les notifications d'un MESSAGE (#9992) — celles dont le contexte est une
+ * conversation : elles disent son groupe, ou qu'elle est privée.
+ */
+export const MESSAGE_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  'new_message',
+  'message_reply',
+  'reply',
+  'user_mentioned',
+  'mention',
+  'message_reaction',
+  'reaction',
+]);
+
+const actorNameOf = (notification: NotificationRecord): string | null =>
+  notification.actor?.displayName ?? notification.actor?.username ?? null;
+
+/**
+ * **LE TEMPS RÉEL PARLE COMME LA CLOCHE** (#9992). `notification:new` porte le
+ * cadrage TOAST de la passerelle (`buildPushHeader`, forme que le SDK iOS
+ * compose déjà) : `title` = l'acteur seul, `subtitle` = la phrase d'action
+ * (« a réagi 🔥 à votre story ») ou, pour un message, le nom du groupe. La
+ * cloche REST porte la phrase entière en `title`. Relu tel quel, le temps réel
+ * disait « Awa » sans dire ce qu'Awa avait fait. La règle est celle d'iOS
+ * (`bannerHeadline`) : un titre qui EST l'acteur reçoit l'action, sauf s'il la
+ * porte déjà ; un message laisse son groupe au contexte, qui le porte.
+ */
+export function decodeRealtimeNotification(raw: unknown): NotificationRecord | null {
+  const decoded = decodeNotification(raw);
+  if (decoded === null || decoded.subtitle === undefined) return decoded;
+  const { subtitle, ...rest } = decoded;
+  if (MESSAGE_NOTIFICATION_TYPES.has(decoded.type)) return rest;
+  const actor = actorNameOf(decoded);
+  const head = decoded.title ?? actor;
+  if (head === null || head !== actor) return decoded;
+  return { ...rest, title: head.endsWith(subtitle) ? head : `${head} ${subtitle}` };
+}

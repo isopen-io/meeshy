@@ -229,6 +229,7 @@ nonisolated enum CallScreenMixdown {
         }
         session.outputURL = url
         session.outputFileType = mixdown.fileType
+        session.shouldOptimizeForNetworkUse = true
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }
         }

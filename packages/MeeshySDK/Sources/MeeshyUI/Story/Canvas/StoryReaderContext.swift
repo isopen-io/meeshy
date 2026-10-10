@@ -80,6 +80,7 @@ public struct StoryReaderContext: Sendable {
                            imageCache: imageCache,
                            localAudioURLResolver: localAudioURLResolver,
                            playerProvider: playerProvider,
+                           locksMute: locksMute,
                            localMediaAliases: localMediaAliases)
     }
 

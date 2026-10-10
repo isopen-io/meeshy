@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.media.AudioManager;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -27,6 +28,13 @@ public class MeeshyPlaybackPlugin extends Plugin {
     static final String ACTION_FLOAT_TOGGLE = "me.meeshy.app.VIDEO_PIP_TOGGLE";
 
     private BroadcastReceiver floatToggle;
+
+    /**
+     * #9985 — un casque debranche ou deconnecte, remis a la page qui met en
+     * pause la video qui s'entend, comme Chrome. Le vocal suit la voie de
+     * {@link PlaybackForegroundService} (#9946).
+     */
+    private BroadcastReceiver noisy;
 
     /**
      * La « Pause » de la notification (#9301) remise a la page. Rend `false`
@@ -60,6 +68,13 @@ public class MeeshyPlaybackPlugin extends Plugin {
             }
         };
         ContextCompat.registerReceiver(getContext(), floatToggle, new IntentFilter(ACTION_FLOAT_TOGGLE), ContextCompat.RECEIVER_NOT_EXPORTED);
+        noisy = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                notifyListeners("becomingNoisy", new JSObject());
+            }
+        };
+        ContextCompat.registerReceiver(getContext(), noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     /** #9847 — la page dit si la video qui flotte joue ; le bouton de la fenetre suit. */
@@ -115,6 +130,10 @@ public class MeeshyPlaybackPlugin extends Plugin {
         if (floatToggle != null) {
             getContext().unregisterReceiver(floatToggle);
             floatToggle = null;
+        }
+        if (noisy != null) {
+            getContext().unregisterReceiver(noisy);
+            noisy = null;
         }
         PlaybackForegroundService.stop(getContext());
         super.handleOnDestroy();

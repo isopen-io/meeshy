@@ -85,6 +85,26 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
         XCTAssertTrue(ArrayStorageIdentity.same([FeedComment](), []))
     }
 
+    /// #9893 — la zone de la liste suit le composeur : la changer reconstruit
+    /// l'overlay, un tick de la barre non.
+    func test_aComposerMove_rebuildsTheOverlay() {
+        let comments = Self.comments()
+        var moved = Self.inputs(comments: comments)
+        moved.zone = StoryCommentsZone.Frame(bottomInset: 382, maxHeight: 415)
+        XCTAssertNotEqual(Self.inputs(comments: comments), moved)
+    }
+
+    /// La carte place la liste avec la zone sûre que le lecteur a déjà lue.
+    @MainActor
+    func test_placingTheOverlay_appliesTheLawWithTheReaderSafeBottom() {
+        let reading = StoryCommentsZone.ComposerReading(
+            state: .expanded, composerHeight: 92, keyboardHeight: 0,
+            windowHeight: 956, topReserved: 159)
+        let host = StoryCommentsOverlayHost(inputs: Self.inputs(comments: []), make: { _ in fatalError("non rendu") })
+        XCTAssertEqual(host.placed(reading).inputs.zone, reading.frame(safeBottom: 34))
+        XCTAssertEqual(host.placed(reading).inputs.zone.bottomInset, 34 + 20 + 46)
+    }
+
     /// L'overlay est monté derrière sa comparaison.
     func test_theCardMountsTheOverlay_behindItsComparison() throws {
         let root = URL(fileURLWithPath: #filePath)
@@ -96,7 +116,8 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
         }
         let canvas = try read("StoryViewerView+Canvas.swift")
         XCTAssertTrue(canvas.contains("let makeCommentsOverlay: () -> StoryCommentsOverlayHost"))
-        XCTAssertTrue(canvas.contains("makeCommentsOverlay().equatable()"))
+        XCTAssertTrue(canvas.contains("makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()"),
+                      "la carte place la liste sur son composeur avant la comparaison (#9893)")
         XCTAssertTrue(try read("StoryViewerView.swift").contains("makeCommentsOverlay: { storyCommentsOverlayHost() }"))
     }
 }

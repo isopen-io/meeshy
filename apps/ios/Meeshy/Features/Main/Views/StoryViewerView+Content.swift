@@ -1393,27 +1393,15 @@ struct StoryCommentsOverlayView: View {
     @State private var hasRequestedTargetHunt = false
 
     @Binding var showCommentsOverlay: Bool
-    /// Réservation visuelle. Quand non-nil, le composer principal (un
-    /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
-    /// sa reply banner. L'overlay s'en sert seulement pour étirer sa
-    /// `composerSpaceReservation` afin que la liste ne passe pas sous la
-    /// banner.
+    /// Quand non-nil, le composer principal affiche sa reply banner ; la liste
+    /// défile jusqu'au commentaire visé (la plaque mesurée, banner comprise,
+    /// déplace `zone`).
     @Binding var replyingToStoryComment: FeedComment?
 
-    /// Drives the dynamic max-height of the comment list — with keyboard the
-    /// list expands toward the top, without it the list caps at ~50 % of the
-    /// screen so the underlying story stays manipulable above the list.
-    @ObservedObject var keyboard: KeyboardObserver
-
-    /// Vrai safe area bas lu sur la keyWindow par le parent
-    /// (`StoryViewerView.windowBottomInset`). Necessaire parce que cet
-    /// overlay est rendu dans le ZStack canvas qui herite du
-    /// `.ignoresSafeArea()` root — `geometry.safeAreaInsets.bottom` y vaut 0.
-    /// Sans cette valeur, `composerSpaceReservation` retombait sur une
-    /// constante hardcodee (54pt pour iPhone Pro) qui derivait sur iPhone
-    /// SE / iPad / pliables (bug 2026-05-28 : « le commentaire sort du
-    /// viewport EXACTEMENT comme la zone de composition »).
-    let safeBottom: CGFloat
+    /// Où la liste se pose et jusqu'où elle monte : la carte la place sur son
+    /// composeur (`StoryCommentsZone`, #9893). Elle suit le clavier dans SA
+    /// transaction — même courbe, même durée que le composeur.
+    let zone: StoryCommentsZone.Frame
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
@@ -1436,19 +1424,6 @@ struct StoryCommentsOverlayView: View {
             startPoint: .top,
             endPoint: .bottom
         )
-    }
-
-    /// Cap the comment list to ~half the screen when the keyboard is hidden
-    /// so the rest of the story (head, mid-frame) stays visible and tappable.
-    /// When the keyboard rises the list can grow into the space the keyboard
-    /// uncovered.
-    private var listMaxHeight: CGFloat {
-        // `DeviceLayout.windowSize`, pas `UIScreen.main.bounds` : en Split View
-        // la fraction était prise sur le DISPLAY, donc plus haute que la fenêtre
-        // entière — le plafond ne plafonnait plus rien et la liste recouvrait la
-        // story qu'elle est censée laisser visible.
-        let window = DeviceLayout.windowSize.height
-        return keyboard.isVisible ? window * 0.62 : window * 0.42
     }
 
     /// Instagram-style overlay: comments float above the composer with a top
@@ -1491,7 +1466,7 @@ struct StoryCommentsOverlayView: View {
                 // Les médias de TOUS les commentaires de la story (racines +
                 // réponses dépliées) se feuillettent ensemble en plein écran.
                 .commentMediaGallery(topLevel: topLevel, replies: storyCommentRepliesMap)
-                .frame(maxHeight: listMaxHeight)
+                .frame(maxHeight: zone.maxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
                 // « geste né dans la story encore visible au-dessus » (au drag
@@ -1521,7 +1496,7 @@ struct StoryCommentsOverlayView: View {
                 // apparaît et fait disparaître l'autre »). On unifie sur
                 // UN SEUL composer (le principal) et on laisse la liste
                 // s'arrêter juste au-dessus.
-                .padding(.bottom, composerSpaceReservation)
+                .padding(.bottom, zone.bottomInset)
         }
         // **CRITIQUE** : forcer la VStack à remplir toute la hauteur du
         // canvas. Sans `.frame(maxHeight: .infinity)`, le `Spacer(minLength:
@@ -1533,35 +1508,7 @@ struct StoryCommentsOverlayView: View {
         // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
         // implicitement la VStack ; maintenant il faut le déclarer.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
         .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
-    }
-
-    /// Hauteur réservée pour le composer principal (StoryComposerBarView)
-    /// + son safe area / sa montée clavier. La liste s'arrête au MILIEU du
-    /// composer (et non au-dessus) pour que les nouveaux commentaires
-    /// paraissent « émerger » de la zone de composition au scroll — le
-    /// composer recouvre visuellement la moitié inférieure de la liste,
-    /// et la masque-gradient `listFadeMask` cache déjà les rows arrivant
-    /// par le haut. User spec 2026-05-28 : « le composant pour remonter
-    /// les commentaires doit débuter en milieu de la zone de composition
-    /// […] on verra les commentaires sortir de cette zone ».
-    /// - clavier visible : `keyboard.height` + composer ~ 92pt (sans banner)
-    ///   ou ~140pt (avec reply banner)
-    /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
-    private var composerSpaceReservation: CGFloat {
-        let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
-        // Mirror `composerBottomPadding(geometry:)` cote canvas : safe area
-        // reel + 20pt breathing room quand clavier cache, sinon hauteur clavier.
-        // `safeBottom` arrive du parent via `windowBottomInset` (keyWindow),
-        // pas via `geometry.safeAreaInsets.bottom` qui vaut 0 sous
-        // `.ignoresSafeArea()` (bug 2026-05-28).
-        let bottomPadding: CGFloat = keyboard.isVisible
-            ? keyboard.height
-            : safeBottom + 20
-        // Half-composer overlap — list ends at composer.middle, the lower
-        // half is the « emerge » zone where new rows transition into view.
-        return composerHeight / 2 + bottomPadding
     }
 
     // MARK: - Comments List

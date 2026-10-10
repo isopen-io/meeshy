@@ -12,6 +12,7 @@ const arNotificationRow = {
   'notifications.row.media.video': '🎥 فيديو',
   'notifications.row.media.audio': '🎵 صوت',
   'notifications.row.expired': 'منتهية',
+  'notifications.row.directMessage': 'رسالة خاصة',
   'notifications.row.milestone.level': 'المستوى {level}',
   'notifications.row.milestone.streak': '{days} يومًا متتاليًا',
   'notifications.row.milestone.badgeReason': 'تم فتح شارة · المرحلة {threshold}',

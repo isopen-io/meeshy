@@ -89,6 +89,7 @@ nonisolated enum ComposerLookVideoExporter {
             .appendingPathComponent("video_look_\(UUID().uuidString).mov")
         session.outputURL = sortie
         session.outputFileType = .mov
+        session.shouldOptimizeForNetworkUse = true
         session.videoComposition = composition
         session.audioMix = audioMix
         // La date de création et le lieu de la prise suivent la vidéo rendue.

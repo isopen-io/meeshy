@@ -53,6 +53,8 @@ import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { useWindowFileDrop } from '@/lib/view/use-window-file-drop';
+import { ComposerDropVeil } from './composer-drop-veil';
 
 /**
  * LE PANNEAU D'EFFETS, CHARGÉ À LA DEMANDE (#6175, panneau inline depuis
@@ -546,6 +548,8 @@ export const Composer = memo(function Composer({
     setPanelOpen(false);
   };
 
+  const fileHovering = useWindowFileDrop(addFiles);
+
   /**
    * LA TUILE « CONTACT » (#8242) — la fiche CHOISIE devient une carte
    * `text/vcard` (`lib/send/contact-card.ts`) qui rejoint la sélection par
@@ -833,6 +837,8 @@ export const Composer = memo(function Composer({
           <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
+
+      {fileHovering ? <ComposerDropVeil language={uiLanguage} /> : null}
 
       {capturing
         ? createPortal(

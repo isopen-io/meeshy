@@ -205,9 +205,10 @@ if (__SHELL__) {
  * navigateur tient lui-même la lecture : hors coque, rien ne se charge.
  */
 if (__SHELL__) {
-  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, shellPlaybackHold }) =>
-    holdWhileAudioPlays(document, shellPlaybackHold()),
-  );
+  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, pauseVideosWhenNoisy, shellNoisy, shellPlaybackHold }) => {
+    holdWhileAudioPlays(document, shellPlaybackHold());
+    pauseVideosWhenNoisy(document, shellNoisy());
+  });
 }
 
 /**

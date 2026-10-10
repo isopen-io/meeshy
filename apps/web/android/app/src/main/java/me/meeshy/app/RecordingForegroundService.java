@@ -28,6 +28,11 @@ import android.util.Log;
  */
 public class RecordingForegroundService extends Service {
 
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(ShellLocale.wrap(base));
+    }
+
     private static final String CHANNEL_RECORDING = "meeshy_recording";
     private static final int NOTIFICATION_ID = 0x4d52; // "MR"
     private static final String TAG = "MeeshyRecording";

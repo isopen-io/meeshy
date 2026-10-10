@@ -9,6 +9,7 @@ const enComposerAttach = {
   'composer.attach.camera.action': 'Take a photo',
   'composer.attach.file': 'File',
   'composer.attach.file.action': 'Choose a file',
+  'composer.drop.veil': 'Drop to attach',
   'composer.attach.contact': 'Contact',
   'composer.attach.contact.action': 'Share a contact',
   'composer.contact.failed': "This contact can't be shared",

@@ -9,6 +9,7 @@ const itComposerAttach = {
   'composer.attach.camera.action': 'Scatta una foto',
   'composer.attach.file': 'File',
   'composer.attach.file.action': 'Scegli un file',
+  'composer.drop.veil': 'Rilascia per allegare',
   'composer.attach.contact': 'Contatto',
   'composer.attach.contact.action': 'Condividi un contatto',
   'composer.contact.failed': 'Questo contatto non può essere condiviso',
