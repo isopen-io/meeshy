@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { VIDEO_DU_REEL, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
+import { REELS_DROLES, STORIES_DE_L_ENTETE } from '../textes/reels.mjs'
+import { VIDEO_DU_REEL, afficheMedia, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
 
 export const VERSION_FIXTURES = 2
 
@@ -411,18 +412,101 @@ const posts = (maintenant) =>
     }
   })
 
+// Les réels drôles de l'en-tête (#9904), tels que `GET /posts/feed/reels` les sert : une vraie vidéo, son affiche, la
+// légende écrite par son auteur dans SA langue et traduite dans les sept langues de lecture. L'auteur qui parle la langue
+// du lecteur cède la parole à son remplaçant : le spectateur lit toujours une légende traduite.
+export const auteurDuReel = (reel, lang) => {
+  const auteur = reel.auteurs.map(profilDe).find((p) => p.lang !== lang)
+  if (!auteur) throw new Error(`${reel.id} : aucun auteur hors de la langue ${lang}`)
+  return auteur
+}
+
+const reelsDroles = (lang, maintenant) =>
+  REELS_DROLES.map((reel, i) => {
+    const auteur = auteurDuReel(reel, lang)
+    const video = videoMedia(reel.video)
+    const affiche = afficheMedia(reel.video)
+    const minutes = 12 + i * 9
+    return {
+      id: oid(`reel:${reel.id}`),
+      type: 'REEL',
+      visibility: 'PUBLIC',
+      content: reel.textes[auteur.lang],
+      originalLanguage: auteur.lang,
+      createdAt: iso(maintenant, minutes),
+      updatedAt: iso(maintenant, minutes),
+      author: identite(auteur),
+      likeCount: 1840 - i * 377,
+      commentCount: 96 - i * 17,
+      repostCount: 0,
+      viewCount: 23_400 - i * 4_100,
+      bookmarkCount: 0,
+      shareCount: 41 - i * 6,
+      reactionSummary: { '😂': 1240 - i * 260, '❤️': 600 - i * 117 },
+      media: [{
+        id: oid(`reel-media:${reel.id}`), fileName: video.fichier, originalName: video.fichier, mimeType: 'video/mp4',
+        fileUrl: video.url, thumbnailUrl: affiche.url, width: video.width, height: video.height, duration: video.dureeMs, order: 0,
+      }],
+      translations: Object.fromEntries(Object.entries(reel.textes).filter(([l]) => l !== auteur.lang).map(([cible, text]) => [cible, { text }])),
+    }
+  })
+
+// La story que la scène `interaction-story` ouvre (#9904) : une photo, et sur la scène le texte de son auteur, dans SA
+// langue, avec ses traductions — le lecteur la lit dans la sienne. Elle expire dans 23 h.
+export const storyDeLEntete = (lang) => {
+  const story = STORIES_DE_L_ENTETE.map((id) => DEMO.story.find((s) => s.id === id)).find((s) => profilDe(s.auteur).lang !== lang)
+  if (!story) throw new Error(`aucune story hors de la langue ${lang}`)
+  return story
+}
+
+const storiesDeLEntete = (lang, maintenant) => {
+  const story = storyDeLEntete(lang)
+  const photo = photoMedia(story.photo)
+  const minutes = 25
+  return [{
+    id: oid(`story:${story.id}`),
+    type: 'STORY',
+    visibility: 'PUBLIC',
+    content: null,
+    originalLanguage: story.lang,
+    createdAt: iso(maintenant, minutes),
+    updatedAt: iso(maintenant, minutes),
+    expiresAt: iso(maintenant, minutes - 23 * 60),
+    author: identite(profilDe(story.auteur)),
+    likeCount: 64,
+    commentCount: 0,
+    repostCount: 0,
+    viewCount: 212,
+    bookmarkCount: 0,
+    shareCount: 0,
+    media: [{
+      id: oid(`story-media:${story.id}`), fileName: photo.fichier, originalName: photo.fichier, mimeType: 'image/jpeg',
+      fileSize: photo.taille, fileUrl: photo.url, width: photo.width, height: photo.height, order: 0,
+    }],
+    storyEffects: {
+      textObjects: [{
+        id: oid(`story-texte:${story.id}`), text: story.text, sourceLanguage: story.lang, translations: story.translations,
+        x: 0.5, y: 0.7, scale: 1, rotation: 0, zIndex: 1, fontSize: 84, textStyle: 'bold', textColor: 'FFFFFF',
+        textAlign: 'center',
+      }],
+    },
+  }]
+}
+
 const photoDuFichier = (fichier) => Object.keys(CREDITS).find((nom) => CREDITS[nom].fichier === fichier)
 
 // Tout ce que les messages et les posts désignent : le script de capture le dépose, l'app le range.
-const mediasDe = ({ lang, fils, lesPosts }) => {
+const mediasDe = ({ lang, fils, lesPosts, lesStories }) => {
   const images = [
     ...Object.values(fils).flat().flatMap((m) => m.attachments ?? []).filter((a) => a.mimeType === 'image/jpeg'),
     ...lesPosts.flatMap((p) => p.media),
+    ...lesStories.flatMap((s) => s.media),
   ]
   const { original, pistes } = mediasDuVocal(lang)
   const commentaire = mediasDuCommentaireVocal(lang)
   return [...new Set(images.map((a) => a.fileName))].map((fichier) => photoMedia(photoDuFichier(fichier)))
     .concat([original, ...pistes, commentaire.original, ...commentaire.pistes, videoMedia(VIDEO_DU_REEL)])
+    .concat(REELS_DROLES.flatMap((r) => [videoMedia(r.video), afficheMedia(r.video)]))
 }
 
 // Ce que chaque scène ouvre (spec § 3) : sa conversation, et le message ou la pièce qu'elle met en avant.
@@ -516,6 +600,7 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
     [ID_NOVA]: [commentaireVocal({ lang, maintenant, mesures })],
   }
   const lesPosts = posts(maintenant)
+  const lesStories = storiesDeLEntete(lang, maintenant)
   return {
     version: VERSION_FIXTURES,
     lang,
@@ -525,8 +610,10 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
     progression: progression(maintenant),
     lienInvitation: lienInvitation(lang, maintenant),
     modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles' },
-    medias: mediasDe({ lang, fils, lesPosts }),
+    medias: mediasDe({ lang, fils, lesPosts, lesStories }),
     posts: lesPosts,
+    reels: reelsDroles(lang, maintenant),
+    stories: lesStories,
     scenes: scenes(lang, fils),
   }
 }

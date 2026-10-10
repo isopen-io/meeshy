@@ -50,6 +50,10 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
     let modesDeLecture: [String: String]
     let medias: [Media]
     let posts: [APIPost]
+    /// Les réels drôles que la scène `interaction-defilement` fait défiler (#9904) — absents d'un kit plus ancien.
+    let reels: [APIPost]?
+    /// La story que la scène `interaction-story` ouvre (#9904) — absente d'un kit plus ancien.
+    let stories: [APIPost]?
     let scenes: [String: Destination]
 
     func destination(_ scene: VitrineScene) -> Destination? {

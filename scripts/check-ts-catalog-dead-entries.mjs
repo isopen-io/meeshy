@@ -421,7 +421,7 @@ export const callersIn = (contents, nsNames) => {
 // `06aa6144f2` — `attachments.signedByTokenByWildcard` (#9600 : l'adresse signée est
 // SERVIE dans les charges, aucun client ne la compose) et `me.securityEvents`
 // (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
-const BASELINE_DEAD_ENTRIES = 277;
+const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

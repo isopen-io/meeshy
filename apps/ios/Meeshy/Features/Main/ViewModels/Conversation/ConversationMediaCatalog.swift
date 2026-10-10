@@ -162,6 +162,20 @@ final class ConversationMediaCatalog: ObservableObject, ConversationMediaCatalog
         publish()
     }
 
+    /// **La réaction posée sur une pièce que seul l'index porte** (#9910) — le
+    /// catalogue la repeint aussitôt (optimiste), la galerie la voit sans
+    /// attendre. Une pièce de la fenêtre n'est pas touchée ici : c'est le
+    /// ViewModel qui la tient, et `syncLive` la ramène.
+    func applyReaction(_ outcome: AttachmentReactionToggle.Outcome, toAttachment attachmentId: String) {
+        guard let carrierId = indexed.first(where: { $0.value.attachments.contains { $0.id == attachmentId } })?.key,
+              var carrier = indexed[carrierId],
+              let index = carrier.attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
+        carrier.attachments[index].reactionSummary = outcome.summary
+        carrier.attachments[index].currentUserReactions = outcome.mine
+        indexed[carrierId] = carrier
+        publish()
+    }
+
     // MARK: - Cycle de vie
 
     /// La galerie s'ouvre : l'index persisté se peint aussitôt, puis la

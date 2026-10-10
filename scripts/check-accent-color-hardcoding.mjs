@@ -322,7 +322,17 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // - `ReelFeedCard.swift` (#9677, 7484db6cfa) — `Color(hex: accentHex)`, l’accent reçu en
 //   paramètre de la scène d'un réel, même nature que `accentColor`.
 // Valeur MESURÉE le 2026-10-09 (CI 37911128290).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 453;
+//
+// 2026-10-10 — variables inconnues 453 → 456 (#9907, #9910) :
+// - `PieceSpotlight.swift` (2, 1a3f753acf) — `Color(hex: accentHex)` pour le
+//   trait et l'ombre de l'anneau qui allume la pièce citée ; l'hexa est REÇU
+//   en paramètre (`accentHex` du fil Focal, `contactColor` de la bulle), même
+//   nature que `accentColor` ;
+// - `MessagePieceOverlay.swift` (1, a08e6bcd61) — `Color(hex: piece.thumbnailColor)`,
+//   la teinte d'attente de la pièce servie par l'API, une couleur de donnée,
+//   même motif que les 32 `thumbnailColor` déjà comptés.
+// Valeur MESURÉE le 2026-10-10 (CI 38045575542).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 456;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -116,6 +116,7 @@ extension ConversationView {
                 // `composerReplyAttachmentPreview`.
                 if let attType = reply.attachmentType {
                     composerReplyAttachmentPreview(type: attType, reply: reply)
+                        .quotedExtraPieces(reply)
                 }
 
                 if let details = quotedDetails {

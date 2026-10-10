@@ -149,4 +149,29 @@ export const SCENES_FILMEES = {
       { nom: 'reel-au-fil', etape: 'reel', instantMs: 1500 },
     ],
   }),
+  // L'en-tête de la fiche (#9904). Les réels drôles : quatre pages, chacune tenue 1,7 s (étape « reel-n » à son arrivée),
+  // puis le pouce remonte la page (0,45 s) et la suivante part. Le montage coupe sur chaque page tenue et pose ses propres
+  // transitions : la montée de page n'est pas une fenêtre de mouvement (au simulateur chargé, elle perd 2 à 3 images).
+  'interaction-defilement': interaction('interaction-defilement', {
+    montreUnFil: false,
+    dureeMs: 8500,
+    mouvement: [],
+    imagesCles: [1, 2, 3, 4].map((n) => ({ nom: `reel-${n}`, etape: `reel-${n}`, instantMs: 900 })),
+  }),
+  // La story s'ouvre depuis la racine (étape « ouverture »), l'intermède de l'auteur passe, la story est révélée (étape
+  // « story ») et se lit 3,2 s, texte traduit.
+  'interaction-story': interaction('interaction-story', {
+    montreUnFil: true,
+    dureeMs: 6000,
+    mouvement: [],
+    imagesCles: [{ nom: 'racine', etape: 'ouverture', instantMs: -100 }, { nom: 'story', etape: 'story', instantMs: 1500 }],
+  }),
+  // Le vocal joue dans sa langue d'origine (étape « original »), puis se relit et se réentend dans celle du lecteur
+  // (étape « traduction »), tenu 3 s.
+  'interaction-vocal': interaction('interaction-vocal', {
+    montreUnFil: true,
+    dureeMs: 6500,
+    mouvement: [],
+    imagesCles: [{ nom: 'original', etape: 'original', instantMs: 1800 }, { nom: 'traduction', etape: 'traduction', instantMs: 1800 }],
+  }),
 }

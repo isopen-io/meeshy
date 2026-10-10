@@ -1,10 +1,12 @@
 /**
- * « MES SONS » (#9848) — tranche du catalogue (`catalog-fr.ts` et ses six
- * jumeaux), extraite pour tenir le budget de taille. L'écran `/me/sounds`
- * (Réglages › Outils) : la bibliothèque de l'auteur et le retrait d'un son.
+ * « MES SONS » (#9848), FRANÇAIS — la SOURCE des clés `soundsMine.*` :
+ * l'écran `/me/sounds` (Réglages › Outils), la bibliothèque de l'auteur et le
+ * retrait d'un son. Hors du catalogue d'interface, arrivé à son plafond :
+ * chargé par l'écran (`i18n-sounds-mine-catalog.ts`, `routes/sounds-mine.tsx`),
+ * jamais au démarrage. La rangée de Réglages (`settings.tools.sounds`) reste
+ * dans `catalog-fr.ts`.
  */
-const frSoundsMine = {
-  'settings.tools.sounds': 'Mes sons',
+const fr = {
   'soundsMine.title': 'Mes sons',
   'soundsMine.back': 'Retour aux réglages',
   'soundsMine.empty.title': 'Aucun son dans votre bibliothèque',
@@ -24,4 +26,4 @@ const frSoundsMine = {
   'soundsMine.offline': 'Hors ligne — le retrait sera possible au retour du réseau.',
 } as const;
 
-export default frSoundsMine;
+export default fr;

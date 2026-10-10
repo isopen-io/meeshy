@@ -8,7 +8,6 @@ const ptConversationCard = {
   'conversation.card.messages.one': '{count} mensagem',
   'conversation.card.messages.other': '{count} mensagens',
   'conversation.card.languages': 'Idiomas falados',
-  'conversation.card.join': 'Entrar',
   'conversation.card.joinAnonymously': 'Entrar anonimamente',
   'conversation.card.open': 'Abrir',
   'conversation.card.leave': 'Sair',

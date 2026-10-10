@@ -52,11 +52,10 @@ import MeeshyUI
 /// generique reste, le tap retombe en zone 3, et le media garde son propre
 /// geste de revelation sur la rangee d'origine.
 ///
-/// **Carrousel** : la citation est une PORTE, pas une galerie. `ReplyReference`
-/// ne porte qu'UNE `attachmentThumbnailUrl` et aucun compte de pieces jointes
-/// (le gateway n'en selectionne pas), donc ni liste de miniatures ni badge
-/// « +N » ne serait honnete. Le tap ouvre le plein ecran de la conversation,
-/// ou les images 2..N sont atteignables au balayage.
+/// **Carrousel** : la citation est une PORTE, pas une galerie : UNE miniature,
+/// et depuis #9911 le badge « +N » quand elle cite un message ENTIER à
+/// plusieurs tuiles (`ReplyReference.quotedPieceCount`). Le tap ouvre le plein
+/// ecran de la conversation, ou les images 2..N sont atteignables au balayage.
 ///
 /// Gardes : `BubbleQuotedReplyZoneLawTests`.
 struct BubbleQuotedReply: View, Equatable {
@@ -144,7 +143,8 @@ struct BubbleQuotedReply: View, Equatable {
             storyCommentCount: reply.storyCommentCount,
             storyThumbnailUrl: reply.storyThumbnailUrl,
             moodEmoji: reply.moodEmoji,
-            storyUnavailable: reply.storyUnavailable
+            storyUnavailable: reply.storyUnavailable,
+            quotedPieceCount: reply.quotedPieceCount
         )
     }
 
@@ -190,6 +190,9 @@ struct BubbleQuotedReply: View, Equatable {
         let storyThumbnailUrl: String?
         let moodEmoji: String?
         let storyUnavailable: Bool?
+        /// « +N » (#9911) — arrive avec l'écho serveur ; absent de la
+        /// projection, le badge resterait figé sur la première résolution.
+        let quotedPieceCount: Int?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -619,6 +622,7 @@ struct BubbleQuotedReply: View, Equatable {
                         // (#4946) ; la directive déplace cette géographie, elle
                         // ne l'abandonne pas — les trois peaux la suivent.
                         quotedThumbnail
+                            .quotedExtraPieces(reply)
 
                         HStack(spacing: MeeshySpacing.xs) {
                             // Le glyphe reste la SEULE affordance du média quand

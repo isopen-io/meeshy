@@ -27,6 +27,12 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case feuilleDeStickers
     /// Le réel publié par la passerelle de la vitrine, annoncé au fil (#9820).
     case reelPublie
+    /// La racine de l'app, montée (#9904).
+    case racine
+    /// Le lecteur immersif des réels, monté sur ses réels (#9904).
+    case lecteurDeReels
+    /// Une story, révélée dans son lecteur après l'intermède de l'auteur (#9904).
+    case story
 }
 
 /// Le média que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810, #9820).
@@ -52,6 +58,9 @@ extension VitrineScene {
         case .interactionCommentaireAudio: return appareil == .ipad ? [.composeurDeCommentaire, .fil] : [.composeurDeCommentaire]
         case .interactionSticker: return [.composeur]
         case .interactionReel: return [.fil, .composeur]
+        case .interactionDefilement: return [.lecteurDeReels]
+        case .interactionStory: return appareil == .ipad ? [.fil] : [.racine]
+        case .interactionVocal: return [.conversation(conversationId ?? "")]
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -187,6 +196,17 @@ final class VitrineRendu {
     func racineAffichee(montrerLeFil: @escaping () -> Void) {
         guard actif else { return }
         self.montrerLeFil = montrerLeFil
+        signaler(.racine)
+    }
+
+    /// Le passage au réel suivant, comme le pouce qui remonte la page (#9904) : `nil` hors du lecteur des réels.
+    private(set) var reelSuivant: (() -> Void)?
+
+    /// Le lecteur des réels est monté sur ses réels : il prête son passage au suivant.
+    func lecteurDeReelsAffiche(suivant: @escaping () -> Void) {
+        guard actif else { return }
+        reelSuivant = suivant
+        signaler(.lecteurDeReels)
     }
 
     func feuilleDeStickersAffichee(choisir: @escaping (StickerSheetChoice) -> Void) {
