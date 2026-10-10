@@ -4011,11 +4011,11 @@
    "createdAt": "2026-09-10T12:00:00.000Z"
   },
   "creator": {
-   "id": "0cdc3a1317dfaf952cb35b8d",
-   "username": "lea.mtn",
-   "displayName": "Léa Martin",
-   "firstName": "Léa",
-   "lastName": "Martin"
+   "id": "b6ce6229c69bf522abfc25cd",
+   "username": "kwame.m",
+   "displayName": "Kwame Mensah",
+   "firstName": "Kwame",
+   "lastName": "Mensah"
   },
   "stats": {
    "totalParticipants": 42,
@@ -4031,6 +4031,53 @@
    ]
   }
  },
+ "liensDAffiliation": [
+  {
+   "id": "9e1e8a18384ed9d1175bc803",
+   "token": "qr-boutique",
+   "name": "QR en boutique",
+   "affiliateLink": "https://meeshy.me/join?affiliate=qr-boutique",
+   "maxUses": null,
+   "currentUses": 96,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-31T12:00:00.000Z",
+   "_count": {
+    "affiliations": 96
+   },
+   "clickCount": 1284
+  },
+  {
+   "id": "c37afc253ebdafd1581a086c",
+   "token": "bio-instagram",
+   "name": "Bio Instagram",
+   "affiliateLink": "https://meeshy.me/join?affiliate=bio-instagram",
+   "maxUses": null,
+   "currentUses": 41,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-22T12:00:00.000Z",
+   "_count": {
+    "affiliations": 41
+   },
+   "clickCount": 642
+  },
+  {
+   "id": "1d23d44729414713ca3aac71",
+   "token": "salon-lisbonne",
+   "name": "Salon de Lisbonne",
+   "affiliateLink": "https://meeshy.me/join?affiliate=salon-lisbonne",
+   "maxUses": null,
+   "currentUses": 18,
+   "isActive": true,
+   "expiresAt": null,
+   "createdAt": "2026-08-13T12:00:00.000Z",
+   "_count": {
+    "affiliations": 18
+   },
+   "clickCount": 219
+  }
+ ],
  "scenes": {
   "global": {
    "conversationId": "cd2497b0ef23413bae5c43f9"

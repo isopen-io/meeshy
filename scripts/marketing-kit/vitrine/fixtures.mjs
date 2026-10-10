@@ -6,7 +6,7 @@ import { KIT_LANGS } from '../lib/locales.mjs'
 import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
 import { REELS_DROLES, STORIES_DE_L_ENTETE } from '../textes/reels.mjs'
-import { SAV, SONDE } from '../textes/liens.mjs'
+import { AFFILIATION, SAV, SONDE } from '../textes/liens.mjs'
 import { VIDEO_DU_REEL, afficheMedia, photoMedia, segmenter, videoMedia, vocalMedia } from './medias.mjs'
 
 export const VERSION_FIXTURES = 2
@@ -634,7 +634,8 @@ const conversationsDuSav = (lang, maintenant) => SAV.map((c, i) => {
   }
 })
 
-// Le lien du premier SAV, tel qu'un client sans compte l'ouvre (`GET /links/:id`) : c'est le lecteur qui l'a créé.
+// Le lien du premier SAV, tel qu'un client sans compte l'ouvre (`GET /links/:id`). Le client, c'est le lecteur : le SAV
+// est celui d'une autre activité, celle de Kwame — un lecteur ne s'invite pas lui-même.
 const lienDuSav = (lang, maintenant) => {
   const c = SAV[0]
   const langues = [...new Set([lang, ...SAV.map((x) => x.lang)])]
@@ -643,10 +644,17 @@ const lienDuSav = (lang, maintenant) => {
     requireAccount: false, requireNickname: false, requireEmail: false, requireBirthday: false, allowedLanguages: [],
     allowAnonymousMessages: true, allowAnonymousImages: true, allowAnonymousFiles: false, allowViewHistory: true,
     conversation: { id: ID_SAV(c.cle), title: c.titre[lang], type: 'group', createdAt: iso(maintenant, 20 * JOUR) },
-    creator: identite(lecteurDe(lang)),
+    creator: identite(profilDe('kwame.m')),
     stats: { totalParticipants: 42, memberCount: 42, anonymousCount: 37, languageCount: langues.length, spokenLanguages: langues },
   }
 }
+
+// Les liens d'affiliation du lecteur, au format de la passerelle (`GET /affiliate/tokens`).
+const liensDAffiliation = (lang, maintenant) => AFFILIATION.map((a, i) => ({
+  id: oid(`affiliate:${a.cle}`), token: a.cle, name: a.nom[lang], affiliateLink: `https://meeshy.me/join?affiliate=${a.cle}`,
+  maxUses: null, currentUses: a.inscrits, isActive: true, expiresAt: null, createdAt: iso(maintenant, (30 + i * 9) * JOUR),
+  _count: { affiliations: a.inscrits }, clickCount: a.clics,
+}))
 
 export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
   if (!KIT_LANGS.includes(lang)) throw new Error(`langue hors kit : ${lang}`)
@@ -677,6 +685,7 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
       'interaction-sav': conversationsDuSav(lang, maintenant),
     },
     lienSav: lienDuSav(lang, maintenant),
+    liensDAffiliation: liensDAffiliation(lang, maintenant),
     scenes: { ...scenes(lang, fils), 'interaction-sonde': { conversationId: ID_SONDE } },
   }
 }

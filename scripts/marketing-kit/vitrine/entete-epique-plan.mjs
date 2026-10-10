@@ -13,16 +13,16 @@ import { auteurDuReel, storyDeLEntete } from './fixtures.mjs'
 export const FPS = 30
 export const LARGEUR = 3840
 export const HAUTEUR = 1646
-// 30 s : la limite d'Apple. Les 23 s des quatre actes, plus les 7 s du lien (#9904, « 7 s juste », directive porteur).
+// 30 s : la limite d'Apple. L'acte du LIEN y prend 10,4 s (#9904, « bien 10-12 s » selon le porteur) : trois réels au lieu
+// de quatre, une story, un vocal et un jeu resserrés à la mesure.
 export const DUREE_S = 30
 export const IMAGES = DUREE_S * FPS
 
 // La musique : « Games Music », Grigoriy Nuzhny, Mixkit — « Mixkit Stock Music Free License » (« Online marketing ads »
 // permis, aucune attribution exigée ; interdits : CD/DVD, jeux vidéo, radio et télévision, remix en piste musicale seule,
 // dépôt sur un service de gestion de droits), relevée le 2026-10-10 sur https://mixkit.co/license/#musicFree. 139 BPM :
-// la mesure tombe toutes les 1,7266 s ; l'extrait part sur un premier temps (48,97 s) et le jeu tombe sur l'entrée du
-// sommet du morceau (69,69 s), douze mesures plus loin. L'acte du LIEN dure 7 s juste : les quatre mesures qui le portent
-// (62,78 → 69,69 s) sont étirées de 1,4 % (atempo, hauteur conservée) — le reste du montage garde la mesure exacte.
+// la mesure tombe toutes les 1,7266 s ; l'extrait part sur un temps (48,54 s) et le jeu tombe, 49 temps plus loin, sur
+// l'entrée du sommet du morceau (69,69 s). Toutes les coupes tombent sur un temps.
 export const MUSIQUE = {
   titre: 'Games Music',
   auteur: 'Grigoriy Nuzhny',
@@ -32,18 +32,11 @@ export const MUSIQUE = {
   sha256: 'c1129accbe28650b96f19e065b229ac5769d77fd09a184a9f628e2c87571a9ab',
   fichier: 'musique-706-games-music.mp3',
   bpm: 139,
-  debutS: 48.97,
+  debutS: 48.54,
 }
 
 export const TEMPS_S = 60 / MUSIQUE.bpm
-// Les temps de l'acte du lien, étirés à 7 s.
-export const ETIREMENT = { de: 32, a: 48, dureeS: 7 }
-export const TEMPS_ETIRE_S = ETIREMENT.dureeS / (ETIREMENT.a - ETIREMENT.de)
-export const enSecondes = (temps) => {
-  if (temps <= ETIREMENT.de) return temps * TEMPS_S
-  if (temps <= ETIREMENT.a) return ETIREMENT.de * TEMPS_S + (temps - ETIREMENT.de) * TEMPS_ETIRE_S
-  return ETIREMENT.de * TEMPS_S + ETIREMENT.dureeS + (temps - ETIREMENT.a) * TEMPS_S
-}
+export const enSecondes = (temps) => temps * TEMPS_S
 // Chaque temps de la musique, en secondes de vidéo : la page y cale la respiration du fond.
 export const tempsDeLaVideo = () => Array.from({ length: 200 }, (_, k) => enSecondes(k)).filter((t) => t < DUREE_S)
 export const enImages = (secondes) => Math.round(secondes * FPS)
@@ -90,57 +83,64 @@ export const fenetre = (cx, cy, zoom) => {
 }
 
 export const PLANS = [
-  ...[1, 2, 3, 4].map((n) => ({
+  ...[1, 2, 3].map((n) => ({
     id: `reel-${n}`, acte: 'reels', de: (n - 1) * 3, a: n * 3, cote: 'droite',
     prise: { famille: 'interaction', scene: 'interaction-defilement' }, ancre: { etape: `reel-${n}`, decalageS: 0.05 },
     camera: { de: fenetre(660, 1435, 1.2), a: fenetre(640, 1450, 1.26) },
   })),
   {
-    id: 'story', acte: 'story', de: 12, a: 20, cote: 'gauche',
+    id: 'story', acte: 'story', de: 9, a: 15, cote: 'gauche',
     prise: { famille: 'interaction', scene: 'interaction-story' }, ancre: { etape: 'ouverture', decalageS: -0.35 },
     camera: { de: fenetre(660, 1516, 1), a: fenetre(660, 1600, 1.12) },
   },
   {
-    id: 'vocal', acte: 'vocal', de: 20, a: 32, cote: 'droite',
+    id: 'vocal', acte: 'vocal', de: 15, a: 25, cote: 'droite',
     prise: { famille: 'interaction', scene: 'interaction-vocal' }, ancre: { etape: 'original', decalageS: -0.3 },
     camera: { de: fenetre(660, 1700, 1.05), a: fenetre(620, 1780, 1.18) },
     loupe: { x: 30, y: 1545, largeur: 940, hauteur: 480 }, repere: { y: 1562 },
   },
   {
-    id: 'sonde', acte: 'lien', de: 32, a: 38, cote: 'gauche',
+    id: 'sonde', acte: 'lien', de: 25, a: 31, cote: 'gauche',
     prise: { famille: 'interaction', scene: 'interaction-sonde' }, ancre: { etape: 'ecran', decalageS: -0.6 },
-    camera: { de: fenetre(660, 1700, 1.05), a: fenetre(660, 1750, 1.15) },
+    camera: { de: fenetre(660, 1350, 1.05), a: fenetre(660, 1300, 1.12) },
+    loupe: { x: 30, y: 500, largeur: 1080, hauteur: 1060 },
   },
   {
-    id: 'sav', acte: 'lien', de: 38, a: 43, cote: 'droite',
+    id: 'sav', acte: 'lien', de: 31, a: 36, cote: 'droite',
     prise: { famille: 'interaction', scene: 'interaction-sav' }, ancre: { etape: 'ecran', decalageS: 0 },
-    camera: { de: fenetre(660, 1400, 1), a: fenetre(660, 1300, 1.12) },
+    camera: { de: fenetre(660, 1400, 1), a: fenetre(660, 1300, 1.1) },
+    loupe: { x: 30, y: 860, largeur: 1280, hauteur: 1000 },
   },
   {
-    id: 'invite', acte: 'lien', de: 43, a: 48, cote: 'gauche',
+    id: 'invite', acte: 'lien', de: 36, a: 42, cote: 'gauche',
     prise: { famille: 'interaction', scene: 'interaction-invite' }, ancre: { etape: 'invitation', decalageS: 0.4 },
     camera: { de: fenetre(660, 1500, 1), a: fenetre(660, 1560, 1.08) },
   },
   {
-    id: 'frappe', acte: 'jeu', de: 48, a: 52, cote: 'gauche',
+    id: 'liens', acte: 'lien', de: 42, a: 49, cote: 'droite',
+    prise: { famille: 'interaction', scene: 'interaction-liens' }, ancre: { etape: 'hub', decalageS: -0.1 },
+    camera: { de: fenetre(660, 1100, 1.25), a: fenetre(660, 1050, 1.35) },
+  },
+  {
+    id: 'frappe', acte: 'jeu', de: 49, a: 53, cote: 'gauche',
     prise: { famille: 'jeu', scene: 'jeu-frappe' }, ancre: { mouvement: true, decalageS: -0.25 },
     camera: { de: fenetre(660, 1100, 1.1), a: fenetre(560, 1000, 1.25) },
     loupe: { x: 70, y: 455, largeur: 560, hauteur: 270 },
   },
   {
-    id: 'coffre', acte: 'jeu', de: 52, a: 56, cote: 'droite',
+    id: 'coffre', acte: 'jeu', de: 53, a: 57, cote: 'droite',
     prise: { famille: 'jeu', scene: 'jeu-coffre' }, ancre: { mouvement: true, decalageS: -0.2 },
     camera: { de: fenetre(660, 1900, 1.1), a: fenetre(660, 2000, 1.25) },
     loupe: { x: 300, y: 1930, largeur: 720, hauteur: 560 },
   },
   {
-    id: 'niveau', acte: 'jeu', de: 56, a: 58, cote: 'gauche',
+    id: 'niveau', acte: 'jeu', de: 57, a: 59, cote: 'gauche',
     prise: { famille: 'jeu', scene: 'jeu-niveau' }, ancre: { mouvement: true, decalageS: -0.15 },
     camera: { de: fenetre(660, 1100, 1.1), a: fenetre(600, 1050, 1.2) },
     loupe: { x: 20, y: 470, largeur: 740, hauteur: 300 },
   },
   {
-    id: 'rang', acte: 'jeu', de: 58, a: 64, cote: 'gauche',
+    id: 'rang', acte: 'jeu', de: 59, a: 64, cote: 'gauche',
     prise: { famille: 'jeu', scene: 'jeu-rang' }, ancre: { mouvement: true, decalageS: -0.15 },
     camera: { de: fenetre(600, 1100, 1.15), a: fenetre(560, 1050, 1.25) },
     loupe: { x: 80, y: 760, largeur: 640, hauteur: 250 },
@@ -153,16 +153,16 @@ export const PLANS = [
 // (le scintillement à -6) : aucun effet ne dépasse la pleine échelle avant la sonie.
 export const REPERES = [
   { son: 'impact', temps: 0, gainDb: -6 },
-  ...[3, 6, 9].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
-  { son: 'souffle', temps: 12, gainDb: -4 },
+  ...[3, 6].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
+  { son: 'souffle', temps: 9, gainDb: -4 },
   { son: 'scintille', plan: 'story', etape: 'story', gainDb: -6 },
-  { son: 'souffle', temps: 20, gainDb: -4 },
+  { son: 'souffle', temps: 15, gainDb: -4 },
   { son: 'scintille', plan: 'vocal', etape: 'traduction', gainDb: -6 },
-  { son: 'souffle', temps: 32, gainDb: -4 },
-  ...[38, 43].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
+  { son: 'souffle', temps: 25, gainDb: -4 },
+  ...[31, 36, 42].map((temps) => ({ son: 'balayage', temps, gainDb: -6 })),
   { son: 'frappe', plan: 'frappe', retardS: 0.52, gainDb: 0 },
   { son: 'piece', plan: 'frappe', retardS: 1.0, gainDb: -2 },
-  { son: 'balayage', temps: 52, gainDb: -6 },
+  { son: 'balayage', temps: 53, gainDb: -6 },
   { son: 'coffre', plan: 'coffre', retardS: 0.15, gainDb: -2 },
   { son: 'niveau', plan: 'niveau', retardS: 0.05, gainDb: -3 },
   { son: 'rang', plan: 'rang', retardS: 0.55, gainDb: -3 },
@@ -293,33 +293,9 @@ export const planDeLEntete = ({ lang, prises, nomDeFiche }) => {
 export const CIBLE_LUFS = -16
 export const CRETE_DBTP = -1.5
 
-// La musique en trois morceaux CONTIGUS du fichier : avant le lien (à la mesure), le lien (quatre mesures étirées à 7 s,
-// hauteur conservée), puis le jeu et la signature (à la mesure). Chaque jointure se fond sur 30 ms, prises sur le morceau
-// qui précède : la durée totale reste exacte.
-export const FONDU_DE_JOINTURE_S = 0.03
-export const morceauxDeLaMusique = () => {
-  const d = MUSIQUE.debutS
-  const debutLien = d + ETIREMENT.de * TEMPS_S
-  const finLien = d + ETIREMENT.a * TEMPS_S
-  const facteur = ((ETIREMENT.a - ETIREMENT.de) * TEMPS_S) / ETIREMENT.dureeS
-  const fondu = FONDU_DE_JOINTURE_S
-  return [
-    { deS: d, aS: debutLien + fondu, tempo: 1 },
-    { deS: debutLien, aS: finLien + fondu * facteur, tempo: facteur },
-    { deS: finLien, aS: finLien + (DUREE_S - enSecondes(ETIREMENT.a)), tempo: 1 },
-  ]
-}
-
-export const filtreDeLaMusique = () => {
-  const m = morceauxDeLaMusique()
-  const t = (v) => v.toFixed(4)
-  return [
-    '[0:a]asplit=3[mu0][mu1][mu2]',
-    ...m.map((x, i) => `[mu${i}]atrim=start=${t(x.deS)}:end=${t(x.aS)},asetpts=PTS-STARTPTS${x.tempo === 1 ? '' : `,atempo=${x.tempo.toFixed(6)}`}[mo${i}]`),
-    `[mo0][mo1]acrossfade=d=${FONDU_DE_JOINTURE_S}:c1=tri:c2=tri[mx1]`,
-    `[mx1][mo2]acrossfade=d=${FONDU_DE_JOINTURE_S}:c1=tri:c2=tri`,
-  ].join(';')
-}
+// La musique : un seul extrait du fichier, à la mesure, de DUREE_S.
+export const filtreDeLaMusique = () =>
+  `[0:a]atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)},asetpts=PTS-STARTPTS`
 
 // Les sons qui CREUSENT la musique : les coups brefs. Un souffle ou un scintillement dure des secondes, et la musique
 // s'éteindrait sous lui.
@@ -415,7 +391,7 @@ export const modeleDeLaPage = ({ plan, images }) => {
     }, reels[0]),
     avecPose({ id: 'story', debutS: story.debutS, finS: story.finS, cote: story.cote, titre: story.titre, sousTitre: story.sousTitre, langues: story.langues, puceS: story.etapesS.story }, story),
     avecPose({ id: 'vocal', debutS: vocal.debutS, finS: vocal.finS, cote: vocal.cote, titre: vocal.titre, sousTitre: vocal.sousTitre, langues: vocal.langues, puceS: 0.25, basculeS: Number((vocal.debutS + vocal.basculeS).toFixed(3)) }, vocal),
-    ...['sonde', 'sav', 'invite'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, sousTitre: p.sousTitre }, p) }),
+    ...['sonde', 'sav', 'invite', 'liens'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, sousTitre: p.sousTitre }, p) }),
     ...['frappe', 'coffre'].map((id) => { const p = videos.find((v) => v.id === id); return avecPose({ id, debutS: p.debutS, finS: p.finS, cote: p.cote, titre: p.titre, slam: true }, p) }),
     avecPose({ id: 'niveau', debutS: niveau.debutS, finS: rang.finS, cote: niveau.cote, titre: niveau.titre, slam: true, sousTitre: rang.sousTitre, sousTitreS: Number((rang.debutS - niveau.debutS + 0.25).toFixed(3)) }, niveau),
   ]

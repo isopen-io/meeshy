@@ -73,6 +73,17 @@ export const TEXTES_ENTETE = {
       ar: 'بدون حساب، حتى من المتصفح',
     },
   },
+  liens: {
+    titre: {
+      fr: 'Suis tes liens', en: 'Track your links', es: 'Sigue tus enlaces', de: 'Behalte deine Links im Blick',
+      it: 'Segui i tuoi link', pt: 'Acompanhe seus links', ar: 'تابع روابطك',
+    },
+    sousTitre: {
+      fr: 'Clics, inscrits, affiliation', en: 'Clicks, sign-ups, affiliates', es: 'Clics, registros, afiliación',
+      de: 'Klicks, Anmeldungen, Partnerlinks', it: 'Clic, iscritti, affiliazione', pt: 'Cliques, cadastros, afiliação',
+      ar: 'النقرات والتسجيلات والإحالات',
+    },
+  },
   frappe: { titre: sansPoint(LEGENDES_APERCUS['jeu-frappe']) },
   coffre: { titre: sansPoint(LEGENDES_APERCUS['jeu-coffre']) },
   niveau: { titre: sansPoint(LEGENDES_APERCUS['jeu-niveau']) },

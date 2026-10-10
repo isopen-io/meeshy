@@ -10,7 +10,7 @@ import { TEXTES_ENTETE } from '../textes/entete-epique.mjs'
 import { tailleDeLoupe } from '../vitrine/entete-epique-page.mjs'
 import {
   DUREE_S, FPS, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, REPERES, SONS, TEMPS_S, CIBLE_LUFS, CRETE_DBTP,
-  ETIREMENT, FONDU_DE_JOINTURE_S, SONS_DE_COUP, argumentsDeMixage, entreeDuPlan, filtreDeLaMusique, morceauxDeLaMusique, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
+  SONS_DE_COUP, argumentsDeMixage, entreeDuPlan, filtreDeLaMusique, enSecondes, fenetre, filtreDeMixage, filtreDeSonie, legendeDuReel, lireMesure, modeleDeLaPage,
   planDeLEntete, recaler, titreDeSignature,
 } from '../vitrine/entete-epique-plan.mjs'
 import { ANCIENS_ENTETES, deposerLEntete, nomDuFichier, sourceVerifiee } from '../vitrine/entete-epique.mjs'
@@ -27,6 +27,7 @@ const prises = () => ({
   'interaction-invite': { clip: '/c/invite.mp4', rapport: rapport({ invitation: 0, 'sans-compte': 1500, formulaire: 2900 }) },
   'interaction-sonde': { clip: '/c/sonde.mp4', rapport: rapport({ ecran: 0 }) },
   'interaction-sav': { clip: '/c/sav.mp4', rapport: rapport({ ecran: 0 }) },
+  'interaction-liens': { clip: '/c/liens.mp4', rapport: rapport({ hub: 0, affiliation: 1300 }) },
   'jeu-frappe': { clip: '/c/frappe.mp4', rapport: rapport(), mouvementMs: 40 },
   'jeu-coffre': { clip: '/c/coffre.mp4', rapport: rapport(), mouvementMs: 30 },
   'jeu-niveau': { clip: '/c/niveau.mp4', rapport: rapport(), mouvementMs: 20 },
@@ -50,6 +51,8 @@ describe('l’en-tête épique : la forme exigée par Apple (#9904)', () => {
     expect(noms.every((n) => !n.startsWith('01-entete-'))).toBe(true)
     expect(ANCIENS_ENTETES.test('01-entete-fr-FR.mp4')).toBe(true)
     expect(ANCIENS_ENTETES.test(nomDuFichier('fr'))).toBe(true)
+    expect(ANCIENS_ENTETES.test('02-entete-epique-fr-FR.mp4')).toBe(true)
+    expect(nomDuFichier('fr')).toBe('03-entete-epique-fr-FR.mp4')
     expect(ANCIENS_ENTETES.test('01-jeu-fr-FR-iphone.mp4')).toBe(false)
   })
 })
@@ -60,36 +63,26 @@ describe('l’en-tête épique : le montage suit la musique (#9904)', () => {
     for (const p of PLANS) expect(Number.isInteger(p.de)).toBe(true)
     const actes = [...new Set(PLANS.map((p) => p.acte))]
     expect(actes).toEqual(['reels', 'story', 'vocal', 'lien', 'jeu', 'signature'])
-    for (const acte of actes) expect(PLANS.find((p) => p.acte === acte).de % 4).toBe(0)
     expect(enSecondes(PLANS.at(-1).de)).toBeLessThan(DUREE_S - 1.5)
   })
 
-  test('quatre réels, la story, le vocal, le lien (proches, SAV, client sans compte), puis le jeu dans l’ordre frappe → coffre → niveau → rang', () => {
-    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'reel-4', 'story', 'vocal', 'sonde', 'sav', 'invite', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
+  test('trois réels, la story, le vocal, le lien (proches, SAV, client sans compte, « Mes liens »), puis le jeu frappe → coffre → niveau → rang', () => {
+    expect(PLANS.map((p) => p.id)).toEqual(['reel-1', 'reel-2', 'reel-3', 'story', 'vocal', 'sonde', 'sav', 'invite', 'liens', 'frappe', 'coffre', 'niveau', 'rang', 'signature'])
   })
 
-  test('les quatre actes d’origine gardent leurs 23 s, le lien dure 7 s juste : 30 s', () => {
+  test('l’acte du lien prend 10 à 12 s, la signature garde plus de 2 s, et le tout tient en 30 s', () => {
     const duree = (acte) => PLANS.filter((p) => p.acte === acte).reduce((n, p) => n + (p.a === null ? DUREE_S - enSecondes(p.de) : enSecondes(p.a) - enSecondes(p.de)), 0)
-    expect(duree('lien')).toBeCloseTo(7, 6)
-    expect(duree('reels') + duree('story') + duree('vocal') + duree('jeu') + duree('signature')).toBeCloseTo(23, 6)
-    expect(enSecondes(PLANS.find((p) => p.acte === 'jeu').de) - enSecondes(PLANS.find((p) => p.acte === 'lien').de)).toBeCloseTo(7, 6)
-  })
-
-  test('la musique : trois morceaux contigus du fichier, le lien étiré de 1,4 % à 7 s, la somme fait 30 s', () => {
-    const [avant, lien, apres] = morceauxDeLaMusique()
-    expect(lien.deS).toBeCloseTo(avant.aS - FONDU_DE_JOINTURE_S, 6)
-    expect(apres.deS).toBeCloseTo(lien.aS - FONDU_DE_JOINTURE_S * lien.tempo, 6)
-    expect(lien.tempo).toBeCloseTo((16 * TEMPS_S) / 7, 6)
-    expect(Math.abs(1 - lien.tempo)).toBeLessThan(0.015)
-    const longueurs = [avant, lien, apres].map((m) => (m.aS - m.deS) / m.tempo)
-    expect(longueurs.reduce((n, l) => n + l, 0) - 2 * FONDU_DE_JOINTURE_S).toBeCloseTo(DUREE_S, 6)
-    expect(filtreDeLaMusique()).toContain(`atempo=${lien.tempo.toFixed(6)}`)
+    expect(duree('lien')).toBeGreaterThanOrEqual(10)
+    expect(duree('lien')).toBeLessThanOrEqual(12)
+    expect(duree('signature')).toBeGreaterThan(2)
+    expect(['reels', 'story', 'vocal', 'lien', 'jeu', 'signature'].reduce((n, a) => n + duree(a), 0)).toBeCloseTo(DUREE_S, 6)
   })
 
   test('l’extrait part sur un premier temps et le jeu entre sur le sommet du morceau (69,7 s)', () => {
     const jeu = PLANS.find((p) => p.acte === 'jeu')
     expect(MUSIQUE.debutS + jeu.de * TEMPS_S).toBeCloseTo(69.69, 1)
-    expect(morceauxDeLaMusique().at(-1).aS).toBeLessThan(118)
+    expect(MUSIQUE.debutS + DUREE_S).toBeLessThan(118)
+    expect(filtreDeLaMusique()).toBe(`[0:a]atrim=start=${MUSIQUE.debutS}:end=${(MUSIQUE.debutS + DUREE_S).toFixed(3)},asetpts=PTS-STARTPTS`)
     expect(TEMPS_S).toBeCloseTo(60 / 139, 6)
   })
 
@@ -214,12 +207,12 @@ describe('l’en-tête épique : la caméra et la loupe (#9904)', () => {
     const p = plan('fr')
     const images = Object.fromEntries(p.plans.filter((x) => x.clip).map((x) => [x.id, { dossier: `images/${x.id}`, nombre: 60 }]))
     const m = modeleDeLaPage({ plan: p, images })
-    expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', 'poing', ...Array(9).fill('fouet')])
-    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'frappe', 'coffre', 'niveau', 'rang'])
-    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'sonde', 'sav', 'invite', 'frappe', 'coffre', 'niveau'])
+    expect(m.plans.map((x) => x.entree)).toEqual(['fouet', 'poing', 'poing', ...Array(10).fill('fouet')])
+    expect(m.plans.filter((x) => x.loupe).map((x) => x.id)).toEqual(['vocal', 'sonde', 'sav', 'frappe', 'coffre', 'niveau', 'rang'])
+    expect(m.blocs.map((b) => b.id)).toEqual(['reels', 'story', 'vocal', 'sonde', 'sav', 'invite', 'liens', 'frappe', 'coffre', 'niveau'])
     expect(m.temps[0]).toBe(0)
     expect(m.temps.at(-1)).toBeLessThan(DUREE_S)
-    expect(m.citations).toHaveLength(4)
+    expect(m.citations).toHaveLength(3)
     expect(m.coups.length).toBeGreaterThanOrEqual(5)
     expect(m.signature.titre).toBe('Parle au monde entier')
   })

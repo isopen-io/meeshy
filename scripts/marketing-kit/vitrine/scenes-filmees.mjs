@@ -190,6 +190,13 @@ export const SCENES_FILMEES = {
     mouvement: [],
     imagesCles: [{ nom: 'conversation', etape: 'ecran', instantMs: 1500 }],
   }),
+  // « Mes liens » : le hub (étape « hub »), puis l'affiliation, ses clics et ses inscrits (étape « affiliation »).
+  'interaction-liens': interaction('interaction-liens', {
+    montreUnFil: false,
+    dureeMs: 4500,
+    mouvement: [],
+    imagesCles: [{ nom: 'hub', etape: 'hub', instantMs: 800 }, { nom: 'affiliation', etape: 'affiliation', instantMs: 1500 }],
+  }),
   // La liste des conversations de SAV, une par produit (étape « ecran »).
   'interaction-sav': interaction('interaction-sav', {
     montreUnFil: true,

@@ -338,12 +338,23 @@ describe('fixtures de la vitrine : le lien — « Dis-moi tout » et les SAV (#9
     expect(sav.every((c) => Date.parse(c.lastMessageAt) > plusRecent)).toBe(true)
   })
 
-  test.each(KIT_LANGS)('%s : le lien du SAV s’ouvre sans compte, créé par le lecteur', (lang) => {
+  test.each(KIT_LANGS)('%s : le lien du SAV s’ouvre sans compte, créé par une autre activité que le lecteur', (lang) => {
     const f = exporterVitrine({ lang, maintenant: MAINTENANT })
     expect(f.lienSav.linkId).not.toBe(f.lienInvitation.linkId)
     expect(f.lienSav.requireAccount).toBe(false)
     expect(f.lienSav.allowAnonymousMessages).toBe(true)
-    expect(f.lienSav.creator.id).toBe(f.lecteur.id)
+    expect(f.lienSav.creator.id).not.toBe(f.lecteur.id)
     expect(f.lienSav.conversation.title).toBe(f.conversationsDeScene['interaction-sav'][0].title)
+  })
+
+  test.each(KIT_LANGS)('%s : les liens d’affiliation de « Mes liens », leurs clics et leurs inscrits', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    expect(f.liensDAffiliation).toHaveLength(3)
+    for (const t of f.liensDAffiliation) {
+      expect(t.id).toMatch(HEX24)
+      expect(t.name).toBeTruthy()
+      expect(t.clickCount).toBeGreaterThan(t._count.affiliations)
+      expect(t.createdAt).toMatch(ISO_MS)
+    }
   })
 })

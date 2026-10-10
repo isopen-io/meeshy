@@ -111,3 +111,25 @@ export const SAV = [
     },
   },
 ]
+
+// « Mes liens » : les liens d'affiliation de l'activité du lecteur, chacun posé sur son canal, avec ses clics et ses inscrits.
+export const AFFILIATION = [
+  {
+    cle: 'qr-boutique', clics: 1284, inscrits: 96, nom: {
+      fr: 'QR en boutique', en: 'In-store QR', es: 'QR en tienda', de: 'QR im Laden', it: 'QR in negozio', pt: 'QR na loja',
+      ar: 'رمز QR في المتجر',
+    },
+  },
+  {
+    cle: 'bio-instagram', clics: 642, inscrits: 41, nom: {
+      fr: 'Bio Instagram', en: 'Instagram bio', es: 'Bio de Instagram', de: 'Instagram-Bio', it: 'Bio di Instagram',
+      pt: 'Bio do Instagram', ar: 'نبذة إنستغرام',
+    },
+  },
+  {
+    cle: 'salon-lisbonne', clics: 219, inscrits: 18, nom: {
+      fr: 'Salon de Lisbonne', en: 'Lisbon trade fair', es: 'Feria de Lisboa', de: 'Messe Lissabon', it: 'Fiera di Lisbona',
+      pt: 'Feira de Lisboa', ar: 'معرض لشبونة',
+    },
+  },
+]
