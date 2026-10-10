@@ -953,6 +953,19 @@ export default defineConfig({
            * 14 avant ce renommage). */
           if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
           /**
+           * LES NOMS QUE LA PREMIÈRE PEINTURE LIT (#9966) — `viewing-`,
+           * `session-` et `call-recording-event-names` (`@meeshy/shared`) sont
+           * des PARTIES des deux cartes, qu'`event-names.ts` répand. Dans
+           * l'entrée, `lib/api/conversation-viewing.ts` et
+           * `lib/calls/call-recording.ts` ne lisent qu'elles. Sans nom à eux,
+           * Rolldown les range dans le groupe `socket-event-names` ci-dessus,
+           * dont ils sont des dépendances, et l'entrée importe alors la carte
+           * ENTIÈRE. Mesuré : rendre `undefined` n'y change rien (90,09 Ko, un
+           * groupe nommé entraîne ses dépendances) ; ce nom sort la carte de la
+           * première peinture, 87,85 Ko au lieu de 90,09, pour 0,29 Ko.
+           */
+          if (/\/socketio-events\/(viewing|session|call-recording)-event-names\.[jt]s$/.test(id)) return 'event-names-first-paint';
+          /**
            * LA LOI DU NIVEAU ET DE LA FRAPPE (#9706) — `levels`, `level-steps`,
            * `level-wire`, `mint` et `rarity` (`@meeshy/shared/utils/game`)
            * sont lus par les seuls écrans du jeu, et chacun pèse moins d'1 Ko.

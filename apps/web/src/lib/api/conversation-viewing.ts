@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+import { SESSION_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/session-event-names';
+import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/viewing-event-names';
 import type { ViewingActionData, ViewingActivityData } from '@meeshy/shared/types/socketio-events/presence';
 
 import type { VisibilitySource } from './app-state-presence';
@@ -303,7 +304,7 @@ export function bindConversationViewing(params: {
 
   const canAnnounce = (): boolean => authenticated && !isSuspended() && visibility.visibilityState() === 'visible';
   const emit = (
-    event: typeof CLIENT_EVENTS.VIEWING_START | typeof CLIENT_EVENTS.VIEWING_STOP | typeof CLIENT_EVENTS.VIEWING_ACTIVITY,
+    event: typeof VIEWING_CLIENT_EVENTS.VIEWING_START | typeof VIEWING_CLIENT_EVENTS.VIEWING_STOP | typeof VIEWING_CLIENT_EVENTS.VIEWING_ACTIVITY,
     conversationId: string,
   ): void => {
     const body: ViewingActionData = { conversationId };
@@ -313,7 +314,7 @@ export function bindConversationViewing(params: {
     if (!canAnnounce()) return;
     for (const conversationId of holders.keys()) {
       const body: ViewingActivityData = { conversationId, focus: true };
-      socket.emit(CLIENT_EVENTS.VIEWING_ACTIVITY, body);
+      socket.emit(VIEWING_CLIENT_EVENTS.VIEWING_ACTIVITY, body);
     }
   };
   const stirAllNow = (): void => {
@@ -321,7 +322,7 @@ export function bindConversationViewing(params: {
     const at = now();
     for (const conversationId of holders.keys()) {
       lastStirred = new Map(lastStirred).set(conversationId, at);
-      emit(CLIENT_EVENTS.VIEWING_ACTIVITY, conversationId);
+      emit(VIEWING_CLIENT_EVENTS.VIEWING_ACTIVITY, conversationId);
     }
   };
   const stopFocusBeat = (): boolean => {
@@ -341,7 +342,7 @@ export function bindConversationViewing(params: {
   };
   const announceAll = (): void => {
     if (!canAnnounce()) return;
-    for (const conversationId of holders.keys()) emit(CLIENT_EVENTS.VIEWING_START, conversationId);
+    for (const conversationId of holders.keys()) emit(VIEWING_CLIENT_EVENTS.VIEWING_START, conversationId);
   };
   const rejoin = (): void => {
     announceAll();
@@ -350,10 +351,10 @@ export function bindConversationViewing(params: {
 
   const own: ViewingTransport = {
     announce: (conversationId) => {
-      if (canAnnounce()) emit(CLIENT_EVENTS.VIEWING_START, conversationId);
+      if (canAnnounce()) emit(VIEWING_CLIENT_EVENTS.VIEWING_START, conversationId);
     },
     withdraw: (conversationId) => {
-      if (authenticated) emit(CLIENT_EVENTS.VIEWING_STOP, conversationId);
+      if (authenticated) emit(VIEWING_CLIENT_EVENTS.VIEWING_STOP, conversationId);
     },
     stir: (conversationId) => {
       if (!canAnnounce()) return;
@@ -361,7 +362,7 @@ export function bindConversationViewing(params: {
       const last = lastStirred.get(conversationId);
       if (last !== undefined && at - last < ACTIVITY_THROTTLE_MS) return;
       lastStirred = new Map(lastStirred).set(conversationId, at);
-      emit(CLIENT_EVENTS.VIEWING_ACTIVITY, conversationId);
+      emit(VIEWING_CLIENT_EVENTS.VIEWING_ACTIVITY, conversationId);
     },
     focusChanged,
   };
@@ -421,24 +422,24 @@ export function bindConversationViewing(params: {
     if (visibility.visibilityState() === 'visible') rejoin();
   };
 
-  socket.on(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+  socket.on(SESSION_SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on('disconnect', onDisconnect);
-  socket.on(SERVER_EVENTS.VIEWING_START, onStart);
-  socket.on(SERVER_EVENTS.VIEWING_STOP, onStop);
-  socket.on(SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
-  socket.on(SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
+  socket.on(VIEWING_SERVER_EVENTS.VIEWING_START, onStart);
+  socket.on(VIEWING_SERVER_EVENTS.VIEWING_STOP, onStop);
+  socket.on(VIEWING_SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
+  socket.on(VIEWING_SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
   const unwatch = visibility.onChange(onVisibility);
   announceAll();
   focusChanged();
 
   return () => {
     if (transport === own) transport = null;
-    socket.off(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
+    socket.off(SESSION_SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
     socket.off('disconnect', onDisconnect);
-    socket.off(SERVER_EVENTS.VIEWING_START, onStart);
-    socket.off(SERVER_EVENTS.VIEWING_STOP, onStop);
-    socket.off(SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
-    socket.off(SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
+    socket.off(VIEWING_SERVER_EVENTS.VIEWING_START, onStart);
+    socket.off(VIEWING_SERVER_EVENTS.VIEWING_STOP, onStop);
+    socket.off(VIEWING_SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
+    socket.off(VIEWING_SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
     stopRestTimers();
     stopFocusBeat();
     unwatch();
