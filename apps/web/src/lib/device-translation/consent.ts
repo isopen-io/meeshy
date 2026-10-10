@@ -1,13 +1,15 @@
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 /**
- * **LE CONSENTEMENT AU TÉLÉCHARGEMENT DU MODÈLE** (#9898) — plusieurs
- * centaines de Mo ne partent jamais sans que le lecteur l'ait accepté. Tant
- * qu'il n'a rien dit, l'appareil ne traduit pas et le serveur reste seul.
+ * **LE CONSENTEMENT À LA TRADUCTION SUR L'APPAREIL** (#9898) — l'appareil ne
+ * télécharge aucun modèle, ne traduit rien et ne partage rien tant que le
+ * lecteur ne l'a pas accepté ; d'ici là, le serveur reste seul.
  *
- * POC : l'acceptation se pose par `deviceTranslationConsent().grant()` (la
- * console, ou l'écran de réglages qui viendra). L'écran qui la demande, avec
- * la taille mesurée par le banc (#9897), est la suite de #9898.
+ * L'acceptation se pose par la bascule Réglages › Données › « Traduire sur
+ * cet appareil » (`routes/settings.tsx`). Sa légende dit ce qu'elle engage :
+ * les sept langues, la taille d'une paire mesurée par le banc (#9897), et le
+ * partage de ce qui est traduit aux autres membres, sauf accusés de lecture
+ * coupés (#9899).
  */
 const KEY = 'meeshy.device-translation.consent';
 

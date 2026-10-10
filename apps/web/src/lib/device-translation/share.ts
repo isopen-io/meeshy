@@ -60,9 +60,9 @@ export type SealPort = (params: {
 /**
  * Ce que l'appareil a déjà posté avec succès, d'une session à l'autre. Une
  * traduction du cache est livrée à chaque ouverture du fil : sans registre, chaque
- * ouverture reposterait tout l'historique (le limiteur de la passerelle est
- * global, 300 requêtes par minute et par adresse). Il ne dit que `shared` —
- * ni un refus, ni une panne.
+ * ouverture reposterait tout l'historique, et la passerelle compte les partages
+ * par COMPTE (120 par minute, et un budget de caractères à l'heure et au jour).
+ * Il ne dit que `shared` — ni un refus, ni une panne.
  */
 export type ShareLedger = {
   readonly has: (key: string) => Promise<boolean>;
