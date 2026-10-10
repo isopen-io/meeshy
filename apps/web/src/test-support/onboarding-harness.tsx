@@ -5,7 +5,7 @@ import type { OnboardingSuggestion } from '@meeshy/shared/types/onboarding';
 
 import type { OnboardingPatchBody, OnboardingState, OnboardingStepId } from '@/lib/api/onboarding';
 
-import type { HttpRequest } from '@/lib/api/http';
+import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { ONBOARDING_QUERY_KEY } from '@/lib/api/onboarding';
 import { sessionStore } from '@/lib/api/session';
 import type { ScoreMark } from '@/lib/onboarding/journey';
@@ -72,6 +72,8 @@ export type HarnessOptions = {
   readonly resend?: boolean;
   /** Ce que rend `loadRecap` ; `'hold'` le laisse en suspens. */
   readonly recap?: Awaited<ReturnType<OnboardingScreenDeps['loadRecap']>> | 'hold';
+  /** La réponse de `PUT /me/birth-date` (#9928) — un majeur par défaut. */
+  readonly birthDate?: ApiResult<unknown>;
 };
 
 export function harness(options: HarnessOptions = {}) {
@@ -89,9 +91,15 @@ export function harness(options: HarnessOptions = {}) {
   let asked = 0;
   let score = options.serverScore ?? 0;
   let onboardingReads = 0;
+  let signOuts = 0;
+  const declared: unknown[] = [];
 
   const { transport } = scriptedTransport({});
   transport.request = (async (request: HttpRequest) => {
+    if (request.method === 'PUT' && request.path === '/api/v1/me/birth-date') {
+      declared.push(request.body);
+      return options.birthDate ?? { ok: true, data: { ageClass: 'adult', viewerWriteRestrictionGlobal: false } };
+    }
     if (request.method === 'PATCH') {
       patches.push(request.body as OnboardingPatchBody);
       return { ok: true, data: state };
@@ -142,6 +150,9 @@ export function harness(options: HarnessOptions = {}) {
       return options.resend ?? true;
     },
     takeStoryProof: (storyId) => storyId === options.publishedStory,
+    signOut: async () => {
+      signOuts += 1;
+    },
     random: () => 0,
     navigate: (path, replace = false) => visits.push({ path, replace }),
   };
@@ -164,6 +175,8 @@ export function harness(options: HarnessOptions = {}) {
     resent: () => resent,
     asked: () => asked,
     onboardingReads: () => onboardingReads,
+    declared,
+    signOuts: () => signOuts,
     arrive,
     serve,
   };

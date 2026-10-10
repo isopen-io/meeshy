@@ -130,9 +130,12 @@ export function replayServedState(input: {
   const closed = !state.eligible || state.completedAt !== null;
   const closedHere = ownSteps.size > 0 && ONBOARDING_COMPLETION_STEPS.every((id) => state.seenSteps.includes(id));
   if (closed) return closedHere ? 'stay' : 'closed';
-  const settledElsewhere =
-    (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ownSteps.has(step) && !context.progress.done.includes(step);
-  return settledElsewhere ? nextStepAfter(step, context) : 'stay';
+  const ours = ownSteps.has(step) || context.progress.done.includes(step);
+  const settledElsewhere = (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ours;
+  /* Une étape qui n'est PLUS proposée (Meeshy Global fermée à un compte dont
+     l'âge vient d'être appris, #9928) cède aussi : son geste serait refusé. */
+  const withdrawn = !isOffered(step, context) && !ours;
+  return settledElsewhere || withdrawn ? nextStepAfter(step, context) : 'stay';
 }
 
 /**

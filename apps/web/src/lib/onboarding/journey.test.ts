@@ -257,4 +257,9 @@ describe('replayServedState — une relecture du serveur rejouée contre la cart
   test('rien de neuf : on reste', () => {
     expect(replayServedState({ context: context(), step: 'languages', ownSteps: none })).toBe('stay');
   });
+
+  test('l’étape affichée n’est plus proposée (Global fermée à un mineur, apprise après coup) : on passe à la suivante (#9928)', () => {
+    const minor = context({ state: state({ seenSteps: ['languages', 'age'], viewerWriteRestriction: 'minor-global' }) });
+    expect(replayServedState({ context: minor, step: 'global', ownSteps: none })).toBe('story');
+  });
 });

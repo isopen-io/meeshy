@@ -7,7 +7,14 @@ import '@/styles/onboarding.css';
 
 import { apiDeps } from '@/lib/api/deps';
 import { performSendRequest, type FriendActionOutcome } from '@/lib/api/friend-actions';
-import { ONBOARDING_QUERY_KEY, ONBOARDING_STEPS, onboardingQueryOptions, type OnboardingDeps, type OnboardingStepId } from '@/lib/api/onboarding';
+import {
+  ONBOARDING_QUERY_KEY,
+  ONBOARDING_STEPS,
+  onboardingQueryOptions,
+  type OnboardingDeps,
+  type OnboardingState,
+  type OnboardingStepId,
+} from '@/lib/api/onboarding';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { performProfileEdit } from '@/lib/api/profile-actions';
 import { retrySendAction, sendAction } from '@/lib/api/query';
@@ -18,7 +25,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { translateOnboarding } from '@/lib/i18n-onboarding-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
+import { declareAge, finishJourney, recordStep, type OnboardingActionDeps } from '@/lib/onboarding/actions';
 import { observeCredit } from '@/lib/onboarding/credit';
 import { resendOwnVerification } from '@/lib/onboarding/resend-verification';
 import { createGreetingSender } from '@/lib/onboarding/greeting-send';
@@ -58,6 +65,7 @@ import {
   type LanguagesSave,
   type ResendLink,
 } from './onboarding-cards';
+import { AgeCard, AgeRefusal, type AgeSubmit } from './onboarding-age';
 import { RecapCard, type RecapNumbers } from './onboarding-recap';
 import { PointsPill, ProgressSegments } from './onboarding-visuals';
 import { href, navigate } from './route-table';
@@ -110,6 +118,8 @@ export type OnboardingScreenDeps = {
   readonly resendVerification: () => Promise<boolean>;
   /** Le retour du studio n'est crédité qu'avec sa preuve (`story-return.ts`). */
   readonly takeStoryProof: (storyId: string) => boolean;
+  /** Ferme la session — après l'écran des moins de 13 ans (#9928). */
+  readonly signOut: () => Promise<void>;
   readonly random: () => number;
   readonly navigate: (path: string, replace?: boolean) => void;
 };
@@ -165,6 +175,9 @@ export const defaultOnboardingScreenDeps: OnboardingScreenDeps = {
   },
   resendVerification: () => (apiDeps.source === 'fixtures' ? Promise.resolve(false) : resendOwnVerification(apiDeps.transport)),
   takeStoryProof: storyReturn.take,
+  /* En `import()` : la déconnexion tire le coffre des comptes, que seul
+     l'écran des moins de 13 ans appelle. */
+  signOut: () => import('@/lib/api/device-accounts').then(({ signOutOfThisDevice }) => signOutOfThisDevice()),
   random: Math.random,
   navigate,
 };
@@ -264,6 +277,8 @@ export function OnboardingJourney({
   const [askable] = useState(() => deps.notificationsAskable());
   const [step, setStep] = useState<JourneyStep | null>(null);
   const [storyPublished, setStoryPublished] = useState(false);
+  const [refused, setRefused] = useState(false);
+  const [today] = useState(() => new Date());
   const { flight, bump, travelling, announcement, celebrate } = useRewardFlight(lang);
   const actionDeps: OnboardingActionDeps = useMemo(() => ({ ...deps.api, queryClient: deps.queryClient }), [deps.api, deps.queryClient]);
 
@@ -396,6 +411,26 @@ export function OnboardingJourney({
     [record, context],
   );
 
+  /* L'ÂGE (#9928) — la réponse DIT la carte suivante : l'étape d'après se
+     calcule sur l'état que la déclaration vient d'écrire au cache (Global
+     fermée à un mineur), jamais sur celui du rendu qui a lancé l'envoi. */
+  const submitAge = useCallback(
+    async (birthDate: string): Promise<AgeSubmit> => {
+      const outcome = await declareAge(actionDeps, birthDate);
+      if (outcome.kind === 'invalid' || outcome.kind === 'failed') return outcome.kind;
+      if (!alive.current || context === null) return 'done';
+      if (outcome.kind === 'below-minimum') {
+        setRefused(true);
+        return 'done';
+      }
+      const served = deps.queryClient.getQueryData<OnboardingState>(ONBOARDING_QUERY_KEY) ?? context.state;
+      record('age', 'done');
+      setStep(nextStepAfter('age', { ...context, state: served, progress: progressNow.current }));
+      return 'done';
+    },
+    [actionDeps, context, deps.queryClient, record],
+  );
+
   const reward = useCallback(
     (step: OnboardingStepId) => {
       const before = progressNow.current.score?.last;
@@ -436,6 +471,16 @@ export function OnboardingJourney({
 
   const sessionPoints = pointsOf(progress);
   const host: CardHost = { lang, online, points: sessionPoints };
+  if (refused) {
+    return (
+      <main data-onboarding className="onb" dir={lang === 'ar' ? 'rtl' : 'ltr'} aria-label={translateOnboarding(lang, 'onboarding.title')}>
+        <div className="onb-backdrop" aria-hidden="true" />
+        <div className="onb-stage">
+          <AgeRefusal host={host} onConfirm={() => void deps.signOut()} />
+        </div>
+      </main>
+    );
+  }
   const { position, count } = journeyPositions(context, step);
   const account = session.status === 'authenticated' ? session.user : null;
   const primaryLanguage = account?.systemLanguage ?? lang;
@@ -489,6 +534,8 @@ export function OnboardingJourney({
           />
         ) : step === 'email' ? (
           <EmailCard host={host} resend={resend} onLater={() => advance('email', 'skipped')} />
+        ) : step === 'age' ? (
+          <AgeCard host={host} today={today} submit={submitAge} onSkip={() => advance('age', 'skipped')} />
         ) : step === 'global' ? (
           <GlobalCard
             host={host}

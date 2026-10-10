@@ -2,6 +2,8 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import type { OnboardingStepOutcome } from '@meeshy/shared/types/onboarding';
 
+import { declareBirthDate, type BirthDateOutcome } from '@/lib/api/birth-date';
+import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import {
   ONBOARDING_QUERY_KEY,
   ONBOARDING_STEPS,
@@ -39,6 +41,21 @@ export function recordStep(deps: OnboardingActionDeps, step: OnboardingStepId, o
     seenSteps: ONBOARDING_STEPS.filter((id) => id === step || state.seenSteps.includes(id)),
   }));
   return send(deps, { step, outcome });
+}
+
+/**
+ * **L'ÂGE DÉCLARÉ** (#9928) — attendu, pas optimiste : c'est la réponse qui
+ * dit la carte suivante (Meeshy Global proposée ou non) et le seul refus qui
+ * ferme le compte (moins de 13 ans). Ce que la passerelle a tranché entre
+ * dans le cache de l'accueil ; un compte devenu fermé en écriture relit sa
+ * liste, où Global passe aux archives et son composeur se verrouille.
+ */
+export async function declareAge(deps: OnboardingActionDeps, birthDate: string): Promise<BirthDateOutcome> {
+  const outcome = await declareBirthDate(deps, birthDate);
+  if (outcome.kind !== 'saved') return outcome;
+  patchCache(deps.queryClient, (state) => ({ ...state, viewerWriteRestriction: outcome.minorGlobal ? 'minor-global' : null }));
+  if (outcome.minorGlobal) void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+  return outcome;
 }
 
 export function finishJourney(deps: OnboardingActionDeps, now: () => Date = () => new Date()): Promise<boolean> {
