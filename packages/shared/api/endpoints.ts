@@ -79,6 +79,7 @@ import * as userGroup from './endpoints/user.js';
 import * as userPreferencesGroup from './endpoints/user-preferences.js';
 import * as usersGroup from './endpoints/users.js';
 import * as voiceGroup from './endpoints/voice.js';
+import * as worldGroup from './endpoints/world.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -136,6 +137,7 @@ export const API_ENDPOINTS = {
   userPreferences: userPreferencesGroup,
   users: usersGroup,
   voice: voiceGroup,
+  world: worldGroup,
 } as const;
 
 /** Les 419 (au 2026-08-29) chemins uniques du manifeste — dédupliqués par verbe. */
@@ -661,6 +663,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/voice/transcribe',
   '/api/v1/voice/translate',
   '/api/v1/voice/translate/async',
+  '/api/v1/world',
   '/attachments/:attachmentId/analysis',
   '/attachments/batch/analysis',
   '/health',
@@ -1193,6 +1196,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/voice/transcribe': ['POST'],
   '/api/v1/voice/translate': ['POST'],
   '/api/v1/voice/translate/async': ['POST'],
+  '/api/v1/world': ['GET'],
   '/attachments/:attachmentId/analysis': ['GET', 'POST'],
   '/attachments/batch/analysis': ['POST'],
   '/health': ['GET'],
