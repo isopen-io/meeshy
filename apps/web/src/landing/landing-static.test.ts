@@ -92,3 +92,12 @@ describe('les images d’aperçu (og:image)', () => {
     }
   });
 });
+
+describe('copie de la landing', () => {
+  test('aucun nom de fixture ne part dans la page publique — le dist gateway les refuse (scripts/check-gateway-build.mjs)', async () => {
+    const { LANDING_COPY } = await import('./landing-copy');
+    const { FIXTURE_MARKERS } = (await import('../../scripts/lib/fixture-markers.mjs')) as { FIXTURE_MARKERS: readonly string[] };
+    const text = JSON.stringify(LANDING_COPY);
+    expect(FIXTURE_MARKERS.filter((marker) => text.includes(marker))).toEqual([]);
+  });
+});
