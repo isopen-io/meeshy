@@ -41,6 +41,12 @@ const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
  */
 const EXEMPT = new Map<string, string>([
   [
+    'download.tsx',
+    "la page /download porte l'en-tête PARTAGÉ de meeshy.me (#10071, `landing/site-chrome.tsx`) : " +
+      "c'est `.ld-header` qui pose `padding-top: env(safe-area-inset-top)` (`styles/site-chrome.css`), " +
+      "collant en tête du défileur — un `pt-safe` sur la racine doublerait l'encoche.",
+  ],
+  [
     'thread.tsx',
     "le FIL, et c'est une exception MESURÉE (#6213) : sa racine `h-dvh` ne " +
       "porte AUCUN inset parce que son défileur couvre l'écran entier et que " +
