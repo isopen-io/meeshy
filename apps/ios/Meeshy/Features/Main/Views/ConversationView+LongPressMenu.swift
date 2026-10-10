@@ -119,3 +119,16 @@ extension ConversationView {
         )
     }
 }
+
+// MARK: - Supprimer UNE pièce (#9906)
+
+extension ConversationView {
+
+    /// Supprime la pièce VISÉE — jamais `attachments.first` par défaut. Sans
+    /// visée, un lot ne désigne rien et rien n'est supprimé
+    /// (`MessagePieceTarget.deletableMedia`).
+    func deleteMedia(targeted attachmentId: String?, of message: Message) {
+        guard let target = MessagePieceTarget.deletableMedia(in: message, targeted: attachmentId) else { return }
+        Task { await viewModel.deleteAttachment(messageId: message.id, attachmentId: target) }
+    }
+}

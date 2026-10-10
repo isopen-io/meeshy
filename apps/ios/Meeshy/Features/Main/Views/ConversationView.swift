@@ -874,11 +874,7 @@ struct ConversationView: View {
                     onSaveMedia: {
                         if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
                     },
-                    onDeleteMedia: {
-                        if let attId = msg.attachments.first?.id {
-                            Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
-                        }
-                    },
+                    onDeleteMedia: { deleteMedia(targeted: nil, of: msg) },
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
