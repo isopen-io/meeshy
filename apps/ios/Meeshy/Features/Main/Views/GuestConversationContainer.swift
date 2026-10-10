@@ -24,6 +24,19 @@ struct GuestSession {
     var isDeliberate: Bool = false
     var origin: GuestSessionOrigin = .shareLink
 
+    /// La session que le fil reçoit. World Wide plafonne les familles de ses
+    /// invités (#10001) : des termes qui ne les disent pas — ancien serveur,
+    /// session enregistrée avant le champ — n'ouvrent pas le sélecteur en
+    /// grand, ils prennent le plafond (#10055).
+    func effectiveContext(_ context: AnonymousSessionContext) -> AnonymousSessionContext {
+        guard case .world = origin else { return context }
+        var capped = context
+        capped.allowedAttachmentKinds = context.attachmentAllowance
+            .capped(by: GuestAttachmentKind.worldGuestCeiling)
+            .kinds
+        return capped
+    }
+
     /// La conversation que le fil ouvre une fois la session obtenue. World
     /// Wide s'annonce par ce que le serveur a servi — son type global, son
     /// titre, son effectif — avant que le détail ne revienne du réseau.
@@ -51,7 +64,8 @@ struct GuestConversationContainer: View {
     let onAccountRequest: (InviteLandingChoice) -> Void
 
     var body: some View {
-        if let context = session.context {
+        if let stored = session.context {
+            let context = session.effectiveContext(stored)
             ConversationView(
                 conversation: session.conversationShell(for: context),
                 anonymousSession: context,

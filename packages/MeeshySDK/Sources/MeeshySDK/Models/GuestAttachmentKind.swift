@@ -45,6 +45,10 @@ public enum GuestAttachmentKind: String, Sendable, CaseIterable, Codable, Equata
         return nil
     }
 
+    /// Le plafond de World Wide (`WORLD_GUEST_ATTACHMENT_KINDS`) : ce qu'un
+    /// invité y joint au plus, quoi que disent les termes de son lien.
+    public static let worldGuestCeiling: [GuestAttachmentKind] = [.text, .audio]
+
     /// Lecture TOLÉRANTE des termes servis : `nil` reste `nil` (aucune
     /// restriction), une famille inconnue est ignorée, et une liste qui n'en
     /// contient que d'inconnues devient VIDE — elle n'ouvre rien, jamais tout.
@@ -90,6 +94,13 @@ public struct GuestAttachmentAllowance: Sendable, Equatable {
     /// Une fiche de contact ou un lieu ne sont dans aucune famille : un lien
     /// restreint ne les offre pas.
     public var offersContactsAndPlaces: Bool { !isRestricted }
+
+    /// Le plafond d'une conversation appliqué aux termes servis : des termes
+    /// ABSENTS prennent le plafond — jamais « tout » —, des termes plus larges
+    /// y sont resserrés, des termes plus étroits le restent.
+    public func capped(by ceiling: [GuestAttachmentKind]) -> GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: (kinds ?? ceiling).filter(ceiling.contains))
+    }
 
     public enum Verdict: Sendable, Equatable {
         /// Admis ; la famille déclarée par le nom, quand elle est connue.
