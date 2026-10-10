@@ -66,7 +66,7 @@ describe('la reprise — la première étape manquante, « Passer tout » dès l
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     await click(action(host, 'skipAll'));
     expect(patches).toEqual([{ finish: true }]);
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 
   test('aucun texte de perte ni de compte à rebours sur aucune carte', async () => {
@@ -86,7 +86,7 @@ describe('le serveur arbitre à CHAQUE relecture, pas seulement sur le cache', (
     expect(card(host)).toBe('languages');
     expect(visits).toEqual([]);
     await arrive();
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 
   test('cache sans « global », serveur qui le pré-coche (salut envoyé depuis iOS) : aucun second « Envoyer »', async () => {
@@ -118,7 +118,7 @@ describe('le serveur arbitre à CHAQUE relecture, pas seulement sur le cache', (
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     await click(action(host, 'skipAll'));
     await arrive();
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 });
 
@@ -345,7 +345,7 @@ describe('le récapitulatif — deux sorties, toujours la possibilité de s’ar
     await click(action(host, 'friends.later'));
     await click(action(host, 'recap.done'));
     expect(first.patches.at(-1)).toEqual({ finish: true });
-    expect(first.visits.at(-1)).toEqual({ path: '/', replace: true });
+    expect(first.visits.at(-1)).toEqual({ path: '/chats', replace: true });
 
     const second = harness();
     const again = await mount(<OnboardingJourney deps={second.deps} search={new URLSearchParams('step=friends')} clearSearch={() => undefined} />);
@@ -379,6 +379,6 @@ describe('accessibilité et langue', () => {
     signIn();
     const { deps, visits } = harness({ state: served({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z' }) });
     await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 });
