@@ -825,6 +825,22 @@ final class DeviceTranslationCoordinatorTests: XCTestCase {
         XCTAssertEqual(rig.source.applied.map(\.persisting), [true, true])
     }
 
+    func test_sharedEvent_beforeTheFirstPass_isNotTranslatedAgainByTheDevice() async throws {
+        let rig = makeRig(messages: [makeMessage()])
+        defer { rig.coordinator.stop() }
+        let readTwice = makeSignal("the event and the first pass read the thread", count: 2)
+        rig.source.onMessagesRead = { readTwice.fulfill() }
+        let neverConsulted = watchTheEngine(of: rig)
+
+        rig.coordinator.start(source: rig.source, encryptionMode: nil)
+        rig.events.send(try makeShared())
+        await fulfillment(of: [readTwice], timeout: patience)
+        await fulfillment(of: [neverConsulted], timeout: quietPeriod)
+
+        XCTAssertEqual(rig.source.applied.map(\.id), ["shared:\(Ids.sharedA)"])
+        XCTAssertTrue(rig.sharing.shareCalls.isEmpty)
+    }
+
     func test_sharedEvent_sealedOverADifferentSourceText_isRefusedWhileTheRightOneIsShown() async throws {
         let rig = makeRig(messages: [makeMessage()])
         defer { rig.coordinator.stop() }

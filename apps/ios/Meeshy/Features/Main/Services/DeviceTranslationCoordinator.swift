@@ -123,10 +123,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
 
     private var readersKey = ""
     private var ledger: [String: LedgerEntry] = [:]
-    /// Les langues posées par le coordinateur, par message : la conversation ne
-    /// les sert qu'après sa décantation, et un passage ne doit pas recalculer
-    /// entre-temps ce qu'il vient de poser.
-    private var applied: [String: Set<String>] = [:]
+    /// Les langues posées par le coordinateur, par message ET pour la version
+    /// qu'elles traduisent : la conversation ne les sert qu'après sa
+    /// décantation, et un passage ne doit pas recalculer entre-temps ce qu'il
+    /// vient de poser. Une langue posée pour une autre version ne compte pas.
+    private var applied: [String: PresentedLanguages] = [:]
 
     private var shareQueue: [DeviceTranslationShare] = []
     private var shareTask: Task<Void, Never>?
@@ -256,6 +257,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
         let disposition: DeviceTranslationDisposition
     }
 
+    private struct PresentedLanguages {
+        let version: MessageVersion
+        var languages: Set<String>
+    }
+
     /// Un autre jeu de langues change ce qu'il reste à faire : tout est à revoir.
     private func adopt(readers: [String]) {
         let key = readers.joined(separator: "|")
@@ -275,7 +281,6 @@ final class DeviceTranslationCoordinator: ObservableObject {
         let version = MessageVersion(message)
         guard ledger[message.id]?.version != version else { return version }
         ledger[message.id] = LedgerEntry(version: version)
-        applied.removeValue(forKey: message.id)
         return version
     }
 
@@ -314,12 +319,13 @@ final class DeviceTranslationCoordinator: ObservableObject {
         DeviceTranslationTarget.candidates(
             preferredLanguages: readers,
             originalLanguage: message.originalLanguage,
-            translatedLanguages: servedLanguages(of: message.id)
+            translatedLanguages: servedLanguages(of: message)
         )
     }
 
-    private func servedLanguages(of messageId: String) -> [String] {
-        (source?.deviceTranslatedLanguages(of: messageId) ?? []) + Array(applied[messageId] ?? [])
+    private func servedLanguages(of message: Message) -> [String] {
+        let presented = applied[message.id].flatMap { $0.version == MessageVersion(message) ? $0.languages : nil }
+        return (source?.deviceTranslatedLanguages(of: message.id) ?? []) + Array(presented ?? [])
     }
 
     // MARK: - 1. Les traductions que les autres ont partagées
@@ -505,7 +511,7 @@ final class DeviceTranslationCoordinator: ObservableObject {
             guard let pair = DeviceTranslationTarget.resolve(
                 preferredLanguages: readers,
                 originalLanguage: plan.message.originalLanguage,
-                translatedLanguages: servedLanguages(of: plan.message.id),
+                translatedLanguages: servedLanguages(of: plan.message),
                 canTranslate: { source, target in
                     !failed.contains(target)
                         && (availability[DeviceTranslationPair(source: source, target: target)] ?? .unsupported) != .unsupported
@@ -557,7 +563,9 @@ final class DeviceTranslationCoordinator: ObservableObject {
 
     /// LE site qui montre une traduction, qu'elle vienne du moteur ou d'un autre
     /// membre. Elle prend l'orthographe du rang du lecteur (`pt-BR` et non `pt`) :
-    /// c'est ainsi que les surfaces de la conversation la retrouvent.
+    /// c'est ainsi que les surfaces de la conversation la retrouvent. Le registre
+    /// retient la version de ce qu'il montre : une traduction partagée reçue
+    /// avant le premier passage n'est pas refaite par l'appareil.
     private func present(
         _ text: String,
         target: String,
@@ -568,7 +576,11 @@ final class DeviceTranslationCoordinator: ObservableObject {
         readers: [String],
         persisting: Bool
     ) {
-        applied[message.id, default: []].insert(target)
+        let version = MessageVersion(message)
+        if applied[message.id]?.version != version {
+            applied[message.id] = PresentedLanguages(version: version, languages: [])
+        }
+        applied[message.id]?.languages.insert(target)
         source?.applyDeviceTranslation(
             MessageTranslation(
                 id: translationId,
