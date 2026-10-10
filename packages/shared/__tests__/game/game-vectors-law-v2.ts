@@ -78,6 +78,7 @@ import {
   seasonStepReward,
   seasonWeek,
   seasonSealReward,
+  upcomingSeason,
   type SeasonStarSource,
 } from '../../utils/game/season.js';
 import {
@@ -300,6 +301,7 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
         season: seasonAt(input.dayKey),
         week: seasonWeek(input.dayKey),
         seasonOfMoment: seasonOfMoment(input),
+        upcoming: upcomingSeason(input)?.startDay ?? null,
       };
     case 'season-progress': {
       const p = seasonProgress(input);
@@ -559,6 +561,13 @@ export function buildGameVectorsV2() {
     ['2026-12-07', 0],
     ['2027-02-01', 0],
     ['2030-06-15', 800],
+    // La saison 1 ouvre le lundi 2026-12-21 (#10014) : la fermeture du dimanche 20 h la précède.
+    ['2026-12-20', 1199],
+    ['2026-12-20', 1200],
+    ['2026-12-21', 0],
+    ['2027-02-14', 1199],
+    ['2027-02-14', 1200],
+    ['2027-02-15', 0],
   ].map(([dayKey, minuteOfDay]) => vector(`saison du ${dayKey} à ${minuteOfDay} min`, { law: 'season-at', dayKey: dayKey as string, minuteOfDay: minuteOfDay as number }));
 
   const progresses = [0, 3, 4, 7, 99, 100, 159, 160, 9999].map((stars) => vector(`parcours de saison à ${stars} étoiles`, { law: 'season-progress', stars }));

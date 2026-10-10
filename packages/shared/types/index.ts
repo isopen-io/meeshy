@@ -31,6 +31,7 @@ export {
 export * from './conversation.js';
 export * from './conversation-preview.js';
 export * from './conversation-card.js';
+export * from './world.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';

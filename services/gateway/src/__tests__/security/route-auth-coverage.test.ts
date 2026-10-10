@@ -360,6 +360,10 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/anonymous/refresh', why: 'sessionToken du corps haché puis vérifié en base (fail-closed)' },
   { method: 'POST', url: '/api/v1/anonymous/leave', why: 'idem' },
   { method: 'GET', url: '/api/v1/anonymous/link/:identifier', why: "aperçu pré-jointure d'un lien de partage, sans contenu de messages" },
+  // #10000 — l'entrée de World Wide que lit la landing de meeshy.me, servie à
+  // des visiteurs SANS compte ni session : identique pour tous, sans identité
+  // lue, ni id ni participant ni présence (schéma de réponse fermé).
+  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage et effectif agrégé, aucun id ni identité" },
   // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
   // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
   // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).

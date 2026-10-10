@@ -20,12 +20,16 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 
+// Une semaine de ligue d'AVANT la saison 1 : les ligues ne suivent pas les saisons (#10014).
 const NOW = new Date('2026-10-14T12:00:00Z');
 const WEEK = '2026-10-12';
+// Un jour de la saison 1, ouverte le lundi 2026-12-21 (#10014).
+const IN_SEASON = new Date('2026-12-23T12:00:00Z');
+const SEASON_WEEK = '2026-12-21';
 
-const build = async (db: FakeGameDb) => {
+const build = async (db: FakeGameDb, now: Date = NOW) => {
   const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
-  return new GameBlockService(db.prisma, { missions }).build({ userId: USER, now: NOW });
+  return new GameBlockService(db.prisma, { missions }).build({ userId: USER, now });
 };
 
 beforeEach(() => privacy.clear());
@@ -41,12 +45,13 @@ describe('les extensions du bloc game', () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 0 });
 
-    const block = await build(db);
+    const block = await build(db, IN_SEASON);
 
     expect(gameBlockSchema.safeParse(block).success).toBe(true);
     expect(block!.league).toMatchObject({ unlocked: false, access: 'locked', pseudonym: null, current: null });
     expect(block!.duo).toMatchObject({ unlocked: false, status: 'none', duoId: null });
     expect(block!.season).toMatchObject({ number: 1, stars: 0, completed: false, sealOwned: false });
+    expect(block!.seasonUpcoming).toBeNull();
     expect(block!.trophies).toEqual({ items: [], order: [] });
     expect(block!.atlas).toMatchObject({ stamped: 0 });
     expect(block!.prestige).toMatchObject({ stars: 0, canPrestige: false });
@@ -61,6 +66,18 @@ describe('les extensions du bloc game', () => {
       now: new Date('2026-10-05T10:00:00Z'),
     });
     expect(block!.season).toBeNull();
+  });
+
+  it('avant le lundi 2026-12-21, le bloc annonce la saison 1 à venir plutôt qu’un vide (#10014)', async () => {
+    const db = fakeGameDb();
+    veteran(db);
+    const block = await build(db);
+    expect(gameBlockSchema.safeParse(block).success).toBe(true);
+    expect(block!.season).toBeNull();
+    expect(block!.seasonUpcoming).toEqual({ number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' });
+    // Une donnée de calendrier : aucun identifiant, aucun pseudonyme, aucun total de quiconque.
+    expect(JSON.stringify(block!.seasonUpcoming)).not.toContain(OTHER);
+    expect(JSON.stringify(block!.seasonUpcoming)).not.toContain(USER);
   });
 
   it('un joueur placé sert son groupe : les autres figés, lui en direct, sous pseudonyme, sans identifiant', async () => {
@@ -93,17 +110,17 @@ describe('les extensions du bloc game', () => {
     const db = fakeGameDb();
     veteran(db);
     db.gameDuo.rows.push({
-      id: 'd1', weekKey: WEEK, inviterId: USER, inviteeId: OTHER, status: 'active', templateKey: 'duo-messages', signal: 'axis:content.text_message',
+      id: 'd1', weekKey: SEASON_WEEK, inviterId: USER, inviteeId: OTHER, status: 'active', templateKey: 'duo-messages', signal: 'axis:content.text_message',
       prism: false, partTarget: 40, commonTarget: 80, inviterProgress: 10, inviteeProgress: 25, inviterSeen: [], inviteeSeen: [],
     });
-    db.gameDuoSlot.rows.push({ id: 's1', userId: USER, weekKey: WEEK, duoId: 'd1' });
+    db.gameDuoSlot.rows.push({ id: 's1', userId: USER, weekKey: SEASON_WEEK, duoId: 'd1' });
     db.user.rows[1]!.displayName = 'Marie';
     db.gameSeason.rows.push({ id: 'se', userId: USER, number: 1, stars: 9, claimedSteps: [1], sealOwnedAt: null });
     db.gameTrophy.rows.push({ id: 't1', userId: USER, key: 'trophy.season-cup.1', awardedAt: new Date('2026-12-06T21:00:00Z') });
     db.atlasStamp.rows.push({ id: 'a1', userId: USER, language: 'es', sentAt: new Date(), receivedAt: new Date(), stampedOn: '2026-10-10' });
     db.gameProfile.rows.push({ id: 'gp', userId: USER, atlasVisibility: 'friends', showcaseOrder: ['trophy.season-cup.1'] });
 
-    const block = await build(db);
+    const block = await build(db, IN_SEASON);
 
     expect(gameBlockSchema.safeParse(block).success).toBe(true);
     expect(block!.duo).toMatchObject({ status: 'active', duoId: 'd1', partner: { userId: OTHER, displayName: 'Marie' }, progress: { mine: 10 } });
@@ -136,7 +153,7 @@ describe('les extensions du bloc game', () => {
     veteran(db);
     (db.gameSeason as unknown as { findUnique: () => Promise<never> }).findUnique = () => Promise.reject(new Error('down'));
 
-    const block = await build(db);
+    const block = await build(db, IN_SEASON);
 
     expect(block).not.toBeNull();
     expect(block!.level).toBeDefined();
