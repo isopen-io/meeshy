@@ -3504,6 +3504,127 @@
    }
   }
  ],
+ "mesLiens": {
+  "liens": [
+   {
+    "id": "24f07bbdf95e593fd5bd5e67",
+    "linkId": "nova-club",
+    "identifier": "nova-club",
+    "name": "Nova Club 🌍",
+    "isActive": true,
+    "currentUses": 412,
+    "maxUses": null,
+    "expiresAt": null,
+    "createdAt": "2026-09-02T10:00:00.000Z",
+    "conversationTitle": "Nova Club 🌍",
+    "allowAnonymousMessages": true,
+    "allowViewHistory": true,
+    "requireAccount": false
+   },
+   {
+    "id": "8c3414dadb3c890000c02cfd",
+    "linkId": "lisboa-2026",
+    "identifier": "lisboa-2026",
+    "name": "Lisboa ✈️",
+    "isActive": true,
+    "currentUses": 38,
+    "maxUses": null,
+    "expiresAt": null,
+    "createdAt": "2026-09-18T12:00:00.000Z",
+    "conversationTitle": "Lisboa ✈️",
+    "allowAnonymousMessages": true
+   },
+   {
+    "id": "1a3ce7a1d99e389d4e826755",
+    "linkId": "pizza-night",
+    "identifier": "pizza-night",
+    "name": "Pizza Night 🍕",
+    "isActive": true,
+    "currentUses": 21,
+    "maxUses": null,
+    "expiresAt": null,
+    "createdAt": "2026-09-10T12:00:00.000Z",
+    "conversationTitle": "Pizza Night 🍕",
+    "allowAnonymousMessages": true
+   }
+  ],
+  "stats": {
+   "totalLinks": 3,
+   "activeLinks": 3,
+   "totalUses": 471
+  },
+  "arrivees": {
+   "nova-club": {
+    "visits": 1284,
+    "arrivals": 412,
+    "anonymousArrivals": 157,
+    "arrivalsByLanguage": [
+     {
+      "language": "fr",
+      "count": 119
+     },
+     {
+      "language": "es",
+      "count": 87
+     },
+     {
+      "language": "ko",
+      "count": 74
+     },
+     {
+      "language": "ja",
+      "count": 58
+     },
+     {
+      "language": "pt",
+      "count": 45
+     },
+     {
+      "language": "ar",
+      "count": 29
+     }
+    ],
+    "arrivalsByCountry": [],
+    "recentArrivals": [
+     {
+      "participantId": "5e831ce5fb01d7784953f15e",
+      "displayName": "Sofía Romero",
+      "isAnonymous": false,
+      "language": "es",
+      "joinedAt": "2026-09-30T11:54:00.000Z"
+     },
+     {
+      "participantId": "9b0369e185c35addb2670a1d",
+      "displayName": "Min-jun",
+      "isAnonymous": true,
+      "language": "ko",
+      "joinedAt": "2026-09-30T11:31:00.000Z"
+     },
+     {
+      "participantId": "5b7d2219e5831a9088e920a1",
+      "displayName": "Aiko",
+      "isAnonymous": true,
+      "language": "ja",
+      "joinedAt": "2026-09-30T11:08:00.000Z"
+     },
+     {
+      "participantId": "deff63d3c56df366fb311336",
+      "displayName": "Lucas Oliveira",
+      "isAnonymous": false,
+      "language": "pt",
+      "joinedAt": "2026-09-30T10:45:00.000Z"
+     },
+     {
+      "participantId": "1fdfd490842baa4f577fa810",
+      "displayName": "Yusuf",
+      "isAnonymous": true,
+      "language": "ar",
+      "joinedAt": "2026-09-30T10:22:00.000Z"
+     }
+    ]
+   }
+  }
+ },
  "scenes": {
   "global": {
    "conversationId": "cd2497b0ef23413bae5c43f9"

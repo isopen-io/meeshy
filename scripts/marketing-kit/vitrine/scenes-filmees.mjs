@@ -174,4 +174,25 @@ export const SCENES_FILMEES = {
     mouvement: [],
     imagesCles: [{ nom: 'original', etape: 'original', instantMs: 1800 }, { nom: 'traduction', etape: 'traduction', instantMs: 1800 }],
   }),
+  // Le LIEN (#9904). Un inconnu ouvre le lien SANS compte : l'invitation se lit (étape « invitation »), il choisit « sans
+  // compte » (étape « sans-compte », le formulaire glisse en 0,4 s), puis son nom et sa langue s'y posent (étape
+  // « formulaire »), tenu 1,8 s.
+  'interaction-invite': interaction('interaction-invite', {
+    montreUnFil: false,
+    dureeMs: 5000,
+    mouvement: [],
+    imagesCles: [{ nom: 'invitation', etape: 'invitation', instantMs: 800 }, { nom: 'formulaire', etape: 'formulaire', instantMs: 1200 }],
+  }),
+  // « Mes liens » : le hub (étape « hub »), la liste des liens de partage et ses chiffres (étape « liste »), puis la fiche
+  // du lien du Nova Club et ses arrivées (étape « fiche »), tenue 2,6 s.
+  'interaction-liens': interaction('interaction-liens', {
+    montreUnFil: false,
+    dureeMs: 7000,
+    mouvement: [],
+    imagesCles: [
+      { nom: 'hub', etape: 'hub', instantMs: 900 },
+      { nom: 'liste', etape: 'liste', instantMs: 700 },
+      { nom: 'fiche', etape: 'fiche', instantMs: 1500 },
+    ],
+  }),
 }

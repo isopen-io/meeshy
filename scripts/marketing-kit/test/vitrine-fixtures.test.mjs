@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
-import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, oid, storyDeLEntete } from '../vitrine/fixtures.mjs'
+import { ID_DEBAT, ID_GLOBAL, ID_NOVA, LIEN_LISBOA, MESURE_PAR_DEFAUT, exporterVitrine, idAmour, languesDuCommentaireVocal, mesLiens, oid, storyDeLEntete } from '../vitrine/fixtures.mjs'
 import { RACINE_MEDIAS, VIDEOS_DES_REELS_DROLES, VIDEO_DU_REEL, afficheMedia, videoMedia } from '../vitrine/medias.mjs'
 
 const MAINTENANT = new Date('2026-09-30T12:00:00.000Z')
@@ -303,4 +303,25 @@ describe('fixtures de la vitrine : les réels drôles et la story de l’en-têt
     expect(storyDeLEntete('es').id).toBe('story.lucas')
   })
 
+})
+
+describe('fixtures de la vitrine : « Mes liens » (#9904)', () => {
+  test.each(KIT_LANGS)('%s : le lien du Nova Club, ses arrivées SANS compte et les langues des arrivants, au format de la passerelle', (lang) => {
+    const f = exporterVitrine({ lang, maintenant: MAINTENANT })
+    const { liens, stats, arrivees } = f.mesLiens
+    expect(liens[0].linkId).toBe(DEMO.lienInvitation.identifiant)
+    expect(stats.totalLinks).toBe(liens.length)
+    expect(stats.totalUses).toBe(liens.reduce((n, l) => n + l.currentUses, 0))
+    const a = arrivees[liens[0].linkId]
+    expect(a.visits).toBe(DEMO.lienInvitation.clics)
+    expect(a.anonymousArrivals).toBe(DEMO.lienInvitation.sansCompte)
+    expect(a.arrivalsByLanguage.reduce((n, l) => n + l.count, 0)).toBe(a.arrivals)
+    expect(a.recentArrivals.some((r) => r.isAnonymous)).toBe(true)
+    expect(a.recentArrivals.map((r) => r.participantId).every((id) => HEX24.test(id))).toBe(true)
+    for (const l of liens) expect(l.id).toMatch(HEX24)
+  })
+
+  test('le lecteur ne figure pas parmi les arrivants de son propre lien', () => {
+    expect(mesLiens('es', MAINTENANT).arrivees['nova-club'].recentArrivals.map((r) => r.displayName).join()).not.toContain('Sofía')
+  })
 })

@@ -36,6 +36,38 @@ export const TEXTES_ENTETE = {
       de: 'transkribiert und übersetzt', it: 'trascritti e tradotti', pt: 'transcritos e traduzidos', ar: 'مكتوبة ومترجمة',
     },
   },
+  // Le LIEN (#9904) : rejoindre sans compte, voir qui arrive par son lien, gérer ses liens. Aucun sondage : l'app n'en a pas.
+  invite: {
+    titre: {
+      fr: 'Rejoins sans compte', en: 'Join without an account', es: 'Únete sin cuenta', de: 'Ohne Konto beitreten',
+      it: 'Entra senza account', pt: 'Entre sem conta', ar: 'انضم بدون حساب',
+    },
+    sousTitre: {
+      fr: 'Un lien suffit', en: 'One link is all it takes', es: 'Basta con un enlace', de: 'Ein Link genügt',
+      it: 'Basta un link', pt: 'Basta um link', ar: 'رابط واحد يكفي',
+    },
+  },
+  arrivees: {
+    titre: {
+      fr: 'Vois qui arrive', en: 'See who’s coming', es: 'Mira quién llega', de: 'Sieh, wer kommt',
+      it: 'Guarda chi arriva', pt: 'Veja quem chega', ar: 'شاهد من يصل',
+    },
+    sousTitre: {
+      fr: 'Sans compte, dans sa langue', en: 'No account, in their own language', es: 'Sin cuenta, en su idioma',
+      de: 'Ohne Konto, in seiner Sprache', it: 'Senza account, nella sua lingua', pt: 'Sem conta, no próprio idioma',
+      ar: 'بدون حساب، وبلغته',
+    },
+  },
+  business: {
+    titre: {
+      fr: 'Gère ton business', en: 'Run your business', es: 'Gestiona tu negocio', de: 'Führe dein Business',
+      it: 'Gestisci il tuo business', pt: 'Gerencie seu negócio', ar: 'أدِر أعمالك',
+    },
+    sousTitre: {
+      fr: 'avec un seul lien', en: 'with a single link', es: 'con un solo enlace', de: 'mit einem einzigen Link',
+      it: 'con un solo link', pt: 'com um único link', ar: 'برابط واحد',
+    },
+  },
   frappe: { titre: sansPoint(LEGENDES_APERCUS['jeu-frappe']) },
   coffre: { titre: sansPoint(LEGENDES_APERCUS['jeu-coffre']) },
   niveau: { titre: sansPoint(LEGENDES_APERCUS['jeu-niveau']) },

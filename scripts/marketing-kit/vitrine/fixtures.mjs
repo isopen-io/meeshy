@@ -591,6 +591,46 @@ const lienInvitation = (lang, maintenant) => {
   }
 }
 
+// « Mes liens » du lecteur (#9904), au format de la passerelle (`GET /links`, `/links/stats`, `/links/:id/stats`) : le lien
+// du « Nova Club », ses visites, ses arrivées — dont celles SANS compte — et les langues des arrivants (le kit,
+// `DEMO.lienInvitation`), plus deux liens plus modestes. Les arrivées récentes sont des membres fictifs du kit.
+const ARRIVANTS = [['sofi.romero', false], ['minjun.p', true], ['aiko.t', true], ['lucas.olv', false], ['yusuf.h', true]]
+
+export const mesLiens = (lang, maintenant) => {
+  const L = DEMO.lienInvitation
+  const nova = {
+    id: oid('share:nova'), linkId: L.identifiant, identifier: L.identifiant, name: L.groupe, isActive: true,
+    currentUses: L.arrivees, maxUses: null, expiresAt: null, createdAt: new Date(`${L.cree}T10:00:00.000Z`).toISOString(),
+    conversationTitle: L.groupe, allowAnonymousMessages: true, allowViewHistory: true, requireAccount: false,
+  }
+  const autres = [
+    { cle: 'lisboa', id: LIEN_LISBOA, titre: DEMO.drole.titre, uses: 38, jours: 12 },
+    { cle: 'debat', id: 'pizza-night', titre: DEMO.debat.titre, uses: 21, jours: 20 },
+  ].map((a) => ({
+    id: oid(`share:${a.cle}`), linkId: a.id, identifier: a.id, name: a.titre, isActive: true, currentUses: a.uses, maxUses: null,
+    expiresAt: null, createdAt: iso(maintenant, a.jours * JOUR), conversationTitle: a.titre, allowAnonymousMessages: true,
+  }))
+  const liens = [nova, ...autres]
+  const parLangue = L.langues.map(([language, part]) => ({ language, count: Math.round((L.arrivees * part) / 100) }))
+  const arrivals = parLangue.reduce((n, l) => n + l.count, 0)
+  const recentes = ARRIVANTS.filter(([pseudo]) => pseudo !== lecteurDe(lang).pseudo).map(([pseudo, anonyme], i) => {
+    const p = profilDe(pseudo)
+    return {
+      participantId: oid(`arrivee:${pseudo}`), displayName: anonyme ? p.prenom : `${p.prenom} ${p.nom}`, isAnonymous: anonyme,
+      language: p.lang, joinedAt: iso(maintenant, 6 + i * 23),
+    }
+  })
+  return {
+    liens,
+    stats: { totalLinks: liens.length, activeLinks: liens.length, totalUses: liens.reduce((n, l) => n + l.currentUses, 0) },
+    arrivees: {
+      [nova.linkId]: {
+        visits: L.clics, arrivals, anonymousArrivals: L.sansCompte, arrivalsByLanguage: parLangue, arrivalsByCountry: [], recentArrivals: recentes,
+      },
+    },
+  }
+}
+
 export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
   if (!KIT_LANGS.includes(lang)) throw new Error(`langue hors kit : ${lang}`)
   const fils = {
@@ -614,6 +654,7 @@ export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
     posts: lesPosts,
     reels: reelsDroles(lang, maintenant),
     stories: lesStories,
+    mesLiens: mesLiens(lang, maintenant),
     scenes: scenes(lang, fils),
   }
 }
