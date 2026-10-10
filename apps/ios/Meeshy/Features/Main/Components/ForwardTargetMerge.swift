@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Une cible que le sélecteur de transfert peut proposer — soit une conversation
 /// existante, soit un contact sans conversation encore ouverte.
@@ -15,6 +16,29 @@ struct ForwardTarget: Identifiable, Equatable {
     let title: String
     let subtitle: String?
     let avatarURL: String?
+    /// Le titre est-il le NOM DE PROFIL de la personne ? Faux pour un contact
+    /// du répertoire, titré par le nom que l'utilisateur lui a donné dans son
+    /// carnet — un renommage de profil n'a pas à l'écraser.
+    var followsProfileName = true
+}
+
+extension ForwardTarget {
+    /// #9307 — la cible d'un pair suit `user:updated` par la loi du SDK
+    /// (`UserUpdatedEvent.composedName`, `OptionalMediaChange.applied`) ;
+    /// `nil` quand elle ne le désigne pas ou que rien ne change.
+    func repainted(by event: UserUpdatedEvent) -> ForwardTarget? {
+        guard userId == event.userId else { return nil }
+        let renamed = followsProfileName ? event.composedName : nil
+        let handle = renamed != nil && kind == .contact ? event.username.map { "@\($0)" } : nil
+        let next = ForwardTarget(
+            id: id, kind: kind, conversationId: conversationId, userId: userId,
+            title: renamed ?? title,
+            subtitle: handle ?? subtitle,
+            avatarURL: event.avatar.applied(to: avatarURL),
+            followsProfileName: followsProfileName
+        )
+        return next == self ? nil : next
+    }
 }
 
 /// Fusion PURE des cibles du sélecteur de transfert — conversations et contacts.

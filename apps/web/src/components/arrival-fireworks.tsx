@@ -15,7 +15,7 @@ import { useEffect, useRef } from 'react';
  */
 
 const PALETTE_TOKENS = ['--ios-indigo-400', '--ios-purple-500', '--ios-success', '--ios-warning', '--ios-info', '--ios-indigo-600'] as const;
-const FALLBACK_COLOR = '#6366F1';
+const FALLBACK_COLOR = 'currentColor';
 const BURSTS = 7;
 const BURST_INTERVAL_MS = 380;
 const PARTICLES_PER_BURST = 54;

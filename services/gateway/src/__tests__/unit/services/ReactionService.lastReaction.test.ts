@@ -99,6 +99,39 @@ describe('ReactionService — la dernière réaction de la conversation (#7545)'
     expect(result?.unchanged).toBe(false);
   });
 
+  it("#9026 — un ajout réel est une ACTIVITÉ : lastActivityAt avance, de façon monotone", async () => {
+    const { prisma, conversationUpdateMany } = makePrisma();
+    const service = new ReactionService(prisma as unknown as PrismaClient);
+
+    await service.addReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️' });
+
+    expect(conversationUpdateMany).toHaveBeenCalledWith({
+      where: { id: CONVERSATION_ID, OR: [{ lastActivityAt: null }, { lastActivityAt: { lt: REACTED_AT } }] },
+      data: { lastActivityAt: REACTED_AT },
+    });
+  });
+
+  it("#9026 — un ajout sans effet n'est pas une activité", async () => {
+    const { prisma, conversationUpdateMany } = makePrisma();
+    prisma.reaction.findFirst.mockResolvedValueOnce({ id: REACTION_ID, messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️', createdAt: new Date(), updatedAt: new Date() } as never);
+    const service = new ReactionService(prisma as unknown as PrismaClient);
+
+    await service.addReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️' });
+
+    expect(conversationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("#9026 — retirer une réaction ne remonte pas la conversation", async () => {
+    const { prisma, conversationUpdateMany } = makePrisma();
+    prisma.reaction.findFirst.mockResolvedValueOnce({ id: REACTION_ID, message: { conversationId: CONVERSATION_ID } } as never);
+    const service = new ReactionService(prisma as unknown as PrismaClient);
+
+    await service.removeReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '❤️' });
+
+    const writes = conversationUpdateMany.mock.calls.map(([args]) => JSON.stringify(args));
+    expect(writes.some((w) => w.includes('lastActivityAt'))).toBe(false);
+  });
+
   it("retirer la dernière réaction l'efface de la conversation, et seulement elle", async () => {
     const { prisma, conversationUpdateMany } = makePrisma();
     prisma.reaction.findFirst.mockResolvedValueOnce({ id: REACTION_ID, message: { conversationId: CONVERSATION_ID } } as never);

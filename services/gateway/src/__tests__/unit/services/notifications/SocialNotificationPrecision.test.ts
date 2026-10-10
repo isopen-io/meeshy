@@ -32,6 +32,15 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   securityLogger: { logViolation: jest.fn() },
 }));
 
+/** Le post que le bâtisseur RELIT pour servir son extrait (#8731) — vivant, sans traduction. */
+const liveExcerptSource = (content: string) => ({
+  content,
+  originalLanguage: null,
+  translations: null,
+  deletedAt: null,
+  expiresAt: null,
+});
+
 const ACTOR_ID = '507f1f77bcf86cd799439011';
 const RECIPIENT_ID = '507f1f77bcf86cd799439012';
 const PREV_COMMENTER_ID = '507f1f77bcf86cd799439013';
@@ -110,6 +119,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   describe('createPostCommentNotification', () => {
     it('met la cible typée + extrait du post en subtitle, le commentaire en body', async () => {
       const createdAt = new Date('2026-06-23T09:00:00.000Z');
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Journée de ouf au bureau')) };
       await service.createPostCommentNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -117,7 +127,6 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentId: COMMENT_ID,
         commentPreview: 'Trop drôle !',
         postType: 'STATUS',
-        postPreview: 'Journée de ouf au bureau',
         postCreatedAt: createdAt,
       });
 
@@ -307,13 +316,13 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
   describe('createPostRepostNotification', () => {
     it('wording typé « a partagé votre story » + extrait en subtitle', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil à Douala')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         repostId: 'cccccccccccccccccccccccc',
         postType: 'STORY',
-        postPreview: 'Coucher de soleil à Douala',
       });
 
       const payload = payloadOfType(mockIO, 'post_repost');
@@ -357,13 +366,13 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   describe('createPostLikeNotification — contexte expiry', () => {
     it('persiste postExpiresAt pour une réaction sur une story expirée', async () => {
       const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil')) };
       await service.createPostLikeNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
         postAuthorId: RECIPIENT_ID,
         emoji: '😍',
         postType: 'STORY',
-        postPreview: 'Coucher de soleil',
         postExpiresAt: expiresAt,
       });
 
@@ -458,6 +467,79 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans un statut');
       expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut de Alice Autrice');
+    });
+  });
+
+  // #8724 — une notification sur un COMMENTAIRE décrit aussi le POST qui le
+  // porte : la ligne in-app pose en pied l'icône et l'extrait du post au lieu
+  // de redire le commentaire.
+  describe('le post qui porte le commentaire voyage en métadonnée (#8724)', () => {
+    const persistedMetadata = (type: string) =>
+      prisma.notification.create.mock.calls
+        .map((c: any[]) => c[0].data)
+        .find((d: any) => d.type === type)?.metadata;
+
+    it('comment_reaction porte postPreview et le média du post', async () => {
+      prisma.postMedia = {
+        findFirst: jest.fn().mockResolvedValue({ mimeType: 'image/jpeg', fileUrl: '/u/p.jpg', thumbnailUrl: null }),
+      };
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('  Nouvelle version de Meeshy  ')) };
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '❤️',
+        commentPreview: 'Superbe features',
+      });
+
+      const metadata = persistedMetadata('comment_reaction');
+      expect(metadata.postPreview).toBe('Nouvelle version de Meeshy');
+      expect(metadata.commentPreview).toBe('Superbe features');
+      expect(metadata.mediaType).toBe('image');
+      expect(metadata.postThumbnailUrl).toEqual(expect.stringContaining('p.jpg'));
+    });
+
+    it('comment_like porte postPreview', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({ notification: { commentLikeEnabled: true } });
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Le post commenté')) };
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: RECIPIENT_ID,
+        emoji: '🔥',
+        commentPreview: 'Mon avis',
+      });
+
+      expect(persistedMetadata('comment_like').postPreview).toBe('Le post commenté');
+    });
+
+    it('comment_reply porte postPreview', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Lancement')) };
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+        parentCommentPreview: 'Bravo',
+      });
+
+      expect(persistedMetadata('comment_reply').postPreview).toBe('Lancement');
+    });
+
+    it('un post sans texte ne pose aucune clé postPreview', async () => {
+      prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('   ')) };
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Merci !',
+      });
+
+      expect(persistedMetadata('comment_reply')).not.toHaveProperty('postPreview');
     });
   });
 });

@@ -29,6 +29,16 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         return try enqueueResult.get()
     }
 
+    /// Doublure : enregistre l'enfilement comme une ligne `.createComment`. La
+    /// preuve de base est l'affaire de la file réelle (`OfflineQueueCommentMediaTests`).
+    var enqueueCommentOwners: [String?] = []
+
+    @discardableResult
+    func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+        enqueueCommentOwners.append(ownerId)
+        return try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+    }
+
     /// Ce que l'écrivain a DEMANDÉ à la file avant d'enfiler, dans l'ordre.
     /// Observable pour que le témoin puisse vérifier le KIND et l'ANCRE de la
     /// question : interroger l'ancre globale ferait qu'une seule republication

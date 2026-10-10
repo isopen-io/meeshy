@@ -43,6 +43,9 @@ export interface MessageListQuery extends PaginationParams {
 export interface CommunityListQuery extends PaginationParams {
   search?: string;
   isPrivate?: string;
+  isActive?: string;
+  sort?: 'createdAt' | 'name';
+  order?: 'asc' | 'desc';
 }
 
 export interface TranslationListQuery extends PaginationParams {
@@ -54,6 +57,7 @@ export interface TranslationListQuery extends PaginationParams {
 export interface ShareLinkListQuery extends PaginationParams {
   search?: string;
   isActive?: string;
+  conversationId?: string;
 }
 
 export interface AnalyticsQuery {

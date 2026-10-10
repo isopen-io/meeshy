@@ -13,6 +13,7 @@ import { FastifyInstance } from 'fastify';
 import { userPreferencesRoutes } from './preferences';
 import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
+import { securityEventsRoutes } from './security-events';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { handleGetMe, meRouteSharedOptions } from './get-me';
 
@@ -21,6 +22,7 @@ export default async function meRoutes(fastify: FastifyInstance) {
   await fastify.register(userPreferencesRoutes, { prefix: '/preferences' });
   await fastify.register(deleteAccountRoutes);
   await fastify.register(dataExportRoutes);
+  await fastify.register(securityEventsRoutes);
 
   // Future routes can be added here:
   // await fastify.register(profileRoutes);

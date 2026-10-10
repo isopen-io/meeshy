@@ -37,9 +37,12 @@ nonisolated enum QuotedReplyPresentation {
     /// message SUPPRIMÉ dit « Message supprimé » — la même clé que la rangée
     /// fantôme du message lui-même —, jamais le texte qu'il portait (le SDK
     /// l'a déjà retiré) ni le libellé générique « Médias » d'un aperçu vide.
+    /// Celle d'un éphémère ÉCHU pour le lecteur dit « Message éphémère
+    /// expiré » (#8631) : même scellement, autre cause.
     static func displayed(_ reference: ReplyReference) -> ReplyReference {
-        reference.presentingDeletion(
-            label: String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main)
+        reference.presentingSeal(
+            deleted: String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main),
+            expired: String(localized: "quote.ephemeral.expired", defaultValue: "Message éphémère expiré", bundle: .main)
         )
     }
 

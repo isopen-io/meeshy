@@ -153,6 +153,17 @@ describe('setAdminConversationMemberRole — E2', () => {
   });
 });
 
+describe('sans motif, chaque écriture garde un corps JSON (audit 2026-10-04)', () => {
+  test('PATCH du rôle : `{ role }` seul ; PATCH de la conversation : les champs seuls', async () => {
+    const { transport, appels } = transportEspion({ conversationId: 'c-1', userId: 'u-1', participantId: 'p-1', role: 'member' });
+
+    await setAdminConversationMemberRole({ ...deps(transport), conversationId: 'c-1', userId: 'u-1', role: 'member', reason: null });
+    await updateAdminConversation({ ...deps(transport), conversationId: 'c-1', edit: { title: 'Titre' }, reason: null });
+
+    expect(appels.map((appel) => appel.body)).toEqual([{ role: 'member' }, { title: 'Titre' }]);
+  });
+});
+
 describe('removeAdminConversationMember — E3', () => {
   test('vise POST …/participants/:userId/remove avec `{ reason }`', async () => {
     const { transport, appels } = transportEspion({ conversationId: 'c-1', userId: 'u-1', participantId: 'p-1', removed: true });
@@ -163,6 +174,17 @@ describe('removeAdminConversationMember — E3', () => {
     expect(appels[0]?.path).toBe('/api/v1/admin/conversations/c-1/participants/u-1/remove');
     expect(appels[0]?.body).toEqual({ reason: MOTIF });
     expect(resultat.ok && resultat.data.removed).toBe(true);
+  });
+
+  /* La passerelle refuse un POST SANS corps (audit 2026-10-04) : sans motif — le rang
+     souverain —, le retrait part avec un objet JSON vide, jamais sans corps. */
+  test('sans motif (rang souverain), le corps est `{}` — jamais absent', async () => {
+    const { transport, appels } = transportEspion({ conversationId: 'c-1', userId: 'u-1', participantId: 'p-1', removed: true });
+
+    await removeAdminConversationMember({ ...deps(transport), conversationId: 'c-1', userId: 'u-1', reason: null });
+    await removeAdminConversationMember({ ...deps(transport), conversationId: 'c-1', userId: 'u-1' });
+
+    expect(appels.map((appel) => appel.body)).toEqual([{}, {}]);
   });
 
   test('refuse un motif trop court avant le réseau', async () => {

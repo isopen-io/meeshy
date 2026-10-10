@@ -1,5 +1,6 @@
 import XCTest
 import AVFoundation
+import CoreGraphics
 import CoreMedia
 @testable import MeeshyUI
 @testable import MeeshySDK
@@ -98,6 +99,20 @@ final class StoryExportCompressionTests: XCTestCase {
                        StoryExportVideoSettings.averageBitRate(for: size))
         XCTAssertEqual(settings[AVVideoCodecKey] as? AVVideoCodecType, .h264,
                        "H.264 : l'export part vers Photos / WhatsApp / Android — HEVC n'y est pas universel")
+    }
+
+    /// **Le fichier dit dans quel espace ses pixels sont peints** (#9332). Le
+    /// compositeur peint en Display P3 ; sans étiquette, un lecteur lit du
+    /// BT.709 et la story exportée pâlit.
+    func test_videoSettings_declarentLeP3QueLeCompositeurPeint() throws {
+        let settings = StoryExportVideoSettings.video(for: CanvasGeometry.designSize)
+        let couleur = try XCTUnwrap(settings[AVVideoColorPropertiesKey] as? [String: String],
+                                    "sans propriétés couleur, l'encodeur laisse le lecteur deviner")
+        XCTAssertEqual(couleur[AVVideoColorPrimariesKey], AVVideoColorPrimaries_P3_D65)
+        XCTAssertEqual(couleur[AVVideoTransferFunctionKey], AVVideoTransferFunction_ITU_R_709_2)
+        XCTAssertEqual(couleur[AVVideoYCbCrMatrixKey], AVVideoYCbCrMatrix_ITU_R_709_2)
+        XCTAssertEqual(StoryRenderingContext.shared.workingColorSpace.name, CGColorSpace.displayP3,
+                       "l'étiquette suit l'espace où le compositeur peint")
     }
 }
 

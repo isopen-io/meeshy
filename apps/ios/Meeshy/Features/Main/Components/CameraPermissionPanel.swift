@@ -13,24 +13,24 @@ import MeeshyUI
 /// > l'auteur cherche une panne là où il n'y a qu'une case à cocher.
 struct CameraPermissionPanel: View {
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "camera.fill")
                 // Le glyphe d'un panneau de REFUS doit grandir comme son
                 // texte : c'est un écran qu'on lit quand quelque chose ne
                 // marche pas, donc précisément là où la grande taille sert.
                 .font(MeeshyFont.relative(38, weight: .light))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             Text(String(localized: "camera.permission.denied.title",
                         defaultValue: "Accès à la caméra refusé", bundle: .main))
-                .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundStyle(.white)
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
 
             Text(String(localized: "camera.permission.denied.body",
                         defaultValue: "Autorisez Meeshy à utiliser la caméra pour prendre des photos et des vidéos.",
                         bundle: .main))
-                .font(MeeshyFont.relative(13))
-                .foregroundStyle(.white.opacity(0.75))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .multilineTextAlignment(.center)
 
             Button {
@@ -38,16 +38,16 @@ struct CameraPermissionPanel: View {
             } label: {
                 Text(String(localized: "camera.permission.openSettings",
                             defaultValue: "Ouvrir les Réglages", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundStyle(.black)
-                    .padding(.horizontal, 20)
-                    .frame(height: 44)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .frame(height: MeeshyControlSize.tapTarget)
                     .background(Capsule().fill(.white))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.55))
+        .background(MeeshyColors.mediaScrim)
     }
 }

@@ -32,6 +32,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { appendPlaybackStretches, newStretchesDurationMs, parsePlaybackTrace } from '../utils/playback-trace';
 import { mergeViewedLanguages, MAX_VIEWED_LANGUAGES } from '../utils/viewed-languages';
+import { EngagementService } from './engagement/EngagementService';
 
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
 
@@ -100,8 +101,19 @@ export async function withRetry<T>(
   throw lastError;
 }
 
+/** Ce que l'écoute d'un vocal demande au moteur d'engagement (#8959). */
+export type MediaConsumptionEngagement = Pick<EngagementService, 'recordActivity'>;
+
 export class MessageMediaConsumptionService {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly engagement: MediaConsumptionEngagement | null;
+
+  /** `engagement` absent ⇒ le moteur réel ; `null` ⇒ aucun crédit. */
+  constructor(
+    private readonly prisma: PrismaClient,
+    engagement?: MediaConsumptionEngagement | null,
+  ) {
+    this.engagement = engagement === undefined ? new EngagementService(prisma) : engagement;
+  }
 
   /**
    * Enregistre qu'un message précis a été consulté dans une version linguistique
@@ -161,7 +173,7 @@ export class MessageMediaConsumptionService {
         select: {
           id: true,
           messageId: true,
-          message: { select: { conversationId: true } },
+          message: { select: { conversationId: true, sender: { select: { userId: true } } } },
         },
       });
 
@@ -171,7 +183,7 @@ export class MessageMediaConsumptionService {
 
       const now = new Date();
 
-      const served = await withRetry(() =>
+      const { becameComplete, ...served } = await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
           // La trace et l'ensemble des langues s'ACCUMULENT : il faut connaître
           // l'état courant pour y ajouter, ce qu'un upsert seul ne permet pas.
@@ -243,11 +255,24 @@ export class MessageMediaConsumptionService {
             },
           });
 
-          return { position: servedPosition.value, complete: servedComplete.value };
+          return {
+            position: servedPosition.value,
+            complete: servedComplete.value,
+            becameComplete: !(previous?.listenedComplete ?? false) && servedComplete.value,
+          };
         })
       );
 
       await this.updateAttachmentComputedStatus(attachmentId);
+
+      if (becameComplete) {
+        this.creditVoiceListened({
+          participantId,
+          attachmentId,
+          conversationId: attachment.message.conversationId,
+          authorUserId: attachment.message.sender?.userId ?? null,
+        });
+      }
 
       return served;
     } catch (error) {
@@ -257,6 +282,40 @@ export class MessageMediaConsumptionService {
       );
       throw error;
     }
+  }
+
+  /**
+   * `tool.voice_listened` (#8959) — au SEUL premier passage à « écouté en
+   * entier » (le « complet » est collant : une réécoute ne le refait jamais
+   * basculer). L'auditeur est un `Participant` : sans `userId` (anonyme), il
+   * n'a pas de compteur. L'auteur du vocal est nommé pour que s'écouter soi-même
+   * ne rapporte rien. Hors du chemin de la réponse.
+   */
+  private creditVoiceListened(params: {
+    participantId: string;
+    attachmentId: string;
+    conversationId: string;
+    authorUserId: string | null;
+  }): void {
+    const engagement = this.engagement;
+    if (!engagement) return;
+    const { participantId, attachmentId, conversationId, authorUserId } = params;
+    void Promise.resolve()
+      .then(async () => {
+        const listener = await this.prisma.participant.findUnique({
+          where: { id: participantId },
+          select: { userId: true },
+        });
+        if (!listener?.userId) return;
+        await engagement.recordActivity(listener.userId, 'tool.voice_listened', {
+          conversationId,
+          targetId: attachmentId,
+          targetOwnerId: authorUserId,
+        });
+      })
+      .catch((error: unknown) =>
+        logger.warn('[MessageReadStatus] tool.voice_listened engagement credit failed', { attachmentId, error })
+      );
   }
 
   async markVideoAsWatched(

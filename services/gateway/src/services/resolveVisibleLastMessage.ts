@@ -29,6 +29,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { applyPersonalHistoryHiding, loadPersonalHistoryHiding, NO_PERSONAL_HIDING } from './personalHistoryFilter';
 import { applyHistoryFloor } from './historyFloor';
+import { withoutCaptureNotices } from './messaging/captureNoticeVisibility';
 
 export interface PreviewCandidate {
   readonly conversationId: string;
@@ -144,7 +145,10 @@ export async function resolveVisibleLastMessages(
           : NO_PERSONAL_HIDING;
         const next = await prisma.message.findFirst({
           where: applyPersonalHistoryHiding(
-            applyHistoryFloor({ conversationId: candidate.conversationId, deletedAt: null }, floorOf(candidate)),
+            applyHistoryFloor(
+              withoutCaptureNotices({ conversationId: candidate.conversationId, deletedAt: null }),
+              floorOf(candidate)
+            ),
             hiding
           ),
           orderBy: { createdAt: 'desc' },

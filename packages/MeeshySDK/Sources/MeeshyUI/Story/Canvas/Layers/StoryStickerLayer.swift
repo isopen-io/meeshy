@@ -104,6 +104,7 @@ public final class StoryStickerLayer: CALayer {
         self.sticker = sticker
         currentLoadTask?.cancel()
         currentLoadTask = nil
+        animatedFrames = nil
 
         // Règle partagée avec le composite et l'export — voir
         // `CanvasGeometry.stickerFontSize`, qui les faisait diverger.
@@ -301,6 +302,7 @@ public final class StoryStickerLayer: CALayer {
     private func stampBitmap(_ bitmap: CGImage) {
         removeAnimation(forKey: Self.animatedContentsKey)
         playsAnimatedContents = false
+        animatedFrames = nil
         contents = bitmap
         contentsGravity = .resizeAspect
     }
@@ -349,6 +351,7 @@ public final class StoryStickerLayer: CALayer {
     private func stampAnimated(_ decoded: AnimatedImageDecoder.Decoded) {
         removeAnimation(forKey: Self.animatedContentsKey)
         playsAnimatedContents = false
+        animatedFrames = decoded.frames.count > 1 ? decoded : nil
         contents = decoded.frames.first
         contentsGravity = .resizeAspect
 
@@ -372,6 +375,28 @@ public final class StoryStickerLayer: CALayer {
         animation.isRemovedOnCompletion = false
         animation.fillMode = .forwards
         add(animation, forKey: Self.animatedContentsKey)
+    }
+
+    /// Le cycle décodé que cette couche joue — gardé HORS de la
+    /// `CAKeyframeAnimation` pour les rendus qui ne font tourner aucune
+    /// animation (#8610). Retenu même sous mouvement réduit : un fichier
+    /// exporté ne dépend pas du réglage de l'appareil qui l'a fabriqué.
+    private nonisolated(unsafe) var animatedFrames: AnimatedImageDecoder.Decoded?
+
+    /// **Pose sur la couche MODÈLE l'image du cycle à `elapsed`** (#8610).
+    ///
+    /// `layer.render(in:)` — l'export MP4 — peint la couche modèle et ignore
+    /// toute animation : sans cette pose, un GIF sortait figé sur sa première
+    /// image pour toute la vidéo. L'image se choisit par la même horloge que
+    /// la `CAKeyframeAnimation` discrète de la scène.
+    @MainActor
+    public func showAnimatedFrame(atElapsed elapsed: TimeInterval) {
+        guard let animatedFrames else { return }
+        let index = AnimatedImageTiming.frameIndex(elapsed: elapsed,
+                                                   frameCount: animatedFrames.frames.count,
+                                                   duration: animatedFrames.duration,
+                                                   loopCount: animatedFrames.loopCount)
+        contents = animatedFrames.frames[index]
     }
 
     /// **Pose la transformation d'une animation** (#4821) — réappliquée à

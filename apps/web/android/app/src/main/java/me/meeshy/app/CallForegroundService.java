@@ -26,6 +26,11 @@ import android.util.Log;
  */
 public class CallForegroundService extends Service {
 
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(ShellLocale.wrap(base));
+    }
+
     static final String EXTRA_VIDEO = "me.meeshy.app.call.video";
     private static final String CHANNEL_ONGOING = "meeshy_calls_ongoing";
     private static final int NOTIFICATION_ID = 0x4d43; // "MC"

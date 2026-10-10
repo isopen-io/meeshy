@@ -37,16 +37,20 @@ extension CallView {
         }
     }
 
+    /// Rangée du (…) déployé, donc candidate du `ViewThatFits` de la pilule :
+    /// ses puces sont construites ici, le `ForEach` ne fait que les relire
+    /// (#9456, `AsyncRenderRow`).
     var reactionPanelRows: some View {
-        VStack(spacing: 0) {
+        let chips = CallReactionEmoji.allCases.map { emoji in
+            AsyncRenderRow(id: emoji, content: CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
+                HapticFeedback.light()
+                _ = callControls.react(emoji)
+            })
+        }
+        return VStack(spacing: 0) {
             CallPanelHeader(title: CallControlsCopy.react, onBack: backToMenu, onClose: closePanel)
             CallPillRow {
-                ForEach(CallReactionEmoji.allCases, id: \.self) { emoji in
-                    CallPillChip(art: .emoji(emoji.rawValue), caption: nil, label: emoji.rawValue) {
-                        HapticFeedback.light()
-                        _ = callControls.react(emoji)
-                    }
-                }
+                ForEach(chips, content: asyncRenderRowContent)
             }
         }
     }
@@ -60,22 +64,12 @@ extension CallView {
         return members.union(ringing).union(peer).union(me)
     }
 
-    /// Posée au-dessus de la scène et sous la pilule : l'envol des réactions
-    /// ne capte aucun toucher.
+    /// Posée au-dessus de la scène : l'envol des réactions ne capte aucun
+    /// toucher.
     var callControlsLayer: some View {
         ZStack(alignment: .bottom) {
             CallFloatingReactionsLayer(reactions: callControls.reactions, reduceMotion: reduceMotion)
                 .equatable()
-            VStack(spacing: 10) {
-                if let notice = callControls.notice {
-                    CallControlsNoticePill(notice: notice, onDismiss: callControls.dismissNotice)
-                        .equatable()
-                }
-                if !callControls.invites.isEmpty {
-                    CallInviteStrip(invites: callControls.invites).equatable()
-                }
-            }
-            .padding(.bottom, Self.chromeBottomInset + 200)
         }
         .onAppear { _ = callControls }
         .sheet(isPresented: panelSheet(.people)) {
@@ -84,5 +78,22 @@ extension CallView {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    /// #8735 — le mot de retour et les invitations qui sonnent, posés JUSTE
+    /// AU-DESSUS du bloc de verre (en `overlay` de son bord haut, sans prendre
+    /// de place) : épinglés à hauteur fixe, ils couvraient la première rangée
+    /// du (…) déployé et volaient ses touchers.
+    var callControlsNoticesAbove: some View {
+        VStack(spacing: 10) {
+            if let notice = callControls.notice {
+                CallControlsNoticePill(notice: notice, onDismiss: callControls.dismissNotice)
+                    .equatable()
+            }
+            if !callControls.invites.isEmpty {
+                CallInviteStrip(invites: callControls.invites).equatable()
+            }
+        }
+        .alignmentGuide(.top) { $0[.bottom] + 10 }
     }
 }

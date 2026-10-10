@@ -29,7 +29,7 @@ describe('éteindre Animé rend la scène STATIQUE', () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-animated]'));
@@ -47,7 +47,7 @@ describe('la tuile Temps range la frise d’une scène qui RESTE animée', () =>
   test('absente d’une scène statique ; frise ouverte, elle est la SEULE tuile du rail droit ; la toucher range la frise sans éteindre Animé', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     expect(el.querySelector('[data-story-option="time"]')).toBeNull();
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
@@ -64,21 +64,23 @@ describe('la tuile Temps range la frise d’une scène qui RESTE animée', () =>
   });
 });
 
-describe('le rail droit suit l’ordre d’iOS', () => {
-  test('annuler, rétablir, Temps, Cadre, nouvelle scène ; « Texte » vit au couloir gauche, avec ce qu’on pose', async () => {
+describe('les rails suivent la géographie d’iOS (#8713)', () => {
+  test('à droite, les effets du fond en haut puis Temps, annuler, rétablir en bas ; à gauche, les portes, puis l’éclair, puis le Cadre ; le (+) de scène en barre haute', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-option="time"]'));
     // Un geste APRÈS l'animation, défait : de quoi annuler ET rétablir.
     click(el.querySelector('[data-story-option="add-text"]'));
     click(el.querySelector('[data-story-option="undo"]'));
-    expect(trailing(el)).toEqual(['undo', 'redo', 'time', 'frame', 'add-page']);
-    expect(el.querySelector('[data-story-studio-rail="leading"] [data-story-option="add-text"]')).not.toBeNull();
+    expect(trailing(el)).toEqual(['effect:opening', 'effect:visual', 'time', 'undo', 'redo']);
+    const leading = [...el.querySelectorAll('[data-story-studio-rail="leading"] [data-story-option], [data-story-studio-rail="leading"] [data-story-animated]')];
+    expect(leading.map((tile) => tile.getAttribute('data-story-option') ?? 'animated')).toEqual(['add-text', 'animated', 'frame']);
+    expect(el.querySelector('[data-story-option="add-page"]')?.closest('[data-story-studio-rail]')).toBeNull();
     expect(el.querySelector('[data-story-studio-rail="trailing"] [data-story-option="add-text"]')).toBeNull();
   });
 });
@@ -89,7 +91,7 @@ describe('l’unité des secondes de la frise se traduit', () => {
     document.documentElement.lang = 'ar';
     const el = mount(harness({}).deps);
     typeText(el, 'مرحبا');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline-duration]') !== null);
     const counter = el.querySelector('[data-story-timeline-duration]')?.parentElement?.textContent ?? '';

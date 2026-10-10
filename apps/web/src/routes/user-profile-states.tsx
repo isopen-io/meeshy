@@ -50,7 +50,7 @@ export function ProfileNotice({
           data-profile-retry
           onClick={action.onAction}
           className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS}`}
-          style={{ minHeight: 44, color: '#fff', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
+          style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
         >
           {action.label}
         </button>

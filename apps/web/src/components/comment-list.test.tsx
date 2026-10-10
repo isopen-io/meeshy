@@ -108,10 +108,21 @@ const gestesDe = (
   };
 };
 
-/** SUPPRIMER COÛTE DEUX GESTES — le premier ARME, le second détruit. */
-const supprimer = async (host: HTMLElement, selecteur = '[data-comment-gesture="delete"]') => {
-  await act(async () => host.querySelector<HTMLButtonElement>(selecteur)?.click());
-  await act(async () => host.querySelector<HTMLButtonElement>(selecteur)?.click());
+/**
+ * LE MENU « … » D'UNE RANGÉE (#8734) — Modifier, Supprimer, Copier, Imager,
+ * Signaler vivent derrière lui, comme sur iOS : l'ouvrir, puis choisir. Le
+ * panneau est en PORTAIL (le fil défile, une feuille le porte) : il se lit
+ * dans le DOCUMENT, jamais dans l'hôte.
+ */
+const ouvrirMenu = async (host: HTMLElement, rangee?: string) => {
+  const portee = rangee === undefined ? host : host.querySelector(`[data-comment-row="${rangee}"]`);
+  await act(async () => portee?.querySelector<HTMLButtonElement>('[data-comment-gesture="more"]')?.click());
+};
+const entreeDuMenu = (geste: string) => document.querySelector<HTMLButtonElement>(`[data-comment-menu] [data-comment-gesture="${geste}"]`);
+const entreesDuMenu = () => [...document.querySelectorAll('[data-comment-menu] [role="menuitem"]')].map((item) => item.getAttribute('data-comment-gesture'));
+const choisir = async (host: HTMLElement, geste: string, rangee?: string) => {
+  await ouvrirMenu(host, rangee);
+  await act(async () => entreeDuMenu(geste)?.click());
 };
 
 const MIEN = { id: 'u-moi', displayName: 'Vous', username: 'moi' };
@@ -257,10 +268,11 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
       liste({ comments: [comment({ id: 'mien', author: MIEN }), comment({ id: 'autrui' })], gestures: gestes }),
     );
     const ligne = (id: string) => host.querySelector(`[data-comment-row="${id}"]`);
-    expect(ligne('mien')?.querySelector('[data-comment-gesture="edit"]')).not.toBeNull();
-    expect(ligne('mien')?.querySelector('[data-comment-gesture="delete"]')).not.toBeNull();
-    expect(ligne('autrui')?.querySelector('[data-comment-gesture="edit"]')).toBeNull();
-    expect(ligne('autrui')?.querySelector('[data-comment-gesture="delete"]')).toBeNull();
+    await ouvrirMenu(host, 'mien');
+    expect(entreesDuMenu()).toEqual(['edit', 'delete']);
+    /* Sans copie, atelier ni signalement câblés, le commentaire d'autrui n'a
+       AUCUNE entrée — et le « … » ne se monte pas (`hasMoreOptions`). */
+    expect(ligne('autrui')?.querySelector('[data-comment-gesture="more"]')).toBeNull();
     /* AIMER, lui, reste offert des deux côtés. */
     expect(ligne('autrui')?.querySelector('[data-comment-gesture="like"]')).not.toBeNull();
   });
@@ -280,8 +292,8 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
    */
   test('SUPPRIMER porte l’encre destructrice, MODIFIER non — le tap irréversible se distingue du tap réversible', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() }));
-    const encreDe = (geste: string) =>
-      host.querySelector<HTMLElement>(`[data-comment-gesture="${geste}"]`)?.style.color ?? '';
+    await ouvrirMenu(host);
+    const encreDe = (geste: string) => entreeDuMenu(geste)?.style.color ?? '';
     expect(encreDe('delete')).toBe('var(--color-error)');
     expect(encreDe('edit')).not.toBe('var(--color-error)');
   });
@@ -300,7 +312,7 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
    */
   test('« Modifier » DONNE le focus au champ, curseur à la fin — le geste ne perd pas sa place', async () => {
     const host = await monter(liste({ comments: [comment({ content: 'Bonjour', author: MIEN })], gestures: gestesDe() }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
     const champ = host.querySelector<HTMLTextAreaElement>('[data-comment-edit-field]');
     expect(champ).not.toBeNull();
     /* L'ATTRIBUT plutôt que l'élément : une comparaison d'objets ferait
@@ -328,7 +340,7 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
         <CommentComposer language="fr" canWrite onSend={async () => ({ ok: true })} />
       </>,
     );
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
 
     const borneDe = (selecteur: string) => host.querySelector(selecteur)?.getAttribute('maxlength') ?? null;
     expect(borneDe('[data-comment-edit-field]')).toBe(borneDe('[data-comment-field]'));
@@ -369,7 +381,7 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
   test('MODIFIER ouvre le champ SUR PLACE, et « Enregistrer » remonte le texte nettoyé', async () => {
     const gestes = gestesDe();
     const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
 
     const champ = host.querySelector<HTMLTextAreaElement>('[data-comment-edit-field="mien"]');
     expect(champ?.value).toBe('Bonjour');
@@ -386,14 +398,14 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
 
   test('« Enregistrer » est DÉSACTIVÉ sur un texte vide — annoncé, jamais un bouton actif qui ne fait rien', async () => {
     const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN, content: '' })], gestures: gestesDe() }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
     expect(host.querySelector<HTMLButtonElement>('[data-comment-edit-save]')?.disabled).toBe(true);
   });
 
   test('« Annuler » referme sans rien remonter — le texte lu revient', async () => {
     const gestes = gestesDe();
     const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
     expect(host.querySelector('[data-comment-edit-field="mien"]')).not.toBeNull();
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-edit-cancel]')?.click());
     expect(host.querySelector('[data-comment-edit-field="mien"]')).toBeNull();
@@ -410,18 +422,18 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
    * annulation. La confirmation sur place coûte le même second geste qu'iOS
    * sans imposer une feuille modale.
    */
-  test('SUPPRIMER n’appelle RIEN au premier tap — il s’arme, et le second geste détruit', async () => {
+  test('SUPPRIMER coûte DEUX gestes — ouvrir le menu n’appelle rien, choisir le verbe détruit', async () => {
     const gestes = gestesDe();
     const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
-    const bouton = () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="delete"]');
+    expect(host.querySelector('[data-comment-gesture="delete"]')).toBeNull();
 
-    await act(async () => bouton()?.click());
+    await ouvrirMenu(host);
     expect(gestes.journal).toEqual([]);
-    expect(bouton()?.hasAttribute('data-comment-delete-armed')).toBe(true);
-    expect(bouton()?.textContent).toBe('Confirmer');
+    expect(entreeDuMenu('delete')?.textContent).toBe('Supprimer');
 
-    await act(async () => bouton()?.click());
+    await act(async () => entreeDuMenu('delete')?.click());
     expect(gestes.journal).toEqual(['delete:mien']);
+    expect(document.querySelector('[data-comment-menu]')).toBeNull();
   });
 
   /**
@@ -431,10 +443,11 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
    * que la géométrie (happy-dom ne met pas en page), et l'invariant de
    * navigateur qui mesure les rectangles vit dans `check-post-comments.mjs`.
    */
-  test('« Supprimer » est ÉCARTÉ de « Modifier » — le tap irréversible n’est pas collé au réversible', async () => {
+  test('« Supprimer » est SÉPARÉ de « Modifier » — le verbe irréversible ouvre sa propre section, comme le `Divider()` d’iOS', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() }));
-    const marge = host.querySelector<HTMLElement>('[data-comment-gesture="delete"]')?.style.marginInlineStart ?? '';
-    expect(Number.parseInt(marge, 10)).toBeGreaterThanOrEqual(8);
+    await ouvrirMenu(host);
+    expect(entreeDuMenu('delete')?.getAttribute('style') ?? '').toContain('border-top');
+    expect(entreeDuMenu('edit')?.getAttribute('style') ?? '').not.toContain('border-top');
   });
 
   /** L'ÉTAT D'ERREUR EST VISIBLE ET SE REJOUE — sans ce constat, la rangée
@@ -486,18 +499,18 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
    * focus à rien, et qui navigue au clavier repartait du haut du document.
    * Trois des quatre gestes de cette surface perdaient la place du lecteur.
    */
-  test('« Annuler » REND le focus au bouton « Modifier » — le retour vaut l’aller', async () => {
+  test('« Annuler » REND le focus au « … » d’où « Modifier » est parti — le retour vaut l’aller', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-edit-cancel]')?.click());
-    expect(document.activeElement?.getAttribute('data-comment-gesture')).toBe('edit');
+    expect(document.activeElement?.getAttribute('data-comment-gesture')).toBe('more');
   });
 
   test('« Enregistrer » aussi — le focus ne retombe pas sur le document', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() }));
-    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    await choisir(host, 'edit');
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-edit-save]')?.click());
-    expect(document.activeElement?.getAttribute('data-comment-gesture')).toBe('edit');
+    expect(document.activeElement?.getAttribute('data-comment-gesture')).toBe('more');
   });
 
   /** SUPPRIMER emporte la rangée ENTIÈRE : la destination se lit AVANT
@@ -509,7 +522,7 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
         gestures: gestesDe(),
       }),
     );
-    await supprimer(host, '[data-comment-row="mien"] [data-comment-gesture="delete"]');
+    await choisir(host, 'delete', 'mien');
     const actif = document.activeElement;
     expect(actif?.getAttribute('data-comment-gesture')).toBe('like');
     expect(actif?.closest('[data-comment-row]')?.getAttribute('data-comment-row')).toBe('apres');

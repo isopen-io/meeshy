@@ -1,6 +1,13 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { mayPublish } from '../services/auth/account-activation';
+import {
+  UNVERIFIED_ACTIVE_SHARE_LINK_CAP,
+  shareLinkGraceAllows,
+  shareLinkGraceVerdict,
+  takeShareLinkTurn,
+  type ShareLinkGraceVerdict,
+} from '../services/auth/share-link-grace';
 import type { UnifiedAuthRequest } from './auth';
 
 /**
@@ -57,14 +64,119 @@ export async function requirePublishingGrace(request: FastifyRequest, reply: Fas
 }
 
 /**
+ * Le refus de la loi des liens de partage (#9713).
+ *
+ * À la CRÉATION, il garde le code `EMAIL_NOT_VERIFIED` : c'est celui que le
+ * web (`apps/web/src/lib/activation/email-gated-transport.ts`) et iOS
+ * (`EmailVerificationGate`) savent mener à la validation de l'adresse PUIS
+ * rejouer — et une fois l'adresse prouvée, la création rejouée passe. Seul le
+ * texte `error` distingue le plafond.
+ *
+ * À la RÉOUVERTURE, la loi est celle du CRÉATEUR du lien, qui n'est pas
+ * toujours l'appelant (un co-administrateur peut rouvrir le lien d'un autre) :
+ * `SHARE_LINK_CREATOR_EMAIL_NOT_VERIFIED`, qui ne prétend rien de l'adresse de
+ * l'appelant. Les clients ne mènent à la validation que sur un `POST` : ce
+ * code ne change rien à ce qu'ils font aujourd'hui.
+ */
+export function sendShareLinkGraceRefusal(
+  reply: FastifyReply,
+  verdict: ShareLinkGraceVerdict,
+  gesture: 'create' | 'reopen' = 'create',
+): void {
+  if (gesture === 'reopen') {
+    sendForbidden(reply, 'Share link creator must verify their e-mail', {
+      code: 'SHARE_LINK_CREATOR_EMAIL_NOT_VERIFIED',
+      message: verdict === 'cap-reached'
+        ? `The creator of this link has not verified their e-mail and already has ${UNVERIFIED_ACTIVE_SHARE_LINK_CAP} active share links.`
+        : 'The creator of this link must verify their e-mail before it can be reopened.',
+    });
+    return;
+  }
+  if (verdict === 'cap-reached') {
+    sendForbidden(reply, 'Email verification required to create more share links', {
+      code: 'EMAIL_NOT_VERIFIED',
+      message: `An unverified address can keep at most ${UNVERIFIED_ACTIVE_SHARE_LINK_CAP} active share links: verify your e-mail to create more.`,
+    });
+    return;
+  }
+  sendForbidden(reply, 'Email verification required', { code: 'EMAIL_NOT_VERIFIED' });
+}
+
+/**
+ * La garde de `POST /links` et `POST /conversations/:id/new-link` (#9713) —
+ * la loi vit dans `services/auth/share-link-grace.ts` :
+ *
+ * | appelant                                         | verdict                         |
+ * |--------------------------------------------------|---------------------------------|
+ * | adresse prouvée (`emailVerifiedAt`)               | passe, sans compter ni attendre |
+ * | non prouvée, délai en cours (`mayPublish`)        | passe sous 5 liens actifs       |
+ * | non prouvée, 5 liens actifs ou plus               | 403 `EMAIL_NOT_VERIFIED`        |
+ * | délai échu (`blocked`) ou activation absente      | 403 `EMAIL_NOT_VERIFIED`        |
+ *
+ * Course : la garde prend le TOUR du compte (`takeShareLinkTurn`) avant de
+ * compter, et ne le rend qu'à la fermeture de la réponse — comptage ET
+ * insertion sont couverts, la création suivante compte une fois la
+ * précédente écrite. Une réponse déjà close (client parti pendant le
+ * comptage) rend le tour sur-le-champ. Reste hors d'atteinte d'un verrou en
+ * mémoire : plusieurs instances de passerelle (il n'y en a qu'une) — au plus
+ * un lien de trop par instance supplémentaire.
+ */
+export async function requireShareLinkGrace(request: FastifyRequest, reply: FastifyReply) {
+  const authContext = (request as UnifiedAuthRequest).authContext;
+
+  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+    sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+    return;
+  }
+
+  const { id: userId, emailVerifiedAt, activation } = authContext.registeredUser;
+  if (emailVerifiedAt) return;
+  if (!mayPublish(activation)) {
+    sendShareLinkGraceRefusal(reply, 'grace-over');
+    return;
+  }
+
+  const release = await takeShareLinkTurn(userId);
+  try {
+    const verdict = await shareLinkGraceVerdict({
+      prisma: request.server.prisma,
+      userId,
+      emailVerifiedAt,
+      activation,
+      now: new Date(),
+    });
+    if (!shareLinkGraceAllows(verdict)) {
+      release();
+      sendShareLinkGraceRefusal(reply, verdict);
+      return;
+    }
+  } catch (error) {
+    release();
+    throw error;
+  }
+
+  if (reply.raw.destroyed || reply.raw.writableFinished) {
+    release();
+    return;
+  }
+  reply.raw.once('close', release);
+}
+
+/**
  * Routes qui exigent un e-mail CONFIRMÉ (#6437) — une constante, pas une
- * prose, comme l'exige le critère de fin de l'issue. Décision : ce qui SORT
- * du compte vers d'AUTRES ADRESSES — inviter par e-mail, créer un lien de
- * partage. Publier n'y figure plus depuis #8476 : il suit le délai de grâce
- * (`requirePublishingGrace` ci-dessus).
+ * prose, comme l'exige le critère de fin de l'issue. Décision : ce qui écrit
+ * à une ADRESSE TIERCE — inviter par e-mail. Publier n'y figure plus depuis
+ * #8476 (`requirePublishingGrace`), ni créer un lien de partage depuis #9713
+ * (`requireShareLinkGrace`).
  */
 export const EMAIL_VERIFICATION_GATED_ROUTES = [
   'POST /invitations/email',
+] as const;
+
+export { UNVERIFIED_ACTIVE_SHARE_LINK_CAP, activeShareLinksWhere } from '../services/auth/share-link-grace';
+
+/** Les routes de `requireShareLinkGrace` (#9713). */
+export const SHARE_LINK_GRACE_GATED_ROUTES = [
   'POST /links',
   'POST /conversations/:id/new-link',
 ] as const;

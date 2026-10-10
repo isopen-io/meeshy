@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { clickGeo } from './click-geo';
 import { logError } from '../../utils/logger';
 import {
   createUnifiedAuthMiddleware,
@@ -30,6 +31,7 @@ import {
 } from './response-schemas';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
+import { linkVisitorFromRequest } from '../links/utils/link-visitor';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -140,8 +142,10 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         browser,
         os,
         device,
+        ...clickGeo(request),
         language,
-        referrer
+        referrer,
+        visitor: linkVisitorFromRequest(request)
       });
 
       return reply.redirect(trackingLink.originalUrl);
@@ -300,6 +304,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         utmClickCampaign: body.utmClickCampaign,
         utmClickTerm: body.utmClickTerm,
         utmClickContent: body.utmClickContent,
+        visitor: linkVisitorFromRequest(request),
       });
 
       return sendSuccess(reply, {

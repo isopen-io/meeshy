@@ -85,8 +85,23 @@ export function reportPost(params: {
   return sendReport({ ...rest, reportedType: 'post', entityId: postId });
 }
 
+/**
+ * Signale un COMMENTAIRE (#8734, jumelle de #8709) — le « Signaler » du menu
+ * « … » d'une rangée de commentaire, publication ou story. La passerelle
+ * l'atteint par sa publication (`routes/reports/target.ts`, `'comment'`).
+ */
+export function reportComment(params: {
+  readonly commentId: string;
+  readonly reason: ReportReason;
+  readonly details?: string;
+  readonly deps: ReportDeps;
+}): Promise<ReportOutcome> {
+  const { commentId, ...rest } = params;
+  return sendReport({ ...rest, reportedType: 'comment', entityId: commentId });
+}
+
 async function sendReport(params: {
-  readonly reportedType: 'user' | 'post';
+  readonly reportedType: 'user' | 'post' | 'comment';
   readonly entityId: string;
   readonly reason: ReportReason;
   readonly details?: string;

@@ -402,7 +402,7 @@ struct TimelineSheetContent: View {
         if case .exporting(let fraction) = exportController.phase {
             ZStack {
                 Color.black.opacity(0.45).ignoresSafeArea()
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     ProgressView(value: max(0, min(1, fraction)))
                         .progressViewStyle(.linear)
                         .tint(MeeshyColors.indigo400)
@@ -420,7 +420,7 @@ struct TimelineSheetContent: View {
                 }
                 .padding(26)
                 .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                         .fill(.ultraThinMaterial)
                 )
             }
@@ -500,10 +500,10 @@ struct TimelineExportPreviewSheet: View {
 
     private var controlsOverlay: some View {
         VStack {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.system(size: MeeshyIconSize.xxxl))
                         .foregroundColor(.white.opacity(0.85))
                         .padding()
                 }
@@ -516,14 +516,14 @@ struct TimelineExportPreviewSheet: View {
 
                 ShareLink(item: url) {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
                 .accessibilityLabel(String(localized: "story.timeline.export.preview.share",
                                            defaultValue: "Partager la vidéo", bundle: .module))
-                .padding(.trailing, 16)
+                .padding(.trailing, MeeshySpacing.lg)
             }
             Spacer()
         }

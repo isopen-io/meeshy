@@ -233,6 +233,8 @@ export interface GatewayMessage {
   readonly translations?: readonly MessageTranslation[];
   /** Message de réponse référencé */
   readonly replyTo?: GatewayMessage;
+  /** #9915 — sur un message CITÉ : nombre total de photos et vidéos (les pièces servies sont plafonnées à quatre). */
+  readonly visualAttachmentCount?: number;
   /** Réactions (optionnel: include_reactions=true) */
   readonly reactions?: readonly MessageReaction[];
   /** Pièces jointes */

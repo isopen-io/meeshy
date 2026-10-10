@@ -65,6 +65,13 @@ enum ComposerProtection: Equatable, CaseIterable {
         return (protection.tintHex, protection.tintHex)
     }
 
+    /// Le voile que la protection pose sur le panneau de verre ENTIER
+    /// (#7667) — la loi de teinte d'icône (#9121) mesure son contraste
+    /// contre ce panneau, pas contre un fond nu.
+    func panelWash(isDark: Bool) -> Color {
+        tint.opacity(isDark ? 0.30 : 0.22)
+    }
+
     /// Bascule d'un VOILE (flou ou vue unique) : allumer l'un éteint l'autre.
     /// L'éphémère n'est pas un voile — il cohabite avec les deux, et le
     /// passer ici ne change rien.
@@ -95,6 +102,45 @@ enum ComposerProtection: Equatable, CaseIterable {
             return String(localized: "composer.viewonce.active", defaultValue: "Mode vue unique actif", bundle: .main)
         case .blurred:
             return String(localized: "composer.blur.active", defaultValue: "Mode flou actif", bundle: .main)
+        }
+    }
+}
+
+/// **UNE loi de teinte d'icône** (#9121) : un effet armé donne SA couleur à
+/// toutes les icônes de la barre — la protection dominante sa couleur d'état,
+/// un effet de message (qui n'a pas de couleur propre) la couleur de marque ;
+/// sinon, la couleur COMMUNE des icônes. Plusieurs effets armés : la
+/// protection la plus forte gagne (éphémère > vue unique > flou,
+/// `ComposerProtection.dominant`), puis l'effet de message.
+///
+/// Clair et sombre lisent la même loi ; une icône teintée tient 3:1 sur le
+/// panneau qu'elle habite (dimension 5). Le rouge d'alerte n'y tient pas en
+/// CLAIR (2,23:1 sur le panneau voilé de rouge) : il y prend son encre,
+/// `errorInk` — la même que `--color-danger` du web clair.
+enum ComposerIconTint: Equatable {
+    case protection(ComposerProtection)
+    case brand
+    case common
+
+    static func resolve(protection: ComposerProtection?, hasMessageEffect: Bool) -> ComposerIconTint {
+        if let protection { return .protection(protection) }
+        return hasMessageEffect ? .brand : .common
+    }
+
+    var hex: String? {
+        switch self {
+        case .protection(let protection): return protection.tintHex
+        case .brand: return MeeshyColors.brandPrimaryHex
+        case .common: return nil
+        }
+    }
+
+    func color(common: Color, isDark: Bool) -> Color {
+        switch self {
+        case .protection(.ephemeral) where !isDark: return MeeshyColors.errorInk
+        case .protection(let protection): return protection.tint
+        case .brand: return MeeshyColors.brandPrimary
+        case .common: return common
         }
     }
 }

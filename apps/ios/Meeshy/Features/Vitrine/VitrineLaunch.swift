@@ -1,0 +1,72 @@
+#if DEBUG
+import Foundation
+
+/// Mode vitrine App Store (#8855) : `-MeeshyVitrine <scène>` ouvre un VRAI écran de l'app,
+/// rempli d'un contenu fictif, sans serveur. Absent de l'app publiée.
+///
+/// ```
+/// xcrun simctl launch <udid> me.meeshy.app -MeeshyVitrine global \
+///     -AppleLanguages "(fr)" -AppleLocale fr_FR \
+///     -meeshy_selected_environment custom -meeshy_custom_host http://127.0.0.1:9
+/// ```
+nonisolated enum VitrineScene: String, CaseIterable, Sendable {
+    case amour
+    case groupe
+    case global
+    case lien
+    case progression
+    case imagine
+    case jeuRang = "jeu-rang"
+    case jeuCoffre = "jeu-coffre"
+    case jeuFrappe = "jeu-frappe"
+    case jeuNiveau = "jeu-niveau"
+    case jeuBadge = "jeu-badge"
+    case interactionFrappe = "interaction-frappe"
+    case interactionEmoji = "interaction-emoji"
+    case interactionEmojiPost = "interaction-emoji-post"
+    case interactionCommentaireAudio = "interaction-commentaire-audio"
+    case interactionSticker = "interaction-sticker"
+    case interactionReel = "interaction-reel"
+    case interactionDefilement = "interaction-defilement"
+    case interactionStory = "interaction-story"
+    case interactionVocal = "interaction-vocal"
+    case interactionInvite = "interaction-invite"
+    case interactionSonde = "interaction-sonde"
+    case interactionSav = "interaction-sav"
+    case interactionLiens = "interaction-liens"
+
+    /// La scène « lien », et l'invitation qu'on filme, montrent ce que voit un invité SANS compte.
+    var ouvreUneSession: Bool { self != .lien && self != .interactionInvite }
+}
+
+nonisolated enum VitrineLaunch {
+    static let argument = "-MeeshyVitrine"
+
+    static func scene(in arguments: [String] = ProcessInfo.processInfo.arguments) -> VitrineScene? {
+        guard let index = arguments.firstIndex(of: argument), arguments.indices.contains(index + 1) else { return nil }
+        return VitrineScene(rawValue: arguments[index + 1])
+    }
+
+    static var isActive: Bool { scene() != nil }
+
+    /// Là où le script de capture dépose les fixtures et attend le signal « prêt ».
+    static var dossier: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("vitrine", isDirectory: true)
+    }
+
+    static var fichierFixtures: URL { dossier.appendingPathComponent("fixtures.json") }
+
+    /// Là où le script de capture dépose les photos et les vocaux.
+    static var dossierMedias: URL { dossier.appendingPathComponent("medias", isDirectory: true) }
+
+    static var marqueurPret: URL { dossier.appendingPathComponent("pret.txt") }
+
+    /// Une scène du jeu (#9805) : la célébration démarre, puis elle est finie — le script de tournage filme entre les deux.
+    static var marqueurCelebrationDebut: URL { dossier.appendingPathComponent("celebration-debut.txt") }
+    static var marqueurCelebrationFin: URL { dossier.appendingPathComponent("celebration-fin.txt") }
+
+    /// Le clap (#9810) : le script de tournage le dépose quand l'enregistreur tourne ; l'action attend ce fichier.
+    static var marqueurGo: URL { dossier.appendingPathComponent("go.txt") }
+}
+#endif

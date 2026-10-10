@@ -208,7 +208,8 @@ struct StoryComposerCover: ViewModifier {
                         references: references,
                         composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
                                                                caption: accessibility.mediaCaption ?? [:]),
-                        allowSoundExtraction: accessibility.allowSoundExtraction
+                        allowSoundExtraction: accessibility.allowSoundExtraction,
+                        alsoAsReel: accessibility.alsoAsReel
                     )
                     // La création accepte TOUJOURS : hors-ligne, la story part
                     // en file d'attente au lieu de rester dans le composer.

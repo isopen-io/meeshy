@@ -31,10 +31,7 @@ extension View {
             // like au lieu d'ouvrir la palette.
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                    HapticFeedback.medium()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isPresented.wrappedValue = true
-                    }
+                    ouvrirLaPalette(isPresented)
                 }
             )
             // Un appui long est INVISIBLE pour VoiceOver : sans action nommée,
@@ -44,6 +41,10 @@ extension View {
                                                     bundle: .main))) {
                 isPresented.wrappedValue = true
             }
+            #if DEBUG
+            // La vitrine (#9810) ouvre la palette par la fonction même de l'appui long.
+            .onAppear { VitrineRendu.shared.paletteDeReactionsPrete { ouvrirLaPalette(isPresented) } }
+            #endif
     }
 
     /// **Le CADRE, posé sur l'hôte** — la barre entière, qui a la largeur.
@@ -61,4 +62,12 @@ extension View {
         }
     }
 
+}
+
+/// Ce que fait l'appui long : la palette s'ouvre, d'un ressort et d'une vibration.
+private func ouvrirLaPalette(_ isPresented: Binding<Bool>) {
+    HapticFeedback.medium()
+    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+        isPresented.wrappedValue = true
+    }
 }

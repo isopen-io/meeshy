@@ -530,7 +530,7 @@ class FeedViewModel: ObservableObject {
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
-                    FeedbackToastManager.shared.showError(toast)
+                    FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid) ?? toast)
                 }
             }
         }
@@ -1165,11 +1165,11 @@ class FeedViewModel: ObservableObject {
         let payload = CreateCommentPayload(
             clientMutationId: cmid, postId: postId,
             parentCommentId: parentId, content: content,
-            originalLanguage: originalLanguage,
+            originalLanguage: originalLanguage, authorId: currentUser?.id,
             location: location, effectFlags: effectFlags
         )
         do {
-            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
+            try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
 
             // R7 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch
@@ -1314,7 +1314,7 @@ class FeedViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -1345,7 +1345,7 @@ class FeedViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             // Re-hydrate from the server response so the gateway-authoritative

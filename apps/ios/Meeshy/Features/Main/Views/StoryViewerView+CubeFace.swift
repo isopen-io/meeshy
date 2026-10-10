@@ -85,7 +85,7 @@ struct NeighborGroupCubeFace: View {
                     endPoint: .bottomTrailing
                 )
             }
-            Color.black.opacity(0.35)
+            MeeshyColors.mediaChromeFill
             if let intro {
                 StoryAuthorIdentityCard(
                     intro: intro,

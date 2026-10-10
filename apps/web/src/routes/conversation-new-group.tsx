@@ -133,7 +133,7 @@ export function GroupComposer({
         data-group-submit
         disabled={disabled}
         aria-busy={busy}
-        className="grid w-full place-items-center rounded-[14px] font-bold text-white transition-opacity"
+        className="grid w-full place-items-center rounded-[14px] font-bold text-ios-on-brand transition-opacity"
         style={{
           minHeight: 52,
           backgroundColor: 'var(--color-ios-brand)',

@@ -26,6 +26,7 @@ import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from 
 import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtures-live';
 import { UNREAD_CONVERSATION, UNREAD_CONVERSATION_ID, UNREAD_MESSAGES } from './fixtures-unread';
 import { LONG_MESSAGE_CONVERSATION, LONG_MESSAGE_CONVERSATION_ID, LONG_MESSAGE_MESSAGES } from './fixtures-long-message';
+import { ARCHIVE_CONVERSATION, ARCHIVE_CONVERSATION_ID, ARCHIVE_MESSAGES } from './fixtures-archive';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
@@ -791,6 +792,7 @@ const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [
   UNREAD_CONVERSATION,
   RENDER_MATRIX_CONVERSATION,
   LONG_MESSAGE_CONVERSATION,
+  ARCHIVE_CONVERSATION,
 ];
 
 /**
@@ -1003,6 +1005,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === UNREAD_CONVERSATION_ID) return withSent(conversationId, withConsumption(UNREAD_MESSAGES));
   if (conversationId === LONG_MESSAGE_CONVERSATION_ID)
     return withSent(conversationId, withConsumption(LONG_MESSAGE_MESSAGES));
+  if (conversationId === ARCHIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(ARCHIVE_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

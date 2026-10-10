@@ -180,7 +180,17 @@ final class MediaGalleryChromeReachTests: XCTestCase {
                 startAttachmentId: first.id,
                 accentColor: "6366F1",
                 sceneContext: sceneContext
-            ),
+            )
+            // **Le portillon de sortie que l'HÔTE pose** (#9573, b2e57f0932) :
+            // il est FERMÉ par défaut, et le ⋯ n'est rendu que s'il laisse
+            // partir la pièce. Une publication n'est pas un contenu qui
+            // disparaît — son hôte, `SocialMediaGalleryPresentation`, ouvre
+            // (`.contentExitGate(.open)`), comme l'hôte de conversation ouvre
+            // la pièce d'un message ordinaire. Monter la galerie nue mesurait
+            // un hôte qui n'existe pas : le ⋯ y manquait par oubli de l'hôte,
+            // pas par décision — exactement l'absence que la décision veut
+            // VISIBLE. Le témoin pose donc ce que les hôtes réels posent.
+            .contentExitGate(.open),
             size: Self.window,
             file: file,
             line: line

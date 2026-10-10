@@ -60,8 +60,8 @@ struct EmailVerificationGateView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                     Text(String(localized: "activation.gate.title", defaultValue: "Validez votre adresse e-mail", bundle: .main))
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
@@ -82,7 +82,7 @@ struct EmailVerificationGateView: View {
                 .buttonStyle(.plain)
                 .keyboardShortcut(.cancelAction)
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
             .iPadFormWidth()
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
@@ -96,6 +96,8 @@ struct EmailVerificationGateView: View {
             return String(localized: "activation.gate.invite", defaultValue: "Pour inviter par e-mail, validez votre adresse. Votre invitation partira dès le code validé.", bundle: .main)
         case .link:
             return String(localized: "activation.gate.link", defaultValue: "Pour créer un lien, validez votre adresse. Votre lien sera créé dès le code validé.", bundle: .main)
+        case .moreLinks:
+            return String(localized: "activation.gate.moreLinks", defaultValue: "Au-delà de 5 liens actifs, validez votre adresse pour en créer d’autres. Votre lien sera créé dès le code validé.", bundle: .main)
         }
     }
 }

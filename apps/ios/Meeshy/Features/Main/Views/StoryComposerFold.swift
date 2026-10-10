@@ -28,13 +28,14 @@ nonisolated enum StoryCaptionPlacement {
     ///   - composerBottomPadding: retrait bas du bloc (zone sûre, clavier).
     ///   - isComposerShown: le chrome est visible — caché, le bloc glisse hors
     ///     de l'écran et ne réserve plus rien.
-    ///   - fallback: la place historique, pour un lecteur sans composeur.
+    ///
+    /// Sans composeur (sa propre story) ou chrome caché, le texte se pose au
+    /// ras du bas, sur le seul retrait — il ne garde plus une « place
+    /// historique » tirée du HAUT de l'écran, ≈ 135 pt trop haut (#9072).
     static func bottomInset(composerBlockHeight: CGFloat?,
                             composerBottomPadding: CGFloat,
-                            isComposerShown: Bool,
-                            fallback: CGFloat) -> CGFloat {
-        guard let height = composerBlockHeight, height > 0 else { return fallback }
-        guard isComposerShown else { return composerBottomPadding }
+                            isComposerShown: Bool) -> CGFloat {
+        guard isComposerShown, let height = composerBlockHeight, height > 0 else { return composerBottomPadding }
         return composerBottomPadding + height
     }
 }
@@ -90,10 +91,52 @@ nonisolated enum StoryComposerFold {
         userFolded && !isReplying ? .folded : .expanded
     }
 
-    /// Le bouton ⌄ de l'angle haut-droit n'existe qu'en RÉDACTION — clavier ou
-    /// panneau d'émojis ouverts. Au repos, le glissement suffit.
-    static func offersFoldButton(presentation: Presentation, isComposerEngaged: Bool) -> Bool {
-        presentation == .expanded && isComposerEngaged
+    /// Le ⌄ de l'angle haut-droit est visible PAR DÉFAUT (#9122) : au repos
+    /// aussi, la barre dit qu'elle se replie — le glissement seul ne se
+    /// devinait pas.
+    static func offersFoldButton(presentation: Presentation) -> Bool {
+        presentation == .expanded
+    }
+
+    /// Ce qu'un toucher fait au composeur (#9893).
+    struct Tap: Equatable, Sendable {
+        let userFolded: Bool
+        let resignsKeyboard: Bool
+        let focusesField: Bool
+    }
+
+    /// Le ⌄ ferme le clavier s'il est ouvert ET replie le composeur en bulle.
+    static let chevronTapped = Tap(userFolded: true, resignsKeyboard: true, focusesField: false)
+    /// La bulle rouvre le composeur, sans rouvrir le clavier : écrire reste un
+    /// second geste, que l'utilisateur choisit.
+    static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
+
+    /// **Sur la story, le ⌄ replie TOUJOURS** (#9893), réponse en cours
+    /// comprise : la plaque reste montée, donc la bannière « Réponse à X » et
+    /// le brouillon attendent la réouverture. Le fil et le détail d'un post
+    /// gardent `presentation(userFolded:isReplying:)`.
+    static func readerPresentation(userFolded: Bool) -> Presentation {
+        userFolded ? .folded : .expanded
+    }
+
+    /// Seule une NOUVELLE demande de réponse rouvre un composeur replié —
+    /// annuler ou envoyer la réponse ne rouvre rien.
+    static func unfoldsOnReply(from oldReplyId: String?, to newReplyId: String?) -> Bool {
+        newReplyId != nil && newReplyId != oldReplyId
+    }
+
+    /// Ce que la bulle signale de ce que le repli garde.
+    enum BubbleBadge: Equatable, Sendable {
+        case none
+        case recording
+        case reply
+    }
+
+    /// Une prise en cours passe avant la réponse : c'est elle qu'il ne faut
+    /// pas oublier sous la bulle.
+    static func bubbleBadge(isRecording: Bool, isReplying: Bool) -> BubbleBadge {
+        if isRecording { return .recording }
+        return isReplying ? .reply : .none
     }
 
     static let foldSymbol = "chevron.down"

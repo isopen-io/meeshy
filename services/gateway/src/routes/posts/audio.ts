@@ -11,6 +11,7 @@ import {
   EXT_TO_MIME,
   staticFileUrl,
   NOT_MUTED_WHERE,
+  NOT_DELETED_SOUND_WHERE,
 } from '../../services/posts/soundFormats';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { logError } from '../../utils/logger.js';
@@ -69,7 +70,9 @@ export function registerStoryAudioRoutes(
     // Composé en AND : le prédicat porte son propre OR, et la recherche
     // ci-dessous en ajoute un second — deux clés `OR` au même niveau,
     // la seconde écraserait la première.
-    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE] };
+    // Un son retiré par son auteur (#9848) quitte la découverte ET la
+    // recherche : le prédicat est posé avant la clause `q`, donc sur les deux.
+    const where: any = { isPublic: true, AND: [NOT_MUTED_WHERE, NOT_DELETED_SOUND_WHERE] };
     if (q) {
       // Titre OU pseudo de l'uploadeur. Un son CAPTURÉ naît sans titre — le
       // libellé « Son original » est composé par le client dans sa langue —

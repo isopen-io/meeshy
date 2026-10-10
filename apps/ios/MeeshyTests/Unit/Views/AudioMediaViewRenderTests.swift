@@ -335,7 +335,8 @@ extension AudioMediaView {
         translatedAudios: [MessageTranslatedAudio] = [],
         conversationName: String? = nil,
         audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil,
-        fileUrl: String = "https://example.com/test.m4a"
+        fileUrl: String = "https://example.com/test.m4a",
+        activeAudioLanguageOverride: String? = nil
     ) -> AudioMediaView {
         let attachment = MeeshyMessageAttachment(
             id: "att-test-1",
@@ -368,6 +369,7 @@ extension AudioMediaView {
             isDark: false,
             accentColor: "#6366F1",
             translatedAudios: translatedAudios,
+            activeAudioLanguageOverride: activeAudioLanguageOverride,
             replyReference: replyReference,
             replyIsStory: replyIsStory,
             conversationName: conversationName,

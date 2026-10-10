@@ -66,6 +66,8 @@ const admit = (params: {
       // ses propres témoins dans `conversationClosedWriteVerbs.test.ts`.
       conversation: null,
       createdAt: params.createdAt === undefined ? freshCreatedAt : params.createdAt,
+      messageType: 'text',
+      metadata: null,
     },
     now: NOW,
     onError: params.onError,

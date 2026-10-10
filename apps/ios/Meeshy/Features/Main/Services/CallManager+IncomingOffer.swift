@@ -7,7 +7,7 @@ extension CallManager {
     /// l'événement qui a réveillé la pile (#7955).
     func handleCallOffer(_ event: CallOfferData) {
         let myUserId = AuthManager.shared.currentUser?.id
-        guard event.initiator.userId != myUserId else { return }
+        guard event.principalUserId != myUserId else { return }
         guard currentCallId != event.callId else { return }
         // `mode` est l'architecture WebRTC ('p2p' | 'sfu'), PAS le type média,
         // porté par `type` ('audio' | 'video'). Absent (anciens builds
@@ -23,11 +23,25 @@ extension CallManager {
         }
         handleIncomingCallNotification(
             callId: event.callId,
-            fromUserId: event.initiator.userId,
+            fromUserId: event.principalUserId,
             fromUsername: callerName,
             isVideo: isVideo,
             iceServers: dynamicIceServers,
             conversationId: event.conversationId
         )
+    }
+}
+
+extension CallOfferData {
+    /// #9084 — le pair qui m'offrira, donc le principal : l'INVITANT d'une
+    /// invitation dans un appel en cours, sinon l'initiateur. La passerelle fait
+    /// offrir chaque membre présent au nouveau venu ; seul l'invitant tient la
+    /// liaison principale, les autres passent par le maillage.
+    var principalUserId: String { invitedBy?.userId ?? initiator.userId }
+
+    /// #9084 — un duo devenu groupe garde `conversationType == "direct"` :
+    /// l'invitation le dit par `isGroup`.
+    var isGroupCall: Bool {
+        isGroup == true || conversationType.map { $0 != "direct" } == true
     }
 }

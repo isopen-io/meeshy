@@ -7,6 +7,13 @@ public enum CallHistoryFilter: String, Sendable, CaseIterable {
     case missed
 }
 
+/// The call's media, filtered by the gateway (`?type=`, #8203).
+public enum CallHistoryType: String, Sendable, CaseIterable {
+    case all
+    case audio
+    case video
+}
+
 // MARK: - Page
 
 public struct CallHistoryPage: Sendable {
@@ -35,7 +42,16 @@ struct CallHistoryClearResult: Decodable {
 // MARK: - Protocol
 
 public protocol CallHistoryServiceProviding: Sendable {
-    func history(limit: Int, cursor: String?, filter: CallHistoryFilter) async throws -> CallHistoryPage
+    /// One page of the journal, narrowed by the gateway itself (#8203): `type`
+    /// keeps one media, `search` the rows whose shown name matches — accent-
+    /// and case-insensitive, over the whole 90-day window, in one request.
+    func history(
+        limit: Int,
+        cursor: String?,
+        filter: CallHistoryFilter,
+        type: CallHistoryType,
+        search: String?
+    ) async throws -> CallHistoryPage
     /// Hides one call from the reader's own journal (#8066) — never for the
     /// other participants. Throws when the gateway refuses (not a member).
     func hide(callId: String) async throws
@@ -45,7 +61,8 @@ public protocol CallHistoryServiceProviding: Sendable {
 
 // MARK: - Service
 
-/// Reads the call journal from `GET /api/v1/calls/history` (cursor-paginated)
+/// Reads the call journal from `GET /api/v1/calls/history` (cursor-paginated,
+/// filtered and searched server-side — #8203)
 /// and erases it for the reader alone (`DELETE /api/v1/calls/history[/:callId]`).
 public final class CallHistoryService: CallHistoryServiceProviding, @unchecked Sendable {
     public static let shared = CallHistoryService()
@@ -58,7 +75,9 @@ public final class CallHistoryService: CallHistoryServiceProviding, @unchecked S
     public func history(
         limit: Int = 30,
         cursor: String? = nil,
-        filter: CallHistoryFilter = .all
+        filter: CallHistoryFilter = .all,
+        type: CallHistoryType = .all,
+        search: String? = nil
     ) async throws -> CallHistoryPage {
         var queryItems = [
             URLQueryItem(name: "limit", value: "\(limit)"),
@@ -66,6 +85,12 @@ public final class CallHistoryService: CallHistoryServiceProviding, @unchecked S
         ]
         if let cursor {
             queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        if type != .all {
+            queryItems.append(URLQueryItem(name: "type", value: type.rawValue))
+        }
+        if let search = search?.trimmingCharacters(in: .whitespacesAndNewlines), !search.isEmpty {
+            queryItems.append(URLQueryItem(name: "q", value: search))
         }
 
         let response: PaginatedAPIResponse<[APICallRecord]> = try await api.request(

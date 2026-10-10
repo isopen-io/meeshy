@@ -195,4 +195,19 @@ describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais h
     const placement = placeMessageMenuCluster(clusterInput({ isMine: true }));
     expect(placement.anchorX).toBe(370 - 350 / 2);
   });
+
+  test('#9043 — un cluster qui tient ne cache rien de la liste (menuHiddenHeight ≤ 0)', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
+  });
+
+  test('#9043 — un aperçu ÉNORME au plancher dit EXACTEMENT ce que la liste perd sous le bas utile', () => {
+    const input = clusterInput({
+      anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 },
+      viewport: { width: 390, height: 800 },
+    });
+    const placement = placeMessageMenuCluster(input);
+    expect(placement.menuHiddenHeight).toBeCloseTo(placement.menuTop + input.menuHeight - (800 - 12), 6);
+    expect(placement.menuHiddenHeight).toBeGreaterThan(0);
+  });
 });

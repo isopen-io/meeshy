@@ -93,8 +93,10 @@ final class StoryAVCompositorStickerImageTests: XCTestCase {
         let source = try String(contentsOf: ComposerSourceGuard.packageRoot
                                     .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift"),
                                 encoding: .utf8)
-        XCTAssertTrue(source.contains("imageCache: stickerImageCache(for: stickerImageURLs, images: images)"),
+        XCTAssertTrue(source.contains("imageCache: stickerImageCache(for: stickerImageURLs, images: images,"),
                       "Le compositor doit remettre le lecteur des stickers — fichiers ET bitmaps en mémoire (#8599) — à `StoryRenderer.render`.")
+        XCTAssertTrue(source.contains("animations: instruction.animations"),
+                      "`startRequest` doit servir les octets ANIMÉS portés par l'instruction (#8610).")
         XCTAssertTrue(source.contains("stickerImageURLs: instruction.stickerImageURLs"),
                       "`startRequest` doit servir les adresses portées par l'instruction.")
     }

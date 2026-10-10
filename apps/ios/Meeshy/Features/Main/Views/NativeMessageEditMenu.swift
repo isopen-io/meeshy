@@ -44,17 +44,22 @@ struct MessageEditMenuAction: Identifiable {
     /// Nom SF Symbol. `nil` pour une action sans glyphe.
     let systemImage: String?
     let isDestructive: Bool
+    /// Non vide ⇒ l'entrée est un SOUS-MENU : le système la rend avec un (>)
+    /// qui déplie ces actions (#8692 — « Composer » ET « Imager »).
+    let children: [MessageEditMenuAction]
     let perform: () -> Void
 
     init(id: String,
          title: String,
          systemImage: String? = nil,
          isDestructive: Bool = false,
+         children: [MessageEditMenuAction] = [],
          perform: @escaping () -> Void) {
         self.id = id
         self.title = title
         self.systemImage = systemImage
         self.isDestructive = isDestructive
+        self.children = children
         self.perform = perform
     }
 }
@@ -96,6 +101,7 @@ extension MessageEditMenuAction {
                           editer: ((String) -> Void)?,
                           selectionner: ((String) -> Void)?,
                           composer: ((String) -> Void)?,
+                          imager: ((String) -> Void)? = nil,
                           repondre: ((String) -> Void)?,
                           transferer: ((String) -> Void)?,
                           plus: ((String) -> Void)?) -> [MessageEditMenuAction] {
@@ -115,11 +121,23 @@ extension MessageEditMenuAction {
                                                defaultValue: "Sélectionner", bundle: .main),
                                  systemImage: "checkmark.circle") { selectionner(messageId) })
         }
-        if let composer {
-            actions.append(.init(id: "compose",
-                                 title: String(localized: "message.action.compose",
-                                               defaultValue: "Composer", bundle: .main),
-                                 systemImage: "wand.and.stars") { composer(messageId) })
+        // **« Imager » prend la troisième place** (directive porteur
+        // 2026-09-29, #8692) : « à la place de Composer lorsqu'on double-tape,
+        // il faut mettre Imager ». Un message qui ne s'image pas la rend à
+        // « Composer ».
+        let composerEntry = composer.map { composer in
+            MessageEditMenuAction(id: "compose",
+                                  title: String(localized: "message.action.compose",
+                                                defaultValue: "Composer", bundle: .main),
+                                  systemImage: "wand.and.stars") { composer(messageId) }
+        }
+        let imagerEntry = imager.map { imager in
+            MessageEditMenuAction(id: "imagine",
+                                  title: MessageCardExportMenu.imageLabel,
+                                  systemImage: MessageCardExportMenu.imageSymbol) { imager(messageId) }
+        }
+        if let third = imagerEntry ?? composerEntry {
+            actions.append(third)
         }
 
         // — Puis ce que la barre montre si la place le permet —
@@ -135,6 +153,15 @@ extension MessageEditMenuAction {
                                  title: String(localized: "message.action.forward",
                                                defaultValue: "Transférer", bundle: .main),
                                  systemImage: "arrowshape.turn.up.right") { transferer(messageId) })
+        }
+        // **Le (>) déplie « Composer » ET « Imager »** — les deux gestes qui
+        // emmènent le message ailleurs, rangés ensemble. Il n'existe que si
+        // les deux existent : seul, l'un est déjà à la troisième place.
+        if let composerEntry, let imagerEntry {
+            actions.append(.init(id: "create",
+                                 title: MessageCardExportMenu.createLabel,
+                                 systemImage: MessageCardExportMenu.createSymbol,
+                                 children: [composerEntry, imagerEntry]) {})
         }
         if let plus {
             actions.append(.init(id: "more",
@@ -198,13 +225,21 @@ final class EditMenuHostView: UIView, UIEditMenuInteractionDelegate {
     func editMenuInteraction(_ interaction: UIEditMenuInteraction,
                              menuFor configuration: UIEditMenuConfiguration,
                              suggestedActions: [UIMenuElement]) -> UIMenu? {
-        UIMenu(children: actions.map { action in
-            UIAction(title: action.title,
-                     image: action.systemImage.map { UIImage(systemName: $0) } ?? nil,
-                     attributes: action.isDestructive ? .destructive : []) { _ in
-                action.perform()
-            }
-        })
+        UIMenu(children: actions.map(Self.element))
+    }
+
+    /// Une action, ou — si elle porte des enfants — un sous-menu que le système
+    /// rend avec un (>) et déplie à la demande.
+    private static func element(_ action: MessageEditMenuAction) -> UIMenuElement {
+        let image = action.systemImage.map { UIImage(systemName: $0) } ?? nil
+        guard action.children.isEmpty else {
+            return UIMenu(title: action.title, image: image, children: action.children.map(element))
+        }
+        return UIAction(title: action.title,
+                        image: image,
+                        attributes: action.isDestructive ? .destructive : []) { _ in
+            action.perform()
+        }
     }
 }
 

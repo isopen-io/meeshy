@@ -12,6 +12,7 @@ import { validatePagination } from '../../utils/pagination';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { viewerFromRequest } from '../users/presence-gate';
+import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { HashtagPostsQuerySchema, chargerPostsParHashtag } from './hashtag';
 import { NearbyQuerySchema, chargerPostsProches, verifierPlafondDecouverteScope } from './nearby';
@@ -304,13 +305,21 @@ export function registerFeedRoutes(
     return feedService.getFeed(userId, params.cursor, params.limit, reader);
   }
 
+  // `viewerPoints` (#9569) — ce que chaque story a rapporté au LECTEUR. Les
+  // stories sont la seule liste dont `PostFeedService` compose l'état du
+  // lecteur sans `withViewerPostState` : le champ se pose donc ici, par
+  // lecteur, une fois la page rendue par le service — une lecture groupée pour
+  // la page. La projection `tray` (anneaux et miniature) ne le porte pas : elle
+  // n'a nulle part où l'afficher, et ne charge pas l'auteur.
   async function chargerStories(
     userId: string,
     params: { cursor?: string; limit: number; updatedSince?: Date; projection?: 'tray' },
     viewerRole: GlobalUserRoleType | undefined,
     reader: WireReader,
   ): Promise<ScopedFeedResult> {
-    return feedService.getStories(userId, { ...params, viewerRole, reader });
+    const resultat = await feedService.getStories(userId, { ...params, viewerRole, reader });
+    if (params.projection === 'tray') return resultat;
+    return { ...resultat, items: await withViewerPoints(prisma, userId, resultat.items) };
   }
 
   async function chargerStoriesMine(
@@ -319,7 +328,8 @@ export function registerFeedRoutes(
     viewerRole: GlobalUserRoleType | undefined,
     reader: WireReader,
   ): Promise<ScopedFeedResult> {
-    return feedService.getStories(userId, { ...params, archiveOfAuthor: true, viewerRole, reader });
+    const resultat = await feedService.getStories(userId, { ...params, archiveOfAuthor: true, viewerRole, reader });
+    return { ...resultat, items: await withViewerPoints(prisma, userId, resultat.items) };
   }
 
   async function chargerReels(

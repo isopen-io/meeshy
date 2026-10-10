@@ -140,62 +140,89 @@ final class VideoSurvivalPolicyTests: XCTestCase {
 
 @MainActor
 final class MockVideoSurvivalActuator: VideoSurvivalActuating {
+    /// How an actuator call holds before returning. Never measured in time: a
+    /// held call returns only when the TEST releases it (#9513), so a slow
+    /// runner can neither make it return early nor late.
+    enum Hold {
+        /// Returns immediately.
+        case none
+        /// Parks until `releaseHeldCalls()`, IGNORING Task cancellation — a
+        /// real `AVCaptureSession`/WebRTC call that doesn't observe Swift's
+        /// cooperative cancellation (exercises "abandon on timeout").
+        case untilReleased
+        /// Parks until `releaseHeldCalls()` OR until its Task is cancelled — a
+        /// cancellation-aware renegotiation (exercises "reset() cancels it").
+        case untilReleasedOrCancelled
+    }
+
     var suspendResult = true
     var resumeResult = true
-    /// When set, the actuator "hangs" this long before returning — simulates a
-    /// renegotiation stuck on a dead link (exercises the controller's timeout).
-    var hangSeconds: TimeInterval = 0
+    var hold: Hold = .none
     private(set) var suspendCallCount = 0
     private(set) var resumeCallCount = 0
     var onTransition: (() -> Void)?
-    /// Fired right after the simulated hang's `Task.sleep` returns (cancelled or
-    /// not) — lets tests observe whether the hang was cut short by cancellation.
+    /// Fired when a held call stops holding (released or cancelled), just
+    /// before the actuator returns.
     var onHangComplete: (() -> Void)?
-    /// When true, the actuator blocks on a continuation that is NEVER resumed
-    /// until the test calls `releaseUncooperativeHang()` — unlike `Task.sleep`,
-    /// this does NOT observe Task cancellation. Simulates a real
-    /// `AVCaptureSession`/WebRTC call that ignores Swift's cooperative
-    /// cancellation, exercising the controller's "abandon on timeout" contract
-    /// rather than its "cancellation cuts the hang short" contract.
-    var hangsUncooperatively = false
-    private var uncooperativeContinuation: CheckedContinuation<Void, Never>?
+    private var heldCalls: [Int: CheckedContinuation<Void, Never>] = [:]
+    private var lastHeldCallID = 0
 
     func suspendOutboundVideo() async -> Bool {
         suspendCallCount += 1
         onTransition?()
-        if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
-        if hangsUncooperatively { await waitUncooperatively() }
-        onHangComplete?()
+        await holdIfRequested()
         return suspendResult
     }
     func resumeOutboundVideo() async -> Bool {
         resumeCallCount += 1
         onTransition?()
-        if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
-        if hangsUncooperatively { await waitUncooperatively() }
-        onHangComplete?()
+        await holdIfRequested()
         return resumeResult
     }
-    private func waitUncooperatively() async {
-        await withCheckedContinuation { continuation in
-            uncooperativeContinuation = continuation
+
+    private func holdIfRequested() async {
+        switch hold {
+        case .none:
+            return
+        case .untilReleased:
+            await park(id: allocateHeldCallID(), unlessCancelled: false)
+        case .untilReleasedOrCancelled:
+            let id = allocateHeldCallID()
+            await withTaskCancellationHandler {
+                await park(id: id, unlessCancelled: true)
+            } onCancel: {
+                Task { @MainActor [weak self] in self?.release(id) }
+            }
+        }
+        onHangComplete?()
+    }
+
+    private func allocateHeldCallID() -> Int {
+        lastHeldCallID += 1
+        return lastHeldCallID
+    }
+
+    private func park(id: Int, unlessCancelled: Bool) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            if unlessCancelled && Task.isCancelled {
+                continuation.resume()
+                return
+            }
+            heldCalls[id] = continuation
         }
     }
-    /// Releases a call parked in `waitUncooperatively()`, if any. Tests MUST
-    /// call this before finishing (even after proving the timeout abandons the
-    /// wait) — an un-resumed `CheckedContinuation` triggers a runtime "leaked
-    /// its continuation" diagnostic.
-    func releaseUncooperativeHang() {
-        uncooperativeContinuation?.resume()
-        uncooperativeContinuation = nil
+
+    private func release(_ id: Int) {
+        heldCalls.removeValue(forKey: id)?.resume()
     }
-    func reset() {
-        suspendCallCount = 0
-        resumeCallCount = 0
-        onTransition = nil
-        onHangComplete = nil
-        hangsUncooperatively = false
-        releaseUncooperativeHang()
+
+    /// Releases every parked call. A test that holds a call MUST release it
+    /// before finishing — an un-resumed `CheckedContinuation` triggers a
+    /// runtime "leaked its continuation" diagnostic.
+    func releaseHeldCalls() {
+        let parked = heldCalls
+        heldCalls = [:]
+        parked.values.forEach { $0.resume() }
     }
 }
 
@@ -224,33 +251,27 @@ final class VideoSurvivalControllerTests: XCTestCase {
     }
 
     /// `onTransition` se déclenche au DÉBUT de l'appel actuator, mais
-    /// `isVideoSuspended` n'est posé qu'après le task group — on poll
-    /// jusqu'à l'état attendu au lieu d'asserter immédiatement (flaky CI).
-    private func waitForSuspendedState(
-        _ expected: Bool,
-        in sut: VideoSurvivalController,
-        timeout: TimeInterval = 5.0
-    ) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if sut.isVideoSuspended == expected { return }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        XCTFail("isVideoSuspended did not become \(expected) within \(timeout)s")
+    /// `isVideoSuspended` n'est posé qu'une fois la complétion traitée : on
+    /// attend `onTransitionSettled`, jamais l'horloge murale (#9513).
+    private func expectSettle(of sut: VideoSurvivalController, _ description: String) -> XCTestExpectation {
+        let settled = expectation(description: description)
+        sut.onTransitionSettled = { settled.fulfill() }
+        return settled
     }
 
     func test_handle_sustainedPoor_callsSuspendAndPublishes() async {
         let (sut, mock, advance) = makeSUT()
         let exp = expectation(description: "suspend")
         mock.onTransition = { exp.fulfill() }
+        let settled = expectSettle(of: sut, "suspend settled")
 
         feed(sut, .poor)            // t=0 start streak
         advance(6)
         feed(sut, .poor)            // t=6 → suspend
 
-        await fulfillment(of: [exp], timeout: 1)
+        await fulfillment(of: [exp, settled], timeout: 5, enforceOrder: true)
         XCTAssertEqual(mock.suspendCallCount, 1)
-        await waitForSuspendedState(true, in: sut)
+        XCTAssertTrue(sut.isVideoSuspended)
     }
 
     func test_handle_suspendFailure_revertsForRetry() async {
@@ -258,12 +279,13 @@ final class VideoSurvivalControllerTests: XCTestCase {
         mock.suspendResult = false
         let exp = expectation(description: "suspend attempt")
         mock.onTransition = { exp.fulfill() }
+        let settled = expectSettle(of: sut, "failed suspend settled")
 
         feed(sut, .poor)
         advance(6)
         feed(sut, .poor)            // → suspend attempt (fails)
 
-        await fulfillment(of: [exp], timeout: 1)
+        await fulfillment(of: [exp, settled], timeout: 5, enforceOrder: true)
         XCTAssertEqual(mock.suspendCallCount, 1)
         XCTAssertFalse(sut.isVideoSuspended) // stayed sending after failure
     }
@@ -272,18 +294,20 @@ final class VideoSurvivalControllerTests: XCTestCase {
         let (sut, mock, advance) = makeSUT()
         let suspendExp = expectation(description: "suspend")
         mock.onTransition = { suspendExp.fulfill() }
+        let suspendSettled = expectSettle(of: sut, "suspend settled")
         feed(sut, .poor); advance(6); feed(sut, .poor)
-        await fulfillment(of: [suspendExp], timeout: 1)
-        await waitForSuspendedState(true, in: sut)
+        await fulfillment(of: [suspendExp, suspendSettled], timeout: 5, enforceOrder: true)
+        XCTAssertTrue(sut.isVideoSuspended)
 
         let resumeExp = expectation(description: "resume")
         mock.onTransition = { resumeExp.fulfill() }
+        let resumeSettled = expectSettle(of: sut, "resume settled")
         feed(sut, .good)            // start recovery streak
         advance(10)
         feed(sut, .good)            // → resume
-        await fulfillment(of: [resumeExp], timeout: 1)
+        await fulfillment(of: [resumeExp, resumeSettled], timeout: 5, enforceOrder: true)
         XCTAssertEqual(mock.resumeCallCount, 1)
-        await waitForSuspendedState(false, in: sut)
+        XCTAssertFalse(sut.isVideoSuspended)
     }
 
     func test_handle_userTurnsVideoOff_doesNotSuspend() async {
@@ -300,9 +324,10 @@ final class VideoSurvivalControllerTests: XCTestCase {
         let (sut, mock, advance) = makeSUT()
         let exp = expectation(description: "suspend")
         mock.onTransition = { exp.fulfill() }
+        let settled = expectSettle(of: sut, "suspend settled")
         feed(sut, .poor); advance(6); feed(sut, .poor)
-        await fulfillment(of: [exp], timeout: 1)
-        await waitForSuspendedState(true, in: sut)
+        await fulfillment(of: [exp, settled], timeout: 5, enforceOrder: true)
+        XCTAssertTrue(sut.isVideoSuspended)
 
         sut.reset()
         XCTAssertFalse(sut.isVideoSuspended)
@@ -311,35 +336,39 @@ final class VideoSurvivalControllerTests: XCTestCase {
     func test_handle_hungTransition_timesOutWithoutFreezing() async {
         // A renegotiation that hangs must NOT pin the controller in the
         // transitioning state for the rest of the call.
+        // The actuator is held — it only returns when this test releases it,
+        // which it does AFTER the verdict. Only the controller's own 50ms
+        // timeout can settle the first transition.
         let (sut, mock, advance) = makeSUT(transitionTimeout: 0.05)
-        mock.hangSeconds = 10 // far longer than the 50ms timeout
+        mock.hold = .untilReleasedOrCancelled
 
         let attempt = expectation(description: "suspend attempt")
         mock.onTransition = { attempt.fulfill() }
+        let timedOut = expectation(description: "first transition settled by the timeout")
+        sut.onTransitionSettled = { timedOut.fulfill() }
         feed(sut, .poor); advance(6); feed(sut, .poor) // trigger suspend
-        await fulfillment(of: [attempt], timeout: 1)
+        await fulfillment(of: [attempt, timedOut], timeout: 5)
+        XCTAssertFalse(sut.isVideoSuspended, "a timed-out suspend must revert, not publish")
 
-        // After the timeout fires, the controller reverts (not suspended) and is
-        // free to act again — prove it by landing a second suspend on a fresh
-        // sustained streak.
-        mock.hangSeconds = 0
+        // The controller is free to act again — a fresh sustained streak lands
+        // a second suspend, which this time returns at once.
+        mock.hold = .none
         let retry = expectation(description: "retry suspend after timeout")
         mock.onTransition = { retry.fulfill() }
-        // Re-feed until the controller is no longer transitioning (timeout cleared it).
-        for _ in 0..<40 {
-            advance(6)
-            feed(sut, .poor)
-            if mock.suspendCallCount >= 2 { break }
-            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms, > the 50ms? loop budget covers it
-        }
-        await fulfillment(of: [retry], timeout: 1)
-        XCTAssertGreaterThanOrEqual(mock.suspendCallCount, 2)
+        let retrySettled = expectation(description: "retry settled")
+        sut.onTransitionSettled = { retrySettled.fulfill() }
+        feed(sut, .poor); advance(6); feed(sut, .poor)
+        await fulfillment(of: [retry, retrySettled], timeout: 5, enforceOrder: true)
+        XCTAssertEqual(mock.suspendCallCount, 2)
         XCTAssertTrue(sut.isVideoSuspended)
+
+        sut.onTransitionSettled = nil
+        mock.releaseHeldCalls()
     }
 
-    /// Regression guard for the "abandon on timeout" contract. `Task.sleep`
-    /// (used by `test_handle_hungTransition_timesOutWithoutFreezing` above) is
-    /// itself cancellation-aware, so it can't tell apart a real hard cap from a
+    /// Regression guard for the "abandon on timeout" contract. The hold used by
+    /// `test_handle_hungTransition_timesOutWithoutFreezing` above is
+    /// cancellation-aware, so it can't tell apart a real hard cap from a
     /// timeout that merely REQUESTS cancellation and then waits for the
     /// actuator anyway (Swift's `withTaskGroup` does exactly the latter: it
     /// implicitly awaits every child task before returning, and cancellation is
@@ -349,35 +378,37 @@ final class VideoSurvivalControllerTests: XCTestCase {
     /// blocks on a continuation nothing but the test can resume.
     func test_handle_uncooperativeHang_abandonsWaitAtTimeoutAndUnblocksRetry() async {
         let (sut, mock, advance) = makeSUT(transitionTimeout: 0.05)
-        mock.hangsUncooperatively = true
+        mock.hold = .untilReleased
 
         let attempt = expectation(description: "suspend attempt")
         mock.onTransition = { attempt.fulfill() }
+        let timedOut = expectation(description: "first transition settled by the timeout")
+        sut.onTransitionSettled = { timedOut.fulfill() }
         feed(sut, .poor); advance(6); feed(sut, .poor) // trigger suspend
-        await fulfillment(of: [attempt], timeout: 1)
 
-        // The stuck actuator call is NEVER released here. If the controller's
-        // timeout still (bug) waits for it via `withTaskGroup`'s implicit
-        // "await all children", the retry below can only happen after this
-        // test's own timeout — proving the controller genuinely abandoned the
-        // wait, rather than merely requesting cancellation and hoping.
+        // The stuck actuator call is NEVER released before the verdict. If the
+        // controller's timeout still (bug) waited for it via `withTaskGroup`'s
+        // implicit "await all children", the transition could never settle —
+        // proving the controller genuinely abandons the wait, rather than
+        // merely requesting cancellation and hoping.
+        await fulfillment(of: [attempt, timedOut], timeout: 5)
+        XCTAssertFalse(sut.isVideoSuspended, "a timed-out suspend must revert, not publish")
+
         let retry = expectation(description: "retry suspend after timeout abandons the uncooperative hang")
         mock.onTransition = { retry.fulfill() }
-        mock.hangsUncooperatively = false // the RETRY call must succeed normally
-        for _ in 0..<40 {
-            advance(6)
-            feed(sut, .poor)
-            if mock.suspendCallCount >= 2 { break }
-            try? await Task.sleep(nanoseconds: 20_000_000)
-        }
-        await fulfillment(of: [retry], timeout: 1)
-        XCTAssertGreaterThanOrEqual(mock.suspendCallCount, 2)
-        await waitForSuspendedState(true, in: sut)
+        let retrySettled = expectation(description: "retry settled")
+        sut.onTransitionSettled = { retrySettled.fulfill() }
+        mock.hold = .none // the RETRY call must succeed normally
+        feed(sut, .poor); advance(6); feed(sut, .poor)
+        await fulfillment(of: [retry, retrySettled], timeout: 5, enforceOrder: true)
+        XCTAssertEqual(mock.suspendCallCount, 2)
+        XCTAssertTrue(sut.isVideoSuspended)
 
         // Cleanup: release the first call's still-parked continuation so it
         // doesn't leak past the test (harmless no-op — the race already
-        // resolved via timeout, generation-guarded on the controller side).
-        mock.releaseUncooperativeHang()
+        // resolved via timeout).
+        sut.onTransitionSettled = nil
+        mock.releaseHeldCalls()
     }
 }
 
@@ -411,25 +442,13 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         return (sut, mock, { clock += $0 })
     }
 
-    private func waitForSuspendedState(
-        _ expected: Bool,
-        in sut: VideoSurvivalController,
-        timeout: TimeInterval = 5.0
-    ) async {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if sut.isVideoSuspended == expected { return }
-            try? await Task.sleep(nanoseconds: 50_000_000)
-        }
-        XCTFail("isVideoSuspended did not become \(expected) within \(timeout)s")
-    }
-
     // MARK: Generation guard
 
     func test_resetMidSuspend_suppressesStaleCompletion() async {
-        // The actuator takes 50ms — long enough that reset() fires before it returns.
+        // The actuator is HELD: it cannot return before this test releases it,
+        // so the suspend is in flight at reset() by construction, not by timing.
         let (sut, mock, advance) = makeSUT()
-        mock.hangSeconds = 0.05
+        mock.hold = .untilReleased
 
         let startedExp = expectation(description: "suspend started")
         mock.onTransition = { startedExp.fulfill() }
@@ -437,15 +456,20 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         advance(6)
         sut.handle(level: .poor, userWantsVideo: true) // triggers suspend
 
-        await fulfillment(of: [startedExp], timeout: 1)
+        await fulfillment(of: [startedExp], timeout: 5)
         XCTAssertFalse(sut.isVideoSuspended, "must not be suspended while actuator is still in-flight")
 
         // User toggles camera off — reset() increments the generation token.
         sut.reset()
         XCTAssertFalse(sut.isVideoSuspended, "reset() must clear state synchronously")
 
-        // Wait for the stale actuator to complete. The generation guard must swallow it.
-        try? await Task.sleep(nanoseconds: 150_000_000) // 150ms > 50ms hang
+        // Only now does the stale actuator return `true`. Wait for the controller
+        // to have PROCESSED that completion — the generation guard must swallow it.
+        let staleSettled = expectation(description: "stale suspend completion processed")
+        sut.onTransitionSettled = { staleSettled.fulfill() }
+        mock.releaseHeldCalls()
+        await fulfillment(of: [staleSettled], timeout: 5)
+
         XCTAssertFalse(
             sut.isVideoSuspended,
             "stale suspend completion must NOT override reset() — generation mismatch must protect against phantom suspended state"
@@ -457,34 +481,56 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         // Mirror of the above but for the resume path.
         let (sut, mock, advance) = makeSUT()
 
-        // Reach suspended state first (fast actuator).
+        // Reach suspended state first (immediate actuator).
         let suspendExp = expectation(description: "suspend")
         mock.onTransition = { suspendExp.fulfill() }
+        let suspendSettled = expectation(description: "suspend settled")
+        sut.onTransitionSettled = { suspendSettled.fulfill() }
         sut.handle(level: .poor, userWantsVideo: true)
         advance(6)
         sut.handle(level: .poor, userWantsVideo: true)
-        await fulfillment(of: [suspendExp], timeout: 1)
-        await waitForSuspendedState(true, in: sut)
+        await fulfillment(of: [suspendExp, suspendSettled], timeout: 5, enforceOrder: true)
+        XCTAssertTrue(sut.isVideoSuspended)
 
-        // Now start a slow resume.
-        mock.hangSeconds = 0.05
+        // Now start a held resume that will FAIL once released. A failed resume
+        // that slipped past the generation guard would put the policy back in
+        // "suspended" (`isSending = false`) behind reset()'s back — invisible on
+        // `isVideoSuspended`, visible on the next degraded streak, which would
+        // then never suspend.
+        mock.hold = .untilReleased
+        mock.resumeResult = false
         let resumeStartedExp = expectation(description: "resume started")
         mock.onTransition = { resumeStartedExp.fulfill() }
+        sut.onTransitionSettled = nil
         sut.handle(level: .good, userWantsVideo: true)
         advance(10)
         sut.handle(level: .good, userWantsVideo: true) // triggers resume
-        await fulfillment(of: [resumeStartedExp], timeout: 1)
+        await fulfillment(of: [resumeStartedExp], timeout: 5)
 
         // Reset while resume is in-flight — generation increments.
         sut.reset()
         XCTAssertFalse(sut.isVideoSuspended, "reset() must clear state synchronously")
 
-        try? await Task.sleep(nanoseconds: 150_000_000) // outlast 50ms hang
-        // If generation guard is missing, resume would write isVideoSuspended = false — which
-        // looks the same here. The real guard is that it doesn't write it BASED on a stale ref.
-        // Verify by checking that resumeCallCount is 1 (not repeated) and state is .initial.
+        let staleSettled = expectation(description: "stale resume completion processed")
+        sut.onTransitionSettled = { staleSettled.fulfill() }
+        mock.releaseHeldCalls()
+        await fulfillment(of: [staleSettled], timeout: 5)
+
         XCTAssertEqual(mock.resumeCallCount, 1, "actuator resume must have been called exactly once")
         XCTAssertFalse(sut.isVideoSuspended, "after reset(), suspended state must remain cleared")
+
+        // Probe the policy state reset() left: a fresh degraded streak suspends.
+        mock.hold = .none
+        let probeExp = expectation(description: "post-reset suspend")
+        mock.onTransition = { probeExp.fulfill() }
+        let probeSettled = expectation(description: "post-reset suspend settled")
+        sut.onTransitionSettled = { probeSettled.fulfill() }
+        sut.handle(level: .poor, userWantsVideo: true)
+        advance(6)
+        sut.handle(level: .poor, userWantsVideo: true)
+        await fulfillment(of: [probeExp, probeSettled], timeout: 5, enforceOrder: true)
+        XCTAssertEqual(mock.suspendCallCount, 2, "the stale resume failure must not have rewritten the policy state")
+        XCTAssertTrue(sut.isVideoSuspended)
     }
 
     // MARK: reset() cancels the in-flight transition Task
@@ -493,28 +539,30 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         // Regression guard: reset() must cancel the in-flight suspend/resume Task,
         // not just ignore its eventual result. Before the fix, a call ending
         // mid-transition left suspendOutboundVideo()/resumeOutboundVideo() running
-        // for up to `transitionTimeout` (here artificially long at 5s) after the
-        // call had already visibly ended — wasted battery/network for no purpose.
+        // for up to `transitionTimeout` after the call had already visibly ended —
+        // wasted battery/network for no purpose.
+        //
+        // The actuator is held until released OR cancelled, and this test never
+        // releases it before the verdict: only reset()'s cancellation can end the
+        // hold. Without the fix, the hold outlives the expectation's deadline.
         let (sut, mock, advance) = makeSUT(transitionTimeout: 20)
-        mock.hangSeconds = 5 // far longer than any reasonable teardown window
+        mock.hold = .untilReleasedOrCancelled
 
         let startedExp = expectation(description: "suspend started")
         mock.onTransition = { startedExp.fulfill() }
-        let hangCompleteExp = expectation(description: "hang cut short by cancellation")
+        let hangCompleteExp = expectation(description: "hold cut short by cancellation")
         mock.onHangComplete = { hangCompleteExp.fulfill() }
 
         sut.handle(level: .poor, userWantsVideo: true)
         advance(6)
-        sut.handle(level: .poor, userWantsVideo: true) // triggers suspend, actuator now "hanging"
+        sut.handle(level: .poor, userWantsVideo: true) // triggers suspend, actuator now held
 
-        await fulfillment(of: [startedExp], timeout: 1)
+        await fulfillment(of: [startedExp], timeout: 5)
 
         sut.reset()
 
-        // If reset() cancels the transition Task, the mock's `try? await Task.sleep`
-        // observes cancellation and returns almost immediately — well within 500ms,
-        // nowhere near the full 5s hang. Without the fix this assertion times out.
-        await fulfillment(of: [hangCompleteExp], timeout: 0.5)
+        await fulfillment(of: [hangCompleteExp], timeout: 5)
+        mock.releaseHeldCalls()
     }
 
     // MARK: isTransitioning guard
@@ -524,51 +572,62 @@ final class VideoSurvivalControllerConcurrencyTests: XCTestCase {
         // must NOT start a concurrent resume (SDP glare: two in-flight renegotiations
         // would produce an offer collision that triggers W3C §3.4 perfect-negotiation).
         let (sut, mock, advance) = makeSUT()
-        mock.hangSeconds = 0.05
+        mock.hold = .untilReleased
 
         let suspendStartedExp = expectation(description: "suspend started")
         mock.onTransition = { suspendStartedExp.fulfill() }
         sut.handle(level: .poor, userWantsVideo: true)
         advance(6)
         sut.handle(level: .poor, userWantsVideo: true) // in-flight suspend
-        await fulfillment(of: [suspendStartedExp], timeout: 1)
+        await fulfillment(of: [suspendStartedExp], timeout: 5)
 
-        // Feed an improving quality while suspend is in-flight.
+        // A SUSTAINED good streak arrives while the suspend is held in flight —
+        // enough for the policy to resume, were the samples not dropped.
         sut.handle(level: .good, userWantsVideo: true)
-        // The isTransitioning guard must block the resume from starting.
+        advance(10)
+        sut.handle(level: .good, userWantsVideo: true)
         XCTAssertEqual(mock.resumeCallCount, 0,
                        "resume must not start while suspend is in-flight — isTransitioning guard")
 
-        // Wait for suspend to complete.
-        try? await Task.sleep(nanoseconds: 150_000_000)
-        await waitForSuspendedState(true, in: sut)
-        XCTAssertEqual(mock.resumeCallCount, 0, "resume must still be 0 — quality tick was dropped")
+        let suspendSettled = expectation(description: "suspend settled")
+        sut.onTransitionSettled = { suspendSettled.fulfill() }
+        mock.releaseHeldCalls()
+        await fulfillment(of: [suspendSettled], timeout: 5)
+        XCTAssertTrue(sut.isVideoSuspended)
+        XCTAssertEqual(mock.resumeCallCount, 0, "resume must still be 0 — quality ticks were dropped")
     }
 
     func test_qualityFeedAfterTransitionCompletes_resumesNormally() async {
         // After the in-flight suspend completes, the NEXT quality tick that sees sustained
         // good quality must be able to start recovery (the controller is unblocked).
         let (sut, mock, advance) = makeSUT()
-        mock.hangSeconds = 0.05
+        mock.hold = .untilReleased
 
         let suspendExp = expectation(description: "suspend")
         mock.onTransition = { suspendExp.fulfill() }
         sut.handle(level: .poor, userWantsVideo: true)
         advance(6)
         sut.handle(level: .poor, userWantsVideo: true)
-        await fulfillment(of: [suspendExp], timeout: 1)
-        try? await Task.sleep(nanoseconds: 150_000_000) // wait for suspend to finish
-        await waitForSuspendedState(true, in: sut)
+        await fulfillment(of: [suspendExp], timeout: 5)
+
+        let suspendSettled = expectation(description: "suspend settled")
+        sut.onTransitionSettled = { suspendSettled.fulfill() }
+        mock.hold = .none
+        mock.releaseHeldCalls()
+        await fulfillment(of: [suspendSettled], timeout: 5)
+        XCTAssertTrue(sut.isVideoSuspended)
 
         // Now feed sustained good quality — recovery window starts fresh.
         let resumeExp = expectation(description: "resume")
         mock.onTransition = { resumeExp.fulfill() }
+        let resumeSettled = expectation(description: "resume settled")
+        sut.onTransitionSettled = { resumeSettled.fulfill() }
         sut.handle(level: .good, userWantsVideo: true)  // start recovery
         advance(10)
         sut.handle(level: .good, userWantsVideo: true)  // -> resume
-        await fulfillment(of: [resumeExp], timeout: 2)
+        await fulfillment(of: [resumeExp, resumeSettled], timeout: 5, enforceOrder: true)
         XCTAssertEqual(mock.resumeCallCount, 1)
-        await waitForSuspendedState(false, in: sut)
+        XCTAssertFalse(sut.isVideoSuspended)
     }
 }
 

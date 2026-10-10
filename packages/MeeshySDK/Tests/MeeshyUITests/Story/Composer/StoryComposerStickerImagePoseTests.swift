@@ -162,15 +162,18 @@ final class StoryComposerStickerImagePoseTests: XCTestCase {
         XCTAssertTrue(poseur.contains("onTemplateSelected("))
     }
 
-    /// Le composer branche ce tap sur le poseur du VM — sans quoi la vignette
-    /// serait tapable et n'atteindrait toujours pas le canevas.
-    func test_theComposerSheet_posesWhatTheLibraryReturns() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Media.swift")
-        let sheet = try XCTUnwrap(code.range(of: "StickerPickerView("))
-        let block = String(code[sheet.lowerBound...].prefix(600))
-
-        XCTAssertTrue(block.contains("onLibraryStickerSelected:"))
-        XCTAssertTrue(block.contains("addSticker(image:"))
+    /// **L'atelier ne monte plus de feuille de stickers** (#9189) : sa porte la
+    /// DEMANDE à l'hôte, qui présente la seule feuille du produit
+    /// (`MeeshyStickerSheet`, app) et y pose par le VM. Une feuille rouverte ici
+    /// serait la troisième, sans Mee, sans Instants ni packs.
+    func test_theAtelier_mountsNoStickerSheet_andAsksItsHost() throws {
+        for (path, code) in try ComposerSourceGuard.allStorySources() {
+            XCTAssertFalse(code.contains("StickerPickerView("),
+                           "\(path) remonte une feuille de stickers : elle vit dans l'app (#9189).")
+        }
+        let canvas = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        XCTAssertTrue(canvas.contains("onOpenStickerPicker: stickerSheetRequest"),
+                      "La porte « Stickers » doit demander la feuille à l'hôte.")
     }
 
     // MARK: - Helpers

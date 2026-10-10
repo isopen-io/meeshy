@@ -1,4 +1,6 @@
 import { Worker } from 'node:worker_threads';
+import { guardedTimeout } from './guarded-timer';
+import { logger } from './logger';
 
 /**
  * Exécuter une expression régulière FOURNIE PAR L'APPELANT est un geste
@@ -485,13 +487,13 @@ async function runOffLoop(job: OffLoopJob, budgets: OffLoopBudgets): Promise<Off
     // premier borne la NAISSANCE du fil, le second son SILENCE une fois
     // vivant. Un minuteur unique armé ici mesurerait les deux ensemble et
     // ferait refuser un motif sain pour le temps qu'a pris un isolate V8.
-    let timer = setTimeout(() => { settle(); }, budgets.startupBudgetMs);
+    let timer = guardedTimeout({ name: 'safe-regex-startup-budget', afterMs: budgets.startupBudgetMs, logger, run: () => { settle(); } });
 
     /** Le fil vient de parler : le délai reprend à zéro. */
     const relancer = (): void => {
       vivant = true;
       clearTimeout(timer);
-      timer = setTimeout(() => { settle(); }, budgets.budgetMs);
+      timer = guardedTimeout({ name: 'safe-regex-silence-budget', afterMs: budgets.budgetMs, logger, run: () => { settle(); } });
     };
 
     const settle = (): void => {
@@ -507,8 +509,8 @@ async function runOffLoop(job: OffLoopJob, budgets: OffLoopBudgets): Promise<Off
       // promesse-ci. Sans écouteur, ce rejet termine le PROCESS sous le
       // `--unhandled-rejections=throw` par défaut de Node 22 — toute la
       // passerelle tombée parce qu'un fil qu'on avait déjà décidé d'abandonner
-      // a mal fini de mourir. Le repli est muet À DESSEIN : ce module n'importe
-      // aucun logger, et l'issue de `terminate()` n'apprend rien à personne.
+      // a mal fini de mourir. Le repli est muet À DESSEIN : l'issue de
+      // `terminate()` n'apprend rien à personne.
       void worker.terminate().catch(() => undefined);
       resolve();
     };

@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import FeedScreen from './feed';
@@ -33,7 +34,10 @@ afterAll(async () => {
 let mounted: { readonly container: HTMLDivElement; readonly root: Root } | null = null;
 
 afterEach(() => {
-  act(() => mounted?.root.unmount());
+  act(() => {
+    closeSendSheet();
+    mounted?.root.unmount();
+  });
   mounted?.container.remove();
   mounted = null;
   window.history.pushState(null, '', '/feed');
@@ -109,5 +113,34 @@ describe('le fil monte les scènes et les ouvre en plein écran, EN PLACE (#6902
 
     expect(document.body.querySelector('[data-scene-fullscreen]')).toBeNull();
     expect(Array.from(document.body.querySelectorAll('video')).some((v) => !v.paused)).toBe(false);
+  });
+
+  /**
+   * #8884 — la scène plein écran porte « Partager » au même endroit que toute
+   * visionneuse, et c'est la PUBLICATION qui part (l'hôte connaît le post),
+   * pas une image de scène qui n'existe pas en fichier.
+   */
+  test('« Partager » sur une scène ouvre la feuille d’envoi avec la PUBLICATION (POST), son adresse et son aperçu', async () => {
+    const el = await mount();
+    const card = el.querySelector('[data-feed-card-id="post-scene-text"]');
+    await act(async () => {
+      (card?.querySelector('[data-feed-scene] button') as HTMLButtonElement | null)?.click();
+    });
+    await settle();
+    const share = document.body.querySelector<HTMLButtonElement>('[data-scene-fullscreen] [data-viewer-action="share"]');
+    expect(share).not.toBeNull();
+    act(() => share?.click());
+
+    const request = sendSheetStore.getState().request;
+    expect(request?.intent).toBe('share');
+    expect(request?.payload).toMatchObject({
+      kind: 'publication',
+      postId: 'post-scene-text',
+      postType: 'POST',
+      url: 'https://meeshy.me/feeds/post/post-scene-text',
+      preview: { kind: 'publication' },
+    });
+    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/post-scene-text' });
+    expect(document.body.querySelector('[data-scene-fullscreen] [data-viewer-action="react"]')).toBeNull();
   });
 });

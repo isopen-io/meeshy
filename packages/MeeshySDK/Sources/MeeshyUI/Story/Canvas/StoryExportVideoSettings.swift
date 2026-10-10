@@ -65,11 +65,18 @@ public nonisolated enum StoryExportVideoSettings {
     /// - Profil `High` : meilleure compression que `Baseline` à qualité égale, et
     ///   décodé par tout appareil postérieur à ~2010 — la compatibilité qui
     ///   motive H.264 n'est pas entamée.
+    ///
+    /// - `AVVideoColorPropertiesKey` (#9332) : `StoryAVCompositor` peint ses
+    ///   images en Display P3 (`StoryRenderingContext.workingColorSpace`). Sans
+    ///   étiquette, un lecteur suppose du BT.709 et la story exportée pâlit ;
+    ///   P3 D65 + transfert et matrice 709 est l'étiquette « Display P3 » de
+    ///   la vidéo Apple.
     static func video(for size: CGSize) -> [String: any Sendable] {
         [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: Int(size.width),
             AVVideoHeightKey: Int(size.height),
+            AVVideoColorPropertiesKey: displayP3,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: averageBitRate(for: size),
                 AVVideoMaxKeyFrameIntervalKey: Int(StoryExportFrameRate.fps * 2),
@@ -78,6 +85,13 @@ public nonisolated enum StoryExportVideoSettings {
             ] as [String: any Sendable]
         ]
     }
+
+    /// L'étiquette couleur de la vidéo Display P3.
+    static let displayP3: [String: String] = [
+        AVVideoColorPrimariesKey: AVVideoColorPrimaries_P3_D65,
+        AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+        AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2
+    ]
 
     /// Réglages de l'entrée audio. 128 kbps AAC stéréo : le palier au-delà duquel
     /// l'oreille ne distingue plus rien sur une story, et une fraction négligeable

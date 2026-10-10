@@ -16,7 +16,8 @@ import {
  * cache PERSISTÉ, et ce qu'il en tient dehors.
  *
  * Deux affirmations portent tout le lot et sont écrites ici plutôt qu'ailleurs :
- * la PRÉSENCE n'entre jamais (loi du 2026-08-25), et un compteur ABSENT n'est
+ * la PRÉSENCE n'entre que telle que la passerelle l'a SERVIE (loi du
+ * 2026-08-25, #9063), et un compteur ABSENT n'est
  * pas un compteur à ZÉRO (`servedUserStats` RETIRE les quatre intimes à un
  * tiers — `services/gateway/src/routes/user-stats.ts:220-225`, `:245-251`).
  */
@@ -60,7 +61,7 @@ describe('decodePublicProfile', () => {
     expect(decodePublicProfile({ ...WIRE_THIRD_PARTY, banner: null })?.banner).toBeNull();
   });
 
-  test('la PRÉSENCE servie par erreur n’entre PAS dans le cache persisté', () => {
+  test('la PRÉSENCE n’entre pas dans l’IDENTITÉ — elle voyage à côté, dans la vue', () => {
     const decoded = decodePublicProfile({ ...WIRE_THIRD_PARTY, isOnline: true, lastActiveAt: '2026-09-19T10:00:00.000Z' });
     expect(decoded).not.toBeNull();
     expect(Object.keys(decoded ?? {}).sort()).toEqual(['avatar', 'banner', 'bio', 'createdAt', 'displayName', 'id', 'username']);
@@ -192,18 +193,42 @@ const recordingTransport = (): { readonly transport: HttpTransport; readonly pat
   return { transport, paths };
 };
 
+describe('decodePublicProfileView — la présence SERVIE (#9063)', () => {
+  const view = (wire: Record<string, unknown>) => decodePublicProfileView({ ...WIRE_THIRD_PARTY, ...wire });
+
+  test('un ami : `isOnline` et `lastActiveAt` servis passent tels quels', () => {
+    expect(view({ isOnline: true, lastActiveAt: '2026-10-01T10:00:00.000Z' })?.presence).toEqual({
+      isOnline: true,
+      lastActiveAt: '2026-10-01T10:00:00.000Z',
+    });
+  });
+
+  test('`showLastSeen` coupé : l’état en ligne passe, la date reste absente', () => {
+    expect(view({ isOnline: false, lastActiveAt: null })?.presence).toEqual({ isOnline: false, lastActiveAt: null });
+  });
+
+  test('masquée (non-ami, cible qui la cache) : `null`, jamais un « hors ligne » fabriqué', () => {
+    expect(view({ isOnline: null, lastActiveAt: null })?.presence).toBeNull();
+    expect(view({})?.presence).toBeNull();
+  });
+
+  test('une date illisible n’est pas une date', () => {
+    expect(view({ isOnline: null, lastActiveAt: 'hier' })?.presence).toBeNull();
+    expect(view({ isOnline: true, lastActiveAt: 'hier' })?.presence).toEqual({ isOnline: true, lastActiveAt: null });
+  });
+});
+
 describe('loadPublicProfile — ce que la requête demande', () => {
-  test('UN aller-retour : `expand=stats,relation`, et JAMAIS `presence`', async () => {
+  test('UN aller-retour : `expand=stats,relation,presence` — la passerelle tranche qui voit la présence', async () => {
     const { transport, paths } = recordingTransport();
     await loadPublicProfile({ source: 'gateway', transport, handle: 'kwame-mensah' });
-    expect(paths).toEqual(['/api/v1/directory/people/kwame-mensah?expand=stats%2Crelation']);
-    expect(paths[0]).not.toContain('presence');
+    expect(paths).toEqual(['/api/v1/directory/people/kwame-mensah?expand=stats%2Crelation%2Cpresence']);
   });
 
   test('le handle est encodé', async () => {
     const { transport, paths } = recordingTransport();
     await loadPublicProfile({ source: 'gateway', transport, handle: 'a b/c' });
-    expect(paths[0]).toBe('/api/v1/directory/people/a%20b%2Fc?expand=stats%2Crelation');
+    expect(paths[0]).toBe('/api/v1/directory/people/a%20b%2Fc?expand=stats%2Crelation%2Cpresence');
   });
 
   test('la charge servie devient une VUE, pas un profil nu', async () => {

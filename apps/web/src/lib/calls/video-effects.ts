@@ -16,10 +16,15 @@ import { createStore } from 'zustand/vanilla';
  * naturelle (`needsFramePipeline`). Leur dessin vit avec le traitement
  * (`face-effects.ts`), jamais ici.
  *
- * Le flou d'arrière-plan est celui du NAVIGATEUR (contrainte `backgroundBlur`,
- * là où la caméra l'offre — Chrome sur ChromeOS, Windows et macOS récents,
- * Safari sur macOS) : aucune segmentation n'est téléchargée. Là où la caméra
- * ne l'offre pas, l'interrupteur n'existe pas.
+ * Le flou d'arrière-plan est d'abord celui de la CAMÉRA (contrainte
+ * `backgroundBlur`, là où elle l'offre — Chrome sur ChromeOS, Windows et macOS
+ * récents, Safari sur macOS) : rien n'est téléchargé. Ailleurs (#8471), il se
+ * fait par SEGMENTATION dans le traitement des images (un modèle léger chargé
+ * au premier flou, `video-effects-segmentation.ts`) ; sans traitement possible,
+ * l'interrupteur n'existe pas.
+ *
+ * Le zoom numérique (#8441) recadre aussi l'image ENVOYÉE : `frameSettings`
+ * réunit ce que le traitement reçoit pour une caméra donnée.
  */
 
 export const VIDEO_PRESETS = ['natural', 'warm', 'cool', 'vivid', 'muted'] as const;
@@ -58,18 +63,32 @@ export function effectsFilter(effects: VideoEffects): string {
 /** Faut-il traiter les images ? Le flou seul non : il se règle sur la caméra elle-même. */
 export const needsFramePipeline = (effects: VideoEffects): boolean => effectsFilter(effects) !== 'none' || effects.faceEffect !== 'none';
 
+/** Ce que le traitement des images reçoit : les effets, le zoom numérique, et si le flou lui revient (la caméra ne le fait pas). */
+export type FrameSettings = { readonly effects: VideoEffects; readonly zoom: number; readonly segmentBlur: boolean };
+
+export const frameSettings = (effects: VideoEffects, camera: { readonly nativeBlur: boolean; readonly zoom: number }): FrameSettings => ({
+  effects,
+  zoom: Number.isFinite(camera.zoom) ? Math.max(1, camera.zoom) : 1,
+  segmentBlur: effects.blur && !camera.nativeBlur,
+});
+
+/** Faut-il traiter les images ? Sinon la caméra part BRUTE, sans traverser le moindre code. */
+export const needsFrames = (settings: FrameSettings): boolean => needsFramePipeline(settings.effects) || settings.segmentBlur || settings.zoom > 1;
+
 /** Les noms que `call:analytics` retient (`effectsUsed`). */
 export function effectsUsedOf(effects: VideoEffects): readonly string[] {
   return [...(effects.preset === 'natural' ? [] : [`filter:${effects.preset}`]), ...(clampBrightness(effects.brightness) === 0 ? [] : ['brightness']), ...(effects.blur ? ['background-blur'] : []), ...(effects.faceEffect === 'none' ? [] : [`face:${effects.faceEffect}`])];
 }
 
-type CanvasProbe = { readonly getContext: (kind: '2d') => unknown; readonly captureStream?: unknown };
+type CanvasProbe = { readonly getContext: (kind: '2d' | 'webgl2') => unknown; readonly captureStream?: unknown };
 
 export type EffectsEnvironment = {
   readonly MediaStreamTrackProcessor?: unknown;
   readonly MediaStreamTrackGenerator?: unknown;
   readonly VideoTrackGenerator?: unknown;
   readonly OffscreenCanvas?: unknown;
+  readonly Worker?: unknown;
+  readonly WebAssembly?: unknown;
   readonly createCanvas: () => CanvasProbe | null;
 };
 
@@ -88,6 +107,20 @@ export function colorPipelineSupported(env: EffectsEnvironment): boolean {
   return frames || typeof canvas.captureStream === 'function';
 }
 
+type LoseContext = { readonly getExtension?: (name: string) => { readonly loseContext?: () => void } | null };
+
+const hasWebgl2 = (canvas: CanvasProbe | null): boolean => {
+  const context = canvas?.getContext('webgl2') as LoseContext | null | undefined;
+  if (context === null || context === undefined) return false;
+  context.getExtension?.('WEBGL_lose_context')?.loseContext?.();
+  return true;
+};
+
+/** Le flou par segmentation (#8471) : le traitement des images, un worker, WebAssembly (le modèle) et WebGL2 (le compositeur). */
+export function segmentationSupported(env: EffectsEnvironment): boolean {
+  return colorPipelineSupported(env) && env.Worker !== undefined && env.WebAssembly !== undefined && hasWebgl2(env.createCanvas());
+}
+
 /** L'environnement du navigateur, lu une fois. */
 export function browserEffectsEnvironment(): EffectsEnvironment {
   const scope = globalThis as unknown as Record<string, unknown>;
@@ -96,6 +129,8 @@ export function browserEffectsEnvironment(): EffectsEnvironment {
     MediaStreamTrackGenerator: scope.MediaStreamTrackGenerator,
     VideoTrackGenerator: scope.VideoTrackGenerator,
     OffscreenCanvas: scope.OffscreenCanvas,
+    Worker: scope.Worker,
+    WebAssembly: scope.WebAssembly,
     createCanvas: () => (typeof document === 'undefined' ? null : document.createElement('canvas')),
   };
 }
@@ -108,14 +143,28 @@ export function browserColorSupport(): boolean {
   return colorSupport;
 }
 
+let segmentationSupport: boolean | null = null;
+
+/** Le navigateur sait-il flouter par segmentation ? Mesuré une fois par session. */
+export function browserSegmentationSupport(): boolean {
+  segmentationSupport ??= segmentationSupported(browserEffectsEnvironment());
+  return segmentationSupport;
+}
+
 type BlurCapabilities = MediaTrackCapabilities & { readonly backgroundBlur?: unknown };
 
-/** La caméra offre-t-elle son flou d'arrière-plan ? */
-export function blurCapable(track: MediaStreamTrack | null): boolean {
+/** La caméra offre-t-elle SON flou d'arrière-plan ? */
+export function cameraBlur(track: MediaStreamTrack | null): boolean {
   if (track === null || typeof track.getCapabilities !== 'function') return false;
   const blur = (track.getCapabilities() as BlurCapabilities).backgroundBlur;
   return Array.isArray(blur) && blur.includes(true);
 }
+
+/** Le flou est offert par la caméra, sinon par la segmentation — jamais sans caméra. */
+export const blurOffered = (track: MediaStreamTrack | null, segmentation: boolean): boolean => track !== null && (cameraBlur(track) || segmentation);
+
+/** L'interrupteur du flou existe-t-il pour cette caméra, dans ce navigateur ? */
+export const blurCapable = (track: MediaStreamTrack | null): boolean => blurOffered(track, track !== null && !cameraBlur(track) && browserSegmentationSupport());
 
 export const effectsOffered = (support: { readonly color: boolean; readonly blur: boolean }): boolean => support.color || support.blur;
 

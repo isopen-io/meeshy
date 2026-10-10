@@ -196,9 +196,9 @@ extension BubbleStandardLayout {
 
     @ViewBuilder
     private func mediaWithReplyContainerBody(reply: BubbleContent.Reply) -> some View {
-        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
-        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
-        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+        let neutralBg = MeeshyColors.surfaceFill(isDark: isDark)
+        let strokeColor = MeeshyColors.hairline(isDark: isDark)
+        let dividerColor = MeeshyColors.hairline(isDark: isDark)
 
         VStack(spacing: 0) {
             BubbleQuotedReply(
@@ -243,7 +243,7 @@ extension BubbleStandardLayout {
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .stroke(strokeColor, lineWidth: 0.5)
+                .stroke(strokeColor, lineWidth: MeeshyBorder.hairline)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
@@ -264,23 +264,6 @@ extension BubbleStandardLayout {
 /// the runtime can resolve in O(1) recursion depth. This also lets SwiftUI
 /// preserve the cell's structural identity across `ThemedMessageBubble.body`
 /// re-evaluations and skip rebuild when the bindings haven't actually changed.
-/// BUG2 A' — attache un long-press HAUTE PRIORITÉ (gagne sur le long-press parent
-/// = context menu) uniquement quand `enabled`. Pour image solo/protégée, aucun
-/// geste n'est attaché → le parent gère son propre long-press normalement.
-private struct AttachmentReactionLongPress: ViewModifier {
-    let enabled: Bool
-    let action: () -> Void
-    func body(content: Content) -> some View {
-        if enabled {
-            content.highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.4).onEnded { _ in action() }
-            )
-        } else {
-            content
-        }
-    }
-}
-
 fileprivate struct BubbleGridCell: View {
     let attachment: MessageAttachment
     let overflowCount: Int
@@ -370,10 +353,9 @@ fileprivate struct BubbleGridCell: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce,
-        // exactement ce que l'appui long ouvre douze lignes plus bas. Même
-        // garde (`canReactPerImage`), même acte : un second chemin qui
-        // ouvrirait autre chose serait deux gestes pour une seule intention.
+        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce.
+        // Depuis #9907, c'est le SEUL geste de la tuile qui y mène directement :
+        // l'appui long ouvre l'aperçu de la pièce, dont le menu réagit aussi.
         //
         // **Déclaré AVANT le simple tap**, ce qui est la seule façon pour
         // SwiftUI d'arbitrer les deux. Le coût est mesuré et assumé : le
@@ -390,11 +372,23 @@ fileprivate struct BubbleGridCell: View {
         .onTapGesture(perform: handleTap)
         .overlay { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
-        .modifier(AttachmentReactionLongPress(enabled: canReactPerImage) {
-            HapticFeedback.medium()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
-        })
-        .overlay { reactionPickerOverlay }
+        // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
+        // de CETTE pièce, dont le menu porte la réaction. Le double tap
+        // ci-dessus reste le chemin court vers le sélecteur.
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
+    }
+
+    /// **L'appui long ouvre l'aperçu de la pièce** (#9907) — dans un LOT
+    /// seulement, et jamais sur une pièce protégée : la pression d'une pièce
+    /// seule ou cachée reste à la bulle, qui montre le message entier.
+    private var offersPiecePreview: Bool {
+        !solo && !ComposableAttachment.isProtected(attachment)
     }
 
     /// BUG2 A' — pastille des réactions par-image (emojis + total) en coin bas-gauche
@@ -410,42 +404,7 @@ fileprivate struct BubbleGridCell: View {
             summary: attachment.reactionSummary,
             currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
-                .padding(5)
-        }
-    }
-
-    /// BUG2 A' — picker emoji présenté centré DANS les bounds de la cellule (évite
-    /// le clip de `.clipped()`), fond assombri tap-to-dismiss.
-    @ViewBuilder private var reactionPickerOverlay: some View {
-        if showReactionPicker {
-            ZStack {
-                Color.black.opacity(0.4)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation { showReactionPicker = false } }
-                // **Aucune échelle écrite ici** (#6117) : la taille de la
-                // rangée est celle du composant, une seule pour toutes les
-                // surfaces où l'on réagit. Elle valait 0,78 — la plus petite
-                // des trois échelles du dépôt, quand le plein écran montait la
-                // même rangée à 2. `scrollable` reste : à 1,5 la rangée dépasse
-                // la largeur d'une tuile, donc elle DÉFILE plutôt que d'être
-                // rognée par le `.clipped()` de la grille.
-                EmojiReactionPicker(
-                    scrollable: true,
-                    onReact: { emoji in
-                        onReactToAttachment?(attachment.id, emoji)
-                        withAnimation { showReactionPicker = false }
-                    },
-                    onDismiss: { withAnimation { showReactionPicker = false } }
-                )
-                .padding(MeeshySpacing.sm)
-                // `adaptiveGlass` et non `.ultraThinMaterial` en dur : sous
-                // iOS 26 ce site rendait une matière PLATE là où le reste du
-                // chrome rend du verre système (#4997 — le site unique
-                // retombe de lui-même sur `.ultraThinMaterial` avant iOS 26).
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .padding(.horizontal, MeeshySpacing.xs + 2)
-            }
-            .transition(.opacity)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -488,6 +447,24 @@ fileprivate struct BubbleGridCell: View {
             viewCountBadge
         }
         .clipped()
+        // #9910 — la vidéo de grille montre ce qu'elle a récolté, comme la
+        // photo voisine ; en HAUT à gauche, le bas portant la barre de lecture
+        // et les contrôles du lecteur.
+        .overlay(alignment: .topLeading) { reactionsBadge }
+        // Recette du 2026-10-10 : sans geste à elle, le double tap d'une vidéo
+        // tombait sur celui de la cellule et ouvrait le menu d'édition du
+        // message. Il ouvre le sélecteur de CETTE pièce, comme la photo.
+        .modifier(QuickReactionDoubleTap(isEnabled: canReactPerImage) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .modifier(PieceSpotlightRing(attachmentId: attachment.id, accentHex: contactColor))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
@@ -509,9 +486,9 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
             Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -535,15 +512,15 @@ fileprivate struct BubbleGridCell: View {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.error.opacity(0.85))
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                         )
                 }
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
                 Spacer()
             }
             .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
@@ -660,7 +637,7 @@ fileprivate struct BubbleGridImageView: View {
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }
@@ -674,21 +651,21 @@ private struct AttachmentBlurOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
                 .background(.ultraThinMaterial)
 
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "eye.slash.fill")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(.white)
 
                 Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundStyle(.white)
 
                 Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
-                    .font(MeeshyFont.relative(9))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .contentShape(Rectangle())
@@ -793,11 +770,11 @@ struct BubbleCarouselView: View {
             } label: {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                    .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
+                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -807,8 +784,8 @@ struct BubbleCarouselView: View {
                 pageIndicator
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     // MARK: - Page Indicator
@@ -818,10 +795,10 @@ struct BubbleCarouselView: View {
         let accent = Color(hex: contactColor)
 
         if items.count <= 7 {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 ForEach(0..<items.count, id: \.self) { i in
                     Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(0.45))
+                        .fill(i == carouselIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
                         .frame(
                             width: i == carouselIndex ? 7 : 5,
                             height: i == carouselIndex ? 7 : 5
@@ -833,23 +810,23 @@ struct BubbleCarouselView: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.7))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                    .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                    .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             )
         } else {
             Text("\(carouselIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
                 )
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
@@ -886,7 +863,7 @@ struct BubbleCarouselView: View {
                 messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { _ in }
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
         }
     }
 
@@ -910,7 +887,7 @@ struct BubbleCarouselView: View {
             Color(hex: attachment.thumbnailColor)
                 .overlay(
                     Image(systemName: "photo")
-                        .font(MeeshyFont.relative(28))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
                         .foregroundColor(.white.opacity(0.4))
                         .accessibilityHidden(true)
                 )

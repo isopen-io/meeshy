@@ -65,6 +65,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .consumeAfterRead:
             try await dispatchConsumeAfterRead(record)
 
+        case .reportContentCapture:
+            try await dispatchReportContentCapture(record)
+
         case .reportAttachmentStatus:
             try await dispatchReportAttachmentStatus(record)
 
@@ -350,6 +353,30 @@ struct OutboxDispatcher: OutboxDispatching {
         }
     }
 
+    /// #9617 — une capture d'un contenu qui disparaît, déclarée tant que la
+    /// passerelle l'accepte : une panne ou un budget dépassé se rejouent avec
+    /// le recul exponentiel de la file, un refus FINAL fait partir la ligne.
+    /// Sans risque de double annonce : la passerelle en écrit au plus une par
+    /// (acteur, message, sorte de capture).
+    private func dispatchReportContentCapture(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ReportContentCapturePayload.self)
+        let result: Result<[String], Error>
+        do {
+            result = .success(try await ContentCaptureService.shared.sendContentCapture(payload.report))
+        } catch {
+            result = .failure(error)
+        }
+        switch ContentCaptureDispatchOutcome.of(result, declared: payload.messageIds, attempts: record.attempts) {
+        case .done:
+            logger.info("reportContentCapture dispatched conv=\(payload.conversationId, privacy: .public) kind=\(payload.kind.rawValue, privacy: .public)")
+        case .drop:
+            logger.warning("reportContentCapture refused for good conv=\(payload.conversationId, privacy: .public)")
+        case .retry:
+            if case .failure(let error) = result { throw error }
+            throw ContentCaptureRefusal(code: "NOT_YET_NOTICED")
+        }
+    }
+
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
@@ -554,20 +581,8 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("repostPost dispatched for \(payload.postId, privacy: .public) targetType=\(payload.targetType, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// `POST /posts/:id/comments` — gateway wraps through
-    /// `withMutationLog`. Body matches `CreateCommentSchema` :
-    /// `{ content, parentId? }`.
-    private func dispatchCreateComment(_ record: OutboxRecord) async throws {
-        let payload = try decodePayload(record, as: CreateCommentPayload.self)
-        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
-            PostsEndpoint.byPostIdComments(postId: payload.postId),
-            method: "POST",
-            body: try CreateCommentBody.encoded(for: payload),
-            queryItems: nil,
-            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
-        )
-        logger.info("createComment dispatched on \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
-    }
+    // `dispatchCreateComment` vit dans `OutboxDispatcher+Comments.swift` : il
+    // téléverse les pièces du commentaire avant de l'écrire (#9743).
 
     /// `DELETE /posts/:postId/comments/:commentId` — gateway wraps
     /// through `withMutationLog`. The route needs `postId` so the
@@ -682,9 +697,14 @@ nonisolated struct CreateCommentBody: Encodable {
     /// au post commenté : encoder une chaîne plate ferait échouer l'envoi
     /// entier, pas seulement la citation.
     let quotedPostMediaId: String?
+    /// Les médias du commentaire, DÉJÀ téléversés (#9743). `nil` quand il n'en
+    /// porte aucun : la clé ne part pas, comme avant le champ.
+    var attachmentIds: [String]? = nil
+    var mobileTranscription: MobileTranscriptionPayload? = nil
 
     enum CodingKeys: String, CodingKey {
         case content, parentId, location, effectFlags, originalLanguage, quotedPostMedia
+        case attachmentIds, mobileTranscription
     }
 
     private struct QuotedPostMediaAnchor: Encodable { let postMediaId: String }
@@ -702,17 +722,21 @@ nonisolated struct CreateCommentBody: Encodable {
             quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) },
             forKey: .quotedPostMedia
         )
+        try container.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+        try container.encodeIfPresent(mobileTranscription, forKey: .mobileTranscription)
     }
 
     /// SEUL site qui traduit un `CreateCommentPayload` persisté en octets HTTP.
-    static func encoded(for payload: CreateCommentPayload) throws -> Data {
+    static func encoded(for payload: CreateCommentPayload, attachmentIds: [String] = []) throws -> Data {
         try JSONEncoder().encode(CreateCommentBody(
             content: payload.content,
             parentId: payload.parentCommentId,
             location: payload.location,
             effectFlags: payload.effectFlags,
             originalLanguage: payload.originalLanguage,
-            quotedPostMediaId: payload.quotedPostMediaId
+            quotedPostMediaId: payload.quotedPostMediaId,
+            attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
+            mobileTranscription: attachmentIds.isEmpty ? nil : payload.mobileTranscription
         ))
     }
 }

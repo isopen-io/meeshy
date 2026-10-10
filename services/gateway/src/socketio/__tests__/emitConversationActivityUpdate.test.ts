@@ -45,8 +45,7 @@ type PrismaOverrides = {
   call?: unknown;
   lastReactionId?: string | null;
   activeCallId?: string | null;
-  lastReactionTargetKey?: string | null;
-  reactedMessageSender?: { senderId: string; sender: { userId: string | null } | null } | null;
+  lastActivityAt?: Date | null;
 };
 
 const makePrisma = (overrides: PrismaOverrides = {}) => ({
@@ -57,17 +56,9 @@ const makePrisma = (overrides: PrismaOverrides = {}) => ({
         lastReactionId,
         activeCallId: 'activeCallId' in overrides ? overrides.activeCallId : null,
         lastMessageAt: LAST_MESSAGE_AT,
-        lastReactionAt: lastReactionId ? REACTION_AT : null,
-        lastReactionTargetKey: 'lastReactionTargetKey' in overrides
-          ? overrides.lastReactionTargetKey
-          : lastReactionId ? 'u-bob' : null,
+        lastActivityAt: 'lastActivityAt' in overrides ? overrides.lastActivityAt : REACTION_AT,
       };
     }),
-  },
-  message: {
-    findUnique: jest.fn(async () =>
-      'reactedMessageSender' in overrides ? overrides.reactedMessageSender : { senderId: 'p-bob', sender: { userId: 'u-bob' } },
-    ),
   },
   reaction: { findUnique: jest.fn(async () => ('reaction' in overrides ? overrides.reaction : reactionRow())) },
   callSession: { findUnique: jest.fn(async () => overrides.call ?? null) },
@@ -132,57 +123,49 @@ describe('emitConversationActivityUpdate — la dernière réaction (#7545)', ()
   });
 });
 
-describe('emitConversationActivityUpdate — le rang servi à l’auteur réagi (#7592)', () => {
-  it("l'auteur du message réagi reçoit son rang (sa ligne remonte), les tiers n'en reçoivent aucun", async () => {
+describe('emitConversationActivityUpdate — le rang servi à TOUS les participants (#9026)', () => {
+  it('une réaction pousse le rang à chaque participant, auteur réagi ou tiers', async () => {
     const emitted: Emitted[] = [];
     await emitConversationActivityUpdate(makePrisma() as never, makeIo(emitted) as never, {
       conversationId: 'c1',
       updatedByUserId: 'u-alice',
       reaction: true,
-      reactedMessageId: 'm1',
     });
 
-    const bob = emitted.find((e) => e.room === 'user:u-bob')!.payload;
-    const carol = emitted.find((e) => e.room === 'user:u-carol')!.payload;
-    expect(bob.listRankAt).toBe(REACTION_AT.toISOString());
-    expect(carol).not.toHaveProperty('listRankAt');
+    expect(emitted).toHaveLength(2);
+    for (const { payload } of emitted) expect(payload.listRankAt).toBe(REACTION_AT.toISOString());
   });
 
-  it("au retrait de la dernière réaction, l'auteur réagi reçoit le rang de son dernier message (sa ligne redescend)", async () => {
+  it("le rang est max(lastMessageAt, lastActivityAt) : une activité plus ancienne ne recule pas la ligne", async () => {
     const emitted: Emitted[] = [];
-    await emitConversationActivityUpdate(makePrisma({ lastReactionId: null }) as never, makeIo(emitted) as never, {
-      conversationId: 'c1',
-      updatedByUserId: 'u-alice',
-      reaction: true,
-      reactedMessageId: 'm1',
-    });
+    await emitConversationActivityUpdate(
+      makePrisma({ lastActivityAt: new Date('2026-09-23T09:00:00Z') }) as never,
+      makeIo(emitted) as never,
+      { conversationId: 'c1', updatedByUserId: 'u-alice', reaction: true },
+    );
 
-    const bob = emitted.find((e) => e.room === 'user:u-bob')!.payload;
-    const carol = emitted.find((e) => e.room === 'user:u-carol')!.payload;
-    expect(bob.listRankAt).toBe(LAST_MESSAGE_AT.toISOString());
-    expect(carol).not.toHaveProperty('listRankAt');
+    for (const { payload } of emitted) expect(payload.listRankAt).toBe(LAST_MESSAGE_AT.toISOString());
   });
 
-  it("un invité auteur est reconnu par son Participant.id", async () => {
-    const guestParticipants = [
-      { id: 'p-guest', userId: null, joinedAt: new Date('2026-01-01'), user: null },
-      participants[1],
-    ];
-    const prisma = makePrisma({ lastReactionTargetKey: 'p-guest', reactedMessageSender: { senderId: 'p-guest', sender: null } });
-    prisma.participant.findMany.mockResolvedValueOnce(guestParticipants as never);
+  it('une activité seule (appel, épingle) pousse le rang à tous, sans réaction ni appel', async () => {
     const emitted: Emitted[] = [];
-    await emitConversationActivityUpdate(prisma as never, makeIo(emitted) as never, {
+    await emitConversationActivityUpdate(makePrisma() as never, makeIo(emitted) as never, {
       conversationId: 'c1',
-      updatedByUserId: 'u-alice',
-      reaction: true,
-      reactedMessageId: 'm1',
+      updatedByUserId: 'u-bob',
+      rank: true,
     });
 
-    expect(emitted.find((e) => e.room === 'user:p-guest')!.payload.listRankAt).toBe(REACTION_AT.toISOString());
-    expect(emitted.find((e) => e.room === 'user:u-carol')!.payload).not.toHaveProperty('listRankAt');
+    expect(emitted.map((e) => e.room).sort()).toEqual(['user:u-bob', 'user:u-carol']);
+    for (const { event, payload } of emitted) {
+      expect(event).toBe(SERVER_EVENTS.CONVERSATION_UPDATED);
+      expect(payload.listRankAt).toBe(REACTION_AT.toISOString());
+      expect(payload).not.toHaveProperty('lastReaction');
+      expect(payload).not.toHaveProperty('activeCall');
+      expect(payload).not.toHaveProperty('lastMessageAt');
+    }
   });
 
-  it("une mise à jour d'appel ne porte aucun rang", async () => {
+  it("une mise à jour d'appel seule ne porte aucun rang", async () => {
     const emitted: Emitted[] = [];
     await emitConversationActivityUpdate(makePrisma() as never, makeIo(emitted) as never, {
       conversationId: 'c1',

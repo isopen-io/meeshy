@@ -4,15 +4,19 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand/react';
 
 import './styles/app.css';
+import './styles/sealed-exit.css';
 
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
-import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageChoice, subscribeInterfaceLanguage } from '@/lib/interface-language';
+import { syncShellLocaleAtStart } from '@/lib/shell-locale';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
+import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
+import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -64,6 +68,14 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * est déjà là, pas à ajouter.
  */
 function SessionGate({ children }: { children: ReactNode }) {
+  const route = useRoute();
+  /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
+     d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
+     sinon vers la connexion au lieu de rendre le compte. */
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+}
+
+function RouteAccessGate({ children }: { children: ReactNode }) {
   const { key, search } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
   const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });
@@ -125,6 +137,11 @@ function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
 const root = document.getElementById('root');
 if (!root) throw new Error('#root absent du document');
 
+/* Les sorties natives du navigateur sont annulées sur toute surface scellée
+   (#9573) — installée SYNCHRONEMENT avant le premier rendu : aucune peinture
+   sans garde, et aucun chunk à la demande dont l'échec la laisserait absente. */
+installSealedExitGuard(document);
+
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
@@ -147,6 +164,7 @@ createRoot(root).render(
  */
 void import('@/lib/api/realtime');
 
+
 /**
  * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque
  * Android reçoit les App Links de `meeshy.me` et `meeshy://` ; le lien d'un
@@ -158,6 +176,39 @@ if (__SHELL__) {
     ([{ ecouterLiensEntrants }, { coqueCourante }, { isAppPath }]) =>
       ecouterLiensEntrants(coqueCourante(), { isAppPath, navigate: (chemin) => navigate(chemin) }),
   );
+}
+
+/**
+ * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
+ * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
+ * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
+ * côté natif, celui d'un utilisateur pas encore connecté attend la connexion.
+ * Le web reçoit le même partage par le `share_target` de la PWA (`/share`).
+ */
+if (__SHELL__) {
+  void import('@/lib/share-incoming/native-start').then(({ startNativeShareInboxInShell }) => startNativeShareInboxInShell());
+}
+
+/**
+ * LA LANGUE CHOISIE DANS MEESHY REJOINT LES TEXTES NATIFS DE LA COQUE (#9749)
+ * — un choix fait avant cette version, ou qu'un Android antérieur au 13 a
+ * oublié, sans jamais écraser la langue posée depuis les réglages d'Android.
+ */
+if (__SHELL__) {
+  void syncShellLocaleAtStart(interfaceLanguageChoice());
+}
+
+/**
+ * UN VOCAL CONTINUE DE JOUER QUAND ON QUITTE L'APP (#9257) — la coque Android
+ * tient un service au premier plan tant qu'un `<audio>` de la page joue ;
+ * sans lui, Android gèle le processus mis en cache au milieu du vocal. Un
+ * navigateur tient lui-même la lecture : hors coque, rien ne se charge.
+ */
+if (__SHELL__) {
+  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, pauseVideosWhenNoisy, shellNoisy, shellPlaybackHold }) => {
+    holdWhileAudioPlays(document, shellPlaybackHold());
+    pauseVideosWhenNoisy(document, shellNoisy());
+  });
 }
 
 /**
@@ -219,6 +270,10 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     );
     void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
       listenCallBackIntentsInBrowser(),
+    );
+    /** ET « RÉPONDRE » SUR UNE NOTIFICATION DE MESSAGE MET LE CURSEUR DANS LE COMPOSEUR (#8860). */
+    void import('@/lib/notifications/composer-focus-intent').then(({ listenComposerFocusIntentsInBrowser }) =>
+      listenComposerFocusIntentsInBrowser(),
     );
     /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,

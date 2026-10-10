@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { ObjectV3Schema } from '../types/canvas-v3';
 import {
   FULL_MEDIA_CROP,
+  MEDIA_CROP_RATIOS,
   MINIMUM_CROP_SIDE,
+  centeredMediaCrop,
   clampMediaCrop,
   effectiveMediaRatio,
   isFullMediaCrop,
@@ -236,5 +238,50 @@ describe('ObjectV3Schema — le recadrage est DÉCLARÉ dans une charge permissi
     const r = ObjectV3Schema.safeParse(objet('text', { text: 'a', cropX: 0, cropY: 0, cropW: 0.5, cropH: 0.5 }));
     expect(r.success).toBe(false);
     expect(JSON.stringify(r.error?.issues)).toContain('CROP_ON_NON_MEDIA:text');
+  });
+});
+
+/**
+ * #9499 — **UNE liste de proportions**, celle que l'ancien éditeur d'image
+ * (`CropRatio` : 1:1 · 4:3 · 16:9 · 9:16) et la retouche du fond (#9136 :
+ * 1:1 · 4:5 · 9:16 · 16:9) offraient chacun à moitié. iOS la reprend cas pour
+ * cas (`MediaCropRatio.allCases`) : deux listes divergeraient au premier ajout.
+ */
+describe('MEDIA_CROP_RATIOS — une seule liste pour toute image', () => {
+  it('ouvre sur le cadre d’origine, puis les portraits, puis les paysages', () => {
+    expect(MEDIA_CROP_RATIOS.map((r) => r.notation)).toEqual([null, '1:1', '4:5', '3:4', '9:16', '4:3', '16:9']);
+  });
+
+  it('chaque notation dit son rapport largeur/hauteur', () => {
+    for (const ratio of MEDIA_CROP_RATIOS) {
+      if (ratio.notation === null) {
+        expect(ratio.value).toBeNull();
+        continue;
+      }
+      const [w, h] = ratio.notation.split(':').map(Number);
+      expect(ratio.value).toBeCloseTo((w ?? 0) / (h ?? 1), 10);
+    }
+  });
+});
+
+describe('centeredMediaCrop — le plus grand cadre CENTRÉ du rapport visé', () => {
+  it('un carré dans un paysage 4:3 garde toute la hauteur', () => {
+    expect(centeredMediaCrop(1, 4 / 3)).toEqual({ x: 0.125, y: 0, width: 0.75, height: 1 });
+  });
+
+  it('un 16:9 dans un portrait garde toute la largeur', () => {
+    const crop = centeredMediaCrop(16 / 9, 9 / 16);
+    expect(crop.width).toBe(1);
+    expect(effectiveMediaRatio(9 / 16, crop)).toBeCloseTo(16 / 9, 6);
+  });
+
+  it('un 3:4 dans une photo 3:2 a bien le rapport 3:4', () => {
+    expect(effectiveMediaRatio(3 / 2, centeredMediaCrop(3 / 4, 3 / 2))).toBeCloseTo(3 / 4, 6);
+  });
+
+  it('le cadre d’origine, ou une source non mesurée, rend le cadre entier', () => {
+    expect(centeredMediaCrop(null, 4 / 3)).toEqual(FULL_MEDIA_CROP);
+    expect(centeredMediaCrop(1, 0)).toEqual(FULL_MEDIA_CROP);
+    expect(centeredMediaCrop(1, Number.NaN)).toEqual(FULL_MEDIA_CROP);
   });
 });

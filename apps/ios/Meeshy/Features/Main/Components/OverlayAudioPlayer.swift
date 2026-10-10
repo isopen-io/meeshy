@@ -169,9 +169,9 @@ final class OverlayAudioPlayer: ObservableObject {
         }
     }
 
-    func timeLabel(totalDuration: Int?) -> String {
+    func timeLabel(attachmentDurationMs: Int?) -> String {
         let current = formatTime(currentTime)
-        let total = formatTime(totalSeconds(fallback: totalDuration))
+        let total = formatTime(totalSeconds(attachmentDurationMs: attachmentDurationMs))
         return "\(current) / \(total)"
     }
 
@@ -180,12 +180,15 @@ final class OverlayAudioPlayer: ObservableObject {
     /// barre oblique (« 0:12 / 1:30 »), que le synthétiseur lit comme deux
     /// heures. Un indice se lit une fois, après le libellé : la POSITION
     /// courante n'y a rien à faire, seule la durée totale renseigne.
-    func spokenTotalDuration(totalDuration: Int?) -> String {
-        LocalizedNumber.spokenDuration(seconds: totalSeconds(fallback: totalDuration))
+    func spokenTotalDuration(attachmentDurationMs: Int?) -> String {
+        LocalizedNumber.spokenDuration(seconds: totalSeconds(attachmentDurationMs: attachmentDurationMs))
     }
 
-    private func totalSeconds(fallback: Int?) -> TimeInterval {
-        duration > 0 ? duration : TimeInterval(fallback ?? 0)
+    /// La durée MESURÉE de la piste chargée, sinon celle de la pièce jointe — en
+    /// MILLISECONDES, comme `MessageAttachment.duration` partout ailleurs. La lire
+    /// en secondes affichait « 0:00 / 565:55 » pour un vocal de 34 s (#9008).
+    private func totalSeconds(attachmentDurationMs: Int?) -> TimeInterval {
+        duration > 0 ? duration : TimeInterval(attachmentDurationMs ?? 0) / 1000
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {

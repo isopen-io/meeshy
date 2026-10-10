@@ -16,9 +16,3 @@ export function ReelPoster({ src }: { readonly src: string | undefined }) {
     />
   );
 }
-
-/** Le disque sombre sous chaque glyphe du rail — `adaptiveGlass(tint:
- * .black.opacity(0.35))`. Partagé par `reel-page.tsx` et
- * `reel-scene-stage.tsx` (#6903) : le tap de pause d'une scène rend le MÊME
- * disque que le tap de pause d'une vidéo. */
-export const RAIL_DISC = 'rgba(0,0,0,0.38)';

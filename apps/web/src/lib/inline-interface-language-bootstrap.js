@@ -26,6 +26,22 @@ export const SUPPORTED_INTERFACE_LANGUAGES = /** @type {const} */ (['fr', 'en', 
 
 export const DEFAULT_INTERFACE_LANGUAGE = /** @type {const} */ ('fr');
 
+/** Les langues d'interface qui se lisent de droite à gauche (#8803) — l'arabe,
+ * seule des sept. Le script les lit pour poser `<html dir>` AVANT la première
+ * peinture, comme `lang` : une page peinte à l'endroit puis retournée
+ * sauterait sous les yeux du lecteur. */
+export const RTL_INTERFACE_LANGUAGES = /** @type {const} */ (['ar']);
+
+/**
+ * @param {string} language une langue de `SUPPORTED_INTERFACE_LANGUAGES`
+ * @returns {'rtl' | 'ltr'}
+ */
+export function interfaceDirection(language) {
+  /** @type {readonly string[]} */
+  const rtl = RTL_INTERFACE_LANGUAGES;
+  return rtl.includes(language) ? 'rtl' : 'ltr';
+}
+
 /**
  * Le script bloquant : lit `INTERFACE_LANGUAGE_KEY` (un choix explicite déjà
  * posé par l'utilisateur) ; à défaut, prend la première langue de
@@ -48,7 +64,9 @@ export const INLINE_INTERFACE_LANGUAGE_BOOTSTRAP =
   `if(s.indexOf(code)>=0)r=code;` +
   `}` +
   `}` +
-  `document.documentElement.lang=r||'${DEFAULT_INTERFACE_LANGUAGE}';` +
+  `r=r||'${DEFAULT_INTERFACE_LANGUAGE}';` +
+  `document.documentElement.lang=r;` +
+  `document.documentElement.dir=${JSON.stringify(RTL_INTERFACE_LANGUAGES)}.indexOf(r)>=0?'rtl':'ltr';` +
   `}catch(e){}})();`;
 
 /**

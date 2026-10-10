@@ -383,7 +383,10 @@ match_key.pub
 # sur apps/ios/ laissait un .andp/ de racine traçable — donc committable.
 .andp/
 secrets.yml
-apps/ios/andp.yml
+# apps/ios/andp.yml est SUIVI depuis le 2026-10-09 (#9752) : il ne porte aucun
+# secret (cibles de build, politique de conformité, fiche App Store dont les
+# valeurs sensibles passent par des clés `_env`). La release ne le réécrit
+# plus (meeshy.sh ne le crée que s'il manque).
 
 apps/ios/SourcePackages/
 .superpowers/
@@ -411,3 +414,12 @@ scripts/pilotage/data.json
 # Kit marketing — rendus générés (scripts/marketing-kit/render.mjs), jamais committés (#7727, #7728)
 scripts/marketing-kit/out/
 apps/ios/fastlane/screenshots/
+
+# Production marketing (vidéos, voix, captures) — hors dépôt, volontairement
+/Marketing/
+
+# Médias de la fiche App Store : produits par scripts/marketing-kit/vitrine/monter.mjs, envoyés par andp, jamais versionnés (#9807, #9811)
+apps/ios/fastlane/metadata/*/previews/
+apps/ios/fastlane/metadata/*/product_page_header/
+apps/ios/fastlane/metadata/*/search_results/
+apps/ios/fastlane/metadata/*/screenshots/

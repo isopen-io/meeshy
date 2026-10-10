@@ -17,14 +17,14 @@ public struct VoiceProfileManageView: View {
                 Color(.systemGroupedBackground).ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         profileStatusCard
                         cloningToggle
                         samplesSection
                         gdprSection
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.md)
                 }
             }
             .navigationTitle(String(localized: "voiceProfile.manage.title", defaultValue: "Profil vocal", bundle: .module))
@@ -50,19 +50,19 @@ public struct VoiceProfileManageView: View {
     // MARK: - Profile Status Card
 
     private var profileStatusCard: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: viewModel.profile?.isReady == true ? "waveform.circle.fill" : "waveform.circle")
                     .font(.system(size: 36))
                     .foregroundColor(viewModel.profile?.isReady == true ? MeeshyColors.success : Color(hex: accentColor))
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(statusTitle)
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
                         .foregroundColor(.primary)
 
                     Text(statusSubtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
 
@@ -70,7 +70,7 @@ public struct VoiceProfileManageView: View {
             }
 
             if let profile = viewModel.profile {
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     statItem(label: String(localized: "voiceProfile.manage.samples", defaultValue: "Echantillons", bundle: .module), value: "\(profile.sampleCount)")
                     statItem(label: String(localized: "voiceProfile.manage.totalDuration", defaultValue: "Duree totale", bundle: .module), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
@@ -79,20 +79,20 @@ public struct VoiceProfileManageView: View {
                 }
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(Color(.secondarySystemGroupedBackground))
         )
     }
 
     private func statItem(label: String, value: String) -> some View {
-        VStack(spacing: 2) {
+        VStack(spacing: MeeshySpacing.xxs) {
             Text(value)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -123,22 +123,22 @@ public struct VoiceProfileManageView: View {
     // MARK: - Cloning Toggle
 
     private var cloningToggle: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "waveform.and.mic")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: MeeshyIconSize.md, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                         .fill(Color(hex: accentColor).opacity(0.12))
                 )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "voiceProfile.manage.cloningActive", defaultValue: "Clonage vocal actif", bundle: .module))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.primary)
                 Text(String(localized: "voiceProfile.manage.cloningSubtitle", defaultValue: "Utiliser votre voix pour les traductions", bundle: .module))
-                    .font(.system(size: 11))
+                    .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundColor(.secondary)
             }
 
@@ -151,9 +151,9 @@ public struct VoiceProfileManageView: View {
                     Task { await viewModel.toggleCloning(enabled: newValue) }
                 }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(Color(.secondarySystemGroupedBackground))
         )
     }
@@ -161,52 +161,52 @@ public struct VoiceProfileManageView: View {
     // MARK: - Samples Section
 
     private var samplesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "waveform")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.manage.samplesHeader", defaultValue: "ECHANTILLONS VOCAUX", bundle: .module))
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.0)
             }
 
             if viewModel.samples.isEmpty {
                 Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun echantillon enregistre", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(.system(size: MeeshyFont.subheadSize))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 20)
+                    .padding(.vertical, MeeshySpacing.xl)
             } else {
                 ForEach(viewModel.samples) { sample in
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.smPlus) {
                         Image(systemName: "waveform")
                             .font(.system(size: 13))
                             .foregroundColor(Color(hex: accentColor))
 
                         Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Echantillon", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                             .foregroundColor(.primary)
 
                         Spacer()
 
                         Text("\(sample.durationSeconds)s")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .font(.system(size: MeeshyFont.smallSize, weight: .medium, design: .monospaced))
                             .foregroundColor(.secondary)
 
                         Button {
                             Task { await viewModel.deleteSample(sampleId: sample.id) }
                         } label: {
                             Image(systemName: "trash")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "FF6B6B"))
+                                .font(.system(size: MeeshyIconSize.xs))
+                                .foregroundColor(MeeshyColors.tileCoral)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(Color(.secondarySystemGroupedBackground))
                     )
                 }
@@ -217,31 +217,31 @@ public struct VoiceProfileManageView: View {
     // MARK: - GDPR Section
 
     private var gdprSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Button {
                 viewModel.showDeleteConfirmation = true
             } label: {
                 HStack {
                     Image(systemName: "trash.fill")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     Text(String(localized: "voiceProfile.manage.deleteAllData", defaultValue: "Supprimer toutes les donnees vocales", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                 }
-                .foregroundColor(Color(hex: "EF4444"))
+                .foregroundColor(MeeshyColors.errorStrong)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(hex: "EF4444").opacity(0.1))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(MeeshyColors.errorStrong.opacity(0.1))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Color(hex: "EF4444").opacity(0.3), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(MeeshyColors.errorStrong.opacity(0.3), lineWidth: 1)
                         )
                 )
             }
 
             Text(String(localized: "voiceProfile.manage.gdprNotice", defaultValue: "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs.", bundle: .module))
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyFont.captionSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
         }

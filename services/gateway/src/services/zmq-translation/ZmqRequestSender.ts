@@ -25,6 +25,7 @@ import type {
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withTimeout } from '../../utils/with-timeout';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { guardedTimeout } from '../../utils/guarded-timer';
 // Logger dédié pour ZmqRequestSender
 const logger = enhancedLogger.child({ module: 'ZmqRequestSender' });
 
@@ -440,13 +441,13 @@ export class ZmqRequestSender {
     const entry = this.pendingRequests.get(taskId);
     if (!entry) return;
 
-    const timeoutId = setTimeout(() => {
+    const timeoutId = guardedTimeout({ name: 'zmq-request-timeout', afterMs: timeoutMs, logger, run: () => {
       const pending = this.pendingRequests.get(taskId);
       if (pending) {
         this.pendingRequests.delete(taskId);
         onTimeout(pending.pendingLanguages ? [...pending.pendingLanguages] : undefined);
       }
-    }, timeoutMs);
+    } });
 
     this.pendingRequests.set(taskId, { ...entry, timeoutId, onTimeout });
   }

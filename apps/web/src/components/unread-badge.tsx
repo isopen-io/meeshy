@@ -96,7 +96,7 @@ export function UnreadBadge({
   return (
     <span
       data-unread={count}
-      className="grid shrink-0 place-items-center rounded-chip text-check font-bold text-white tabular-nums"
+      className="grid shrink-0 place-items-center rounded-chip text-check font-bold text-ios-on-brand tabular-nums"
       style={{
         minWidth: UNREAD_BADGE_FLOW.minimumSize,
         minHeight: UNREAD_BADGE_FLOW.minimumSize,
@@ -145,7 +145,7 @@ export function UnreadCornerBadge({ count }: { readonly count: number }) {
       data-unread={count}
       data-badge-pose="corner"
       aria-hidden="true"
-      className="pointer-events-none absolute grid place-items-center rounded-chip font-semibold text-white tabular-nums"
+      className="pointer-events-none absolute grid place-items-center rounded-chip font-semibold text-ios-on-brand tabular-nums"
       style={{
         top: '50%',
         left: '50%',
@@ -221,8 +221,8 @@ export function UnreadRungBadge({
         paddingInline: horizontalPadding,
         fontSize,
         lineHeight: 1,
-        backgroundColor: '#fff',
-        color: `color-mix(in srgb, ${tint} 70%, #000)`,
+        backgroundColor: 'var(--color-ios-on-brand)',
+        color: `color-mix(in srgb, ${tint} 70%, var(--color-media-backdrop))`,
       }}
     >
       {text}

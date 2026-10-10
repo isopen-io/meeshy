@@ -9,29 +9,24 @@ import MeeshyUI
 /// `accessibilityHidden(true)`, ne réagissait à rien et n'annonçait rien. Un
 /// ornement à l'endroit où l'œil cherche un contrôle coûte plus qu'un vide.
 ///
-/// **Le sous-menu ne propose la frappe QUE si les points la permettent.** La
-/// directive du porteur est une NÉGATION — et une négation se prouve par un
-/// témoin qui cherche l'ABSENCE, jamais par une capture qui montre le cas
-/// heureux (`ProgressionMeeshEntryTests`).
-///
-/// Jumelle de `MeeshEntry` / `MeeshDetail` (`apps/web/src/routes/progression.tsx`) :
-/// mêmes mots, même ordre, même règle sur la seconde borne.
+/// **Le toucher ouvre la FICHE des Meeshes** (#9564, amendement n° 4). Le
+/// compteur ouvrait sa propre feuille de frappe : deux chemins vers un même
+/// geste, dont un hors de la fiche. La frappe — et la scène où Mee et Meo la
+/// jouent (#9537) — n'a plus qu'un site : la fiche des Meeshes. Le compteur,
+/// lui, roule quand le solde change, au retour de cette fiche.
 struct ProgressionMeeshEntry: View {
     let meesh: EngagementMeeshProgress
-    let isMinting: Bool
-    var mintError: String? = nil
-    let onMint: () -> Void
+    let onOpen: () -> Void
 
-    @State private var ouvert = false
     private let tint = MeeshyColors.warning
 
     /// La forme de la pièce : plus RECTANGLE qu'une capsule (directive porteur 2026-09-14, #6466).
-    private static let forme = RoundedRectangle(cornerRadius: 12, style: .continuous)
+    private static let forme = RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
 
     var body: some View {
         Button {
             HapticFeedback.light()
-            ouvert.toggle()
+            onOpen()
         } label: {
             // `N` puis la PIÈCE — UNE seule pièce de verre (#6466).
             //
@@ -46,45 +41,27 @@ struct ProgressionMeeshEntry: View {
             // disait « récompense » en général ; le logo Meeshy (2026-09-09)
             // disait « marque ». Une Meesh est une MONNAIE : la pièce d'argent
             // (#6427) est le premier glyphe qui dit ce qu'est la chose.
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text("\(meesh.balance)")
-                    .font(MeeshyFont.relative(17, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(tint)
+                    .modifier(MeeshCounterRoll())
+                    .animation(.easeOut(duration: 0.35), value: meesh.balance)
                 MeeshCoinGlyph(size: 20)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
             .frame(minHeight: CollapsibleHeaderMetrics.roundChromeDiameter)
             .adaptiveGlass(in: Self.forme, tint: tint.opacity(0.14), interactive: true)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Le compteur REBONDIT comme tout ce qui se touche dans le jeu (#9564).
+        .buttonStyle(GameBounceButtonStyle())
         .accessibilityIdentifier("progression.meesh.entry")
         .accessibilityLabel(ProgressionCopy.meeshEntryA11y(meesh.balance))
+        .accessibilityHint(ConceptText.cardHint)
         .accessibilityAddTraits(.isButton)
-        .popover(isPresented: $ouvert) {
-            ProgressionMeeshDetail(meesh: meesh, isMinting: isMinting, mintError: mintError, onMint: onMint)
-                .frame(idealWidth: 300)
-                .padding(MeeshySpacing.lg)
-                // **Verre NEUTRE, jamais teinté** (directive porteur
-                // 2026-09-09 : « le menu affiché au touché doit être bien
-                // travaillé »). Le `tint: tint` peignait le panneau en aplat
-                // ORANGE plein : le titre teinté devenait jaune sur jaune —
-                // illisible — et le solde perdait le contraste que le thème lui
-                // donne. Une teinte sert à SIGNALER, elle ne peut pas servir de
-                // fond à ce qu'elle signale.
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .fill(ThemeManager.shared.backgroundSecondary)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                        .stroke(tint.opacity(0.30), lineWidth: 1)
-                )
-                .presentationCompactAdaptationPopoverIfAvailable()
-        }
     }
 }
 
@@ -113,6 +90,27 @@ struct MeeshCoinGlyph: View {
     }
 }
 
+/// Ce que la scène de frappe de la feuille grave : la prochaine pièce, et où en est la scène.
+struct GameMintStrike: Equatable {
+    let number: Int
+    let edition: MeeshEdition
+    /// Incrémenté à chaque frappe commencée : c'est ce qui rejoue la scène.
+    let play: Int
+    /// Frappée avec succès, la pièce reste sur son revers numéroté.
+    let restsReversed: Bool
+}
+
+/// Le chiffre « roule » quand le solde change (iOS 17+) ; sur iOS 16 il change net.
+private struct MeeshCounterRoll: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.contentTransition(.numericText())
+        } else {
+            content
+        }
+    }
+}
+
 /// LE CONTENU du sous-menu, séparé de son bouton.
 ///
 /// Deux raisons, et la seconde compte plus : l'état d'OUVERTURE est une affaire
@@ -123,6 +121,8 @@ struct ProgressionMeeshDetail: View {
     let meesh: EngagementMeeshProgress
     let isMinting: Bool
     var mintError: String? = nil
+    /// La scène de frappe — Mee et Meo qui frappent la pièce — au-dessus du solde ; `nil` : pas de scène.
+    var strike: GameMintStrike? = nil
     let onMint: () -> Void
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -134,7 +134,7 @@ struct ProgressionMeeshDetail: View {
             // solde nu : hors du bouton qui l'a ouvert, plus rien ne disait de
             // quelle monnaie on parlait, et « 3 Meesh » devait porter seul à la
             // fois le nom et le chiffre.
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 MeeshCoinGlyph(size: 16)
                 Text(ProgressionCopy.meeshEntryTitle)
                     .font(.caption2.weight(.semibold))
@@ -143,18 +143,28 @@ struct ProgressionMeeshDetail: View {
             }
             .foregroundColor(tint)
 
+            if let strike {
+                MintStrikeScene(
+                    edition: strike.edition, number: strike.number,
+                    year: Calendar.current.component(.year, from: Date()), play: strike.play,
+                    coinSide: 48, restsReversed: strike.restsReversed
+                )
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("progression.meesh.strike")
+            }
+
             // Les formulations viennent du hero d'origine : « Aucune Meesh »
             // plutôt que « 0 Meesh », « Convertir » plutôt que « Frapper ». Une
             // refonte de DISPOSITION ne réécrit pas la langue en passant —
             // l'utilisateur reconnaît les mots, c'est à ça qu'il sait que c'est
             // la même chose.
             Text(ProgressionCopy.meeshBalance(meesh.balance))
-                .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if meesh.mintedLifetime > 0 {
                 Text(ProgressionCopy.meeshMintedLifetime(meesh.mintedLifetime))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -196,7 +206,7 @@ struct ProgressionMeeshDetail: View {
                         )
                         .multilineTextAlignment(.center)
                     }
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(theme.backgroundPrimary)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(tint))
@@ -210,20 +220,20 @@ struct ProgressionMeeshDetail: View {
                 // L'ÉCHEC se lit ICI, sous l'action qu'on peut retenter — et non
                 // en haut de l'écran, sous le détail qui le cache.
                 if let mintError, !isMinting {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .accessibilityHidden(true)
                         Text(mintError)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("progression.meesh.mint.error")
                 }
             } else {
                 Text(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -241,7 +251,7 @@ struct ProgressionMeeshDetail: View {
     @ViewBuilder
     private var bornes: some View {
         if let premiere = meesh.firstMintedAt {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 borne(
                     String(localized: "progression.meesh.first_mint", defaultValue: "Première frappe", bundle: .main),
                     premiere
@@ -259,7 +269,7 @@ struct ProgressionMeeshDetail: View {
                 defaultValue: "Aucune frappe pour l’instant.",
                 bundle: .main
             ))
-            .font(MeeshyFont.relative(11, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(theme.textMuted)
         }
     }
@@ -272,7 +282,7 @@ struct ProgressionMeeshDetail: View {
             Text(date.formatted(date: .abbreviated, time: .omitted))
                 .foregroundColor(theme.textPrimary)
         }
-        .font(MeeshyFont.relative(11, weight: .medium))
+        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         .accessibilityElement(children: .combine)
     }
 }

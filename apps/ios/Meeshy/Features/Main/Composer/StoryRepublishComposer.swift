@@ -103,6 +103,11 @@ struct StoryRepublishComposer: View {
                 // publication : sans lui la republication naîtrait sans lien
                 // vers son original, donc sans attribution ni crédit de vues.
                 // Il voyage par CAPTURE — c'est le point 2 ci-dessus.
+                //
+                // La republication PART : le lecteur de la source pose l'anneau du
+                // cœur sur « Republier » (directive porteur 2026-10-01) — la
+                // passerelle ne sert pas `isRepostedByMe` sur le fil des stories.
+                StoryViewerParticipationStore.shared.note(.reposted, storyId: source.story.id)
                 viewModel.publishStoryInBackground(
                     targetType: targetType,
                     slides: slides,

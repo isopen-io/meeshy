@@ -8,7 +8,6 @@ const esConversationCard = {
   'conversation.card.messages.one': '{count} mensaje',
   'conversation.card.messages.other': '{count} mensajes',
   'conversation.card.languages': 'Idiomas hablados',
-  'conversation.card.join': 'Unirse',
   'conversation.card.joinAnonymously': 'Unirse de forma anónima',
   'conversation.card.open': 'Abrir',
   'conversation.card.leave': 'Salir',
@@ -28,6 +27,11 @@ const esConversationCard = {
   'conversation.card.join.error': 'No se pudo unir. Inténtalo de nuevo.',
   'conversation.card.leave.error': 'No se pudo salir. Inténtalo de nuevo.',
   'conversation.card.a11y': 'Conversación: {title}',
+  'conversation.card.joinPrompt': '¿Unirse?',
+  'conversation.card.joinChoice.anonymous': 'Anónimo',
+  'conversation.card.joinChoice.account': 'Mi cuenta',
+  'conversation.card.a11y.joinWithAccount': 'Unirse con mi cuenta',
+  'conversation.card.a11y.joinWithNamedAccount': 'Unirse con la cuenta {account}',
 } satisfies ConversationCardCatalogSlice;
 
 export default esConversationCard;

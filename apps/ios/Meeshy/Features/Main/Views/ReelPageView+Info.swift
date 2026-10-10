@@ -20,9 +20,13 @@ import MeeshyUI
 extension ReelPageView {
 
     var authorMetaLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let username = reel.authorUsername, !username.isEmpty {
-                Text("@\(username)").font(.caption).foregroundColor(.white.opacity(0.7))
+                Text("@\(username)")
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             }
             if isAuthor {
                 if reel.authorUsername?.isEmpty == false { metaDot }
@@ -32,42 +36,44 @@ extension ReelPageView {
                 statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
+        }
+    }
 
-            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
-            // carte de post et le viewer story (E1) — BackgroundSoundBadge
-            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
-            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
-            // seul prédicat, jamais une seconde résolution qui pourrait
-            // diverger.
-            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
-            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
-                .equatable()
-
-            // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
-            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
-            // false`, non touché ici). Gate renforcée (correctif revue DoD,
-            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
-            // existe réellement pour le piloter (`borrowedSoundTrack`,
-            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
-            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
-            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
-            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
-            // conservée) — l'icône et le libellé a11y suivent
-            // `audioPlayer.isPlaying`, jamais un état local séparé qui
-            // pourrait diverger du son réellement audible.
-            //
-            // Réel COMPOSÉ (#6745) : le son de fond est joué par le PLAYER de
-            // la scène, et c'est son muet que le bouton pilote.
-            if BackgroundSoundBadge.showsMuteButton(for: announcement), isSceneReel {
-                sceneSoundMuteButton
-            } else if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
-                ReelBorrowedSoundToggle(audioPlayer: audioPlayer)
+    /// **Le son de fond du réel, sur SA ligne** (#9677, directive porteur
+    /// 2026-10-08) — sous la rangée de l'auteur, toute la largeur du bloc
+    /// d'infos, comme le crédit du lecteur de story. Partagé avec le @pseudo,
+    /// les compteurs et le baffle, il n'avait que ≈ 40 pt (recette 402 pt).
+    ///
+    /// Hors du bouton du profil, et c'est la NOTE qui coupe le son : plus de
+    /// baffle. L'état est celui qui joue vraiment — le muet du PLAYER pour un
+    /// réel composé (#6745), le lecteur du son emprunté sinon. Sans moteur local
+    /// à piloter (son incrusté dans la vidéo), le crédit s'annonce sans contrôle.
+    /// La piste PROPRE d'une vidéo n'est pas touchée : elle joue toujours
+    /// (`drive()` réaffirme `manager.isMuted = false`).
+    @ViewBuilder
+    var soundCreditRow: some View {
+        let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
+        if BackgroundSoundBadge.showsMuteButton(for: announcement) {
+            Group {
+                if isSceneReel {
+                    BackgroundSoundMuteControl(announcement: announcement,
+                                               accentHex: BackgroundSoundBadge.overMediaAccentHex,
+                                               isMuted: sceneSoundMuted) { sceneSoundMuted.toggle() }
+                } else if borrowedSoundTrack != nil {
+                    ReelBorrowedSoundCredit(audioPlayer: audioPlayer, announcement: announcement)
+                } else {
+                    BackgroundSoundBadge(announcement: announcement,
+                                         accentHex: BackgroundSoundBadge.overMediaAccentHex)
+                        .equatable()
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .mediaChromeLegible()
         }
     }
 
     var metaDot: some View {
-        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(.white.opacity(0.55))
     }
 
     func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -75,8 +81,8 @@ extension ReelPageView {
             icon: icon,
             count: count,
             label: a11yLabel,
-            tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
+            tint: MeeshyColors.mediaChromeSecondary,
+            iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
 
@@ -86,8 +92,8 @@ extension ReelPageView {
     /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
     /// Les URLs restent blanches + soulignées (convention plein écran).
     var infoOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar tap → author's story (if active) else profile.
                 Button(action: onTapAvatar) {
                     MeeshyAvatar(
@@ -104,8 +110,8 @@ extension ReelPageView {
                 Button(action: onTapAuthorName) {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(reel.author)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                            .foregroundColor(MeeshyColors.mediaChromeForeground)
                         authorMetaLine
                     }
                     // #6693 — sur un réel clair, le nom blanc passait sans voile sur les
@@ -116,6 +122,8 @@ extension ReelPageView {
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))
             }
+
+            soundCreditRow
 
             // Audio reels show the post caption only when it adds something
             // beyond the transcript hero; text/image reels always show it.
@@ -145,6 +153,9 @@ extension ReelPageView {
                 MediaCaptionOverlay(
                     caption: displayedDescription,
                     isExpanded: descriptionExpanded,
+                    // #9075 — les adresses de la légende s'ouvrent par `/l/`.
+                    trackedLinks: reel.trackedLinkMap,
+                    validUsernames: reel.validMentionUsernames,
                     // **Aucun retrait à elle** (directive porteur 2026-09-01) :
                     // la colonne d'information est déjà posée à 16 pt par
                     // `ReelsPlayerView`, et les 20 pt que la couche ajoutait
@@ -174,18 +185,6 @@ extension ReelPageView {
                     dimsBackgroundWhenExpanded: false,
                     onToggle: {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                    },
-                    render: { texte, taille in
-                        MessageTextRenderer.render(
-                            texte,
-                            fontSize: taille,
-                            color: .white,
-                            mentionColor: MeeshyColors.mentionColor(isDark: true),
-                            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-                            accentColor: .white,
-                            usesRelativeFont: true
-                        )
-                        .tint(.white)
                     }
                 )
             }
@@ -223,25 +222,18 @@ extension ReelPageView {
     }
 }
 
-/// Le muet du son emprunté : la seule vue de la page qui LIT `isPlaying`,
-/// donc la seule qui observe le moteur — la page, elle, ne se ré-évalue plus à
-/// chaque battement de `currentTime`.
-struct ReelBorrowedSoundToggle: View {
+/// Le crédit du son emprunté, qui le coupe : la seule vue de la page qui LIT
+/// `isPlaying`, donc la seule qui observe le moteur — la page, elle, ne se
+/// ré-évalue plus à chaque battement de `currentTime`.
+struct ReelBorrowedSoundCredit: View {
     @ObservedObject var audioPlayer: AudioPlaybackManager
+    let announcement: BackgroundAudioAnnouncement
 
     var body: some View {
-        Button {
+        BackgroundSoundMuteControl(announcement: announcement,
+                                   accentHex: BackgroundSoundBadge.overMediaAccentHex,
+                                   isMuted: !audioPlayer.isPlaying) {
             audioPlayer.togglePlayPause()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
         }
-        .accessibilityLabel(audioPlayer.isPlaying
-            ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
-            : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
     }
 }

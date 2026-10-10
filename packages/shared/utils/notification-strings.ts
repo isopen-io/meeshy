@@ -13,7 +13,7 @@ export const NOTIFICATION_LANGUAGES = [
 export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 
 export const NOTIFICATION_STRING_KEYS = [
-  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
+  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.commentContext', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
   'comment.genericFrom', 'comment.repliedInFrom',
   'comment.repliedToYours',
@@ -22,16 +22,23 @@ export const NOTIFICATION_STRING_KEYS = [
   'reference.post', 'reference.reel', 'reference.story', 'reference.status',
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body', 'call.action.answer', 'call.action.decline', 'call.action.callBack',
-  'call.recordingReady',
+  'call.recordingReady', 'call.recordingReady.video',
   'contact.request', 'contact.accepted',
   'contact.requestAction', 'contact.acceptedAction',
   'contact.joinedAction', 'contact.joinedBody', 'contact.joinedMany', 'contact.joinedManyBody',
   'contact.recentlyActiveAction', 'contact.recentlyActiveBody',
+  'game.duoInvitedAction', 'game.duoInvitedBody', 'game.duoAcceptedAction', 'game.duoAcceptedBody',
+  'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
+  'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
+  'game.seasonStep', 'game.seasonDone', 'game.missionWindow',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'attachment.contact',
+  'content.location', 'content.sticker', 'content.invitation',
+  'content.storyReply.yours', 'content.storyReply.other',
+  'content.action.openMap', 'content.action.join', 'message.action.reply',
   'login.newDevice.title',
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
@@ -78,6 +85,10 @@ export type NotificationStringParams = {
   readonly author?: string;
   readonly count?: number;
   readonly callIcon?: string;
+  /** `game.missionWindow` : l'activité de la mission et les deux bornes de sa plage, déjà localisées. */
+  readonly mission?: string;
+  readonly start?: string;
+  readonly end?: string;
   /**
    * L'entité nommée par le libellé. Typée en clé de PROSE, pas en valeur de
    * fil : le catalogue est un dictionnaire, il RENDRA ce qu'on lui donne — y
@@ -302,6 +313,9 @@ export function notificationString(
     author: params.author ?? '',
     count: params.count != null ? String(params.count) : '',
     callIcon: params.callIcon ?? '',
+    mission: params.mission ?? '',
+    start: params.start ?? '',
+    end: params.end ?? '',
   };
 
   if (params.postType) {
@@ -319,7 +333,7 @@ export function notificationString(
     tokens.callBody = INCOMING_CALL_BODY[L][params.callType];
   }
 
-  if (key === 'reaction.commentVerbose') {
+  if (key === 'reaction.commentVerbose' || key === 'reaction.commentContext') {
     // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
     const kind: NotificationPostLabelKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author
@@ -534,6 +548,13 @@ export function buildNotificationDisplay(
     // ── Un contact est revenu (#8285) : « Marie était sur Meeshy récemment » ──
     case 'contact_recently_active':
       return framed(notificationString(L, 'contact.recentlyActiveAction'), null);
+
+    // ── Le jeu (#9490) : un duo se joue entre amis, on nomme l'ami. La ligue et la saison
+    //    n'ont pas d'acteur : le titre reste au client, la phrase est dans le corps. ──
+    case 'game_duo_invited':
+      return framed(notificationString(L, 'game.duoInvitedAction'), null);
+    case 'game_duo_accepted':
+      return framed(notificationString(L, 'game.duoAcceptedAction'), null);
 
     // ── Partage / repost ──
     case 'post_repost':

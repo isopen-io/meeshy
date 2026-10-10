@@ -110,8 +110,17 @@
  * navigateur la garde, et lui seul sait la reconjuguer avec l'identité qui
  * l'a demandée.
  */
+/**
+ * ## LES SESSIONS DU LECTEUR EN SORTENT (#6720)
+ *
+ * `GET /auth/sessions` porte l'adresse IP, la ville et le pays de CHAQUE
+ * connexion du lecteur (décision porteur du 2026-10-08 : l'écran les montre).
+ * Les montrer n'oblige pas à les garder sept jours sur le disque du poste : la
+ * liste ne se lit qu'en ligne, et son cache vit en mémoire
+ * (`api/account-security.ts`).
+ */
 export const API_RESPONSE_CACHE_PATTERN =
-  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)/;
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))/;
 
 /**
  * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.

@@ -58,6 +58,7 @@ extension ComposerObjectEditorView {
             ComposerMentionStrip(
                 controller: mentionBox.controller,
                 currentText: objet.text,
+                backdrop: .plateau,
                 onSelect: { remplace in
                     viewModel.updateTextContent(id: id, text: remplace)
                 }

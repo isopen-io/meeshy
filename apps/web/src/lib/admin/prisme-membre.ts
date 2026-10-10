@@ -28,9 +28,11 @@ import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-h
  * faux.
  *
  * **Un Prisme à trois rangs honnête vaut mieux qu'un quatrième rang faux.**
- * La passerelle persiste bien `User.deviceLocale` (règle 2 du Prisme), mais
- * `sanitizeUser` ne le sert pas : le jour où elle le servira, ce module aura
- * UN endroit où l'ajouter, et ce sera la locale DU MEMBRE.
+ * La passerelle persiste bien `User.deviceLocale` (règle 2 du Prisme), et la sert
+ * DEPUIS #8005 dans le bloc `adminMetadata` de la fiche (rôles qui voient les données
+ * sensibles) : quand elle est servie, `prismeDuMembre` l'ajoute en quatrième rang —
+ * c'est la locale DU MEMBRE, l'endroit unique prévu pour elle. Quand elle ne l'est pas,
+ * le prisme reste à trois rangs : on n'invente pas le quatrième.
  *
  * ## POURQUOI PAS `resolveReaderLanguages`, QUI ACCEPTE POURTANT UN USER ARBITRAIRE
  *
@@ -52,11 +54,17 @@ import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-h
 /** Le défaut produit du Prisme quand aucune préférence n'est déclarée. */
 const REPLI_PRODUIT = 'fr';
 
-/** Les trois rangs applicatifs, tels que `GET /admin/users/:id` les sert. */
+/**
+ * Les trois rangs applicatifs, tels que `GET /admin/users/:id` les sert — et,
+ * depuis #8005, la locale de l'APPAREIL DU MEMBRE (`adminMetadata.deviceLocale`),
+ * le quatrième rang, quand la passerelle la sert à un rôle qui voit les données
+ * sensibles. C'est la locale DU MEMBRE : jamais celle de l'appareil qui regarde.
+ */
 export type LanguesDuMembre = {
   readonly systemLanguage: string;
   readonly regionalLanguage: string;
   readonly customDestinationLanguage: string;
+  readonly deviceLocale?: string | null;
 };
 
 export type PrismeMembre = {
@@ -76,11 +84,17 @@ export type PrismeMembre = {
  * l'appareil qui lit est celui de l'administrateur.
  */
 export function prismeDuMembre(membre: LanguesDuMembre): PrismeMembre {
-  const languages = resolveUserLanguagesOrdered({
-    systemLanguage: membre.systemLanguage,
-    regionalLanguage: membre.regionalLanguage,
-    customDestinationLanguage: membre.customDestinationLanguage,
-  });
+  const languages = resolveUserLanguagesOrdered(
+    {
+      systemLanguage: membre.systemLanguage,
+      regionalLanguage: membre.regionalLanguage,
+      customDestinationLanguage: membre.customDestinationLanguage,
+    },
+    /* LE RANG 4, S'IL EST SERVI — la locale de l'appareil DU MEMBRE (#8005). Jamais
+       `navigator.language`, qui est celle de l'administrateur : sans `deviceLocale` servie,
+       le prisme reste à trois rangs, honnête. */
+    membre.deviceLocale === undefined || membre.deviceLocale === null || membre.deviceLocale === '' ? {} : { deviceLocale: membre.deviceLocale },
+  );
 
   if (languages.length === 0) return { languages: [REPLI_PRODUIT], locale: REPLI_PRODUIT };
 

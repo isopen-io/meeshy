@@ -73,6 +73,12 @@ export class ReportService {
 
     if (filters.moderatorId) {
       where.moderatorId = filters.moderatorId;
+    } else if (filters.unassigned) {
+      where.moderatorId = null;
+    }
+
+    if (filters.reportedEntityId) {
+      where.reportedEntityId = filters.reportedEntityId;
     }
 
     if (filters.createdAfter || filters.createdBefore) {
@@ -127,8 +133,15 @@ export class ReportService {
       updateData.moderatorId = moderatorId;
     }
 
-    // Si un modérateur intervient, l'assigner
-    if (!updateData.moderatorId) {
+    // ROUVRIR (retour à `pending`) efface la résolution précédente et laisse
+    // le signalement sans modérateur (spec 2026-10-04 § 7) : sinon il
+    // réapparaît dans la file « résolu le … par … », action comprise.
+    if (updates.status === 'pending') {
+      updateData.resolvedAt = null;
+      updateData.actionTaken = null;
+      updateData.moderatorId = null;
+    } else if (!updateData.moderatorId) {
+      // Si un modérateur intervient, l'assigner
       updateData.moderatorId = moderatorId;
     }
 

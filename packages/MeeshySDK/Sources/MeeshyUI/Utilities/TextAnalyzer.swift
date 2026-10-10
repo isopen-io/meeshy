@@ -264,7 +264,7 @@ public struct SmartContextZone: View {
                     analyzer.showLanguagePicker = true
                     HapticFeedback.light()
                 } label: {
-                    Text(lang.flag).font(.system(size: 16))
+                    Text(lang.flag).font(.system(size: MeeshyFont.calloutSize))
                 }
                 .transition(.scale.combined(with: .opacity))
             }

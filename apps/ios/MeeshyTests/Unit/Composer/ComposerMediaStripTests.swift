@@ -96,7 +96,12 @@ final class ComposerMediaStripTests: XCTestCase {
             "Le rail doit peindre UNE vignette par slide — la preuve visible."
         )
         XCTAssertTrue(
-            rail.contains("letonDelete:(Int)->Void") && rail.contains("Button{onDelete(index)}"),
+            // #9126 : la croix est OPTIONNELLE — le meuble la retire quand il retouche
+            // pour la conversation, où une scène est une pièce du message. Quand elle est
+            // fournie, la vignette la peint et la touche retire.
+            rail.contains("letonDelete:((Int)->Void)?")
+                && rail.contains("ifletonDelete,")
+                && rail.contains("Button{onDelete(index)}"),
             "Chaque vignette doit pouvoir se RETIRER — la croix que le constat porteur du "
                 + "2026-09-06 a fait rétablir après qu'un lot l'eut perdue."
         )
@@ -122,8 +127,13 @@ final class ComposerMediaStripTests: XCTestCase {
             "La liste des vignettes doit venir de la RÈGLE, jamais d'un filtre réécrit en ligne "
                 + "dans un `body` — c'est ce qui garde les deux surfaces d'accord."
         )
+        // **#9126 — la retouche d'une série a sa PROPRE sélection.** Quand le
+        // meuble retouche les pièces en attente d'un message (`retouchSeries`),
+        // taper une vignette passe par `selectRetouchScene(at:)`, qui sélectionne la
+        // scène PUIS rouvre les outils de sa pièce ; hors retouche, le relais
+        // reste `viewModel.selectSlide(at:)`. Les deux branches sont exigées.
         XCTAssertTrue(
-            src.contains("onSelect:{viewModel.selectSlide(at:$0)}"),
+            src.contains("onSelect:{indexinifretouchSeries!=nil{selectRetouchScene(at:index)}else{viewModel.selectSlide(at:index)}}"),
             "Taper une vignette doit SÉLECTIONNER sa slide — sans quoi le rail est décoratif."
         )
         // **#6577 — la croix passe par le RETRAIT du meuble, pas par le SDK.**
@@ -131,8 +141,11 @@ final class ComposerMediaStripTests: XCTestCase {
         // dans `documentLocalMedia` et repartait à la publication. Ce que ce
         // témoin tient est inchangé — la croix a un EFFET sur le modèle — mais
         // son site a bougé d'un cran, et il fallait qu'il bouge.
+        // **#9126 — en retouche, une scène EST une pièce du message** : elle ne
+        // se jette pas depuis le rail (`returnsToConversation ? nil : …`). Hors
+        // retouche, la croix passe toujours par `retractScene(at:)`.
         XCTAssertTrue(
-            src.contains("onDelete:{retractScene(at:$0)}"),
+            src.contains("onDelete:returnsToConversation?nil:{retractScene(at:$0)}"),
             "La croix d'une vignette doit RETIRER sa scène ET son fichier — par le point "
                 + "d'entrée du meuble, seul lieu qui voie les deux porteurs (#6577)."
         )

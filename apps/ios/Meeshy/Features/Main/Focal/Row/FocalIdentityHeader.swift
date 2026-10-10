@@ -34,6 +34,8 @@ struct FocalIdentityHeader: View, Equatable {
     let senderThumbHash: String?
     let senderColorHex: String
     let senderPresence: PresenceState
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892).
+    var senderIsHere: ConversationHere = .absent
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
     /// L'auteur n'a PAS de compte (`Participant.type == "anonymous"`).
@@ -75,6 +77,7 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.senderThumbHash == rhs.senderThumbHash
             && lhs.senderColorHex == rhs.senderColorHex
             && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
@@ -107,7 +110,7 @@ struct FocalIdentityHeader: View, Equatable {
             // plutôt qu'une page de profil vide.
             if let onTap { onTap() } else { onOpenProfile?(profileUser) }
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 MeeshyAvatar(
                     name: senderDisplayName,
                     context: .custom(avatarSize),
@@ -117,6 +120,7 @@ struct FocalIdentityHeader: View, Equatable {
                     storyState: senderStoryRing,
                     moodEmoji: senderMoodEmoji,
                     presenceState: senderPresence,
+                    isHere: senderIsHere,
                     enablePulse: false,
                     isDark: isDark
                 )

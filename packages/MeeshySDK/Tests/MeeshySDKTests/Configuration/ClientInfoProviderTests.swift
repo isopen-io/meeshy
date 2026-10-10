@@ -52,6 +52,17 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertEqual(headers["X-Canvas-Caps"], "3")
     }
 
+    // MARK: - Version du jeu
+
+    /// Sans cet en-tête, la passerelle ne sert JAMAIS les badges de 1 000 et 5 000
+    /// actions à ce client (rétrocompatibilité) : l'Obsidienne et le Prisme
+    /// resteraient invisibles alors que le binaire sait les peindre.
+    func test_buildHeaders_declareLaVersionDuJeuQueCeBinaireSaitLire() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertEqual(headers["X-Meeshy-Game-Version"], "2")
+        XCTAssertEqual(GameRoutes.versionHeader, "X-Meeshy-Game-Version")
+    }
+
     // MARK: - Porte de version
 
     /// La porte serveur (`services/gateway/src/utils/appVersion.ts`) ne juge
@@ -145,10 +156,85 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertNotNil(headers["X-Device-Locale"])
     }
 
+    // MARK: - Capacités nommées (#9929)
+
+    /// La passerelle ne sert l'étape `age` et `viewerWriteRestriction` dans
+    /// `/me/onboarding` qu'au client qui déclare `onboarding-age` : sans
+    /// l'en-tête, la carte « âge » ne naît jamais.
+    func test_buildHeaders_declaresTheOnboardingAgeCapability() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        let declared = headers["X-Meeshy-Capabilities"]?.split(separator: ",").map(String.init) ?? []
+        XCTAssertTrue(declared.contains("onboarding-age"))
+    }
+
+    func test_identityHeaders_declareTheSameCapabilitiesForExtensions() {
+        XCTAssertEqual(ClientInfoProvider.identityHeaders()["X-Meeshy-Capabilities"], ClientCapabilities.headerValue())
+    }
+
+    func test_headerValue_joinsCapabilitiesWithCommas() {
+        XCTAssertEqual(ClientCapabilities.headerName, "X-Meeshy-Capabilities")
+        XCTAssertEqual(ClientCapabilities.headerValue([.onboardingAge]), "onboarding-age")
+        XCTAssertEqual(ClientCapabilities.headerValue([]), "")
+    }
+
     func test_identityHeaders_neLisentJamaisLaGeolocalisation() {
         let headers = ClientInfoProvider.identityHeaders()
         XCTAssertNil(headers["X-Meeshy-City"])
         XCTAssertNil(headers["X-Meeshy-Region"])
+    }
+
+    // MARK: - Aucun lieu GPS (#9612)
+
+    /// La ville et la région partaient de la position GPS à chaque requête,
+    /// hors de l'usage pour lequel la localisation avait été accordée. Le
+    /// serveur situe une session par son adresse (base locale, #9609) : rien
+    /// de la position de l'appareil ne doit plus partir, même autorisée.
+    func test_buildHeaders_nEnvoieNiVilleNiRegion() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        XCTAssertNil(headers["X-Meeshy-City"])
+        XCTAssertNil(headers["X-Meeshy-Region"])
+    }
+
+    // MARK: - Nom d'appareil (#9610)
+
+    /// Le nom LISIBLE se déduit du MODÈLE déclaré à côté — jamais du nom que
+    /// l'utilisateur a donné à son appareil. Sur un hôte dont le modèle ne dit
+    /// rien de sûr, l'en-tête est absent plutôt que faux.
+    func test_identityHeaders_nommentLAppareilDepuisSonModele() {
+        let headers = ClientInfoProvider.identityHeaders()
+        let model = headers["X-Meeshy-Device"] ?? ""
+        XCTAssertEqual(headers["X-Meeshy-Device-Name"], DeviceModelName.readable(forIdentifier: model))
+    }
+
+    // MARK: - Poignée de main de la socket (#9610)
+
+    /// La socket ne peut pas porter les en-têtes : elle remet le MÊME relevé
+    /// dans `handshake.auth.client`, sous les noms de champs du contrat
+    /// (`CLIENT_SESSION_HEADERS`), valeur pour valeur.
+    func test_socketAuthPayload_projetteLesEnTetesSousLesNomsDuContrat() throws {
+        let headers = ClientInfoProvider.identityHeaders()
+        let payload = ClientInfoProvider.socketAuthPayload()
+        let client = try XCTUnwrap(payload["client"] as? [String: String])
+
+        XCTAssertEqual(client["platform"], "ios")
+        XCTAssertEqual(client["appVersion"], headers["X-Meeshy-Version"])
+        XCTAssertEqual(client["appBuild"], headers["X-Meeshy-Build"])
+        XCTAssertEqual(client["deviceModel"], headers["X-Meeshy-Device"])
+        XCTAssertEqual(client["osVersion"], headers["X-Meeshy-OS"])
+        XCTAssertEqual(client["timezone"], headers["X-Meeshy-Timezone"])
+        XCTAssertEqual(client["deviceLocale"], headers["X-Device-Locale"])
+        XCTAssertEqual(client["deviceName"], headers["X-Meeshy-Device-Name"])
+    }
+
+    /// Rien d'autre que le contrat ne part dans la poignée de main : ni le
+    /// niveau de canvas, ni la porte de version, ni un lieu.
+    func test_socketAuthPayload_neContientQueLesChampsDuContrat() throws {
+        let client = try XCTUnwrap(ClientInfoProvider.socketAuthPayload()["client"] as? [String: String])
+        let contrat: Set<String> = [
+            "appVersion", "appBuild", "platform", "deviceModel",
+            "osVersion", "timezone", "deviceLocale", "deviceName"
+        ]
+        XCTAssertTrue(Set(client.keys).isSubset(of: contrat), "Hors contrat : \(Set(client.keys).subtracting(contrat))")
     }
 
     /// Une SEULE source : ce que l'app envoie contient, valeur pour valeur,

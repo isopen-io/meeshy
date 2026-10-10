@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
-import { deviceIdentityFromInfo, isLoginFromNewDevice, type DeviceIdentity } from '../../utils/new-device';
+import { isLoginFromUnrecognisedDevice, type SessionEvidence } from '../../utils/new-device';
+import { parseUserAgent } from '../../services/GeoIPService';
 
 /**
  * **Le site UNIQUE qui décide si une connexion mérite une alerte** (#7035).
@@ -14,6 +15,36 @@ import { deviceIdentityFromInfo, isLoginFromNewDevice, type DeviceIdentity } fro
  * testée à part (`utils/new-device.ts`).
  */
 
+/**
+ * **Une session RÉVOQUÉE ne fait reconnaître aucun appareil** (audit du
+ * 2026-10-08, P1 — préexistant à #9608).
+ *
+ * L'historique relu comptait toutes les sessions du compte. La victime clique
+ * « déconnecter partout » ; le voleur se reconnecte depuis le même appareil,
+ * qui est « connu » par la session qu'on vient de lui couper : aucune alerte,
+ * au moment exact où elle compte le plus.
+ *
+ * Ce sont les motifs qu'ÉCRIT la passerelle quand quelqu'un — la personne, un
+ * administrateur, une réinitialisation — retire sa confiance à une session :
+ * `revokeSession` (`user_revoked`), `DELETE /sessions` (`user_revoked_all`),
+ * le lien de l'e-mail d'alerte (`email_revoke_all`), le changement de mot de
+ * passe (`password_changed`), la révocation d'administration (`admin_revoke`)
+ * et la réinitialisation par e-mail (`PASSWORD_RESET`). Une fin ORDINAIRE —
+ * `logout`, `expired`, `session_limit_exceeded` — ne retire aucune confiance à
+ * l'appareil, et reste comptée.
+ */
+export const SESSION_REVOCATION_REASONS: ReadonlySet<string> = new Set([
+  'user_revoked',
+  'user_revoked_all',
+  'email_revoke_all',
+  'password_changed',
+  'admin_revoke',
+  'PASSWORD_RESET',
+]);
+
+const stillTrusted = (session: SessionRow): boolean =>
+  session.isValid !== false || !SESSION_REVOCATION_REASONS.has(session.invalidatedReason ?? '');
+
 /** Ce que la porte remet — volontairement minimal, pour rester testable. */
 export type NewDeviceContext = {
   readonly userId: string;
@@ -22,11 +53,17 @@ export type NewDeviceContext = {
   readonly deviceInfo: { type?: string | null; vendor?: string | null; model?: string | null; os?: string | null; browser?: string | null } | null;
   readonly userAgent: string | null;
   readonly ipAddress: string;
-  readonly geoData: unknown;
+  /** Le lieu déduit par le SERVEUR de l'adresse attestée (#9608) — jamais d'un en-tête. */
+  readonly geoData: { readonly country?: string | null } | null;
+};
+
+type SessionRow = SessionEvidence & {
+  readonly isValid?: boolean | null;
+  readonly invalidatedReason?: string | null;
 };
 
 type SessionReader = {
-  findMany(args: unknown): Promise<DeviceIdentity[]>;
+  findMany(args: unknown): Promise<SessionRow[]>;
 };
 
 type NotificationSender = {
@@ -65,8 +102,6 @@ export async function notifyIfLoginFromNewDevice(
 ): Promise<'alerte-emise' | 'appareil-connu' | 'indisponible'> {
   if (!sessions || !notifications) return 'indisponible';
 
-  const courant = deviceIdentityFromInfo(context.deviceInfo, context.userAgent);
-
   const precedentes = await sessions.findMany({
     where: {
       userId: context.userId,
@@ -79,12 +114,26 @@ export async function notifyIfLoginFromNewDevice(
       osName: true,
       browserName: true,
       userAgent: true,
+      country: true,
+      isValid: true,
+      invalidatedReason: true,
     },
     orderBy: { createdAt: 'desc' },
     take: HISTORIQUE_MAX,
   });
 
-  if (!isLoginFromNewDevice(precedentes, courant)) return 'appareil-connu';
+  // #9608 — l'appareil se relit dans l'agent, le lieu dans l'adresse attestée ;
+  // le modèle déclaré par l'en-tête ne peut qu'ajouter une alerte.
+  const inconnu = isLoginFromUnrecognisedDevice(
+    precedentes.filter(stillTrusted),
+    {
+      userAgent: context.userAgent,
+      declaredModel: context.deviceInfo?.model ?? null,
+      attestedCountry: context.geoData?.country ?? null,
+    },
+    parseUserAgent
+  );
+  if (!inconnu) return 'appareil-connu';
 
   const revokeToken = jwt.sign({ userId: context.userId, action: 'revoke-all' }, jwtSecret, {
     expiresIn: '24h',

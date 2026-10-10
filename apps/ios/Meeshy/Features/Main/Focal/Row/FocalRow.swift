@@ -25,6 +25,7 @@ import MeeshyUI
 /// `.onTapGesture` car ce sont des ZONES DE RANGÉE, pas des CONTRÔLES
 /// (même patron que la bulle historique, `mediaWithReplyContainer`).
 struct FocalRow: View {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let input: FocalRowInput
     let actions: FocalRowActions
 
@@ -73,6 +74,8 @@ struct FocalRow: View {
         // #7467 — la destruction se VOIT, dans la rangée plate comme dans la
         // bulle : même modificateur, même durée, même repli.
         .ephemeralBurn(isBurning: content.isBurning)
+        // Ce que les visionneuses ouvertes depuis cette rangée laissent sortir (#9573).
+        .contentExitGate(content.exitGate)
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
         .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
@@ -256,6 +259,7 @@ struct FocalRow: View {
                     senderThumbHash: input.senderThumbHash,
                     senderColorHex: input.senderColorHex,
                     senderPresence: input.senderPresence,
+                    senderIsHere: input.senderIsHere,
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
@@ -303,7 +307,7 @@ struct FocalRow: View {
                 } else if content.requiresVeil {
                     FocalProtectedContent(
                         isBlurred: true,
-                        isViewOnce: content.isViewOnce,
+                        isViewOnce: content.veilConsumesViewOnce,
                         isDark: input.isDark,
                         messageId: content.messageId,
                         onConsumeViewOnce: actions.onConsumeViewOnce,
@@ -312,9 +316,11 @@ struct FocalRow: View {
                         contentSections
                     }
                 } else {
-                    contentSections.viewOnceRetouch(isActive: content.isViewOnceRevealed) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
+                    contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
+            // #9574, #9617 — annoncé OU noir (Focal et Script).
+            .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection
@@ -523,7 +529,7 @@ struct FocalRow: View {
         if isFailedOutgoing {
             BubbleFailedRetryBar(onRetry: { actions.onRetry?(input.localId) })
                 .frame(width: 72, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
                 .padding(.leading, indent)
         }
     }
@@ -540,6 +546,7 @@ struct FocalRow: View {
                 messageDeliveryStatus: content.meta.deliveryStatus ?? .sent,
                 onMediaTap: actions.onMediaTap,
                 onConsumeViewOnce: actions.onConsumeViewOnce,
+                onReactToAttachment: actions.onReactToAttachment,
                 maxWidth: FocalMediaGridLayout.gridWidth(rowWidth: input.availableWidth)
             )
         }
@@ -659,13 +666,15 @@ struct FocalRow: View {
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
 
-    /// « emoji-only conserve 90/60/quarante-cinq pt » (critère §7) : `emojiFontSize`
-    /// vient de `content.text.emojiFontSize`, jamais recalculé ici.
+    /// L'emoji seul prend la taille de `content.text.emojiFontSize` (×4 / ×3 /
+    /// ×2, #9054), jamais recalculée ici — et à la taille EXACTE
+    /// (`MeeshyFont.emoji`) : `relative` la plafonnait à 34 pt.
     /// Rendu du texte ORIGINAL (`raw`), jamais traduit — même règle que
     /// `BubbleStandardLayout.emojiOnlyContent` (lu, jamais modifié).
     private var emojiBlock: some View {
         Text(content.text?.raw ?? "")
-            .font(MeeshyFont.relative(content.text?.emojiFontSize ?? FocalMetrics.Text.size))
+            .font(content.text?.emojiFontSize.map(MeeshyFont.emoji)
+                  ?? MeeshyFont.relative(FocalMetrics.Text.size))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, indent)
     }
@@ -800,7 +809,7 @@ struct FocalRow: View {
         // de la propriété. Inoffensif tant que le corps tient en une
         // expression — et un piège dès qu'on y ajoutera une seconde vue, qui
         // ne se monterait alors pas.
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
             // Jamais de drapeau EN CLAIR sur un message protégé (revue
             // adversariale 2026-08-18) : la bulle floute sa bande de
             // drapeaux avec le contenu — révéler la langue d'origine
@@ -888,7 +897,7 @@ struct FocalRow: View {
         @ViewBuilder _ content: () -> Content
     ) -> some View {
         content()
-            .padding(.horizontal, 7)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
             .frame(height: height)
             .background(
@@ -937,7 +946,7 @@ struct FocalRow: View {
                         actions.onSetActiveDisplayLanguage?(content.messageId, code)
                     } label: {
                         focusChip(isActive: code.lowercased() == translation.activeLangCode.lowercased()) {
-                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(12))
+                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(MeeshyFont.smallSize))
                         }
                     }
                     .buttonStyle(.plain)
@@ -975,7 +984,7 @@ struct FocalRow: View {
             actions.onToggleReaction?(reaction.emoji)
         } label: {
             focusChip(filled: mine) {
-                HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Text(reaction.emoji).font(.caption2)
                     if reaction.count > 1 {
                         Text("\(reaction.count)")
@@ -1072,6 +1081,7 @@ struct FocalRow: View {
                 senderThumbHash: input.senderThumbHash,
                 senderColorHex: input.senderColorHex,
                 senderPresence: input.senderPresence,
+                senderIsHere: input.senderIsHere,
                 senderStoryRing: input.senderStoryRing,
                 senderMoodEmoji: input.senderMoodEmoji,
                 senderIsAnonymous: input.senderIsAnonymous,

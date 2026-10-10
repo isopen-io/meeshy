@@ -171,4 +171,15 @@ describe('le pair des gates, et les contrôles d’un appel (#8433, #8438, #8439
     expect(decodeMutedByModerator(h.fired[0]?.[1])).toEqual({ callId: 'call-1', byUserId: CALL_PEER_USER_ID });
     expect(decodeReactionReceived(h.fired[1]?.[1])).toEqual({ callId: 'call-1', userId: CALL_PEER_USER_ID, emoji: '🎉' });
   });
+
+  test('une troisième personne rejoint l’appel, caméra coupée, sous la forme que décode le moteur (#8743)', () => {
+    const h = peer();
+    h.created.probe.join({ userId: 'u-lina', name: 'Lina' });
+    expect(h.fired).toHaveLength(0);
+    h.created.initiated('call-1');
+    h.created.probe.join({ userId: 'u-lina', name: 'Lina' });
+    const [event, payload] = h.fired.at(-1) ?? [];
+    expect(event).toBe(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
+    expect(decodeParticipantJoined(payload)).toMatchObject({ callId: 'call-1', person: { userId: 'u-lina', name: 'Lina' }, video: false });
+  });
 });

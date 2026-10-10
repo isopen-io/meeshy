@@ -82,12 +82,19 @@ const isUsable = (token: ReferralToken, now: Date): boolean =>
 
 const referralLinkOf = (origin: string, token: string): string => `${origin}/signup/affiliate/${encodeURIComponent(token)}`;
 
-export async function loadShareableReferralLink(params: {
+type ReferralLinkParams = {
   readonly origin: string;
   readonly now: Date;
   readonly deps: ReferralLinkDeps;
-}): Promise<ApiResult<string>> {
-  const { origin, now, deps } = params;
+};
+
+/**
+ * **LE LIEN D'UN JETON EXISTANT, sans rien créer** (#7742) — la carte photo du
+ * jeu le montre dès l'aperçu ; « aucun jeton utilisable » rend `null`, et le
+ * jeton ne se crée qu'au geste de partage (`loadShareableReferralLink`). Une
+ * lecture en panne ou illisible reste un échec.
+ */
+export async function findExistingReferralLink({ origin, now, deps }: ReferralLinkParams): Promise<ApiResult<string | null>> {
   if (__FIXTURES__ && deps.source === 'fixtures') return { ok: true, data: referralLinkOf(origin, FIXTURE_REFERRAL_TOKEN) };
 
   const listed = await deps.transport.request<unknown>({
@@ -100,7 +107,14 @@ export async function loadShareableReferralLink(params: {
   const usable = listed.data
     .map(decodeReferralToken)
     .find((token): token is ReferralToken => token !== null && isUsable(token, now));
-  if (usable !== undefined) return { ok: true, data: referralLinkOf(origin, usable.token) };
+  return { ok: true, data: usable === undefined ? null : referralLinkOf(origin, usable.token) };
+}
+
+export async function loadShareableReferralLink(params: ReferralLinkParams): Promise<ApiResult<string>> {
+  const { origin, now, deps } = params;
+  const existing = await findExistingReferralLink(params);
+  if (!existing.ok) return existing;
+  if (existing.data !== null) return { ok: true, data: existing.data };
 
   const created = await deps.transport.request<unknown>({
     method: 'POST',

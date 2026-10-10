@@ -24,6 +24,7 @@ import {
   performCommentLike,
   type CommentGestureDeps,
 } from './comment-gestures';
+import { ownerPresent } from '@/test-support/comment-owner';
 
 /**
  * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7135, première tranche de #7118) —
@@ -746,7 +747,7 @@ describe('le compteur de commentaires bascule dans TOUS les caches qui le montre
       postId: 'p1',
       content: 'Bravo',
       author: { id: 'u-moi', displayName: 'Vous' },
-      deps: { source: 'gateway', transport, queryClient },
+      deps: { source: 'gateway', transport, queryClient, owner: ownerPresent },
     });
 
     expect(threeCounts(queryClient)).toEqual({ feed: 8, reels: 8, detail: 8 });

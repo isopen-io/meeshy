@@ -2,8 +2,12 @@ import { isEngagementProgressPayload, type EngagementProgressPayload } from '@me
 import { resolveEngagementProgress, type EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
+import type { GameBlockV2 } from './game-v2';
+
+import { mintBadgeImpact, type MintBadgeImpact } from '@/lib/view/game-mint';
+
 import type { DataSource } from './config';
-import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
+import { readGameBlock } from './game';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -24,10 +28,11 @@ import type { ApiResult, HttpTransport } from './http';
  * `resolveEngagementProgress`), depuis la source déclarée à la construction :
  * `'fixtures'` sert la fixture sans toucher au réseau — c'est ce qui laisse le
  * POC, ses captures et `bun test` sans passerelle ; `'gateway'` parle au
- * transport. C'est le PREMIER écran qui lit `apiConfig.source` au lieu
- * d'importer les fixtures en direct (`vite.config.ts` § garde
- * `VITE_DATA_SOURCE`) — la garde y reste tant que la liste et le fil ne le
- * font pas aussi.
+ * transport. Les deux fixtures (`engagement-fixture.ts`, `game-fixture.ts`)
+ * s'importent dynamiquement, à l'intérieur de la branche `'fixtures'` — même
+ * patron que `account-deletion.ts`/`affiliate-tokens.ts` — pour que
+ * `check-gateway-build.mjs` (#5815, #9510) ne les trouve jamais dans le
+ * morceau `engagement` d'un dist `VITE_DATA_SOURCE=gateway`.
  */
 export const ENGAGEMENT_PROGRESS_PATH = meEndpoints.engagement;
 
@@ -54,16 +59,55 @@ export async function fetchEngagementProgress(
   return { ok: true, data: result.data };
 }
 
+/**
+ * LA PROGRESSION ET, À CÔTÉ, LE JEU (#9383) — `game` est le bloc que la
+ * passerelle sert depuis #9378, `mintBadgeLoss` les badges que la frappe
+ * éteindrait (calculé sur les compteurs servis, avec le prix de CETTE frappe ;
+ * absent quand le serveur ne sert pas les points par axe : inconnu n'est pas zéro).
+ * Les deux sont ABSENTS (clé omise) devant un ancien serveur ou un bloc partiel :
+ * l'écran actuel reste alors intact, il ne reçoit rien à moitié.
+ */
+export type EngagementWithGame = EngagementProgress & {
+  readonly game?: GameBlockV2;
+  readonly mintBadgeLoss?: number;
+  /** Actions à refaire pour rallumer le badge le plus proche de ceux qu'une frappe éteindrait. */
+  readonly mintBadgeRegain?: number;
+};
+
+const withGame = (progress: EngagementProgress, game: GameBlockV2 | null, impact: MintBadgeImpact | null): EngagementWithGame =>
+  game === null
+    ? progress
+    : { ...progress, game, ...(impact === null ? {} : { mintBadgeLoss: impact.lost, mintBadgeRegain: impact.regain }) };
+
 export async function loadEngagementProgress(params: {
   readonly source: DataSource;
   readonly transport: HttpTransport;
   readonly signal?: AbortSignal;
-}): Promise<ApiResult<EngagementProgress>> {
-  if (params.source === 'fixtures') {
-    return { ok: true, data: resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE) };
+}): Promise<ApiResult<EngagementWithGame>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { ENGAGEMENT_PROGRESS_FIXTURE } = await import('./engagement-fixture');
+    const { gameBlockWithExtrasFixture } = await import('./game-fixture');
+    /* Un gate qui mesure les débordements arme les valeurs LONGUES (`game-fixture-long.ts`, #9563). */
+    const long = await import('./game-fixture-long');
+    const armed = long.gameLongArmed();
+    const payload = armed ? long.ENGAGEMENT_LONG_FIXTURE : ENGAGEMENT_PROGRESS_FIXTURE;
+    const game = armed ? long.gameBlockLongFixture() : gameBlockWithExtrasFixture();
+    return {
+      ok: true,
+      data: withGame(resolveEngagementProgress(payload), game, mintBadgeImpact(payload.counters, game.mint.price)),
+    };
   }
   const result = await fetchEngagementProgress(params.transport, params.signal);
-  return result.ok ? { ok: true, data: resolveEngagementProgress(result.data) } : result;
+  if (!result.ok) return result;
+  const game = readGameBlock(Reflect.get(result.data, 'game'));
+  return {
+    ok: true,
+    data: withGame(
+      resolveEngagementProgress(result.data),
+      game,
+      game === null ? null : mintBadgeImpact(result.data.counters, game.mint.price),
+    ),
+  };
 }
 
 /**
@@ -81,6 +125,17 @@ export type MeeshMintResult = {
   readonly status: 'minted' | 'already-minted' | 'insufficient';
   readonly balance?: number;
   readonly mintedLifetime?: number;
+  /**
+   * La réponse ÉTENDUE (#9378) : le numéro gravé, l'édition, le prix payé, la
+   * Gloire gagnée et les niveaux avant et après. Absents d'un serveur antérieur
+   * — l'écran retombe alors sur l'aperçu qu'il a montré avant le geste.
+   */
+  readonly number?: number;
+  readonly edition?: 'silver' | 'gold' | 'prism';
+  readonly price?: number;
+  readonly gloryGained?: number;
+  readonly levelBefore?: number;
+  readonly levelAfter?: number;
 };
 
 export async function mintMeesh(

@@ -121,6 +121,10 @@ struct CanvasV3ExhaustivityTests {
         media.crop = MediaCropRect(x: 0.1, y: 0.2, width: 0.5, height: 0.6)
         // #8502 — le filtre PROPRE d'un objet.
         media.filter = "vintage"
+        // #9175 — les réglages d'une image. Voyagent pour TOUT média, fond
+        // compris : leur clé v3 `payload.adjustments` n'est partagée avec rien.
+        // #9498 — et les effets (bloom, grain), dans le même sac.
+        media.adjustments = ImageAdjustments(exposure: 0.5, contrast: 1.25, vignette: 0.75, bloom: 0.5, grain: 0.25)
         return media
     }
 
@@ -136,6 +140,7 @@ struct CanvasV3ExhaustivityTests {
             keyframes: [StoryKeyframe(id: "kf-au", time: 3, volume: 0.4, easing: .linear)],
             mediaURL: "https://cdn/a.m4a",
             soundId: "snd-9", soundAuthorUsername: "amina",
+            soundCreatedAt: "2026-03-12T09:30:00Z",
             sourceStart: 1, sourceEnd: 7)
         audio.zIndex = 5
         audio.scale = 1.15

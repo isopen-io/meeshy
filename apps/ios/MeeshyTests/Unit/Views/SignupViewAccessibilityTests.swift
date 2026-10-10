@@ -120,12 +120,17 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// **QUINZE depuis les phases vivantes (#8288).** Aux onze d'avant — dont le
-    /// crayon d'identité, retiré par #7897 et remplacé par la ligne dépliable
-    /// « Pourquoi mettre un mot de passe maintenant ? » — s'ajoutent : passer le
-    /// numéro (« Continuer avec l'e-mail seulement »), la réussite et l'échec de
-    /// « Valider mon compte maintenant », et le compte VALIDÉ (code juste ou
-    /// lien ouvert), qui se sent avec son feu d'artifice.
+    /// **QUINZE depuis #9362** : « S'inscrire » touché INACTIF se sent comme un
+    /// refus (`HapticFeedback.error()`) en disant le motif du numéro.
+    ///
+    /// **QUATORZE depuis #9343.** Les phases vivantes (#8288) en avaient porté
+    /// quinze : aux onze d'avant — dont le crayon d'identité, retiré par #7897
+    /// et remplacé par la ligne dépliable « Pourquoi mettre un mot de passe
+    /// maintenant ? » — s'ajoutaient passer le numéro (« Plus tard »), la
+    /// réussite et l'échec de « Valider mon compte maintenant », et le compte
+    /// VALIDÉ (code juste ou lien ouvert), qui se sent avec son feu d'artifice.
+    /// Le numéro requis par l'écran (#9343), « Plus tard » est parti avec son
+    /// haptique.
     ///
     /// `SignupView` en porte ONZE — fermer, sous une adresse déjà utilisée
     /// « Recevoir un lien de connexion », « Mot de passe oublié ? » et « Ce
@@ -195,7 +200,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertTrue(body.contains("meeshyTapTarget()"),
                       "la croix de fermeture est un glyphe : sans cadre déclaré, sa cible EST son dessin")
         XCTAssertGreaterThanOrEqual(
-            occurrences(of: "minHeight: 44", in: body), 4,
+            occurrences(of: "minHeight: 44", in: body)
+                + occurrences(of: "minHeight: MeeshyControlSize.tapTarget", in: body), 4,
             "les boutons de texte (Se connecter ×2, conditions, confidentialité) portent chacun 44 pt"
         )
         XCTAssertFalse(body.contains("frame(height: 3"),
@@ -206,7 +212,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// touchable sur 44 pt, et annoncer celle qui est retenue.
     func test_countrySheet_rowsAreTouchableAndAnnounceTheSelection() throws {
         let body = try signupViewCode()
-        XCTAssertTrue(body.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(body.contains(".frame(minHeight: 44)") || body.contains(".frame(minHeight: MeeshyControlSize.tapTarget)"))
         XCTAssertTrue(body.contains("country.id == selection.id ? [.isSelected] : []"),
                       "le pays retenu doit s'entendre, pas seulement se voir")
     }
@@ -255,9 +261,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
         return String(end == nil ? rest : rest[..<end!.lowerBound])
     }
 
-    /// Il n'est ni requis, ni présenté comme un choix : le NOMMER facultatif
-    /// fait croire qu'il y a une décision à prendre. Vide, il est simplement
-    /// absent de la charge.
+    /// Il n'est jamais présenté comme un choix : le NOMMER facultatif ferait
+    /// croire qu'il y a une décision à prendre — et depuis #9343 il n'y en a
+    /// plus, l'écran l'exige (la passerelle, elle, ne l'exige pas).
     ///
     /// **La règle ne vaut PAS pour le mot de passe** (#6424), et la différence
     /// est de nature : un numéro absent ne change rien à ce qui suit, un mot de
@@ -300,8 +306,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertTrue(body.contains("auth.signup.phone.benefit"),
                       "l'écran DOIT dire ce que le numéro ouvre")
         let phone = try fieldBody("phoneField", in: body)
-        XCTAssertTrue(phone.contains("phoneHint"),
-                      "et le champ téléphone DOIT le porter — un texte défini mais jamais monté n'informe personne")
+        XCTAssertTrue(phone.contains("Text(phoneBenefit)"),
+                      "et le champ téléphone DOIT l'AFFICHER (#8842) — un texte défini mais jamais monté n'informe personne")
     }
 
     // MARK: - Un détail REPLIÉ n'est pas un détail PERDU

@@ -13,6 +13,10 @@ import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import {
+  creditAcceptedTranslationRequest,
+  lazyTranslationRequestEngagement
+} from '../../services/messaging/translationRequestCredit';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
@@ -33,6 +37,13 @@ export async function registerTranslationRoutes(
   prisma: PrismaClient,
   translateService: AttachmentTranslateService | null
 ) {
+  // #8959 — une traduction ou une transcription acceptée rapporte
+  // `tool.translation_request` ; le crochet ne voit que les réponses 2xx.
+  const creditAccepted = creditAcceptedTranslationRequest({
+    engagement: lazyTranslationRequestEngagement(() => prisma),
+    requesterOf: (request) => (request as UnifiedAuthRequest).authContext,
+    onError: (error) => logger.warn('tool.translation_request engagement credit failed', { error })
+  });
 
   /**
    * POST /attachments/:attachmentId/translate
@@ -42,6 +53,7 @@ export async function registerTranslationRoutes(
     '/attachments/:attachmentId/translate',
     {
       onRequest: [authRequired],
+      onResponse: creditAccepted,
       schema: {
         description: 'Translate an attachment to one or more target languages. Currently supports audio files with speech-to-text, translation, and text-to-speech (with optional voice cloning). Image, video, and document translation are planned but not yet implemented. Translation can be async with webhook notification.',
         tags: ['attachments', 'translation'],
@@ -234,6 +246,7 @@ export async function registerTranslationRoutes(
     '/attachments/:attachmentId/transcribe',
     {
       onRequest: [authRequired],
+      onResponse: creditAccepted,
       schema: {
         description: 'Transcribe an audio attachment to text only, without translation or voice synthesis. Uses Whisper for accurate speech-to-text. Returns the attachment enriched with transcription data including text, detected language, confidence score, and word-level timestamps.',
         tags: ['attachments', 'transcription'],

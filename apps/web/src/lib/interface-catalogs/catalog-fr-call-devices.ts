@@ -9,6 +9,7 @@ const frCallDevices = {
   'call.bubble.collapse': 'Réduire en bulle',
   'call.bubble.ongoing': 'Appel en cours',
   'call.bubble.moveHint': 'Les flèches déplacent la bulle',
+  'call.bubble.resizeHint': '+ et − changent sa taille, comme Ctrl + molette ou le pincement',
   'call.pip.enter': 'Image dans l’image',
   'call.devices.open': 'Choisir les périphériques',
   'call.devices.title': 'Périphériques',

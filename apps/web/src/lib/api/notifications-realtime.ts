@@ -70,7 +70,7 @@ function deletedBulkScopeOf(payload: unknown): NotificationDeletedBulkScope | nu
   return objectOf(objectOf(payload)?.scope)?.kind === 'read' ? { kind: 'read' } : null;
 }
 
-const notificationIdOf = (payload: unknown): string | null => {
+export const notificationIdOf = (payload: unknown): string | null => {
   const id = objectOf(payload)?.notificationId;
   return typeof id === 'string' && id.length > 0 ? id : null;
 };

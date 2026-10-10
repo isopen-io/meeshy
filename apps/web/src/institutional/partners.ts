@@ -13,6 +13,7 @@ export const PAGE_PARTNERS: ContentPage = {
   title: 'Devenez Partenaire',
   hero: 'Rejoignez notre écosystème et développez votre activité avec Meeshy',
   description: 'Rejoignez notre écosystème et développez votre activité avec Meeshy',
+  mee: { sticker: 'duo-meo-tope-la', caption: 'Tope là : Meo et Mee scellent chaque partenariat d’une seule tape.' },
   sections: [
     {
       title: 'Solutions Entreprise',

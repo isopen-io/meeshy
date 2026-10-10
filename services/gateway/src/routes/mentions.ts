@@ -7,6 +7,7 @@ import type { MentionSuggestion } from '../services/MentionService.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../services/historyFloor.js';
 import { logError } from '../utils/logger.js';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 interface MessageParams {
   messageId: string;
@@ -153,6 +154,9 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         reader: historyReaderFromAuthContext(authRequest.authContext)
       });
       if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé ou accès refusé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé ou accès refusé');
       }
 

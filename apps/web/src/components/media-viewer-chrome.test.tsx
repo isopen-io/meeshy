@@ -1,0 +1,477 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { Attachment } from '@/lib/api/types';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { MediaCarrier } from '@/lib/view/media';
+import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
+
+import MediaViewer from './media-viewer';
+
+/**
+ * **#8879 — LA VISIONNEUSE DE MÉDIAS PORTE LE CHROME COMMUN DES PLEIN ÉCRANS**
+ * (`docs/product/visionneuse-plein-ecran.md`) : la croix EN FIN de barre haute,
+ * l'auteur et l'heure en haut, « Enregistrer » DANS le menu « … », Réagir et
+ * Créer en rail à droite, « Répondre… » en capsule sous la légende — et ce
+ * qu'elles déclenchent est l'action EXISTANTE de l'hôte, pas une seconde.
+ */
+const photo = (id: string): Attachment =>
+  ({
+    id,
+    messageId: `m-${id}`,
+    fileName: `${id}.jpg`,
+    originalName: `${id}.jpg`,
+    mimeType: 'image/jpeg',
+    fileSize: 4096,
+    fileUrl: `/uploads/${id}.jpg`,
+    width: 800,
+    height: 600,
+    uploadedBy: 'u',
+    isAnonymous: false,
+    isViewOnce: false,
+    isBlurred: false,
+    createdAt: '2026-09-20T10:00:00.000Z',
+  }) as unknown as Attachment;
+
+const clip = (id: string): Attachment =>
+  ({
+    ...photo(id),
+    fileName: `${id}.mp4`,
+    originalName: `${id}.mp4`,
+    mimeType: 'video/mp4',
+    fileUrl: `/uploads/${id}.mp4`,
+    width: 1920,
+    height: 1080,
+    duration: 42_000,
+  }) as unknown as Attachment;
+
+const carrier: MediaCarrier = {
+  sender: { displayName: 'Nour Haddad', avatarUrl: null },
+  sentAt: '2026-09-20T10:13:00.000Z',
+  caption: { text: 'Le port au coucher du soleil', language: 'fr', translated: false },
+};
+
+const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true, share: false };
+
+const pageOf = (attachment: Attachment, offers: MediaPageOffers, onReply?: () => void): MediaViewerPage => ({
+  attachment,
+  messageId: '65f0a1b2c3d4e5f6a7b8c9d0',
+  conversationId: 'c-a',
+  offers,
+  ...(onReply === undefined ? {} : { onReply }),
+});
+
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(async () => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
+});
+
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement;
+let root: Root;
+
+afterEach(() => {
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});
+
+async function mount(params: {
+  readonly offers: MediaPageOffers;
+  readonly onReply?: () => void;
+  readonly onClose?: () => void;
+  readonly withCarrier?: boolean;
+  readonly carrier?: MediaCarrier;
+  readonly items?: readonly Attachment[];
+  readonly withoutActions?: boolean;
+}): Promise<HTMLElement> {
+  const items = params.items ?? [photo('a'), photo('b')];
+  container = document.createElement('div');
+  container.id = 'root';
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => {
+    root.render(
+      <MediaViewer
+        items={items}
+        startIndex={0}
+        onClose={params.onClose ?? (() => {})}
+        languages={['fr']}
+        fallbackLanguage="fr"
+        {...(params.withCarrier === false ? {} : { carrier: params.carrier ?? carrier })}
+        {...(params.withoutActions === true ? {} : { actionsAt: (index: number) => pageOf(items[index]!, params.offers, params.onReply) })}
+      />,
+    );
+  });
+  await act(async () => {
+    await import('./viewer-media-actions');
+    await import('./viewer-video-page');
+    await import('./media-transport');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  return document.body.querySelector<HTMLElement>('[data-media-viewer]')!;
+}
+
+/** `a` vient-il AVANT `b` dans le document — donc dans l'ordre de tabulation et de lecture ? */
+const precedes = (a: Element, b: Element): boolean => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+/**
+ * #9578 — LA COLONNE D'ACTIONS FLOTTE SUR LA SCÈNE, miroir `cadreActionColumn`
+ * (galerie iOS) : posée au bord de fin du plateau, elle ne prend plus de
+ * hauteur à la scène. Directement sous la scène, la barre de progression d'un
+ * bord à l'autre ; puis la ligne d'informations, la légende, la capsule
+ * « Répondre » et la pellicule.
+ */
+describe('MediaViewer — la colonne flotte sur la scène, la barre colle sous elle (#9578)', () => {
+  const stubPlayback = (): (() => void) => {
+    const { play, pause } = HTMLMediaElement.prototype;
+    HTMLMediaElement.prototype.play = function stubbedPlay(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function stubbedPause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    return () => {
+      HTMLMediaElement.prototype.play = play;
+      HTMLMediaElement.prototype.pause = pause;
+    };
+  };
+
+  async function mountClip(): Promise<{ readonly dialog: HTMLElement; readonly restore: () => void }> {
+    const restore = stubPlayback();
+    const dialog = await mount({ offers: { ...ALL, share: true }, onReply: () => {}, items: [clip('v'), photo('p')] });
+    const video = dialog.querySelector('[data-viewer-page] video')!;
+    await act(async () => {
+      Object.defineProperty(video, 'duration', { value: 42, configurable: true });
+      video.dispatchEvent(new Event('loadedmetadata'));
+    });
+    return { dialog, restore };
+  }
+
+  test('les actions et les contrôles de la vidéo vivent SUR la scène, jamais dans le couloir bas', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const stage = dialog.querySelector('[data-viewer-stage]')!;
+      const column = dialog.querySelector('[data-viewer-stage-rail]')!;
+      expect(stage.contains(column)).toBe(true);
+      expect(stage.contains(dialog.querySelector('.media-viewer-track-frame'))).toBe(true);
+      for (const action of ['react', 'compose', 'mute', 'more']) {
+        expect(column.querySelector(`[data-viewer-action="${action}"]`)).not.toBeNull();
+      }
+      expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-action]')).toBeNull();
+      expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-rail]')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test('sous la scène, de haut en bas : la piste, la ligne d’informations, la légende, « Répondre », la pellicule', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const bar = dialog.querySelector('[data-viewer-bottom-bar]')!;
+      const slot = dialog.querySelector('[data-viewer-transport-slot]')!;
+      const ordered = [
+        slot.querySelector('[role="slider"]'),
+        dialog.querySelector('[data-viewer-meta]'),
+        dialog.querySelector('[data-viewer-caption-text]'),
+        dialog.querySelector('[data-viewer-reply]'),
+        dialog.querySelector('[data-filmstrip-item]'),
+      ];
+      expect(ordered.every((el) => el !== null && bar.contains(el))).toBe(true);
+      expect(bar.firstElementChild).toBe(slot);
+      ordered.slice(1).forEach((el, at) => expect(precedes(ordered[at]!, el!)).toBe(true));
+    } finally {
+      restore();
+    }
+  });
+
+  test('au clavier, la colonne précède la piste : l’ordre de tabulation suit l’ordre visuel', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      const lastAction = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-action="more"]')!;
+      const slider = dialog.querySelector('[data-viewer-transport-slot] [role="slider"]')!;
+      const firstAction = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-action="react"]')!;
+      const center = dialog.querySelector('[data-viewer-center-toggle]')!;
+      expect(precedes(center, firstAction)).toBe(true);
+      expect(precedes(lastAction, slider)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  test('le plein cadre fait céder la colonne flottante : invisible ET intouchable', async () => {
+    const { dialog, restore } = await mountClip();
+    try {
+      act(() => {
+        dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      const column = dialog.querySelector<HTMLElement>('[data-viewer-stage-rail]')!;
+      expect(column.hasAttribute('inert')).toBe(true);
+      expect(column.style.opacity).toBe('0');
+    } finally {
+      restore();
+    }
+  });
+
+  test('un vocal garde sa colonne dans le couloir : posée sur la scène, elle couvrirait ses commandes et sa transcription', async () => {
+    const voice = { ...photo('s'), fileName: 's.m4a', originalName: 's.m4a', mimeType: 'audio/mp4', fileUrl: '/uploads/s.m4a', duration: 12_000 } as unknown as Attachment;
+    const dialog = await mount({ offers: ALL, items: [voice] });
+    expect(dialog.querySelector('[data-viewer-stage-rail]')).toBeNull();
+    expect(dialog.querySelector('[data-viewer-bottom-bar] [data-viewer-rail]')).not.toBeNull();
+  });
+
+  test('une photo sans vidéo garde sa colonne sur la scène, et une page sans action n’en a aucune', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    expect(dialog.querySelector('[data-viewer-stage] [data-viewer-stage-rail] [data-viewer-rail]')).not.toBeNull();
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    const bare = await mount({ offers: NO_MEDIA_OFFERS });
+    expect(bare.querySelector('[data-viewer-stage-rail]')).toBeNull();
+  });
+});
+
+/**
+ * #9577 — LE MUET ET « ⋯ » D'UNE VIDÉO REJOIGNENT LA COLONNE D'ACTIONS, sous
+ * « Composer » ; la ligne d'informations dit « cotes · poids · durée ».
+ */
+describe('MediaViewer — une vidéo en plein écran (#9577)', () => {
+  const stubPlayback = (): (() => void) => {
+    const { play, pause } = HTMLMediaElement.prototype;
+    HTMLMediaElement.prototype.play = function stubbedPlay(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    HTMLMediaElement.prototype.pause = function stubbedPause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    return () => {
+      HTMLMediaElement.prototype.play = play;
+      HTMLMediaElement.prototype.pause = pause;
+    };
+  };
+
+  const actionsOf = (dialog: HTMLElement): readonly (string | null)[] =>
+    Array.from(dialog.querySelectorAll('[data-viewer-rail-slot] [data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
+
+  test('le muet puis « ⋯ » suivent « Composer » dans la colonne d’actions', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: { ...ALL, share: true }, items: [clip('v')] });
+      expect(actionsOf(dialog).slice(-3)).toEqual(['compose', 'mute', 'more']);
+      expect(actionsOf(dialog)[0]).toBe('react');
+    } finally {
+      restore();
+    }
+  });
+
+  test('une vidéo dont la page n’offre AUCUNE action garde son muet et son « ⋯ »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: NO_MEDIA_OFFERS, items: [clip('v')], withoutActions: true });
+      expect(actionsOf(dialog)).toEqual(['mute', 'more']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('le plein cadre fait céder le muet et « ⋯ » avec le reste du chrome : invisibles ET intouchables', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      act(() => {
+        dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      });
+      expect(dialog.querySelector('[data-viewer-action="mute"]')!.closest('[inert]')).not.toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  test('la ligne d’informations dit « largeur × hauteur · poids · durée »', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')] });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['1920 × 1080', '4 Ko', 'Durée 0:42']);
+      expect(dialog.querySelectorAll('[data-viewer-meta] > span[aria-hidden="true"]').length).toBe(2);
+    } finally {
+      restore();
+    }
+  });
+
+  test('sans porteur, ni cotes ni poids — mais la durée reste : c’est le seul temps que la visionneuse montre', async () => {
+    const restore = stubPlayback();
+    try {
+      const dialog = await mount({ offers: ALL, items: [clip('v')], withCarrier: false });
+      const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+      expect(parts).toEqual(['Durée 0:42']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('une photo garde « largeur × hauteur · poids », sans durée', async () => {
+    const dialog = await mount({ offers: ALL });
+    const parts = Array.from(dialog.querySelectorAll('[data-viewer-meta] > span:not([aria-hidden])')).map((el) => el.textContent);
+    expect(parts).toEqual(['800 × 600', '4 Ko']);
+    expect(dialog.querySelector('[data-viewer-video-controls]')).toBeNull();
+  });
+});
+
+describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
+  test('la croix est EN FIN de barre haute, après l’identité de l’auteur (heure comprise)', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    const top = dialog.querySelector('[data-viewer-top-bar]')!;
+    const identity = top.querySelector('[data-viewer-identity]')!;
+    const exit = top.querySelector('[data-viewer-exit="close"]')!;
+    expect(identity.textContent).toContain('Nour Haddad');
+    expect(identity.querySelector('time[datetime="2026-09-20T10:13:00.000Z"]')).not.toBeNull();
+    expect(exit.getAttribute('aria-label')).toBe('Fermer');
+    expect(identity.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('l’auteur n’est plus répété dans le pied : le pied garde la ligne de cotes et la légende', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    const bottom = dialog.querySelector('[data-viewer-bottom-bar]')!;
+    expect(bottom.hasAttribute('data-viewer-footer')).toBe(true);
+    expect(bottom.querySelector('[data-viewer-identity]') === null).toBe(true);
+    expect(bottom.textContent).not.toContain('Nour Haddad');
+    expect(bottom.querySelector('[data-viewer-caption-text]')?.textContent).toBe('Le port au coucher du soleil');
+    expect(bottom.textContent).toContain('800 × 600');
+  });
+
+  test('toucher la croix appelle le rappel de fermeture de l’hôte', async () => {
+    const closed: number[] = [];
+    const dialog = await mount({ offers: ALL, onClose: () => closed.push(1) });
+    act(() => {
+      dialog.querySelector<HTMLButtonElement>('[data-viewer-exit="close"]')!.click();
+    });
+    expect(closed).toEqual([1]);
+  });
+
+  test('« Répondre… » est une capsule sous la légende, et appelle l’action de réponse de l’hôte', async () => {
+    const replies: number[] = [];
+    const dialog = await mount({ offers: ALL, onReply: () => replies.push(1) });
+    const capsule = dialog.querySelector<HTMLButtonElement>('[data-viewer-bottom-bar] [data-viewer-reply]')!;
+    expect(capsule.textContent).toContain('Répondre');
+    act(() => {
+      capsule.click();
+    });
+    expect(replies).toEqual([1]);
+    expect(dialog.querySelector('[data-viewer-action="reply"]')).toBeNull();
+  });
+
+  test('un hôte qui ne sait pas répondre n’a pas de capsule (loi 4)', async () => {
+    const dialog = await mount({ offers: { ...ALL, reply: false } });
+    expect(dialog.querySelector('[data-viewer-reply]')).toBeNull();
+  });
+
+  test('Réagir et Créer forment la colonne verticale au bord de fin de la scène ; Enregistrer n’y est pas', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    const rail = dialog.querySelector('[data-viewer-stage-rail] [data-viewer-rail]')!;
+    const actions = Array.from(rail.querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
+    expect(actions).toEqual(['react', 'compose']);
+    expect(rail.getAttribute('aria-label')).toBe('Réagir');
+  });
+
+  test('« Enregistrer » vit DANS le menu « … » de la barre haute', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    const top = dialog.querySelector('[data-viewer-top-bar]')!;
+    expect(top.querySelector('[data-viewer-menu-item="save"]')).toBeNull();
+    act(() => {
+      top.querySelector<HTMLButtonElement>('[data-viewer-menu-button]')!.click();
+    });
+    const item = top.querySelector('[data-viewer-menu-item="save"]')!;
+    expect(item.textContent).toContain('Enregistrer');
+  });
+
+  test('une page qui n’offre rien n’a ni menu, ni rail, ni capsule', async () => {
+    const dialog = await mount({ offers: NO_MEDIA_OFFERS });
+    expect(dialog.querySelector('[data-viewer-menu-button]')).toBeNull();
+    expect(dialog.querySelector('[data-viewer-rail]')).toBeNull();
+    expect(dialog.querySelector('[data-viewer-reply]')).toBeNull();
+  });
+
+  test('UNE seule région vivante annonce les issues, à la racine de la couche', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    expect(dialog.querySelectorAll('[role="status"]')).toHaveLength(1);
+  });
+
+  test('la pellicule marque la page active d’une bordure de l’encre du média (iOS), les autres d’un filet', async () => {
+    const dialog = await mount({ offers: ALL });
+    const [active, other] = Array.from(dialog.querySelectorAll<HTMLElement>('[data-filmstrip-item]'));
+    expect(active!.getAttribute('style')).toContain('var(--color-on-media)');
+    expect(other!.getAttribute('style')).toContain('var(--color-media-hairline)');
+  });
+
+  test('un glissé vers le bas au-delà du seuil ferme (le même geste que story et réel)', async () => {
+    const closed: number[] = [];
+    const dialog = await mount({ offers: ALL, onClose: () => closed.push(1) });
+    const stage = dialog.querySelector<HTMLElement>('.media-viewer-track-frame')!;
+    const pointer = (type: string, y: number) =>
+      new PointerEvent(type, { bubbles: true, cancelable: true, clientX: 100, clientY: y, pointerId: 1, pointerType: 'touch', isPrimary: true });
+    act(() => {
+      stage.dispatchEvent(pointer('pointerdown', 100));
+      stage.dispatchEvent(pointer('pointermove', 280));
+      stage.dispatchEvent(pointer('pointerup', 280));
+    });
+    expect(closed).toEqual([1]);
+  });
+
+  test('un toucher qui a glissé ne bascule pas le plein cadre', async () => {
+    const dialog = await mount({ offers: ALL });
+    const stage = dialog.querySelector<HTMLElement>('.media-viewer-track-frame')!;
+    const pointer = (type: string, x: number) =>
+      new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 100, pointerId: 1, pointerType: 'touch', isPrimary: true });
+    act(() => {
+      stage.dispatchEvent(pointer('pointerdown', 100));
+      stage.dispatchEvent(pointer('pointermove', 130));
+      stage.dispatchEvent(pointer('pointerup', 130));
+      stage.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(dialog.querySelector('[data-viewer-top-bar]')!.getAttribute('data-chrome-yields')).toBe('shown');
+  });
+
+  test('un tap sur le plateau fait céder le chrome : barres inertes ET invisibles', async () => {
+    const dialog = await mount({ offers: ALL, onReply: () => {} });
+    act(() => {
+      dialog.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    const bars = Array.from(dialog.querySelectorAll<HTMLElement>('[data-viewer-top-bar], [data-viewer-bottom-bar]'));
+    expect(bars).toHaveLength(2);
+    expect(bars.map((bar) => bar.getAttribute('data-chrome-yields'))).toEqual(['hidden', 'hidden']);
+    expect(bars.every((bar) => bar.hasAttribute('inert'))).toBe(true);
+  });
+
+  test('#9074 — la légende du pied ouvre ses adresses : la carte par /l/, le lien garde le geste, le plateau ne l’entend pas', async () => {
+    const tracked: MediaCarrier = {
+      ...carrier,
+      caption: { text: 'Le port https://exemple.org/port', language: 'fr', translated: false },
+      trackingLinks: [{ url: 'https://exemple.org/port', token: 'Port9' }],
+    };
+    const dialog = await mount({ offers: ALL, onReply: () => {}, carrier: tracked });
+    const link = dialog.querySelector<HTMLAnchorElement>('[data-viewer-caption-text] a')!;
+    expect(link.getAttribute('href')).toBe('/l/Port9');
+    expect(link.textContent).toBe('m+Port9');
+    expect(link.hasAttribute('data-claims-gesture')).toBe(true);
+    link.addEventListener('click', (event) => event.preventDefault());
+    act(() => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(dialog.querySelector('[data-viewer-top-bar]')!.getAttribute('data-chrome-yields')).toBe('shown');
+  });
+});

@@ -61,6 +61,25 @@ function notificationTypesClause(types: string | undefined): { type?: { in: stri
   return wanted.length === 0 ? {} : { type: { in: wanted } };
 }
 
+/**
+ * Les types dont une ligne LUE quitte la cloche (#8958) — un message, une
+ * réaction, un commentaire déjà ouverts n'ont plus rien à dire, et les garder
+ * faisait s'accumuler l'inbox. Comme `types`, la liste appartient au client :
+ * il sait quelles familles se consomment en les ouvrant.
+ *
+ * Le filtre se joue EN BASE, jamais chez le client : masquer après coup
+ * laisserait la pagination servir des pages entières de lignes invisibles.
+ * Une liste vide ou illisible ne retire rien.
+ */
+function hideReadTypesClause(types: string | undefined): { NOT?: { isRead: true; type: { in: string[] } } } {
+  const hidden = (types ?? '')
+    .split(',')
+    .map((type) => type.trim())
+    .filter((type) => type.length > 0);
+
+  return hidden.length === 0 ? {} : { NOT: { isRead: true, type: { in: hidden } } };
+}
+
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
 
@@ -110,6 +129,11 @@ export async function notificationRoutes(fastify: FastifyInstance) {
               description:
                 'Comma-separated raw notification types to keep (e.g. user_mentioned,mention). Empty or absent = whole inbox.',
             },
+            hideReadTypes: {
+              type: 'string',
+              description:
+                'Comma-separated raw notification types whose READ rows are left out (consumed content). Empty or absent = nothing hidden.',
+            },
           },
         },
         response: {
@@ -138,7 +162,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const userId = request.user!.userId;
-        const { offset, limit = 20, unreadOnly = false, cursor, types } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string; types?: string };
+        const { offset, limit = 20, unreadOnly = false, cursor, types, hideReadTypes } = request.query as { offset?: number; limit?: number; unreadOnly?: boolean; cursor?: string; types?: string; hideReadTypes?: string };
 
         // Récupérer les notifications BRUTES de Prisma (pas encore formatées).
         // Même prédicat que le compte non-lus rendu à côté (`getUnreadCount`) :
@@ -147,6 +171,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
         const visibleWhere = {
           ...visibleNotificationsWhere({ userId, unreadOnly }),
           ...notificationTypesClause(types),
+          ...hideReadTypesClause(hideReadTypes),
         };
 
         // Qui gagne quand les deux arrivent — et pourquoi c'est la PRÉSENCE de

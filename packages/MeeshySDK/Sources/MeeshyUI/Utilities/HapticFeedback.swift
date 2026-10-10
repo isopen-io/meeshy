@@ -59,6 +59,14 @@ public struct HapticFeedback {
     }
 
     @MainActor
+    public static func warning() {
+        #if canImport(UIKit) && os(iOS)
+        notificationGenerator.prepare()
+        notificationGenerator.notificationOccurred(.warning)
+        #endif
+    }
+
+    @MainActor
     public static func error() {
         #if canImport(UIKit) && os(iOS)
         notificationGenerator.prepare()

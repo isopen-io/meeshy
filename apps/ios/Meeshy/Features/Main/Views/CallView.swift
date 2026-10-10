@@ -35,6 +35,8 @@ struct CallView: View {
     @ObservedObject var transcriptionService: CallTranscriptionService
     @State var pulseScale: CGFloat = 1.0
     @State var showControls = true
+    /// #8735 — les touchers du chrome : chacun réarme le masquage automatique,
+    /// et aucun masquage ne tombe sous un doigt posé.
     @State var showTranscript = false
     @State var showOriginalText = false
     @State var showEffectsToolbar = false
@@ -55,10 +57,14 @@ struct CallView: View {
     // the PiP toggles it.
     @State var swapStreams = false
     @State var screenSharePicker = ScreenSharePickerLauncher()
-    // §7.2/f — watchdog: after a delay with no remote video, the "Connexion
-    // vidéo…" spinner turns into a calmer, informative state instead of
-    // spinning forever (the media auto-repair / ICE-restart is §5.8).
-    @State var videoConnectSlow = false
+    // §7.2/f, #8788 — watchdog: after a delay with no remote video, the
+    // "Connexion vidéo…" spinner gives way to the peer's avatar and « Caméra
+    // désactivée » — a peer who sends no image is not loading. Keyed by call
+    // so the next call starts waiting afresh.
+    @State var remoteVideoWaitElapsedCallId: String?
+    // #8410 — la scène de groupe est-elle en hauteur compacte ? Mesurée par
+    // préférence (`noteGroupStageHeight`), jamais lue sur la fenêtre.
+    @State var isStageCompactHeight = false
     let videoConnectWatchdogSeconds: UInt64 = 12
     // §H2 — After 6s in .offering with no answer, surface a calmer label
     // so the user knows the call is ringing, not stuck.
@@ -96,6 +102,8 @@ struct CallView: View {
     /// film redessinerait tout l'écran d'appel à chaque trame.
     @StateObject var captureHost = CallCaptureHost()
     var capture: CallCaptureController { captureHost.controller }
+    /// #9214 — le cadre en direct du duo : choix synchronisé et textes du cadre.
+    @StateObject var liveFrame = CallLiveFrameSession()
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).
@@ -181,60 +189,8 @@ struct CallView: View {
             // primary — the "double frame / overlapping layers" bug. After a PiP
             // swap the local feed becomes the primary, so this would duplicate it
             // again. Hence: self-preview background only when NOT connected.
-            if shouldShowSelfPreviewBackground {
-                // §7.7 — self-preview background mirrors only the front camera.
-                CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
-                    .ignoresSafeArea()
-                Color.black.opacity(0.25)
-                    .ignoresSafeArea()
-            } else {
-                callBackground
-            }
-
-            // Content based on state
-            switch callManager.callState {
-            case .ringing(let isOutgoing):
-                if isOutgoing {
-                    outgoingRingingView
-                } else {
-                    // Audit P1-16 — pass our own @ObservedObject down so
-                    // SwiftUI reuses the same subscription instead of
-                    // re-creating it on each parent body reval.
-                    IncomingCallView(callManager: callManager)
-                }
-            case .offering:
-                // `.offering` = SDP offer émis, en attente de l'answer du
-                // peer = en attente que l'appelé tape "Accepter" sur CallKit.
-                // L'utilisateur attend toujours une réponse humaine — afficher
-                // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
-                // La transition vers connectingView ne se fait qu'après que
-                // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
-                // que le peer a accepté.
-                outgoingRingingView
-            case .connecting:
-                connectingView
-                    .background { CallPreviewBackdrop(preview: .shared) }
-            case .connected:
-                connectedView
-            case .ended(let reason):
-                endedView(reason: reason)
-            case .reconnecting:
-                // §4.3 — keep the connected layout (peer's last frame / tiles)
-                // and overlay a "Reconnexion…" banner instead of blanking to
-                // the full-screen connecting view — the FaceTime/WhatsApp
-                // recovery behaviour. Gated on `hasEstablishedMedia` : un ICE
-                // restart PRÉ-établissement (watchdog `.connecting`) passe
-                // aussi par `.reconnecting` — sans média déjà négocié il n'y a
-                // pas de "dernier frame" à figer et le layout connecté
-                // afficherait un chrono 00:00 mensonger : rester "Connexion…".
-                if callManager.hasEstablishedMedia {
-                    connectedView
-                } else {
-                    connectingView
-                }
-            case .idle:
-                EmptyView()
-            }
+            surfaceBackdrop
+            surfaceContent
 
             // Bandeau top — les bannières émergent de la Dynamic Island
             // (IslandEmergingBanner) et se posent SOUS elle, dans la safe area.
@@ -261,14 +217,7 @@ struct CallView: View {
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
             // est retiré (pipeline de capture audio inexistant — voir
             // CallEffectsOverlay), il ne reste que les filtres vidéo.
-            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
-                CallEffectsOverlay(
-                    isExpanded: $showEffectsToolbar,
-                    isVideoEnabled: callManager.isVideoEnabled,
-                    callManager: callManager
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            surfaceEffects
 
             // Minimize-to-PiP affordance. The drag-down gesture on the call
             // view already minimizes video calls (see audio/video layouts),
@@ -277,7 +226,7 @@ struct CallView: View {
             // top-leading chevron covers both modes and is reachable with one
             // hand on any device size.
             if callManager.callState.isActive {
-                topChrome
+                AnyView(topChrome)
             }
         }
         // BORD À BORD sur les quatre côtés. Le `clipShape` du morph PiP (plus
@@ -307,6 +256,9 @@ struct CallView: View {
         // sombre : sinon ils virent au clair en mode Light et les contrôles/
         // textes blancs deviennent illisibles (white-on-white).
         .environment(\.colorScheme, .dark)
+        // #8735 — chaque contrôle de l'écran d'appel dit qu'il est touché par
+        // CETTE porte (`CallPressLabel`, « Sortie », les rangées du (…)).
+        .environment(\.callChromeInteraction, { noteChromeInteraction($0) })
         .onAppear {
             showTranscript = transcriptionService.isShowingOverlay
             startPulseAnimation()
@@ -383,6 +335,95 @@ struct CallView: View {
         }
     }
 
+    // Débordement de pile sur iPhone (2026-09-30, 5 `.ips` `___chkstk_darwin`
+    // dans `closure #1 in CallView.callSurface`) : la fermeture du `ZStack`
+    // réservait la trame de TOUTES ses branches à la fois, au-delà du 1 Mo de
+    // pile du fil principal d'un appareil (le simulateur en a 8 et ne le voit
+    // pas). Chaque bloc est effacé à sa DÉCLARATION : la fermeture ne porte
+    // plus que des `AnyView`, et chaque corps ne vit que le temps de sa
+    // propre évaluation.
+    private var surfaceBackdrop: AnyView { AnyView(surfaceBackdropBody) }
+
+    @ViewBuilder
+    private var surfaceBackdropBody: some View {
+        if shouldShowSelfPreviewBackground {
+            // §7.7 — self-preview background mirrors only the front camera.
+            LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
+                .ignoresSafeArea()
+            Color.black.opacity(MeeshyOpacity.medium)
+                .ignoresSafeArea()
+        } else {
+            callBackground
+        }
+    }
+
+    private var surfaceContent: AnyView { AnyView(surfaceContentBody) }
+
+    @ViewBuilder
+    private var surfaceContentBody: some View {
+        // Content based on state.
+        //
+        // §4.3 — `.reconnecting` keeps the connected layout (peer's last
+        // frame / tiles) instead of blanking to the full-screen connecting
+        // view — the FaceTime/WhatsApp recovery behaviour — gated on
+        // `hasEstablishedMedia` (`showsConnectedLayout`): un ICE restart
+        // PRÉ-établissement passe aussi par `.reconnecting`, et sans média
+        // négocié le layout connecté afficherait un chrono 00:00 mensonger.
+        //
+        // #8735 — `connectedView` est monté à UN SEUL endroit, hors du
+        // `switch` : deux branches en faisaient deux vues pour SwiftUI, et
+        // un simple creux réseau (`.connected` → `.reconnecting`) détruisait
+        // tout le sous-arbre — le (…) ou le mode ouvert se refermait, la
+        // rangée défilée disparaissait sous le doigt.
+        if showsConnectedLayout {
+            connectedView
+        } else {
+            switch callManager.callState {
+            case .ringing(let isOutgoing):
+                if isOutgoing {
+                    outgoingRingingView
+                } else {
+                    // Audit P1-16 — pass our own @ObservedObject down so
+                    // SwiftUI reuses the same subscription instead of
+                    // re-creating it on each parent body reval.
+                    IncomingCallView(callManager: callManager)
+                }
+            case .offering:
+                // `.offering` = SDP offer émis, en attente de l'answer du
+                // peer = en attente que l'appelé tape "Accepter" sur CallKit.
+                // L'utilisateur attend toujours une réponse humaine — afficher
+                // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
+                // La transition vers connectingView ne se fait qu'après que
+                // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
+                // que le peer a accepté.
+                outgoingRingingView
+            case .connecting:
+                connectingView
+                    .background { CallPreviewBackdrop(preview: .shared) }
+            case .connected, .reconnecting:
+                connectingView
+            case .ended(let reason):
+                endedView(reason: reason)
+            case .idle:
+                EmptyView()
+            }
+        }
+    }
+
+    private var surfaceEffects: AnyView { AnyView(surfaceEffectsBody) }
+
+    @ViewBuilder
+    private var surfaceEffectsBody: some View {
+        if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled && !showsConnectedLayout {
+            CallEffectsOverlay(
+                isExpanded: $showEffectsToolbar,
+                isVideoEnabled: callManager.isVideoEnabled,
+                callManager: callManager
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
     // MARK: - Background
 
     private var callBackground: some View {
@@ -395,7 +436,7 @@ struct CallView: View {
             // (white-on-white). This keeps the call screen correct in .dark AND
             // .light appearance.
             LinearGradient(
-                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
+                colors: [MeeshyColors.surfaceDarkBase, MeeshyColors.surfaceDarkDeep, MeeshyColors.surfaceDarkRaised],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -424,13 +465,13 @@ struct CallView: View {
                     .scaleEffect(1.08)
                     .blur(radius: 20)
                     .clipped()
-                    .opacity(0.55)
+                    .opacity(MeeshyOpacity.strong)
                     .overlay(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(0.50),
-                                Color.black.opacity(0.18),
-                                Color.black.opacity(0.55)
+                                Color.black.opacity(MeeshyOpacity.strong),
+                                Color.black.opacity(MeeshyOpacity.light),
+                                Color.black.opacity(MeeshyOpacity.strong)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -443,7 +484,7 @@ struct CallView: View {
 
             // Animated ambient orbs — decorative only
             Circle()
-                .fill(MeeshyColors.indigo500.opacity(0.15))
+                .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -80, y: -200)
@@ -451,7 +492,7 @@ struct CallView: View {
                 .accessibilityHidden(true)
 
             Circle()
-                .fill(MeeshyColors.indigo400.opacity(0.12))
+                .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 .frame(width: 350, height: 350)
                 .blur(radius: 90)
                 .offset(x: 100, y: 200)
@@ -459,7 +500,7 @@ struct CallView: View {
                 .accessibilityHidden(true)
 
             Circle()
-                .fill(MeeshyColors.error.opacity(0.1))
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                 .frame(width: 250, height: 250)
                 .blur(radius: 70)
                 .offset(x: 80, y: -100)

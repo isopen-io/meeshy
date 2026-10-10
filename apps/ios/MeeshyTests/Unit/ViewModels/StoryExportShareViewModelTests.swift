@@ -367,11 +367,52 @@ final class StoryExportBrandIntroTests: XCTestCase {
         XCTAssertEqual(mock.lastIntro?.username, "ada")
     }
 
+    // MARK: - La story d'un AUTRE (#9953)
+
+    /// « Exporter en vidéo » est offert à tout lecteur : la story d'un autre
+    /// ne porte pas l'interlude d'identité du lecteur, qui ne la signe pas de
+    /// son visage — même règle que l'enregistrement (`StoryPhotoSaveService`).
+    func test_startExport_storyOfSomeoneElse_bakesWithoutTheViewerIntro() async {
+        let mock = MockShareExporter(behavior: .success)
+        let author = makeAuthor()
+        let sut = StoryExportShareViewModel(exporter: mock, brandIntro: { author })
+
+        await sut.startExport(story: makeStoryItem(), authorUsername: "someone-else-\(UUID().uuidString)")
+
+        XCTAssertEqual(mock.prepareCallCount, 1, "l'export d'une story d'autrui démarre")
+        XCTAssertNil(mock.lastIntro, "aucun interlude du lecteur devant la story d'un autre")
+    }
+
     private func makeStoryItem() -> StoryItem {
         StoryItem(id: "s1", content: "Bonjour",
                   storyEffects: StoryEffects(textObjects: [
                       StoryTextObject(id: "t1", text: "Bonjour")
                   ]),
                   createdAt: Date(), expiresAt: Date().addingTimeInterval(3600))
+    }
+}
+
+// MARK: - Qui signe l'export (#9953)
+
+final class StoryExportAuthorshipTests: XCTestCase {
+
+    func test_withoutAuthor_theViewerIsTheAuthor() {
+        let authorship = StoryExportAuthorship.resolve(authorUsername: nil, viewerUsername: "ada")
+        XCTAssertEqual(authorship, StoryExportAuthorship(watermarkHandle: "ada", showsViewerIntro: true))
+    }
+
+    func test_ownStory_signsWithTheViewer_caseInsensitively() {
+        let authorship = StoryExportAuthorship.resolve(authorUsername: "Ada", viewerUsername: "ada")
+        XCTAssertEqual(authorship, StoryExportAuthorship(watermarkHandle: "Ada", showsViewerIntro: true))
+    }
+
+    func test_storyOfSomeoneElse_namesItsAuthor_withoutTheViewerIntro() {
+        let authorship = StoryExportAuthorship.resolve(authorUsername: "grace", viewerUsername: "ada")
+        XCTAssertEqual(authorship, StoryExportAuthorship(watermarkHandle: "grace", showsViewerIntro: false))
+    }
+
+    func test_signedOutViewer_neverSignsSomeoneElsesStory() {
+        let authorship = StoryExportAuthorship.resolve(authorUsername: "grace", viewerUsername: nil)
+        XCTAssertEqual(authorship, StoryExportAuthorship(watermarkHandle: "grace", showsViewerIntro: false))
     }
 }

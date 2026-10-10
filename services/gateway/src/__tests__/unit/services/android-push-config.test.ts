@@ -29,6 +29,16 @@ describe('androidNotificationConfig — le son, le canal et le badge', () => {
   });
 });
 
+describe('androidNotificationConfig — un lecteur qui a coupé le son ne sonne pas, comme sur le web (#8678)', () => {
+  it('a muted banner goes to the silent shell channel: since Android 8 the channel, not the sound key, rings', () => {
+    expect(androidNotificationConfig({ ...banner, muted: true }).channelId).toBe('meeshy_notifications_silent');
+  });
+
+  it('a banner with sound stays on the default shell channel', () => {
+    expect(androidNotificationConfig({ ...banner, muted: false }).channelId).toBe('meeshy_notifications');
+  });
+});
+
 describe('androidNotificationConfig — la bannière d’une conversation remplace la précédente, comme sur le web', () => {
   it('threadId becomes the tag, the analogue of the web tag and of aps thread-id', () => {
     expect(androidNotificationConfig({ ...banner, threadId: 'conv-42' }).tag).toBe('conv-42');
@@ -51,5 +61,29 @@ describe('androidNotificationConfig — une notification corrigée remplace SA b
 
   it('an empty notificationId sets no tag', () => {
     expect(androidNotificationConfig({ ...banner, data: { notificationId: '' } })).not.toHaveProperty('tag');
+  });
+});
+
+describe('androidNotificationConfig — la vignette d’une vidéo s’affiche dans la bannière de la coque (#8860)', () => {
+  const video = (thumbnailUrl: string, extra: Record<string, string> = {}) => ({
+    ...banner,
+    data: { notificationId: 'n-1', thumbnailUrl, ...extra },
+  });
+
+  it('a video thumbnail travels as the system banner image', () => {
+    expect(androidNotificationConfig(video('https://gate.meeshy.me/api/v1/attachments/file/t.jpg')).imageUrl).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/t.jpg',
+    );
+  });
+
+  it('only an https address is an image — a storage key or another scheme is dropped', () => {
+    expect(androidNotificationConfig(video('2026/09/t.jpg'))).not.toHaveProperty('imageUrl');
+    expect(androidNotificationConfig(video('http://gate.meeshy.me/t.jpg'))).not.toHaveProperty('imageUrl');
+  });
+
+  it('a protected message never shows an image, even if a thumbnail slipped into data', () => {
+    expect(
+      androidNotificationConfig(video('https://gate.meeshy.me/t.jpg', { notificationLocKey: 'notification.viewOnce' })),
+    ).not.toHaveProperty('imageUrl');
   });
 });

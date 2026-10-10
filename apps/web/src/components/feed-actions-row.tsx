@@ -76,7 +76,7 @@ export function FeedActionsRow({
   readonly onComment?: CommentHandler;
   readonly onRepost?: RepostHandler;
 }) {
-  const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
+  const ink = tone === 'onDark' ? 'var(--color-on-media)' : 'var(--color-ios-ink-2)';
   const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center justify-between" data-feed-actions>
@@ -149,7 +149,7 @@ export function FeedActionsRow({
         /* Le cœur aimé se peint dans la couleur d'erreur, le signet dans la
            marque (sur un réel, en blanc) — miroir `FeedPostCard.swift:946`,
            rouge seulement quand LE LECTEUR a aimé. */
-        const pressedInk = kind === 'like' ? 'var(--color-error)' : tone === 'onDark' ? 'white' : 'var(--color-ios-brand)';
+        const pressedInk = kind === 'like' ? 'var(--color-error)' : tone === 'onDark' ? 'var(--color-on-media)' : 'var(--color-ios-brand)';
         return (
           <button
             key={item.key}

@@ -71,8 +71,8 @@ public struct TransitionChromeLane: View {
                 .font(.system(size: 8, weight: .semibold))
                 .lineLimit(1)
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xxs)
         .frame(width: Self.badgeWidth(geometry: geometry), alignment: alignment == .leading ? .leading : .trailing)
         .background(
             Capsule().fill(MeeshyColors.indigo500.opacity(isDark ? 0.30 : 0.18))

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// Bande de glyphes sous la vignette d'une carte de « Mes stories ».
 ///
@@ -37,12 +38,12 @@ struct MyStoryActionBar: View, Equatable {
     }
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(glyphs) { glyph in
                 item(glyph)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     @ViewBuilder
@@ -63,13 +64,13 @@ struct MyStoryActionBar: View, Equatable {
     }
 
     private func label(_ glyph: MyStoryGlyph) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: glyph.systemImage)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
             // Jamais de « 0 » décoratif sous la vignette (directive 2026-07-29).
             if let count = counts[glyph], count > 0 {
                 Text("\(count)")
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
             }
         }
         .foregroundColor(.secondary)

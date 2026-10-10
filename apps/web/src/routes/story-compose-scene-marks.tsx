@@ -1,0 +1,191 @@
+import type { StudioInlineSection } from '@/lib/stories/studio-inline-edit';
+import type { StudioObjectActionId, StudioSceneEffect } from '@/lib/stories/studio-scene-columns';
+import type { StudioBackgroundMenuAction } from '@/lib/stories/studio-scene-menu';
+
+/**
+ * **LES GLYPHES DES RAILS DE LA SCÈNE** (#8715, #8794) — même trait que les
+ * marques du chrome (`story-compose-chrome.tsx`) : 24 × 24, trait de 1,8.
+ * Ils répondent aux symboles SF qu'iOS pose aux mêmes places
+ * (`camera.viewfinder`, `sparkles.rectangle.stack`, `camera.filters`,
+ * `square.3.layers.3d.top.filled`, `photo.on.rectangle.angled`).
+ */
+
+const STROKE = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+
+type MarkProps = { readonly size?: number };
+
+/** Le viseur — le premier toucher arme l'objectif (#8711). */
+export function ViewfinderMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M3 8V5a2 2 0 012-2h3M16 3h3a2 2 0 012 2v3M21 16v3a2 2 0 01-2 2h-3M8 21H5a2 2 0 01-2-2v-3" />
+      <circle cx="12" cy="12" r="3.5" />
+    </svg>
+  );
+}
+
+/** L'effet d'OUVERTURE — une scène qui en recouvre une autre, et son éclat. */
+export function OpeningEffectMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="3" y="8" width="13" height="13" rx="2.5" />
+      <path d="M7 5h11a2 2 0 012 2v10" />
+      <path d="M9.5 11.5l.8 1.7 1.7.8-1.7.8-.8 1.7-.8-1.7-1.7-.8 1.7-.8z" />
+    </svg>
+  );
+}
+
+/** L'effet VISUEL — trois filtres qui se recouvrent. */
+export function VisualEffectMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <circle cx="12" cy="8.5" r="5" />
+      <circle cx="8.5" cy="14.5" r="5" />
+      <circle cx="15.5" cy="14.5" r="5" />
+    </svg>
+  );
+}
+
+/** « Mettre en fond » / « Remplacer le fond » — une image qui passe derrière. */
+export function BackgroundMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="3" y="6" width="14" height="14" rx="2.5" />
+      <path d="M7 3h12a2 2 0 012 2v12" />
+      <path d="M3 16l4-4 4 4 2-2 4 4" />
+    </svg>
+  );
+}
+
+/** « Décrire » (#8849) — une image et les lignes qui la disent : sa légende et
+ * son texte alternatif. */
+export function DescribeMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="3" y="3" width="18" height="11" rx="2.5" />
+      <path d="M3 11l4-3.5 4 3.5 3-2.5 4 3.5" />
+      <path d="M4 18h16M4 21h10" />
+    </svg>
+  );
+}
+
+/** « Modifier » — le crayon. */
+export function EditMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 20h4L19 9l-4-4L4 16z" />
+      <path d="M13.5 6.5l4 4" />
+    </svg>
+  );
+}
+
+/** « Monter » / « Descendre » — une flèche dans un plan. */
+export function LayerStepMark({ size = 20, up }: MarkProps & { readonly up: boolean }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 19h16" />
+      <path d={up ? 'M12 15V4M7.5 8.5L12 4l4.5 4.5' : 'M12 4v11M7.5 10.5L12 15l4.5-4.5'} />
+    </svg>
+  );
+}
+
+/** « Dupliquer » — deux feuilles. */
+export function DuplicateMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="8" y="8" width="12" height="12" rx="2.5" />
+      <path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2" />
+    </svg>
+  );
+}
+
+/** « Retirer » — la corbeille. */
+export function TrashMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" />
+    </svg>
+  );
+}
+
+/** « Passer au premier plan » — trois plans, le haut plein. */
+export function ForegroundMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M12 3l9 5-9 5-9-5z" fill="currentColor" />
+      <path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5" />
+    </svg>
+  );
+}
+
+/** Le glyphe d'une action d'objet ou du fond — le MÊME au menu d'appui long
+ * et à la colonne droite. */
+export function ObjectActionMark({ action, size = 20 }: { readonly action: StudioObjectActionId | StudioBackgroundMenuAction; readonly size?: number }) {
+  if (action === 'edit') return <EditMark size={size} />;
+  if (action === 'raise' || action === 'lower') return <LayerStepMark size={size} up={action === 'raise'} />;
+  if (action === 'duplicate') return <DuplicateMark size={size} />;
+  if (action === 'set-background' || action === 'replace-background') return <BackgroundMark size={size} />;
+  if (action === 'forward') return <ForegroundMark size={size} />;
+  if (action === 'retake') return <ViewfinderMark size={size} />;
+  return <TrashMark size={size} />;
+}
+
+/** La famille d'effets de la scène, par son glyphe. */
+export function EffectMark({ effect, size = 20 }: { readonly effect: StudioSceneEffect; readonly size?: number }) {
+  return effect === 'opening' ? <OpeningEffectMark size={size} /> : <VisualEffectMark size={size} />;
+}
+
+/** « Couper » (#9136) — des ciseaux : la vidéo garde sa fenêtre. */
+export function TrimMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M8.6 7.6L20 18M8.6 16.4L20 6" />
+    </svg>
+  );
+}
+
+/** « Son » (#9136) — un haut-parleur et son onde. */
+export function SoundMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      <path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" />
+    </svg>
+  );
+}
+
+/** « Recadrer » (#9136) — les deux équerres du recadrage. */
+export function CropMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M6 2.5V16a2 2 0 002 2h13.5" />
+      <path d="M2.5 6H16a2 2 0 012 2v13.5" />
+    </svg>
+  );
+}
+
+/** Les tracés des SOUS-OUTILS d'un objet (#9140) — police, effet, couleur,
+ * alignement, fond du texte, langue, pose ; le calque reprend « Décrire » et
+ * le filtre du fond. Mêmes places que les symboles SF d'iOS
+ * (`TextEditTool.sfSymbol`). */
+const SECTION_PATHS = {
+  style: 'M5 5h14M12 5v14M9 19h6',
+  effect: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z',
+  color: 'M12 3.5c3.5 4.2 6 7.4 6 10.5a6 6 0 01-12 0c0-3.1 2.5-6.3 6-10.5z',
+  align: 'M4 6h16M7 10h10M4 14h16M7 18h10',
+  background: 'M6 5h12a3 3 0 013 3v8a3 3 0 01-3 3H6a3 3 0 01-3-3V8a3 3 0 013-3zM9 9.5h6M12 9.5V15',
+  language: 'M12 3a9 9 0 110 18 9 9 0 010-18zM3 12h18M12 3c2.5 2.6 3.6 5.6 3.6 9s-1.1 6.4-3.6 9M12 3c-2.5 2.6-3.6 5.6-3.6 9s1.1 6.4 3.6 9',
+  pose: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
+} as const satisfies Record<Exclude<StudioInlineSection, 'describe' | 'filter'>, string>;
+
+export function InlineSectionMark({ section, size = 20 }: { readonly section: StudioInlineSection; readonly size?: number }) {
+  if (section === 'describe') return <DescribeMark size={size} />;
+  if (section === 'filter') return <VisualEffectMark size={size} />;
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d={SECTION_PATHS[section]} />
+    </svg>
+  );
+}

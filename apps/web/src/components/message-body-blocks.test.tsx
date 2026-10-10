@@ -61,6 +61,20 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html).not.toContain('data-sticker-emoji');
   });
 
+  test('un gabarit MEE (#9034) rend l’image jointe tant que son catalogue n’est pas chargé', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{ templateId: 'mee.mee-coucou', emoji: '👋' }} picture={picture('a4')} side={160} />);
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
+  test('un sticker de PACK (#9141) rend son image jointe — le GIF d’un pack cinématique reste animé, l’Instant porte son texte', () => {
+    const html = renderToStaticMarkup(
+      <StickerArtwork sticker={{ templateId: 'pack.chats-de-paris.dodo', emoji: '😴', slots: { texte: 'Léa' } }} picture={picture('a6')} side={160} />,
+    );
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
   test('aucune pièce jointe ⇒ le glyphe, l’emoji du sticker s’il en a un, sinon le repli générique', () => {
     const withEmoji = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🎉' }} picture={undefined} side={160} />);
     expect(withEmoji).toContain('🎉');
@@ -70,7 +84,7 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
 
   test('le glyphe RÉSERVE son encombrement visuel — police 90, AUCUNE boîte fixe plus petite que lui (#7881)', () => {
     const html = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🔥' }} picture={undefined} side={160} />);
-    expect(html).toContain('font-size:90px');
+    expect(html).toContain('font-size:180px');
     /* La boîte 60×60 (`BubbleSticker.emojiBox`) est l'ASSIETTE du mouvement
        côté iOS, jamais un cadre : `MessageStickerArtwork.swift:138-141` pose
        le `Text` en `.fixedSize()`, qui occupe la taille NATURELLE du glyphe.
@@ -89,6 +103,13 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html112).toContain('width="112"');
     const html160 = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('a5')} side={160} />);
     expect(html160).toContain('width="160"');
+  });
+
+  test('deux fois plus grand (#9319), mais jamais plus large que sa colonne', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('a7')} side={320} />);
+    expect(html).toContain('width="320"');
+    expect(html).toContain('max-width:100%');
+    expect(html).toContain('height:auto');
   });
 });
 

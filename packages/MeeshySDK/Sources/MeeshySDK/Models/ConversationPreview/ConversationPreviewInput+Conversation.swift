@@ -96,7 +96,8 @@ public extension ConversationPreviewInput {
             typing: typing,
             draft: draft,
             lastReaction: conversation.lastReaction,
-            lastMessage: ConversationPreviewMessage(conversation: conversation)
+            lastMessage: ConversationPreviewMessage(conversation: conversation),
+            isDirect: conversation.type == .direct
         )
     }
 }

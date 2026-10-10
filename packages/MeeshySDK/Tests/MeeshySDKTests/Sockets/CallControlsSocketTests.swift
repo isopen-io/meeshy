@@ -37,6 +37,14 @@ final class CallControlsSocketTests: XCTestCase {
         XCTAssertEqual(event.invitedBy, "u1")
     }
 
+    func test_inviteSettled_decodesWhoseInvitationEnded() throws {
+        let event = try decode(CallInviteSettledEvent.self, #"{"callId":"c1","userId":"u2"}"#)
+
+        XCTAssertEqual(event, CallInviteSettledEvent(callId: "c1", userId: "u2"))
+        XCTAssertEqual(CallControlSocketEvent.inviteDeclined(event).callId, "c1")
+        XCTAssertEqual(CallControlSocketEvent.inviteExpired(event).callId, "c1")
+    }
+
     func test_mutedByModerator_decodes() throws {
         let event = try decode(CallMutedByModeratorEvent.self, #"{"callId":"c1","byUserId":"u1"}"#)
 

@@ -9,6 +9,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
+import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
   CommentAddedEventData,
@@ -106,10 +108,12 @@ import type {
   CallMuteParticipantEvent,
   CallMutedByModeratorEvent,
   CallParticipantInvitedEvent,
+  CallInviteSettledEvent,
   CallReactionEvent,
   CallReactionReceivedEvent,
 } from '../call-controls.js';
 import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call-preview.js';
+import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
 import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
@@ -211,6 +215,10 @@ import type {
   TypingActionData,
   TypingEvent,
   UserStatusEvent,
+  ViewingActionData,
+  ViewingActivityData,
+  ViewingEvent,
+  ViewingSnapshotEvent,
 } from './presence.js';
 import type {
   AttachmentReactionUpdateEventData,
@@ -246,6 +254,12 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
+  [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
+  [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
+  [SERVER_EVENTS.ENGAGEMENT_POST_UPDATED]: (data: PostEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
@@ -283,8 +297,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
   [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_INVITED]: (data: CallParticipantInvitedEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_DECLINED]: (data: CallInviteSettledEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
   [SERVER_EVENTS.CALL_REACTION_RECEIVED]: (data: CallReactionReceivedEvent) => void;
+  [SERVER_EVENTS.CALL_FRAME_SELECTED]: (data: CallLiveFrameSelectedEvent) => void;
   [SERVER_EVENTS.CALL_PREVIEW_REQUESTED]: (data: CallPreviewRequestedEvent) => void;
   [SERVER_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
@@ -444,10 +461,14 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS]: (data: MessageSendWithAttachmentsData, callback?: (response: SocketIOResponse<MessageSendResponseData>) => void) => void;
   [CLIENT_EVENTS.MESSAGE_EDIT]: (data: MessageEditData, callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.MESSAGE_DELETE]: (data: MessageDeleteData, callback?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.MESSAGE_CAPTURE_DETECTED]: (data: ContentCaptureReportInput, callback?: (response: ContentCaptureAck) => void) => void;
   [CLIENT_EVENTS.CONVERSATION_JOIN]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.CONVERSATION_LEAVE]: (data: ConversationActionData) => void;
   [CLIENT_EVENTS.TYPING_START]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**
@@ -576,6 +597,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_INVITE_PARTICIPANT]: (data: CallInviteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_MUTE_PARTICIPANT]: (data: CallMuteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_REACTION]: (data: CallReactionEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_FRAME_SELECT]: (data: CallLiveFrameSelectEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_PREVIEW_REQUEST]: (data: CallPreviewRequestEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;

@@ -188,7 +188,8 @@ public actor ConversationStore {
 
     // MARK: - Hydration
 
-    public func hydrate(_ conv: MeeshyConversation) {
+    public func hydrate(_ incoming: MeeshyConversation) {
+        let conv = incoming.imposingServedArchive()
         conversations[conv.id] = conv
         // Seed or refresh the per-conv subject and the list snapshot.
         if let existing = subjects.subject(for: conv.id, initial: { conv }) {
@@ -198,7 +199,7 @@ public actor ConversationStore {
     }
 
     public func hydrateList(_ convs: [MeeshyConversation]) {
-        for conv in convs {
+        for conv in convs.map({ $0.imposingServedArchive() }) {
             conversations[conv.id] = conv
             if let existing = subjects.subject(for: conv.id, initial: { conv }) {
                 existing.send(conv)
@@ -252,7 +253,7 @@ public actor ConversationStore {
             // moteur pour un résultat identique.
             merged = ConversationSyncEngine.reconcileUnread(
                 incoming: merged, local: existing, openConversationId: nil
-            )
+            ).imposingServedArchive()
             conversations[merged.id] = merged
             if let subject = subjects.subject(for: merged.id, initial: { merged }) {
                 subject.send(merged)
@@ -287,6 +288,9 @@ public actor ConversationStore {
         guard var conv = conversations[convId] else {
             throw ConversationStoreError.unknownConversation(convId)
         }
+        // Global d'un mineur ne sort pas des archives (#9929) : aucun geste
+        // optimiste, aucune écriture en file — la passerelle l'ignorerait.
+        if case .setArchived(false) = mutation, conv.isArchiveImposed { return }
         let snapshot = conv.userState
 
         // 1. Optimistic mutation + candidate version bump.
@@ -640,6 +644,10 @@ public actor ConversationStore {
                     rowSenderName: conv.lastMessageSenderName
                 ), auteur != conv.lastMessageSenderName {
                     conv.lastMessageSenderName = auteur
+                    conv.lastMessageSenderUserId = ConversationListAuthor.peerUserId(
+                        senderUserId: event.senderUserId, senderName: auteur,
+                        readerId: event.readerId, youLabel: event.youLabel
+                    )
                     changed = true
                 }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
@@ -683,6 +691,12 @@ public actor ConversationStore {
             conv.activeCall = call
             changed = true
         }
+        // #9026 — le rang SERVI, monotone : un rang plus ancien arrivé en retard
+        // ne redescend jamais la ligne (l'activité serveur l'est aussi).
+        if let rank = event.listRankAt, rank > (conv.listRankAt ?? .distantPast) {
+            conv.listRankAt = rank
+            changed = true
+        }
         // Un DM ne porte JAMAIS le titre de la base : `APIConversation
         // .toConversation` l'écarte explicitement et pose à la place le nom du
         // participant d'en face. Le payload socket, lui, porte le titre BRUT —
@@ -716,9 +730,9 @@ public actor ConversationStore {
     }
 
     /// Apply a `user:updated` socket event — un CONTACT a changé son profil
-    /// public (nom, avatar, bannière). Ne touche QUE les conversations
-    /// directes dont ce contact est l'interlocuteur : dans un groupe, la ligne
-    /// porte l'identité du GROUPE, pas celle d'un membre.
+    /// public (nom, avatar, bannière). L'identité d'une ligne ne bouge que dans
+    /// les directs dont il est l'interlocuteur — un groupe porte la sienne ;
+    /// l'auteur du dernier message, lui, suit dans toute ligne (#9359).
     public func applyUserUpdated(_ event: UserUpdatedEvent) {
         // Snapshot AVANT la boucle : `commit` réécrit `conversations`, et itérer
         // la vue `.values` d'un dictionnaire qu'on mute est un comportement
@@ -737,19 +751,28 @@ public actor ConversationStore {
     /// La ligne d'une conversation directe est hydratée par le REST depuis le
     /// participant d'en face : `title` ← `APIConversationUser.name`,
     /// `participantAvatarURL` ← `resolvedAvatar`, etc. Le socket rejoue
-    /// exactement ces champs-là, avec le même résolveur de nom, sinon la ligne
-    /// dirait deux choses différentes selon le transport qui l'a remplie.
+    /// exactement ces champs-là, sinon la ligne dirait deux choses différentes
+    /// selon le transport qui l'a remplie. Le nom est le nom COMPOSÉ
+    /// (`UserUpdatedEvent.composedName`, #9307) : c'est lui que la passerelle
+    /// écrit dans `Participant.displayName` au renommage, donc lui que le REST
+    /// relit.
     public nonisolated static func merging(
         _ conversation: MeeshyConversation,
         withUserUpdate event: UserUpdatedEvent
     ) -> MeeshyConversation? {
-        guard conversation.type == .direct,
-              conversation.participantUserId == event.userId else { return nil }
-
         var conv = conversation
         var changed = false
 
-        if let name = event.resolvedDisplayName, name != conv.title {
+        // L'AUTEUR de la dernière ligne (« Bob : … » d'un groupe, #9359) suit
+        // la loi unique de l'expéditeur, quel que soit le type de conversation.
+        if let author = event.repaintedLastMessageAuthor(of: conversation) {
+            conv.lastMessageSenderName = author
+            changed = true
+        }
+        guard conversation.type == .direct,
+              conversation.participantUserId == event.userId else { return changed ? conv : nil }
+
+        if let name = event.composedName, name != conv.title {
             conv.title = name
             changed = true
         }
@@ -872,14 +895,15 @@ public actor ConversationStore {
         return s
     }
 
-    private func commit(_ conv: MeeshyConversation) {
+    private func commit(_ candidate: MeeshyConversation) {
+        let conv = candidate.imposingServedArchive()
         conversations[conv.id] = conv
         subjects.send(conv)
         publishList()
     }
 
     private func publishList() {
-        let snapshot = Array(conversations.values).sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let snapshot = Array(conversations.values).sorted { $0.listActivityAt > $1.listActivityAt }
         subjects.list.send(snapshot)
     }
 

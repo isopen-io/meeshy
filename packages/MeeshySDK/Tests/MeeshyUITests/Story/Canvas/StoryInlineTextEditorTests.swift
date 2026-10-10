@@ -177,23 +177,21 @@ final class StoryInlineTextEditorTests: XCTestCase {
         XCTAssertGreaterThan(editor.font?.pointSize ?? 0, small)
     }
 
-    /// Le curseur de taille écrit `fontSize` ET remet `scale` à 1 : le champ
-    /// lit le PRODUIT des deux, donc un `scale` résiduel gonflerait le rendu
-    /// au-delà de la valeur affichée par le curseur.
-    func test_theInlineEditorReadsTheProductOfSizeAndScale() {
+    /// Le champ écrit à la taille de l'ÉDITION (#9139) : le pincement agrandit
+    /// le cadre entier sur la scène, jamais la police contre la largeur de
+    /// coupe — sans quoi rouvrir la saisie d'un texte agrandi le recouperait.
+    func test_theInlineEditorWritesAtTheEditionSize_scaleNeverEntersTheFont() {
         let editor = StoryInlineTextEditor()
         var text = StoryTextObject(id: "t1", text: "Bonjour")
         text.fontSize = 50
-        text.scale = 2
-
+        text.scale = 1
         editor.apply(textObject: text, geometry: geometry, setText: true)
-        let doubled = editor.font?.pointSize ?? 0
+        let édition = editor.font?.pointSize ?? 0
 
-        TextEditToolOptions.applyingSliderValue(50, to: &text)
+        text.scale = 2
         editor.apply(textObject: text, geometry: geometry, setText: false)
 
-        XCTAssertEqual(text.scale, 1)
-        XCTAssertLessThan(editor.font?.pointSize ?? 0, doubled)
+        XCTAssertEqual(editor.font?.pointSize ?? 0, édition, accuracy: 0.001)
     }
 
     // MARK: - Hauteur bornée et défilement (spec 2026-08-01)

@@ -75,6 +75,43 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertFalse(roster.contains("b"))
     }
 
+    // MARK: - Nom d'un groupe sans son principal (#9091)
+
+    func test_callTitle_titledGroup_isTheGroupTitle() {
+        let roster = GroupCallRoster(localUserId: "me").admitting(arrival("c", name: "Chloé"))
+
+        XCTAssertEqual(roster.callTitle(groupTitle: "Équipe"), "Équipe")
+    }
+
+    func test_callTitle_untitledGroup_namesTheRemainingMembers() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("c", name: "Chloé"))
+            .admitting(arrival("d", name: "Dia"))
+
+        XCTAssertEqual(roster.callTitle(groupTitle: nil), "Chloé, Dia")
+        XCTAssertEqual(roster.callTitle(groupTitle: "  "), "Chloé, Dia", "un titre blanc n'est pas un titre")
+    }
+
+    func test_callTitle_untitledGroupBeyondTwo_namesTwoAndCountsTheRest() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("c", name: "Chloé"))
+            .admitting(arrival("d", name: "Dia"))
+            .admitting(arrival("e", name: "Eli"))
+
+        let title = roster.callTitle(groupTitle: nil)
+
+        XCTAssertTrue(title.hasPrefix("Chloé, Dia"), title)
+        XCTAssertTrue(title.contains("1"), title)
+        XCTAssertFalse(title.contains("Eli"), title)
+    }
+
+    func test_callTitle_unnamedOrNoMember_isNeverEmpty() {
+        let unnamed = GroupCallRoster(localUserId: "me").admitting(arrival("c"))
+
+        XCTAssertFalse(unnamed.callTitle(groupTitle: nil).isEmpty)
+        XCTAssertFalse(GroupCallRoster(localUserId: "me").callTitle(groupTitle: nil).isEmpty)
+    }
+
     // MARK: - Tri des signaux
 
     func test_destination_directCall_alwaysPrimary() {
@@ -111,6 +148,19 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "b", localUserId: "me", primaryUserId: "b", isInCall: true))
         XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "c", localUserId: "me", primaryUserId: "b", isInCall: false))
         XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "c", localUserId: "me", primaryUserId: nil, isInCall: true))
+    }
+
+    /// #9085 — le siège du principal libéré : tout le groupe passe par le maillage,
+    /// l'ancien principal compris s'il revient.
+    func test_destination_vacatedPrimary_everyMemberGoesToMesh() {
+        XCTAssertEqual(GroupSignalRouting.destination(from: "b", localUserId: "me", primaryUserId: nil, isGroupCall: true, primaryVacated: true), .mesh(userId: "b"))
+        XCTAssertEqual(GroupSignalRouting.destination(from: "me", localUserId: "me", primaryUserId: nil, isGroupCall: true, primaryVacated: true), .ignore)
+        XCTAssertEqual(GroupSignalRouting.destination(from: "b", localUserId: "me", primaryUserId: nil, isGroupCall: false, primaryVacated: true), .primary)
+    }
+
+    func test_shouldOfferToArrival_vacatedPrimary_offersToEveryArrival() {
+        XCTAssertTrue(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "b", localUserId: "me", primaryUserId: nil, isInCall: true, primaryVacated: true))
+        XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "me", localUserId: "me", primaryUserId: nil, isInCall: true, primaryVacated: true))
     }
 
     // MARK: - Grille
@@ -222,11 +272,55 @@ final class GroupCallModelTests: XCTestCase {
     }
 
     func test_stage_shownOnlyFromTwoRemoteMembers() {
-        let one = GroupCallRoster(localUserId: "me").admitting(arrival("b"))
+        let one = GroupCallRoster(localUserId: "me").admitting(arrival("b"), isPrimary: true)
         let two = one.admitting(arrival("c"))
 
         XCTAssertFalse(GroupCallStage.isShown(isMeshActive: true, roster: one))
         XCTAssertTrue(GroupCallStage.isShown(isMeshActive: true, roster: two))
         XCTAssertFalse(GroupCallStage.isShown(isMeshActive: false, roster: two))
+    }
+
+    /// #9085 — le principal parti, il peut ne rester qu'UN membre, tenu par le
+    /// maillage : l'écran 1:1 ne montre que le principal, la grille doit rester.
+    func test_stage_shownForASingleMeshMember() {
+        let meshOnly = GroupCallRoster(localUserId: "me").admitting(arrival("c"))
+        let primaryOnly = GroupCallRoster(localUserId: "me").admitting(arrival("b"), isPrimary: true)
+
+        XCTAssertTrue(GroupCallStage.isShown(isMeshActive: true, roster: meshOnly))
+        XCTAssertFalse(GroupCallStage.isShown(isMeshActive: true, roster: primaryOnly))
+    }
+
+    // MARK: - Invitation (#9084)
+
+    private func offer(_ json: String) throws -> CallOfferData {
+        try JSONDecoder().decode(CallOfferData.self, from: Data(json.utf8))
+    }
+
+    /// L'invitant est celui qui offrira à l'invité : c'est lui le principal,
+    /// et la réponse de l'invité doit lui revenir — pas à l'initiateur.
+    func test_principalUserId_invitation_isTheInviter() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"},"conversationType":"direct","invitedBy":{"userId":"a","username":"alice"},"isGroup":true}"#)
+
+        XCTAssertEqual(event.principalUserId, "a")
+        XCTAssertTrue(event.isGroupCall)
+    }
+
+    func test_principalUserId_plainDirectCall_isTheInitiator() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"},"conversationType":"direct"}"#)
+
+        XCTAssertEqual(event.principalUserId, "b")
+        XCTAssertFalse(event.isGroupCall)
+    }
+
+    func test_isGroupCall_groupConversationWithoutInvitation_isGroup() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"g","initiator":{"userId":"b","username":"bob"},"conversationType":"group"}"#)
+
+        XCTAssertTrue(event.isGroupCall)
+    }
+
+    func test_isGroupCall_oldGatewayWithoutType_isNotGroup() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"}}"#)
+
+        XCTAssertFalse(event.isGroupCall)
     }
 }

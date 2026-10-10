@@ -180,6 +180,12 @@ enum AppSourceGuard {
         // trois lignes plus haut, à la création plutôt qu'au déplacement.
         "Meeshy/Features/Main/Composer/ComposerMediaRetraction.swift",
         "Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift",
+        // **Les poses de la feuille de stickers, sorties du meuble au #9189** :
+        // la feuille est devenue UNE pour la conversation et la scène, et ce
+        // que la scène fait d'un choix vit dans cette règle. Sans son adresse,
+        // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
+        // un meuble qui ne pose plus rien lui-même.
+        "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
     ]
 
     static func composerHostURLs() -> [URL] {

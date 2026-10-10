@@ -79,17 +79,22 @@ final class SignupViewModelPhasesTests: XCTestCase {
     }
 
     private func toCard(_ sut: SignupViewModel) {
-        sut.skipPhone()
+        sut.form.phoneDigits = "0612345678"
         sut.form.email = "awa@example.com"
     }
 
     // MARK: - Phases 1 à 3
 
-    func test_skipPhone_revealsTheEmail() {
+    /// #9343 — sans numéro plausible, rien ne s'ouvre : ni l'adresse, ni la
+    /// carte, quelle que soit l'adresse tapée.
+    func test_withoutAPlausiblePhone_theEmailNeverAppears() {
         let (sut, _, _, _) = makeSUT()
+        sut.form.email = "awa@example.com"
         XCTAssertEqual(sut.phase, .phone)
-        sut.skipPhone()
-        XCTAssertEqual(sut.phase, .email)
+        sut.form.phoneDigits = "1111100000"
+        XCTAssertEqual(sut.phase, .phone)
+        sut.form.phoneDigits = "42424242"
+        XCTAssertEqual(sut.phase, .phone)
     }
 
     func test_plausiblePhone_revealsTheEmail() {
@@ -209,16 +214,40 @@ final class SignupViewModelPhasesTests: XCTestCase {
         XCTAssertNil(sut.sessionOpener())
     }
 
-    // MARK: - L'alerte « sans numéro » (#8040)
+    // MARK: - Le numéro, requis par l'écran (#9343)
 
-    func test_requestSubmit_emailOnlyChosen_createsWithoutNudging() async {
+    func test_requestSubmit_withAPlausiblePhone_createsWithTheNumber() async {
         let (sut, registrar, _, _) = makeSUT()
         toCard(sut)
 
         let outcome = await sut.requestSubmit()
 
         XCTAssertEqual(outcome, .created)
-        XCTAssertFalse(sut.isPhoneNudgePresented)
         XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "0612345678")
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneCountryCode, "FR")
+    }
+
+    /// Un numéro donné puis EFFACÉ : l'adresse et la carte restent (monotonie),
+    /// mais « S'inscrire » s'éteint et l'absence se dit sous le champ.
+    func test_phoneErasedAfterTheCard_disablesSignUpAndSaysWhy() {
+        let (sut, _, _, _) = makeSUT()
+        toCard(sut)
+        sut.form.phoneDigits = ""
+
+        XCTAssertEqual(sut.phase, .card)
+        XCTAssertEqual(sut.primaryAction, .signUp(enabled: false))
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
+    }
+
+    func test_validateNow_withoutPhone_sendsNothing() async {
+        let (sut, registrar, _, _) = makeSUT()
+        toCard(sut)
+        sut.form.phoneDigits = ""
+
+        let created = await sut.validateNow()
+
+        XCTAssertFalse(created)
+        XCTAssertEqual(registrar.registerCallCount, 0)
     }
 }

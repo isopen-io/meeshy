@@ -85,6 +85,11 @@ const frThreadStates = {
      (`media.reactions.badge.a11y`, `media.reactions.badge.mine.a11y`). */
   'media.reactions.badge.a11y': 'Réactions',
   'media.reactions.badge.mine.a11y': 'dont la vôtre',
+
+  /* LA PASTILLE D'UN AVIS D'ARRIVÉE SANS COMPTE (#9710) — `bubble.joinNotice.noAccount`
+     du catalogue iOS. Elle était EN DUR, en français, sous un fil servi en
+     sept langues. */
+  'message.join.noAccount': 'sans compte',
 } as const;
 
 export default frThreadStates;

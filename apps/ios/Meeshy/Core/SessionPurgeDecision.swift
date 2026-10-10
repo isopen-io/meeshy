@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// **Quand la base locale de messages doit être purgée** (#5968).
 ///
@@ -29,5 +30,31 @@ enum SessionPurgeDecision {
     nonisolated static func shouldPurgeLocalMessages(sessionResolved: Bool,
                                                      isAuthenticated: Bool) -> Bool {
         sessionResolved && !isAuthenticated
+    }
+}
+
+/// **Quelle base locale des messages la session lit** (#8656).
+///
+/// Même table de vérité que la purge, lue dans l'autre sens :
+///
+/// | `sessionResolved` | `isAuthenticated` | base |
+/// |---|---|---|
+/// | `false` | `false` | inchangée — personne n'a encore regardé : la base ouverte au démarrage (celle du compte du trousseau) reste servie, cache-first |
+/// | indifférent | `true` | celle du compte ACTIF |
+/// | `true` | `false` | celle de personne |
+///
+/// `isAuthenticated` passe à `true` AVANT `hasResolvedStoredSession` au
+/// démarrage à froid : la base d'un compte restauré se sert sans attendre.
+nonisolated enum MessageStoreTarget: Equatable {
+    case unchanged
+    case account(MessageStoreAccountKey?)
+
+    nonisolated static func resolve(
+        sessionResolved: Bool,
+        isAuthenticated: Bool,
+        activeKey: MessageStoreAccountKey?
+    ) -> MessageStoreTarget {
+        if isAuthenticated { return .account(activeKey) }
+        return sessionResolved ? .account(nil) : .unchanged
     }
 }

@@ -218,8 +218,14 @@ test_endpoint() {
 }
 
 test_endpoint "Gateway Health" "https://gate.staging.meeshy.me/health"
-test_endpoint "ML Service Health" "https://ml.staging.meeshy.me/health"
 test_endpoint "Frontend" "https://staging.meeshy.me"
+# L'API ML n'a aucun routage public (#9662) : sonde interne seulement.
+echo -n "   Testing ML Service Health (interne)... "
+if ssh $REMOTE_HOST "docker exec meeshy-translator-staging python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\"" >/dev/null 2>&1; then
+    echo "✅"
+else
+    echo "⏳ (le chargement des modèles peut prendre quelques minutes)"
+fi
 
 echo ""
 
@@ -234,7 +240,7 @@ echo ""
 echo "🌐 URLs disponibles:"
 echo "   - Frontend:  https://staging.meeshy.me"
 echo "   - Gateway:   https://gate.staging.meeshy.me"
-echo "   - ML:        https://ml.staging.meeshy.me"
+echo "   - ML:        interne seulement (translator-staging:8000, #9662)"
 echo "   - Traefik:   https://traefik.staging.meeshy.me"
 echo ""
 echo "🔒 MongoDB UI / Redis UI (#6254 — plus routées par Traefik, accès tunnel SSH uniquement) :"

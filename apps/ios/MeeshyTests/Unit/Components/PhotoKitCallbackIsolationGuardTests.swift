@@ -66,14 +66,15 @@ final class PhotoKitCallbackIsolationGuardTests: XCTestCase {
         )
     }
 
-    /// Une closure `@Sendable` par callback PhotoKit : thumbnail, preview,
-    /// videoPlayerItem, resolveImage, resolveVideo.
+    /// Une closure `@Sendable` par callback PhotoKit : thumbnails, preview,
+    /// videoPlayerItem, resolveForAttachment (octets, #9683), resolveImage,
+    /// resolveVideo.
     func test_recentMediaStrip_declaresOneSendableCompletionPerPhotoKitCallback() throws {
         let src = try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
 
         XCTAssertEqual(
-            occurrences(of: "let completion: @Sendable", in: src), 5,
-            "Les 5 callbacks PhotoKit (thumbnail, preview, videoPlayerItem, resolveImage, resolveVideo) doivent chacun passer par un local `@Sendable`"
+            occurrences(of: "let completion: @Sendable", in: src), 6,
+            "Les 6 callbacks PhotoKit (thumbnails, preview, videoPlayerItem, resolveForAttachment, resolveImage, resolveVideo) doivent chacun passer par un local `@Sendable`"
         )
 
         XCTAssertTrue(
@@ -88,29 +89,23 @@ final class PhotoKitCallbackIsolationGuardTests: XCTestCase {
 
     /// La bande d'échantillons rendait des vignettes DÉFINITIVEMENT floues :
     /// `deliveryMode = .fastFormat` livre un rendu dégradé que PhotoKit ne
-    /// remplace JAMAIS par une meilleure version (contrairement à
-    /// `.opportunistic`, qui rappelle avec la version nette).
+    /// remplace JAMAIS par une meilleure version.
     ///
-    /// L'invariant que `.fastFormat` protégeait ici n'est pas la vitesse mais le
-    /// callback UNIQUE : `withCheckedContinuation` plante si on le reprend deux
-    /// fois. Or `.highQualityFormat` est mono-callback lui aussi — c'est déjà ce
-    /// que font `preview(for:)` et `resolveImage(_:)` dans le même fichier. Seul
-    /// `.opportunistic` rappelle plusieurs fois : c'est LUI qui est interdit
-    /// ici, pas la qualité. La sûreté de la continuation ne coûte donc rien.
+    /// `.opportunistic` (#9683) livre une version rapide — souvent servie par
+    /// le cache de `PHCachingImageManager` — puis la version nette. Son rappel
+    /// MULTIPLE l'interdisait tant que la vignette passait par une
+    /// continuation, qui plante si on la reprend deux fois ; elle passe
+    /// désormais par un `AsyncStream` (garde ci-dessous).
     ///
     /// Test de COMPORTEMENT sur l'objet réellement construit, pas un comptage de
     /// mots dans le source : une garde textuelle ne prouverait pas que ces
     /// options sont celles que la requête reçoit.
-    func test_recentMediaStrip_thumbnailOptions_askFullQualityAndStaySingleCallback() {
+    func test_recentMediaStrip_thumbnailOptions_deliverFastThenSharp() {
         let options = RecentMediaStripModel.thumbnailRequestOptions()
 
         XCTAssertEqual(
-            options.deliveryMode, .highQualityFormat,
-            "`.fastFormat` rend une vignette dégradée définitive — la bande d'échantillons reste floue pour toujours"
-        )
-        XCTAssertNotEqual(
             options.deliveryMode, .opportunistic,
-            "`.opportunistic` rappelle plusieurs fois et reprendrait deux fois la continuation"
+            "La vignette s'affiche d'abord vite, puis nette — jamais `.fastFormat`, dégradé pour toujours"
         )
         XCTAssertEqual(
             options.resizeMode, .exact,
@@ -124,6 +119,24 @@ final class PhotoKitCallbackIsolationGuardTests: XCTestCase {
             options.isSynchronous,
             "La requête doit rester asynchrone : synchrone et pleine qualité bloquerait le main pendant le décodage"
         )
+    }
+
+    /// `.opportunistic` rappelle PLUSIEURS fois : la vignette ne doit jamais
+    /// repasser par une continuation (reprise deux fois = plantage). Elle
+    /// passe par un flux dont la fin annule la requête — la cellule qui quitte
+    /// l'écran ne laisse aucune requête PhotoKit derrière elle — et le
+    /// gestionnaire pré-charge la fenêtre qui va défiler.
+    func test_recentMediaStrip_thumbnails_streamCancellablyThroughTheCachingManager() throws {
+        let src = try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
+        let start = try XCTUnwrap(src.range(of: "func thumbnails(for asset: PHAsset"))
+        let end = try XCTUnwrap(src.range(of: "func cacheThumbnails(", range: start.upperBound..<src.endIndex))
+        let body = String(src[start.lowerBound..<end.lowerBound])
+        XCTAssertFalse(body.contains("withCheckedContinuation"), "Une continuation reprise deux fois plante")
+        XCTAssertTrue(body.contains("AsyncStream"))
+        XCTAssertTrue(body.contains("cancelImageRequest"), "La fin du flux doit annuler la requête PhotoKit")
+        XCTAssertTrue(src.contains("PHCachingImageManager()"))
+        XCTAssertTrue(src.contains("startCachingImages("))
+        XCTAssertTrue(src.contains("stopCachingImages("))
     }
 
     /// Le correctif jumeau déjà en place côté transcription : s'il régresse, le

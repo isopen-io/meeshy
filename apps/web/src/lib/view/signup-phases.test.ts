@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import { isPhoneValid } from '../signup-form';
 import {
   INITIAL_SIGNUP_PROGRESS,
-  isPhoneGiven,
   nextSignupProgress,
-  shouldNudgePhone,
+  phoneRefusalShown,
   signupPhase,
   signupPrimaryAction,
   type SignupObservation,
@@ -14,7 +14,8 @@ import {
 /**
  * L'INSCRIPTION EN PHASES VIVANTES (#8288) — la LOI, sans DOM.
  *
- * Téléphone d'abord ; l'adresse paraît quand le numéro est donné (ou passé) ;
+ * Téléphone d'abord ; l'adresse paraît quand le numéro est donné — et
+ * seulement alors, il n'y a plus rien à passer (#9343) ;
  * la carte d'identité paraît quand l'adresse est cohérente ; la carte porte le
  * code ; le code juste fait passer « S'inscrire » à « Parler aux autres ».
  * Rien de ce qui est paru ne se referme.
@@ -22,7 +23,6 @@ import {
 
 const observe = (over: Partial<SignupObservation> = {}): SignupObservation => ({
   phoneGiven: false,
-  phoneSkipped: false,
   emailValid: false,
   ...over,
 });
@@ -46,9 +46,13 @@ describe('phase 1 — le téléphone d’abord', () => {
   });
 
   test('un numéro est DONNÉ quand il est plausible — jamais sur une saisie en cours', () => {
-    expect(isPhoneGiven('')).toBe(false);
-    expect(isPhoneGiven('0612')).toBe(false);
-    expect(isPhoneGiven('06 12 34 56 78')).toBe(true);
+    expect(isPhoneValid('')).toBe(false);
+    expect(isPhoneValid('0612')).toBe(false);
+    expect(isPhoneValid('06 12 34 56 78')).toBe(true);
+  });
+
+  test('sans numéro donné, une adresse valide n’ouvre RIEN — la phase du téléphone ne se passe pas (#9343)', () => {
+    expect(nextSignupProgress(INITIAL_SIGNUP_PROGRESS, observe({ emailValid: true }))).toBe(INITIAL_SIGNUP_PROGRESS);
   });
 });
 
@@ -59,21 +63,17 @@ describe('phase 2 — l’adresse paraît', () => {
     expect(signupPhase(progress, NONE)).toBe('email');
   });
 
-  test('ou quand il est passé — « Continuer avec l’e-mail seulement »', () => {
-    const progress = nextSignupProgress(INITIAL_SIGNUP_PROGRESS, observe({ phoneSkipped: true }));
-    expect(signupPhase(progress, NONE)).toBe('email');
-  });
 });
 
 describe('phase 3 — la carte d’identité paraît', () => {
   test('quand l’adresse est cohérente', () => {
-    const email = nextSignupProgress(INITIAL_SIGNUP_PROGRESS, observe({ phoneSkipped: true }));
-    const card = nextSignupProgress(email, observe({ phoneSkipped: true, emailValid: true }));
+    const email = nextSignupProgress(INITIAL_SIGNUP_PROGRESS, observe({ phoneGiven: true }));
+    const card = nextSignupProgress(email, observe({ phoneGiven: true, emailValid: true }));
     expect(card.cardShown).toBe(true);
     expect(signupPhase(card, NONE)).toBe('card');
   });
 
-  test('jamais avant l’adresse : une adresse valide sans numéro ni passage n’ouvre pas la carte', () => {
+  test('jamais avant l’adresse : une adresse valide sans numéro n’ouvre pas la carte', () => {
     const progress = nextSignupProgress(INITIAL_SIGNUP_PROGRESS, observe({ emailValid: true }));
     expect(progress.cardShown).toBe(false);
   });
@@ -128,16 +128,21 @@ describe('le bouton principal', () => {
   });
 });
 
-describe('l’alerte « sans numéro » (#8040)', () => {
-  test('se pose quand aucun numéro n’est donné', () => {
-    expect(shouldNudgePhone({ hasPhone: false, phoneSkipped: false })).toBe(true);
+describe('le refus du numéro se dit SOUS le champ, au bon moment (#9343)', () => {
+  test('pendant la première frappe, rien — l’adresse ne paraît pas au troisième chiffre, le refus non plus', () => {
+    expect(phoneRefusalShown({ refusal: 'too-short', checked: false, progress: INITIAL_SIGNUP_PROGRESS })).toBe(false);
   });
 
-  test('se tait quand on a CHOISI l’e-mail seul — le lien discret était déjà la question', () => {
-    expect(shouldNudgePhone({ hasPhone: false, phoneSkipped: true })).toBe(false);
+  test('le champ quitté avec un numéro implausible ⇒ le refus se dit', () => {
+    expect(phoneRefusalShown({ refusal: 'too-short', checked: true, progress: INITIAL_SIGNUP_PROGRESS })).toBe(true);
   });
 
-  test('se tait quand un numéro est donné', () => {
-    expect(shouldNudgePhone({ hasPhone: true, phoneSkipped: false })).toBe(false);
+  test('un numéro donné puis effacé ⇒ l’absence se dit aussitôt', () => {
+    const shown = { emailShown: true, cardShown: false };
+    expect(phoneRefusalShown({ refusal: 'missing', checked: false, progress: shown })).toBe(true);
+  });
+
+  test('un numéro plausible ⇒ aucun refus, quoi qu’on ait touché', () => {
+    expect(phoneRefusalShown({ refusal: null, checked: true, progress: { emailShown: true, cardShown: true } })).toBe(false);
   });
 });

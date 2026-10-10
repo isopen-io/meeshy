@@ -65,7 +65,10 @@ public final class StoryForegroundVideoFrameSource: @unchecked Sendable {
 
         let generator = generator(for: media.id, url: url)
         let clipTime = CMTime(seconds: slideSeconds - start, preferredTimescale: 600)
-        return try? generator.copyCGImage(at: clipTime, actualTime: nil)
+        // Les réglages de la vidéo (#9169), peints par la même chaîne que la
+        // composition de lecture : la pièce rendue montre ce que l'aperçu montrait.
+        return (try? generator.copyCGImage(at: clipTime, actualTime: nil))
+            .map { StoryVideoAdjustmentsProcessor.apply(media, to: $0) }
     }
 
     private nonisolated func generator(for id: String, url: URL) -> AVAssetImageGenerator {

@@ -12,12 +12,14 @@
 
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { MESSAGE_ATTACHMENT_ORDER } from './attachments/attachmentIncludes';
 import { CALL_ERROR_CODES, type CallEndedEvent, type CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import {
   CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
   CALL_CONNECTING_GRACE_MS,
   CALL_HEARTBEAT_TIMEOUT_MS,
   CALL_MAX_PARTICIPANTS,
+  CALL_REJOIN_GRACE_MS,
   CALL_RING_TIMEOUT_MS
 } from '@meeshy/shared/types/call-rules';
 import {
@@ -28,6 +30,8 @@ import {
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import { ActiveCallClaim, type ActiveCallChangedListener } from './calls/activeCallClaim';
+import { fireAndForget } from './calls/fireAndForget';
+import { LoneSurvivorGrace } from './calls/loneSurvivorGrace';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
@@ -35,6 +39,8 @@ import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { commitCallEnd } from './calls/endCallRetry';
+import { callEngagementCrediter } from './calls/callEngagementCredits';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -101,7 +107,7 @@ export const CALL_SUMMARY_MESSAGE_INCLUDE = {
       }
     }
   },
-  attachments: true
+  attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER }
 } as const satisfies Prisma.MessageInclude;
 
 // Type for CallSession with populated participants
@@ -212,6 +218,8 @@ interface LeaveCallData {
   // silently excludes it from the web retry-on-failure feature
   // (isRetryableCallFailure only treats failed/connectionLost as retryable).
   endReasonHint?: CallEndReason;
+  // #9088 — endCall() delegating a group hang-up hands over what it already read.
+  snapshot?: { call: Prisma.CallSessionGetPayload<{ include: { participants: true } }>; isDirectCall: boolean };
 }
 
 export class CallService {
@@ -279,7 +287,30 @@ export class CallService {
   ) {
     this.turnCredentialService = new TURNCredentialService();
     this.activeCallClaim = new ActiveCallClaim(prisma, ACTIVE_STATUSES);
+    this.creditCallEngagement = callEngagementCrediter(prisma, (callId, error) =>
+      logger.warn('Call engagement credit failed', { callId, error })
+    );
   }
+
+  /** #8959 — les points d'un appel terminé, crédités à l'écriture de son résumé terminal. */
+  private readonly creditCallEngagement: (callId: string) => void;
+
+  /** #9109 — un groupe réduit à un seul participant se termine après la grâce de reprise. */
+  private readonly loneSurvivorGrace = new LoneSurvivorGrace({
+    graceMs: CALL_REJOIN_GRACE_MS,
+    readCall: (callId) => this.getCallSession(callId),
+    endFor: async ({ callId, userId, participantId, lastLeaverUserId }) => {
+      this.broadcastCallEndedIfTerminal(await this.leaveCall({ callId, userId, participantId, endReasonHint: CallEndReason.completed }), lastLeaverUserId);
+      this.finalizeCallSummary(callId);
+    },
+    endAbandoned: async ({ callId, lastLeaverUserId }) => {
+      const ended = await this.forceEndOrphanedCallSession(callId, CallEndReason.completed);
+      if (ended === null) return;
+      this.broadcastCallEndedIfTerminal({ id: callId, ...ended, endedAt: new Date() }, lastLeaverUserId);
+      this.finalizeCallSummary(callId);
+    },
+    onError: (callId, error) => logger.warn('lone-survivor end failed', { callId, error })
+  });
 
   /**
    * Register the callback notified with every callId force-ended by
@@ -297,13 +328,7 @@ export class CallService {
     if (!callback) {
       return;
     }
-    try {
-      Promise.resolve(callback(callId)).catch((error) => {
-        logger.warn('reaped-call callback failed', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('reaped-call callback failed synchronously', { callId, error });
-    }
+    fireAndForget(() => callback(callId), 'reaped-call callback', callId);
   }
 
   /**
@@ -340,13 +365,7 @@ export class CallService {
       reason: CallEndReason.garbageCollected
     };
 
-    try {
-      Promise.resolve(broadcaster(callId, conversationId, endedEvent)).catch((error) => {
-        logger.warn('call-ended broadcaster failed (reaped call)', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('call-ended broadcaster failed synchronously (reaped call)', { callId, error });
-    }
+    fireAndForget(() => broadcaster(callId, conversationId, endedEvent), 'call-ended broadcaster (reaped call)', callId);
   }
 
   /**
@@ -439,13 +458,7 @@ export class CallService {
       reason: (callSession.endReason || CallEndReason.completed) as CallEndReason
     };
 
-    try {
-      Promise.resolve(broadcaster(callSession.id, callSession.conversationId, endedEvent)).catch((error) => {
-        logger.warn('call-ended broadcaster failed', { callId: callSession.id, error });
-      });
-    } catch (error) {
-      logger.warn('call-ended broadcaster failed synchronously', { callId: callSession.id, error });
-    }
+    fireAndForget(() => broadcaster(callSession.id, callSession.conversationId, endedEvent), 'call-ended broadcaster', callSession.id);
   }
 
   /**
@@ -498,13 +511,7 @@ export class CallService {
       mode: mode as CallMode
     };
 
-    try {
-      Promise.resolve(broadcaster(callId, event)).catch((error) => {
-        logger.warn('participant-left broadcaster failed', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('participant-left broadcaster failed synchronously', { callId, error });
-    }
+    fireAndForget(() => broadcaster(callId, event), 'participant-left broadcaster', callId);
   }
 
   /**
@@ -524,10 +531,10 @@ export class CallService {
     delayMs: number = this.RINGING_TIMEOUT_MS
   ): void {
     this.clearRingingTimeout(callId);
-    const handle = setTimeout(() => {
+    const handle = guardedTimeout({ name: 'call-ringing-timeout', afterMs: delayMs, logger, run: () => {
       this.ringingTimeouts.delete(callId);
       onTimeout();
-    }, delayMs);
+    } });
     handle.unref?.();
     this.ringingTimeouts.set(callId, handle);
   }
@@ -579,7 +586,7 @@ export class CallService {
 
     const key = `${callId}:${participantId}`;
     if (!this.heartbeatDbWriteTimers.has(key)) {
-      const timer = setTimeout(() => {
+      const timer = guardedTimeout({ name: 'call-heartbeat-db-write', afterMs: this.HEARTBEAT_DB_DEBOUNCE_MS, logger, run: () => {
         this.heartbeatDbWriteTimers.delete(key);
         // Détachée DANS un `setTimeout` : il n'y a aucun `try/catch` englobant à
         // invoquer, et le rappel se déclenche longtemps après le heartbeat qui
@@ -587,7 +594,7 @@ export class CallService {
         // effet observable serait l'arrêt du process (leçon 230).
         void this.persistHeartbeatToDb(callId, participantId)
           .catch(err => logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err }));
-      }, this.HEARTBEAT_DB_DEBOUNCE_MS);
+      } });
       timer.unref?.();
       this.heartbeatDbWriteTimers.set(key, timer);
     }
@@ -601,6 +608,7 @@ export class CallService {
    * and buffer-cleanup timers.
    */
   destroy(): void {
+    this.loneSurvivorGrace.destroy();
     for (const handle of this.ringingTimeouts.values()) {
       clearTimeout(handle);
     }
@@ -1315,6 +1323,12 @@ export class CallService {
     return (error as { code?: string } | null)?.code === 'P2034';
   }
 
+  /** A missing conversation reads as NOT direct — fail toward never ending a call others may still be on. */
+  private async isDirectConversation(conversationId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
+    return conversation?.type === 'direct';
+  }
+
   /**
    * TOCTOU close (audit 2026-07-02): the `activeParticipants.length >=
    * CALL_MAX_PARTICIPANTS` check below reads a snapshot fetched before this
@@ -1551,11 +1565,7 @@ export class CallService {
       }
 
       // Mirror the normal direct/last-participant decision below.
-      const idemConversation = await this.prisma.conversation.findUnique({
-        where: { id: existing.conversationId },
-        select: { type: true }
-      });
-      const idemIsDirect = idemConversation?.type === 'direct';
+      const idemIsDirect = await this.isDirectConversation(existing.conversationId);
       const idemRemaining = existing.participants.filter((p) => !p.leftAt).length;
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
@@ -1650,10 +1660,7 @@ export class CallService {
     }
 
     // Get call with all participants
-    const call = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: { participants: true }
-    });
+    const call = data.snapshot?.call ?? await this.prisma.callSession.findUnique({ where: { id: callId }, include: { participants: true } });
 
     if (!call) {
       logger.error('❌ Call not found', { callId });
@@ -1690,11 +1697,7 @@ export class CallService {
     // call stayed open, no call:ended was broadcast, and the caller's ringback kept
     // playing until they manually hung up. GROUP calls still continue until the
     // last participant leaves.
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: call.conversationId },
-      select: { type: true }
-    });
-    const isDirectCall = conversation?.type === 'direct';
+    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDirectConversation(call.conversationId);
 
     // Vague 183 — `isLastParticipant` is decided FRESH inside the
     // transaction (see below), never from `call.participants` here. That
@@ -1854,6 +1857,7 @@ export class CallService {
       // in memory for the rest of the call.
       this.clearParticipantBackgrounded(callId, participantId);
       this.heartbeats.get(callId)?.delete(participantId);
+      this.loneSurvivorGrace.arm(callId);
     }
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
@@ -2043,7 +2047,7 @@ export class CallService {
     participantId: string,
     isAnonymous?: boolean,
     reason?: string,
-    options?: { preJoinDecline?: boolean }
+    options?: { preJoinDecline?: boolean; session?: CallSessionWithParticipants }
   ): Promise<CallSessionWithParticipants> {
     logger.info('Ending call', { callId, endedBy, isAnonymous, reason });
 
@@ -2053,12 +2057,8 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.PERMISSION_DENIED}: Anonymous users cannot end calls. Use leave instead.`);
     }
 
-    const call = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: {
-        participants: true
-      }
-    });
+    // #9088 — `options.session` is the session the gateway already read to authorize the caller.
+    const call = options?.session ?? await this.prisma.callSession.findUnique({ where: { id: callId }, include: { participants: true } });
 
     if (!call) {
       logger.error('❌ Call not found', { callId });
@@ -2115,12 +2115,11 @@ export class CallService {
     // ringing. A missing/undeleted conversation resolves the same way as
     // "not direct" — fail toward NOT destroying a call that may still be
     // live for others.
+    const isDirectCall = options?.session
+      ? options.session.conversation?.type === 'direct'
+      : await this.isDirectConversation(call.conversationId);
     if (options?.preJoinDecline) {
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: call.conversationId },
-        select: { type: true }
-      });
-      if (conversation?.type !== 'direct') {
+      if (!isDirectCall) {
         logger.info('ℹ️ Pre-join decline on a group call — session continues for other invitees', {
           callId, endedBy
         });
@@ -2143,14 +2142,10 @@ export class CallService {
     // returns early (group) or falls through to the direct-call end path
     // below (direct).
     if (!options?.preJoinDecline) {
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: call.conversationId },
-        select: { type: true }
-      });
       const otherActiveParticipants = call.participants.filter(
         (p) => !p.leftAt && p.id !== userParticipant?.id
       );
-      if (conversation?.type !== 'direct' && otherActiveParticipants.length > 0) {
+      if (!isDirectCall && otherActiveParticipants.length > 0) {
         logger.info('ℹ️ endCall on a group call with other active participants — treated as a leave', {
           callId, endedBy
         });
@@ -2158,7 +2153,8 @@ export class CallService {
           callId,
           userId: endedBy,
           participantId,
-          endReasonHint: this.resolveEndReason(reason)
+          endReasonHint: this.resolveEndReason(reason),
+          snapshot: { call, isDirectCall }
         });
       }
     }
@@ -2708,7 +2704,9 @@ export class CallService {
         // A concurrent terminal path already posted the final summary.
         return null;
       }
-      return applyUpdate(existing.id, summary.content, callMetadata);
+      const updated = await applyUpdate(existing.id, summary.content, callMetadata);
+      this.creditCallEngagement(call.id);
+      return updated;
     }
 
     // `Message.senderId` references a Participant (not a User); resolve the
@@ -2749,6 +2747,7 @@ export class CallService {
         outcome: summary.outcome,
         callType: summary.callType
       });
+      this.creditCallEngagement(call.id);
       return { kind: 'created', message };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -2758,7 +2757,9 @@ export class CallService {
         // was another terminal path, stay idempotent.
         const raced = await findExisting();
         if (raced && isLiveMessage(raced)) {
-          return applyUpdate(raced.id, summary.content, callMetadata);
+          const updated = await applyUpdate(raced.id, summary.content, callMetadata);
+          this.creditCallEngagement(call.id);
+          return updated;
         }
         return null;
       }

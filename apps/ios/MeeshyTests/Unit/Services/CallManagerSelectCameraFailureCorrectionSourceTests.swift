@@ -50,7 +50,7 @@ final class CallManagerSelectCameraFailureCorrectionSourceTests: XCTestCase {
 
     func test_callManager_selectCamera_revertsOptimisticStateOnFailure() {
         guard let fn = body(
-            source(for: "CallManager.swift"),
+            ((try? AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")) ?? ""),
             from: "func selectCamera(id: String) {",
             to: "var videoFilters: VideoFilterPipeline"
         ) else { return }

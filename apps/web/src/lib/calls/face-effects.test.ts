@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { FACE_EFFECTS } from './video-effects';
-import { FACE_DETECT_EVERY, FACE_FRAME_BUDGET_MS, faceGrade, haloOf, heuristicFaceBox, hornsOf, nextEffectLoad, risingParticles, shouldDetect, smoothFaceBox, sparklesOf, toadOf, demonEyesOf, lavaGlow, type Box } from './face-effects';
+import { FACE_DETECT_EVERY, FACE_FRAME_BUDGET_MS, faceGrade, glowBucket, particleSeeds, haloOf, heuristicFaceBox, hornsOf, nextEffectLoad, risingParticles, shouldDetect, smoothFaceBox, sparklesOf, toadOf, demonEyesOf, lavaGlow, type Box } from './face-effects';
 
 /**
  * LES EFFETS DE VISAGE, EN GÉOMÉTRIE PURE (#8551) — où poser les cornes, le
@@ -104,6 +104,15 @@ describe('les braises et la lave', () => {
     expect(before.every((p) => p.alpha >= 0 && p.alpha <= 1 && p.r > 0)).toBe(true);
   });
 
+  test('les paramètres d’une graine se calculent UNE fois : seule la phase change d’une image à l’autre (#9100)', () => {
+    const first = particleSeeds(11, 28);
+    expect(particleSeeds(11, 28)).toBe(first);
+    expect(first).toHaveLength(28);
+    expect(particleSeeds(12, 28)).not.toBe(first);
+    expect(risingParticles({ seed: 11, t: 0, count: 28, area })).not.toEqual(risingParticles({ seed: 11, t: 500, count: 28, area }));
+    expect(particleSeeds(11, 28)).toBe(first);
+  });
+
   test('la lueur de lave vacille, sans jamais s’éteindre', () => {
     const glows = [0, 150, 300, 450, 600].map(lavaGlow);
     expect(new Set(glows).size).toBeGreaterThan(1);
@@ -136,5 +145,15 @@ describe('le budget d’une image', () => {
 
   test('une image lente isolée ne fait pas renoncer', () => {
     expect(nextEffectLoad({ ema: 2, degraded: false }, FACE_FRAME_BUDGET_MS * 2).degraded).toBe(false);
+  });
+});
+
+describe('les lueurs en sprites quantifiés (#9100)', () => {
+  test('deux tailles voisines partagent un sprite ; des tailles éloignées, non', () => {
+    expect(glowBucket(40)).toBe(glowBucket(41));
+    expect(glowBucket(40)).not.toBe(glowBucket(80));
+    expect(glowBucket(40)).toBeGreaterThanOrEqual(40 * 0.85);
+    expect(glowBucket(40)).toBeLessThanOrEqual(40 * 1.2);
+    expect(glowBucket(0.5)).toBeGreaterThanOrEqual(4);
   });
 });

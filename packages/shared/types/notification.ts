@@ -8,6 +8,7 @@
 
 import type { PostType } from './post.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+import type { NotificationContentDetail } from './notification-content-detail.js';
 
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
@@ -163,6 +164,18 @@ export enum NotificationTypeEnum {
   LEVEL_UP = 'level_up',
   BADGE_EARNED = 'badge_earned',
 
+  // ===== JEU MEESHY (#9490) — au plus une notification de jeu par jour, préférence `gameEnabled` =====
+  /** Un ami t'invite à la mission en duo de la semaine. */
+  GAME_DUO_INVITED = 'game_duo_invited',
+  /** Ton ami a accepté la mission en duo. */
+  GAME_DUO_ACCEPTED = 'game_duo_accepted',
+  /** Le résultat de ta semaine de ligue : montée, maintien, descente, coupe. Aucun nom de joueur. */
+  GAME_LEAGUE_RESULT = 'game_league_result',
+  /** Une étape de la saison est atteinte. */
+  GAME_SEASON_STEP = 'game_season_step',
+  /** La mission personnelle du jour commence : sa plage horaire est dans le texte (#9539). */
+  GAME_MISSION_WINDOW = 'game_mission_window',
+
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',
   SUBSCRIPTION_RENEWED = 'subscription_renewed',
@@ -282,6 +295,8 @@ export interface NotificationContext extends NotificationAttachmentWire {
    *  étiquetait faux tout message non anglais et faussait la résolution du
    *  Prisme sur la bulle pré-enregistrée. @see schema.prisma Message.originalLanguage */
   readonly messageOriginalLanguage?: string;
+  /** #8857 — position, contact, invitation, lien, sticker, vignette vidéo, réponse à une story. */
+  readonly contentDetail?: NotificationContentDetail;
 }
 
 /**
@@ -601,6 +616,38 @@ export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificat
 }
 
 /**
+ * Metadata des notifications du JEU (#9490). `gameSection` dit où le toucher mène dans la
+ * Progression ; rien d'autre ne voyage que ce que le destinataire sait déjà de LUI : jamais
+ * l'identité d'un joueur de ligue (pseudonyme ou compte), jamais une heure d'activité.
+ */
+export interface GameDuoNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'duo';
+  readonly duoId: string;
+  readonly weekKey: string;
+}
+
+export interface GameLeagueResultNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'league';
+  readonly weekKey: string;
+  readonly league: string;
+  readonly outcome: 'promoted' | 'stayed' | 'relegated';
+  readonly cup: 'gold' | 'silver' | 'bronze' | null;
+}
+
+export interface GameSeasonStepNotificationMetadata extends BaseNotificationMetadata {
+  readonly action: 'view_details';
+  readonly route: 'progression';
+  readonly gameSection: 'season';
+  readonly season: number;
+  readonly step: number;
+  readonly completed: boolean;
+}
+
+/**
  * Metadata générique pour autres types
  */
 export interface GenericNotificationMetadata extends BaseNotificationMetadata {
@@ -629,6 +676,9 @@ export type NotificationMetadata =
   | LoginNewDeviceNotificationMetadata
   | ContactJoinedNotificationMetadata
   | ContactRecentlyActiveNotificationMetadata
+  | GameDuoNotificationMetadata
+  | GameLeagueResultNotificationMetadata
+  | GameSeasonStepNotificationMetadata
   | GenericNotificationMetadata;
 
 // =====================================================

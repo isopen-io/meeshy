@@ -29,7 +29,9 @@
 @source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './admin.css';
 @import './glass.css';
+@import './ui.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -113,7 +115,11 @@
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
   --radius-menu: var(--radius-xs);
-  --radius-field: var(--radius-sm);
+  /* 14 et non plus 8 (#8879) : le champ d'iOS (`MeeshyRadius.md`), celui
+     que `field.tsx` et la recherche de `sheet.tsx` posaient déjà en dur. */
+  --radius-field: var(--ios-radius-md);
+  /* La tuile (`MeeshyRadius.sm`, 10) — vignettes et icônes carrées. */
+  --radius-tile: var(--ios-radius-sm);
   --radius-card: var(--radius-lg);
   --radius-hero: var(--radius-xl);
   --radius-sheet: var(--radius-2xl);
@@ -309,6 +315,22 @@
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/*
+ * LE BANDEAU DU HAUT RÉSERVE SA PLACE (#9494) — sur les hubs, la bannière du
+ * joueur est permanente : posée par-dessus l'en-tête, elle le cacherait. La
+ * coquille (`shell.tsx`) mesure la pile du haut et la reporte dans
+ * `--top-band` ; l'arbre de la coquille ajoute cette hauteur à son encoche.
+ * Tout ce qui lit `--safe-top` (`pt-safe` en tête) descend d'autant, comme le
+ * viewport iOS sous `CallPresentationLayer`. Hors des hubs, ou bandeau vide,
+ * la coquille ne pose pas l'attribut : rien ne bouge, et l'encoche simulée
+ * sur `:root` par les gates (`check-thread-scroll-edges.mjs`) reste lue. Ce
+ * qui sort de l'arbre par un portail (l'écran d'appel, les feuilles modales)
+ * garde l'encoche réelle de `:root`.
+ */
+[data-top-band-host] {
+  --safe-top: calc(env(safe-area-inset-top, 0px) + var(--top-band, 0px));
 }
 
 @utility pt-safe {
@@ -571,6 +593,14 @@
   }
 }
 
+[data-composer-toolbar-leading][data-scrolls-further] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+}
+
+[data-composer-toolbar-leading][data-scrolls-further]:dir(rtl) {
+  mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
+}
+
 /* LA MONTEE D'UNE PLAQUE DU STUDIO (#8517) — l'edition d'un objet et le
    Cadre entrent comme le texte du post : un cadre de verre qui glisse de
    16 px vers le haut en s'eclairant. `prefers-reduced-motion` la coupe. */
@@ -592,6 +622,24 @@
 @media (prefers-reduced-motion: reduce) {
   .studio-plaque-rise {
     animation: none;
+  }
+}
+
+/* UN OUTIL OUVERT PREND TOUTE LA PLACE (#8654) — l'en-tete, les rails et
+   leurs (+) cedent en fondu, sans quitter leur place (la scene ne saute
+   pas). */
+[data-studio-chrome] {
+  transition: opacity 200ms ease;
+}
+
+[data-studio-chrome='hidden'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-studio-chrome] {
+    transition: none;
   }
 }
 
@@ -670,8 +718,51 @@
   animation-fill-mode: both;
 }
 
+/* LE PLEIN ÉCRAN DU PAIR (#9065) : le mood quitte sa respiration pour un
+   pulse à peine perceptible, tant que le pair regarde. Miroir de
+   `MeeshyMoodBadge.hushedScale` (iOS). */
+@keyframes moodHush {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+.mood-hush {
+  animation-name: moodHush;
+  animation-duration: 1.6s;
+  animation-direction: alternate;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+/* LE PAIR ACTIF (#9065) : une respiration à peine plus élevée, qui dure tant
+   qu'il défile, écoute ou agit — le même cran que l'onde active du point « ici »,
+   jamais un pulse qui crie.
+   Miroir de `MeeshyMoodBadge` (iOS). */
+@keyframes moodStir {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.mood-stir {
+  animation-name: moodStir;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mood-breathe {
+  .mood-breathe,
+  .mood-stir,
+  .mood-hush {
     animation: none;
   }
 }
@@ -691,4 +782,69 @@
 
 :root.light {
   --color-karaoke-ink: var(--ios-indigo-600);
+}
+
+/*
+ * L'ENCRE DE LA SÉRIE 🔥 (#9221) — la flamme sous l'avatar de l'en-tête et la
+ * marque « 🔥4 · 120 » de la liste. Le rouge iOS (`--ios-error`, #f87171) se
+ * lit sur nuit, mais pas sur blanc (2,8:1, en 11–12 px) : sur téléphone, la
+ * série disparaissait. En clair, un rouge plus profond, mêlé des deux rouges
+ * du design system, mesuré à 5:1.
+ */
+:root,
+:root.dark {
+  --streak-ink: var(--ios-error);
+}
+
+:root.light {
+  --streak-ink: color-mix(in srgb, var(--ios-error-strong) 60%, var(--ios-error-dark));
+}
+
+/*
+ * UNE INTERFACE ARABE, UN CONTENU LATIN (#8803). `<html dir="rtl">` retourne la
+ * mise en page ; il retournerait aussi chaque phrase française ou anglaise d'un
+ * message, d'un aperçu ou d'un nom — « .On se voit demain au bureau », le point
+ * en tête. Chaque bloc prend donc le sens de SON contenu (premier caractère
+ * fort), comme `NSWritingDirection.natural` sur iOS ; la géométrie reste celle
+ * du document. L'ALIGNEMENT, lui, suit l'interface (`NSTextAlignment.natural`) :
+ * `start` se résoudrait sur le contenu, donc le corps hérite de `right` et un
+ * `text-start` posé par un écran se lit « côté début de l'INTERFACE » ; un
+ * `text-center` garde la main.
+ */
+:root[dir='rtl'] body {
+  text-align: right;
+}
+
+:root[dir='rtl'] body :where(*),
+:root[dir='rtl'] body ::placeholder {
+  unicode-bidi: plaintext;
+}
+
+:root[dir='rtl'] body .text-start {
+  text-align: right;
+}
+
+/*
+ * L'ADMINISTRATION EST TOUJOURS À L'ENDROIT (D-162, directive porteur
+ * 2026-09-30). Son cadre porte `dir="ltr"` quelle que soit la langue
+ * d'interface — une interface arabe lit l'administration en anglais — mais les
+ * règles ci-dessus décrivent le corps par un sélecteur DESCENDANT : elles
+ * atteignent le cadre malgré son `dir`, et l'`unicode-bidi: plaintext` hérité
+ * + l'alignement `right` remettraient à droite chaque texte d'une mise en page
+ * qui lit de gauche à droite. On les rend ici, sous le cadre seulement ; le
+ * reste du document garde son sens. (`revert` rend la valeur de la feuille de
+ * style du navigateur : `isolate` pour un élément qui porte `dir`.)
+ */
+:root[dir='rtl'] [data-admin-shell] {
+  text-align: left;
+}
+
+:root[dir='rtl'] [data-admin-shell],
+:root[dir='rtl'] [data-admin-shell] :where(*),
+:root[dir='rtl'] [data-admin-shell] ::placeholder {
+  unicode-bidi: revert;
+}
+
+:root[dir='rtl'] [data-admin-shell] .text-start {
+  text-align: left;
 }

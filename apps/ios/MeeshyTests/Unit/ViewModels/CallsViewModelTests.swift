@@ -14,13 +14,11 @@ final class CallsViewModelTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
-        await CacheCoordinator.shared.callHistory.invalidate(for: "calls:list:all")
-        await CacheCoordinator.shared.callHistory.invalidate(for: "calls:list:missed")
+        await CacheCoordinator.shared.callHistory.invalidateAll()
     }
 
     override func tearDown() async throws {
-        await CacheCoordinator.shared.callHistory.invalidate(for: "calls:list:all")
-        await CacheCoordinator.shared.callHistory.invalidate(for: "calls:list:missed")
+        await CacheCoordinator.shared.callHistory.invalidateAll()
         try await super.tearDown()
     }
 
@@ -317,27 +315,233 @@ final class CallsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.visibleCalls.map(\.callId), ["c1", "g1"])
     }
 
-    func test_searchAcrossHistory_loadsOlderPagesUntilTheEnd() async {
-        let (sut, service) = makeSUT()
-        service.historyResult = .success(Self.page([Self.makeRecord(id: "c1")], hasMore: true))
-        service.historyResultByCursor["c1"] = .success(Self.page([Self.makeRecord(id: "c2")], hasMore: true))
-        service.historyResultByCursor["c2"] = .success(Self.page([Self.groupRecord(id: "g3", participants: ["Chloé"])], hasMore: false))
-        await sut.loadCalls()
-        sut.searchQuery = "chloe"
+    // MARK: - Offline journal (#8204)
 
-        await sut.searchAcrossHistory()
-
-        XCTAssertEqual(service.requestedCursors, [nil, "c1", "c2"])
-        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["g3"])
+    private static func recentRecord(
+        id: String,
+        minutesAgo: Double = 0,
+        title: String = "Équipe",
+        isVideo: Bool = false,
+        daysAgo: Double = 0
+    ) -> APICallRecord {
+        APICallRecord(
+            callId: id, conversationId: "conv-\(id)", conversationType: "group", conversationTitle: title,
+            mode: "sfu", status: "ended", direction: "outgoing", isVideo: isVideo,
+            startedAt: Date().addingTimeInterval(-(minutesAgo * 60 + daysAgo * 86_400)), durationSec: 60
+        )
     }
 
-    func test_searchAcrossHistory_withoutQuery_loadsNothing() async {
+    private func waitUntil(_ condition: @MainActor () -> Bool) async {
+        let deadline = Date().addingTimeInterval(3)
+        while !condition(), Date() < deadline { await Task.yield() }
+    }
+
+    /// The app is killed: what was only in memory is gone, the disk stays.
+    private func simulateRestart() async {
+        let store = await CacheCoordinator.shared.callHistory
+        await store.flushDirtyKeys()
+        await store.evictL1()
+    }
+
+    private func reopenedOffline(filter: CallHistoryFilter = .all) async -> CallsViewModel {
+        let service = MockCallHistoryService()
+        service.historyResult = .failure(URLError(.notConnectedToInternet))
+        let (sut, _) = makeSUT(service: service, networkMonitor: TestNetworkMonitor(isOnline: false))
+        sut.filter = filter
+        await sut.loadCalls()
+        return sut
+    }
+
+    func test_loadMore_olderPagesReachTheCache_soTheJournalReopensOfflineWithThem() async {
         let (sut, service) = makeSUT()
-        service.historyResult = .success(Self.page([Self.makeRecord(id: "c1")], hasMore: true))
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1"), Self.recentRecord(id: "c2", minutesAgo: 1)], hasMore: true))
+        service.historyResultByCursor["c2"] = .success(Self.page([Self.recentRecord(id: "c3", minutesAgo: 2)], hasMore: false))
+        await sut.loadCalls()
+        await sut.loadMore()
+        await simulateRestart()
+
+        let reopened = await reopenedOffline()
+
+        XCTAssertEqual(reopened.calls.map(\.callId), ["c1", "c2", "c3"])
+    }
+
+    func test_loadMore_onTheMissedFilter_reachesThatFilterCache() async {
+        let (sut, service) = makeSUT()
+        sut.filter = .missed
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "m1")], hasMore: true))
+        service.historyResultByCursor["m1"] = .success(Self.page([Self.recentRecord(id: "m2", minutesAgo: 1)], hasMore: false))
+        await sut.loadCalls()
+        await sut.loadMore()
+        await simulateRestart()
+
+        let reopened = await reopenedOffline(filter: .missed)
+
+        XCTAssertEqual(reopened.calls.map(\.callId), ["m1", "m2"])
+    }
+
+    func test_loadMore_neverKeepsACallOlderThanTheJournalWindow() async {
+        let (sut, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1")], hasMore: true))
+        service.historyResultByCursor["c1"] = .success(Self.page([Self.recentRecord(id: "old", daysAgo: 91)], hasMore: false))
+        await sut.loadCalls()
+        await sut.loadMore()
+        await simulateRestart()
+
+        let reopened = await reopenedOffline()
+
+        XCTAssertEqual(reopened.calls.map(\.callId), ["c1"])
+    }
+
+    func test_loadCalls_staleRevalidation_keepsTheOlderPagesBehindTheFreshFirstPage() async {
+        let (first, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1", minutesAgo: 1), Self.recentRecord(id: "c2", minutesAgo: 2)], hasMore: true))
+        service.historyResultByCursor["c2"] = .success(Self.page([Self.recentRecord(id: "c3", minutesAgo: 3)], hasMore: false))
+        await first.loadCalls()
+        await first.loadMore()
+        let store = await CacheCoordinator.shared.callHistory
+        await store.debugRewindFetchTimestamp(by: 600, for: "calls:list:all")
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c0"), Self.recentRecord(id: "c1", minutesAgo: 1)], hasMore: true))
+
+        let (sut, _) = makeSUT(service: service)
+        await sut.loadCalls()
+        await waitUntil { sut.calls.first?.callId == "c0" }
+
+        XCTAssertEqual(sut.calls.map(\.callId), ["c0", "c1", "c2", "c3"])
+    }
+
+    func test_loadCalls_staleRevalidationAcrossAGap_replacesTheCachedJournal() async {
+        let (first, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1", minutesAgo: 5)], hasMore: true))
+        service.historyResultByCursor["c1"] = .success(Self.page([Self.recentRecord(id: "c2", minutesAgo: 6)], hasMore: false))
+        await first.loadCalls()
+        await first.loadMore()
+        let store = await CacheCoordinator.shared.callHistory
+        await store.debugRewindFetchTimestamp(by: 600, for: "calls:list:all")
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "n1"), Self.recentRecord(id: "n2", minutesAgo: 1)], hasMore: true))
+
+        let (sut, _) = makeSUT(service: service)
+        await sut.loadCalls()
+        await waitUntil { sut.calls.first?.callId == "n1" }
+
+        XCTAssertEqual(sut.calls.map(\.callId), ["n1", "n2"])
+        XCTAssertFalse(sut.reachedEnd)
+    }
+
+    func test_hide_afterPaging_leavesTheCachedJournalWithoutTheRowAndKeepsTheOthers() async {
+        let (sut, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1")], hasMore: true))
+        service.historyResultByCursor["c1"] = .success(Self.page([Self.recentRecord(id: "c2", minutesAgo: 1)], hasMore: false))
+        await sut.loadCalls()
+        await sut.loadMore()
+
+        await sut.hide(callId: "c1")
+        await simulateRestart()
+
+        let reopened = await reopenedOffline()
+        XCTAssertEqual(reopened.calls.map(\.callId), ["c2"])
+    }
+
+    // MARK: - Server search and type (#8203)
+
+    func test_applySearch_asksTheGatewayOnce_withoutWalkingThePages() async {
+        let (sut, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1")], hasMore: true))
+        service.historyResultBySearch["Ada"] = .success(Self.page([Self.recentRecord(id: "a1", title: "Ada")], hasMore: false))
         await sut.loadCalls()
 
-        await sut.searchAcrossHistory()
+        sut.searchQuery = " Ada "
+        await sut.applySearch()
 
-        XCTAssertEqual(service.historyCallCount, 1)
+        XCTAssertEqual(service.requestedCursors, [nil, nil])
+        XCTAssertEqual(service.lastSearch, "Ada")
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["a1"])
+        XCTAssertTrue(sut.reachedEnd)
+    }
+
+    func test_applySearch_keepsWhatTheGatewayMatched_evenWhenTheRowNameDiffers() async {
+        let (sut, service) = makeSUT()
+        service.historyResultBySearch["bob"] = .success(Self.page([Self.recentRecord(id: "g1", title: "Équipe")], hasMore: false))
+        await sut.loadCalls()
+
+        sut.searchQuery = "bob"
+        await sut.applySearch()
+
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["g1"])
+    }
+
+    func test_applySearch_sameQueryAgain_isServedFromItsCacheWithoutARequest() async {
+        let (sut, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1")], hasMore: false))
+        service.historyResultBySearch["Ada"] = .success(Self.page([Self.recentRecord(id: "a1", title: "Ada")], hasMore: false))
+        await sut.loadCalls()
+
+        sut.searchQuery = "Ada"
+        await sut.applySearch()
+        sut.searchQuery = ""
+        await sut.applySearch()
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["c1"])
+        sut.searchQuery = "Ada"
+        await sut.applySearch()
+
+        XCTAssertEqual(service.historyCallCount, 2)
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["a1"])
+    }
+
+    func test_applySearch_offline_keepsTheMatchesOfTheLoadedJournal() async {
+        let monitor = TestNetworkMonitor(isOnline: true)
+        let (sut, service) = makeSUT(networkMonitor: monitor)
+        service.historyResult = .success(Self.page([Self.makeRecord(id: "c1"), Self.groupRecord(id: "g1", participants: ["Chloé"])]))
+        await sut.loadCalls()
+        monitor.isOnline = false
+        service.historyResultBySearch["chloe"] = .failure(URLError(.notConnectedToInternet))
+
+        sut.searchQuery = "chloe"
+        await sut.applySearch()
+
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["g1"])
+        XCTAssertEqual(sut.loadState, .offline)
+    }
+
+    func test_loadMore_duringASearch_continuesTheSearchResults() async {
+        let (sut, service) = makeSUT()
+        service.historyResultBySearch["Ada"] = .success(Self.page([Self.recentRecord(id: "a1", title: "Ada")], hasMore: true))
+        service.historyResultByCursor["a1"] = .success(Self.page([Self.recentRecord(id: "a2", minutesAgo: 1, title: "Ada")], hasMore: false))
+        await sut.loadCalls()
+        sut.searchQuery = "Ada"
+        await sut.applySearch()
+
+        await sut.loadMore()
+
+        XCTAssertEqual(service.lastCursor, "a1")
+        XCTAssertEqual(service.lastSearch, "Ada")
+        XCTAssertEqual(sut.visibleCalls.map(\.callId), ["a1", "a2"])
+    }
+
+    func test_hide_alsoLeavesTheSearchCacheWithoutTheRow() async {
+        let (sut, service) = makeSUT()
+        service.historyResultBySearch["Ada"] = .success(Self.page([Self.recentRecord(id: "a1", title: "Ada"), Self.recentRecord(id: "a2", minutesAgo: 1, title: "Ada")], hasMore: false))
+        await sut.loadCalls()
+        sut.searchQuery = "Ada"
+        await sut.applySearch()
+
+        await sut.hide(callId: "a1")
+        let (reopened, _) = makeSUT(service: service)
+        reopened.searchQuery = "Ada"
+        await reopened.applySearch()
+
+        XCTAssertEqual(reopened.visibleCalls.map(\.callId), ["a2"])
+    }
+
+    func test_setType_video_asksTheGatewayForVideoCallsOnly() async {
+        let (sut, service) = makeSUT()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "c1")]))
+        await sut.loadCalls()
+        service.historyResult = .success(Self.page([Self.recentRecord(id: "v1", isVideo: true)]))
+
+        sut.setType(.video)
+        await waitUntil { sut.calls.map(\.callId) == ["v1"] }
+
+        XCTAssertEqual(sut.type, .video)
+        XCTAssertEqual(service.lastType, .video)
     }
 }

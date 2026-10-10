@@ -89,6 +89,7 @@ public enum ConversationPreviewComposer {
         case "expired": return .protectionExpired
         case "view-once": return .protectionViewOnce
         case "encrypted": return .protectionEncrypted
+        case "after-read": return .protectionAfterRead
         // `blurred` — et toute protection qu'un client ancien ne connaît pas
         // encore : retenue, jamais rendue en clair.
         default: return .protectionHidden
@@ -119,9 +120,14 @@ public enum ConversationPreviewComposer {
         let isReader = reaction.reactorUserId != nil && reaction.reactorUserId == input.viewerId
         let actor = hasText(reaction.reactorName) ? reaction.reactorName : strings(.authorUnknown)
         let excerpt = reactionExcerpt(reaction, input, strings)
-        let key: ConversationPreviewStringKey = isReader
-            ? (excerpt != nil ? .reactionSelf : .reactionSelfBare)
-            : (excerpt != nil ? .reactionMember : .reactionMemberBare)
+        let key: ConversationPreviewStringKey
+        if isReader {
+            key = excerpt != nil ? .reactionSelf : .reactionSelfBare
+        } else if input.isDirect == true {
+            key = excerpt != nil ? .reactionPeer : .reactionPeerBare
+        } else {
+            key = excerpt != nil ? .reactionMember : .reactionMemberBare
+        }
         let text = strings(key, ["actor": actor, "emoji": reaction.emoji, "excerpt": excerpt ?? ""])
         return ConversationPreview(kind: .reaction, segments: [.label(text)])
     }
@@ -162,6 +168,8 @@ public enum ConversationPreviewComposer {
             return line(.hidden, [.label(strings(.protectionHidden)), .label(strings(.protectionHiddenHint))])
         case .encrypted:
             return line(.encrypted, [.label(strings(.protectionEncrypted))])
+        case .afterRead:
+            return line(.ephemeral, [.label(strings(.protectionAfterRead))])
         case .ephemeral(let expiresAt, let durationSeconds):
             let body = ConversationPreviewBody.of(message, input, strings)
             let countdown: [ConversationPreviewSegment]

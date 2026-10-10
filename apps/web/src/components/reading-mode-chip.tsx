@@ -201,7 +201,7 @@ export function ReadingModeChip({
                    1,49:1 en schéma clair (mesuré) — affichée, illisible. Le
                    TITRE porte l'indisponibilité ; la raison garde l'encre
                    secondaire de toutes les autres lignes. */
-                className="flex w-full items-start gap-2 px-3 py-2 text-left"
+                className="flex w-full items-start gap-2 px-3 py-2 text-start"
               >
                 <span className="mt-0.5 w-4 shrink-0" aria-hidden>
                   {row.isCurrent ? <Glyph name="check" size={14} /> : null}
@@ -230,7 +230,7 @@ export function ReadingModeChip({
             tabIndex={rows.length === activeIndex ? 0 : -1}
             onFocus={() => setActiveIndex(rows.length)}
             onClick={chooseAuto}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-title font-semibold"
+            className="flex w-full items-center gap-2 px-3 py-2 text-start text-title font-semibold"
             style={{ color: 'var(--accent)' }}
           >
             Automatique

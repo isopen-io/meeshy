@@ -106,9 +106,9 @@ describe('le curseur de la scène (#8598)', () => {
     act(() => {
       body.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const corridor = scrub(body)!.closest<HTMLElement>('.media-viewer-chrome')!;
-    expect(corridor.style.opacity).toBe('0');
-    expect(corridor.style.pointerEvents).toBe('none');
+    const corridor = scrub(body)!.closest<HTMLElement>('[data-viewer-bottom-bar]')!;
+    expect(corridor.getAttribute('data-chrome-yields')).toBe('hidden');
+    expect(corridor.hasAttribute('inert')).toBe(true);
   });
 
   test('glisser le curseur ne bascule PAS le plateau — le geste appartient au curseur', async () => {
@@ -119,8 +119,25 @@ describe('le curseur de la scène (#8598)', () => {
       slider.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: 10, pointerId: 1 }));
       slider.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    const corridor = slider.closest<HTMLElement>('.media-viewer-chrome')!;
-    expect(corridor.style.opacity).toBe('1');
+    const corridor = slider.closest<HTMLElement>('[data-viewer-bottom-bar]')!;
+    expect(corridor.getAttribute('data-chrome-yields')).toBe('shown');
+  });
+});
+
+describe('les contrôles de la scène portent le disque commun des plein écrans (#8879)', () => {
+  test('lecture/pause : le MÊME disque de verre que le rail du chrome (40 dans une cible de 44), jamais un noir local', async () => {
+    const body = await open(POST_SCENE_DECORATED);
+    const control = body.querySelector<HTMLElement>('[data-scene-viewer-playpause]')!;
+    expect(control.className).toContain('size-11');
+    const disc = control.querySelector<HTMLElement>('span')!;
+    expect(disc.className).toContain('glass-call');
+    expect(disc.className).toContain('viewer-disc');
+    expect(control.className).not.toContain('media-viewer-scene-control');
+  });
+
+  test('la scène en plein viewport porte la barre basse en VOILE sur elle (overlay), une image en couloir', async () => {
+    const body = await open(POST_SCENE_DECORATED);
+    expect(body.querySelector('[data-viewer-bottom-bar]')!.className).toContain('viewer-scrim-bottom');
   });
 });
 
@@ -141,7 +158,8 @@ describe('l’ouverture depuis la carte (#8598)', () => {
     expect(String(box!.keyframes[0]!.clipPath)).toContain('inset(');
     const layer = animateCalls.find((call) => call.element.hasAttribute('data-media-viewer'));
     expect(layer).toBeDefined();
-    expect(layer!.keyframes[0]!.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(layer!.keyframes[0]!.backgroundColor).toBe('color-mix(in srgb, var(--color-media-backdrop) 0%, transparent)');
+    expect(layer!.keyframes[1]!.backgroundColor).toBe('var(--color-media-backdrop)');
   });
 
   test('sous `prefers-reduced-motion`, rien ne s’anime : la scène est là, à sa place', async () => {

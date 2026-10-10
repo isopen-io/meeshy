@@ -42,7 +42,7 @@ public struct ViewOnceChip: View, Equatable {
 
     public var body: some View {
         Button(action: onOpen) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: state == .sealed
                       ? MessageProtectionSymbols.viewOnceFilled
                       : MessageProtectionSymbols.viewOnce)
@@ -56,8 +56,8 @@ public struct ViewOnceChip: View, Equatable {
             .font(.footnote.weight(.semibold))
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 Capsule()
                     .fill(MeeshyColors.stateViewOnce.opacity(Self.fillOpacity(for: state, isDark: isDark)))
@@ -65,7 +65,7 @@ public struct ViewOnceChip: View, Equatable {
                         MeeshyColors.stateViewOnce.opacity(state == .sealed ? 0.45 : 0.2), lineWidth: 0.75
                     ))
             )
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

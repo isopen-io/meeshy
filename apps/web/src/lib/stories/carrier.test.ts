@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import { parseCanvasDocument, type CanvasScene } from '@/lib/canvas/document';
-import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { thumbHashImage } from '@/lib/media/thumbhash-image';
 
 import { readerBackdropHash, storyCarrier } from './carrier';
 
@@ -37,7 +37,7 @@ describe('storyCarrier — le porteur lit la clé que la passerelle sert', () =>
           mimeType: 'image/jpeg',
           width: 1600,
           height: 400,
-          poster: thumbHashPlaceholder(HASH_MEDIA) as string,
+          poster: thumbHashImage(HASH_MEDIA) as string,
         },
       ],
     });
@@ -45,6 +45,18 @@ describe('storyCarrier — le porteur lit la clé que la passerelle sert', () =>
 
   test('une pièce SANS adresse n’entre pas dans le porteur — elle masquerait le `mediaURL` de l’objet', () => {
     expect(storyCarrier({ id: 'p1', media: [{ id: 'm1', fileUrl: null }] }).media).toEqual([]);
+  });
+
+  test('une vidéo sans vignette stockée a pour affiche l’empreinte ENTIÈRE, jamais sa couleur moyenne (#9255)', () => {
+    const carrier = storyCarrier({ id: 'p1', media: [{ id: 'm1', fileUrl: 'a.mp4', mimeType: 'video/mp4', thumbnailUrl: null, thumbHash: HASH_MEDIA }] });
+    const poster = carrier.media[0]?.poster;
+    expect(poster?.startsWith('data:image/bmp;base64,')).toBe(true);
+    expect(poster).toBe(thumbHashImage(HASH_MEDIA));
+  });
+
+  test('une empreinte illisible ne pose aucune affiche', () => {
+    const carrier = storyCarrier({ id: 'p1', media: [{ id: 'm1', fileUrl: 'a.mp4', thumbHash: 'AA==' }] });
+    expect(carrier.media[0]?.poster).toBeUndefined();
   });
 
   test('la vignette servie prime sur le ThumbHash', () => {

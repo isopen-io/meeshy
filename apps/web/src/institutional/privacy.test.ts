@@ -26,6 +26,8 @@ const blockText = (block: Block): string => {
       return block.cards
         .map((card) => [card.title, card.body ?? '', ...(card.items ?? [])].join(' '))
         .join(' ');
+    case 'mee':
+      return block.views.map((view) => view.caption).join(' ');
   }
 };
 
@@ -84,6 +86,6 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
   });
 
   test('la date de mise à jour suit la modification', () => {
-    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 27 septembre 2026');
+    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 10 octobre 2026');
   });
 });

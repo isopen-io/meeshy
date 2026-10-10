@@ -45,13 +45,13 @@ public struct InviteLandingView: View {
                     .padding(.top, MeeshySpacing.lg)
                 InviteGroupCard(conversation: info.conversation, address: info.address, isDark: isDark)
                     .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, 22)
+                    .padding(.top, MeeshySpacing.xl)
                 InviteGroupFacts(stats: info.stats, shares: info.spokenLanguageShares, isDark: isDark)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.lg)
                 InviteGuestTermsCard(info: info, now: now, isDark: isDark)
                     .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, 10)
+                    .padding(.top, MeeshySpacing.smPlus)
             }
             .padding(.bottom, MeeshySpacing.xxl)
         }
@@ -80,7 +80,7 @@ public struct InviteLandingView: View {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo600)
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .background(Circle().fill(isDark ? MeeshyColors.indigo900.opacity(0.7) : Color.white))
                     .shadow(color: MeeshyColors.indigo900.opacity(isDark ? 0 : 0.1), radius: 8, y: 4)
             }
@@ -94,7 +94,7 @@ public struct InviteLandingView: View {
                 .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo500)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            Color.clear.frame(width: 44, height: 44)
+            Color.clear.frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
         }
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.top, MeeshySpacing.md)

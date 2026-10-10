@@ -15,6 +15,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { EPHEMERAL_UNAVAILABILITY_GRACE_MS } from '@meeshy/shared/utils/ephemeral-countdown';
 
 import { consumeAfterReadMessages } from '../consumeAfterReadMessages';
+import { startEphemeralCountdowns } from '../ephemeralCountdown';
 
 const CONV = '507f1f77bcf86cd799439011';
 const OTHER_CONV = '507f1f77bcf86cd799439012';
@@ -45,6 +46,7 @@ function matches(row: Row, where: Row): boolean {
     if ('isSet' in cond) return cond.isSet ? value !== undefined : value === undefined;
     if ('not' in cond) return cond.not === null ? !isAbsent(value) : value !== cond.not;
     if ('gt' in cond) return value instanceof Date && value.getTime() > cond.gt.getTime();
+    if ('lt' in cond) return value instanceof Date && value.getTime() < cond.lt.getTime();
     return false;
   });
 }
@@ -82,6 +84,7 @@ function buildPrisma(seed: { messages: Row[]; entries?: Row[]; participants?: Ro
     },
     participant: {
       findMany: async ({ where }: Row) => participants.filter((p) => matches(p, where)),
+      findUnique: async ({ where }: Row) => participants.find((p) => matches(p, where)) ?? null,
     },
   };
   return { prisma: prisma as any, messages, entries };
@@ -215,5 +218,89 @@ describe('consumeAfterReadMessages', () => {
     await consume(prisma, [FLAME]);
 
     expect(messages[0]?.expiresAt).toEqual(soon);
+  });
+});
+
+/**
+ * #9572 — la copie transférée d'une flamme à durée porte durée ET après
+ * lecture. Les deux horloges écrivent la MÊME colonne
+ * (`MessageStatusEntry.ephemeralExpiresAt`) : la réception y pose `D(u)`, la
+ * consommation la ramène à maintenant si elle est encore à venir. Ces témoins
+ * font tourner les deux PRODUCTIONS sur la même base : le premier des deux
+ * l'emporte, dans les deux ordres.
+ */
+describe('copie transférée — durée ET après lecture : le premier des deux l’emporte (#9572)', () => {
+  const COPY = '507f1f77bcf86cd799439041';
+  const RECEIVED = new Date('2026-10-07T12:00:00.000Z');
+  const DURATION_S = 30;
+  const deadline = new Date(RECEIVED.getTime() + DURATION_S * 1000);
+
+  const copyBase = () =>
+    buildPrisma({
+      messages: [
+        message({ id: COPY, ephemeralDuration: DURATION_S, createdAt: new Date('2026-10-07T11:00:00.000Z'), expiresAt: RETENTION }),
+      ],
+      entries: [
+        { id: 'e-reader', messageId: COPY, conversationId: CONV, participantId: READER },
+        { id: 'e-peer', messageId: COPY, conversationId: CONV, participantId: PEER },
+      ],
+      participants: activeParticipants,
+    });
+
+  const receive = (prisma: unknown, participantId: string, at: Date) =>
+    startEphemeralCountdowns(prisma as any, { participantId, conversationId: CONV, messageIds: [COPY], at });
+  const consumeAt = (prisma: unknown, now: Date) =>
+    consumeAfterReadMessages(prisma as any, { conversationId: CONV, participantId: READER, messageIds: [COPY], now });
+
+  it('la RÉCEPTION lance le décompte de la durée héritée, bit après lecture ou non', async () => {
+    const { prisma, entries, messages } = copyBase();
+
+    const started = await receive(prisma, READER, RECEIVED);
+
+    expect(started).toHaveLength(1);
+    expect(entries[0]?.ephemeralExpiresAt).toEqual(deadline);
+    // La destruction suit le décompte, plus la grâce — plus le plafond de sept jours.
+    expect(messages[0]?.expiresAt).toEqual(new Date(deadline.getTime() + EPHEMERAL_UNAVAILABILITY_GRACE_MS));
+  });
+
+  it('lue puis quittée AVANT l’échéance : la consommation retire plus tôt', async () => {
+    const { prisma, entries } = copyBase();
+    await receive(prisma, READER, RECEIVED);
+    const leftAt = new Date(RECEIVED.getTime() + 5_000);
+
+    const result = await consumeAt(prisma, leftAt);
+
+    expect(result.consumed).toEqual([COPY]);
+    expect(entries[0]?.ephemeralExpiresAt).toEqual(leftAt);
+  });
+
+  it('jamais quittée, ou quittée APRÈS l’échéance : la durée a déjà retiré, rien ne la repousse', async () => {
+    const { prisma, entries } = copyBase();
+    await receive(prisma, READER, RECEIVED);
+
+    await consumeAt(prisma, new Date(deadline.getTime() + 60_000));
+
+    expect(entries[0]?.ephemeralExpiresAt).toEqual(deadline);
+  });
+
+  it('consommée AVANT l’accusé de réception : la réception ne rouvre pas un décompte', async () => {
+    const { prisma, entries } = copyBase();
+    const seenAt = new Date(RECEIVED.getTime() - 1_000);
+    await consumeAt(prisma, seenAt);
+
+    const started = await receive(prisma, READER, RECEIVED);
+
+    expect(started).toHaveLength(0);
+    expect(entries[0]?.ephemeralExpiresAt).toEqual(seenAt);
+  });
+
+  it('la consommation d’un lecteur ne touche pas le décompte de l’autre', async () => {
+    const { prisma, entries } = copyBase();
+    await receive(prisma, READER, RECEIVED);
+    await receive(prisma, PEER, RECEIVED);
+
+    await consumeAt(prisma, new Date(RECEIVED.getTime() + 5_000));
+
+    expect(entries[1]?.ephemeralExpiresAt).toEqual(deadline);
   });
 });

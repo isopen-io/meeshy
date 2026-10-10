@@ -60,6 +60,22 @@ describe('l’invite « Écrivez… » s’écrit au doigt', () => {
     await flush(() => el.querySelectorAll('[data-scene-text]').length === 2);
     expect([...el.querySelectorAll('[data-scene-text]')].map((node) => node.textContent)).toEqual(['Un', 'Deux']);
   });
+
+  test('l’invite du texte AJOUTÉ s’écrit à SA place, jamais dans la boîte du texte déjà écrit (#8681)', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"] [data-scene-text]') !== null);
+    const first = el.querySelector<HTMLElement>('[data-scene-object-id="text-1"] [data-scene-text]')!;
+    first.style.width = '64px';
+    first.style.height = '40px';
+    typeText(el, 'Un!');
+    expect(field(el)?.style.height).toBe('40px');
+    click(el.querySelector('[data-story-option="add-text"]'));
+    expect(field(el)?.dataset.storyTextTarget).toBe('text-2');
+    expect(field(el)?.style.height).toBe('');
+    expect(field(el)?.style.left).toBe('50%');
+    expect(field(el)?.style.top).toBe('50%');
+  });
 });
 
 describe('toucher le vide désélectionne', () => {
@@ -67,10 +83,10 @@ describe('toucher le vide désélectionne', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Sélectionné');
     await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
-    expect(el.querySelector('[data-story-edit-plaque]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).not.toBeNull();
     paint(el, 'text-1');
     tapStageAt(el, { clientX: 300, clientY: 500 });
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
     // Rien de sélectionné et la page déjà écrite : aucune invite ne recouvre la scène.
     expect(field(el)).toBeNull();
     // Le texte reste, il n'est que désélectionné.
@@ -79,7 +95,7 @@ describe('toucher le vide désélectionne', () => {
 });
 
 describe('« Sortir de la scène » n’existe plus (absent d’iOS, il supprimait le média)', () => {
-  test('le menu du calque d’un POST offre Modifier et Retirer, rien d’autre', async () => {
+  test('le menu du calque d’un POST offre Modifier, Mettre en fond (#8716) et Retirer, rien d’autre', async () => {
     const drafts = createStudioDraftStore(null);
     drafts.set(VIEWER_ID, onePageSnapshot({ texts: [], overlay: { postMediaId: 'pm-ov', fileUrl: '2026/09/u/ov.jpg', mediaType: 'image', aspectRatio: 1 } }));
     const el = mount(harness({ drafts }).deps, 'POST');
@@ -89,7 +105,7 @@ describe('« Sortir de la scène » n’existe plus (absent d’iOS, il supprima
     act(() => layer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 30 })));
     await flush(() => document.querySelector('[data-story-object-menu]') !== null);
     const actions = [...document.querySelectorAll('[data-story-object-menu] [data-story-object-action]')];
-    expect(actions.map((action) => action.getAttribute('data-story-object-action'))).toEqual(['edit', 'remove']);
+    expect(actions.map((action) => action.getAttribute('data-story-object-action'))).toEqual(['edit', 'set-background', 'remove']);
     expect(document.querySelector('[data-story-object-menu]')?.textContent).not.toContain('Sortir');
   });
 });
@@ -99,7 +115,7 @@ describe('deux doigts pincent et tournent un objet (miroir iOS)', () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Pincé');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
     paint(el, 'text-1', { top: 0, left: 0, width: 200, height: 200 });
     const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;

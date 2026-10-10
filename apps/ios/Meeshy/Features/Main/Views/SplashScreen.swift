@@ -24,12 +24,12 @@ struct SplashScreen: View {
             // Animated gradient background
             LinearGradient(
                 colors: isDark ? [
-                    Color(hex: "09090B"),
-                    Color(hex: "13111C"),
+                    MeeshyColors.surfaceDarkBase,
+                    MeeshyColors.surfaceDarkRaised,
                     MeeshyColors.indigo950
                 ] : [
                     Color(hex: "FFFFFF"),
-                    Color(hex: "F8F7FF"),
+                    MeeshyColors.surfaceLightRaised,
                     MeeshyColors.indigo50
                 ],
                 startPoint: .topLeading,
@@ -68,7 +68,7 @@ struct SplashScreen: View {
                     .frame(width: 120, height: 120)
                     .opacity(showLogo ? 1 : 0)
                     .scaleEffect(showLogo ? 1 : 0.5)
-                    .padding(.bottom, 32)
+                    .padding(.bottom, MeeshySpacing.xxxl)
 
                 // App Name
                 Text(verbatim: "Meeshy")
@@ -85,11 +85,11 @@ struct SplashScreen: View {
                     .frame(height: 80)
                     .opacity(showTitle ? 1 : 0)
                     .offset(y: showTitle ? 0 : -40)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, MeeshySpacing.sm)
 
                 // Tagline
                 Text(String(localized: "splash.tagline", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
@@ -100,7 +100,7 @@ struct SplashScreen: View {
                 // Footer : version + signature + brand logo (shared — see BrandSignature)
                 BrandSignature()
                     .opacity(showSubtitle ? 1 : 0)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, MeeshySpacing.xxl)
             }
         }
         .onAppear {

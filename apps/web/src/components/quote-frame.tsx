@@ -34,7 +34,7 @@ export function QuoteFrame({
     placeholderSrc !== null
       ? { backgroundImage: `url("${placeholderSrc}")`, backgroundSize: 'cover' }
       : thumbnailSrc === null
-        ? { backgroundColor: 'black' }
+        ? { backgroundColor: 'var(--color-media-backdrop)' }
         : {};
   return (
     <span
@@ -56,7 +56,7 @@ export function QuoteFrame({
       ) : stillSrc !== null ? (
         <QuoteVideoStill src={stillSrc} />
       ) : null}
-      {timebased ? <Glyph name="fillPlay" size={20} className="absolute inset-0 m-auto text-white" /> : null}
+      {timebased ? <Glyph name="fillPlay" size={20} className="absolute inset-0 m-auto text-on-media" /> : null}
     </span>
   );
 }

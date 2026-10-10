@@ -85,11 +85,13 @@ describe('remainingPlacesOf — places restantes', () => {
 });
 
 describe('joinChoicesOf — la matrice session × compte requis', () => {
-  test('connecté : rejoindre avec son compte, rien d’autre', () => {
-    for (const guestAllowed of [true, false]) {
-      expect(joinChoicesOf({ signedIn: true, guestAllowed })).toEqual({
+  test('connecté, lien réservé aux comptes : rejoindre avec son compte, rien d’autre', () => {
+    for (const anonymousRequested of [true, false]) {
+      expect(joinChoicesOf({ signedIn: true, guestAllowed: false, anonymousRequested })).toEqual({
         account: true,
         guest: false,
+        anonymousOffer: false,
+        accountOffer: false,
         signIn: false,
         signUp: false,
         accountRequired: false,
@@ -97,10 +99,36 @@ describe('joinChoicesOf — la matrice session × compte requis', () => {
     }
   });
 
-  test('visiteur, lien ouvert aux invités : le formulaire, puis se connecter ou créer un compte', () => {
-    expect(joinChoicesOf({ signedIn: false, guestAllowed: true })).toEqual({
+  test('connecté, lien ouvert aux invités (#8816) : son compte d’abord, « Anonyme » offert à côté', () => {
+    expect(joinChoicesOf({ signedIn: true, guestAllowed: true, anonymousRequested: false })).toEqual({
+      account: true,
+      guest: false,
+      anonymousOffer: true,
+      accountOffer: false,
+      signIn: false,
+      signUp: false,
+      accountRequired: false,
+    });
+  });
+
+  test('connecté qui a choisi « Anonyme » (#8816) : le formulaire d’invité, son compte offert pour revenir', () => {
+    expect(joinChoicesOf({ signedIn: true, guestAllowed: true, anonymousRequested: true })).toEqual({
       account: false,
       guest: true,
+      anonymousOffer: false,
+      accountOffer: true,
+      signIn: false,
+      signUp: false,
+      accountRequired: false,
+    });
+  });
+
+  test('visiteur, lien ouvert aux invités : le formulaire, puis se connecter ou créer un compte', () => {
+    expect(joinChoicesOf({ signedIn: false, guestAllowed: true, anonymousRequested: false })).toEqual({
+      account: false,
+      guest: true,
+      anonymousOffer: false,
+      accountOffer: false,
       signIn: true,
       signUp: true,
       accountRequired: false,
@@ -108,9 +136,11 @@ describe('joinChoicesOf — la matrice session × compte requis', () => {
   });
 
   test('visiteur, compte requis : aucune porte anonyme, et on le DIT', () => {
-    expect(joinChoicesOf({ signedIn: false, guestAllowed: false })).toEqual({
+    expect(joinChoicesOf({ signedIn: false, guestAllowed: false, anonymousRequested: true })).toEqual({
       account: false,
       guest: false,
+      anonymousOffer: false,
+      accountOffer: false,
       signIn: true,
       signUp: true,
       accountRequired: true,

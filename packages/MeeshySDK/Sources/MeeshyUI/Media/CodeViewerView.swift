@@ -15,6 +15,10 @@ public struct CodeViewerView: View {
     // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
     // from the environment instead.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573), reposé sur ce que cette vue présente.
+    @Environment(\.contentExitGate) private var exitGate
+    /// Le bouclier de capture de l'hôte (#9574), reposé sur ce que cette vue présente.
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
     @State private var showFullViewer = false
     @State private var codeContent: String?
     @State private var isLoading = true
@@ -50,6 +54,8 @@ public struct CodeViewerView: View {
                 codeContent: codeContent,
                 accentColor: accentColor
             )
+            .contentExitGate(exitGate)
+            .captureShield(isCaptureShielded)
         }
     }
 
@@ -229,6 +235,8 @@ public struct CodeFullSheet: View {
     // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
     // precedent) — colorScheme drives isDark directly.
     @Environment(\.colorScheme) private var colorScheme
+    /// Le portillon de sortie posé par l'hôte (#9573) : fermé, ni enregistrement, ni partage, ni copie.
+    @Environment(\.contentExitGate) private var exitGate
 
     private var langColor: Color { Color(hex: language.color) }
     private var isDark: Bool { colorScheme == .dark }
@@ -277,10 +285,12 @@ public struct CodeFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    if let code = codeContent {
+                    if let code = codeContent, exitGate.mayLeave(attachment.id) {
                         Button {
-                            UIPasteboard.general.string = code
-                            HapticFeedback.success()
+                            exitGate.perform(attachment.id) {
+                                UIPasteboard.general.string = code
+                                HapticFeedback.success()
+                            }
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .foregroundColor(Color(hex: accentColor))

@@ -78,15 +78,15 @@ import MeeshyUI
 /// en zone 3, et le média garde son propre geste de révélation sur la rangée
 /// d'origine.
 ///
-/// **Carrousel** : la citation est une PORTE, pas une galerie.
-/// `ReplyReference` ne porte qu'UNE `attachmentThumbnailUrl` et aucun compte
-/// de pièces jointes (le gateway n'en sélectionne pas), donc ni liste de
-/// miniatures ni badge « +N » ne serait honnête. Le tap ouvre le pager plein
-/// écran de la conversation, où les images 2..N sont atteignables au
-/// balayage.
+/// **Carrousel** : la citation est une PORTE, pas une galerie : UNE
+/// miniature, et depuis #9911 le badge « +N » quand elle cite un message
+/// ENTIER à plusieurs tuiles (`ReplyReference.quotedPieceCount`). Le tap ouvre
+/// le pager plein écran de la conversation, où les images 2..N sont
+/// atteignables au balayage.
 ///
 /// Gardes : `FocalQuotedReplyRichTests.test_loiDesZones_*`.
 struct FocalQuotedReplyView: View, Equatable {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     let reply: BubbleContent.Reply
     let accentHex: String
     let isDark: Bool
@@ -244,7 +244,13 @@ struct FocalQuotedReplyView: View, Equatable {
         }
     }
 
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée, même dans un message ordinaire.
     var body: some View {
+        quotedBody.captureShield(reference.quotedCapture(quotedMessage: nil).shieldsCapture(surfaceAnnounces: announcesCapture))
+    }
+
+    private var quotedBody: some View {
         HStack(spacing: FocalQuoteRail.spacing) {
             FocalQuoteRail(colorHex: authorHex)
 
@@ -265,6 +271,7 @@ struct FocalQuotedReplyView: View, Equatable {
                 }
 
                 quotedThumbnail
+                    .quotedExtraPieces(reference)
 
                 // « 1024×768 · 0:42 · 1,2 Mo ». La rangée plate est dense :
                 // la ligne n'apparaît que lorsqu'un fait existe, et jamais
@@ -380,7 +387,7 @@ struct FocalQuotedReplyView: View, Equatable {
             // Même glyphe que la zone média sans miniature : UN seul
             // vocabulaire visuel pour « ceci se joue ».
             Image(systemName: "play.circle.fill")
-                .font(MeeshyFont.relative(16, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(radius: 2)
                 .accessibilityHidden(true)
@@ -429,14 +436,14 @@ struct FocalQuotedReplyView: View, Equatable {
     @ViewBuilder
     private var previewLine: some View {
         if let emoji = reference.moodEmoji {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text(emoji).font(MeeshyFont.relative(MeeshyFont.captionSize))
                 Text(reference.previewText)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize))
                     .foregroundColor(previewColor)
             }
         } else if reference.isStoryReply {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "camera.fill")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(previewColor)
@@ -446,7 +453,7 @@ struct FocalQuotedReplyView: View, Equatable {
                     .foregroundColor(previewColor)
             }
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 previewGlyph
                 let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
                 MessageTextRenderer.render(

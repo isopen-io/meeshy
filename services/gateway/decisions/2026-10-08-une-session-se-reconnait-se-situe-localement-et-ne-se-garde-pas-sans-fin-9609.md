@@ -1,0 +1,104 @@
+## 2026-10-08 : Une session dit sa version et son moyen de connexion, se situe par une base LOCALE, ne se garde pas sans fin, et l'administration qui la ferme le dit au membre (#9609, #9610, #9613, #9614, #9642, #9643)
+
+Milestone « Chaque session ouverte se reconnaît et se ferme à distance ». Décision porteur du 2026-10-08 : TOUT est affiché dans l'administration ; dans Sécurité > Sessions, l'utilisateur voit toutes les informations disponibles. Règles de conformité tirées de l'analyse `conformite-juridique` du même jour — **une analyse sourcée, pas un avis juridique signé** ; la politique de confidentialité complète reste #9644 (juriste).
+
+### 1. Le contrat de ce qu'un client déclare (#9610)
+
+Site unique : `packages/shared/utils/client-session.ts`.
+
+| en-tête HTTP | champ (`ClientSessionInfo`, et clé de `handshake.auth.client`) | règle |
+|---|---|---|
+| `X-Meeshy-Version` | `appVersion` | forme de version, ≤ 32 |
+| `X-Meeshy-Build` | `appBuild` | idem |
+| `X-Meeshy-Platform` | `platform` | `ios` · `web` · `pwa` · `android-shell`, sinon ignorée |
+| `X-Meeshy-Device` | `deviceModel` | ≤ 64 |
+| `X-Meeshy-OS` | `osVersion` | forme de version |
+| `X-Meeshy-Timezone` | `timezone` | forme IANA |
+| `X-Device-Locale` | `deviceLocale` | BCP 47 |
+| `X-Meeshy-Device-Name` (nouveau) | `deviceName` | nom lisible DÉRIVÉ DU MODÈLE par le client, ≤ 64 |
+
+- **Tous facultatifs.** Caractères de contrôle retirés, valeurs hors forme ignorées. Un client qui n'envoie rien garde ce que le serveur déduit (agent, adresse attestée).
+- **La socket** ne peut pas porter ces en-têtes (liste CORS de Socket.IO fermée) : elle remet le même relevé, sous les mêmes noms, dans `handshake.auth.client`.
+- **Le moyen de connexion** (`loginMethod`) est posé par le SERVEUR, jamais déclaré : `password`, `two_factor`, `magic_link`, `registration`, `email_verification` ; `oauth` et `anonymous` sont nommés sans producteur (une session anonyme vit sur `Participant`).
+- **Relevé à l'ouverture** (`createSession`), puis **tenu à jour** au rafraîchissement (`POST /auth/refresh`) et à la connexion de la socket, sur la session que le `sid` nomme, bornée au compte et vivante, en n'écrivant que ce qui a CHANGÉ et sans jamais effacer ce qu'un ancien client ne déclare pas (`services/auth/session-client-info.ts`).
+- `User.lastLoginAt` est posé partout où `lastLoginIp` l'est : c'est l'horloge de sa conservation.
+- Aucun index : aucun de ces champs n'est cherché. Seul `UserSession.invalidatedAt` en reçoit un (conservation) — par migration idempotente, jamais `prisma db push`.
+
+### 2. Le lieu se lit dans une base LOCALE (#9609)
+
+- **DB-IP Lite « IP to City »**, format MMDB, **CC-BY 4.0**, lu par `mmdb-lib` (MIT, sans dépendance) derrière l'interface existante `lookupGeoIp`. **ip-api.com est retiré** : aucune adresse ne part chez un tiers, et plus aucun quota (45 requêtes/min, HTTP clair) ne s'épuise de l'extérieur par `/directory/availability` ou le login — ce qui éteignait le critère « pays » de l'alerte de nouvelle connexion.
+- **Volume, jamais l'image** : `${GEOIP_HOST_DIR:-/opt/meeshy/geoip}` monté en lecture seule sur `/app/geoip` (production et staging) ; chemin lu : `GEOIP_DATABASE_PATH`, défaut `/app/geoip/dbip-city-lite.mmdb`.
+- **Mise à jour mensuelle** : `infrastructure/scripts/geoip-update-dbip.sh` (mois courant, repli sur le précédent ; gzip, taille, marqueur MMDB vérifiés ; remplacement atomique). La passerelle relit la date du fichier au plus une fois par heure et reprend la nouvelle base sans redémarrage ; une base renouvelée mais illisible laisse servir la précédente.
+- **Absente, elle ne se dégrade pas en silence** : pays et ville inconnus, aucun appel sortant, une ERREUR au démarrage, et `/health` sert `services.geoip.status` (`loaded` · `missing` · `unreadable` · `unchecked`).
+- Adresses privées (IPv4 et IPv6) : `Local`, sans lecture. `::ffff:a.b.c.d` est cherchée sur son IPv4. Adresse mal formée : lieu inconnu.
+- **Attribution** « IP Geolocation by DB-IP » (lien https://db-ip.com) servie avec chaque liste de sessions : `data.geolocation` (utilisateur), `meta.geolocation` (administration) — `GEOLOCATION_ATTRIBUTION`, avec `approximate: true` : **la ville se dit approximative**.
+- **Plus de latitude ni de longitude** : ni écrites (sessions, jetons de lien magique et de réinitialisation), ni servies, ni passées à la carte tierce de l'e-mail « nouvelle connexion » (qui ne s'affiche donc plus). L'existant s'efface par `packages/shared/prisma/migrations/2026-10-08-session-coordinates-erase.mongodb.js` — **écrite, testée, exécutée nulle part** : en production, feu vert du porteur et sauvegarde vérifiée d'abord.
+- Mémoire : la base « ville » pèse de l'ordre de 130 Mo, tenus en mémoire par processus. La base « pays » (≈ 8 Mo) se monte au même chemin si la mémoire l'exige ; la ville sera alors inconnue.
+
+### 3. La conservation (#9614, #9642)
+
+Une passe quotidienne (`jobs/retention-sweep.ts`, ordonnancée par `BackgroundJobsManager`) :
+
+| donnée | durée |
+|---|---|
+| session close | 90 jours après `invalidatedAt` (à défaut : après sa dernière activité) |
+| `SecurityEvent` | 12 mois ; d'un compte purgé, 90 jours après la purge (`AccountDeletionRequest.gracePeriodEndsAt`, statut `GRACE_PERIOD_EXPIRED`/`COMPLETED`) — la plus courte l'emporte |
+| `AdminAuditLog` | 12 mois |
+| `registrationIp`, `registrationLocation` | `null` 12 mois après l'inscription |
+| `lastLoginIp`, `lastLoginLocation` | `null` 12 mois après `lastLoginAt` ; compte antérieur au champ : quand aucune session ne s'est ouverte depuis 12 mois |
+
+**L'interrupteur** : la passe n'écrit que si `RETENTION_PURGE_ENABLED` vaut exactement `true` — posé en staging, `false` par défaut en production. Désarmée, elle COMPTE ce qu'elle effacerait et le journalise (« would purge »). **En production, la première passe armée supprime l'arriéré : feu vert du porteur et sauvegarde vérifiée des collections `UserSession`, `SecurityEvent`, `AdminAuditLog`, `User` avant de poser la variable.**
+
+Non couvert, dit pour qu'on ne le croie pas fermé : `registrationDevice` / `lastLoginDevice` (agents) ne sont pas effacés ; `registrationCountry` est gardé (pays seul, sert l'aiguillage des pays d'arrivée).
+
+### 4. L'export RGPD (#9614)
+
+`GET /me/export` remet chaque session avec : `id`, dates (création, dernière activité, échéance, clôture), motif de clôture en code ET en clair dans la langue de la personne (`sessionClosureReasonText`), appareil, nom d'appareil, système, navigateur, version, build, plateforme, moyen de connexion, adresse, pays, ville, lieu, fuseau, agent. **Jamais** `isCurrentSession` (vraie pour toutes), jeton, empreinte ni coordonnées. Nouvelle section `securityEvents` (sans `metadata` ni empreinte). Le profil porte l'adresse et le lieu d'inscription et de dernière connexion, et `lastLoginAt`.
+
+### 5. L'administration (#9613, #9643)
+
+- `GET /admin/users/:userId/sessions` sert tout ce qui est retenu (version, build, plateforme, nom d'appareil, moyen de connexion, agent, fuseau, adresse, pays, ville) ; les trois routes exigent `canViewSensitiveData` — **BIGBOSS et ADMIN seuls** voient l'adresse et la ville.
+- **Chaque lecture** des sessions et des événements de sécurité d'un membre écrit `AdminAuditLog` (`VIEW_USER`, `metadata.surface` = `sessions` / `security-events`, plus la page et les filtres) — patron de `user-profile-reads.ts`.
+- **`DELETE /admin/users/:userId/sessions`** ferme tout en un geste : toutes les sessions en base (`admin_revoke`), toutes les sockets, `REVOKE_SESSION` journalisé avec `scope: 'all'`.
+- **Le membre est toujours informé, l'administrateur jamais nommé** (`services/auth/team-session-closure.ts`) : le motif socket `admin_revoke` (message « closed by the Meeshy team ») ; un `SecurityEvent` `SESSION_CLOSED_BY_TEAM` / `SESSIONS_CLOSED_BY_TEAM` (« … par l'équipe Meeshy »), sans identifiant, adresse ni agent de l'administrateur ; un e-mail (gabarit d'alerte existant, `sessions_closed_by_team`, six langues, langue de CADRAGE du membre) quand plus aucune session ne vit.
+- **Le motif d'une socket coupée est celui du geste** : `disconnectSession` exige désormais `reason` — `user_revoke` (le membre ferme un de ses appareils), `logout`, `password_changed`, `admin_revoke`. Il envoyait `admin_revoke` à tous : un membre qui fermait lui-même un appareil lisait qu'un administrateur l'avait déconnecté. Les clients ne décodent pas `reason` en énumération stricte (vérifié iOS et web) : l'ajout est rétrocompatible.
+
+Constaté, non changé : désactiver un compte coupe ses sockets (`deactivatedUserSessionRevoker`) sans invalider ses sessions en base ; la socket refuse déjà un compte inactif (`AuthHandler`), mais une réactivation rend ces sessions de nouveau valides. À trancher dans une issue à part.
+
+### Ce qu'il faut poser sur les serveurs
+
+1. `install -m 0755 infrastructure/scripts/geoip-update-dbip.sh /usr/local/bin/meeshy-geoip-update`, puis `mkdir -p /opt/meeshy/geoip && /usr/local/bin/meeshy-geoip-update`, puis la ligne cron mensuelle donnée en tête du script.
+2. Reporter dans `/opt/meeshy/production/docker-compose.yml` (qui DIVERGE du dépôt) le volume `/opt/meeshy/geoip:/app/geoip:ro` et `RETENTION_PURGE_ENABLED=false` ; recréer la passerelle ; vérifier `curl -s https://gate.meeshy.me/health | jq .services.geoip`.
+3. Staging : rejouer `packages/shared/prisma/migrations/2026-10-08-session-retention-indexes.mongodb.js` (à blanc puis pour de vrai).
+4. Production, sur feu vert du porteur et après sauvegarde vérifiée : la même migration d'index ; `RETENTION_PURGE_ENABLED=true` ; la migration d'effacement des coordonnées.
+
+Témoins : `__tests__/unit/services/geoip-local-database.test.ts`, `…/services/session-client-info.test.ts`, `socketio/handlers/__tests__/AuthHandler.client-info.test.ts`, `…/routes/auth/magic-link-refresh-legacy-token.test.ts` (rafraîchissement et liste servie), `…/jobs/retention-sweep.test.ts`, `…/routes/me/export-security.test.ts`, `…/routes/admin/user-sessions-team-closure.test.ts`, `socketio/__tests__/disconnectSession.test.ts`, `…/migrations/session-coordinates-erase-migration.test.ts`, `packages/shared/__tests__/client-session.test.ts`.
+
+### Reprise après l'audit adversarial et les revues (2026-10-08, même jour)
+
+Ce paragraphe AMENDE les sections précédentes là où elles divergent.
+
+- **Fuseau (L2-1)** : un fuseau déclaré n'entre que si `Intl.DateTimeFormat` le connaît (`isValidTimeZone`) ; `mergeClientHeaders` lit le relevé NETTOYÉ, jamais l'en-tête brut ; la notification et l'e-mail « nouvelle connexion » se datent par `formatInTimeZone` (`utils/time-zone-format.ts`), qui ne lève jamais (repli UTC). Un `Foo/Bar` forgé taisait l'alerte.
+- **Textes client (L2-8)** : contrôles C0/C1 ET bidirectionnels (U+200E/F, U+202A–U+202E, U+2066–U+2069) retirés de tout champ déclaré, dès l'ouverture. Une base GeoIP illisible n'est relue que si sa date ou sa taille change.
+- **Trace d'acteur des événements de sécurité (L2-2, registre)** : `services/auth/security-event-view.ts` classe les 42 types produits (`holder`, `unproven`, `third_party`, `system`). FERMÉ par défaut : le titulaire (export, `GET /me/security-events`) ne voit adresse, agent, lieu et empreinte que pour `holder` ; l'administration voit aussi `unproven` et `system`, jamais `third_party` ni un type non classé. Témoin : balayage des producteurs du code.
+- **Le membre lit ses événements (L2-4)** : `GET /me/security-events`. **E-mail à CHAQUE fermeture par l'administration** (« une de vos sessions » / « toutes vos sessions »), au plus un par membre et par heure (`SET NX EX 3600`), aucun quand rien n'était ouvert (L2-6).
+- **Lecture d'administration (L2-7)** : `GET …/sessions` et `…/security-events` exigent `requireHierarchy` (surclasser la cible, ou être soi).
+- **Conservation** :
+  - compte purgé : la date est `User.deletedAt` (posée à l'instant de la purge), le compte doit être désactivé ET porter une demande aboutie ; un compte traité sort de la sélection, si bien que rien n'échappe au plafond de 40 pages par passe (pagination `id > dernier`, jamais `cursor` + `skip`) ;
+  - une session ÉCHUE depuis plus de 90 jours se purge même sans `invalidatedAt` ; `registrationDevice` et `lastLoginDevice` suivent l'adresse et le lieu ;
+  - **procédures** : un compte banni (`Ban` en cours), signalé (`Report` `pending`/`under_review` le visant — `resolvedAt` n'est écrit par aucun chemin) ou verrouillé garde sessions, événements, lignes d'audit (le visant ou écrites par lui) et adresses ; si ces procédures ne se lisent pas, la passe n'efface RIEN. Aucun indicateur de rétention légale au schéma : #9650 (`décision-produit`) ;
+  - **`AdminAuditLog` : 15 mois** — le journal survit à toute donnée qu'il décrit. Écart à la décision du porteur (12 mois), à confirmer dans #9650 ;
+  - l'interrupteur se relit à CHAQUE passe, valeur exacte `true` seulement ; aucun état ne survit d'une passe à l'autre.
+- **Lecteurs bornés** (`services/retention/retention-bounds.ts`, module unique des durées) : liste et événements d'administration, export, `GET /me/security-events` et fiche d'administration n'affichent plus ce que la purge effacerait — qu'elle soit armée ou non. Une donnée gardée pour une procédure reste en base mais ne se sert plus par l'interface (#9650).
+
+### Reprise après l'audit adversarial n°2 (2026-10-08)
+
+- **Champ absent ≠ `null`, et une négation écarte le document sans la clé** (sémantique mongo:8, #8309). La passe lit le ban par `unsetOrNull('liftedAt')` (et une échéance absente vaut « sans échéance ») : `BanService.createBan` n'écrit pas la clé, et `{ liftedAt: null }` laissait un compte banni sans protection (A2-1). Toutes les exemptions et toutes les bornes de lecture s'écrivent en branches POSITIVES ; la borne de lecture des sessions est le complément exact de la purge, vérifié ligne à ligne sur documents (un `NOT` masquait toute session vivante). La garde #8309 voit désormais la forme `NOT: [{…}]`.
+- **Une session échue ne part que si elle est aussi inactive depuis 90 jours** (A2-2) : `/auth/refresh` et la garde REST ne lisent pas `expiresAt` (#9656).
+- **Un événement masqué perd aussi `metadata`** (A2-3) : les producteurs y recopient la trace de l'acteur.
+- **Traces de connexion sur la fiche et la liste d'administration : à qui SURCLASSE le membre, ou à lui-même** (A2-4).
+- **Refermer une session close ne fait rien** (A2-5) : ni motif écrasé, ni `invalidatedAt` relancé, ni e-mail.
+- E-mails de fermeture dédoublonnés par membre ET par nature ; la lecture d'administration applique « compte purgé + 90 jours » ; une passe tronquée le dit (`truncated`).
+- **Limite assumée, écrite pour qu'on ne la croie pas fermée** : `PASSWORD_RESET_SUCCESS` et `MAGIC_LINK_LOGIN_SUCCESS` sont classés `holder` — prouvés par la possession de la boîte mail. Si la boîte a été volée, le titulaire voit l'adresse de celui qui l'a volée. C'est tolérable (c'est l'information dont il a besoin pour réagir), mais ce n'est pas « l'acteur est le titulaire » au sens strict.
+- Défauts préexistants ouverts : #9656 (échéance non appliquée au rafraîchissement), #9657 (`AccountPurgeService` efface les adresses sans regarder les procédures), #9658 (seul un signalement de COMPTE protège), #9659 (un verrou déclenché par des demandes de réinitialisation de tiers gèle la purge), #9660 (lieu de dernière connexion périmé), #9661 (lecteurs du journal d'audit non bornés).
+- Compte à blanc relevé le 2026-10-08 (lecture seule, mongosh) : staging — 316 sessions closes sur 1 465, aucun événement, ligne d'audit ni adresse au-delà des bornes, 2 comptes sous procédure (signalements) ; production — 508 sessions closes sur 2 944, rien d'autre, 3 comptes sous procédure.

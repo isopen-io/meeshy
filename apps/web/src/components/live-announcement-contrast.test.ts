@@ -34,6 +34,9 @@ import { resolveColor, wcagContrastRatio } from '../../scripts/lib/glass-contras
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..', '..', '..', '..');
+/* La table héritée pointe vers les rôles du SDK (`var(--ios-…)`, #8879) :
+   `ios.css` se lit SOUS elle, comme le fait `check-jetons.mjs`. */
+const IOS_CSS = readFileSync(join(ROOT, 'packages/design-tokens/ios.css'), 'utf8');
 const DARK_CSS = readFileSync(join(ROOT, 'packages/design-tokens/dark.css'), 'utf8');
 const LIGHT_CSS = readFileSync(join(ROOT, 'packages/design-tokens/light.css'), 'utf8');
 
@@ -49,8 +52,9 @@ function parseAllVars(css: string): Record<string, string> {
 /* `:root.light` ne SURCHARGE que ce qu'il déclare — le reste vient de
    `:root, :root.dark`, universel. Même cascade que `loadIosSchemes()`
    (`scripts/lib/glass-contrast.mjs`). */
-const darkVars = parseAllVars(DARK_CSS);
-const lightVars = { ...darkVars, ...parseAllVars(LIGHT_CSS) };
+const [IOS_DARK_CSS = '', IOS_LIGHT_CSS = ''] = IOS_CSS.split(':root.light {');
+const darkVars = { ...parseAllVars(IOS_DARK_CSS), ...parseAllVars(DARK_CSS) };
+const lightVars = { ...darkVars, ...parseAllVars(IOS_LIGHT_CSS), ...parseAllVars(LIGHT_CSS) };
 
 const WHITE = { r: 255, g: 255, b: 255, a: 1 } as const;
 

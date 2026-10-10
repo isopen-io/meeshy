@@ -65,7 +65,15 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    userCommunityPreferences: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    conversationShare: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn<any>().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops)),
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(null),
@@ -236,7 +244,7 @@ describe('DELETE /communities/:id — DB error', () => {
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue({
       id: COMMUNITY_ID, createdBy: USER_ID,
     });
-    prisma.community.delete = jest.fn<any>().mockRejectedValue(new Error('db crash'));
+    prisma.$transaction = jest.fn<any>().mockRejectedValue(new Error('db crash'));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'DELETE', url: `/communities/${COMMUNITY_ID}` });
     expect(res.statusCode).toBe(500);

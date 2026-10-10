@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeCallSession, loadActiveCall, loadCallSession, loadConversationActiveCallId } from './call-sessions';
+import { decodeCallSession, joinableCall, loadActiveCall, loadCallSession, loadConversationActiveCall } from './call-sessions';
 import { createHttpTransport } from './http';
 
 /**
@@ -131,13 +131,29 @@ describe('un appel par son identifiant — `GET /calls/:callId`', () => {
 });
 
 describe('l’appel en cours d’UNE conversation — `GET /conversations/:id/active-call`', () => {
-  test('rend l’identifiant d’un appel vivant, `null` sinon', async () => {
+  test('rend l’appel vivant avec son type, `null` sinon', async () => {
     const live = gatewayReplying({ status: 200, body: { success: true, data: wireSession() } });
-    expect(await loadConversationActiveCallId(live.deps, 'c 1')).toEqual({ ok: true, data: '64f0c0ffee00000000000a01' });
+    expect(await loadConversationActiveCall(live.deps, 'c 1')).toEqual({ ok: true, data: { callId: '64f0c0ffee00000000000a01', media: 'video' } });
     expect(live.paths).toEqual(['/api/v1/conversations/c%201/active-call']);
+    const audio = gatewayReplying({ status: 200, body: { success: true, data: wireSession({ metadata: { type: 'audio' } }) } });
+    expect(await loadConversationActiveCall(audio.deps, 'c')).toEqual({ ok: true, data: { callId: '64f0c0ffee00000000000a01', media: 'audio' } });
     const none = gatewayReplying({ status: 200, body: { success: true, data: null } });
-    expect(await loadConversationActiveCallId(none.deps, 'c')).toEqual({ ok: true, data: null });
+    expect(await loadConversationActiveCall(none.deps, 'c')).toEqual({ ok: true, data: null });
     const ended = gatewayReplying({ status: 200, body: { success: true, data: wireSession({ status: 'ended' }) } });
-    expect(await loadConversationActiveCallId(ended.deps, 'c')).toEqual({ ok: true, data: null });
+    expect(await loadConversationActiveCall(ended.deps, 'c')).toEqual({ ok: true, data: null });
+  });
+});
+
+describe('rejoindre depuis le fil — l’appel et son type (#9111)', () => {
+  test('la réponse de la passerelle l’emporte, type compris, même sans la ligne de liste (fil ouvert après un rechargement)', () => {
+    expect(joinableCall({ callId: 'k1', media: 'video' }, null)).toEqual({ callId: 'k1', media: 'video' });
+    expect(joinableCall({ callId: 'k1', media: 'video' }, { id: 'k0', kind: 'audio' })).toEqual({ callId: 'k1', media: 'video' });
+  });
+
+  test('avant la réponse, la ligne de liste sert ; la passerelle qui ne voit aucun appel l’emporte aussi', () => {
+    expect(joinableCall(undefined, { id: 'k0', kind: 'video' })).toEqual({ callId: 'k0', media: 'video' });
+    expect(joinableCall(undefined, { id: 'k0', kind: 'audio' })).toEqual({ callId: 'k0', media: 'audio' });
+    expect(joinableCall(undefined, null)).toBeNull();
+    expect(joinableCall(null, { id: 'k0', kind: 'video' })).toBeNull();
   });
 });

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// Garde de source COMPLÈTE de `Lentille/Row/*.swift` (contrat LWS-7,
@@ -574,6 +575,57 @@ final class LentilleRowSourceGuardTests: XCTestCase {
             skeletonCode.contains("Spacer(minLength: 0)"),
             "la bande de date du squelette doit être poussée à droite comme celle de la rangée."
         )
+    }
+
+    // MARK: - Aucune animation infinie au repos (#9868)
+
+    /// La rangée monte l'avatar en `.conversationHeaderCollapsed`, dont le
+    /// `defaultPulse` vaut vrai : sans `enablePulse: false` explicite, chaque
+    /// rangée visible fait pulser son humeur et son point en ligne en
+    /// `repeatForever`, et la liste au repos garde le GPU et ProMotion éveillés.
+    func test_everyRowAvatar_disablesThePulse() throws {
+        let calls = try rowSources().flatMap { source in
+            Self.avatarCallArguments(in: normalizedCode(source.code)).map { (source.name, $0) }
+        }
+        XCTAssertFalse(
+            calls.isEmpty,
+            "aucun appel MeeshyAvatar( trouvé sous Lentille/Row/ : la garde ne voit plus l'avatar de rangée."
+        )
+        for (name, arguments) in calls {
+            XCTAssertTrue(
+                arguments.contains("enablePulse: false"),
+                "\(name) monte un MeeshyAvatar sans `enablePulse: false` : une rangée de liste ne pulse jamais (#9868)."
+            )
+        }
+    }
+
+    func test_rowAvatarContext_wouldPulseByDefault_soTheOverrideIsLoadBearing() async {
+        let pulsesByDefault = await MainActor.run { LentilleMetrics.Avatar.context.defaultPulse }
+        XCTAssertTrue(
+            pulsesByDefault,
+            "si le contexte de rangée ne pulse plus par défaut, la garde ci-dessus peut être revue."
+        )
+    }
+
+    private static func avatarCallArguments(in code: String) -> [String] {
+        let marker = "MeeshyAvatar("
+        var results: [String] = []
+        var searchStart = code.startIndex
+        while let range = code.range(of: marker, range: searchStart..<code.endIndex) {
+            var depth = 1
+            var index = range.upperBound
+            while index < code.endIndex, depth > 0 {
+                switch code[index] {
+                case "(": depth += 1
+                case ")": depth -= 1
+                default: break
+                }
+                index = code.index(after: index)
+            }
+            results.append(String(code[range.upperBound..<index]))
+            searchStart = index
+        }
+        return results
     }
 
     // MARK: - Aiguille

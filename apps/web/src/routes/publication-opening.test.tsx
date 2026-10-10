@@ -273,3 +273,29 @@ describe('la graine amorcée des Réels : sa caisse dit si elle se relit', () =>
     expect(el.textContent).not.toContain('Légende gardée par le profil.');
   });
 });
+
+/**
+ * **LE RÉEL REGARDÉ NE CHANGE PAS DE PLACE QUAND SON FIL SE RELIT** (#9702).
+ * La passerelle reclasse sa page à chaque lecture (les réels déjà vus
+ * coulent) : le fil rouvert depuis sa caisse puis relu ne peint pas un autre
+ * réel sous le lecteur, et « suivant » mène toujours quelque part.
+ */
+describe('le fil des Réels rouvert depuis sa caisse puis relu', () => {
+  const ordre = (el: HTMLElement) => [0, 1, 2].map((index) => el.querySelector(`[data-reel-index="${index}"]`)?.getAttribute('data-reel'));
+
+  test('la page relue reclasse le réel regardé en queue : il garde la tête, la suite prend l’ordre servi', async () => {
+    const fil: Caisse = { nom: 'le fil « Pour toi »', key: reelsQueryKey(), poser: keyset };
+    poser(fil, [reel('reel-14'), reel('reel-13'), reel('reel-12')]);
+    setOnline(false);
+
+    const el = await mountAt('/reels', LECTEUR);
+    expect(ordre(el)).toEqual(['reel-14', 'reel-13', 'reel-12']);
+
+    await act(async () => {
+      poser(fil, [reel('reel-12'), reel('reel-13'), reel('reel-14')]);
+    });
+    await tick();
+
+    expect(ordre(el)).toEqual(['reel-14', 'reel-12', 'reel-13']);
+  });
+});

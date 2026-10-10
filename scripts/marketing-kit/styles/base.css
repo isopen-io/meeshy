@@ -75,7 +75,7 @@ bdi { unicode-bidi: isolate; }
 }
 
 .ecran.iphone { width: 440px; height: 956px; }
-.ecran.ipad { width: 1376px; height: 1032px; }
+.ecran.ipad { width: 1032px; height: 1376px; }
 
 /* ─── Barre d'état 9:41, batterie pleine (xcrun simctl status_bar override) ─── */
 .status-bar {

@@ -44,7 +44,7 @@ public struct TimelineOperationsBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             historyButton(icon: "arrow.uturn.backward", enabled: canUndo, action: onUndo,
                           a11y: String(localized: "story.timeline.toolbar.undo",
                                        defaultValue: "Annuler", bundle: .module))
@@ -60,7 +60,7 @@ public struct TimelineOperationsBar: View {
                 saveButton(onSave)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, 5)
         .frame(minHeight: 38)
         .accessibilityElement(children: .contain)
@@ -88,7 +88,7 @@ public struct TimelineOperationsBar: View {
         Button(action: action) {
             HStack(spacing: 3) {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(String(format: String(localized: "story.timeline.ops.extend.label",
                                            defaultValue: "%@ s", bundle: .module),
                             "\(Int(Self.extendStepSeconds))"))
@@ -96,7 +96,7 @@ public struct TimelineOperationsBar: View {
                     .monospacedDigit()
             }
             .padding(.horizontal, 9)
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.15)))
             .contentShape(Rectangle().inset(by: -6))
         }
@@ -111,15 +111,15 @@ public struct TimelineOperationsBar: View {
     /// quand actif) — l'opération déménage, sa sémantique apprise reste.
     private var snapChip: some View {
         Button(action: onSnapToggle) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(isSnapEnabled ? MeeshyColors.success : Color.secondary.opacity(0.4))
                     .frame(width: 8, height: 8)
                 Text(String(localized: "story.timeline.toolbar.snap", bundle: .module))
                     .font(.caption2.weight(.semibold))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule().fill(isSnapEnabled
                                ? MeeshyColors.indigo500.opacity(0.15)

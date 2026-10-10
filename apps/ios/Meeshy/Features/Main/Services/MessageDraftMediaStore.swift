@@ -31,6 +31,7 @@ enum MessageDraftMediaStore {
     static func persist(
         attachments: [MeeshyMessageAttachment],
         files: [String: URL],
+        assetLinks: [String: String] = [:],
         userId: String,
         conversationId: String
     ) -> [DraftAttachmentRef] {
@@ -65,8 +66,19 @@ enum MessageDraftMediaStore {
                 duration: attachment.duration,
                 width: attachment.width,
                 height: attachment.height,
-                thumbnailColor: attachment.thumbnailColor
+                thumbnailColor: attachment.thumbnailColor,
+                libraryAssetId: assetLinks[attachment.id]
             )
+        }
+    }
+
+    /// La carte pièce → asset d'un brouillon (#9697), bornée aux pièces
+    /// réellement restaurées : un fichier disparu n'y laisse aucun lien.
+    static func assetLinks(of refs: [DraftAttachmentRef], restored attachmentIds: [String]) -> [String: String] {
+        let alive = Set(attachmentIds)
+        return refs.reduce(into: [:]) { links, ref in
+            guard alive.contains(ref.attachmentId), let assetId = ref.libraryAssetId else { return }
+            links[ref.attachmentId] = assetId
         }
     }
 

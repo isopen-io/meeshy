@@ -132,7 +132,7 @@ public struct JoinFlowSheet: View {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 28, height: 28)
+                    .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
             .accessibilityLabel(String(localized: "joinFlow.close.accessibilityLabel", defaultValue: "Fermer", bundle: .module))
@@ -179,7 +179,7 @@ public struct JoinFlowSheet: View {
             }
 
             Text(String(localized: "joinFlow.success.title", defaultValue: "Bienvenue !", bundle: .module))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let result = viewModel.joinResult {
@@ -198,9 +198,9 @@ public struct JoinFlowSheet: View {
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                     Text(String(localized: "joinFlow.success.openConversation", defaultValue: "Ouvrir la conversation", bundle: .module))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -227,7 +227,7 @@ public struct JoinFlowSheet: View {
                     .frame(width: 100, height: 100)
 
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(MeeshyFont.relative(48))
+                    .font(MeeshyFont.relative(MeeshyIconSize.hero))
                     .foregroundColor(MeeshyColors.error)
             }
 
@@ -254,7 +254,7 @@ public struct JoinFlowSheet: View {
                 .padding(.vertical, MeeshySpacing.md)
                 .background(
                     Capsule()
-                        .strokeBorder(MeeshyColors.indigo400.opacity(0.4), lineWidth: 1.5)
+                        .strokeBorder(MeeshyColors.indigo400.opacity(0.4), lineWidth: MeeshyBorder.emphasis)
                 )
             }
             .padding(.top, MeeshySpacing.sm)
@@ -262,7 +262,7 @@ public struct JoinFlowSheet: View {
             Button(String(localized: "joinFlow.error.close", defaultValue: "Fermer", bundle: .module)) {
                 dismiss()
             }
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
             .foregroundColor(theme.textMuted)
             .padding(.top, MeeshySpacing.xs)
 

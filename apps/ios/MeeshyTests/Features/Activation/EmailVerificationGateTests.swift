@@ -5,8 +5,9 @@ import MeeshySDK
 /// **Un refus `EMAIL_NOT_VERIFIED` mène à la validation, puis l'action repart**
 /// (#8365). `APIClient` — seul site par lequel les cinq routes gardées
 /// passent — ouvre la validation et REJOUE la même requête : rien du brouillon
-/// n'est perdu. Publier n'est jamais retenu d'avance : la passerelle le permet
-/// pendant tout le délai de grâce de l'adresse (#8476).
+/// n'est perdu. Publier et créer un lien ne sont jamais retenus d'avance : la
+/// passerelle les permet pendant le délai de grâce de l'adresse (#8476), au
+/// plus cinq liens actifs (#9713) — seule l'invitation l'est (#9715).
 @MainActor
 final class EmailVerificationGateTests: XCTestCase {
 
@@ -41,6 +42,10 @@ final class EmailVerificationGateTests: XCTestCase {
     }
 
     private static let refused = EmailVerificationGate.localRefusal()
+    private static let refusedAtLinkCap = MeeshyError.forbidden(
+        reason: "An unverified address can keep at most 5 active share links: verify your e-mail to create more.",
+        body: Data(#"{"success":false,"error":"Email verification required to create more share links","code":"EMAIL_NOT_VERIFIED","message":"An unverified address can keep at most 5 active share links: verify your e-mail to create more."}"#.utf8)
+    )
     private static let postBody = Data(#"{"type":"POST","content":"Mon brouillon"}"#.utf8)
     private static let storyBody = Data(#"{"type":"STORY","mediaIds":["m-1"]}"#.utf8)
 
@@ -108,17 +113,66 @@ final class EmailVerificationGateTests: XCTestCase {
 
     // MARK: - Prévenir plutôt que guérir
 
-    func test_run_knownUnproven_verifiesBeforeAnySend() async throws {
+    func test_run_inviteKnownUnproven_verifiesBeforeAnySend() async throws {
         let gate = FakeGate(knownUnproven: true, answer: true)
         let requests = Requests([.success("created")])
+
+        let result = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/invitations/email", body: nil, gate: gate) {
+            try requests.perform()
+        }
+
+        XCTAssertEqual(result, "created")
+        XCTAssertEqual(gate.asked, [.invite])
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func test_run_link_knownUnproven_isNeverHeldBack_withinTheShareLinkGrace() async throws {
+        for path in ["/api/v1/links", "/api/v1/conversations/c-1/new-link"] {
+            let gate = FakeGate(knownUnproven: true, answer: false)
+            let requests = Requests([.success("created")])
+
+            let result = try await EmailVerificationGate.run(method: "POST", path: path, body: nil, gate: gate) {
+                try requests.perform()
+            }
+
+            XCTAssertEqual(result, "created", path)
+            XCTAssertEqual(gate.asked, [], path)
+            XCTAssertEqual(requests.count, 1, path)
+        }
+    }
+
+    // MARK: - Au-delà de 5 liens actifs, la vue dit pourquoi (#9715)
+
+    func test_run_linkRefusedAtTheCap_asksForMoreLinks_thenReplays() async throws {
+        let gate = FakeGate(knownUnproven: true, answer: true)
+        let requests = Requests([.failure(Self.refusedAtLinkCap), .success("created")])
 
         let result = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/links", body: nil, gate: gate) {
             try requests.perform()
         }
 
         XCTAssertEqual(result, "created")
+        XCTAssertEqual(gate.asked, [.moreLinks])
+        XCTAssertEqual(requests.count, 2)
+    }
+
+    func test_run_linkRefusedGenerically_graceOverOrOldGateway_asksForALink_thenReplays() async throws {
+        let gate = FakeGate(knownUnproven: true, answer: true)
+        let requests = Requests([.failure(Self.refused), .success("created")])
+
+        let result = try await EmailVerificationGate.run(method: "POST", path: "/api/v1/conversations/c-1/new-link", body: nil, gate: gate) {
+            try requests.perform()
+        }
+
+        XCTAssertEqual(result, "created")
         XCTAssertEqual(gate.asked, [.link])
-        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.count, 2)
+    }
+
+    func test_reasonForRefusal_capTextOnlyChangesALink() {
+        XCTAssertEqual(EmailVerificationGate.reason(for: .link, refusedBy: Self.refusedAtLinkCap), .moreLinks)
+        XCTAssertEqual(EmailVerificationGate.reason(for: .publish, refusedBy: Self.refusedAtLinkCap), .publish)
+        XCTAssertEqual(EmailVerificationGate.reason(for: .link, refusedBy: Self.refused), .link)
     }
 
     func test_run_knownUnprovenAndDismissed_sendsNothing() async {

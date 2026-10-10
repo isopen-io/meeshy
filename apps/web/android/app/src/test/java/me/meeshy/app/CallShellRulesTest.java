@@ -2,7 +2,9 @@ package me.meeshy.app;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -69,5 +71,56 @@ public class CallShellRulesTest {
         assertNull(CallShellRules.credentialHeader("registered", ""));
         assertNull(CallShellRules.credentialHeader("other", "x"));
         assertNull(CallShellRules.credentialHeader(null, null));
+    }
+
+    @Test
+    public void leavingTheAppDuringAVideoCallFloatsItInPictureInPicture() {
+        assertTrue(CallShellRules.entersPictureInPicture(26, true, true, true));
+        assertTrue(CallShellRules.entersPictureInPicture(36, true, true, true));
+    }
+
+    @Test
+    public void aVoiceCallOrNoCallNeverFloats() {
+        assertFalse(CallShellRules.entersPictureInPicture(36, true, false, true));
+        assertFalse(CallShellRules.entersPictureInPicture(36, false, true, true));
+    }
+
+    @Test
+    public void aSystemWithoutPictureInPictureNeverFloats() {
+        assertFalse(CallShellRules.entersPictureInPicture(25, true, true, true));
+        assertFalse(CallShellRules.entersPictureInPicture(36, true, true, false));
+    }
+
+    @Test
+    public void theFloatingWindowOffersTheMicrophoneThenHangUp() {
+        assertArrayEquals(new String[] {"mute", "hangup"}, CallShellRules.pictureInPictureActions(false));
+        assertArrayEquals(new String[] {"unmute", "hangup"}, CallShellRules.pictureInPictureActions(true));
+    }
+
+    @Test
+    public void aTappedWindowButtonBecomesThePageGesture() {
+        assertEquals("mic", CallShellRules.pictureInPictureGesture("mute"));
+        assertEquals("mic", CallShellRules.pictureInPictureGesture("unmute"));
+        assertEquals("hangup", CallShellRules.pictureInPictureGesture("hangup"));
+        assertNull(CallShellRules.pictureInPictureGesture("other"));
+        assertNull(CallShellRules.pictureInPictureGesture(null));
+    }
+
+    @Test
+    public void theFloatingWindowTakesTheShapeOfTheVideo() {
+        assertArrayEquals(new int[] {720, 1280}, CallShellRules.pictureInPictureAspect(720, 1280));
+        assertArrayEquals(new int[] {1280, 720}, CallShellRules.pictureInPictureAspect(1280, 720));
+    }
+
+    @Test
+    public void aShapeAndroidRefusesIsBroughtToItsLimit() {
+        assertArrayEquals(new int[] {239, 100}, CallShellRules.pictureInPictureAspect(3000, 500));
+        assertArrayEquals(new int[] {100, 239}, CallShellRules.pictureInPictureAspect(300, 1600));
+    }
+
+    @Test
+    public void anUnknownShapeLeavesTheSystemDefault() {
+        assertNull(CallShellRules.pictureInPictureAspect(0, 720));
+        assertNull(CallShellRules.pictureInPictureAspect(720, -1));
     }
 }

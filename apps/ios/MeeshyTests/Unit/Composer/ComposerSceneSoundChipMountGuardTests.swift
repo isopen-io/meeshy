@@ -61,7 +61,7 @@ final class ComposerSceneSoundChipMountGuardTests: XCTestCase {
     /// en a qu'une, et un doublon de cette forme ne se lit pas comme un
     /// doublon.
     func test_leSonDeFOND_nEstPasPeintCommeUnePuce() throws {
-        XCTAssertTrue(try surface.contains("filter { $0.isBackground != true }"))
+        XCTAssertTrue(try surface.contains("SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])"))
     }
 
     /// **Le binding résout par IDENTIFIANT, jamais par index.**

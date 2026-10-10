@@ -76,9 +76,24 @@ final class ReelsViewModelTests: XCTestCase {
         await sut.awaitColdStart()
 
         XCTAssertEqual(cache.lastCachedFeedKey, "main-feed")
-        // Network revalidation replaces the cache seed with the fresh page.
-        XCTAssertEqual(sut.reels.map(\.id), ["fresh-1", "fresh-2"])
-        XCTAssertEqual(sut.currentId, "fresh-1")
+        // Le réel affiché depuis le cache garde sa place ; la page servie le suit.
+        XCTAssertEqual(sut.reels.map(\.id), ["cached-1", "fresh-1", "fresh-2"])
+        XCTAssertEqual(sut.currentId, "cached-1")
+    }
+
+    /// Recette du 2026-10-09 (#9702) : ouvert sur le réel 14 depuis le cache,
+    /// le pager devenait [13 … 14] au retour de la passerelle, qui fait couler
+    /// les réels déjà vus — « suivant » n'existait plus.
+    func test_coldStart_serveurReclasseLeReelRegardeEnQueue_leReelGardeLaTeteEtSonSuivant() async {
+        let (sut, service, _) = makeSUT(cachedReels: ["r14", "r13", "r12"].map { Self.makeReel(id: $0) })
+        service.getFeedResult = .success(Self.makePaginated(reelIds: ["r13", "r12", "r11", "r14"]))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r14", "r13", "r12", "r11"])
+        XCTAssertEqual(sut.currentId, "r14")
+        XCTAssertEqual(sut.currentIndex, 0)
     }
 
     func test_coldStart_offline_keepsCachedReels() async {
@@ -140,17 +155,17 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertNil(sut.loadFailure, "une passe qui aboutit efface le motif précédent")
     }
 
-    func test_coldStart_droppedCachedReel_resetsCurrentIdToFreshHead() async {
+    func test_coldStart_reelRegardeAbsentDeLaPageServie_resteAffiche() async {
         let (sut, service, _) = makeSUT(cachedReels: [Self.makeReel(id: "cached-only")])
         service.getFeedResult = .success(Self.makePaginated(reelIds: ["fresh-1"]))
 
         sut.seed(posts: [], startId: nil)
         await sut.awaitColdStart()
 
-        // The fresh feed no longer contains the cache-seeded reel, so currentId
-        // must not point at a reel absent from the list.
-        XCTAssertEqual(sut.reels.map(\.id), ["fresh-1"])
-        XCTAssertEqual(sut.currentId, "fresh-1")
+        // Le fil d'affinité ne sert ni la graine ni les réels du lecteur : le
+        // réel affiché ne saute pas, la page servie devient sa suite.
+        XCTAssertEqual(sut.reels.map(\.id), ["cached-only", "fresh-1"])
+        XCTAssertEqual(sut.currentId, "cached-only")
     }
 
     // MARK: - Affinity thread wiring (getReels / seedReelId)

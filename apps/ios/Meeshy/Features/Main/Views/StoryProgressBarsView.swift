@@ -35,14 +35,14 @@ struct StoryProgressBarsView: View {
     static let touchInsets = EdgeInsets(top: 30, leading: 0, bottom: 11, trailing: 0)
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             if let group {
                 ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
                     GeometryReader { barGeo in
                         let w = width(for: index, totalWidth: barGeo.size.width)
                         ZStack(alignment: .leading) {
                             Capsule()
-                                .fill(Color.white.opacity(0.2))
+                                .fill(Color.white.opacity(MeeshyOpacity.light))
                             Capsule()
                                 .fill(index == currentIndex ? Self.activeFill : AnyShapeStyle(Color.white))
                                 .frame(width: w)

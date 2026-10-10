@@ -17,7 +17,7 @@ public struct LiveLocationBadge: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Circle()
                 .fill(MeeshyColors.success)
                 .frame(width: 8, height: 8)
@@ -25,17 +25,17 @@ public struct LiveLocationBadge: View {
                 .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)
 
             Image(systemName: "location.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(String(localized: "location.live.sharing", defaultValue: "\(username) partage sa position", bundle: .module))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
 
                 Text(formattedRemaining)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: MeeshyFont.microSize, weight: .medium))
                     .foregroundColor(.secondary)
             }
 
@@ -46,25 +46,25 @@ public struct LiveLocationBadge: View {
                     onStop()
                 } label: {
                     Text(String(localized: "location.live.stop", defaultValue: "Arreter", bundle: .module))
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(hex: "FF6B6B"))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .font(.system(size: MeeshyFont.captionSize, weight: .bold))
+                        .foregroundColor(MeeshyColors.tileCoral)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(
                             Capsule()
-                                .fill(Color(hex: "FF6B6B").opacity(0.12))
+                                .fill(MeeshyColors.tileCoral.opacity(0.12))
                         )
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
         )
         .onAppear {
@@ -106,26 +106,26 @@ public struct LiveLocationDurationPicker: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "timer")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "location.live.shareDuration", defaultValue: "Duree du partage", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(.primary)
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(LiveLocationDuration.allCases) { duration in
                     Button {
                         selectedDuration = duration
                     } label: {
                         Text(duration.displayText)
-                            .font(.system(size: 11, weight: selectedDuration == duration ? .bold : .medium))
+                            .font(.system(size: MeeshyFont.footnoteSize, weight: selectedDuration == duration ? .bold : .medium))
                             .foregroundColor(selectedDuration == duration ? .white : Color(hex: accentColor))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule()
                                     .fill(selectedDuration == duration ? Color(hex: accentColor) : Color(hex: accentColor).opacity(0.12))

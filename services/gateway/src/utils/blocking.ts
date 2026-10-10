@@ -77,7 +77,7 @@ export async function hasBlocked(
  * relationship with `userId` (either side blocked the other).
  */
 export async function getBlockedUserIdsAmong(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   userId: string,
   candidateIds: string[]
 ): Promise<Set<string>> {
@@ -144,4 +144,24 @@ export async function getBlockRelatedUserIds(
   for (const bid of (userRow?.blockedUserIds ?? []) as string[]) related.add(bid);
   related.delete(userId);
   return related;
+}
+
+/**
+ * Un blocage, dans un sens ou dans l'autre, sépare-t-il `actorId` de l'un de
+ * ces auteurs ? FERMÉ sur l'échec : une lecture qui ne conclut pas répond
+ * « bloqué » — commenter ou réagir se refuse, jamais ne s'ouvre, sur une panne.
+ */
+export async function isBlockedWithAny(
+  prisma: PrismaClient,
+  actorId: string,
+  authorIds: readonly (string | null | undefined)[]
+): Promise<boolean> {
+  const others = [...new Set(authorIds.filter((id): id is string => typeof id === 'string' && id.length > 0))].filter((id) => id !== actorId);
+  if (others.length === 0) return false;
+  try {
+    const verdicts = await Promise.all(others.map((authorId) => isBlockedBetween(prisma, actorId, authorId)));
+    return verdicts.some(Boolean);
+  } catch {
+    return true;
+  }
 }

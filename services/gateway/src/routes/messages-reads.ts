@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentFullSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { hoistStickerOnto } from '../services/stickers/messageSticker';
 import { loadViewOnceReaderStates, projectViewOnceForReader } from '../services/messaging/viewOnceAudience';
@@ -38,6 +38,7 @@ import { callerParticipantWhere } from './conversations/utils/access-control';
 import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../services/messaging/servedPostReply';
+import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 /**
  * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
@@ -271,7 +272,7 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
               }
             }
           },
-          attachments: { select: attachmentFullSelect }
+          attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
         }
       })
       );
@@ -290,6 +291,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // réponse qu'un id inconnu, comme la racine de fil sous le plancher.
       const historyFloor = await loadHistoryFloor(prisma, readerRow);
       if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
+      // #9629 — un avis de capture ne se lit par son identifiant que dans son audience.
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé');
       }
 
@@ -458,11 +463,16 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
           translations: true,
           conversationId: true,
           senderId: true,
-          isViewOnce: true
+          isViewOnce: true,
+          messageType: true,
+          metadata: true
         }
       });
 
       if (!message) {
+        return sendNotFound(reply, 'Message non trouvé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé');
       }
 
@@ -555,6 +565,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       });
 
       if (!message || !message.conversation.participants.length) {
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
+      }
+      if (await captureNoticeWithheldFrom(prisma, { row: message, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
         return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 

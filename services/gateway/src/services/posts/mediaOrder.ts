@@ -61,6 +61,10 @@ export async function applyMediaOrder(
  *
  * Elle n'avait pas lieu d'être tant qu'un commentaire ne portait qu'un média :
  * un seul rang ne s'ordonne pas.
+ *
+ * Les écritures se suivent UNE À UNE (#9745) : cette fonction s'exécute dans la
+ * transaction de la création, et une session MongoDB ne porte qu'une opération
+ * à la fois. Dix médias au plus — la mise en parallèle n'achetait rien.
  */
 export async function applyCommentMediaOrder(
   client: Pick<PrismaClient, 'postMedia'>,
@@ -68,11 +72,10 @@ export async function applyCommentMediaOrder(
   mediaIds: readonly string[],
 ): Promise<void> {
   const ranked = [...new Set(mediaIds)];
-  if (ranked.length === 0) return;
 
-  await Promise.all(
-    ranked.map((id, order) =>
-      client.postMedia.updateMany({ where: { id, commentId }, data: { order } }),
-    ),
+  await ranked.reduce(
+    (previous, id, order) =>
+      previous.then(() => client.postMedia.updateMany({ where: { id, commentId }, data: { order } })),
+    Promise.resolve<unknown>(undefined),
   );
 }

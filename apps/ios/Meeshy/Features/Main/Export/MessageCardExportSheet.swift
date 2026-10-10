@@ -7,7 +7,7 @@ import MeeshyUI
 /// Ce que la feuille d'export reçoit : la carte telle que le lecteur la lit,
 /// les autres langues où elle existe, et qui signe le filigrane.
 struct MessageCardExportRequest {
-    /// La carte telle que le lecteur la lit.
+    /// La carte telle que le lecteur la lit — ses médias compris (#8692).
     let subject: MessageCardSubject
     /// Les langues dans lesquelles la réponse existe — l'original d'abord.
     let languages: [String]
@@ -19,60 +19,132 @@ struct MessageCardExportRequest {
     let accentColor: String
     /// « Export rapide » : le format par défaut, enregistré dès que la carte est peinte.
     let quick: Bool
+    /// Un commentaire de post (#9686) : les compositions offertes au-dessus de l'aperçu.
+    var composition: MessageCardCommentComposition? = nil
 }
 
-/// **EXPORTER UN MESSAGE EN IMAGE — UN COMPOSER SIMPLIFIÉ.** Miroir natif de
-/// `apps/web/src/routes/thread-export-sheet.tsx` : la feuille ne crée aucun
-/// contenu, elle choisit comment MONTRER ce qui existe (le template, le titre
-/// de la conversation, les noms des auteurs ou leur anonymat, la date), montre
-/// la carte telle qu'elle partira, puis l'enregistre.
+/// **« IMAGINE » — UN MESSAGE OU UN COMMENTAIRE DEVIENT UNE IMAGE, UN GIF OU
+/// UNE VIDÉO** (#8692, ex « Exporter en image », #8667). Miroir natif de
+/// `apps/web/src/routes/thread-export-sheet.tsx` : l'atelier ne crée aucun
+/// contenu, il choisit comment MONTRER ce qui existe — le template, le format
+/// de l'image, la disposition (« Frame »), les médias, les noms ou leur
+/// anonymat — montre la carte telle qu'elle partira, puis l'enregistre.
 ///
-/// Des centaines de templates se choisissent par leurs trois dimensions —
-/// couleurs, typographie, liaison — ou d'un geste : les « Populaires » (les
-/// plus enregistrés sur l'appareil, puis la vitrine) et « Au hasard ». Après le
-/// format, la LANGUE. Deux gestes à la fin : « Sauvegarder » (la photothèque,
-/// album Meeshy) et « Partager » (la feuille du système).
+/// L'aperçu EST le contrôle : chaque partie de la carte (en-tête, citation,
+/// liaison, réponse, médias, fond) se touche, et le plateau ouvre l'onglet qui
+/// la règle — un seul panneau à la fois, jamais toute la liste. Les 784
+/// templates se parcourent dans une galerie peinte sur le message, qui se
+/// cherche. Le plateau, les gestes de fin et les étiquettes sont en Liquid
+/// Glass adaptatif : sur iOS 26 ils fondent dans le style du système, et
+/// gardent une matière lisible jusqu'à iOS 16.
 ///
 /// La peinture tourne HORS du MainActor : l'aperçu précédent reste affiché
-/// pendant que le suivant se peint, jamais de saut ni d'écran vide.
+/// pendant que le suivant se peint, jamais de saut ni d'écran vide. Les médias
+/// se chargent derrière : la carte se peint d'abord avec leurs couleurs
+/// d'attente, puis se repeint quand les pixels arrivent.
 struct MessageCardExportSheet: View {
     let request: MessageCardExportRequest
     let onClose: () -> Void
 
-    private let store: MessageCardPreferenceStore = UserDefaultsMessageCardStore()
+    let store: MessageCardPreferenceStore = UserDefaultsMessageCardStore()
 
-    @State private var savedDefault: MessageCardFormat?
-    @State private var format: MessageCardFormat = .initial
-    @State private var popular: [MessageCardTemplateID] = []
-    @State private var exportLanguage: String?
-    @State private var rendered: Rendered?
-    @State private var failed = false
-    @State private var busy = false
-    @State private var notice: String?
-    @State private var shareFile: ShareFile?
-    @State private var quickSent = false
-    @State private var loaded = false
+    @State var savedDefault: MessageCardFormat?
+    @State var format: MessageCardFormat = .initial
+    @State var popular: [MessageCardTemplateID] = []
+    @State var usage: [MessageCardTemplateID: Int] = [:]
+    @State var exportLanguage: String?
+    @State var rendered: Rendered?
+    @State var failed = false
+    @State var busy = false
+    @State var notice: String?
+    @State var sharePayload: MessageCardSharePayload?
+    @State var quickSent = false
+    @State var loaded = false
+    @State var tab: MessageCardExportTab = .styles
+    @State var focus: MessageCardPartID?
+    @State var touched = false
+    @State var galleryOpen = false
+    @State var thumbnails = MessageCardThumbnailStore()
+    @State var loadedMedia: MessageCardLoadedMedia = .empty
+    @State var mediaVersion = 0
+    @State var mediaAttempt = 0
+    @State var output: MessageCardOutput = .image
+    @State var motionTask: Task<Void, Never>?
+    @StateObject var motion = MessageCardMotionProgress()
+    /// Où commence le passage exporté d'un son ou d'une vidéo, en secondes (#8979) — propre à ce message.
+    @State var clipStart: Double = 0
+    /// Le pincement en cours sur une partie de l'aperçu (#8979).
+    @State var pinch: MessageCardPinch?
+    /// Le visuel que « une seule » et « en fond » montrent (#9235) — propre à ce contenu.
+    @State var featuredMedia: String?
+    /// La composition choisie d'un commentaire de post (#9686) — mode, post en tête, réponses cochées.
+    @State var compositionMode: PostCommentCardMode?
+    @State var showsPost = true
+    @State var chosenReplies: Set<String> = []
 
-    @Environment(\.colorScheme) private var colorScheme
-
-    private struct Rendered {
+    struct Rendered {
         let key: String
         let image: UIImage
         let png: Data
         let truncated: Bool
+        let size: CGSize
+        let regions: [MessageCardRegion]
+        /// La coupe vient des médias — l'avis le dit (revue #8979).
+        var crowdedByMedia = false
+        /// L'échelle la plus grande que la carte laisse aux médias — le pincement s'y arrête.
+        var mediaScaleLimit = MessageCardScales.range.upperBound
     }
 
-    private struct ShareFile: Identifiable {
-        let url: URL
-        var id: String { url.path }
+    private static let popularCount = 8
+
+    var accent: Color { Color(hex: request.accentColor) }
+
+    var subject: MessageCardSubject {
+        if let composition = request.composition, let compositionMode,
+           let composed = composition.subject(mode: compositionMode, showsPost: showsPost, chosen: chosenReplies) {
+            return composed
+        }
+        return exportLanguage.flatMap(request.subjectIn) ?? request.subject
     }
 
-    private static let popularCount = 6
+    /// Le choix de composition, dans la clé de peinture : changer de mode repeint l'aperçu.
+    var compositionKey: String {
+        guard let compositionMode else { return "" }
+        return "\(compositionMode.rawValue)|\(showsPost)|\(chosenReplies.sorted().joined(separator: ","))"
+    }
 
-    private var accent: Color { Color(hex: request.accentColor) }
+    /// Les médias tels qu'on les peint — chaque son avec l'onde et la durée de
+    /// SA piste (celle que sert la langue d'export) dès qu'elle est lue.
+    var currentMedia: [MessageCardMedia] {
+        loadedMedia.media(of: subject.media)
+    }
 
-    private var subject: MessageCardSubject {
-        exportLanguage.flatMap(request.subjectIn) ?? request.subject
+    /// Le format tel que la carte le peint : avec le visuel choisi (#9235).
+    func painting(_ format: MessageCardFormat) -> MessageCardFormat {
+        var painted = format
+        painted.disposition.featuredMediaID = featuredMedia
+        return painted
+    }
+
+    /// Ce que la carte MONTRE — les sorties offertes, le plan animé et la vidéo
+    /// décodée suivent ces médias, jamais ceux que la disposition cache (#9235).
+    var paintedMedia: [MessageCardMedia] {
+        painting(format).disposition.paintedMedia(of: currentMedia)
+    }
+
+    /// Le plan d'une carte animée : la durée choisie, à partir du passage choisi (#8979).
+    var motionPlan: MessageCardMotionPlan? {
+        MessageCardMotionPlan.of(output, media: paintedMedia, length: format.disposition.clipLength, start: clipStart)
+    }
+
+    /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
+    private var clipKey: String {
+        motionPlan.map { "\($0.start)+\($0.duration)" } ?? ""
+    }
+
+    /// Les pistes à lire — une langue d'export qui sert une autre piste en fait charger une autre.
+    private var soundsKey: String {
+        subject.media.filter { $0.media.kind == .audio }.map(\.fileURL).joined(separator: "|")
     }
 
     private var title: String? {
@@ -80,196 +152,256 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    private var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")" }
-    private var ready: Bool { rendered?.key == renderKey }
+    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)" }
+    var ready: Bool { rendered?.key == renderKey }
+    private var isDefault: Bool { savedDefault == format }
+
+    private var tabs: [MessageCardExportTab] {
+        MessageCardExportTab.offered(hasMedia: !subject.media.isEmpty, languageCount: request.languages.count)
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    preview
-                    if let notice {
-                        Text(notice)
-                            .font(.footnote)
-                            .foregroundStyle(MeeshyColors.error)
+            VStack(spacing: MeeshySpacing.md) {
+                compositionBar
+                stage
+                notices
+                AdaptiveGlassContainer(spacing: 12) {
+                    VStack(spacing: MeeshySpacing.md) {
+                        tray
+                        outputPicker
+                        actions
                     }
-                    if ready, rendered?.truncated == true {
-                        Text(Self.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    popularRow
-                    paletteRow
-                    typefaceRow
-                    linkRow
-                    optionsRow
-                    if request.languages.count > 1 { languageRow }
-                    actions
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
             }
-            .navigationTitle(Self.text("export.card.title", "Exporter en image"))
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.md)
+            .background(ambient)
+            .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(Self.text("common.cancel", "Annuler"), action: onClose)
-                }
-            }
+            .toolbar { toolbar }
         }
         .tint(accent)
         .onAppear(perform: load)
+        .onDisappear { motionTask?.cancel() }
+        // Une sortie que la carte n'offre plus (une seule photo choisie après « GIF ») retombe sur l'image (#9235).
+        .adaptiveOnChange(of: offeredOutputs) { _, offered in
+            if !offered.contains(output) { output = .image }
+        }
+        .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)|\(compositionKey)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
-        .sheet(item: $shareFile) { file in
-            ShareSheet(activityItems: [file.url]) { completed in
-                shareFile = nil
+        .sheet(isPresented: $galleryOpen) {
+            MessageCardExportGallery(
+                usage: usage,
+                selected: format.template,
+                source: thumbSource,
+                onPick: { id in
+                    format.template = id
+                    galleryOpen = false
+                },
+                onClose: { galleryOpen = false }
+            )
+        }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(activityItems: payload.activityItems) { completed in
+                sharePayload = nil
                 finish(completed ? .shared : .cancelled)
             }
         }
     }
 
+    // MARK: - En-tête
+
+    @ToolbarContentBuilder
+    private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button(MessageCardExportText.text("common.cancel", "Annuler")) {
+                motionTask?.cancel()
+                onClose()
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                HapticFeedback.light()
+                format.template = MessageCardTemplates.random()
+            } label: {
+                Image(systemName: "shuffle")
+            }
+            .accessibilityLabel(MessageCardExportText.text("export.card.random", "Au hasard"))
+            Button {
+                MessageCardFormat.writeDefault(format, to: store)
+                savedDefault = format
+                HapticFeedback.success()
+                FeedbackToastManager.shared.showSuccess(MessageCardExportText.text("export.announce.defaultSaved", "Format par défaut enregistré"))
+            } label: {
+                Image(systemName: isDefault ? "bookmark.fill" : "bookmark")
+            }
+            .disabled(isDefault)
+            .accessibilityLabel(isDefault
+                ? MessageCardExportText.text("export.card.default.current", "Format par défaut")
+                : MessageCardExportText.text("export.card.default.save", "Utiliser comme format par défaut"))
+        }
+    }
+
     // MARK: - Aperçu
 
-    private var preview: some View {
+    /// Le fond de la feuille : la carte elle-même, floutée — la scène prend la couleur du style choisi.
+    private var ambient: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground))
-            if let rendered {
-                Image(uiImage: rendered.image)
+            Color(uiColor: .systemBackground)
+            if let image = rendered?.image {
+                Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(12)
-                    .opacity(ready ? 1 : 0.55)
-                    .accessibilityLabel(Self.text("export.card.preview", "Aperçu de l’image"))
-            } else if failed {
-                Text(Self.text("export.announce.failed", "Impossible de créer l’image"))
-                    .font(.footnote)
-                    .foregroundStyle(MeeshyColors.error)
-                    .padding()
+                    .scaledToFill()
+                    .blur(radius: 48)
+                    .opacity(0.5)
+                    .animation(.easeInOut(duration: 0.35), value: rendered?.key)
             }
-            if !ready && !failed {
-                VStack(spacing: 8) {
-                    ProgressView()
-                    if rendered == nil {
-                        Text(Self.text("export.card.rendering", "Préparation de l’image…"))
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
+    }
+
+    private var stage: some View {
+        GeometryReader { proxy in
+            ZStack {
+                if let rendered {
+                    card(rendered, in: proxy.size)
+                } else if failed {
+                    Text(MessageCardExportText.text("export.announce.failed", "Impossible de créer l’image"))
+                        .font(.footnote)
+                        .foregroundStyle(MeeshyColors.error)
+                } else {
+                    VStack(spacing: MeeshySpacing.sm) {
+                        ProgressView()
+                        Text(MessageCardExportText.text("export.card.rendering", "Préparation de l’image…"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
         }
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 240, maxHeight: 420)
-        .accessibilityElement(children: .combine)
+        .overlay(alignment: .bottom) { hint }
     }
 
-    // MARK: - Choix
-
-    private var popularRow: some View {
-        ChipRow(label: Self.text("export.card.popular", "Populaires")) {
-            chip(Self.text("export.card.random", "Au hasard"), selected: false, systemImage: "dice") {
-                format.template = MessageCardTemplates.random()
-            }
-            ForEach(popular, id: \.self) { id in
-                chip(Self.templateLabel(id), selected: id == format.template, swatch: id.palette.palette) {
-                    format.template = id
-                }
-            }
+    @ViewBuilder
+    private var hint: some View {
+        if !touched && rendered != nil {
+            Label(MessageCardExportText.text("export.card.hint.pinch", "Touchez pour régler, pincez pour redimensionner"), systemImage: "hand.tap")
+                .font(.footnote.weight(.semibold))
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
+                .adaptiveGlass(in: Capsule())
+                .padding(.bottom, MeeshySpacing.smPlus)
+                .allowsHitTesting(false)
+                .transition(.opacity)
         }
     }
 
-    private var paletteRow: some View {
-        ChipRow(label: Self.text("export.card.palette", "Couleurs")) {
-            ForEach(MessageCardPaletteID.allCases, id: \.self) { palette in
-                chip(palette.palette.name, selected: palette == format.template.palette, swatch: palette.palette) {
-                    format.template = format.template.with(palette: palette)
-                }
+    @ViewBuilder
+    private var notices: some View {
+        if let notice {
+            Text(notice)
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.error)
+        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failures(of: subject.media, output: output).count) {
+            mediaFailure(failure)
+        } else if ready, let rendered, rendered.truncated {
+            Text(rendered.crowdedByMedia
+                 ? MessageCardExportText.text("export.card.truncated.media", "Les médias prennent la place : la fin du texte est coupée.")
+                 : MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Plateau
+
+    private var tray: some View {
+        MessageCardExportTray(
+            tabs: tabs,
+            tab: tab,
+            focus: focus,
+            format: $format,
+            popular: popular,
+            hasQuote: subject.quoted != nil,
+            hasTitle: title != nil,
+            hasHandles: subject.hasHandles,
+            media: currentMedia,
+            featuredMedia: $featuredMedia,
+            hasMediaAuthors: subject.hasMediaAuthors,
+            output: output,
+            plan: motionPlan,
+            languages: request.languages,
+            exportLanguage: $exportLanguage,
+            thumbs: thumbSource,
+            onTab: openTab,
+            onGallery: { galleryOpen = true },
+            onExcerptStart: { clipStart = $0 }
+        )
+    }
+
+    /// Toucher une partie de la carte ouvre l'onglet qui la règle.
+    func pick(_ part: MessageCardPartID) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            touched = true
+            focus = part
+            tab = MessageCardExportTab.of(part)
+        }
+    }
+
+    /// Choisir un onglet à la main désigne la partie qu'il règle.
+    private func openTab(_ next: MessageCardExportTab) {
+        let painted = Set(rendered?.regions.map(\.part) ?? [])
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            tab = next
+            switch next {
+            case .palette: focus = .background
+            case .link: focus = subject.quoted == nil ? nil : .link
+            case .typeface: focus = focus == .quote || focus == .reply ? focus : .reply
+            case .frame: focus = painted.contains(.header) ? .header : nil
+            case .media: focus = painted.contains(.media) ? .media : (painted.contains(.transcript) ? .transcript : nil)
+            case .styles, .format, .details, .language: focus = nil
             }
         }
     }
 
-    private var typefaceRow: some View {
-        ChipRow(label: Self.text("export.card.typeface", "Typographie")) {
-            ForEach(MessageCardTypefaceID.allCases, id: \.self) { typeface in
-                chip(Self.typefaceLabel(typeface), selected: typeface == format.template.typeface, font: typeface.typeface.replyFace) {
-                    format.template = format.template.with(typeface: typeface)
-                }
-            }
-        }
+    // MARK: - Vignettes
+
+    var thumbSource: MessageCardThumbSource {
+        var neutral = format
+        neutral.template = MessageCardTemplates.defaultID
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)|\(compositionKey)"
+        let format = format
+        return MessageCardThumbSource(
+            store: thumbnails,
+            keyOf: { "\($0.rawValue)|\(state)" },
+            inputOf: { id in
+                var styled = format
+                styled.template = id
+                return input(for: styled)
+            },
+            pictures: loadedMedia.pictures
+        )
     }
 
-    private var linkRow: some View {
-        ChipRow(label: Self.text("export.card.link", "Liaison")) {
-            ForEach(MessageCardLinkID.allCases, id: \.self) { link in
-                chip(Self.linkLabel(link), selected: link == format.template.link) {
-                    format.template = format.template.with(link: link)
-                }
-            }
-        }
+    /// La carte telle qu'elle partira — animée, sur l'extrait que la vidéo emportera (#8979).
+    func input(for format: MessageCardFormat) -> MessageCardInput {
+        MessageCardInput.of(
+            subject: subject,
+            format: painting(format),
+            handle: request.handle,
+            conversationTitle: title,
+            anonymousLabel: MessageCardExportText.text("export.card.anonymous", "Anonyme"),
+            formatDate: { Self.dateFormatter.string(from: $0) },
+            formatTime: { Self.timeFormatter.string(from: $0) },
+            media: currentMedia
+        ).clipped(to: motionPlan?.clip)
     }
 
-    /// L'anonymat n'a de sens que pour un nom PEINT — et celui du message cité, que s'il y en a un.
-    private var optionsRow: some View {
-        ChipRow(label: Self.text("export.card.options", "Afficher")) {
-            ForEach(format.offeredToggles(hasConversationTitle: title != nil, hasQuote: subject.quoted != nil), id: \.self) { toggle in
-                chip(Self.toggleLabel(toggle), selected: format[toggle], systemImage: format[toggle] ? "checkmark" : nil) {
-                    format[toggle].toggle()
-                }
-            }
-        }
-    }
-
-    private var languageRow: some View {
-        ChipRow(label: Self.text("export.card.language", "Langue du message")) {
-            chip(Self.text("export.card.language.asRead", "Comme je le lis"), selected: exportLanguage == nil) {
-                exportLanguage = nil
-            }
-            ForEach(request.languages, id: \.self) { code in
-                chip(LanguageDisplay.from(code: code)?.name ?? code.uppercased(), selected: exportLanguage == code) {
-                    exportLanguage = code
-                }
-            }
-        }
-    }
-
-    // MARK: - Gestes
-
-    private var isDefault: Bool { savedDefault == format }
-
-    private var actions: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
-                Button { save() } label: {
-                    Label(Self.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                Button { share() } label: {
-                    Label(Self.text("export.card.share", "Partager"), systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.bordered)
-            }
-            .disabled(!ready || busy)
-            Button {
-                MessageCardFormat.writeDefault(format, to: store)
-                savedDefault = format
-                HapticFeedback.success()
-            } label: {
-                Label(
-                    isDefault
-                        ? Self.text("export.card.default.current", "Format par défaut")
-                        : Self.text("export.card.default.save", "Utiliser comme format par défaut"),
-                    systemImage: isDefault ? "checkmark.seal.fill" : "bookmark"
-                )
-                .frame(maxWidth: .infinity, minHeight: 44)
-            }
-            .buttonStyle(.bordered)
-            .disabled(isDefault)
-        }
-        .padding(.top, 6)
-    }
+    // MARK: - Chargement et peinture
 
     private func load() {
         guard !loaded else { return }
@@ -277,190 +409,106 @@ struct MessageCardExportSheet: View {
         let stored = MessageCardFormat.readDefault(from: store)
         savedDefault = stored
         format = stored ?? .initial
-        popular = MessageCardUsage.popular(MessageCardUsage.read(from: store), count: Self.popularCount)
+        usage = MessageCardUsage.read(from: store)
+        popular = MessageCardUsage.popular(usage, count: Self.popularCount)
+        if let composition = request.composition, let first = composition.modes.first {
+            compositionMode = first
+            showsPost = first.showsPostByDefault
+            chosenReplies = composition.initialChoice
+        }
+    }
+
+    /// « Un média n'a pas pu se charger » + « Réessayer » (#8901) — jamais un cadre muet.
+    private func mediaFailure(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.error)
+            Button(MessageCardExportText.text("export.card.media.retry", "Réessayer")) {
+                HapticFeedback.light()
+                mediaAttempt += 1
+            }
+            .font(.footnote.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Les pixels et l'onde réelle des médias, chargés HORS du MainActor —
+    /// la carte est déjà peinte avec leurs couleurs d'attente. Rejoué par
+    /// « Réessayer » (`mediaAttempt`), et par une langue d'export qui sert une
+    /// autre piste : seul ce qui manque se charge.
+    private func loadMedia() async {
+        let items = subject.media
+        let wanted = loadedMedia.missing(items)
+        guard loaded, !wanted.isEmpty else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            await MessageCardMediaLoader.load(wanted)
+        }.value
+        guard !Task.isCancelled else { return }
+        loadedMedia = loadedMedia.merging(result, for: items)
+        mediaVersion += 1
+    }
+
+    /// Les pixels des médias sont là, et aucun n'a échoué : la carte montre ce qui partira.
+    private var mediaArePainted: Bool {
+        subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
     }
 
     private func render() async {
         guard loaded else { return }
         let key = renderKey
         failed = false
-        let input = MessageCardInput.of(
-            subject: subject,
-            format: format,
-            handle: request.handle,
-            conversationTitle: title,
-            anonymousLabel: Self.text("export.card.anonymous", "Anonyme"),
-            formatDate: { Self.dateFormatter.string(from: $0) }
-        )
-        let card = await Task.detached(priority: .userInitiated) { MessageCardRenderer.render(input) }.value
+        let input = input(for: format)
+        let pictures = loadedMedia.pictures
+        let card = await Task.detached(priority: .userInitiated) { MessageCardRenderer.render(input, pictures: pictures) }.value
         guard !Task.isCancelled, key == renderKey else { return }
         guard let card, let image = UIImage(data: card.png) else {
             failed = true
             return
         }
-        rendered = Rendered(key: key, image: image, png: card.png, truncated: card.truncated)
-        if request.quick && !quickSent {
+        rendered = Rendered(
+            key: key,
+            image: image,
+            png: card.png,
+            truncated: card.truncated,
+            size: CGSize(width: card.width, height: card.height),
+            regions: card.regions,
+            crowdedByMedia: card.crowdedByMedia,
+            mediaScaleLimit: card.mediaScaleLimit
+        )
+        // L'export rapide attend les pixels des médias : il ne part jamais
+        // avec leurs couleurs d'attente.
+        // Un média en échec retient l'export rapide : l'atelier le dit et attend « Réessayer ».
+        if request.quick && !quickSent && mediaArePainted {
             quickSent = true
             save()
         }
+        #if DEBUG
+        if mediaArePainted { VitrineRendu.shared.signaler(.imagine) }
+        #endif
     }
 
-    private enum Outcome { case gallery, shared, cancelled, denied }
-
-    private func save() {
-        guard ready, !busy, let rendered else { return }
-        busy = true
-        notice = nil
-        Task {
-            let saved = await PhotoLibraryManager.shared.saveImageFile(rendered.png, fileName: MessageCardSubject.fileName(at: Date()))
-            busy = false
-            finish(saved ? .gallery : .denied)
-        }
-    }
-
-    private func share() {
-        guard ready, !busy, let rendered else { return }
-        notice = nil
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(MessageCardSubject.fileName(at: Date()))
-        do {
-            try rendered.png.write(to: url, options: .atomic)
-            shareFile = ShareFile(url: url)
-        } catch {
-            notice = Self.text("export.announce.failed", "Impossible de créer l’image")
-        }
-    }
-
-    /// Chaque carte ENREGISTRÉE compte pour son template ; un refus reste dans
-    /// la feuille, où l'utilisateur peut réessayer.
-    private func finish(_ outcome: Outcome) {
-        switch outcome {
-        case .gallery, .shared:
-            MessageCardUsage.record(format.template, in: store)
-            HapticFeedback.success()
-            onClose()
-            let message = outcome == .gallery
-                ? Self.text("export.announce.gallery", "Image enregistrée dans la galerie")
-                : Self.text("export.announce.shared", "Image prête")
-            FeedbackToastManager.shared.showSuccess(message)
-        case .cancelled:
-            notice = nil
-        case .denied:
-            notice = Self.text("export.announce.photosDenied", "Autorisez Meeshy à ajouter des photos pour enregistrer l’image")
-        }
-    }
-
-    // MARK: - Pastilles
-
-    private func chip(
-        _ label: String,
-        selected: Bool,
-        swatch: MessageCardPalette? = nil,
-        font: MessageCardFace? = nil,
-        systemImage: String? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            HapticFeedback.light()
-            action()
-        } label: {
-            HStack(spacing: 8) {
-                if let swatch {
-                    Circle()
-                        .fill(LinearGradient(colors: swatch.background.map { Self.color($0.color) }, startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 1))
-                }
-                if let systemImage {
-                    Image(systemName: systemImage).font(.footnote.weight(.semibold))
-                }
-                Text(label)
-                    .font(font.map { Font(MessageCardRenderer.uiFont(MessageCardFont(face: $0, size: 16)) as CTFont) } ?? .subheadline.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
-            .foregroundStyle(selected ? Color.white : Color.primary)
-            .background(
-                Capsule().fill(selected ? accent : Color(uiColor: .secondarySystemBackground))
-            )
-            .overlay(Capsule().stroke(selected ? accent : Color.primary.opacity(0.08), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
-    }
-
-    private struct ChipRow<Content: View>: View {
-        let label: String
-        @ViewBuilder let content: () -> Content
-
-        var body: some View {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(label)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) { content() }
-                        .padding(.vertical, 1)
-                }
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(label)
-        }
-    }
-
-    // MARK: - Libellés
-
-    private static let dateFormatter: DateFormatter = {
+    static let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         formatter.timeStyle = .none
         return formatter
     }()
 
-    private static func color(_ color: MessageCardColor) -> Color {
-        Color(.sRGB, red: color.red, green: color.green, blue: color.blue, opacity: color.alpha)
-    }
+    static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter
+    }()
+}
 
-    static func text(_ key: StaticString, _ fallback: String.LocalizationValue) -> String {
-        String(localized: key, defaultValue: fallback, bundle: .main)
-    }
+/// La progression d'une carte animée — écrite depuis l'encodeur, lue par le plateau.
+final class MessageCardMotionProgress: ObservableObject {
+    @Published var value: Double?
 
-    static func templateLabel(_ id: MessageCardTemplateID) -> String {
-        "\(id.palette.palette.name) · \(typefaceLabel(id.typeface)) · \(linkLabel(id.link))"
-    }
-
-    static func typefaceLabel(_ typeface: MessageCardTypefaceID) -> String {
-        switch typeface {
-        case .rond: return text("export.card.typeface.rond", "Ronde")
-        case .didone: return text("export.card.typeface.didone", "Didone")
-        case .plume: return text("export.card.typeface.plume", "Plume")
-        case .affiche: return text("export.card.typeface.affiche", "Affiche")
-        case .futur: return text("export.card.typeface.futur", "Futuriste")
-        case .machine: return text("export.card.typeface.machine", "Machine à écrire")
-        case .marqueur: return text("export.card.typeface.marqueur", "Marqueur")
-        case .systeme: return text("export.card.typeface.systeme", "Système")
-        }
-    }
-
-    static func linkLabel(_ link: MessageCardLinkID) -> String {
-        switch link {
-        case .orbite: return text("export.card.link.orbite", "Orbite")
-        case .filet: return text("export.card.link.filet", "Filet")
-        case .guillemets: return text("export.card.link.guillemets", "Guillemets")
-        case .fleche: return text("export.card.link.fleche", "Flèche")
-        case .bulles: return text("export.card.link.bulles", "Bulles")
-        case .fil: return text("export.card.link.fil", "Fil")
-        case .silence: return text("export.card.link.silence", "Silence")
-        }
-    }
-
-    static func toggleLabel(_ toggle: MessageCardFormat.Toggle) -> String {
-        switch toggle {
-        case .showConversationTitle: return text("export.card.option.title", "Titre de la conversation")
-        case .showAuthors: return text("export.card.option.authors", "Noms des auteurs")
-        case .showDate: return text("export.card.option.date", "Date")
-        case .anonymizeQuoted: return text("export.card.option.anonymizeQuoted", "Anonymiser le message cité")
-        case .anonymizeReply: return text("export.card.option.anonymizeReply", "Anonymiser la réponse")
-        }
-    }
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage.
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
 }

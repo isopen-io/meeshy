@@ -17,9 +17,10 @@
  * | `location` | un message de type `location` |
  *
  * La vue unique est exclue aux DEUX niveaux qui la déclarent : le message (pour
- * tous les genres) et la pièce (pour les genres de pièce). `NOT: { isViewOnce:
- * true }` et jamais `isViewOnce: false` — un document écrit AVANT le champ ne
- * le porte pas, et un champ absent ne matche pas `false` (voir `messages-list-views.ts`).
+ * tous les genres) et la pièce (pour les genres de pièce), par `NOT: { isViewOnce:
+ * true }`. Sur MongoDB, cette négation écarte AUSSI le document sans la clé
+ * (mesuré, #8309) — comme `isViewOnce: false` : la migration 022 pose `false`
+ * sur les messages et les pièces écrits avant le champ.
  *
  * Les recherches de sous-chaîne (`contains`) sont traduites par Prisma en une
  * expression Mongo ÉCHAPPÉE : aucun motif fourni par l'appelant n'est

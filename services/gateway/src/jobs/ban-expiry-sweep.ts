@@ -13,6 +13,7 @@ import type { BanService } from '../services/admin/ban.service';
 import { SYSTEM_ACTOR_ID } from '../services/admin/ban.service';
 import type { UserAuditService } from '../services/admin/user-audit.service';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'BanExpirySweepJob' });
 
@@ -40,9 +41,9 @@ export class BanExpirySweepJob {
     this.sweep();
 
     // Then run on interval
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'ban-expiry-sweep', everyMs: this.intervalMinutes * 60 * 1000, logger, run: () => {
       this.sweep();
-    }, this.intervalMinutes * 60 * 1000);
+    } });
     this.intervalId.unref?.();
   }
 
@@ -79,7 +80,8 @@ export class BanExpirySweepJob {
             userId: ban.userId,
             adminId: SYSTEM_ACTOR_ID,
             action: UserAuditAction.UNBAN_USER,
-            entityId: ban.id,
+            // entity 'User' : l'identifiant est celui du MEMBRE ; le ban est dans metadata.
+            entityId: ban.userId,
             changes: {},
             metadata: { reason: 'expired', banId: ban.id, expiresAt: ban.expiresAt?.toISOString() ?? null },
           });

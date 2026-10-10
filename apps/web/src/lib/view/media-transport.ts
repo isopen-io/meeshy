@@ -23,6 +23,29 @@ export function attachmentDurationLabel(durationMs: number | undefined): string 
   return formatMediaTime(durationMs / 1000);
 }
 
+/**
+ * LA DURÉE DE LA LIGNE D'INFORMATIONS (#9577) — « largeur × hauteur · poids ·
+ * durée ». Pendant la lecture, le temps RESTANT, qui décompte avec la
+ * progression ; à l'arrêt (repos, pause), la durée totale. Tant que l'élément
+ * ne connaît pas sa durée, celle de la pièce jointe — et rien à décompter.
+ */
+export type InfoDuration = { readonly label: string; readonly remaining: boolean };
+
+export function infoDuration(params: {
+  readonly playing: boolean;
+  readonly position: number;
+  readonly duration: number;
+  readonly durationMs: number | undefined;
+}): InfoDuration | null {
+  const { playing, position, duration, durationMs } = params;
+  if (!(duration > 0)) {
+    const pieceLabel = attachmentDurationLabel(durationMs);
+    return pieceLabel === null ? null : { label: pieceLabel, remaining: false };
+  }
+  if (!playing) return { label: formatMediaTime(duration), remaining: false };
+  return { label: formatMediaTime(Math.max(0, duration - position)), remaining: true };
+}
+
 /** `VideoTransportControls.speeds` — les paliers offerts par le menu. */
 export const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 1.75, 2] as const;
 

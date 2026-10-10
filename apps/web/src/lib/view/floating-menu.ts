@@ -76,6 +76,7 @@ export const LINKS_DESTINATION: FloatingDestination = {
   key: 'links',
   route: 'links',
   labelKey: 'root.menu.links',
+  // harmony-exempt: miroir de RootView.swift (catégorie du menu flottant), à remonter dans le SDK (#8879)
   tint: '#F8B500',
   glyph: { set: 'socle', name: 'linkSimple' },
 };
@@ -84,6 +85,7 @@ export const NOTIFICATIONS_DESTINATION: FloatingDestination = {
   key: 'notifications',
   route: 'notifications',
   labelKey: 'root.menu.notifications',
+  // harmony-exempt: miroir de RootView.swift (catégorie du menu flottant), à remonter dans le SDK (#8879)
   tint: '#FF6B6B',
   glyph: { set: 'socle', name: 'bell' },
   badge: 'unreadNotifications',
@@ -93,7 +95,7 @@ export const CALLS_DESTINATION: FloatingDestination = {
   key: 'calls',
   route: 'calls',
   labelKey: 'root.menu.calls',
-  tint: '#6366F1',
+  tint: 'var(--color-ios-brand)',
   glyph: { set: 'socle', name: 'phone' },
 };
 
@@ -101,7 +103,7 @@ export const DISCOVER_DESTINATION: FloatingDestination = {
   key: 'discover',
   route: 'discover',
   labelKey: 'root.menu.discover',
-  tint: '#8B5CF6',
+  tint: 'var(--ios-purple-600)',
   glyph: { set: 'flottant', name: 'binoculars' },
   badge: 'pendingFriendRequests',
 };
@@ -110,6 +112,7 @@ export const COMMUNITIES_DESTINATION: FloatingDestination = {
   key: 'communities',
   route: 'communities',
   labelKey: 'root.menu.communities',
+  // harmony-exempt: miroir de RootView.swift (catégorie du menu flottant), à remonter dans le SDK (#8879)
   tint: '#2ECC71',
   glyph: { set: 'flottant', name: 'usersThree' },
 };
@@ -118,6 +121,7 @@ export const SETTINGS_DESTINATION: FloatingDestination = {
   key: 'settings',
   route: 'settings',
   labelKey: 'root.menu.settings',
+  // harmony-exempt: miroir de RootView.swift (catégorie du menu flottant), à remonter dans le SDK (#8879)
   tint: '#64748B',
   glyph: { set: 'flottant', name: 'gear' },
 };
@@ -170,7 +174,7 @@ export const FEED_DESTINATION: FloatingDestination = {
   key: 'feed',
   route: 'feed',
   labelKey: 'root.menu.feed',
-  tint: '#F87171',
+  tint: 'var(--ios-error)',
   glyph: { set: 'flottant', name: 'stack' },
 };
 
@@ -184,7 +188,7 @@ export const CONVERSATIONS_DESTINATION: FloatingDestination = {
   key: 'conversations',
   route: 'list',
   labelKey: 'root.menu.conversations',
-  tint: '#F87171',
+  tint: 'var(--ios-error)',
   glyph: { set: 'marque' },
 };
 
@@ -203,7 +207,7 @@ export const PROFILE_DESTINATION: FloatingDestination = {
   key: 'profile',
   route: 'profile',
   labelKey: 'root.menu.profile',
-  tint: '#4F46E5',
+  tint: 'var(--ios-indigo-600)',
   glyph: { set: 'socle', name: 'user' },
 };
 

@@ -131,7 +131,7 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, CheckedContinuation<TusUploadResult, Error>)] = []
+    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, Bool, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
     private let urlSession: URLSession
@@ -163,7 +163,7 @@ public actor TusUploadManager {
     }
 
     deinit {
-        for (_, _, _, _, _, _, continuation) in queue {
+        for (_, _, _, _, _, _, _, continuation) in queue {
             continuation.resume(throwing: CancellationError())
         }
     }
@@ -177,7 +177,12 @@ public actor TusUploadManager {
     /// `transcription` : transcription faite sur l'appareil (vocal de
     /// conversation), transportée à la CRÉATION de la session — une reprise
     /// (checkpoint) rejoue une session dont le serveur la tient déjà.
-    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil) async throws -> TusUploadResult {
+    ///
+    /// `capturedInApp` : le fichier sort de la caméra ou du micro de
+    /// l'application (#9775). Seul l'appelant qui a ouvert la caméra le sait ;
+    /// il le DÉCLARE à la création (clé `capturedinapp` d'`Upload-Metadata`),
+    /// et le serveur le rend sur `MessageAttachment.capturedInApp`.
+    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -190,7 +195,7 @@ public actor TusUploadManager {
         emitProgress()
 
         return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, transcription, continuation))
+            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation))
             processQueue()
         }
     }
@@ -212,12 +217,12 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, credential, uploadContext, thumbHash, transcription, continuation) = queue.removeFirst()
+            let (fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation) = queue.removeFirst()
             activeCount += 1
             Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
                     // cache média typé, keyé par l'URL canonique serveur. L'auteur
@@ -285,7 +290,7 @@ public actor TusUploadManager {
     /// state machine directly — the same rationale as `sha256Hex` below:
     /// a pure-enough I/O sequence exercised without going through
     /// `uploadFile`'s queue/background-task ceremony.
-    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil) async throws -> TusUploadResult {
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) async throws -> TusUploadResult {
         var credential = credential
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -333,7 +338,8 @@ public actor TusUploadManager {
                 credential: credential,
                 uploadContext: uploadContext,
                 thumbHash: thumbHash,
-                transcription: transcription
+                transcription: transcription,
+                capturedInApp: capturedInApp
             )
             guard let url = URL(string: location, relativeTo: baseURL) else {
                 throw URLError(.badURL)
@@ -510,7 +516,8 @@ public actor TusUploadManager {
         credential: MeeshyRequestCredential,
         uploadContext: String?,
         thumbHash: String?,
-        transcription: TusUploadTranscriptionMetadata?
+        transcription: TusUploadTranscriptionMetadata?,
+        capturedInApp: Bool
     ) async throws -> String {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
@@ -520,20 +527,10 @@ public actor TusUploadManager {
         createReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         createReq.setValue("\(fileSize)", forHTTPHeaderField: "Upload-Length")
 
-        let encodedFilename = Data(fileName.utf8).base64EncodedString()
-        let encodedFiletype = Data(mimeType.utf8).base64EncodedString()
-        var metadataValue = "filename \(encodedFilename),filetype \(encodedFiletype)"
-        if let context = uploadContext {
-            let encodedContext = Data(context.utf8).base64EncodedString()
-            metadataValue += ",uploadcontext \(encodedContext)"
-        }
-        if let hash = thumbHash {
-            let encodedHash = Data(hash.utf8).base64EncodedString()
-            metadataValue += ",thumbhash \(encodedHash)"
-        }
-        if let encodedTranscription = transcription?.uploadMetadataValue() {
-            metadataValue += ",transcription \(encodedTranscription)"
-        }
+        let metadataValue = Self.creationMetadata(
+            fileName: fileName, mimeType: mimeType, uploadContext: uploadContext,
+            thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp
+        )
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
         let (_, createResponse) = try await urlSession.data(for: createReq)
@@ -543,6 +540,30 @@ public actor TusUploadManager {
             throw URLError(.badServerResponse)
         }
         return location
+    }
+
+    /// La valeur d'`Upload-Metadata` à la CRÉATION d'une session : des paires
+    /// `clé base64(valeur)`. `capturedinapp` ne voyage que pour une capture —
+    /// le serveur lit `'true'` strictement, et son absence vaut « pas une
+    /// capture » (#9775).
+    static func creationMetadata(
+        fileName: String,
+        mimeType: String,
+        uploadContext: String?,
+        thumbHash: String?,
+        transcription: TusUploadTranscriptionMetadata?,
+        capturedInApp: Bool
+    ) -> String {
+        let encode = { (value: String) in Data(value.utf8).base64EncodedString() }
+        let pairs: [String?] = [
+            "filename \(encode(fileName))",
+            "filetype \(encode(mimeType))",
+            uploadContext.map { "uploadcontext \(encode($0))" },
+            thumbHash.map { "thumbhash \(encode($0))" },
+            transcription?.uploadMetadataValue().map { "transcription \($0)" },
+            capturedInApp ? "capturedinapp \(encode("true"))" : nil,
+        ]
+        return pairs.compactMap { $0 }.joined(separator: ",")
     }
 
     /// Issues a HEAD against the upload URL to discover the server-side

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { aggregateQuality, appliedTier, encodingFor, peerRate, qualityLevel, readStats, TIER_ENCODING, type PeerQuality } from './call-quality';
+import { aggregateQuality, appliedTier, encodingFor, metricGrade, peerRate, qualityLevel, readStats, TIER_ENCODING, type PeerQuality } from './call-quality';
 
 type Entry = Readonly<Record<string, unknown>>;
 
@@ -27,12 +27,46 @@ describe('la qualité d’un lien, lue dans getStats (#8047)', () => {
     expect(qualityLevel({ packetLoss: 0, rtt: 500 })).toBe('poor');
   });
 
-  test('un relevé donne la latence, la gigue la plus haute, les compteurs et le codec émis', () => {
+  test('un relevé donne la latence, la gigue audio, les compteurs et le codec émis', () => {
     const read = readStats(stats({ rtt: 120, jitter: 30 }), 1_000);
     expect(read.rtt).toBeCloseTo(120);
     expect(read.jitter).toBeCloseTo(30);
     expect(read.bytesSent).toBe(750_000);
     expect(read.codec).toBe('VP8');
+  });
+
+  /**
+   * LA GIGUE SE LIT COMME SUR iOS (#8209) — `CallStats.reduce` : la MOYENNE des
+   * flux audio entrants qui la rapportent, en ms. La vidéo n'y entre pas ; un
+   * flux sans `kind` compte comme audio (iOS range tout ce qui n'est pas
+   * `video` côté audio) ; sans flux audio, 0.
+   */
+  test('la gigue est la moyenne des flux AUDIO entrants, la vidéo n’y entre pas — la règle d’iOS (#8209)', () => {
+    const read = readStats(
+      report([
+        { type: 'inbound-rtp', kind: 'audio', jitter: 0.01 },
+        { type: 'inbound-rtp', kind: 'audio', jitter: 0.03 },
+        { type: 'inbound-rtp', jitter: 0.05 },
+        { type: 'inbound-rtp', kind: 'audio' },
+        { type: 'inbound-rtp', kind: 'video', jitter: 0.4 },
+      ]),
+      0,
+    );
+    expect(read.jitter).toBeCloseTo(30);
+    expect(readStats(report([{ type: 'inbound-rtp', kind: 'video', jitter: 0.2 }]), 0).jitter).toBe(0);
+  });
+
+  test('chaque mesure a le niveau d’iOS : perte 3/5 %, latence 300/450 ms, gigue 30/50 ms (#8209)', () => {
+    expect(metricGrade('jitter', 29.9)).toBe('good');
+    expect(metricGrade('jitter', 30)).toBe('medium');
+    expect(metricGrade('jitter', 49.9)).toBe('medium');
+    expect(metricGrade('jitter', 50)).toBe('poor');
+    expect(metricGrade('packetLoss', 2.9)).toBe('good');
+    expect(metricGrade('packetLoss', 3)).toBe('medium');
+    expect(metricGrade('packetLoss', 5)).toBe('poor');
+    expect(metricGrade('rtt', 299)).toBe('good');
+    expect(metricGrade('rtt', 300)).toBe('medium');
+    expect(metricGrade('rtt', 450)).toBe('poor');
   });
 
   test('sans vidéo émise, le codec est celui de l’audio', () => {

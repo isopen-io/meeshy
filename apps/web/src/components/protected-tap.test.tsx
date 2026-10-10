@@ -166,7 +166,7 @@ const shownMasks = (scope: Element | null | undefined): readonly Element[] =>
   Array.from(scope?.querySelectorAll('[data-protected-attachment]') ?? []).filter((el) => el.closest('[data-protected-rest]') === null);
 
 const closeViewer = async () => {
-  await mounter.click(document.body.querySelector<HTMLButtonElement>('.media-viewer-close'));
+  await mounter.click(document.body.querySelector<HTMLButtonElement>('[data-media-viewer] [data-viewer-exit="close"]'));
   await mounter.settle();
 };
 

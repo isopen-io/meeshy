@@ -8,6 +8,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { mayConsumePost } from './postConsumptionGate';
+import { creditPostEngagement } from '../../services/posts/postEngagementCredits';
 
 /** La tranche de `PostService` que le partage touche — rien d'autre n'est prêté. */
 type ShareService = Pick<PostService, 'sharePost' | 'shareWithTrackingLink'>;
@@ -124,6 +125,14 @@ export function registerShareRoutes(
           return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
         }
         payload.shareCount = post.shareCount;
+        // #9635 — le partage SIMPLE (le seul que le web envoie) crédite `social.share`
+        // comme le partage suivi : une fois par post et par personne (opération
+        // « par cible »), jamais pour son propre post.
+        creditPostEngagement(prisma, authContext.registeredUser.id, 'social.share', {
+          postId,
+          targetId: postId,
+          targetOwnerId: post.authorId,
+        });
       }
 
       return sendSuccess(reply, payload);

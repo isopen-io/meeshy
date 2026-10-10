@@ -12,6 +12,7 @@
 
 import type { CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'MultiLevelCache' });
 
@@ -53,7 +54,7 @@ export class MultiLevelCache<T = any> {
     this.deserialize = options.deserialize || JSON.parse;
 
     const cleanupIntervalMs = options.cleanupIntervalMs || 5 * 60 * 1000;
-    this.cleanupInterval = setInterval(() => this.cleanupExpiredMemoryEntries(), cleanupIntervalMs);
+    this.cleanupInterval = guardedInterval({ name: 'multi-level-cache-memory-purge', everyMs: cleanupIntervalMs, logger, run: () => this.cleanupExpiredMemoryEntries() });
     this.cleanupInterval.unref?.();
 
     logger.info(`🚀 [${this.name}] Cache multi-niveau initialisé`);

@@ -127,16 +127,6 @@ const startConnectedVideoCall = async (page) => {
   return appears(page, '[data-call-screen="connected"]', 15_000);
 };
 
-/**
- * En vidéo, les commandes s'effacent après 4 s sans geste (#8391) : un toucher
- * sur la scène les rappelle, comme le ferait la personne en appel.
- */
-const wakeChrome = async (page, width, height) => {
-  await page.mouse.move(width / 2, height / 2);
-  await page.mouse.move(width / 2 + 8, height / 2 + 8);
-  await appears(page, '[data-call-chrome="shown"]');
-};
-
 const inViewport = (box, width, height) => box !== null && box.x >= 0 && box.y >= 0 && box.x + box.width <= width + 0.5 && box.y + box.height <= height + 0.5;
 
 const browser = await launchChromium({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
@@ -167,8 +157,11 @@ try {
       check(/ — Qualité de l’appel : (excellente|bonne)$/.test(name), `${label} : l'indicateur DIT le niveau d'un lien sain (« ${name} »)`);
       await indicator.click();
       check(await appears(page, '[data-call-quality-detail]'), `${label} : un toucher ouvre le détail`);
-      const rows = await page.$$eval('[data-call-quality-row]', (cells) => cells.map((cell) => cell.textContent ?? ''));
-      check(rows.length === 5 && rows.every((row) => /\d/.test(row)), `${label} : perte, latence, gigue et débits sont chiffrés (${JSON.stringify(rows)})`);
+      const rows = await page.$$eval('[data-call-quality-row]', (cells) => cells.map((cell) => [cell.getAttribute('data-call-quality-row') ?? '', cell.textContent ?? '']));
+      const measures = rows.filter(([key]) => !['call.quality.profile', 'call.quality.audioCap', 'call.quality.videoCap'].includes(key)).map(([, text]) => text);
+      check(measures.length === 5 && measures.every((row) => /\d/.test(row)), `${label} : perte, latence, gigue et débits sont chiffrés (${JSON.stringify(measures)})`);
+      const caps = Object.fromEntries(rows);
+      check(caps['call.quality.profile'] !== undefined && caps['call.quality.profile'] !== '' && /\d/.test(caps['call.quality.audioCap'] ?? '') && /\d/.test(caps['call.quality.videoCap'] ?? ''), `${label} : le profil de données et ses plafonds se lisent (#8697) (${JSON.stringify(caps)})`);
       check(inViewport(await page.locator('[data-call-quality-detail]').boundingBox(), width, height), `${label} : le détail tient dans l'écran`);
       await capture(page, `detail-${width}x${height}`);
       const close = page.locator('[data-call-quality-close]');
@@ -228,7 +221,7 @@ try {
         check(await vanishes(page, '[data-call-alert="capturing"]'), `${label} : la capture cessée, l'alerte s'efface`);
 
         // ------------------------------------------------ 7. le rapport de fin d'appel
-        await wakeChrome(page, width, height);
+        check(await appears(page, '[data-call-chrome="shown"]'), `${label} : sans toucher sur la scène, les commandes restent pendant tout l'appel (#8988)`);
         await page.getByRole('button', { name: 'Raccrocher' }).click();
         check(await appears(page, '[data-call-screen="ended"]'), `${label} : raccrocher termine l'appel`);
         const [analytics] = await peerReports(page, 'call:analytics');
@@ -237,6 +230,30 @@ try {
         check(typeof analytics?.codec === 'string' && analytics.codec !== 'unknown' && analytics.codec !== '', `${label} : call:analytics porte le codec négocié (« ${analytics?.codec} »)`);
         check(Math.abs(sum - 1) < 1e-6 && (distribution.poor ?? 0) > 0, `${label} : la répartition de qualité somme à 1 et compte le passage dégradé (${JSON.stringify(distribution)})`);
         check(analytics?.platform === 'web' && analytics?.isVideo === true && analytics?.setupTimeMs >= 0 && analytics?.transcriptionUsed === false, `${label} : plateforme, vidéo, établissement et sous-titres sont ceux de l'appel (${JSON.stringify({ platform: analytics?.platform, isVideo: analytics?.isVideo, setupTimeMs: analytics?.setupTimeMs, transcriptionUsed: analytics?.transcriptionUsed })})`);
+
+        // ------------------------------------------------ 8. le journal réseau survit au rechargement (#8698)
+        await page.reload({ waitUntil: 'load' });
+        const journal = await page.evaluate(() => {
+          const keys = Object.keys(localStorage).filter((key) => /^meeshy\.call-journal\.u_[^.]+\.call-/.test(key));
+          return keys.map((key) => ({ key, events: JSON.parse(localStorage.getItem(key) ?? '[]') }));
+        });
+        const events = journal[0]?.events ?? [];
+        const kinds = (kind, test) => events.filter((event) => event.kind === kind && test(event)).length;
+        check(journal.length === 1, `${label} : l'appel a UN journal réseau, rangé sous le compte (${journal.map((entry) => entry.key).join(', ')})`);
+        check(kinds('phase', (event) => event.phase === 'connected') === 1 && kinds('phase', (event) => event.phase === 'ended' && event.reason === 'local') === 1, `${label} : rechargé, le journal garde la connexion et la fin raccrochée`);
+        check(kinds('quality', (event) => event.level === 'poor') > 0 && kinds('survival', (event) => event.stage === 'frozen') > 0 && kinds('survival', (event) => event.stage === 'suspended') > 0, `${label} : rechargé, il garde le lien dégradé, le gel puis la suspension de la vidéo`);
+        check(kinds('profile', (event) => typeof event.audioBitrate === 'number') > 0 && events.length <= 150, `${label} : il dit le profil de données et reste borné (${events.length} événements)`);
+        await page.evaluate(([key, value]) => {
+          const viewerKey = key.slice(0, key.lastIndexOf('.'));
+          localStorage.setItem(`${viewerKey}.call-kwame-video`, value);
+        }, [journal[0]?.key ?? '', JSON.stringify(events)]);
+        await page.goto(`${BASE}/call/call-kwame-video`, { waitUntil: 'load' });
+        check(await appears(page, '[data-call-detail-network] [data-call-network-journal]'), `${label} : la fiche d'un appel lit son journal sous « Qualité et réseau »`);
+        const heading = await page.textContent('[data-call-network-journal] h3').catch(() => '');
+        check(heading === 'Qualité et réseau', `${label} : sous son titre (« ${heading} »)`);
+        const lines = await page.$$eval('[data-call-network-event]', (items) => items.length);
+        check(lines === events.length, `${label} : une ligne datée par événement (${lines}/${events.length})`);
+        await capture(page, 'fiche-qualite-reseau');
       }
     } catch (error) {
       failures.push(`${label} : ${error instanceof Error ? error.message : String(error)} — erreurs de page ${JSON.stringify(errors)}`);

@@ -216,6 +216,14 @@ const SURFACES: Record<string, Classification> = {
   // de l'utilisateur pour construire son filtre. Deux lectures, exemptées au
   // même titre que leur fichier d'origine.
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #8876 — `enrichReports` nomme ce qu'un signalement DÉSIGNE : UNE lecture de
+  // `Message` par page (auteur, conversation, extrait). Exempte au titre de la
+  // surface de modération — le modérateur lit ce que le signalant a vu, et le
+  // masquage personnel d'un PARTICIPANT n'a pas à décider de ce qu'un signalement
+  // lui montre. Ce qui PART est gardé ailleurs : l'extrait n'est servi qu'avec
+  // `canModerateContent`, jamais pour un contenu protégé ou retiré
+  // (`messageContentIsProtected`, `deletedAt`).
+  'admin/reports-enrichment.ts': { kind: 'exempt', reads: 1, why: 'Surface admin/modération.' },
   // #7845 — deux lectures de COMPTE (`count` des messages envoyés, `findMany`
   // des seuls identifiants pour compter les signalements reçus) : aucune ne
   // sert un message, la fiche d'un membre ne rend que des nombres.
@@ -234,7 +242,9 @@ const SURFACES: Record<string, Classification> = {
       "SOUVERAINE (isViewOnce/isBlurred/effectFlags/expiresAt/encryptionMode, " +
       'appliquée par ce fichier) répondent à deux questions différentes.',
   },
-  'admin/analytics.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
+  // 4 → 5 (audit 2026-10-04) : `engagementRate` compte les comptes EXPÉDITEURS
+  // de la période (`aggregateRaw` sur `Message`) — un dénombrement, aucun contenu.
+  'admin/analytics.ts': { kind: 'exempt', reads: 5, why: 'Surface admin/modération.' },
   'admin/dashboard.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
   // 4 → 3 (#4161) : `GET /users/:userId/stats` recopiait `computeUserStats`
   // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE
@@ -303,7 +313,20 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   // 5 → 4 (#7451) : le GEL par message est parti dans
   // `messaging/freezeMessageStatus.ts` (déclaré plus bas). La lecture a changé
   // de fichier, pas de nature — elle ne servait déjà aucun contenu.
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 4, applications: 1 },
+  // 4 → 3 lectures, 1 → 0 application (#9630) : le compteur UNITAIRE
+  // (`getUnreadCount`) est parti, entier, dans `unreadCountOfParticipant.ts`
+  // (déclaré ci-dessous) — ce fichier hors budget ne pouvait plus grandir pour
+  // y écarter les avis de capture. Aucune lecture n'a disparu.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 3, applications: 0 },
+  // #9630 — le compteur unitaire : le `count` sous `applyPersonalHistoryHiding`
+  // (masquage personnel ET avis de capture non adressés à ce lecteur), plus la
+  // lecture des CANDIDATS avis de la fenêtre (identité et marque, aucun contenu)
+  // dont il tire ce qu'il écarte — d'où une application pour deux lectures.
+  'unreadCountOfParticipant.ts': { kind: 'applies', reads: 2, applications: 1 },
+  // #9709 — le rattrapage traduit l'historique pour le lecteur qui ARRIVE : ce
+  // qu'il a masqué de sa vue (historique effacé, messages supprimés pour lui)
+  // ne lui est pas retraduit. Un invité sans compte n'a rien à masquer.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -321,6 +344,42 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    *     l'utilisateur a nettoyé sa vue — or un succès atteint reste à vie
    *     (règle porteur).
    */
+  /**
+   * #9315 — le verdict de la route par CHEMIN (`GET /attachments/file/*`). Une
+   * lecture, qui ne projette que l'ÉTAT des messages porteurs d'un fichier
+   * (`deletedAt`, `expiresAt`, `viewOnceBurnAt`, et le bloc de protection —
+   * `isViewOnce`, `isBlurred`, `effectFlags`, `ephemeralDuration` — dont #9600
+   * lit la nature pour dire si le fichier se lit par lecteur) pour décider si
+   * ses octets peuvent encore partir. L'adresse SIGNÉE (#9600) connaît son
+   * lecteur, mais elle sert le fichier d'un message que la liste lui a déjà
+   * servi : son lecteur est jugé comme celui des routes par identifiant
+   * (`attachmentReadVerdict.ts`, une `findUnique` hors du périmètre de ce garde). Aucun contenu, aucun aperçu, aucun
+   * auteur n'est servi par elle : le masquage personnel protège ce qu'un
+   * lecteur VOIT dans son historique, et une adresse de fichier n'en est pas
+   * une surface (la route ne connaît pas le lecteur, #9315 « aucune
+   * authentification exigée »).
+   */
+  'attachments/fileRouteVerdict.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Projette seulement l'état des messages porteurs d'un fichier (supprimé, " +
+      'expiré, vue unique consommée) pour décider si ses octets partent encore ; ' +
+      "aucun contenu servi, et la route ne connaît pas le lecteur dont l'historique serait masqué.",
+  },
+  /**
+   * #9646 — relit la protection (cinq colonnes) des messages porteurs de pièces
+   * DÉJÀ choisies et filtrées par l'appelant (galerie, détail — plancher et
+   * masquage appliqués là), pour signer les adresses de celles qui
+   * disparaissent. Elle ne choisit aucun message et n'en sert aucun contenu.
+   */
+  'attachments/signServedAttachments.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Relit seulement la protection des porteurs de pièces que l'appelant a déjà choisies sous son " +
+      'plancher et son masquage, pour en signer les adresses ; aucun message choisi, aucun contenu servi.',
+  },
   'achievements/GlobalAchievements.ts': {
     kind: 'exempt',
     reads: 3,
@@ -373,10 +432,10 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
   },
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur : il détruit les messages arrivés à " +
-      "expiration, sans lecteur. Masquer une ligne à la destruction la ferait " +
+      "expiration, sans lecteur, et les réponses qui les citent (#8630). Masquer une ligne à la destruction la ferait " +
       'survivre indéfiniment à la préférence d\'affichage d\'un seul utilisateur.',
   },
 
@@ -412,6 +471,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "ligne ouverte et y ajouter un arrivant. Écriture serveur, sans lecteur : " +
       "masquer ici ouvrirait une seconde ligne dès qu'un seul membre a effacé la sienne.",
   },
+  'game/MissionHabits.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Heures habituelles d'écriture du titulaire pour sa mission personnelle (#9539) : " +
+      'ses 150 derniers messages ENVOYÉS, `select: { createdAt: true }`, réduits à un ' +
+      "histogramme qui n'entre que dans le tirage de sa plage. Aucun contenu servi, " +
+      "à personne ; et effacer son historique cache ce qu'on a reçu, sans défaire " +
+      "d'avoir écrit à ces heures-là.",
+  },
   'messaging/messagePostSaveEffects.ts': {
     kind: 'exempt',
     reads: 1,
@@ -437,6 +506,56 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "des messages que le lecteur VIENT de voir, et ne rend aucun contenu. " +
       'Un masquage personnel empêcherait ce lecteur de faire disparaître ' +
       'chez lui ce qu\'il a vu — le contraire de la directive.',
+  },
+  'messaging/quoteCascade.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Chaîne citée (#8630) : elle lit identifiants, expéditeur et échéance des " +
+      "messages CITÉS (vers le haut) et les identifiants des RÉPONSES (vers le bas) " +
+      "pour décider ce qui est mort pour un lecteur, et ne rend aucun contenu. " +
+      "Masquer ici laisserait vivre, chez qui a effacé l'original de son historique, " +
+      "une réponse à un éphémère déjà détruit pour lui.",
+  },
+  'messaging/attachmentSendAdmission.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Admission des pièces d'un envoi (#9587) : elle lit l'identifiant, la " +
+      "conversation et le `clientMessageId` des messages qui PORTENT déjà les " +
+      "pièces déclarées, pour reconnaître le réessai idempotent du MÊME envoi. " +
+      "Elle ne rend aucun contenu ; masquer ici refuserait le réessai d'un " +
+      "envoi de l'auteur sous prétexte qu'il a effacé son propre historique.",
+  },
+  'messaging/captureNoticeRetention.ts': {
+    kind: 'exempt',
+    reads: 3,
+    why:
+      "Durée des avis de capture (#9629) : la cascade relit les avis vivants d'une " +
+      "conversation pour avancer leur échéance, le rattrapage relit ceux qui n'en " +
+      "ont pas et l'échéance des messages qu'ils nomment. Aucun contenu n'est " +
+      "servi : ce sont des écritures d'échéance, pour TOUS les lecteurs à la fois.",
+  },
+  'messaging/captureNoticeVisibility.ts': {
+    kind: 'exempt',
+    reads: 2,
+    why:
+      "Audience des avis de capture (#9629, #9630) : ses deux lectures rendent " +
+      "l'identité, l'auteur et la métadonnée des avis vivants, puis l'horloge et " +
+      "l'auteur des messages qu'ils nomment — aucun contenu. Le masquage du " +
+      "lecteur n'y est pas APPLIQUÉ en `where`, il y est JUGÉ : un avis se sert " +
+      "si le lecteur lit le message capturé (`readableByReader` sur SON plancher " +
+      "et SON masquage), et les ids refusés rejoignent le masquage de la surface.",
+  },
+  'messaging/contentCaptureNotices.ts': {
+    kind: 'exempt',
+    reads: 1,
+    why:
+      "Avis de capture (#9617) : il lit la protection et l'expéditeur des " +
+      "messages déclarés capturés, et ne rend aucun contenu. Le droit du " +
+      "lecteur, masquage personnel COMPRIS, est jugé message par message par " +
+      "`readerMayReadMessage` avec `whenHidingUnreadable: 'refuse'` : un " +
+      "message masqué pour l'acteur n'est jamais annoncé.",
   },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',

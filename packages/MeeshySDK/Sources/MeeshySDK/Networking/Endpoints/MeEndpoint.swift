@@ -13,6 +13,7 @@ import Foundation
 
 public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case accountDeletion
+    case birthDate
     case categories
     case categoriesByCategoryId(categoryId: String)
     case categoriesReorder
@@ -24,6 +25,24 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case deleteAccountDeleteNow
     case engagement
     case export
+    case gameChestClaim
+    case gameDuoByDuoIdAbandon(duoId: String)
+    case gameDuoByDuoIdAccept(duoId: String)
+    case gameDuoInvite
+    case gameFlameFreezes
+    case gameFlameRelight
+    case gameGuideSeen
+    case gameLeagueConsent
+    case gameLeagueFriends
+    case gameLeaguePseudonym
+    case gameLeagueWeek
+    case gameMissionsByMissionIdReroll(missionId: String)
+    case gamePrestige
+    case gamePrivacy
+    case gameSeasonSeal
+    case gameSeasonStepsByStepClaim(step: String)
+    case gameShowcaseOrder
+    case gameVisibility
     case meeshMint
     case onboarding
     case permissions
@@ -40,6 +59,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case preferencesPrivacy
     case preferencesVideo
     case root
+    case securityEvents
     case starredMessages
     case starredMessagesByMessageId(messageId: String)
     case stickers
@@ -50,6 +70,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .accountDeletion: return "/api/v1/me/account/deletion"
+        case .birthDate: return "/api/v1/me/birth-date"
         case .categories: return "/api/v1/me/categories"
         case .categoriesByCategoryId(let categoryId): return "/api/v1/me/categories/\(categoryId)"
         case .categoriesReorder: return "/api/v1/me/categories/reorder"
@@ -61,6 +82,24 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .deleteAccountDeleteNow: return "/api/v1/me/delete-account/delete-now"
         case .engagement: return "/api/v1/me/engagement"
         case .export: return "/api/v1/me/export"
+        case .gameChestClaim: return "/api/v1/me/game/chest/claim"
+        case .gameDuoByDuoIdAbandon(let duoId): return "/api/v1/me/game/duo/\(duoId)/abandon"
+        case .gameDuoByDuoIdAccept(let duoId): return "/api/v1/me/game/duo/\(duoId)/accept"
+        case .gameDuoInvite: return "/api/v1/me/game/duo/invite"
+        case .gameFlameFreezes: return "/api/v1/me/game/flame/freezes"
+        case .gameFlameRelight: return "/api/v1/me/game/flame/relight"
+        case .gameGuideSeen: return "/api/v1/me/game/guide/seen"
+        case .gameLeagueConsent: return "/api/v1/me/game/league/consent"
+        case .gameLeagueFriends: return "/api/v1/me/game/league/friends"
+        case .gameLeaguePseudonym: return "/api/v1/me/game/league/pseudonym"
+        case .gameLeagueWeek: return "/api/v1/me/game/league/week"
+        case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
+        case .gamePrestige: return "/api/v1/me/game/prestige"
+        case .gamePrivacy: return "/api/v1/me/game/privacy"
+        case .gameSeasonSeal: return "/api/v1/me/game/season/seal"
+        case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
+        case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"
+        case .gameVisibility: return "/api/v1/me/game/visibility"
         case .meeshMint: return "/api/v1/me/meesh/mint"
         case .onboarding: return "/api/v1/me/onboarding"
         case .permissions: return "/api/v1/me/permissions"
@@ -77,6 +116,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .preferencesPrivacy: return "/api/v1/me/preferences/privacy"
         case .preferencesVideo: return "/api/v1/me/preferences/video"
         case .root: return "/api/v1/me"
+        case .securityEvents: return "/api/v1/me/security-events"
         case .starredMessages: return "/api/v1/me/starred-messages"
         case .starredMessagesByMessageId(let messageId): return "/api/v1/me/starred-messages/\(messageId)"
         case .stickers: return "/api/v1/me/stickers"

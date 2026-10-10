@@ -91,8 +91,10 @@ describe('le rail droit : des TUILES libellées, et l’historique', () => {
     const el = mount(harness({}).deps);
     // #8516 : le Texte est une porte du couloir GAUCHE (ce qu'on pose) ; le
     // rail droit ne garde que les outils de la scène.
+    // #8713 : le (+) de scène a pris la place de l'éclair, dans la barre haute.
     const tiles = [...el.querySelectorAll('[data-story-studio-rail] [data-story-tile]')];
-    expect(tiles.map((tile) => tile.getAttribute('data-story-option'))).toEqual(['add-text', 'add-page']);
+    expect(tiles.map((tile) => tile.getAttribute('data-story-option'))).toEqual(['add-text']);
+    expect(el.querySelector('[data-story-option="add-page"]')?.closest('[data-story-studio-rail]')).toBeNull();
     expect(tiles.every((tile) => tile.textContent === '' && tile.getAttribute('aria-label') !== null && tile.className.split(' ').includes('glass'))).toBe(true);
   });
 
@@ -265,7 +267,7 @@ describe('le mode Animé (#8415)', () => {
   test('la pastille ouvre la frise : une piste par objet, rails et volets retirés sauf Temps ; la refermer rend tout', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     const toggle = el.querySelector('[data-story-animated]')!;
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     click(toggle);
@@ -277,10 +279,13 @@ describe('le mode Animé (#8415)', () => {
     expect([...el.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-option]')].map((tile) => tile.getAttribute('data-story-option'))).toEqual(['time']);
     expect(el.querySelector('[data-story-object-move]')).toBeNull();
     expect(el.querySelector('[data-story-publish]')).not.toBeNull();
+    // L'éclair reste à sa place, frise ouverte : c'est lui qui éteint Animé.
+    expect(el.querySelector('[data-story-scene-toggles] [data-story-animated]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="add-page"]')).toBeNull();
     click(el.querySelector('[data-story-animated]'));
     expect(el.querySelector('[data-story-timeline]')).toBeNull();
-    expect(el.querySelector('[data-story-studio-rail="trailing"] [data-story-option="add-page"]')).not.toBeNull();
-    expect(el.querySelector('[data-story-studio-rail="leading"]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="add-page"]')).not.toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="leading"] [data-story-animated]')).not.toBeNull();
   });
 
   test('la fenêtre réglée à la frise PART dans le document, avec la durée de la scène', async () => {
@@ -312,7 +317,7 @@ describe('le mode Animé (#8415)', () => {
   test('éteindre Animé est un geste qu’Annuler défait : la scène redevient animée, et « Temps » rouvre sa frise', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-animated]'));
@@ -345,7 +350,7 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     act(() => layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 50, clientY: 30 })));
   };
 
-  test('toucher un objet le SÉLECTIONNE sans contour ni poignée ; double-tap ouvre sa plaque d’édition', async () => {
+  test('toucher un objet le SÉLECTIONNE sans contour ni poignée ; double-tap ouvre son édition (sous-outils au rail droit, #9140)', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Un');
     click(el.querySelector('[data-story-option="add-text"]'));
@@ -354,11 +359,50 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     tapObject(el, 'text-1');
     expect(el.querySelector<HTMLTextAreaElement>('#story-studio-text')?.dataset.storyTextTarget).toBe('text-1');
     expect(el.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]')).toBeNull();
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
     tapObject(el, 'text-1');
-    await flush(() => el.querySelector('[data-story-edit-plaque] [data-story-object-editor="text-1"]') !== null);
-    click(el.querySelector('[data-story-edit-done]'));
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    await flush(() => el.querySelector('[data-story-option="section:style"]') !== null);
+    expect(el.querySelector('[data-story-trailing-options]')?.getAttribute('aria-label')).toContain('1');
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
+  });
+
+  /** #8681 (jumelle de #8680) — le double-toucher d'un texte ÉCRIT ouvre la
+   * même édition que son AJOUT : chrome effacé, sous-outils du texte au rail
+   * droit et (x) (#9140), saisie sur la scène à la pose de l'objet — aucun
+   * autre éditeur. */
+  test('double-toucher un texte écrit ouvre EXACTEMENT l’édition de son ajout, jamais un autre éditeur', async () => {
+    const el = mount(harness({}).deps);
+    const field = () => el.querySelector<HTMLTextAreaElement>('#story-studio-text');
+    const edition = () => ({
+      chrome: ['[data-story-studio-top]', '[data-story-studio-rail="leading"]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome')),
+      sections: [...el.querySelectorAll('[data-story-trailing-options] [data-story-option^="section:"]')].map((tile) => tile.getAttribute('data-story-option')),
+      panels: el.querySelectorAll('[data-story-inline-panel]').length,
+      close: el.querySelector('[data-story-trailing-options] [data-story-option="edit:exit"]') !== null,
+      target: field()?.dataset.storyTextTarget ?? null,
+      focused: document.activeElement !== null && document.activeElement === field(),
+      onScene: (field()?.style.transform ?? '').startsWith('translate(-50%, -50%) rotate('),
+    });
+    click(el.querySelector('[data-story-option="add-text"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
+    const added = edition();
+    expect(added).toEqual({
+      chrome: ['hidden', 'hidden'],
+      sections: ['section:style', 'section:effect', 'section:color', 'section:align', 'section:background', 'section:language', 'section:pose'],
+      panels: 0,
+      close: true,
+      target: added.target,
+      focused: true,
+      onScene: true,
+    });
+    typeText(el, 'Écrit');
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
+    await flush(() => el.querySelector(`[data-scene-object-id="${added.target}"]`) !== null);
+    tapObject(el, added.target!);
+    tapObject(el, added.target!);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
+    expect(edition()).toEqual(added);
   });
 
   test('le clic droit (appui long au doigt) ouvre le menu : Dupliquer pose une copie', async () => {
@@ -375,15 +419,53 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     expect(el.querySelectorAll('[data-scene-text]')).toHaveLength(2);
   });
 
-  test('une plaque ouverte en bas retire le socle sur MOBILE', async () => {
+  /** #8654 (jumelle de #8652) — un outil ouvert prend toute la place : en-tête,
+   * rails et leurs (+), socle cèdent ; restent ses réglages et son (X). */
+  test('un outil ouvert efface en-tête, rails et socle ; son (X) rend exactement le chrome d’avant', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     const row = () => el.querySelector('[data-story-socle-row]')?.className ?? '';
-    expect(row()).not.toContain('max-md:hidden');
+    const chrome = () =>
+      ['[data-story-studio-top]', '[data-story-studio-rail="leading"]', '[data-story-trailing-options]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome') ?? 'absent');
+    expect(chrome()).toEqual(['shown', 'shown', 'shown']);
+    expect(row()).not.toContain('hidden');
+
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    expect(row()).toContain('max-md:hidden');
+    // Les outils du FOND vivent au rail droit (#8849) : lui seul reste.
+    expect(chrome()).toEqual(['hidden', 'hidden', 'shown']);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('aria-hidden')).toBe('true');
+    expect(el.querySelector('[data-story-studio-rail="leading"]')?.hasAttribute('inert')).toBe(true);
+    expect(row().split(' ')).toContain('hidden');
+    // #8713 : annuler reste en bas de la colonne, « même pour les outils ».
+    expect(el.querySelector('[data-story-trailing-foot] [data-story-option="undo"]')?.closest('[inert]')).toBeNull();
+    const close = el.querySelector('[data-story-frame-panel] [data-story-tool-close]');
+    expect(close?.getAttribute('aria-label')).toBe('Fermer l’outil');
+    // La tuile qui l'a ouvert est devenue inerte : le focus entre dans l'outil.
+    expect(document.activeElement).toBe(close);
+
+    // Son (X) range les contrôles ; le (x) du rail rend la gestion de la scène.
+    click(close);
+    await flush(() => el.querySelector('[data-story-frame-panel]') === null);
+    expect(chrome()).toEqual(['hidden', 'hidden', 'shown']);
+    click(el.querySelector('[data-story-option="background:exit"]'));
+    await flush(() => el.querySelector('[data-story-option="background:exit"]') === null);
+    expect(chrome()).toEqual(['shown', 'shown', 'shown']);
+    expect(row().split(' ')).not.toContain('hidden');
+  });
+
+  test('l’édition d’un texte est un outil : le chrome cède aussi', async () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Un');
+    await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
+    click(el.querySelector('[data-story-object-edit="text-1"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('hidden');
+    expect(el.querySelector('[data-story-studio-rail="leading"]')?.getAttribute('data-studio-chrome')).toBe('hidden');
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') === null);
+    expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('shown');
   });
 
   test('le Cadre « sable » teinte AUSSI le sol autour de la carte', async () => {
@@ -445,6 +527,8 @@ describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', 
     const el = mount(bench.deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="section:filter"]') !== null);
+    click(el.querySelector('[data-story-option="section:filter"]'));
     await flush(() => el.querySelector('[data-story-option="filter:bw"]') !== null);
     expect(el.querySelector('[data-story-option="filter:none"]')?.getAttribute('aria-pressed')).toBe('true');
     click(el.querySelector('[data-story-option="filter:bw"]'));
@@ -461,7 +545,27 @@ describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', 
     const el = mount(seeded().deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
-    await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(el.querySelector('[data-story-option^="trim"]')).toBeNull();
+    expect(el.querySelector('[data-story-option="section:trim"]')).toBeNull();
+  });
+});
+
+/** #8681 (jumelle de #8680, porteur 2026-09-29 : « lorsqu'on touche le premier
+ * outil image, ça doit ouvrir directement la photothèque »). */
+describe('la première porte ouvre directement la photothèque', () => {
+  test('le premier contrôle du couloir est le sélecteur de fichiers des photos et vidéos, sans menu intermédiaire', () => {
+    const el = mount(harness({}).deps);
+    const rail = el.querySelector('[data-story-studio-rail="leading"]')!;
+    const first = rail.querySelector('input, button, [role="button"], [aria-haspopup]');
+    expect(first?.tagName).toBe('INPUT');
+    expect(first?.getAttribute('type')).toBe('file');
+    expect(first?.getAttribute('data-door')).toBe('visual');
+    expect(first?.getAttribute('accept')).toBe('image/*,video/*');
+    // Le disque EST l'étiquette du champ : le toucher ouvre le sélecteur du
+    // système dans le même geste, sans feuille ni menu à traverser.
+    expect(first?.parentElement?.tagName).toBe('LABEL');
+    expect(first?.parentElement?.parentElement).toBe(rail);
+    expect(rail.querySelector('[aria-haspopup], [role="menu"]')).toBeNull();
   });
 });

@@ -38,9 +38,9 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
     id: 'c-new', content: 'hi', originalLanguage: 'fr', translations: null,
     likeCount: 0, replyCount: 0, effectFlags: 0, parentId: null,
     createdAt: new Date('2025-01-01T00:00:00Z'), metadata: null,
-    author: { id: 'a1', username: 'al', displayName: 'Al', avatar: null },
+    author: { id: 'a1a1a1a1a1a1a1a1a1a1a1a1', username: 'al', displayName: 'Al', avatar: null },
   };
-  return {
+  const prisma = {
     post: {
       findFirst: jest.fn().mockResolvedValue({ id: 'post-1' }),
       update: jest.fn().mockResolvedValue({}),
@@ -51,7 +51,11 @@ const buildPrismaForAdd = (postMedia: ReturnType<typeof makePostMediaMock>) => {
       update: jest.fn().mockResolvedValue({}),
     },
     postMedia,
-  } as unknown as PrismaClient;
+    // Création + réclamation partagent une transaction (#9745) : le double la
+    // déroule sur le même client.
+    $transaction: jest.fn(async (work: (tx: unknown) => Promise<unknown>) => work(prisma)),
+  };
+  return prisma as unknown as PrismaClient;
 };
 
 describe('PostCommentService.addComment — media', () => {
@@ -62,7 +66,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    const result: any = await service.addComment('post-1', 'a1', 'hi', { effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-1'] });
+    const result: any = await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'hi', { effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-1'] });
 
     // La condition est portée par l'ÉCRITURE et non par une lecture préalable :
     // la base tranche en une opération, donc deux commentaires concurrents ne
@@ -77,7 +81,7 @@ describe('PostCommentService.addComment — media', () => {
       { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
     ]);
     // Et la garde de propriété : l'auteur du commentaire, pas n'importe qui.
-    expect(call.where.uploaderId).toBe('a1');
+    expect(call.where.uploaderId).toBe('a1a1a1a1a1a1a1a1a1a1a1a1');
     expect(call.data).toEqual(expect.objectContaining({ commentId: 'c-new' }));
     expect(result.media).toHaveLength(1);
     expect(result.media[0].id).toBe('m-1');
@@ -91,7 +95,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await service.addComment('post-1', 'a1', '', {
+    await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', '', {
       effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-2'],
       mobileTranscription: { text: 'bonjour', language: 'fr', segments: [] } as any,
     });
@@ -119,7 +123,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await service.addComment('post-1', 'a1', 'deux photos', {
+    await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'deux photos', {
       mediaIds: ['p-1', 'p-2'],
       mobileTranscription: { text: 'bonjour', language: 'fr', segments: [] } as any,
     });
@@ -138,7 +142,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    const result: any = await service.addComment('post-1', 'a1', 'trois photos', { mediaIds: ['c', 'a', 'b'] });
+    const result: any = await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'trois photos', { mediaIds: ['c', 'a', 'b'] });
 
     expect(postMedia.updateMany.mock.calls[0][0].where.id).toEqual({ in: ['c', 'a', 'b'] });
     // Le RANG suit l'ordre de la requête — le seul porteur de l'ordre voulu.
@@ -149,28 +153,38 @@ describe('PostCommentService.addComment — media', () => {
     expect(result.media).toHaveLength(3);
   });
 
+  // La garde vit dans la REQUÊTE (#9745) : libre ET téléversé par l'auteur. Un
+  // média pris, inconnu ou à quelqu'un d'autre n'en revient pas — la lecture
+  // rend moins de lignes que demandé. Le comportement de bout en bout, sur un
+  // double qui honore le filtre : `PostCommentService.mediaOwnership.test.ts`.
   it('throws MEDIA_NOT_AVAILABLE when the media is already linked', async () => {
     const postMedia = makePostMediaMock();
-    postMedia.findMany.mockResolvedValue([{ id: 'm-3', postId: 'other-post', commentId: null }]);
+    postMedia.findMany.mockResolvedValue([]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await expect(service.addComment('post-1', 'a1', 'hi', { effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-3'] }))
+    await expect(service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'hi', { effectFlags: 0, originalLanguage: 'fr', mediaIds: ['m-3'] }))
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
+    const admission = postMedia.findMany.mock.calls[0][0];
+    expect(admission.where.id).toEqual({ in: ['m-3'] });
+    expect(admission.where.uploaderId).toBe('a1a1a1a1a1a1a1a1a1a1a1a1');
+    expect(admission.where.AND).toEqual([
+      { OR: [{ postId: null }, { postId: { isSet: false } }] },
+      { OR: [{ commentId: null }, { commentId: { isSet: false } }] },
+    ]);
+    expect((prisma as any).postComment.create).not.toHaveBeenCalled();
   });
 
   it('REFUSE le lot ENTIER dès qu’UN média est indisponible — jamais un commentaire amputé en silence', async () => {
     const postMedia = makePostMediaMock();
-    postMedia.findMany.mockResolvedValue([
-      { id: 'libre', postId: null, commentId: null },
-      { id: 'pris', postId: null, commentId: 'autre-commentaire' },
-    ]);
+    postMedia.findMany.mockResolvedValue([{ id: 'libre' }]);
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await expect(service.addComment('post-1', 'a1', 'hi', { mediaIds: ['libre', 'pris'] }))
+    await expect(service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'hi', { mediaIds: ['libre', 'pris'] }))
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
     expect(postMedia.updateMany).not.toHaveBeenCalled();
+    expect((prisma as any).postComment.create).not.toHaveBeenCalled();
   });
 
   it('grave `metadata.quotedPostMedia` À CÔTÉ du lieu partagé — une seule écriture, pas deux (#6578)', async () => {
@@ -178,7 +192,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await service.addComment('post-1', 'a1', 'celle-là', {
+    await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'celle-là', {
       quotedPostMedia: { postMediaId: '507f1f77bcf86cd799439102', kind: 'image' },
       location: { latitude: 48.85, longitude: 2.35, name: 'Paris' },
     });
@@ -195,7 +209,7 @@ describe('PostCommentService.addComment — media', () => {
     const prisma = buildPrismaForAdd(postMedia);
 
     const service = new PostCommentService(prisma, noopTrackingLinks);
-    await service.addComment('post-1', 'a1', 'bravo');
+    await service.addComment('post-1', 'a1a1a1a1a1a1a1a1a1a1a1a1', 'bravo');
 
     const data = (prisma as any).postComment.create.mock.calls[0][0].data;
     expect(data.metadata).toBeUndefined();

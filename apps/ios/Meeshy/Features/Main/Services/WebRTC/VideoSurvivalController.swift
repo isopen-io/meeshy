@@ -252,6 +252,11 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// only `transitionTask` would not propagate, since the actuator call is an
     /// independent Task, not a structured child of `transitionTask`.
     private var activeActuatorTask: Task<Bool, Never>?
+    /// Fired once a transition's completion has been processed — applied,
+    /// reverted on failure/timeout, or swallowed by the generation token after
+    /// `reset()`. A swallowed completion changes nothing observable, so tests
+    /// await this instead of sleeping past the actuator (#9513).
+    var onTransitionSettled: (() -> Void)?
 
     func reset() {
         state = .initial
@@ -311,7 +316,9 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
                     }
                 }
             }
-            guard let self, generation == self.generation else { return }
+            guard let self else { return }
+            defer { self.onTransitionSettled?() }
+            guard generation == self.generation else { return }
             if ok {
                 self.isVideoSuspended = suspend
             } else {

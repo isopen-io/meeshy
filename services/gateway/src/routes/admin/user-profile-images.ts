@@ -46,8 +46,10 @@ import { getCacheStore } from '../../services/CacheStore';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { validatePagination } from '../../utils/pagination';
+import { ADMIN_USER_FICHE_INCLUDE } from '../../services/admin/user-management.service';
 import { sendBadRequest, sendError, sendForbidden, sendInternalError, sendNotFound, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
 import { evaluerLoiDesChamps } from './user-field-law';
 
 type Deps = { userAuditService: UserAuditService };
@@ -215,6 +217,10 @@ export function registerUserProfileImageRoutes(fastify: FastifyInstance, deps: D
           : { banner: url },
       });
 
+      if (kind === 'avatar') {
+        await releaseParticipantAvatarSnapshots(fastify.prisma, userId)
+          .catch((err: unknown) => logError(fastify.log, '[ADMIN_PROFILE_IMAGE] participant snapshot release failed', err));
+      }
       await oublierLeCache(userId);
       fastify.notificationService?.emitUserUpdated({ userId, changes: kind === 'avatar' ? { avatar: url } : { banner: url } })
         .catch((err: unknown) => logError(fastify.log, '[ADMIN_PROFILE_IMAGE] emitUserUpdated failed', err));
@@ -234,7 +240,9 @@ export function registerUserProfileImageRoutes(fastify: FastifyInstance, deps: D
         userAgent: request.headers['user-agent'],
       });
 
-      return sendSuccess(reply, sanitizationService.sanitizeUser(aJour as never, moi.role), {
+      // La fiche RELUE (avec `_count`), la forme de `GET /admin/users/:id`.
+      const relue = await fastify.prisma.user.findUnique({ where: { id: userId }, include: ADMIN_USER_FICHE_INCLUDE });
+      return sendSuccess(reply, sanitizationService.sanitizeUser((relue ?? aJour) as never, moi.role, { withAdminMetadata: true }), {
         message: 'Profile image updated',
       });
     } catch (error) {

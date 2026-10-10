@@ -1,6 +1,6 @@
 import type { CanvasObject } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
-import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
+import { SCENE_TEXT_WRAP_FRACTION, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import type { SceneClockHandle } from './scene-clock';
 import { SceneObjectFrame } from './scene-object-frame';
@@ -41,7 +41,7 @@ export function SceneObjectText({
           ...boxStyle,
           ...(webkitTextStroke !== undefined ? { WebkitTextStroke: webkitTextStroke } : {}),
           color: resolved.color,
-          // 85 % DE LA SCÈNE, pas du cadre (revue-correction #6901). Un
+          // 88 % DE LA SCÈNE (iOS, #9140), pas du cadre (revue-correction #6901). Un
           // `max-w-[85%]` résolvait contre `SceneObjectFrame`, dont la
           // largeur est AUTO (shrink-to-fit sur ce texte même) : la boîte
           // peinte valait alors 85 % du texte — mesuré 65,72 px pour un
@@ -51,7 +51,7 @@ export function SceneObjectText({
           // deux lignes (`check-story-studio.mjs`). `cqw` se résout contre le
           // CONTENEUR (`SceneCanvas`, `container-type: inline-size`), donc
           // contre la scène — le même référentiel que `fontSize` ci-dessous.
-          maxWidth: '85cqw',
+          maxWidth: `${SCENE_TEXT_WRAP_FRACTION * 100}cqw`,
           // Un texte se dimensionne sur la LARGEUR de la scène rendue
           // (`CanvasGeometry.scaleFactor`), en unités de conteneur.
           fontSize: `${resolved.widthFraction * 100}cqw`,

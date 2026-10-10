@@ -32,6 +32,28 @@ nonisolated enum NowPlayingReturnPolicy {
     }
 }
 
+/// Toucher le mini-lecteur (#9300) : ouvrir la conversation du vocal SUR sa
+/// bulle, comme le web (`/c/<id>?message=<id>`, #9294). Le message voyage
+/// par `navigateToConversationById(_:highlightMessageId:)`, que le fil
+/// consomme (`consumePendingHighlightMessage` : défilement, fenêtre autour
+/// si hors des pages chargées, mise en évidence). Contrairement au retour
+/// Now Playing, une lecture en pause navigue aussi : le geste est explicite.
+nonisolated enum MiniPlayerTapPolicy {
+
+    struct Target: Equatable {
+        let conversationId: String
+        let highlightMessageId: String?
+    }
+
+    static func target(context: ActiveAudioContext?) -> Target? {
+        guard let context, !context.conversationId.isEmpty else { return nil }
+        return Target(
+            conversationId: context.conversationId,
+            highlightMessageId: context.messageId.isEmpty ? nil : context.messageId
+        )
+    }
+}
+
 /// Modificateur posé sur la racine (iPhone ET iPad) : suit le cycle
 /// background → active de l'app et déclenche la navigation quand la politique
 /// le décide. Le highlight est parké sur le Router AVANT le post — même

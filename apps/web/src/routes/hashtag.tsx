@@ -74,7 +74,7 @@ export default function HashtagScreen() {
           className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
-          <Glyph name="caretLeft" size={20} />
+          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </Link>
         <h1 className="truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           #{canonical}
@@ -99,7 +99,7 @@ export default function HashtagScreen() {
             <button
               type="button"
               onClick={() => void page.refetch()}
-              className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+              className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
               Réessayer

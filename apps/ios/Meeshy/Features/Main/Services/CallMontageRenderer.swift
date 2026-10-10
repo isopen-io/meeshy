@@ -6,6 +6,9 @@ nonisolated struct CallMontagePortrait: @unchecked Sendable {
     let id: String
     let name: String
     let image: CGImage?
+    /// Peint, ce portrait est un TROU qui relève sa case (#9348) — `nil` pour
+    /// les appels, qui peignent la photo.
+    var hole: CallMontageHole? = nil
 }
 
 nonisolated struct CallMontageCaption: Equatable, Sendable {
@@ -14,8 +17,9 @@ nonisolated struct CallMontageCaption: Equatable, Sendable {
 }
 
 nonisolated enum CallMontageRenderer {
-    static func render(style: CallMontageStyle, portraits: [CallMontagePortrait], canvas: CGSize, caption: CallMontageCaption) -> CGImage? {
-        guard let context = makeContext(size: canvas) else { return nil }
+    static func render(style: CallMontageStyle, portraits: [CallMontagePortrait], canvas: CGSize, caption: CallMontageCaption,
+                       colorSpace: CGColorSpace = CallMontageRenderer.deviceSpace) -> CGImage? {
+        guard let context = makeContext(size: canvas, colorSpace: colorSpace) else { return nil }
         let bounds = CGRect(origin: .zero, size: canvas)
         let slots = CallMontageLayout.frames(style: style, count: portraits.count, canvas: canvas)
         let placed = Array(zip(slots, portraits))
@@ -191,7 +195,16 @@ nonisolated enum CallMontageRenderer {
         if slot.rotation != 0, slot.shape != .rectangle {
             rotate(context, around: CGPoint(x: slot.frame.midX, y: slot.frame.midY), degrees: slot.rotation)
         }
-        context.addPath(path(for: slot))
+        let chemin = path(for: slot)
+        if let hole = portrait.hole {
+            hole.record(path: chemin, frame: slot.frame, toCanvas: context.userSpaceToDeviceSpaceTransform)
+            context.addPath(chemin)
+            context.setBlendMode(.clear)
+            context.fillPath()
+            context.restoreGState()
+            return
+        }
+        context.addPath(chemin)
         context.clip()
         if let image = portrait.image {
             drawImage(context, image, aspectFill: slot.frame)
@@ -278,7 +291,11 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Drawing primitives
 
-    static func makeContext(size: CGSize) -> CGContext? {
+    /// L'espace des images de l'appel (WebRTC sert du sRGB). Une photo prise en
+    /// Display P3 passe le sien (#9327) : peinte ici, elle serait écrêtée.
+    static var deviceSpace: CGColorSpace { CGColorSpaceCreateDeviceRGB() }
+
+    static func makeContext(size: CGSize, colorSpace: CGColorSpace = deviceSpace) -> CGContext? {
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
         guard width > 0, height > 0,
@@ -288,7 +305,7 @@ nonisolated enum CallMontageRenderer {
                 height: height,
                 bitsPerComponent: 8,
                 bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(),
+                space: colorSpace,
                 bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
               ) else { return nil }
         context.translateBy(x: 0, y: CGFloat(height))

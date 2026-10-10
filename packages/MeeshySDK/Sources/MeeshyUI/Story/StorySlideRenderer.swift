@@ -17,14 +17,22 @@ public enum StorySlideRenderer {
         slide: StorySlide,
         bgImage: UIImage?,
         loadedImages: [String: UIImage] = [:],
-        size: CGSize = CGSize(width: 100, height: 178)
+        size: CGSize = CGSize(width: 100, height: 178),
+        scale: CGFloat? = nil
     ) -> UIImage? {
         // Default ~100x178 (9:16) is enough for a ThumbHash (~32x32 avg colours).
         // Callers needing a crisp preview — the story-tray cover thumbnail that must
         // show ALL composer layers (text + drawing + media) — pass a larger `size`.
         // Every layer draw scales relative to `size`, so geometry stays correct.
 
-        let renderer = UIGraphicsImageRenderer(size: size)
+        // `scale` : la densité de la vignette d'une tuile de scène (#5037) ;
+        // `nil` garde celle de l'écran, comme avant.
+        let format = UIGraphicsImageRendererFormat.default()
+        if let scale {
+            format.scale = scale
+            format.preferredRange = .standard
+        }
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         let base = renderer.image { ctx in
             let rect = CGRect(origin: .zero, size: size)
             let cgCtx = ctx.cgContext
@@ -139,8 +147,15 @@ public enum StorySlideRenderer {
             //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
             //    naturellement ignoré (le `if let img` échoue).
             for obj in slide.effects.resolvedForegroundMediaObjects {
+                // Le filtre et les réglages PROPRES à une IMAGE (#8474, #9175),
+                // cuits par la même fonction que le player — qui ne les peint
+                // pas sur une vidéo.
+                // La VIGNETTE d'une vidéo posée porte ses réglages (#9169), par
+                // la même chaîne que sa lecture.
                 if let img = loadedImages[obj.id] {
-                    drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
+                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img
+                        : StoryVideoAdjustmentsProcessor.poster(img, for: obj)
+                    drawMediaObject(obj, image: MediaCropPresentation.keptPart(peinte, of: obj), in: size, ctx: cgCtx)
                 }
             }
 
@@ -171,7 +186,9 @@ public enum StorySlideRenderer {
             // (1080x1920) then stretched into the composite rect — the same
             // design→bounds mapping the live `MeeshyStrokeCanvas` uses.
             if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
-                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
+                // Vectoriel, à la résolution du composite : plus de bitmap
+                // 1080×1920 alloué pour une vignette de 44 points (#5037).
+                StoryStrokeRasterizer.draw(strokes: strokes, in: cgCtx, rect: rect)
             } else if let data = slide.effects.drawingData,
                       let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
                 drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
@@ -208,10 +225,13 @@ public enum StorySlideRenderer {
     ///
     /// Résultat : la miniature de tray et le placeholder ThumbHash ne
     /// correspondaient pas à la story jouée — un saut de couleur au chargement.
+    ///
+    /// Depuis #9496, le fond porte aussi les RÉGLAGES de son média, cuits après
+    /// le filtre par la même fonction que la couche de fond du lecteur
+    /// (`StoryBackgroundLook`) — une affiche de fond vidéo n'en reçoit ni
+    /// netteté ni flou, comme ses trames.
     static func filterBackground(_ image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let raw = effects.filter, let filter = StoryFilter(rawValue: raw) else { return image }
-        let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
-        return StoryFilterProcessor.apply(filter, to: image, intensity: intensity)
+        StoryBackgroundLook.image(image, effects: effects)
     }
 
     /// Compute thumbHash for a complete slide composite.
@@ -245,11 +265,11 @@ public enum StorySlideRenderer {
         // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
         // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
         // texte ~2,77× trop gros dans le composite ThumbHash.
-        // `resolvedSize × scale` = `designFontSize` du canvas (`StoryTextLayer` : `fontSize * scale`).
-        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0) — sans le `× scale`
-        // ici, un texte agrandi/réduit au doigt s'affichait à sa taille de BASE dans le cover/thumbHash
-        // (incohérence avec le canvas). Parité avec `drawMediaObject`/`drawSticker` qui appliquent déjà scale.
-        let designFontSize = textObj.resolvedSize * textObj.scale
+        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0). Comme sur le
+        // canvas (#9139), il agrandit le CADRE entier — la mise en ligne se fait à la taille
+        // d'édition, puis le contexte est mis à l'échelle autour du centre : un texte agrandi
+        // garde ses lignes dans le cover/thumbHash comme dans la scène.
+        let designFontSize = textObj.resolvedSize
         let fontSize = max(6, size.width * CGFloat(designFontSize / Double(CanvasGeometry.designWidth)))
         let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
 
@@ -297,7 +317,15 @@ public enum StorySlideRenderer {
         // Rotation autour du centre — parité canvas (`StoryTextLayer`). Sans ça un texte
         // pivoté apparaissait DROIT dans le composite cover/thumbHash (≠ ce que l'auteur voit).
         drawRotated(textObj.rotation, around: CGPoint(x: centerX, y: centerY), in: ctx) {
+            // `drawRotated` ne sauve pas l'état pour un texte droit : l'échelle
+            // se sauve elle-même, sans quoi elle fuirait sur l'objet suivant.
+            let scale = CGFloat(max(textObj.scale, 0.0001))
+            ctx.saveGState()
+            ctx.translateBy(x: centerX, y: centerY)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -centerX, y: -centerY)
             (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+            ctx.restoreGState()
         }
     }
 
@@ -338,7 +366,7 @@ public enum StorySlideRenderer {
     /// (jamais étirée) et clippée aux coins arrondis (`cornerRadiusFraction`), avec
     /// un bord blanc 2px comme `applyForegroundFrames` du canvas.
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {
-        let designBox = StoryMediaLayer.baseMediaDesignSize(aspectRatio: obj.aspectRatio)
+        let designBox = StoryMediaLayer.baseMediaDesignSize(for: obj)
         let projection = size.width / CanvasGeometry.designWidth
         let boxW = designBox.width * CGFloat(obj.scale) * projection
         let boxH = designBox.height * CGFloat(obj.scale) * projection

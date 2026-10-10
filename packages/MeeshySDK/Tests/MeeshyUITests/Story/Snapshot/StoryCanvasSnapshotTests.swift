@@ -48,8 +48,7 @@ final class StoryCanvasSnapshotTests: XCTestCase {
         assertSnapshot(
             of: view,
             as: .image(precision: 0.99, perceptualPrecision: 0.98),
-            named: "complexSlide-iPhone16Pro-t0s",
-            record: false
+            named: "complexSlide-iPhone16Pro-t0s"
         )
     }
 
@@ -58,8 +57,7 @@ final class StoryCanvasSnapshotTests: XCTestCase {
         assertSnapshot(
             of: view,
             as: .image(precision: 0.99, perceptualPrecision: 0.98),
-            named: "complexSlide-iPadProM2-t0s",
-            record: false
+            named: "complexSlide-iPadProM2-t0s"
         )
     }
 }

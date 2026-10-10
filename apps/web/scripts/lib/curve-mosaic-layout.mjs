@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs';
 
+import { readSwiftDesignTokens, SWIFT_VALUE } from './swift-design-tokens.mjs';
+
 /**
  * PARTIE 12 — L'AGENCEMENT D'UNE PUBLICATION (#6514). `src/lib/feed/mosaic-layout.ts`
  * DÉRIVE trois sources, jamais importées (du Swift, et un schéma zod qu'on ne
@@ -24,12 +26,13 @@ export const MOSAIC_LAYOUT_COTES = 20;
 export function mosaicLayoutCurveFailures({ root, count }) {
   const failures = [];
   const canvasSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`, 'utf8');
-  const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshyUI/Story/MosaicLayout.swift`, 'utf8');
+  const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Story/MosaicLayout.swift`, 'utf8');
   const mosaicSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift`, 'utf8');
   const choiceSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Composer/ComposerMosaicChoice.swift`, 'utf8');
   const publicationLayout = readFileSync(`${root}apps/web/src/lib/stories/publication-layout.ts`, 'utf8');
   const sharedSchema = readFileSync(`${root}packages/shared/types/canvas-v3.ts`, 'utf8');
   const derived = readFileSync(`${root}apps/web/src/lib/feed/mosaic-layout.ts`, 'utf8');
+  const tokens = readSwiftDesignTokens(root);
 
   const first = (text, pattern) => {
     const m = pattern.exec(text);
@@ -114,7 +117,10 @@ export function mosaicLayoutCurveFailures({ root, count }) {
   );
   check(
     'tuile : rayon (clipShape de vignette)',
-    numberOf(mosaicSwift, /\.clipShape\(RoundedRectangle\(cornerRadius: ([0-9.]+)\)\)\s*\.overlay\(alignment: \.center\) \{ report\(/),
+    (() => {
+      const raw = first(mosaicSwift, new RegExp(`\\.clipShape\\(RoundedRectangle\\(cornerRadius: ${SWIFT_VALUE}\\)\\)\\s*\\.overlay\\(alignment: \\.center\\) \\{ report\\(`));
+      return raw === null ? null : tokens.value(raw);
+    })(),
     count(derived, 'MOSAIC_TILE_RADIUS'),
   );
 

@@ -46,5 +46,7 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
                        "Le chemin direct d'ImageFullscreen ne sert que des médias de CONVERSATION : la directive 2026-09-12 leur interdit la marque.")
         XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
                       "Le chemin nominal écrit les octets REÇUS via saveImage — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImageFile(at: onDisk)"),
+                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage.")
     }
 }

@@ -68,12 +68,12 @@ struct StoryLanguageQuickBar: View {
 
     /// Rangée simple — épouse son contenu (comme la barre de réaction non-défilante).
     private var inlineRow: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             flagStrip
-                .padding(.vertical, 6)
-                .padding(.leading, 10)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .padding(.leading, MeeshySpacing.smPlus)
             plusChip
-                .padding(.trailing, 10)
+                .padding(.trailing, MeeshySpacing.smPlus)
         }
     }
 
@@ -81,12 +81,12 @@ struct StoryLanguageQuickBar: View {
     /// derrière un masque en fondu ; le « + » NE défile PAS (épinglé à droite,
     /// hors du ScrollView).
     private var scrollingRow: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ScrollView(.horizontal, showsIndicators: false) {
                 flagStrip
-                    .padding(.vertical, 6)
-                    .padding(.leading, 10)
-                    .padding(.trailing, 4)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
+                    .padding(.leading, MeeshySpacing.smPlus)
+                    .padding(.trailing, MeeshySpacing.xs)
             }
             .frame(width: scrollWidth)
             .mask(
@@ -101,15 +101,17 @@ struct StoryLanguageQuickBar: View {
                 )
             )
             plusChip
-                .padding(.trailing, 10)
+                .padding(.trailing, MeeshySpacing.smPlus)
         }
     }
 
+    /// Les pastilles sont construites ICI, sur le fil principal : la barre
+    /// est montée dans le rail de la story, candidat d'un `ViewThatFits` que le
+    /// rendu asynchrone d'iOS 26 mesure (#9456, `AsyncRenderRow`).
     private var flagStrip: some View {
-        HStack(spacing: 6) {
-            ForEach(languages) { language in
-                chip(language)
-            }
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            ForEach(languages.map { AsyncRenderRow(id: $0.id, content: chip($0)) },
+                    content: asyncRenderRowContent)
         }
     }
 
@@ -125,7 +127,7 @@ struct StoryLanguageQuickBar: View {
             onSelect(language.id)
         } label: {
             Text(language.flag)
-                .font(.system(size: 22))
+                .font(.system(size: MeeshyFont.titleSize))
                 .opacity(isActive ? 1 : 0.55)
                 .overlay(alignment: .bottom) {
                     Capsule()
@@ -152,11 +154,11 @@ struct StoryLanguageQuickBar: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(Color.white.opacity(0.15))
-                    .frame(width: 32, height: 32)
+                    .fill(Color.white.opacity(MeeshyOpacity.light))
+                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
             }
             .scaleEffect(highlightedIndex == languages.count ? 1.35 : 1.0)
             .animation(.spring(response: 0.25, dampingFraction: 0.5), value: highlightedIndex)
@@ -188,12 +190,8 @@ struct StoryLanguageQuickBar: View {
     @ViewBuilder
     private func tileFrameReader(index: Int) -> some View {
         if let scrubFrameSpace {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ScrubTileFramesKey.self,
-                    value: [index: proxy.frame(in: .named(scrubFrameSpace))]
-                )
-            }
+            GeometryReader(content: FramePreferenceProbe(ScrubTileFramesKey.self,
+                                                         in: .named(scrubFrameSpace)) { [index: $0] }.content)
         }
     }
 }

@@ -91,54 +91,60 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
     /// **Vue `2f` — l'heure appartient à la ligne du NOM.**
     ///
     /// Elle qualifie l'AUTEUR (« Camille Roux, il y a 2 h ») ; le crédit du son,
-    /// juste dessous, qualifie le CONTENU. La version précédente de cette garde
-    /// exigeait l'inverse — une horloge PRÉCÉDANT l'heure, sur une ligne de méta
-    /// partagée avec le crédit du son. C'est la disposition que la cible `2f`
-    /// refuse, et que `FeedPostCard` (vue `1h`) avait déjà quittée : deux
-    /// surfaces voisines disaient la même chose de deux façons.
-    ///
-    /// Le témoin porte sur la LIGNE, pas sur l'ordre : il extrait le `HStack` du
-    /// nom par comptage d'accolades et exige d'y trouver le nom ET l'heure.
-    /// Reposer l'heure dans une rangée à elle la ferait sortir de ce bloc et
-    /// rougir — ce qu'un simple test d'ordre textuel ne saurait pas voir.
+    /// juste dessous, qualifie le CONTENU. Depuis #8878 la ligne est celle de
+    /// `FullscreenIdentityRow` (SDK), commune à tous les visualiseurs plein écran :
+    /// l'en-tête lui PASSE le nom et l'heure, et c'est l'atome qui les pose sur une
+    /// même rangée. Le témoin garde donc les deux moitiés du contrat : l'en-tête
+    /// nourrit le nom ET l'heure, et l'atome les range dans le même `HStack`.
     func test_header_publicationTimeSitsOnTheNameLine() throws {
-        let nameLine = try nameLineBlock()
+        let header = try headerBlock()
 
         XCTAssertTrue(
-            nameLine.contains("Text(DisplayName.truncated(group.username))"),
-            "Le bloc extrait n'est pas la ligne du nom — le témoin ne mesure plus rien."
+            header.contains("FullscreenIdentityRow("),
+            "L'identité de l'auteur est celle de l'atome plein écran, pas une rangée réécrite."
         )
         XCTAssertTrue(
-            nameLine.contains("Text(story.timeAgo)"),
-            "Vue `2f` : l'heure de publication doit vivre sur la ligne du NOM, qu'elle " +
-            "qualifie — pas sur une rangée de méta partagée avec le crédit du son, où " +
-            "la donnée la plus consultée se noie dans la moins consultée."
+            header.contains("name: DisplayName.truncated(group.username)"),
+            "Le nom passé à l'atome est celui de la ligne du nom."
         )
+        XCTAssertTrue(
+            header.contains("subtitle: currentStory?.timeAgo"),
+            "Vue `2f` : l'heure de publication est le `subtitle` de l'atome, donc sur la " +
+            "ligne du NOM qu'elle qualifie — pas sur une rangée de méta partagée avec le " +
+            "crédit du son, où la donnée la plus consultée se noie dans la moins consultée."
+        )
+
+        let atom = strippingComments(
+            try source("../../packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenTopBar.swift"))
+        let nameLine = try XCTUnwrap(atom.range(of: "HStack(spacing: MeeshySpacing.xsPlus) {"),
+                                     "La ligne du nom de l'atome est introuvable")
+        let tail = String(atom[nameLine.upperBound...])
+        let name = try XCTUnwrap(tail.range(of: "Text(name)"))
+        let date = try XCTUnwrap(tail.range(of: "Text(subtitle)"))
+        let accessory = try XCTUnwrap(tail.range(of: "accessory\n"))
+        XCTAssertTrue(name.lowerBound < date.lowerBound && date.lowerBound < accessory.lowerBound,
+                      "Le nom, puis l'heure sur sa ligne, puis l'accessoire SOUS elle.")
     }
 
     /// **Vue `2f` — le crédit du son occupe sa propre ligne, SOUS celle du nom.**
     ///
     /// Deux attributions distinctes — qui a republié, à qui appartient la
     /// musique — se tronquaient l'une l'autre quand elles partageaient la
-    /// largeur. Le témoin le dit dans les deux sens : le badge est HORS de la
-    /// ligne du nom, et il vient APRÈS elle.
+    /// largeur. Le crédit est l'`accessory` de l'atome, qui le range sous la
+    /// ligne du nom : il vient APRÈS l'heure dans l'en-tête, et hors de la ligne.
     func test_header_soundCreditSitsOnItsOwnLineBelowTheName() throws {
         let header = try headerBlock()
-        let nameLine = try nameLineBlock()
 
-        XCTAssertFalse(
-            nameLine.contains("BackgroundSoundBadge("),
-            "Le crédit du son ne doit PAS partager la ligne du nom : sur un écran " +
-            "étroit, le titre du son et le handle d'origine se tronquent l'un l'autre."
-        )
-        guard let time = header.range(of: "Text(story.timeAgo)"),
+        guard let time = header.range(of: "subtitle: currentStory?.timeAgo"),
+              let accessory = header.range(of: "accessory: {"),
               let badge = header.range(of: "BackgroundSoundBadge(") else {
-            XCTFail("Le header doit porter l'heure ET le crédit du son")
+            XCTFail("Le header doit porter l'heure, l'accessoire ET le crédit du son")
             return
         }
         XCTAssertTrue(
-            time.lowerBound < badge.lowerBound,
-            "Le crédit du son se pose SOUS la ligne du nom, jamais au-dessus."
+            time.lowerBound < accessory.lowerBound && accessory.lowerBound < badge.lowerBound,
+            "Le crédit du son est dans l'`accessory` de l'atome : SOUS la ligne du nom, " +
+            "jamais au-dessus ni sur elle."
         )
     }
 
@@ -156,30 +162,6 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
             "dans Xh » ; l'horloge y avait été re-affectée, jamais demandée pour " +
             "elle-même."
         )
-    }
-
-    /// La ligne du nom : le `HStack` qui ouvre le `VStack` d'identité, borné par
-    /// comptage d'accolades. Un `range(of:)` sur le fichier entier dirait
-    /// seulement qu'un texte EXISTE quelque part ; ici la question est sur quelle
-    /// LIGNE il se trouve, et seule la structure y répond.
-    private func nameLineBlock() throws -> String {
-        let header = try headerBlock()
-        guard let open = header.range(of: "HStack(spacing: 5) {") else {
-            XCTFail("Ligne du nom introuvable dans le header")
-            return ""
-        }
-        var depth = 0
-        var index = header.index(before: open.upperBound)
-        while index < header.endIndex {
-            if header[index] == "{" { depth += 1 }
-            if header[index] == "}" {
-                depth -= 1
-                if depth == 0 { return String(header[open.upperBound..<index]) }
-            }
-            index = header.index(after: index)
-        }
-        XCTFail("Fermeture de la ligne du nom introuvable")
-        return ""
     }
 
     func test_header_hasNoExpiryCountdown() throws {

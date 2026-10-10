@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachments';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
-import { flush, registerStudioBench } from '@/test-support/story-studio-bench';
+import { flush, registerStudioBench, typeText } from '@/test-support/story-studio-bench';
 
 import ComposerRetouch from './composer-retouch';
 import ComposerTray from './composer-tray';
@@ -67,7 +67,7 @@ describe('la vignette d’une IMAGE en attente propose « Éditer »', () => {
 
 describe('le studio en RETOUCHE — seulement ce qui peint', () => {
   test('ni audience, ni formats, ni Animé, ni ⋯, ni nouvelle scène, ni son, ni texte du post, ni légende', async () => {
-    const el = mount(<ComposerRetouch attachment={photo()} onDone={() => undefined} onCancel={() => undefined} render={fakeRender} />);
+    const el = mount(<ComposerRetouch pieces={[photo()]} focus={0} onDone={() => undefined} onCancel={() => undefined} render={fakeRender} />);
     await flush(() => el.querySelector('[data-scene-player]') !== null);
     for (const absent of [
       '[data-story-audience]',
@@ -86,7 +86,7 @@ describe('le studio en RETOUCHE — seulement ce qui peint', () => {
     }
   });
 
-  test('« Terminé » rend un JPEG nommé d’après l’image — et rien n’est téléversé', async () => {
+  test('« Terminé » rend un JPEG nommé d’après l’image retouchée — et rien n’est téléversé', async () => {
     const calls: string[] = [];
     const original = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {
@@ -94,13 +94,17 @@ describe('le studio en RETOUCHE — seulement ce qui peint', () => {
       return new Response('{}');
     }) as typeof fetch;
     try {
-      let done: File | null = null;
-      const el = mount(<ComposerRetouch attachment={photo()} onDone={(file) => (done = file)} onCancel={() => undefined} render={fakeRender} />);
-      await flush(() => el.querySelector('[data-story-retouch-done]') !== null);
+      const piece = photo();
+      const got: { done: readonly { readonly localId: string; readonly file: File }[] | null } = { done: null };
+      const el = mount(<ComposerRetouch pieces={[piece]} focus={0} onDone={(replaced) => (got.done = replaced)} onCancel={() => undefined} render={fakeRender} />);
+      await flush(() => el.querySelector('[data-scene-player]') !== null);
+      typeText(el, 'Plage');
       act(() => el.querySelector<HTMLButtonElement>('[data-story-retouch-done]')!.click());
-      await flush(() => done !== null);
-      expect((done as File | null)?.name).toBe('plage-retouche.jpg');
-      expect((done as File | null)?.type).toBe('image/jpeg');
+      await flush(() => got.done !== null);
+      const [rendu] = got.done ?? [];
+      expect(rendu?.localId).toBe(piece.localId);
+      expect(rendu?.file.name).toBe('plage-retouche.jpg');
+      expect(rendu?.file.type).toBe('image/jpeg');
       expect(calls).toEqual([]);
     } finally {
       globalThis.fetch = original;
@@ -110,7 +114,7 @@ describe('le studio en RETOUCHE — seulement ce qui peint', () => {
   test('✕ referme sans rien rendre', async () => {
     let cancelled = false;
     let done = false;
-    const el = mount(<ComposerRetouch attachment={photo()} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
+    const el = mount(<ComposerRetouch pieces={[photo()]} focus={0} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
     await flush(() => el.querySelector('[data-story-retouch-cancel]') !== null);
     act(() => el.querySelector<HTMLButtonElement>('[data-story-retouch-cancel]')!.click());
     expect(cancelled).toBe(true);
@@ -128,7 +132,7 @@ describe('le retour matériel', () => {
   test('popstate ⇒ le studio se referme sans rien rendre', async () => {
     let cancelled = false;
     let done = false;
-    const el = mount(<ComposerRetouch attachment={photo()} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
+    const el = mount(<ComposerRetouch pieces={[photo()]} focus={0} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
     await flush(() => el.querySelector('[data-story-retouch-cancel]') !== null);
     act(() => {
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -139,7 +143,59 @@ describe('le retour matériel', () => {
 
   test('ouvert ⇒ pose UNE entrée d’historique que le retour consomme', () => {
     const before = window.history.length;
-    mount(<ComposerRetouch attachment={photo()} onDone={() => undefined} onCancel={() => undefined} render={fakeRender} />);
+    mount(<ComposerRetouch pieces={[photo()]} focus={0} onDone={() => undefined} onCancel={() => undefined} render={fakeRender} />);
     expect(window.history.length).toBe(before + 1);
+  });
+});
+
+/**
+ * TOUTES LES PIÈCES DU MESSAGE EN SCÈNES (#9126, miroir
+ * `ConversationRetouchSeriesEditor` iOS) — « Éditer » sur la 2e ouvre les trois,
+ * sur la 2e ; on passe de l’une à l’autre ; « Terminé » rend chaque scène
+ * retouchée à SA pièce, les autres restent telles quelles.
+ */
+describe('« Éditer » ouvre toutes les pièces du message', () => {
+  const named = (name: string): PendingAttachment => pendingAttachmentOf(new File([new Uint8Array([1, 2, 3])], name, { type: 'image/png' }));
+
+  test('le plateau ouvre le studio sur la pièce TOUCHÉE, avec une scène par pièce et sans corbeille', async () => {
+    const pieces = [named('un.png'), named('deux.png'), named('trois.png')];
+    const el = mount(
+      <ComposerTray variant="above" pending={pieces} onRemove={() => undefined} onReplace={() => undefined} notice={null} place={null} onRemovePlace={() => undefined} />,
+    );
+    act(() => el.querySelectorAll<HTMLButtonElement>('[data-composer-edit]')[1]!.click());
+    await flush(() => document.querySelectorAll('[data-composer-retouch] [data-story-studio-page-tile]').length === 3);
+    const tiles = [...document.querySelectorAll('[data-composer-retouch] [data-story-studio-page-tile]')];
+    expect(tiles.map((tile) => tile.getAttribute('aria-current'))).toEqual([null, 'true', null]);
+    expect(document.querySelector('[data-composer-retouch] [data-story-studio-page-delete]')).toBeNull();
+  });
+
+  test('retoucher la 1re et la 3e : « Terminé » rend ces deux-là, à leur place ; la 2e reste', async () => {
+    const pieces = [named('un.png'), named('deux.png'), named('trois.png')];
+    const got: { done: readonly { readonly localId: string; readonly file: File }[] | null } = { done: null };
+    const el = mount(<ComposerRetouch pieces={pieces} focus={1} onDone={(replaced) => (got.done = replaced)} onCancel={() => undefined} render={fakeRender} />);
+    await flush(() => el.querySelectorAll('[data-story-studio-page-tile]').length === 3);
+    const tile = (index: number) => el.querySelectorAll<HTMLButtonElement>('[data-story-studio-page-tile]')[index]!;
+    act(() => tile(0).click());
+    await flush(() => tile(0).getAttribute('aria-current') === 'true');
+    typeText(el, 'Un');
+    act(() => tile(2).click());
+    await flush(() => tile(2).getAttribute('aria-current') === 'true');
+    typeText(el, 'Trois');
+    act(() => el.querySelector<HTMLButtonElement>('[data-story-retouch-done]')!.click());
+    await flush(() => got.done !== null);
+    expect((got.done ?? []).map(({ localId, file }) => [localId, file.name])).toEqual([
+      [pieces[0]!.localId, 'un-retouche.jpg'],
+      [pieces[2]!.localId, 'trois-retouche.jpg'],
+    ]);
+  });
+
+  test('aucune retouche : « Terminé » referme sans rien rendre', async () => {
+    let cancelled = false;
+    let done = false;
+    const el = mount(<ComposerRetouch pieces={[named('un.png'), named('deux.png')]} focus={0} onDone={() => (done = true)} onCancel={() => (cancelled = true)} render={fakeRender} />);
+    await flush(() => el.querySelectorAll('[data-story-studio-page-tile]').length === 2);
+    act(() => el.querySelector<HTMLButtonElement>('[data-story-retouch-done]')!.click());
+    await flush(() => cancelled);
+    expect(done).toBe(false);
   });
 });

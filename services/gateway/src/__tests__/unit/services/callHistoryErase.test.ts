@@ -37,7 +37,11 @@ describe('hideCallFromHistory', () => {
     expect(outcome).toBe('hidden');
     expect(findFirst.mock.calls[0][0].where).toEqual({
       id: CALL_ID,
-      conversation: { participants: { some: { userId: USER_ID, isActive: true } } },
+      OR: [
+        { conversation: { participants: { some: { userId: USER_ID, isActive: true } } } },
+        { participants: { some: { participant: { userId: USER_ID } } } },
+        { invitedUserIds: { has: USER_ID } },
+      ],
     });
     expect(update).toHaveBeenCalledWith({ where: { id: CALL_ID }, data: { hiddenForUserIds: { push: USER_ID } } });
   });
@@ -70,7 +74,15 @@ describe('clearCallHistory', () => {
     const { where, data } = updateMany.mock.calls[0][0];
     expect(data).toEqual({ hiddenForUserIds: { push: USER_ID } });
     expect(where.id).toEqual({ notIn: [CALL_ID] });
-    expect(where.conversation).toEqual({ participants: { some: { userId: USER_ID, isActive: true } } });
+    expect(where.AND).toEqual([
+      {
+        OR: [
+          { conversation: { participants: { some: { userId: USER_ID, isActive: true } } } },
+          { participants: { some: { participant: { userId: USER_ID } } } },
+          { invitedUserIds: { has: USER_ID } },
+        ],
+      },
+    ]);
     expect(where.startedAt.gte).toBeInstanceOf(Date);
     expect(where.status.in).toEqual(['ended', 'missed', 'rejected', 'failed']);
   });

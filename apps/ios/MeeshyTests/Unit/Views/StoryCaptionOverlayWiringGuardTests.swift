@@ -12,6 +12,7 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
     private static let canvasPath = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
     private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
     private static let contentPath = "Meeshy/Features/Main/Views/StoryViewerView+Content.swift"
+    private static let holdPath = "Meeshy/Features/Main/Views/StoryViewerView+PlaybackHold.swift"
     private static let captionLayerPath = "Meeshy/Features/Main/Views/StoryViewerView+CanvasCaption.swift"
 
     // MARK: - La couche partagée remplace le cartouche
@@ -59,9 +60,9 @@ final class StoryCaptionOverlayWiringGuardTests: XCTestCase {
     // MARK: - Déplier suspend la lecture
 
     func test_laLegendeDepliaeeEstUneCauseDePauseAPartEntiere() throws {
-        let source = try Self.strippedSource(at: Self.contentPath)
-        guard let range = source.range(of: "var shouldPauseTimer: Bool {") else {
-            throw GuardIsBlind(description: "`shouldPauseTimer` introuvable")
+        let source = try Self.strippedSource(at: Self.holdPath)
+        guard let range = source.range(of: "var playbackCauses: StoryPlaybackCauses {") else {
+            throw GuardIsBlind(description: "`playbackCauses` introuvable")
         }
         let bloc = Self.braceBlock(in: source, from: range.lowerBound)
         XCTAssertTrue(

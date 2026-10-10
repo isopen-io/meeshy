@@ -28,7 +28,8 @@ import {
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
-import { loadCommentPostAcl, canUserInteractWithPost, canUserConsumePost } from '../../services/posts/postVisibility.js';
+import { loadCommentPostAcl, canUserInteractWithThread, canUserConsumeThread } from '../../services/posts/postVisibility.js';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 
 const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
 
@@ -121,7 +122,7 @@ export class CommentReactionHandler {
       // adresser la diffusion (voir `postId` ci-dessous).
       // Refus indistinct d'un commentaire inexistant — pas d'oracle.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+      if (!thread || !(await canUserInteractWithThread(this.prisma, thread, userId))) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
@@ -264,7 +265,7 @@ export class CommentReactionHandler {
 
       // Retirer reste une interaction avec le fil — même garde que la pose.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserInteractWithPost(this.prisma, thread.post, userId))) {
+      if (!thread || !(await canUserInteractWithThread(this.prisma, thread, userId))) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-remove denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
@@ -392,7 +393,7 @@ export class CommentReactionHandler {
       // le gater sur les amis stricts en ferait un 404, ce que la lecture REST
       // du même fil n'impose pas.
       const thread = await loadCommentPostAcl(this.prisma, validated.commentId);
-      if (!thread || !(await canUserConsumePost(this.prisma, thread.post, userId))) {
+      if (!thread || !(await canUserConsumeThread(this.prisma, thread, userId))) {
         this.logger.warn('[CommentReactionHandler] comment:reaction-sync denied (visibility)', { userId, commentId: validated.commentId });
         if (callback) callback({ success: false, error: 'Comment not found' });
         return;
@@ -458,7 +459,7 @@ export class CommentReactionHandler {
         commentId,
         postId,
         reactionEmoji: emoji,
-        commentPreview: comment.content?.slice(0, 80) ?? '',
+        commentPreview: comment.content ? sliceCodePoints(comment.content, 80) : '',
         postAuthorName,
         // Forward the real post type (mirror PostReactionHandler) so a reaction on a
         // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.

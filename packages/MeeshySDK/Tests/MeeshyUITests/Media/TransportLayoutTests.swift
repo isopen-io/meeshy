@@ -123,4 +123,31 @@ final class TransportLayoutTests: XCTestCase {
     func test_corridor_withNothingToShow_rendersNoBar() {
         XCTAssertFalse(TransportLayout.showsBar(placement: .corridor, controls: .none))
     }
+
+    // MARK: - La barre prend la largeur de l'écran, le son et (...) vont au rail (#9577)
+
+    func test_corridor_carriesTheProgressAlone_neverTheMuteNorTheMenu() {
+        XCTAssertFalse(TransportLayout.showsBarItems(placement: .corridor),
+                       "le son et (...) ont quitté la ligne de la barre : elle prend toute la largeur")
+        XCTAssertTrue(TransportLayout.showsBarItems(placement: .stacked))
+        XCTAssertFalse(TransportLayout.showsBar(placement: .corridor, controls: [.mute, .speed, .pip]),
+                       "sans progression à montrer, la bande ne se rend pas pour deux boutons")
+    }
+
+    func test_rail_carriesTheMuteAndTheMenu_andNothingElse() {
+        XCTAssertTrue(TransportLayout.showsRail(placement: .rail, controls: [.mute, .speed, .pip]))
+        XCTAssertFalse(TransportLayout.showsRail(placement: .rail, controls: [.scrubber, .playPause]),
+                       "ni son ni menu demandés ⇒ aucun rail (loi 4)")
+        XCTAssertFalse(TransportLayout.showsRail(placement: .corridor, controls: .fullscreenDefault))
+        XCTAssertFalse(TransportLayout.showsRail(placement: .stacked, controls: .fullscreenDefault))
+        XCTAssertFalse(TransportLayout.showsCenter(placement: .rail))
+        XCTAssertFalse(TransportLayout.showsBar(placement: .rail, controls: .fullscreenDefault))
+        XCTAssertFalse(TransportLayout.showsSkip(placement: .rail, controls: .fullscreenDefault))
+    }
+
+    func test_center_showsSkipButtons_onlyWhenTheHostAsksForThem() {
+        XCTAssertTrue(TransportLayout.showsSkip(placement: .center, controls: [.playPause, .skip]),
+                      "le lecteur plein écran du SDK garde ses ±10 s autour du bouton central")
+        XCTAssertFalse(TransportLayout.showsSkip(placement: .center, controls: [.playPause]))
+    }
 }

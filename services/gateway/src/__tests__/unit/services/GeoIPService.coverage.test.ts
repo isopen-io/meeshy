@@ -65,32 +65,16 @@ describe('extractIpFromRequest', () => {
     expect(extractIpFromRequest(req)).toBe('1.2.3.4');
   });
 
-  it('prefers cf-connecting-ip over other headers', () => {
+  it('returns request.ip even when the caller forges cf-connecting-ip, x-real-ip and x-forwarded-for (#9608)', () => {
     const req = makeRequest({
       ip: '9.9.9.9',
       headers: {
         'cf-connecting-ip': '5.5.5.5',
-        'x-forwarded-for': '4.4.4.4',
+        'x-forwarded-for': ['11.11.11.11, 12.12.12.12'],
         'x-real-ip': '3.3.3.3',
       },
     });
-    expect(extractIpFromRequest(req)).toBe('5.5.5.5');
-  });
-
-  it('uses x-real-ip when no cf-connecting-ip', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-real-ip': '6.6.6.6', 'x-forwarded-for': '4.4.4.4' },
-    });
-    expect(extractIpFromRequest(req)).toBe('6.6.6.6');
-  });
-
-  it('uses first IP from x-forwarded-for (comma-separated)', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-forwarded-for': '7.7.7.7, 8.8.8.8, 9.9.9.9' },
-    });
-    expect(extractIpFromRequest(req)).toBe('7.7.7.7');
+    expect(extractIpFromRequest(req)).toBe('9.9.9.9');
   });
 
   it('normalises IPv6 localhost ::1 to 127.0.0.1', () => {
@@ -101,14 +85,6 @@ describe('extractIpFromRequest', () => {
   it('normalises ::ffff:127.0.0.1 to 127.0.0.1', () => {
     const req = makeRequest({ ip: '::ffff:127.0.0.1' });
     expect(extractIpFromRequest(req)).toBe('127.0.0.1');
-  });
-
-  it('handles x-forwarded-for as array', () => {
-    const req = makeRequest({
-      ip: '9.9.9.9',
-      headers: { 'x-forwarded-for': ['11.11.11.11, 12.12.12.12'] },
-    });
-    expect(extractIpFromRequest(req)).toBe('11.11.11.11');
   });
 });
 
@@ -153,114 +129,8 @@ describe('parseUserAgent', () => {
 
 // ─── lookupGeoIp ─────────────────────────────────────────────────────────────
 
-describe('lookupGeoIp', () => {
-  let originalFetch: typeof global.fetch;
-
-  beforeEach(() => {
-    originalFetch = global.fetch;
-    cleanGeoCache(); // clear any cached results
-  });
-
-  afterEach(() => {
-    global.fetch = originalFetch;
-    cleanGeoCache();
-  });
-
-  it('returns local-IP placeholder for private addresses without calling fetch', async () => {
-    global.fetch = jest.fn() as typeof fetch;
-
-    const result = await lookupGeoIp('127.0.0.1');
-
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(result).not.toBeNull();
-    expect(result!.ip).toBe('127.0.0.1');
-    expect(result!.location).toBe('Local');
-    expect(result!.country).toBeNull();
-  });
-
-  it('returns placeholder for 192.168.x.x private range', async () => {
-    global.fetch = jest.fn() as typeof fetch;
-
-    const result = await lookupGeoIp('192.168.1.100');
-
-    expect(global.fetch).not.toHaveBeenCalled();
-    expect(result!.location).toBe('Local');
-  });
-
-  it('calls ip-api.com and returns GeoIpData on success', async () => {
-    global.fetch = jest.fn().mockReturnValue(makeFetchResponse({
-      status: 'success',
-      countryCode: 'FR',
-      country: 'France',
-      city: 'Paris',
-      regionName: 'Île-de-France',
-      timezone: 'Europe/Paris',
-      lat: 48.8566,
-      lon: 2.3522,
-    })) as typeof fetch;
-
-    const result = await lookupGeoIp('8.8.8.8');
-
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('8.8.8.8'),
-      expect.anything()
-    );
-    expect(result).not.toBeNull();
-    expect(result!.country).toBe('FR');
-    expect(result!.countryName).toBe('France');
-    expect(result!.city).toBe('Paris');
-    expect(result!.timezone).toBe('Europe/Paris');
-    expect(result!.latitude).toBe(48.8566);
-  });
-
-  it('returns cached result on second call without hitting the API', async () => {
-    const mockFetch = jest.fn().mockReturnValue(makeFetchResponse({
-      status: 'success',
-      countryCode: 'DE',
-      country: 'Germany',
-      city: 'Berlin',
-      regionName: 'Berlin',
-      timezone: 'Europe/Berlin',
-      lat: 52.52,
-      lon: 13.405,
-    }));
-    global.fetch = mockFetch as typeof fetch;
-
-    await lookupGeoIp('5.5.5.5');
-    await lookupGeoIp('5.5.5.5');
-
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('returns null when HTTP response is not ok', async () => {
-    global.fetch = jest.fn().mockReturnValue(makeFetchResponse({}, false)) as typeof fetch;
-
-    const result = await lookupGeoIp('8.8.4.4');
-
-    expect(result).toBeNull();
-  });
-
-  it('returns null when API status is not success', async () => {
-    global.fetch = jest.fn().mockReturnValue(makeFetchResponse({
-      status: 'fail',
-      message: 'reserved range',
-    })) as typeof fetch;
-
-    const result = await lookupGeoIp('1.1.1.1');
-
-    expect(result).toBeNull();
-  });
-
-  it('returns null on fetch error (network failure)', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('network error')) as typeof fetch;
-
-    const result = await lookupGeoIp('9.9.9.9');
-
-    expect(result).toBeNull();
-  });
-});
-
-// ─── cleanGeoCache ────────────────────────────────────────────────────────────
+// lookupGeoIp lit désormais une base LOCALE (#9609) : ses cas vivent dans
+// `geoip-local-database.test.ts`, jamais plus contre un tiers simulé.
 
 describe('cleanGeoCache', () => {
   it('does not throw when cache is empty', () => {

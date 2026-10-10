@@ -964,6 +964,13 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     Contrôle : `find apps/ios/Build -name "MeeshyShareExtension.appex.xcent" -newermt "-10 minutes" -exec plutil -p {} \;`
     — filtrer sur la FRAÎCHEUR : `Build/Meeshy.build/` est un résidu d'anciens builds,
     l'actif est `Build/Intermediates.noindex/Meeshy.build/`.
+- **MeeshyNotificationContentExtension** (notification déployée, #8859) et
+  **MeeshyBroadcastExtension** (partage d'écran, #8063) — deux `app-extension` embarquées,
+  groupe `group.me.meeshy.apps`. App IDs au portail : `me.meeshy.app.notification-content`
+  (T75359QHNV, enregistré le 2026-10-01, #8953) et `me.meeshy.app.broadcast` (67U4MGRB8C),
+  tous deux avec APP_GROUPS, listés dans `fastlane/Matchfile` + `sync_certificates`/`force_sync`.
+  **Toute nouvelle extension embarquée suit ce chemin AVANT sa première archive** : App ID
+  enregistré (`POST /v1/bundleIds` + `bundleIdCapabilities`), Matchfile, lanes.
 - **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
   compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
   l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien

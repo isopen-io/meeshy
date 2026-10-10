@@ -616,10 +616,11 @@ describe('PasswordResetService', () => {
 
         expect(mockPrisma.passwordResetToken.create).toHaveBeenCalledWith({
           data: expect.objectContaining({
-            geoLocation: 'New York, United States',
-            geoCoordinates: '40.7128,-74.006'
+            geoLocation: 'New York, United States'
           })
         });
+        // #9609 — plus aucune coordonnée n'est écrite.
+        expect(mockPrisma.passwordResetToken.create.mock.calls[0][0].data).not.toHaveProperty('geoCoordinates');
       });
     });
 
@@ -1332,8 +1333,7 @@ describe('PasswordResetService - Edge Cases', () => {
     expect(result.success).toBe(true);
     expect(mockPrisma.passwordResetToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        geoLocation: null,
-        geoCoordinates: null
+        geoLocation: null
       })
     });
   });

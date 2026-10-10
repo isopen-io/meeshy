@@ -109,6 +109,22 @@ final class ConversationHeaderActiveMemberTests: XCTestCase {
         XCTAssertEqual(profile?.isAnonymous, false)
     }
 
+    func test_ranked_registeredSender_isAnnouncedHereByItsAccountId() {
+        let messages = [makeMessage(senderId: "participant-1", senderUserId: "user-1")]
+
+        let member = ConversationActiveMember.ranked(from: messages, fallbackColor: "#6366F1").first
+
+        XCTAssertEqual(member?.viewingKey, "user-1")
+    }
+
+    func test_ranked_anonymousSender_isAnnouncedHereByItsParticipantId() {
+        let messages = [makeMessage(senderId: "participant-9", senderIsAnonymous: true)]
+
+        let member = ConversationActiveMember.ranked(from: messages, fallbackColor: "#6366F1").first
+
+        XCTAssertEqual(member?.viewingKey, "participant-9")
+    }
+
     func test_ranked_anonymousSender_carriesParticipantIdentityWithoutAccount() {
         let messages = [makeMessage(senderId: "participant-7", senderIsAnonymous: true)]
 

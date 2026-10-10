@@ -30,10 +30,15 @@ public struct DraftAttachmentRef: Codable, Equatable, Sendable {
     public var width: Int?
     public var height: Int?
     public var thumbnailColor: String
+    /// `PHAsset.localIdentifier` dont la pièce vient (#9697) — `nil` pour une
+    /// pièce qui ne vient pas de la photothèque, et pour un brouillon écrit
+    /// avant ce champ.
+    public var libraryAssetId: String?
 
     public init(attachmentId: String, storedFileName: String, originalName: String,
                 mimeType: String, fileSize: Int = 0, duration: Int? = nil,
-                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4") {
+                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4",
+                libraryAssetId: String? = nil) {
         self.attachmentId = attachmentId
         self.storedFileName = storedFileName
         self.originalName = originalName
@@ -43,6 +48,7 @@ public struct DraftAttachmentRef: Codable, Equatable, Sendable {
         self.width = width
         self.height = height
         self.thumbnailColor = thumbnailColor
+        self.libraryAssetId = libraryAssetId
     }
 }
 

@@ -63,6 +63,11 @@ function makePrisma(opts: { toHardDelete?: { id: string }[]; reposts?: { id: str
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // Ce que les posts détruits ont rapporté à leurs lecteurs (#9569) : le
+    // retrait gouverne la passe — sans ce double elle rejette.
+    engagementPostPoints: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
   };
 }
 

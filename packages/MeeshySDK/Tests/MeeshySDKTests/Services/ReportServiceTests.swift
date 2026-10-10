@@ -74,6 +74,21 @@ final class ReportServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
+    // MARK: - reportComment (#8709)
+
+    func testReportCommentPostsACommentTargetToReports() async throws {
+        let response = APIResponse<ReportResponseData>(success: true, data: ReportResponseData(id: "report-c"), error: nil)
+        mock.stub("/reports", result: response)
+
+        try await service.reportComment(commentId: "cmt123", reportType: "harassment", reason: "Insultes")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reportedType"] as? String, "comment")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reportedEntityId"] as? String, "cmt123")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reportType"] as? String, "harassment")
+    }
+
     // MARK: - reportStory
 
     func testReportStoryPostsToAdminReports() async throws {

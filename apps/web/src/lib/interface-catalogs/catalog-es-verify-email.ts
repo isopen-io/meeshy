@@ -32,7 +32,6 @@ const esVerifyEmail = {
   'verifyEmail.proven': 'Dirección confirmada ✓ — introduce el código recibido para iniciar sesión aquí.',
   'verifyEmail.handoff.opened': 'El enlace se abrió en la app Meeshy.',
   'verifyEmail.handoff.stay': 'Continuar en el navegador',
-  'verifyEmail.signingIn': 'Iniciando sesión…',
   'verifyEmail.arrival.title': '¡Dirección confirmada!',
   'verifyEmail.arrival.lead': 'Preparando tus conversaciones…',
   'verifyEmail.arrival.status': 'Dirección confirmada — iniciando sesión…',

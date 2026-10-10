@@ -1,3 +1,6 @@
+import { guardedTimeout } from '../utils/guarded-timer';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
 type AgentApiResponse<T> = {
   success: boolean;
   data?: T;
@@ -17,7 +20,7 @@ export class AgentHttpClient {
   private async request<T>(path: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const { timeoutMs = 5000, ...fetchOptions } = options;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = guardedTimeout({ name: 'agent-http-timeout', afterMs: timeoutMs, logger: enhancedLogger, run: () => controller.abort() });
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {

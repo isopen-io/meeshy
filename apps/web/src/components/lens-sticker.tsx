@@ -2,8 +2,25 @@ import type { ReactNode } from 'react';
 
 import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
+import { lensSectionAccessibleName } from '@/lib/lens/folded-unread';
 import type { LensSectionId } from '@/lib/lens/sections';
 import { sectionLabelOf } from '@/lib/lens/sections';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+import { Glyph } from './glyph';
+import { UnreadBadge } from './unread-badge';
+
+/**
+ * LE PLIAGE D'UNE SECTION (#8694) — fourni par la liste pour les seules
+ * sections repliables (`isLensSectionFoldable`). `unread` est déjà passé par
+ * `foldedSectionUnread` : il vaut zéro dépliée, donc la pastille — dont le
+ * portillon `count > 0` vit dans l'atome — ne peut pas y apparaître.
+ */
+export type LensSectionFold = {
+  readonly folded: boolean;
+  readonly unread: number;
+  readonly onToggle: () => void;
+};
 
 /**
  * LE STICKER DE SECTION (#5694, écart 6) — miroir
@@ -19,13 +36,15 @@ import { sectionLabelOf } from '@/lib/lens/sections';
  * cote du JSON fait dériver ce composant SANS qu'aucune ligne d'ici ne
  * bouge — c'est la garantie qu'un littéral recopié ne peut jamais offrir.
  *
- * UN EN-TÊTE, PAS UN BOUTON (§1.1 de la spécification) : iOS rend `pinned`
- * repliable (le pliage PERSISTE côté serveur, `PATCH …/categories/:id`) ;
- * aucun port web-v2 ne l'écrit encore — un bouton sans effet observable est
- * inerte (charte, § contrôle = effet), un `<h2>` dit exactement ce qu'il
- * fait. Il est monté PLEINE LARGEUR (`-mx-2`), sans la marge horizontale des
- * rangées — même géométrie que `LazyVStack(spacing: 8, pinnedViews:
- * [.sectionHeaders])` côté iOS.
+ * UN EN-TÊTE, ET UN BOUTON SEULEMENT S'IL REPLIE (#8694). Sans `fold`, c'est
+ * un `<h2>` nu — une section calculée ne se replie pas, un bouton y serait
+ * inerte (charte, § contrôle = effet). Avec `fold` (`pinned`, repliable comme
+ * sur iOS où son pliage vit dans l'état de l'écran), le `<h2>` porte un
+ * `<button aria-expanded>` — le motif accordéon — dont l'effet est observable :
+ * les rangées disparaissent et, repliée, la pastille de non-lus qu'elles
+ * portaient monte à côté du chevron. Il est monté PLEINE LARGEUR (`-mx-2`),
+ * sans la marge horizontale des rangées — même géométrie que
+ * `LazyVStack(spacing: 8, pinnedViews: [.sectionHeaders])` côté iOS.
  *
  * UN SEUL STICKER COLLE À LA FOIS (revue #5694). Ce nœud est le PREMIER
  * ENFANT de la SECTION (`LensSection`, ci-dessous), jamais un frère direct de
@@ -38,8 +57,9 @@ import { sectionLabelOf } from '@/lib/lens/sections';
  * avec toutes les sections. La cible iOS n'en montre jamais qu'un
  * (`targets/lentille.scrolled.{light,dark}.png`).
  */
-export function LensSticker({ id }: { readonly id: LensSectionId }) {
+export function LensSticker({ id, fold }: { readonly id: LensSectionId; readonly fold?: LensSectionFold }) {
   const sticker = lentilleTokens.list.sticker;
+  const label = sectionLabelOf(id);
 
   return (
     <h2
@@ -54,8 +74,34 @@ export function LensSticker({ id }: { readonly id: LensSectionId }) {
         color: 'var(--color-ios-ink-2)',
       }}
     >
-      {sectionLabelOf(id)}
+      {fold === undefined ? label : <FoldToggle id={id} label={label} fold={fold} />}
     </h2>
+  );
+}
+
+/**
+ * Le bouton du pliage, miroir de `LentilleSticker` iOS : le titre, puis, au
+ * bout de la ligne, la pastille de non-lus À CÔTÉ du chevron — `›` repliée
+ * (retourné en arabe), `⌄` dépliée. Le chevron est décoratif : le NOM du
+ * bouton dit l'état et le compte, une seule fois.
+ */
+function FoldToggle({ id, label, fold }: { readonly id: LensSectionId; readonly label: string; readonly fold: LensSectionFold }) {
+  return (
+    <button
+      type="button"
+      data-section-toggle={id}
+      aria-expanded={!fold.folded}
+      aria-label={lensSectionAccessibleName({ language: currentInterfaceLanguage(), label, folded: fold.folded, unread: fold.unread })}
+      onClick={fold.onToggle}
+      className="flex w-full items-center gap-2 text-start uppercase"
+      style={{ font: 'inherit', letterSpacing: 'inherit', color: 'inherit' }}
+    >
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="normal-case" style={{ letterSpacing: 'normal' }}>
+        <UnreadBadge count={fold.unread} />
+      </span>
+      <Glyph name="caretDown" size={10} {...(fold.folded ? { className: '-rotate-90 rtl:rotate-90' } : {})} />
+    </button>
   );
 }
 
@@ -91,15 +137,17 @@ export function LensSticker({ id }: { readonly id: LensSectionId }) {
  */
 export function LensSection({
   id,
+  fold,
   children,
 }: {
   readonly id: LensSectionId;
+  readonly fold?: LensSectionFold;
   readonly children: ReactNode;
 }) {
   return (
     <li data-section={id} className="shrink-0" style={{ marginTop: lentilleTokens.list.row.marginVertical }}>
-      <LensSticker id={id} />
-      <ul>{children}</ul>
+      <LensSticker id={id} {...(fold === undefined ? {} : { fold })} />
+      {fold?.folded === true ? null : <ul>{children}</ul>}
     </li>
   );
 }

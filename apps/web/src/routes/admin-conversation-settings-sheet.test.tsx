@@ -1,4 +1,9 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
+import { appQueryClient } from '@/lib/api/query-client';
+import { adminIdentityFixture } from '@/test-support/admin-assertions';
 
 import { decodeAdminConversation, type AdminConversation } from '@/lib/api/admin-user-conversations';
 import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
@@ -30,7 +35,10 @@ afterAll(async () => {
 });
 
 const mounter = createActMounter();
-afterEach(() => mounter.unmountAll());
+afterEach(() => {
+  mounter.unmountAll();
+  appQueryClient.clear();
+});
 
 function conversation(overrides: Record<string, unknown> = {}): AdminConversation {
   const decodee = decodeAdminConversation({
@@ -50,7 +58,10 @@ function conversation(overrides: Record<string, unknown> = {}): AdminConversatio
 
 const MOTIF = 'Signalement #9142 — mise en conformité';
 
-async function monter(conv: AdminConversation = conversation()) {
+/* Le lecteur est un ADMIN par défaut : le motif ouvre le geste. Le rang souverain, qui agit
+   sans motif (spec 2026-10-04 § 4), a son propre témoin. */
+async function monter(conv: AdminConversation = conversation(), role = 'ADMIN') {
+  appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role }));
   const t = routedTransport((req) => {
     if (req.method === 'PATCH' && pathOf(req) === '/api/v1/admin/conversations/c-atelier') {
       return { ok: true, data: { id: 'c-atelier', title: 'Atelier', type: 'group' } };
@@ -67,19 +78,21 @@ async function monter(conv: AdminConversation = conversation()) {
   let changements = 0;
   let fermetures = 0;
   await mounter.mount(
-    <AdminConversationSettingsSheet
-      conversation={conv}
-      userId="u-membre"
-      language="fr"
-      deps={{ source: 'gateway', transport: t.transport }}
-      onAnnounce={(texte) => annonces.push(texte)}
-      onChanged={() => {
-        changements += 1;
-      }}
-      onClose={() => {
-        fermetures += 1;
-      }}
-    />,
+    <QueryClientProvider client={appQueryClient}>
+      <AdminConversationSettingsSheet
+        conversation={conv}
+        userId="u-membre"
+        language="fr"
+        deps={{ source: 'gateway', transport: t.transport }}
+        onAnnounce={(texte) => annonces.push(texte)}
+        onChanged={() => {
+          changements += 1;
+        }}
+        onClose={() => {
+          fermetures += 1;
+        }}
+      />
+    </QueryClientProvider>,
   );
   return { t, annonces, changements: () => changements, fermetures: () => fermetures };
 }
@@ -130,6 +143,28 @@ describe('ce qui part', () => {
     expect(role?.body).toEqual({ role: 'moderator', reason: MOTIF });
   });
 
+  test('un rôle SERVI hors liste reste proposé après un autre choix : on peut y revenir (#9463)', async () => {
+    const { t } = await monter(conversation({ membership: { userId: 'u-membre', displayName: 'Le membre', role: 'guest', isActive: true } }));
+    const choix = () => [...(q<HTMLSelectElement>('[data-admin-conv-member-role]')?.options ?? [])].map((o) => o.value);
+    expect(choix()).toContain('guest');
+    typeInto(q<HTMLSelectElement>('[data-admin-conv-member-role]'), 'moderator');
+    expect(choix()).toContain('guest');
+    typeInto(q<HTMLSelectElement>('[data-admin-conv-member-role]'), 'guest');
+    mounter.type(document.body, '[data-admin-conv-reason]', MOTIF);
+    expect(q<HTMLButtonElement>('[data-admin-conv-save]')?.disabled).toBe(true);
+    expect(t.calls()).toHaveLength(0);
+  });
+
+  test('retirer un membre garde le focus sur le bouton qui s’arme (#9463)', async () => {
+    await monter();
+    mounter.type(document.body, '[data-admin-conv-reason]', MOTIF);
+    const bouton = q<HTMLButtonElement>('[data-admin-conv-remove]');
+    bouton?.focus();
+    await mounter.click(bouton);
+    expect(q('[data-admin-conv-remove]')).toBe(bouton);
+    expect(document.activeElement).toBe(bouton);
+  });
+
   test('ARCHIVER se confirme : le premier geste ne part pas', async () => {
     const { t } = await monter();
     await mounter.click(q('[data-admin-conv-toggle="archive"]'));
@@ -168,5 +203,25 @@ describe('retirer le membre', () => {
     expect(q('[data-admin-conv-member-role]')).toBe(null);
     expect(q('[data-admin-conv-remove]')).toBe(null);
     expect(document.body.textContent ?? '').toContain(translateAdmin('fr', 'admin.convSettings.creatorProtected'));
+  });
+});
+
+describe('le rang souverain agit sans motif (spec 2026-10-04 § 4)', () => {
+  test('Enregistrer est actif sans motif, et le changement part SANS `reason`', async () => {
+    const { t } = await monter(conversation(), 'BIGBOSS');
+    mounter.type(document.body, '[data-admin-conv-field="title"]', 'Atelier du jeudi');
+    const save = q<HTMLButtonElement>('[data-admin-conv-save]');
+    expect(save?.disabled).toBe(false);
+    expect(q<HTMLButtonElement>('[data-admin-conv-remove]')?.disabled).toBe(false);
+    await mounter.click(save);
+    const patch = t.calls().find((call) => call.method === 'PATCH');
+    expect(patch?.body).toEqual({ title: 'Atelier du jeudi' });
+  });
+
+  test('ADMIN : sans motif, les deux gestes restent inactifs', async () => {
+    await monter();
+    mounter.type(document.body, '[data-admin-conv-field="title"]', 'Atelier du jeudi');
+    expect(q<HTMLButtonElement>('[data-admin-conv-save]')?.disabled).toBe(true);
+    expect(q<HTMLButtonElement>('[data-admin-conv-remove]')?.disabled).toBe(true);
   });
 });

@@ -40,9 +40,14 @@ extension StoryCanvasUIView {
                 editableKind: .text
             ))
         }
+        // **Le fond se nomme FOND, en composition aussi** (#9521) : annoncé
+        // « Image » comme une image posée, il ne se distinguait pas à l'oreille,
+        // et son « Modifier » — les outils du fond — restait introuvable.
         for media in slide.effects.mediaObjects ?? [] {
             elements.append(makeAccessibilityElement(
-                label: mediaAccessibilityLabel(kind: media.kind),
+                label: media.isBackground
+                    ? backgroundMediaAccessibilityLabel(kind: media.kind)
+                    : mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 editableKind: .media
@@ -95,9 +100,7 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for media in slide.effects.mediaObjects ?? [] where media.isBackground {
             elements.append(makeAccessibilityElement(
-                label: media.kind == .video
-                    ? String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
-                    : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module),
+                label: backgroundMediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 editableKind: nil
@@ -211,9 +214,11 @@ extension StoryCanvasUIView {
             if m.isBackground {
                 return CGRect(origin: .zero, size: g.renderSize)
             }
-            let side: CGFloat = 540
-            let designSize = CGSize(width: side * CGFloat(m.scale),
-                                    height: side * CGFloat(m.scale) / CGFloat(max(m.aspectRatio, 0.01)))
+            // Le cadre du CALQUE, recadrage compris (#9499) : VoiceOver
+            // désigne ce que l'œil voit.
+            let base = StoryMediaLayer.baseMediaDesignSize(for: m)
+            let designSize = CGSize(width: base.width * CGFloat(m.scale),
+                                    height: base.height * CGFloat(m.scale))
             return centeredFrame(normalizedX: CGFloat(m.x),
                                  normalizedY: CGFloat(m.y),
                                  designSize: designSize,
@@ -304,6 +309,12 @@ extension StoryCanvasUIView {
                           defaultValue: "Texte vide", bundle: .module)
         }
         return "\(textAccessibilityPrefix) : \(net)"
+    }
+
+    func backgroundMediaAccessibilityLabel(kind: StoryMediaKind?) -> String {
+        kind == .video
+            ? String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+            : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
     }
 
     func mediaAccessibilityLabel(kind: StoryMediaKind?) -> String {

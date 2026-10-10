@@ -9,14 +9,17 @@ extension CallView {
         if let mode = layer.activeMode {
             ZStack(alignment: .bottom) {
                 modeStage(mode)
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(MeeshyOpacity.heavy)], startPoint: .center, endPoint: .bottom)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
-                VStack(spacing: 14) {
+                VStack(spacing: MeeshySpacing.mdPlus) {
+                    if mode == .effects {
+                        effectsCompanions
+                    }
                     if showTranscript {
                         captionsBand(hasOwnGlass: true, opensJournal: false)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                     }
                     modeControls(mode)
                 }
@@ -37,8 +40,26 @@ extension CallView {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
         case .montage:
-            CallMontageLiveStage(capture: capture)
+            CallMontageFrameStage(
+                capture: capture,
+                isLiveOffered: offersLiveFrame,
+                reduceMotion: reduceMotion,
+                people: liveFramePeople,
+                texts: liveFrameTexts,
+                sources: liveFrameSources
+            )
         }
+    }
+
+    /// #8737 — les autres restent visibles pendant qu'on applique un effet. Posé
+    /// dans la pile des commandes, le bloc prend la bande libre au-dessus d'elles.
+    private var effectsCompanions: some View {
+        CallEffectsCompanionStrip(
+            tiles: effectsCompanionTiles,
+            track: { effectsTrack(for: $0) },
+            intendedFront: callManager.isUsingFrontCamera,
+            topInset: Self.chromeTopInset
+        )
     }
 
     @ViewBuilder
@@ -47,7 +68,7 @@ extension CallView {
         case .effects:
             CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
         case .montage:
-            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, onExit: exitMode)
+            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, hold: liveFrameHold, onExit: exitMode)
         }
     }
 

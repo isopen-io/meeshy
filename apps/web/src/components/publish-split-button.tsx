@@ -52,7 +52,6 @@ const MENU_PADDING = 40;
 
 const KIND_KEY = { STORY: 'story', POST: 'post', REEL: 'reel' } as const;
 
-export const publishTitleKey = (kind: PublicationKind) => `story.studio.publish.as.${KIND_KEY[kind]}` as const;
 
 /** La hauteur du CONTENU du menu, bordures comprises — jamais la hauteur
  * déjà bornée par `maxHeight`, qui ne dirait pas qu'il manque de place. */
@@ -74,6 +73,8 @@ export function PublishSplitButton({
   refusalOf,
   audienceLabelOf,
   layoutsServedFor,
+  checkedKinds,
+  toggleOf,
   onPrimary,
   onChoose,
 }: {
@@ -92,6 +93,12 @@ export function PublishSplitButton({
   /** **CE FORMAT DÉPLIE-T-IL SES AGENCEMENTS ?** (#7684, `layoutIsServed`) —
    * absent ⇒ aucun sous-menu, exactement comme avant #7684. */
   readonly layoutsServedFor?: (kind: PublicationKind) => boolean;
+  /** **LES FORMATS QUI PARTENT** (#9476) — la story ET son réel quand les deux
+   * partent ; absent ⇒ le seul `kind`, exactement comme avant. */
+  readonly checkedKinds?: readonly PublicationKind[];
+  /** **CE QUE TOUCHE UNE LIGNE SANS AGENCEMENT** (#9476,
+   * `toggledPublishChoice`) — absent ⇒ elle arme son format seul. */
+  readonly toggleOf?: (kind: PublicationKind) => PublishChoice;
   /** La partie principale : publier le choix EN COURS, que l'hôte tient. */
   readonly onPrimary: () => void;
   /** Un choix du menu : un format, et sa disposition s'il en a choisi une.
@@ -233,7 +240,7 @@ export function PublishSplitButton({
           data-publish-layout-choice={row.mode}
           {...focusProps}
           onClick={() => choose({ kind: row.format, layout: row.mode })}
-          className="flex w-full items-center gap-3 px-4 text-left text-body"
+          className="flex w-full items-center gap-3 px-4 text-start text-body"
           style={{ minHeight: LAYOUT_ITEM_HEIGHT, color: 'var(--color-ios-ink)' }}
         >
           <Suspense fallback={<span aria-hidden="true" className="shrink-0" style={{ width: LAYOUT_MARK_SIZE, height: LAYOUT_MARK_SIZE }} />}>
@@ -257,19 +264,19 @@ export function PublishSplitButton({
         onClick={() => {
           if (row.refusal !== null) return;
           if (!row.expandable) {
-            choose({ kind: row.format, layout: null });
+            choose(toggleOf?.(row.format) ?? { kind: row.format, layout: null });
             return;
           }
           if (isExpanded) collapse(row.format);
           else expand(row.format, index);
         }}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex w-full items-center gap-2 px-3 py-2 text-start"
         style={{ minHeight: 44, color: row.refusal === null ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-3)' }}
       >
         <span className="flex min-w-0 flex-1 flex-col items-start">
           <span className="flex items-center gap-2 text-title font-medium">
             {translate(language, `story.studio.kind.${KIND_KEY[row.format]}`)}
-            {row.format === kind ? <Glyph name="check" size={14} /> : null}
+            {(checkedKinds ?? [kind]).includes(row.format) ? <Glyph name="check" size={14} /> : null}
           </span>
           {audienceLabelOf === undefined ? null : (
             <span data-publish-kind-audience className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
@@ -309,7 +316,7 @@ export function PublishSplitButton({
   return (
     <div
       data-publish-split
-      className="flex shrink-0 items-center overflow-hidden rounded-chip text-white"
+      className="flex shrink-0 items-center overflow-hidden rounded-chip text-ios-on-brand"
       style={{ backgroundColor: 'var(--color-ios-brand)', opacity: disabled && menuDisabled ? 0.4 : 1 }}
     >
       <button
@@ -320,11 +327,11 @@ export function PublishSplitButton({
         disabled={disabled}
         aria-busy={busy}
         className="grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
-        style={{ minHeight: 44, outlineColor: '#fff', outlineOffset: -4 }}
+        style={{ minHeight: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         {label}
       </button>
-      <span aria-hidden="true" style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+      <span aria-hidden="true" style={{ width: 1, height: 20, backgroundColor: 'color-mix(in srgb, var(--color-ios-on-brand) 40%, transparent)' }} />
       <button
         ref={buttonRef}
         type="button"
@@ -338,7 +345,7 @@ export function PublishSplitButton({
           setOpen((value) => !value);
         }}
         className="grid place-items-center focus-visible:outline-2 disabled:opacity-60"
-        style={{ minHeight: 44, minWidth: 44, outlineColor: '#fff', outlineOffset: -4 }}
+        style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         <Glyph name="caretDown" size={16} />
       </button>

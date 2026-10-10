@@ -92,6 +92,7 @@ public enum StoryExporter {
     ///     d'élément ou `postMediaId`. Ils priment sur toute adresse : médias
     ///     retouchés, stickers collés et fond image sortent tels que l'auteur
     ///     les voit. Voir `StoryExportInputs`.
+    ///   - animations: octets ANIMÉS des stickers (#8610), keyés comme `images`.
     public static func export(_ inputSlide: StorySlide,
                               to outputURL: URL,
                               languages: [String] = [],
@@ -100,6 +101,7 @@ public enum StoryExporter {
                               audioResolver: (@Sendable (StoryAudioPlayerObject) -> URL?)? = nil,
                               stickerImageSources: [String: String] = [:],
                               images: [String: UIImage] = [:],
+                              animations: [String: Data] = [:],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         // Keep the export alive if the app is backgrounded mid-render — the same
         // net `TusUploadManager` gives uploads. A story export runs a few seconds
@@ -201,7 +203,7 @@ public enum StoryExporter {
             guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
                 throw StoryExporterError.backgroundAssetVideoTrackMissing
             }
-            let assetDuration = try await asset.load(.duration)
+            let window = Self.backgroundSourceWindow(bg, assetDuration: try await asset.load(.duration))
             backgroundVideoAsset = (asset, bg)
             backgroundVideoTransform = (try? await assetVideoTrack.load(.preferredTransform)) ?? .identity
 
@@ -214,9 +216,9 @@ public enum StoryExporter {
                 var inserted = CMTime.zero
                 while inserted < storyDuration {
                     let remaining = storyDuration - inserted
-                    let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                    let chunkDuration = CMTimeMinimum(window.duration, remaining)
                     try videoTrack.insertTimeRange(
-                        CMTimeRange(start: .zero, duration: chunkDuration),
+                        CMTimeRange(start: window.start, duration: chunkDuration),
                         of: assetVideoTrack,
                         at: storyStart + inserted
                     )
@@ -230,9 +232,9 @@ public enum StoryExporter {
                 // track to draw on for the tail (StoryRenderer keeps rendering
                 // static content — text, stickers, drawings — past the end of
                 // the background clip).
-                let playableDuration = CMTimeMinimum(assetDuration, storyDuration)
+                let playableDuration = CMTimeMinimum(window.duration, storyDuration)
                 try videoTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: playableDuration),
+                    CMTimeRange(start: window.start, duration: playableDuration),
                     of: assetVideoTrack,
                     at: storyStart
                 )
@@ -344,7 +346,8 @@ public enum StoryExporter {
                 outroFade: outroFade,
                 requiredSourceTrackIDs: tracks.map { NSNumber(value: $0) },
                 stickerImageURLs: stickerImageURLs,
-                images: images
+                images: images,
+                animations: animations
             )
         }
 
@@ -768,9 +771,8 @@ public enum StoryExporter {
         storyStart: CMTime = .zero,
         backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
     ) async throws -> AVMutableAudioMix? {
-        guard let entry = backgroundVideoAsset else {
-            // Pas de bg video → pas d'audio à composer. Une étape future
-            // ajoutera l'audio des `audioPlayerObjects` ici même.
+        guard let entry = backgroundVideoAsset, Self.backgroundCarriesSound(entry.bg) else {
+            // Pas de bg video, ou un fond MUET (#9136) → pas d'audio à composer.
             return nil
         }
 
@@ -788,7 +790,7 @@ public enum StoryExporter {
             throw StoryExporterError.sessionCreationFailed
         }
 
-        let assetDuration = try await entry.asset.load(.duration)
+        let window = Self.backgroundSourceWindow(entry.bg, assetDuration: try await entry.asset.load(.duration))
 
         if entry.bg.loop {
             // Loop : insert l'audio en boucle pour couvrir totalDuration,
@@ -796,9 +798,9 @@ public enum StoryExporter {
             var inserted = CMTime.zero
             while inserted < totalDuration {
                 let remaining = totalDuration - inserted
-                let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                let chunkDuration = CMTimeMinimum(window.duration, remaining)
                 try audioTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: chunkDuration),
+                    CMTimeRange(start: window.start, duration: chunkDuration),
                     of: assetAudioTrack,
                     at: storyStart + inserted
                 )
@@ -808,9 +810,9 @@ public enum StoryExporter {
             // No-loop : on insère une fois, clippé à totalDuration. Le
             // tail est silencieux par défaut (AVFoundation n'a pas besoin
             // qu'on ajoute du silence explicite).
-            let playableDuration = CMTimeMinimum(assetDuration, totalDuration)
+            let playableDuration = CMTimeMinimum(window.duration, totalDuration)
             try audioTrack.insertTimeRange(
-                CMTimeRange(start: .zero, duration: playableDuration),
+                CMTimeRange(start: window.start, duration: playableDuration),
                 of: assetAudioTrack,
                 at: storyStart
             )

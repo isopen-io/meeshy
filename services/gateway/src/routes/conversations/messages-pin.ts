@@ -9,6 +9,9 @@
  * appelle `registerMessagePinRoutes`.
  */
 import { FastifyInstance } from 'fastify';
+import { signMessagesAttachmentsForReader } from '../../services/attachments/signServedAttachments';
+import { readerFileUrlSignerFromEnv } from '../../services/attachments/readerFileSignature';
+import { readerParticipantIdOf } from './readerParticipant';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
@@ -20,7 +23,7 @@ import {
 } from '../../services/historyFloor';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
-import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   loadPersonalHistoryHiding,
   applyPersonalHistoryHiding
@@ -32,7 +35,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { refusesContentGesture, withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
@@ -40,6 +44,27 @@ import { transformTranslationsToArray, type MessageTranslationJSON } from '../..
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import { announceConversationActivity } from '../../services/conversations/conversationActivity';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+
+/**
+ * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
+ * tout le salon (`message:pinned`) : c'est y écrire, et un mineur déclaré ne le
+ * fait pas. Posé APRÈS l'existence du message (le 404 reste ce qu'il était), et
+ * sur le type déjà chargé avec lui : la date de naissance n'est lue que dans Global.
+ */
+const refusesMinorPin = (
+  prisma: PrismaClient,
+  authRequest: UnifiedAuthRequest,
+  conversationType: string | null | undefined
+): Promise<boolean> =>
+  refusesMinorInConversationOfType(prisma, {
+    conversationType,
+    userId: authRequest.authContext.isAnonymous ? null : authRequest.authContext.userId,
+    now: new Date(),
+  });
 
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
@@ -54,6 +79,21 @@ export function registerMessagePinRoutes(
   requiredAuth: any,
   socketIOHandler: any
 ) {
+  const engagement = new EngagementService(prisma);
+
+  // #9026 — épingler ou dépingler est une ACTIVITÉ : la conversation remonte en
+  // tête pour TOUS ses participants (`lastActivityAt` pour le rechargement,
+  // `listRankAt` servi à chacun en direct). Hors du chemin de la réponse.
+  const announcePinActivity = (conversationId: string, actorUserId: string, at: Date): void => {
+    void announceConversationActivity({
+      prisma,
+      io: socketIOHandler ? fastify.socketIOHandler.getManager()?.getIO() ?? null : null,
+      conversationId,
+      at,
+      updatedByUserId: actorUserId,
+    }).catch((error: unknown) => logger.warn('[PIN] conversation activity failed', { conversationId, error }));
+  };
+
   // ============================================================================
   // PIN / UNPIN MESSAGE
   // ============================================================================
@@ -87,6 +127,7 @@ export function registerMessagePinRoutes(
             }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
@@ -126,12 +167,23 @@ export function registerMessagePinRoutes(
       // requête chargeait le document entier — contenu, traductions, metadata —
       // pour un `if (!message)`. Le jumeau qui dépingle sélectionnait déjà `id`
       // seul ; c'est l'asymétrie que le correctif précédent avait laissée.
+      //
+      // `pinnedAt` en plus : seul un message qui DEVIENT épinglé rapporte
+      // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true }
+        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { type: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+      }
+      // #9629 — un avis de capture n'est pas un contenu : l'épingler le
+      // diffuserait à toute la conversation (`message:pinned`).
+      if (refusesContentGesture(message)) {
+        return sendBadRequest(reply, 'A capture notice cannot be pinned', { code: 'CAPTURE_NOTICE_NOT_PINNABLE' });
       }
 
       const now = new Date();
@@ -139,6 +191,13 @@ export function registerMessagePinRoutes(
         where: { id: messageId },
         data: { pinnedAt: now, pinnedBy: userId }
       });
+      announcePinActivity(conversationId, userId, now);
+
+      if (!message.pinnedAt && !authRequest.authContext.isAnonymous && userId) {
+        void engagement
+          .recordActivity(userId, 'tool.pin', { conversationId })
+          .catch((error: unknown) => logger.warn('[PIN] tool.pin engagement credit failed', { messageId, error }));
+      }
 
       logger.info(`[PIN] User ${userId} pinned message ${messageId} in conversation ${conversationId}`);
 
@@ -237,16 +296,20 @@ export function registerMessagePinRoutes(
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true }
+        select: { id: true, conversation: { select: { type: true } } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
+        return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
       }
 
       await prisma.message.update({
         where: { id: messageId },
         data: { pinnedAt: null, pinnedBy: null }
       });
+      announcePinActivity(conversationId, userId, new Date());
 
       logger.info(`[UNPIN] User ${userId} unpinned message ${messageId} in conversation ${conversationId}`);
 
@@ -394,7 +457,7 @@ export function registerMessagePinRoutes(
 
       const pinnedMessages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
         where: applyPersonalHistoryHiding(
-          applyHistoryFloor({ conversationId, pinnedAt: { not: null }, deletedAt: null }, pinnedFloor),
+          applyHistoryFloor(withoutCaptureNotices({ conversationId, pinnedAt: { not: null }, deletedAt: null }), pinnedFloor),
           pinnedHiding
         ),
         orderBy: { pinnedAt: 'desc' },
@@ -466,7 +529,7 @@ export function registerMessagePinRoutes(
           // que `attachmentForwardPreviewSelect` documente — « the user taps
           // through to the full message for playback » — et une forme NOMMÉE,
           // jamais une copie locale qui dériverait (`attachmentIncludes.ts`).
-          attachments: { select: attachmentForwardPreviewSelect },
+          attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
           _count: { select: { reactions: true, replies: true } }
         }
       }));
@@ -569,7 +632,14 @@ export function registerMessagePinRoutes(
         };
       });
 
-      return sendSuccess(reply, formattedMessages, {
+      // #9646 — les pièces d'un message protégé épinglé, signées pour CE lecteur.
+      const servedMessages = await signMessagesAttachmentsForReader(prisma, {
+        messages: formattedMessages,
+        readerParticipantId: await readerParticipantIdOf(prisma, conversationId, authRequest.authContext),
+        signer: readerFileUrlSignerFromEnv(new Date()),
+      });
+
+      return sendSuccess(reply, servedMessages, {
         pagination: { total, offset, limit, hasMore: offset + formattedMessages.length < total }
       });
     } catch (error) {

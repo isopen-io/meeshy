@@ -1,25 +1,23 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
-import { chromeAfter, chromeHidden, CHROME_IDLE_MS, type ChromeCue, type ChromeVisibility } from './call-controls';
+import { chromeAfter, type ChromeCue, type ChromeVisibility } from './call-controls';
 
 /**
- * **CE QUI EFFACE LES COMMANDES D'UNE VIDÉO** (#8391, #8550) — le branchement
- * DOM de `chromeAfter` et `chromeHidden`, sur une scène vidéo seulement :
+ * **CE QUI RANGE LES COMMANDES D'UNE VIDÉO** (#8391, #8550, #8988) — le
+ * branchement DOM de `chromeAfter`, sur une scène vidéo seulement :
  *
  * - TOUCHER la scène (n'importe où hors d'un bouton, d'un champ ou du cadre
- *   des commandes) efface TOUTES les commandes — en-tête, pilule et son
- *   panneau, capsule de zoom, pastilles d'état ; un second toucher les rend ;
- * - au bout de `CHROME_IDLE_MS` sans geste, elles s'effacent d'elles-mêmes —
- *   jamais avec le focus CLAVIER dans les commandes (`:focus-visible`),
- *   jamais sous `prefers-reduced-motion` ; bouger la souris les rend ;
- * - le clavier et le focus les rendent toujours.
- *
- * Un geste n'écrit qu'une référence : bouger la souris ne rend pas l'écran
- * d'appel à chaque pixel. Seul le passage caché ↔ visible est un état.
+ *   des commandes) range TOUTES les commandes — en-tête, pilule et son
+ *   panneau, capsule de zoom, pastilles d'état ; le toucher suivant les rend ;
+ * - rien d'autre ne les range : aucune attente, aucun mouvement de souris
+ *   (#8988, directive porteur du 2026-10-01) ;
+ * - un GLISSÉ n'est pas un toucher (#9096) : le clic qui le suit est avalé ;
+ * - le clavier les rend toujours. La touche s'écoute sur le DOCUMENT : un clic
+ *   sur la scène, qui n'est pas focalisable, emporte le focus HORS de l'écran
+ *   d'appel, sur le `<dialog>` qui le porte (`call-layer.tsx`, mesuré dans
+ *   Chromium), où un écouteur posé sur l'écran ne l'entend plus ; le focus
+ *   qui entre dans l'écran les rend aussi.
  */
-
-const STIRS = ['pointermove', 'wheel'] as const;
-const KEYS = ['keydown', 'focusin'] as const;
 
 /** Ce qui AGIT à l'endroit touché : le toucher lui appartient, il n'efface rien. */
 const INTERACTIVE = [
@@ -37,7 +35,10 @@ const INTERACTIVE = [
   '[role="radio"]',
   '[role="switch"]',
   '[role="alertdialog"]',
+  '[role="dialog"]',
+  '[role="toolbar"]',
   '[tabindex]:not([tabindex="-1"])',
+  '[data-call-header]',
   '[data-call-chrome-keep]',
 ].join(', ');
 
@@ -46,73 +47,60 @@ const INTERACTIVE = [
  * n'agisse : sous Preact, un bouton qui change d'état (« Couper le micro » →
  * « Activer le micro ») remplace son glyphe pendant son propre gestionnaire,
  * et à la remontée la cible, détachée, n'a plus de bouton parmi ses ancêtres.
+ *
+ * Un toucher qui rate de peu (le titre d'une feuille, l'espace entre deux
+ * boutons d'une rangée, un vide de l'en-tête — #8735) appartient à ce qu'il
+ * touche. L'écran d'appel étant lui-même un dialogue, seul ce qui agit À
+ * L'INTÉRIEUR de l'élément écouté (`currentTarget`) retient le toucher.
  */
-export const tapTogglesChrome = (event: Event): boolean => event.target instanceof Element && event.target.closest(INTERACTIVE) === null;
-
-const prefersReducedMotion = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-const keyboardInside = (controls: HTMLElement | null): boolean => {
-  const focused = typeof document === 'undefined' ? null : document.activeElement;
-  return controls !== null && focused instanceof HTMLElement && controls.contains(focused) && focused.matches(':focus-visible');
+export const tapTogglesChrome = (event: Event): boolean => {
+  if (!(event.target instanceof Element)) return false;
+  const hit = event.target.closest(INTERACTIVE);
+  const scope = event.currentTarget;
+  return hit === null || hit === scope || (scope instanceof Node && !scope.contains(hit));
 };
 
-/** `held` : un sous-menu est ouvert — on y regarde (l'aperçu d'une capture, un effet qu'on essaie) ; l'écran ne s'efface pas de lui-même. */
-type ChromeInput = { readonly videoScene: boolean; readonly root: RefObject<HTMLElement | null>; readonly controls: RefObject<HTMLElement | null>; readonly held?: boolean };
+type ChromeInput = {
+  readonly videoScene: boolean;
+  readonly root: RefObject<HTMLElement | null>;
+  /** Vrai pour un clic qui n'est pas un toucher — celui qui suit un glissé (#9096, `use-call-swipe-down.ts`). */
+  readonly swallowTap?: () => boolean;
+};
 
-export function useCallChrome({ videoScene, root, controls, held = false }: ChromeInput): boolean {
+/**
+ * Ce que montrent les commandes : `shown` hors d'une scène vidéo, sinon
+ * l'état de `chromeAfter` — que l'écran projette en opacité et en visibilité.
+ */
+export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): ChromeVisibility {
   const [visibility, setVisibility] = useState<ChromeVisibility>('shown');
-  const lastGesture = useRef(Date.now());
   const scene = useRef(videoScene);
   scene.current = videoScene;
-
-  const cue = useCallback((next: ChromeCue) => {
-    lastGesture.current = Date.now();
-    setVisibility((current) => chromeAfter(current, next));
-  }, []);
+  const swallow = useRef(swallowTap);
+  swallow.current = swallowTap;
 
   useEffect(() => {
     const element = root.current;
     if (element === null) return undefined;
-    const stir = () => cue('stir');
+    const page = element.ownerDocument;
+    const cue = (next: ChromeCue) => setVisibility((current) => chromeAfter(current, next));
     const key = () => cue('key');
-    const press = (event: Event) => {
-      lastGesture.current = Date.now();
-      if (!tapTogglesChrome(event)) cue('stir');
-    };
     const tap = (event: Event) => {
+      if (swallow.current?.() === true) return;
       if (scene.current && tapTogglesChrome(event)) cue('tap');
     };
-    STIRS.forEach((name) => element.addEventListener(name, stir, { passive: true }));
-    KEYS.forEach((name) => element.addEventListener(name, key));
-    element.addEventListener('pointerdown', press, { passive: true, capture: true });
+    page.addEventListener('keydown', key);
+    element.addEventListener('focusin', key);
     element.addEventListener('click', tap, { capture: true });
     return () => {
-      STIRS.forEach((name) => element.removeEventListener(name, stir));
-      KEYS.forEach((name) => element.removeEventListener(name, key));
-      element.removeEventListener('pointerdown', press, { capture: true });
+      page.removeEventListener('keydown', key);
+      element.removeEventListener('focusin', key);
       element.removeEventListener('click', tap, { capture: true });
     };
-  }, [root, cue]);
+  }, [root]);
 
   useEffect(() => {
     if (!videoScene) setVisibility('shown');
   }, [videoScene]);
 
-  useEffect(() => {
-    if (!videoScene || held || visibility !== 'shown' || prefersReducedMotion()) return undefined;
-    const pending = { handle: setTimeout(() => undefined, 0) };
-    const check = (): void => {
-      const idleMs = Date.now() - lastGesture.current;
-      const hide = chromeHidden({ videoScene, idleMs, keyboardInside: keyboardInside(controls.current), reducedMotion: false });
-      if (hide) {
-        setVisibility((current) => chromeAfter(current, 'rest'));
-        return;
-      }
-      pending.handle = setTimeout(check, idleMs >= CHROME_IDLE_MS ? CHROME_IDLE_MS : CHROME_IDLE_MS - idleMs);
-    };
-    pending.handle = setTimeout(check, Math.max(0, CHROME_IDLE_MS - (Date.now() - lastGesture.current)));
-    return () => clearTimeout(pending.handle);
-  }, [videoScene, held, visibility, controls]);
-
-  return videoScene && visibility !== 'shown';
+  return videoScene ? visibility : 'shown';
 }

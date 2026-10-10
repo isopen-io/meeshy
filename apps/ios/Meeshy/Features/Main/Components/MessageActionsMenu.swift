@@ -15,7 +15,7 @@ struct MessageActionsMenu: View {
     // l'overlay pour positionner le menu sans PreferenceKey) applique le même
     // facteur via `UIFontMetrics` → le calcul de layout reste cohérent avec le
     // rendu quelle que soit la taille Dynamic Type.
-    @ScaledMetric(relativeTo: .body) private var rowMinHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var rowMinHeight: CGFloat = MessageActionsMenu.rowHeight
     @ScaledMetric(relativeTo: .body) private var iconColumnWidth: CGFloat = 24
 
     private var accent: Color { Color(hex: accentHex) }
@@ -25,11 +25,11 @@ struct MessageActionsMenu: View {
             ForEach(Array(actions.enumerated()), id: \.element) { index, action in
                 row(action)
                 if index < actions.count - 1 {
-                    Divider().overlay(accent.opacity(0.08)).padding(.leading, 52)
+                    Divider().overlay(accent.opacity(MeeshyOpacity.subtle)).padding(.leading, 52)
                 }
             }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(width: Self.menuWidth)
         // Design système par version d'iOS : Liquid Glass natif iOS 26
         // (`.regular` pur, sans teinte ni ombre manuelle) / fallback material
@@ -38,23 +38,24 @@ struct MessageActionsMenu: View {
         // teinte à l'accent + double ombre faisaient un chrome maison qui
         // divergeait du menu système ; la séparation avec le fond vient
         // désormais du voile de l'overlay, comme pour le menu conversation.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 
     private func row(_ action: PrimaryAction) -> some View {
-        let tint = accent
+        // Le destructif en rouge, isolé du reste de la liste (#9908).
+        let tint = action == .deletePiece ? MeeshyColors.error : accent
         return Button {
             HapticFeedback.light()
             onSelect(action)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 Image(systemName: symbol(action))
                     .font(MeeshyFont.relative(17, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: iconColumnWidth)
                 Text(label(action))
-                    .font(MeeshyFont.relative(16))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize))
                 Spacer(minLength: 0)
                 if action == .more {
                     Image(systemName: "chevron.forward")
@@ -63,7 +64,7 @@ struct MessageActionsMenu: View {
                 }
             }
             .foregroundStyle(tint)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
@@ -101,6 +102,9 @@ struct MessageActionsMenu: View {
         case .select: return "checkmark.circle"
         case .exportImage: return MessageCardExportMenu.imageSymbol
         case .exportQuick: return MessageCardExportMenu.quickSymbol
+        case .wholeMessage: return "text.bubble"
+        case .replyToPiece: return "arrowshape.turn.up.left"
+        case .deletePiece: return "trash"
         }
     }
 
@@ -116,6 +120,9 @@ struct MessageActionsMenu: View {
         case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         case .exportImage: return MessageCardExportMenu.imageLabel
         case .exportQuick: return MessageCardExportMenu.quickLabel
+        case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
+        case .replyToPiece: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
+        case .deletePiece: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
         }
     }
 }

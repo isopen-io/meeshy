@@ -12,16 +12,21 @@
  */
 
 
+import { GameMedal } from '@/components/game/medal';
+import { GameRarityLine } from '@/components/game-rarity';
+import { GameTouch } from '@/components/game-touch';
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
-import { ProgressBar } from '@/components/progress-bar';
-import { meeshMissing } from '@/lib/view/meesh-copy';
+import { milestoneGlyph } from '@/components/milestone-glyph';
+import { medalOfAxis } from '@/lib/game/medal';
+import { rarityRim, visibleRarity, type AchievementRarityMap } from '@/lib/game/rarity';
+import { gameText } from '@/lib/view/game-copy';
+import { badgeDetail, defiDetail, succesDetail } from '@/lib/view/game-detail';
 import {
   ACHIEVEMENT_COPY,
   ACHIEVEMENT_SECTION_TITLES,
   generatedAchievementLabel,
-  AXIS_GLYPHS,
   AXIS_LABELS,
   BADGE_UNIT,
   nextStepLabel,
@@ -30,10 +35,10 @@ import {
 } from '@/lib/view/progression';
 import {
   type EngagementAxisProgress,
-  type EngagementMeeshProgress,
   type EngagementProgress,
   type EngagementTier,
 } from '@meeshy/shared/utils/engagement-progress';
+import type { EngagementAchievementKey } from '@meeshy/shared/types/engagement';
 import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-view';
 
 /**
@@ -61,20 +66,21 @@ import type { AchievementSectionView } from '@meeshy/shared/utils/achievement-vi
  */
 
 export const BRAND = 'var(--color-ios-brand)';
-export const STREAK_TINT = 'var(--ios-warning)';
+/* Les teintes d'ÉTAT suivent le thème (`--color-warn|ok|error`) : les jetons
+   `--ios-*` bruts sont ceux du thème sombre et tombent sous 3:1 en clair
+   (#9383, `progression-contrast.test.ts`). */
+export const STREAK_TINT = 'var(--color-warn)';
 /** L'ambre des Meeshes — la même famille que les badges, distincte de la marque. */
-export const MEESH_TINT = 'var(--ios-warning)';
+export const MEESH_TINT = 'var(--color-warn)';
 /** L'argent de la PIÈCE Meesh (#6427) — dérivé de `MeeshyColors.meeshSilver`, jamais recopié. */
 export const MEESH_COIN_TINT = 'var(--ios-meesh-silver)';
-export const UNLOCKED_TINT = 'var(--ios-success)';
+export const UNLOCKED_TINT = 'var(--color-ok)';
 export const INK = 'var(--color-ios-ink)';
 export const INK_2 = 'var(--color-ios-ink-2)';
 export const CARD = 'var(--color-ios-card)';
 
-/** Les glyphes d'axe viennent des DEUX jeux — le socle (`user`, `smiley`, `microphone`) et celui de l'écran. */
-export function axisGlyph(name: ProgressionGlyph): GlyphShape {
-  return name in PROGRESSION_GLYPHS ? PROGRESSION_GLYPHS[name as keyof typeof PROGRESSION_GLYPHS] : GLYPHS[name as keyof typeof GLYPHS];
-}
+/** Les glyphes d'axe — la table unique que la ligne de notification d'un badge lit aussi (`milestone-glyph.ts`, #8727). */
+export const axisGlyph = (name: ProgressionGlyph): GlyphShape => milestoneGlyph(name);
 
 export function Card({ tint, children, className }: { tint: string; children: React.ReactNode; className?: string }) {
   return (
@@ -132,15 +138,31 @@ export function TierDots({ tiers, tint, axisLabel }: { tiers: readonly Engagemen
   );
 }
 
-export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
+/**
+ * LA LIGNE D'UN BADGE (#9466) — un badge d'accumulation est une MÉDAILLE
+ * (`components/game/medal.tsx`) : lunette de métal à la hauteur atteinte, émail
+ * de la famille, pictogramme d'axe, perles de palier, arc vers le suivant ;
+ * éteint, son empreinte. La ligne dit déjà l'axe, le palier et ce qui manque :
+ * la médaille reste décorative sauf quand l'hôte lui passe `medalLabel`
+ * (« Messages texte, Or, 100 sur 500 vers Platine »).
+ */
+export function AxisRow({ axis, medalLabel }: { axis: EngagementAxisProgress; medalLabel?: string }) {
   const label = AXIS_LABELS[axis.axisKey];
+  const medal = medalOfAxis(axis);
   return (
-    <li className="flex items-center gap-3 py-2.5">
-      <span
-        className="grid size-9 shrink-0 place-items-center rounded-field"
-        style={{ color: BRAND, backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' }}
-      >
-        <GlyphSvg glyph={axisGlyph(AXIS_GLYPHS[axis.axisKey])} size={16} />
+    <li>
+      <GameTouch detail={badgeDetail(axis)} className="flex w-full items-center gap-3 py-2.5" style={{ minHeight: 44 }}>
+      <span className="grid w-12 shrink-0 place-items-center">
+        <GameMedal
+          size={44}
+          family={medal.family}
+          pictogram={medal.pictogram}
+          tier={medal.tier}
+          progress={medal.progress}
+          {...(medal.threshold === null ? {} : { threshold: String(medal.threshold) })}
+          {...(medal.missing === null ? {} : { missing: `−${medal.missing}` })}
+          {...(medalLabel === undefined ? {} : { label: medalLabel })}
+        />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline justify-between gap-2">
@@ -158,11 +180,22 @@ export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
           </span>
         </div>
       </div>
+      </GameTouch>
     </li>
   );
 }
 
-export function AchievementsSection({ progress }: { progress: EngagementProgress }) {
+export function AchievementsSection({
+  progress,
+  onPhoto,
+  rarities,
+}: {
+  progress: EngagementProgress;
+  /** La rareté mesurée de chaque succès (#9390) ; absente (ancien serveur) : l'écran d'avant. */
+  rarities?: AchievementRarityMap | undefined;
+  /** La révélation d'un succès se photographie (#7742) ; absent : aucun bouton. */
+  onPhoto?: (key: EngagementAchievementKey) => void;
+}) {
   const unlocked = progress.achievements.filter((a) => a.unlocked).length;
   return (
     <section aria-labelledby="progression-achievements" className="flex flex-col gap-2">
@@ -178,14 +211,22 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
           {progress.achievements.map((achievement) => {
             const copy = ACHIEVEMENT_COPY[achievement.key];
             const dated = reachedAtLabel(achievement.reachedAt);
+            const entry = rarities?.[achievement.key];
+            const shown = visibleRarity(entry);
             return (
-              <li key={achievement.key} className="flex items-center gap-3 py-2.5">
+              <li
+                key={achievement.key}
+                {...(shown === null ? {} : { 'data-game-rim': shown })}
+                className="flex items-center gap-3 py-2.5"
+                style={shown === null ? undefined : { ...rarityRim(shown), paddingInlineStart: 10 }}
+              >
+                <GameTouch detail={succesDetail(achievement, rarities)} className="flex min-w-0 flex-1 items-center gap-3" style={{ minHeight: 44 }}>
                 <span
                   className="grid size-9 shrink-0 place-items-center rounded-field"
                   style={{
                     color: achievement.unlocked ? UNLOCKED_TINT : INK_2,
                     backgroundColor: achievement.unlocked
-                      ? 'color-mix(in srgb, var(--ios-success) 14%, transparent)'
+                      ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
                       : 'color-mix(in srgb, var(--color-ios-ink-3) 18%, transparent)',
                   }}
                 >
@@ -198,7 +239,21 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
                   <span className="text-check" style={{ color: INK_2 }}>
                     {achievement.unlocked ? (dated ?? 'Débloqué') : copy.condition}
                   </span>
+                  <GameRarityLine entry={entry} />
                 </div>
+                </GameTouch>
+                {achievement.unlocked && onPhoto !== undefined ? (
+                  <button
+                    type="button"
+                    data-achievement-photo={achievement.key}
+                    aria-label={`${gameText('game.photo.offer.start')} — ${copy.title}`}
+                    onClick={() => onPhoto(achievement.key)}
+                    className="grid size-11 shrink-0 place-items-center rounded-chip"
+                    style={{ color: BRAND }}
+                  >
+                    <Glyph name="image" size={18} />
+                  </button>
+                ) : null}
               </li>
             );
           })}
@@ -227,8 +282,10 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
  *    pas masqué en CSS : un objectif qu'on ne peut pas tenir ne doit pas
  *    exister dans l'arbre, même invisible.
  *
- * La rangée défile dans SON conteneur (`overflow-x`), jamais le document : la
- * page ne défile jamais horizontalement.
+ * Les paliers se rangent en GRILLE qui passe à la ligne (#9563, amendement
+ * n° 3) : la rangée était un carrousel (`overflow-x`), seule surface de
+ * Progression à glisser de côté sous le doigt — et le prochain objectif, dernier
+ * de la rangée, restait hors de l'écran tant qu'on ne la faisait pas défiler.
  */
 export function GeneratedAchievements({ sections }: { sections: readonly AchievementSectionView[] }) {
   if (sections.length === 0) return null;
@@ -251,14 +308,16 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
             </span>
           </div>
           <ul
-            className="scrollbar-none flex gap-2 overflow-x-auto pb-1"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3"
             aria-label={`${ACHIEVEMENT_SECTION_TITLES[vue.section]} — ${vue.unlockedCount} sur ${vue.attainableCount}`}
           >
             {vue.entries.map((entry) => (
-              <li
-                key={entry.key}
-                className="flex min-w-36 shrink-0 flex-col gap-1 rounded-card px-3 py-2"
+              <li key={entry.key} className="flex min-w-0">
+              <GameTouch
+                detail={defiDetail(entry)}
+                className="flex min-w-0 flex-1 flex-col gap-1 rounded-card px-3 py-2"
                 style={{
+                  minHeight: 44,
                   backgroundColor: entry.unlocked
                     ? 'color-mix(in srgb, var(--color-ok) 14%, transparent)'
                     : 'color-mix(in srgb, var(--color-ios-ink) 6%, transparent)',
@@ -270,7 +329,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                 >
                   <GlyphSvg glyph={entry.unlocked ? PROGRESSION_GLYPHS.star : PROGRESSION_GLYPHS.medal} size={13} />
                 </span>
-                <span className="text-check font-semibold" style={{ color: INK }}>
+                <span className="break-words text-check font-semibold" style={{ color: INK }}>
                   {generatedAchievementLabel(entry.family, entry.tier)}
                 </span>
                 {entry.unlocked ? (
@@ -278,6 +337,7 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
                     Obtenu
                   </span>
                 ) : null}
+              </GameTouch>
               </li>
             ))}
           </ul>
@@ -287,89 +347,6 @@ export function GeneratedAchievements({ sections }: { sections: readonly Achieve
   );
 }
 
-export function MeeshHero({
-  meesh,
-  onMint,
-  isMinting,
-  mintError,
-}: {
-  meesh: EngagementMeeshProgress;
-  onMint: () => void;
-  isMinting: boolean;
-  /** L'ÉCHEC de la frappe (#6470) — même loi que `MeeshDetail`. */
-  mintError?: string | undefined;
-}) {
-  const soldeLabel = meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`;
-  return (
-    <section aria-labelledby="progression-meesh" className="flex flex-col gap-3 rounded-card px-4 py-4"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--ios-warning) 12%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--ios-warning) 30%, transparent)',
-      }}
-    >
-      <div className="flex items-center gap-2">
-        <span style={{ color: MEESH_COIN_TINT }} aria-hidden="true">
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.coinFill} size={18} />
-        </span>
-        <h2 id="progression-meesh" className="text-large-title font-bold" style={{ color: INK }}>
-          {soldeLabel}
-        </h2>
-      </div>
-
-      {meesh.mintedLifetime > 0 ? (
-        <p className="text-check" style={{ color: INK_2 }}>
-          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
-        </p>
-      ) : null}
-
-      <ProgressBar
-        progress={meesh.progress}
-        label={`Vers la prochaine Meesh — ${meesh.debitablePoints} points sur ${meesh.mintCost}`}
-        tint={MEESH_TINT}
-      />
-
-      {meesh.canMint ? (
-        // Le bouton RESTE pendant la frappe, avec son état dit : le faire
-        // disparaître au moment du tap donnerait l'impression que l'action a
-        // échoué, alors qu'elle est en cours.
-        <>
-          <button
-            type="button"
-            onClick={onMint}
-            disabled={isMinting}
-            aria-busy={isMinting}
-            data-meesh-mint
-            className="flex min-h-11 items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-80"
-            style={{ backgroundColor: MEESH_TINT, color: 'var(--color-ios-surface)' }}
-          >
-            {/* MÊME loi que `MeeshDetail` (#6470) : l'activité se VOIT, pas
-                seulement se lit. Deux surfaces qui portent la même action
-                doivent porter le même état, sinon l'une des deux ment. */}
-            {isMinting ? (
-              <span
-                aria-hidden="true"
-                data-meesh-mint-spinner
-                className="inline-block size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
-              />
-            ) : null}
-            {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
-          </button>
-          {mintError !== undefined && !isMinting ? (
-            <p role="alert" data-meesh-mint-error className="text-caption" style={{ color: 'var(--ios-error)' }}>
-              {mintError}
-            </p>
-          ) : null}
-        </>
-      ) : (
-        <p className="text-check" style={{ color: INK_2 }}>
-          {/* SITE UNIQUE (#6478) — la phrase vivait en double, donc fausse deux
-              fois : « Vos 1 points de conversation ». */}
-          {meeshMissing(meesh.missingPoints, meesh.floorPoints)}
-        </p>
-      )}
-    </section>
-  );
-}
 
 
 export function ProgressionSkeleton() {
@@ -403,7 +380,7 @@ export function ProgressionError({ message, online, onRetry }: { message: string
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: BRAND, minHeight: 44 }}
       >
         Réessayer

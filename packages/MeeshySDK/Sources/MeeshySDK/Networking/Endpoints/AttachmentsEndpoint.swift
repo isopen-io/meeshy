@@ -23,6 +23,7 @@ public enum AttachmentsEndpoint: MeeshyEndpoint, Sendable {
     case byAttachmentIdTranslate(attachmentId: String)
     case fileByWildcard(wildcard: String)
     case search
+    case signedByTokenByWildcard(token: String, wildcard: String)
     case upload
     case uploadText
 
@@ -39,6 +40,7 @@ public enum AttachmentsEndpoint: MeeshyEndpoint, Sendable {
         case .byAttachmentIdTranslate(let attachmentId): return "/api/v1/attachments/\(attachmentId)/translate"
         case .fileByWildcard(let wildcard): return "/api/v1/attachments/file/\(wildcard)"
         case .search: return "/api/v1/attachments/search"
+        case .signedByTokenByWildcard(let token, let wildcard): return "/api/v1/attachments/signed/\(token)/\(wildcard)"
         case .upload: return "/api/v1/attachments/upload"
         case .uploadText: return "/api/v1/attachments/upload-text"
         }

@@ -96,7 +96,7 @@ public nonisolated enum StoryAudioIdentity {
     /// lecteur croie voir deux choses différentes.
     ///
     /// **Cette règle gouverne le COMPOSER, pas le lecteur.**
-    /// `AudioChipDisplay.creditMarqueeText` compose la même phrase pour la puce
+    /// `AudioChipDisplay.creditLine` compose la même phrase pour la puce
     /// d'une story PUBLIÉE, et n'est pas absorbée ici : elle part d'une
     /// `BackgroundAudioAnnouncement` — pas d'un `StoryAudioPlayerObject` — et
     /// tranche un cas que le composer ne connaît pas, celui du CACHE FROID, où

@@ -16,12 +16,14 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 export function ComposerEmojiSheet({
   onPick,
   onClose,
+  title,
 }: {
   readonly onPick: (emoji: string) => void;
   readonly onClose: () => void;
+  readonly title?: string;
 }) {
   return (
-    <Sheet title={translate(currentInterfaceLanguage(), 'composer.emoji.title')} onClose={onClose}>
+    <Sheet title={title ?? translate(currentInterfaceLanguage(), 'composer.emoji.title')} onClose={onClose}>
       <EmojiGrid onPick={onPick} />
     </Sheet>
   );

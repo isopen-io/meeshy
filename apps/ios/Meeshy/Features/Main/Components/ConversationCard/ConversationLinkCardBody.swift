@@ -44,13 +44,13 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var groupCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             banner
             identity
             if let description = card.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
                 Text(description)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.8))
+                    .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, MeeshySpacing.sm)
@@ -62,10 +62,10 @@ struct ConversationLinkCardBody: View, Equatable {
         }
         .padding(.bottom, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isDark ? MeeshyColors.indigo900.opacity(0.45) : MeeshyColors.indigo50.opacity(0.6))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                .fill(isDark ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo50.opacity(0.6))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
@@ -83,11 +83,11 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var gradient: LinearGradient {
-        LinearGradient(colors: [accent, accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.strong)], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 
     private var identity: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             avatar
                 .padding(.top, -Self.avatarSide * 0.5)
             Text(title)
@@ -101,21 +101,21 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var avatar: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
             .fill(gradient)
             .overlay(
                 CachedAsyncImage(url: card.avatarUrl,
                                  targetSize: CGSize(width: Self.avatarSide, height: Self.avatarSide),
                                  showsStatusOverlays: false) {
                     Text(verbatim: initials)
-                        .font(MeeshyFont.relative(18, weight: .heavy, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .heavy, design: .rounded))
                         .foregroundColor(.white)
                 }
                 .scaledToFill()
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                     .stroke(isDark ? MeeshyColors.indigo950 : Color.white, lineWidth: 3)
             )
             .frame(width: Self.avatarSide, height: Self.avatarSide)
@@ -160,7 +160,7 @@ struct ConversationInviteQuote: View {
                 .fill(accent)
                 .frame(width: 3)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(name: inviter.displayName, context: .custom(28), avatarURL: inviter.avatarUrl,
                                  enablePulse: false, isDark: isDark)
@@ -171,24 +171,48 @@ struct ConversationInviteQuote: View {
                             .foregroundColor(accent)
                             .lineLimit(1)
                         Text(ConversationLinkCardCopy.invitesYou)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 if let text = trimmedMessage {
-                    Text(text)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
-                        .foregroundColor(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo950.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
+                    inviteMessage(text)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("conversation-link-card-invite")
+    }
+
+    /// Le message du lien en CITATION mise en valeur (correction porteur
+    /// 2026-09-29, #8726) : un grand guillemet décoratif, puis le texte. Absent,
+    /// rien ne se dessine — aucune place réservée.
+    private func inviteMessage(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
+            Text(verbatim: "\u{201C}")
+                .font(MeeshyFont.relative(60, weight: .black, design: .serif))
+                .foregroundColor(accent.opacity(MeeshyOpacity.heavy))
+                .frame(height: 34, alignment: .top)
+                .padding(.top, -2)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium).italic())
+                .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, MeeshySpacing.xs)
+        }
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                .fill(accent.opacity(isDark ? 0.16 : 0.08))
+        )
+        .accessibilityIdentifier("conversation-link-card-invite-message")
     }
 }
 
@@ -217,30 +241,41 @@ struct ConversationCardStatsRow: View {
             if let messages = stats.messageCount {
                 metric(icon: "bubble.left.and.bubble.right.fill", value: messages)
             }
-            ForEach(Array(stats.languages.prefix(visible)), id: \.self) { code in
-                Text(verbatim: code.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(accent.opacity(0.14)))
-                    .fixedSize()
-            }
+            // Pas de `ForEach` : sa fermeture hérite de l'isolation @MainActor,
+            // et iOS 26 la rappelle sur `com.apple.SwiftUI.AsyncRenderer` en
+            // mesurant la bulle — le contrôle d'isolation de Swift 6 y trappe
+            // (`.ips` du 2026-09-29, `closure #1 in closure #1 in row`). Au plus
+            // quatre pastilles, posées sans fermeture.
+            let shown = Array(stats.languages.prefix(visible))
+            if shown.count > 0 { languagePill(shown[0]) }
+            if shown.count > 1 { languagePill(shown[1]) }
+            if shown.count > 2 { languagePill(shown[2]) }
+            if shown.count > 3 { languagePill(shown[3]) }
             if stats.languages.count > visible {
                 Text(verbatim: "+\(stats.languages.count - visible)")
-                    .font(MeeshyFont.relative(11, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                     .fixedSize()
             }
         }
     }
 
+    private func languagePill(_ code: String) -> some View {
+        Text(verbatim: code.uppercased())
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+            .foregroundColor(accent)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(Capsule().fill(accent.opacity(0.14)))
+            .fixedSize()
+    }
+
     private func metric(icon: String, value: Int) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(value.formatted(.number.notation(.compactName)))
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .monospacedDigit()
         }
         .fixedSize()

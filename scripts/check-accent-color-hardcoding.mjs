@@ -194,8 +194,145 @@
 // fond choisi, relue au canvas, au lecteur et au composite. C'est le fond
 // d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
 // aucun sens.
-const REFERENCE_LITERAL_COLOR_COUNT = 120;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 441;
+//
+// 2026-09-30 (#8877) — littéraux 120 → 67. Le codemod de la charte visuelle
+// échange 53 `Color(hex: "…")` par le jeton `MeeshyColors` de MÊME valeur
+// (indigo, succès/erreur, teintes franches, tuiles, plans nommés) : aucun
+// pixel ne bouge, le codage en dur devient une référence au jeton. Les
+// variables inconnues ne bougent pas (441).
+//
+// 2026-09-30 (#8877, harmonisation vue par vue) — littéraux 67 → 65, variables
+// inconnues 441 → 438 : les plans de saisie de `ReportMessageSheet` deviennent
+// `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
+// deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
+// de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+//
+// 2026-10-02 (#9069) — variables inconnues 438 → 443 : les cinq
+// `Color(hex: band.fill | band.stroke | band.ink | text.fill)` de
+// `MeeInstantView` (MeeshyUI/Story). Ce ne sont PAS des couleurs d'accent : ce
+// sont les couleurs du DESSIN d'un Instant de Mee et Meo, mesurées dans le SVG
+// du web par `apps/web/scripts/mee-ios-instants.ts` et écrites dans l'index
+// généré, pour que le bandeau et le texte redessinés en natif soient
+// identiques au web (une seule source de dessin). Les rapporter à
+// `accentColor` changerait le sticker selon la conversation.
+//
+// 2026-10-03 (#9171) — variables inconnues 442 → 443 : le fond d'attente de
+// `VisitorContentView` (`Color(hex: media.thumbnailColor)`). C'est la couleur
+// DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
+// et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
+// `accentColor` peindrait la vignette d'un autre média que le sien.
+//
+// 2026-10-05 (#9397) — littéraux 65 → 110, variables inconnues 443 → 445 : la
+// palette des MATIÈRES DU JEU — `GameMaterial.swift` (33), `LevelRingView.swift`
+// (10), `RankBlasonView.swift` (1), `SignatureMark.swift` (1), soit 45 — et les
+// deux `Color(hex: from|to)` de `GameMaterial.pair()`. Les dégradés de la
+// planche (`<linearGradient id="gCopper">…`), transcrits stop pour stop, pour
+// que les rangs, badges et trophées rendent la MÊME matière héraldique que le
+// design ; ce ne sont PAS des couleurs d'accent (même précédent que #9069,
+// #9171) — cuivre, bronze, argent, or, platine, obsidienne, prisme et flamme
+// sont des matériaux FIXES, volontairement indépendants du thème de
+// conversation. Les autres fichiers listés par le cliquet au moment de la
+// régression (`SyntaxHighlighter.swift`, `StoryFilterGridView.swift`,
+// `TagInputView.swift`, `ConversationAnimatedBackground.swift`,
+// `CountryPicker.swift`, `LanguageSelector.swift`, `ConversationListHelpers.swift`,
+// …) sont antérieurs au lot du jeu (#9373 → #9383) et n'y contribuent pas —
+// vérifié par `git log` sur chacun.
+//
+// 2026-10-05 (#9406) — littéraux 110 → 112 : `GameSurface.swift`
+// (`GameColors.warmText` / `.goodText`), deux variantes de CONTRASTE pour des
+// couleurs SÉMANTIQUES (avertissement, réussite) — `MeeshyColors.warning` /
+// `.success`, pensées pour fond sombre, tombent sous le seuil WCAG 4,5:1 sur
+// fond clair (mesuré : 1,6:1). Rien à voir avec `accentColor`/`colorPalette` ;
+// « Semantic colors (error, success) remain static via MeeshyColors »
+// (CLAUDE.md racine, § Conversation Accent Color).
+//
+// 2026-10-05 (#9383 #9381 #9382, via dev) — littéraux 112 → 110 : le lot
+// « le jeu respecte les gardes du dépôt » retire les deux littéraux
+// `GameSurface.swift` ajoutés par #9406 ci-dessus, en passant `warmText` et
+// `goodText` par des jetons au lieu de `Color(hex:)`. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-05 (#9380) — littéraux 110 → 109 : `GameMaterial.swift` centralise
+// les matières et couleurs de palier du jeu (cadre déclaré, ruban de l'écu,
+// marges) ; `LevelRingView.swift`, `RankBlasonView.swift` et
+// `SignatureMark.swift` lisent désormais ce jeton unique au lieu de
+// `Color(hex:)` répété. Valeur MESURÉE le 2026-10-05.
+//
+// 2026-10-05 (#9471, via #9349) — variables inconnues 445 → 444 :
+// `ComposerFrameBand.swift` lit `StoryBackdrop.solidColor` directement au
+// lieu de recomposer `Color(hex: hex)` depuis `solidHex` — un appel
+// variable de moins. Le littéral `Color(hex: "FB923C")` de la même fonction
+// (dégradé de repli) est inchangé, d'où le cliquet littéral stable à 109.
+//
+// 2026-10-05 (#9503, vague 2 du jeu) — littéraux 109 → 116 : `GameMedalView.swift`
+// (5 — couleurs fixes par catégorie de médaille : content, social, conversation,
+// comment, tool) et `GameReferralBannerView.swift` (2 — encre de la carte de
+// parrainage) sont deux fichiers NOUVEAUX sous `.../MeeshyUI/Game/`, même
+// précédent que `GameMaterial.swift` (#9397, #9380) : couleurs de DESIGN du jeu
+// volontairement indépendantes du thème de conversation. Valeur MESURÉE le
+// 2026-10-05.
+//
+// 2026-10-06 (#9511, vague 2 du jeu) — littéraux 116 → 128 : `GameLeagueBricks.swift`
+// (12 — huit teintes de rareté : quartz, ambre, jade, saphir, rubis, amethyste,
+// diamant, prisme ; quatre teintes de badge de ligue : slate, blue, violet, gold)
+// est un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMedalView.swift`/`GameMaterial.swift` ci-dessus. Valeur MESURÉE le
+// 2026-10-06.
+//
+// 2026-10-06 (#9540, revers gravé de la Meesh) — littéraux 128 → 129 :
+// `GameEngravedBirds.swift` (1 — `shadeColor`, l'ombre basse de la gravure) est
+// un fichier NEUF sous `.../MeeshyUI/Game/`, même précédent que
+// `GameMaterial.swift` : couleur de DESIGN du jeu, indépendante du thème de
+// conversation. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-06 (#9540, correctif) — littéraux 129 → 128 : `shadeColor` lit le jeton
+// `MeeshyColors.indigo950` (la même teinte, `#1E1B4B`) — le littéral a disparu, la
+// garde `DesignLiteralRatchetGuardTests` n'en accepte pas un de plus. Valeur
+// MESURÉE le 2026-10-06.
+//
+// 2026-10-08 (#9636, blason des rangs) — littéraux 128 → 136 : l'encre de gravure
+// du blason, une par matière (cuivre, bronze, argent, or, platine, obsidienne, prisme,
+// flamme), dans `MeeshyUI/Game/GameMaterial.swift`, la palette FIXE du jeu qui porte
+// déjà les teintes de chaque matière — ce n'est pas une couleur de conversation, aucun
+// `accentColor` ne peut la remplacer. Valeur MESURÉE le 2026-10-08.
+//
+// 2026-10-08 (#9688, niveaux ouverts par le rang) — littéraux 136 → 145 : les neuf teintes
+// des paliers d'au-delà du niveau 100 (Nébuleuse … Infini ; Singularité reprend le prisme de
+// Galaxie), dans `LevelTierPalette` (`MeeshyUI/Game/GameMaterial.swift`), MIROIR des jetons
+// web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
+// couleur de conversation. Valeur MESURÉE le 2026-10-08.
+const REFERENCE_LITERAL_COLOR_COUNT = 145;
+// 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
+// `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
+// `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas
+// du jeu, indépendante du thème de conversation, même motif que les
+// variables déjà admises sous un nom différent. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-06 (#9540, revers gravé de la Meesh) — variables inconnues 445 → 451 :
+// `GameEngravedBirds.swift` (6) peint les formes de Mee et Meo depuis leur
+// table de dessin — `Color(hex: stroke.color)`, l'aplat `hex`, et les deux
+// arrêts de chacun des deux dégradés (`first`/`second`, `inner`/`outer`) : les
+// émaux de la gravure, portés À L'IDENTIQUE du web, indépendants du thème de
+// conversation. Valeur MESURÉE le 2026-10-06.
+//
+// 2026-10-09 — variables inconnues 451 → 453 :
+// - `PublicationViewersSheet.swift` (#9727, 37654709ba) — `Color(hex: post.authorColor)`,
+//   la couleur DÉTERMINISTE de l'auteur du post servie par l'API, passée en
+//   `accentColor` à son avatar : une couleur de donnée, pas une couleur en dur ;
+// - `ReelFeedCard.swift` (#9677, 7484db6cfa) — `Color(hex: accentHex)`, l’accent reçu en
+//   paramètre de la scène d'un réel, même nature que `accentColor`.
+// Valeur MESURÉE le 2026-10-09 (CI 37911128290).
+//
+// 2026-10-10 — variables inconnues 453 → 456 (#9907, #9910) :
+// - `PieceSpotlight.swift` (2, 1a3f753acf) — `Color(hex: accentHex)` pour le
+//   trait et l'ombre de l'anneau qui allume la pièce citée ; l'hexa est REÇU
+//   en paramètre (`accentHex` du fil Focal, `contactColor` de la bulle), même
+//   nature que `accentColor` ;
+// - `MessagePieceOverlay.swift` (1, a08e6bcd61) — `Color(hex: piece.thumbnailColor)`,
+//   la teinte d'attente de la pièce servie par l'API, une couleur de donnée,
+//   même motif que les 32 `thumbnailColor` déjà comptés.
+// Valeur MESURÉE le 2026-10-10 (CI 38045575542).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 456;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

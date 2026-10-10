@@ -108,7 +108,7 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
             type="button"
             onClick={() => lancer(action)}
             aria-describedby={`${action.key}-indice`}
-            className="flex w-full items-center gap-3 rounded-hero px-4 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="flex w-full items-center gap-3 rounded-hero px-4 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 52,
               background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
@@ -116,7 +116,7 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
             }}
           >
             <Glyph name={action.glyph} size={22} />
-            <span className="flex-1 text-left">{action.label}</span>
+            <span className="flex-1 text-start">{action.label}</span>
           </button>
           <p id={`${action.key}-indice`} className="px-1 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
             {action.hint}
@@ -141,7 +141,7 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
                 }}
               >
                 <span
-                  className="grid size-11 place-items-center rounded-chip text-white"
+                  className="grid size-11 place-items-center rounded-chip text-ios-on-brand"
                   style={{ background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))' }}
                 >
                   <Glyph name={action.glyph} size={20} />

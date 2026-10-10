@@ -195,8 +195,8 @@ struct OnboardingFriendsCard: View {
             }
             .padding(MeeshySpacing.md)
             .frame(minHeight: 44)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.12)))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(tint.opacity(MeeshyOpacity.light)))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)

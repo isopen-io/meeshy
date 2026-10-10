@@ -13,6 +13,10 @@ const ptRowActions = {
   'rowActions.unread': 'Não lida',
   'rowActions.archive': 'Arquivar',
   'rowActions.unarchive': 'Desarquivar',
+  'lensSection.a11y.expanded': '{section}, expandida',
+  'lensSection.a11y.folded': '{section}, recolhida',
+  'lensSection.a11y.folded.unread.one': '{section}, recolhida, {count} mensagem não lida',
+  'lensSection.a11y.folded.unread.other': '{section}, recolhida, {count} mensagens não lidas',
 } as const;
 
 export default ptRowActions;

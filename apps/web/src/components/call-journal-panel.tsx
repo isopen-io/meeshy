@@ -23,7 +23,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * l'écran d'appel, qui lui remet la couleur de chaque personne.
  */
 
-const INK_2 = 'rgba(255,255,255,0.72)';
+const INK_2 = 'var(--color-on-media-3)';
 
 const NEAR_BOTTOM = 24;
 
@@ -79,7 +79,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             {t(language, 'callControls.journal.empty')}
           </p>
           {listening ? null : (
-            <button type="button" onClick={onListen} className="min-h-11 rounded-full bg-white px-4 text-mini font-semibold text-[var(--ios-indigo-950)]" data-call-journal-listen="">
+            <button type="button" onClick={onListen} className="min-h-11 rounded-full bg-on-media px-4 text-mini font-semibold text-[var(--ios-indigo-950)]" data-call-journal-listen="">
               {translate(language, 'call.captions.on')}
             </button>
           )}
@@ -103,9 +103,9 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
                 <li key={caption.id} className="flex flex-col gap-0.5" style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 64px', opacity: caption.isFinal ? 1 : 0.7 }} data-call-journal-entry={caption.mine ? 'mine' : 'peer'}>
                   <span className="text-mini" style={{ color: INK_2 }}>
                     <strong style={{ color: colorOf(caption) }}>{speaker(caption)}</strong> · <time dateTime={new Date(caption.at).toISOString()}>{clock.format(caption.at)}</time>
-                    {languages === null ? null : <span className="ms-1.5 text-[10px] font-semibold tracking-wide">{languages}</span>}
+                    {languages === null ? null : <span className="ms-1.5 text-check font-semibold tracking-wide">{languages}</span>}
                   </span>
-                  <span className="text-body text-white" dir="auto" data-call-journal-text="">
+                  <span className="text-body text-on-media" dir="auto" data-call-journal-text="">
                     {served}
                   </span>
                   {served === caption.original ? null : (
@@ -124,7 +124,7 @@ export function CallJournalPanel({ id, closeGlyph, language, onClose, back, capt
             <button
               type="button"
               onClick={backToLive}
-              className="absolute bottom-3 left-1/2 min-h-11 -translate-x-1/2 rounded-full bg-white px-4 text-mini font-semibold text-[var(--ios-indigo-950)] shadow-lg"
+              className="absolute bottom-3 left-1/2 min-h-11 -translate-x-1/2 rounded-full bg-on-media px-4 text-mini font-semibold text-[var(--ios-indigo-950)] shadow-lg"
               data-call-journal-live=""
             >
               {t(language, 'callControls.journal.live')}

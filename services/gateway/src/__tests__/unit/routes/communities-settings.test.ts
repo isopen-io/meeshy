@@ -51,6 +51,11 @@ function makePrisma(overrides: any = {}) {
       delete: jest.fn<any>().mockResolvedValue({}),
       ...overrides.community,
     },
+    conversation: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    communityMember: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    userCommunityPreferences: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    conversationShare: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    $transaction: jest.fn<any>().mockImplementation((ops: Promise<unknown>[]) => Promise.all(ops)),
     ...overrides,
   };
 }

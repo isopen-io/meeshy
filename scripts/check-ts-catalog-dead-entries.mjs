@@ -267,18 +267,13 @@ export const callersIn = (contents, nsNames) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-// 277 → 278 (#6822) : `admin.usersByUserIdRestore`
-// (`POST /admin/users/:userId/restore`, l'inverse du soft-delete). Morte à la
-// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
-// `admin.usersByUserId*` déjà mortes ci-dessus : ce script ne balaie pas
-// `apps/web-v2`, seul client de l'administration — voir la note sur
-// `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
-// service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
-// route), la console n'ayant pas encore d'action « restaurer ».
+// 277 → 278 (#6822) : une entrée d'administration née sans appelant ici —
+// elle l'a regagné depuis (voir 276 → 275 ci-dessous) ; l'historique git de ce
+// fichier garde la note d'origine.
 // 278 → 279 (#6861) : `admin.conversations`
 // (`GET /admin/conversations`, le listing de l'instance au rang
 // d'administration). Morte à la naissance DANS CE COMPTAGE, même raison que
-// `admin.usersByUserIdRestore` juste au-dessus : ce script ne balaie que
+// l'entrée #6822 juste au-dessus : ce script ne balaie que
 // `apps/web` (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul
 // client de l'administration, et qui appelle cette route par son chemin
 // littéral (`lib/api/admin-conversations.ts`, #6862).
@@ -352,7 +347,83 @@ export const callersIn = (contents, nsNames) => {
 // `conversations.byIdMessagesAfterReadConsume` par le catalogue.
 // 332 → 331 (#8583, 2026-09-28) : les réponses d'un commentaire se chargent
 // par `posts.byPostIdCommentsByCommentIdReplies` (`lib/api/comment-replies.ts`).
-const BASELINE_DEAD_ENTRIES = 331;
+// 331 -> 337 (#8876, 2026-09-30) : six entrées `admin` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `admin.auditLogs`, `admin.trackingLinks`, `admin.trackingLinksByLinkId`,
+// `admin.monitoring`, `admin.communitiesByCommunityId` et
+// `admin.communitiesByCommunityIdMembers`. Mortes à la naissance PAR
+// CONSTRUCTION : le lot passerelle livre la moitié SERVEUR seule, et la console
+// web qui les appelle par le module de groupe (`adminEndpoints`) est le lot
+// suivant du même chantier, qui ramène cette valeur à 331. Valeur MESURÉE le
+// 2026-09-30.
+// 337 → 286 (#8876, 2026-09-30) : l'intégration de la vue de Dieu. Les dix
+// lots d'écrans de l'administration appellent désormais par le module de groupe
+// (`adminEndpoints`) les six entrées nées mortes ci-dessus — et quarante-cinq
+// autres, servies de longue date par la passerelle sans qu'aucun écran v2 ne
+// les lise (statistiques, langues, signalements, liens, diffusions, anonymes,
+// communautés, publications, classement…). 45 sous la valeur d'avant le chantier
+// (331), là où la dette annoncée n'était que de 6. Valeur MESURÉE le 2026-09-30.
+// 286 → 285 (#8876, 2026-09-30) : la revue de la vue de Dieu. La fiche d'un
+// membre révoque une session précise par
+// `adminEndpoints.usersByUserIdSessionsBySessionId`
+// (`lib/api/admin-user-dossier.ts`) — une entrée servie de longue date par la
+// passerelle, sans lecteur jusque-là, a enfin son appelant. Valeur MESURÉE le
+// 2026-09-30.
+// 285 → 287 (#9141, 2026-10-02) : `stickerPacks.pending` et
+// `stickerPacks.bySlugReview`, les deux routes de MODÉRATION des packs de
+// stickers tiers. Mortes à la naissance PAR CONSTRUCTION : #9141 livre la
+// Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
+// appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
+// lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
+// 287 → 285 (#9256, 2026-10-04) : `attachments.byAttachmentIdTranscribe` et
+// `attachments.byAttachmentIdTranslate` regagnent leur appelant — le lecteur
+// audio plein écran web transcrit et traduit à la demande
+// (`lib/api/attachment-processing.ts`). Valeur MESURÉE le 2026-10-04.
+// 285 → 276 (#6408, #6409, #6410, 2026-10-04) : les routes des liens de
+// suivi, de parrainage et de « mes communautés » regagnent leur appelant —
+// la page « Mes liens » web gère les quatre familles d'iOS
+// (`lib/api/my-tracking-links.ts`, `affiliate-tokens.ts`,
+// `community-links.ts`). Valeur MESURÉE le 2026-10-04.
+// 276 → 281 (#9399, 2026-10-05) : les cinq entrées `me.game*`
+// (`.gameChestClaim`, `.gameFlameFreezes`, `.gameFlameRelight`,
+// `.gameGuideSeen`, `.gameMissionsByMissionIdReroll`) GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// le lot du jeu, #9382). Mortes à la naissance PAR CONSTRUCTION, même motif
+// que `stickerPacks.pending`/`bySlugReview` ci-dessus : les routes sont
+// livrées côté gateway, l'écran web qui les appellera est un suivi à part.
+// Valeur MESURÉE le 2026-10-05.
+// 281 → 260 (#9414, 2026-10-05) : le lot « Progression joue le jeu » câble
+// l'écran web et ses tests contre vingt-et-une entrées qui n'avaient encore
+// aucun appelant — dont les cinq `me.game*` ci-dessus. Valeur MESURÉE le
+// 2026-10-05.
+// 260 → 274 (#9507, 2026-10-05) : quatorze entrées GÉNÉRÉES depuis
+// `route-manifest.json` en régénérant `api/endpoints.ts` (resté périmé après
+// la vague 2 du jeu — ligues, duos, saisons, prestige, parrainage —
+// #9225/#9230, #9504) : `me.gameDuoByDuoIdAbandon`, `.gameDuoByDuoIdAccept`,
+// `.gameDuoInvite`, `.gameLeagueConsent`, `.gameLeagueFriends`,
+// `.gameLeaguePseudonym`, `.gameLeagueWeek`, `.gamePrestige`, `.gamePrivacy`,
+// `.gameSeasonSeal`, `.gameSeasonStepsByStepClaim`, `.gameShowcaseOrder`,
+// `.gameVisibility`, et `users.byUserIdGameShowcase`. Mortes à la naissance
+// PAR CONSTRUCTION, même motif que #9399 ci-dessus : la vague 2 est livrée
+// côté gateway ; aucun écran web ne les appelle encore. Valeur MESURÉE le
+// 2026-10-05.
+// 274 → 275 (#9529, 2026-10-06) : `users.byUserIdGame`
+// (`GET /users/:userId/game`), GÉNÉRÉE depuis `route-manifest.json` par
+// `e0a8b73588` (#9481) sans relever cette référence — la jumelle TS de
+// `UsersEndpoint.byUserIdGame` (`check-swift-catalog-dead-entries.mjs`, même
+// issue, même commit). Le web APPELLE cette route (`fetchUserGame`,
+// `apps/web/src/lib/api/game-integration.ts`), mais par la table du jeu
+// `GAME_INTEGRATION_ROUTES` / `gameUserGamePath`
+// (`packages/shared/types/game-routes.ts`), jamais par le catalogue généré —
+// comme `users.byUserIdGameShowcase` et les `me.game*` ci-dessus. Valeur
+// MESURÉE le 2026-10-06.
+// 275 → 277 (2026-10-08) : les jumelles TS des deux entrées relevées côté Swift par
+// `06aa6144f2` — `attachments.signedByTokenByWildcard` (#9600 : l'adresse signée est
+// SERVIE dans les charges, aucun client ne la compose) et `me.securityEvents`
+// (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
+// 275 → 274 (2026-10-10, #9945) : une entrée morte de moins, consommée par les lots
+// #9906-#9911 (pièce visée). Valeur MESURÉE le 2026-10-10.
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

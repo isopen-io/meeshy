@@ -13,6 +13,7 @@ import { MagicLinkService } from '../services/MagicLinkService';
 import { visibleNotificationsWhere } from '../services/notifications/visibleNotificationsWhere';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
 
@@ -96,13 +97,13 @@ export class NotificationDigestJob {
     const delayHours = (delayMs / 3600000).toFixed(1);
     logger.info(`[NotificationDigestJob] Starting — first run in ${delayHours}h (${TARGET_HOUR_UTC}:00 UTC)`);
 
-    this.timeoutId = setTimeout(() => {
+    this.timeoutId = guardedTimeout({ name: 'notification-digest-first-run', afterMs: delayMs, logger, run: () => {
       this.timeoutId = null;
       this.doWork();
       // Then every 24h
-      this.intervalId = setInterval(() => this.doWork(), 24 * 60 * 60 * 1000);
+      this.intervalId = guardedInterval({ name: 'notification-digest', everyMs: 24 * 60 * 60 * 1000, logger, run: () => this.doWork() });
       this.intervalId.unref?.();
-    }, delayMs);
+    } });
     this.timeoutId.unref?.();
   }
 

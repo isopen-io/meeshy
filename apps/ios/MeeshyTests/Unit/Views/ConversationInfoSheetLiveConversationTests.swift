@@ -111,7 +111,8 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
         XCTAssertTrue(
             nearLayer.contains("onConversationUpdated: { conversationOverride = $0 }"),
             "Le site de montage doit stocker la conversation confirmée dans `conversationOverride` " +
-            "— c'est le seul écrivain de cet état, et le seul moment où le serveur dit ce que " +
+            "— avec `admitPeerUpdate` (le pair d'un direct repeint à `user:updated`, #9359), c'est " +
+            "l'un des deux seuls écrivains de cet état, les deux moments où le serveur dit ce que " +
             "l'écran doit désormais afficher."
         )
 

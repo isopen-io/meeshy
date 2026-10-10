@@ -27,18 +27,23 @@ struct MediaSaveRequest: Identifiable, Equatable {
     /// Attachment id serveur — pour le report best-effort « downloaded »
     /// (panneau « Qui a vu ») au moment du câblage des points d'entrée.
     let attachmentId: String?
+    /// L'auteur d'une œuvre COMPOSÉE, que la marque nomme (« "" » = inconnu :
+    /// aucun nom). `nil` = l'œuvre de l'utilisateur connecté lui-même.
+    let authorUsername: String?
 
     init(kind: AttachmentKind,
          origin: MediaOrigin,
          remoteURLString: String,
          suggestedFileName: String? = nil,
-         attachmentId: String? = nil) {
+         attachmentId: String? = nil,
+         authorUsername: String? = nil) {
         self.id = UUID()
         self.kind = kind
         self.origin = origin
         self.remoteURLString = remoteURLString
         self.suggestedFileName = suggestedFileName
         self.attachmentId = attachmentId
+        self.authorUsername = authorUsername
     }
 
     var destinations: [MediaSaveDestination] {
@@ -60,6 +65,20 @@ protocol MediaSaveSourceResolving: Sendable {
 protocol PhotoLibrarySaving: Sendable {
     func saveImage(_ data: Data) async throws
     func saveVideo(at url: URL) async throws
+    /// Écriture PAR FICHIER (#9685) : Photos lit le fichier lui-même, rien n'est
+    /// chargé ni décodé en mémoire. `moveFile` seulement pour un temporaire possédé.
+    func saveImageFile(at url: URL, moveFile: Bool) async throws
+    func saveVideo(at url: URL, moveFile: Bool) async throws
+}
+
+extension PhotoLibrarySaving {
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
+        try await saveImage(Data(contentsOf: url))
+    }
+
+    func saveVideo(at url: URL, moveFile: Bool) async throws {
+        try await saveVideo(at: url)
+    }
 }
 
 /// Report best-effort de la consommation « downloaded » (panneau « Qui a
@@ -112,6 +131,24 @@ final class MediaSaveCoordinator: ObservableObject {
     @Published private(set) var isProcessing = false
     @Published private(set) var lastOutcome: Outcome?
 
+    /// **Le portillon de sortie de l'hôte qui possède ce coordinateur** (#9573).
+    ///
+    /// FERMÉ tant qu'il n'est pas posé : `nil` refuse toute requête — ni feuille
+    /// de destinations, ni Photos, ni Fichiers, ni partage. La garde vit ICI,
+    /// dans le gestionnaire, pas seulement dans le bouton de l'hôte.
+    ///
+    /// - Une visionneuse de conversation y pose le portillon de son
+    ///   environnement, dérivé du message qui porte la pièce.
+    /// - Le menu d'un message y pose celui du message (`MessageExitTransport`).
+    /// - Un hôte de PUBLICATION (post, réel) le crée ouvert, et le dit :
+    ///   `MediaSaveCoordinator(exitGate: .open)`.
+    var exitGate: ContentExitGate?
+
+    /// La pièce de cette requête peut-elle partir par ce coordinateur ?
+    func mayLeave(_ attachmentId: String?) -> Bool {
+        exitGate?.mayLeave(attachmentId) ?? false
+    }
+
     /// Requête en cours de traitement (après le choix de destination) —
     /// portée jusqu'à la complétion différée de l'export Fichiers pour le
     /// report « downloaded ».
@@ -122,10 +159,12 @@ final class MediaSaveCoordinator: ObservableObject {
     private let downloadReporter: MediaSaveDownloadReporting
     private let branding: MediaSaveBranding
 
-    init(resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
+    init(exitGate: ContentExitGate? = nil,
+         resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
          photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
          downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter(),
          branding: MediaSaveBranding = MeeshyMediaSaveBranding()) {
+        self.exitGate = exitGate
         self.resolver = resolver
         self.photoSaver = photoSaver
         self.downloadReporter = downloadReporter
@@ -133,6 +172,7 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     func requestSave(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
         lastOutcome = nil
         activeRequest = nil
         pendingRequest = request
@@ -142,6 +182,7 @@ final class MediaSaveCoordinator: ObservableObject {
     /// Meeshy, sans demander où** (#8307, directive porteur 2026-09-27). Les
     /// documents et l'audio gardent le choix de destination (Fichiers, partage).
     func save(_ request: MediaSaveRequest) {
+        guard mayLeave(request.attachmentId) else { return }
         guard Self.savesStraightToAlbum(request.kind) else { return requestSave(request) }
         lastOutcome = nil
         activeRequest = nil
@@ -167,6 +208,7 @@ final class MediaSaveCoordinator: ObservableObject {
     func pick(_ destination: MediaSaveDestination, request explicitRequest: MediaSaveRequest? = nil) async {
         guard let request = explicitRequest ?? pendingRequest else { return }
         pendingRequest = nil
+        guard mayLeave(request.attachmentId) else { return }
         guard destination.accepts(request.kind) else {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
             return
@@ -184,15 +226,17 @@ final class MediaSaveCoordinator: ObservableObject {
             // copie fidèle de l'original. Un marquage impossible, comme un média
             // transmis, retombe sur ce fichier d'origine — et `isStamped`
             // interdit alors de le supprimer.
-            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin)
+            let branded = await branding.stamp(localFile, kind: request.kind, origin: request.origin,
+                                               author: request.authorUsername)
             defer { if branded.isStamped { Self.discardStagingDirectory(of: branded.url) } }
             switch destination {
             case .photoLibrary:
+                // Par fichier, jamais par `UIImage` (#9685). La copie marquée nous
+                // appartient : Photos la DÉPLACE. Le fichier du cache, jamais.
                 if request.kind == .image {
-                    let data = try Data(contentsOf: branded.url)
-                    try await photoSaver.saveImage(data)
+                    try await photoSaver.saveImageFile(at: branded.url, moveFile: branded.isStamped)
                 } else {
-                    try await photoSaver.saveVideo(at: branded.url)
+                    try await photoSaver.saveVideo(at: branded.url, moveFile: branded.isStamped)
                 }
                 lastOutcome = .saved(.photoLibrary)
                 await reportDownloadedOnce()
@@ -395,6 +439,18 @@ struct PhotoLibraryManagerAdapter: PhotoLibrarySaving {
 
     func saveVideo(at url: URL) async throws {
         guard await PhotoLibraryManager.shared.saveVideo(at: url) else {
+            throw MediaSaveError.photoLibraryDenied
+        }
+    }
+
+    func saveImageFile(at url: URL, moveFile: Bool) async throws {
+        guard await PhotoLibraryManager.shared.saveImageFile(at: url, moveFile: moveFile) else {
+            throw MediaSaveError.photoLibraryDenied
+        }
+    }
+
+    func saveVideo(at url: URL, moveFile: Bool) async throws {
+        guard await PhotoLibraryManager.shared.saveVideo(at: url, moveFile: moveFile) else {
             throw MediaSaveError.photoLibraryDenied
         }
     }

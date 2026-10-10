@@ -1,5 +1,6 @@
-import { prismFor, resolveAudioTrack, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
+import { electServedAudio, prismFor, servedTranscript, type Served, type ServedTrack } from '@/lib/api/prism';
 import type { Attachment } from '@/lib/api/types';
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
 /**
  * `MediaCarrier` (#6221, § 5 étape 5) — CE QUE LA VISIONNEUSE REMET AU BAS DU
@@ -22,6 +23,9 @@ export type MediaCarrier = {
    */
   readonly sender: { readonly displayName: string; readonly avatarUrl: string | null } | null;
   readonly sentAt: string;
+  /** LA CARTE DES ADRESSES SUIVIES DU PORTEUR (#9074) — celle du message ou du
+   * post : la légende du pied ouvre ses adresses par `/l/<token>`. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
 };
 
 /**
@@ -56,6 +60,7 @@ export type MediaCarrier = {
 export type CarrierMessageSource = {
   readonly sender?: { readonly displayName?: string } | null;
   readonly createdAt: Date;
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 };
 
 export function mediaCarrierOf(params: {
@@ -78,6 +83,7 @@ export function mediaCarrierOf(params: {
         : null,
     sentAt: message.createdAt.toISOString(),
     caption,
+    ...(message.trackingLinks !== undefined && message.trackingLinks.length > 0 ? { trackingLinks: message.trackingLinks } : {}),
   };
 }
 
@@ -139,15 +145,8 @@ export type ElectedAudio = {
  * (CLAUDE.md § Prisme, cycle 128).
  */
 export function electAudio(params: ElectionInput): ElectedAudio {
-  const { attachment, fallbackLanguage } = params;
-  const described = electDescription(params);
-  const track = resolveAudioTrack({
-    servedLanguage: described.language,
-    originalLanguage: attachment.transcription?.language ?? fallbackLanguage,
-    originalUrl: attachment.fileUrl,
-    translations: attachment.translations,
-  });
-  return { described, track };
+  const { attachment, readerLanguages, displayLanguage, fallbackLanguage } = params;
+  return electServedAudio({ preferredLanguages: prismFor({ readerLanguages, displayLanguage }), attachment, fallbackLanguage });
 }
 
 /** La piste seule, sans ses métadonnées de service (`translated` retiré : la convention `null` le remplace). */

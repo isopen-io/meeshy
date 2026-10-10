@@ -22,6 +22,7 @@ type Link = {
   shortUrl: string;
   isActive: boolean;
   conversationId?: string | null;
+  createdBy?: string | null;
 };
 
 /**
@@ -34,10 +35,11 @@ const buildPrisma = () => {
   let seq = 0;
 
   const trackingLink = {
-    // findExistingTrackingLink(originalUrl, conversationId?)
+    // findExistingTrackingLink(originalUrl, scope) — chaque clé du `where` compte
     findFirst: jest.fn(async (arg: any): Promise<Link | null> => {
-      const url = arg?.where?.originalUrl;
-      return store.find((l) => l.originalUrl === url && l.isActive) ?? null;
+      const where: Record<string, unknown> = arg?.where ?? {};
+      return store.find((l) =>
+        Object.entries(where).every(([key, value]) => (l as Record<string, unknown>)[key] === value)) ?? null;
     }),
     // tokenExists(token) — always unique in this mock (no collisions)
     findUnique: jest.fn(async (arg: any): Promise<Link | null> => {
@@ -53,13 +55,14 @@ const buildPrisma = () => {
         shortUrl: arg?.data?.shortUrl ?? `/l/tok${seq}`,
         isActive: true,
         conversationId: arg?.data?.conversationId ?? null,
+        createdBy: arg?.data?.createdBy ?? null,
       };
       store.push(link);
       return link;
     }),
   };
 
-  const prisma: unknown = { trackingLink };
+  const prisma: unknown = { trackingLink, __store: store };
   return prisma as ConstructorParameters<typeof TrackingLinkService>[0] & {
     trackingLink: typeof trackingLink;
     __store: Link[];
@@ -125,6 +128,38 @@ describe('TrackingLinkService.collectContentTrackingLinks', () => {
     expect(links).toEqual([]);
   });
 
+  it('never hands a post author the link another author minted for the same URL (#9184)', async () => {
+    const alice = await service.collectContentTrackingLinks({ content: 'Va voir https://meeshy.me', createdBy: 'alice' });
+    const lea = await service.collectContentTrackingLinks({ content: 'Moi aussi https://meeshy.me', createdBy: 'lea' });
+
+    expect(lea[0].token).not.toBe(alice[0].token);
+    expect(prisma.__store.map((link) => link.createdBy)).toEqual(['alice', 'lea']);
+  });
+
+  it('reuses an author\'s own link outside a conversation', async () => {
+    const first = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', createdBy: 'lea' });
+    const again = await service.collectContentTrackingLinks({ content: 'encore https://meeshy.me', createdBy: 'lea' });
+
+    expect(again).toEqual(first);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('mints a fresh link, reusing nobody\'s, when content has neither author nor conversation', async () => {
+    const owned = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', createdBy: 'alice' });
+    const orphan = await service.collectContentTrackingLinks({ content: 'https://meeshy.me' });
+
+    expect(orphan[0].token).not.toBe(owned[0].token);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps sharing one link per URL inside a conversation, whoever cites it', async () => {
+    const first = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', conversationId: 'c1', createdBy: 'alice' });
+    const reply = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', conversationId: 'c1', createdBy: 'lea' });
+
+    expect(reply).toEqual(first);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(1);
+  });
+
   it('maps multiple distinct URLs to distinct tokens', async () => {
     const content = 'One https://a.com/1 two https://b.com/2';
     const links = await service.collectContentTrackingLinks({ content, createdBy: 'u1' });
@@ -132,5 +167,91 @@ describe('TrackingLinkService.collectContentTrackingLinks', () => {
       { url: 'https://a.com/1', token: 'tok1' },
       { url: 'https://b.com/2', token: 'tok2' },
     ]);
+  });
+});
+
+/**
+ * Le contrat des trois écritures d'un lien (#9093) : `[[url]]` n'est JAMAIS
+ * suivi ni réécrit, `[libellé](url)` est suivi par la carte, une URL brute est
+ * suivie par la carte — et le contenu stocké n'est jamais réécrit par la loi.
+ */
+describe('Un lien s\'écrit de trois façons (#9093)', () => {
+  let prisma: ReturnType<typeof buildPrisma>;
+  let service: TrackingLinkService;
+  beforeEach(() => { prisma = buildPrisma(); service = new TrackingLinkService(prisma); });
+
+  it('[[url]] ne crée aucun lien de suivi et la détection brute ne l\'attrape pas', async () => {
+    const links = await service.collectContentTrackingLinks({
+      content: 'Voir [[https://meeshy.me/brut]] tel quel',
+      createdBy: 'u1',
+    });
+
+    expect(links).toEqual([]);
+    expect(prisma.trackingLink.create).not.toHaveBeenCalled();
+  });
+
+  it('[[url]] n\'est plus réécrit en m+<token> par la passerelle des messages', async () => {
+    const content = 'Voir [[https://meeshy.me/brut]] tel quel';
+
+    const { processedContent, trackingLinks } = await service.processExplicitLinksInContent({
+      content,
+      conversationId: 'c1',
+      createdBy: 'u1',
+    });
+
+    expect(processedContent).toBe(content);
+    expect(trackingLinks).toEqual([]);
+    expect(prisma.trackingLink.create).not.toHaveBeenCalled();
+  });
+
+  it('[libellé](url) entre dans la carte avec son adresse exacte, contenu intact', async () => {
+    const content = 'Lis [la suite](https://meeshy.me/notes) puis reviens';
+
+    const { processedContent } = await service.processMessageLinks({
+      content,
+      createdBy: 'u1',
+      rewriteToShortLink: false,
+    });
+    const links = await service.collectContentTrackingLinks({ content, createdBy: 'u1' });
+
+    expect(processedContent).toBe(content);
+    expect(links).toEqual([{ url: 'https://meeshy.me/notes', token: 'tok1' }]);
+  });
+
+  it('la parenthèse fermante d\'un lien markdown ne rejoint pas l\'adresse', async () => {
+    const links = await service.collectContentTrackingLinks({
+      content: '[ici](https://a.com/x)[là](https://b.com/y)',
+      createdBy: 'u1',
+    });
+
+    expect(links.map((link) => link.url)).toEqual(['https://a.com/x', 'https://b.com/y']);
+  });
+
+  it('les trois écritures dans un même texte : seule [[url]] reste hors carte', async () => {
+    const links = await service.collectContentTrackingLinks({
+      content: 'brut https://a.com/1, [lib](https://b.com/2) et [[https://c.com/3]]',
+      createdBy: 'u1',
+    });
+
+    expect(links.map((link) => link.url)).toEqual(['https://a.com/1', 'https://b.com/2']);
+  });
+
+  it('une même adresse brute ET entre [[ ]] n\'est suivie que pour son occurrence brute', async () => {
+    const content = '[[https://a.com/x]] puis https://a.com/x';
+
+    const { processedContent, trackingLinks } = await service.processMessageLinks({ content, createdBy: 'u1' });
+
+    expect(trackingLinks.map((link) => link.originalUrl)).toEqual(['https://a.com/x']);
+    expect(processedContent).toBe('[[https://a.com/x]] puis m+tok1');
+  });
+
+  it('<url> garde son comportement : suivi et réécrit en m+<token>', async () => {
+    const { processedContent } = await service.processExplicitLinksInContent({
+      content: 'voir <https://meeshy.me/x>',
+      conversationId: 'c1',
+      createdBy: 'u1',
+    });
+
+    expect(processedContent).toBe('voir m+tok1');
   });
 });

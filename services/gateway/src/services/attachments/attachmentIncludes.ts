@@ -336,6 +336,43 @@ export const attachmentTranslateSelect = Prisma.validator<Prisma.MessageAttachme
   },
 });
 
+/**
+ * L'ORDRE des pièces d'un message (#9776) — UN site, toute lecture qui sert
+ * les pièces d'un message le passe en `orderBy`.
+ *
+ * `rank` est l'ordre de `attachmentIds` dans la requête de création (l'ordre
+ * du composeur), écrit par `associateAttachmentsToMessage`. `createdAt` seul
+ * ne le dit pas : c'est l'heure de FIN d'un téléversement, et ils partent en
+ * parallèle. Un message d'avant le rang n'en porte pas — MongoDB range un
+ * champ absent EN TÊTE d'un tri ascendant, et `createdAt` puis `id` lui
+ * gardent l'ordre stable qu'il avait.
+ */
+export const MESSAGE_ATTACHMENT_ORDER: Prisma.MessageAttachmentOrderByWithRelationInput[] = [
+  { rank: 'asc' },
+  { createdAt: 'asc' },
+  { id: 'asc' },
+];
+
+/**
+ * #9915 — le nombre de TUILES (photos et vidéos) du message CITÉ, compté en
+ * base à côté des quatre pièces que la citation sert (`take: 4`). À étaler
+ * dans le `select`/`include` du `replyTo` (ou son `_count.select` quand il en
+ * a déjà un) : `servedQuotedMessage` le sert en `visualAttachmentCount`, que
+ * les clients lisent pour le « +N » de la citation du message entier.
+ */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT = {
+  _count: {
+    select: {
+      attachments: {
+        where: { OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }] },
+      },
+    },
+  },
+} satisfies { _count: { select: Prisma.MessageCountOutputTypeSelect } };
+
+/** Le même compte, pour un `replyTo` qui a déjà son propre `_count.select`. */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT = QUOTED_VISUAL_ATTACHMENT_COUNT._count.select;
+
 // ============================================================================
 // Derived payload types — consumers get fully-typed Prisma results, no casts.
 // ============================================================================

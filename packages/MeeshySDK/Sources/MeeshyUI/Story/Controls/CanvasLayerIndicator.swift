@@ -19,15 +19,15 @@ struct CanvasLayerIndicator: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.55) }
+    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(MeeshyOpacity.strong) }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             chip(.background, icon: "photo", label: layerLabel(.background))
             chip(.foreground, icon: "square.stack.3d.up", label: layerLabel(.foreground))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
         .animation(.easeInOut(duration: 0.2), value: layer)
     }
 
@@ -41,15 +41,15 @@ struct CanvasLayerIndicator: View {
                 object: value.rawValue
             )
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                 Text(label)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .medium))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: isActive ? .semibold : .medium))
             }
             .foregroundColor(isActive ? .white : mutedText)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive ? MeeshyColors.indigo500 : Color.clear)

@@ -97,7 +97,7 @@ extension MeeshyComposerHost {
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
                 // Teinté du plateau, comme la croix qu'il encadre (#8370).
-                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
         }
         .accessibilityLabel(Text(ComposerOverflowCopy.menu))
     }

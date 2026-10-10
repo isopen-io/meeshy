@@ -58,6 +58,7 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
         AuthManager.shared.currentUser = originalUser
         AuthManager.shared.isAuthenticated = originalIsAuthenticated
         APIClient.shared.authToken = originalAuthToken
+        AuthManager.shared.acknowledgeSessionRevocationNotice()
         try await super.tearDown()
     }
 
@@ -138,6 +139,39 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
             "de ré-authentification à quelqu'un qui n'était pas connecté"
         )
         cancellable.cancel()
+    }
+
+    // MARK: - Avis de fermeture (#9612)
+
+    /// L'utilisateur doit SAVOIR pourquoi il a été déconnecté avant de se
+    /// reconnecter : « fermée par l'équipe Meeshy » ne se lit pas comme
+    /// « fermée depuis un autre de vos appareils ».
+    func test_handleSessionRevoked_gardeLeMotifPourLAvis() {
+        AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+
+        AuthManager.shared.handleSessionRevoked(reason: .adminRevoke)
+
+        XCTAssertEqual(AuthManager.shared.sessionRevocationNotice?.reason, .adminRevoke)
+        AuthManager.shared.acknowledgeSessionRevocationNotice()
+        XCTAssertNil(AuthManager.shared.sessionRevocationNotice, "l'avis lu ne revient pas")
+    }
+
+    func test_handleSessionRevoked_sansSession_nePoseAucunAvis() {
+        AuthManager.shared.acknowledgeSessionRevocationNotice()
+
+        AuthManager.shared.handleSessionRevoked(reason: .adminRevoke)
+
+        XCTAssertNil(AuthManager.shared.sessionRevocationNotice, "personne n'était connecté : rien à expliquer")
+    }
+
+    /// Le motif voyage dans la charge `[ { code, message, reason } ]` ; un
+    /// motif que ce binaire ne connaît pas ferme la session quand même.
+    func test_reason_seLitDansLaChargeSocket_etTolereLInconnu() {
+        XCTAssertEqual(SessionRevocationReason.fromSocketPayload([["code": "session_revoked", "reason": "admin_revoke"]]), .adminRevoke)
+        XCTAssertEqual(SessionRevocationReason.fromSocketPayload([["reason": "user_revoke"]]), .userRevoke)
+        XCTAssertEqual(SessionRevocationReason.fromSocketPayload([["reason": "password_changed"]]), .passwordChanged)
+        XCTAssertEqual(SessionRevocationReason.fromSocketPayload([["reason": "a_reason_from_the_future"]]), .unknown)
+        XCTAssertEqual(SessionRevocationReason.fromSocketPayload([]), .unknown)
     }
 }
 

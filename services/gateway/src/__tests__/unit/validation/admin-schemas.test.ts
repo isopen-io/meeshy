@@ -299,13 +299,13 @@ describe('InvitationIdParamSchema', () => {
 });
 
 describe('UpdateInvitationBodySchema', () => {
-  it('accepts pending status', () => {
-    expect(UpdateInvitationBodySchema.parse({ status: 'pending' })).toMatchObject({ status: 'pending' });
+  it('accepts rejected — the only gesture the console offers', () => {
+    expect(UpdateInvitationBodySchema.parse({ status: 'rejected' })).toMatchObject({ status: 'rejected' });
   });
 
-  it('accepts accepted and rejected', () => {
-    expect(UpdateInvitationBodySchema.parse({ status: 'accepted' })).toMatchObject({ status: 'accepted' });
-    expect(UpdateInvitationBodySchema.parse({ status: 'rejected' })).toMatchObject({ status: 'rejected' });
+  it('refuses accepted (it IS the friendship) and pending (no reopening)', () => {
+    expect(() => UpdateInvitationBodySchema.parse({ status: 'accepted' })).toThrow();
+    expect(() => UpdateInvitationBodySchema.parse({ status: 'pending' })).toThrow();
   });
 
   it('rejects invalid status', () => {

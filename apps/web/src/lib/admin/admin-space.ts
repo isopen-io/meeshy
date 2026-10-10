@@ -1,4 +1,6 @@
-import type { AdminRoute } from './sections';
+import { ADMIN_SECTION_TABLE, adminSectionOfRouteKey, type AdmRoute, type AdminRoute, type AdminSectionId, type AdminSpace } from './admin-routes';
+
+export type { AdmRoute, AdminSpace };
 
 /**
  * L'ESPACE D'ADMINISTRATION OÙ L'ON SE TROUVE, et ce que le menu latéral en
@@ -8,44 +10,29 @@ import type { AdminRoute } from './sections';
  * `/admin` ferait sauter l'administrateur d'un espace à l'autre au premier
  * clic. Le menu lit donc l'espace de la route COURANTE et y traduit la route
  * de chaque section.
+ *
+ * Depuis #8876 la correspondance `/admin` → `/adm` et la section surlignée ne
+ * sont plus écrites ici : elles DÉRIVENT de `admin-routes.ts`, l'unique table
+ * des paires liste/fiche — un lot qui ajoute une section n'a plus aucune
+ * seconde table à tenir d'accord.
  */
-export type AdminSpace = 'adm' | 'admin';
-
-export type AdmRoute = 'adm' | 'admUsers' | 'admConversations' | 'admAgent' | 'admAnonymous';
-
-const EN_ADM: Readonly<Record<AdminRoute, AdmRoute>> = {
-  admin: 'adm',
-  adminUsers: 'admUsers',
-  adminConversations: 'admConversations',
-  adminAgent: 'admAgent',
-  adminAnonymous: 'admAnonymous',
-};
-
 export function adminSpaceOf(routeKey: string | null): AdminSpace {
   if (routeKey === null) return 'admin';
   return routeKey.startsWith('adm') && !routeKey.startsWith('admin') ? 'adm' : 'admin';
 }
 
 export function routeInSpace(route: AdminRoute, space: AdminSpace): AdminRoute | AdmRoute {
-  return space === 'adm' ? EN_ADM[route] : route;
+  if (space === 'admin') return route;
+  const row = ADMIN_SECTION_TABLE.find((candidate) => candidate.list.admin === route);
+  return row === undefined ? route : row.list.adm;
 }
 
 /**
  * La section que surligne le menu. Une FICHE appartient à sa liste : ouvrir un
  * membre garde « Comptes » actif, sans quoi le menu ne dirait plus où l'on est.
  */
-const SECTION_PAR_SUFFIXE: readonly (readonly [RegExp, string])[] = [
-  [/^adm(in)?$/, 'dashboard'],
-  [/^adm(in)?Users?$/, 'users'],
-  [/^adm(in)?Conversations?$/, 'conversations'],
-  [/^adm(in)?Agent$/, 'agent'],
-  [/^adm(in)?Anonymous(One)?$/, 'anonymous'],
-];
-
-export function activeAdminSectionId(routeKey: string | null): string | null {
-  if (routeKey === null) return null;
-  const trouve = SECTION_PAR_SUFFIXE.find(([motif]) => motif.test(routeKey));
-  return trouve === undefined ? null : trouve[1];
+export function activeAdminSectionId(routeKey: string | null): AdminSectionId | null {
+  return routeKey === null ? null : adminSectionOfRouteKey(routeKey);
 }
 
 /** Le repli du menu, retenu par navigateur — une commodité, jamais un état partagé. */

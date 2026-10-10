@@ -1,8 +1,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest, requirePublishingGrace } from '../../middleware/auth';
+import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import {
@@ -10,11 +11,18 @@ import {
   servePublishedPost,
   finalReferences,
   hoistLocation,
+  hoistTrackingLinks,
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
+import {
+  publishStoryAlsoAsReel,
+  ReelCompanionNotQualifiedError,
+  REEL_NOT_QUALIFIED,
+  ALSO_AS_REEL_REQUIRES_STORY,
+} from '../../services/posts/storyReelCompanion';
 import {
   planAttachmentPublication,
   postMediaFieldsFromAttachment,
@@ -27,8 +35,10 @@ import {
 // de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
 // masque.
 import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
+import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
+import { mayServePostToAnonymous } from './anonymousPostGate';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { issuesServies } from '../../utils/zod-issue-schema';
@@ -45,7 +55,8 @@ import {
   createSocialTranslateRateLimitConfig,
   createSharedWriteRateLimitPreHandler,
 } from './socialRateLimit';
-import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
+import { withMutationVerdict, MutationResultGone } from '../../utils/withMutationLog';
+import { MutationInFlight } from '../../services/MutationLogService';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
@@ -165,9 +176,16 @@ function rejectUnclaimedCanvasMedia(
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  // #9149 — la porte d'un LIEN PARTAGÉ : `GET /posts/:postId` laisse entrer un
+  // visiteur sans compte, que `anonymousPostGate` juge. Absente, la route reste
+  // fermée comme avant (fail-closed) : seul `postRoutes` la câble.
+  optionalAuth: ReturnType<typeof createUnifiedAuthMiddleware> = requiredAuth
 ) {
   const postService = new PostService(prisma);
+  // Les octets que « aussi en réel » COPIE (#9476) — la même interface que
+  // l'instantané de republication (`MediaStorage`).
+  const companionStorage = new MediaService();
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
   // (interactions.ts, sa PROPRE instance de ce même preHandler) :
   // `config.rateLimit` ne PEUT PAS le faire (chaque route qui le déclare
@@ -248,6 +266,11 @@ export function registerCoreRoutes(
             conversation: { select: { identifier: true } },
             messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
             effectFlags: true, expiresAt: true, createdAt: true,
+            // #9572 — la loi de sortie lit la durée ET chaque pièce du message :
+            // publier la pièce ordinaire d'un message dont une AUTRE pièce est
+            // à vue unique reste une sortie de ce message.
+            ephemeralDuration: true,
+            attachments: { select: { isViewOnce: true, isBlurred: true, effectFlags: true } },
           } },
         },
       });
@@ -268,7 +291,10 @@ export function registerCoreRoutes(
           isViewOnce: attachment?.isViewOnce,
           isBlurred: attachment?.isBlurred,
           effectFlags: attachment?.effectFlags,
-        });
+        })
+        // Le verdict « exporter » de la loi de sortie, FERMÉ sur une projection
+        // incomplète. Sans message parent, l'appartenance refuse plus bas.
+        || (attachment?.message != null && !contentExitLawOfSource(attachment.message).exportable);
 
       // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
       // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
@@ -397,8 +423,21 @@ export function registerCoreRoutes(
         return;
       }
 
+      // « Aussi en réel » (#9476) : une STORY originale seulement — une
+      // republication désigne les médias de sa SOURCE, et aucun autre type n'a
+      // de second format à porter.
+      const { alsoAsReel, ...creation } = parsed.data;
+      if (alsoAsReel === true && (creation.type !== 'STORY' || creation.repostOfId)) {
+        return sendBadRequest(reply, 'alsoAsReel requires an original story', { code: ALSO_AS_REEL_REQUIRES_STORY });
+      }
+      const authorId = authContext.registeredUser.id;
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
-      const post = await withMutationLog<CreatedPost>({
+      let companionReel: (CreatedPost & { id: string }) | undefined;
+      // #9603 — le verdict du journal dit si la publication vient d'être
+      // écrite ou si elle est REJOUÉE. Rejouée, elle est resservie et rien de
+      // ce qui suit la première écriture ne repart : ni crédit, ni diffusion,
+      // ni mentions, ni éventail d'amis.
+      const { result: post, replayed } = await withMutationVerdict<CreatedPost>({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -414,18 +453,40 @@ export function registerCoreRoutes(
           // sur la détection regex du serveur au lieu de la mesure on-device
           // déjà faite à la création. Elle traverse donc par le spread comme le
           // reste de `parsed.data`, au même titre qu'`originalLanguage`.
-          return postService.createPost({
-            ...parsed.data,
-            content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
-            type: parsed.data.type ?? 'POST',
-            visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
-          }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>;
+          const input = {
+            ...creation,
+            content: creation.content !== undefined ? SecuritySanitizer.sanitizeText(creation.content) : undefined,
+            type: creation.type ?? 'POST',
+            visibility: creation.visibility ?? (creation.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
+          };
+          if (alsoAsReel !== true) {
+            return postService.createPost(input, authorId) as Promise<CreatedPost & { id: string }>;
+          }
+          // Les DEUX publications, ou aucune. Le journal de mutation retient la
+          // STORY (l'id rendu) ; le réel voyage à côté, dans `reel`.
+          return publishStoryAlsoAsReel({
+            prisma,
+            storage: companionStorage,
+            createPost: (post, author) => postService.createPost(post, author) as Promise<CreatedPost & { id: string }>,
+            retractPost: (postId, author) => postService.deletePost(postId, author, { actorRole: 'USER', reason: 'also-as-reel-rollback' }),
+          }, input, authorId).then(({ story, reel }) => {
+            companionReel = reel;
+            return story;
+          });
         },
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
         },
       });
+
+      if (replayed) {
+        return sendSuccess(reply, servePublishedPost({
+          post: post as unknown as Record<string, unknown>,
+          references: undefined,
+          request,
+        }), { statusCode: 201 });
+      }
 
       // Le CORPS de la publication — le noyau partagé avec
       // `POST /posts/from-attachment` (#4151). Il porte le Prisme, les
@@ -460,8 +521,29 @@ export function registerCoreRoutes(
         porte: 'POST /posts',
       });
 
-      return sendSuccess(reply, served, { statusCode: 201 });
+      if (!companionReel) {
+        return sendSuccess(reply, served, { statusCode: 201 });
+      }
+      // Le réel est une publication à part entière : il passe par le MÊME
+      // noyau (Prisme, mentions, diffusion, hashtags, éventail d'amis).
+      const servedReel = await runPublicationEffects({
+        ...publicationContext,
+        request,
+        post: companionReel as unknown as PublishedPostRow,
+        authorId,
+        postType: 'REEL',
+        submittedContent: parsed.data.content,
+        storyEffects: companionReel.storyEffects,
+        declaredMentions: parsed.data.mentions,
+        detectedLanguage: parsed.data.detectedLanguage,
+        editedInApp: parsed.data.editedInApp,
+        porte: 'POST /posts',
+      });
+      return sendSuccess(reply, { ...served, reel: servedReel }, { statusCode: 201 });
     } catch (error) {
+      if (error instanceof ReelCompanionNotQualifiedError) {
+        return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
+      }
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
@@ -469,6 +551,11 @@ export function registerCoreRoutes(
       // rien à refaire.
       if (error instanceof MutationResultGone) {
         return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      // Une requête jumelle (même cmid) publie en ce moment : ni resservir ni
+      // rejouer. 409, que la file durable iOS retente.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Post already in flight', { code: 'MUTATION_IN_FLIGHT' });
       }
       logError(fastify.log, '[POST /posts] Error', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -478,12 +565,20 @@ export function registerCoreRoutes(
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
     schema: { params: postIdParamsSchema },
-    preValidation: [requiredAuth],
+    preValidation: [optionalAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const viewerUserId = authContext?.registeredUser?.id;
       const { postId } = request.params;
+
+      // #9149 — un visiteur SANS COMPTE (aucune session, ou l'invité d'un lien
+      // de conversation) ne lit que ce que `anonymousPostGate` autorise :
+      // public, vivant, d'un auteur actif, original compris. Refusé, il reçoit
+      // le même 404 qu'une publication inexistante.
+      if (viewerUserId === undefined && !(await mayServePostToAnonymous(prisma, postId))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       const post = await postService.getPostById(postId, viewerUserId);
       if (!post) {
@@ -492,13 +587,21 @@ export function registerCoreRoutes(
 
       reply.header('Cache-Control', 'private, no-cache');
 
+      // `viewerPoints` (#9569) — ce que ce post a rapporté au LECTEUR. Posé
+      // ICI et non dans `getPostById` : ce dernier nourrit aussi les réponses
+      // d'ÉCRITURE (like, republication, rejeu), qui partent avant que le
+      // crédit du geste soit écrit — elles serviraient une valeur périmée
+      // qu'un client poserait par-dessus celle de `engagement:post-updated`.
+      // Une lecture le sert ; une écriture ne le porte pas.
+      const [served] = await withViewerPoints(prisma, viewerUserId, [post]);
+
       // `getPostById` a déjà aplati ET projeté la racine pour CE lecteur —
       // `withMentions` y est neutre. Ce qu'il reste à faire est l'imbriqué : le
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
       return sendSuccess(reply, servePublishedPost({
-        post: post as unknown as Record<string, unknown>,
+        post: served as unknown as Record<string, unknown>,
         references: undefined,
         request,
       }));
@@ -634,7 +737,7 @@ export function registerCoreRoutes(
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences),
+          graftReferences(hoistLocation(hoistTrackingLinks(post as unknown as Record<string, unknown>)), broadcastReferences),
           WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {

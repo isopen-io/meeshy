@@ -208,8 +208,7 @@ export class PasswordResetService {
             ipAddress,
             userAgent,
             deviceFingerprint,
-            geoLocation: geoData?.location || null,
-            geoCoordinates: geoData ? `${geoData.latitude},${geoData.longitude}` : null
+            geoLocation: geoData?.location || null
           }
         });
 
@@ -430,6 +429,7 @@ export class PasswordResetService {
             failedLoginAttempts: 0,
             lockedUntil: null,
             lockedReason: null,
+            lastLoginAt: new Date(),
             lastLoginIp: ipAddress,
             lastLoginLocation: geoData?.location || null,
             lastLoginDevice: deviceFingerprint || null

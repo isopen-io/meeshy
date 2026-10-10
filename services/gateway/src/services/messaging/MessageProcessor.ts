@@ -5,6 +5,9 @@
 
 import * as path from 'path';
 import { composeMessageEffectFlags, ephemeralSendFields } from './ephemeralSendFields';
+import { copiedAttachmentFields } from './copiedAttachmentFields';
+import { exitProtectedCopy } from './copyExitProtection';
+import type { ForwardImposition } from './forwardAdmission';
 import { declaredReplyProtection } from './replyProtectionContagion';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
@@ -22,7 +25,7 @@ import { MessageTranslationService } from '../message-translation/MessageTransla
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
-import { attachmentFullSelect, attachmentSocketSelect } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import {
@@ -78,10 +81,10 @@ export class MessageProcessor {
   }
 
   /**
-   * Traite les liens du contenu selon les règles suivantes :
-   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
-   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
-   * - Règle 3 : [[url]] → force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes (#9093) :
+   * - Règle 1 : Markdown [texte](url) → contenu intact, suivi par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 2 : URLs brutes → contenu intact, suivies par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → contenu intact, AUCUN suivi
    * - Règle 4 : <url> → force le tracking → m+token
    *
    * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
@@ -287,6 +290,8 @@ export class MessageProcessor {
     replyToId?: string;
     storyReplyToId?: string;
     forwardedFromId?: string;
+    /** #9572 — le verdict d'`admitMessageForward` ; REQUIS avec `forwardedFromId` (`exitProtectedCopy`). */
+    forwardImposes?: ForwardImposition | null;
     forwardedFromConversationId?: string;
     /**
      * Diffusion à plusieurs destinataires (pas un transfert) : copie
@@ -313,7 +318,7 @@ export class MessageProcessor {
     /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
     attachmentReplyTo?: unknown;
   }): Promise<Message> {
-    const data = await declaredReplyProtection(this.prisma, request);
+    const data = await exitProtectedCopy(this.prisma, await declaredReplyProtection(this.prisma, request));
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
       conversationId: data.conversationId,
@@ -425,7 +430,7 @@ export class MessageProcessor {
       encryptionMetadata: encryptionContext.encryptionMetadata,
       isBlurred: data.isBlurred || false,
       // #7451 — la DURÉE s'enregistre ; `expiresAt` devient interne.
-      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, effectFlags, now: new Date() }),
+      ...ephemeralSendFields({ ephemeralDuration: data.ephemeralDuration, expiresAt: data.expiresAt, isViewOnce: data.isViewOnce, effectFlags, durationBoundsAfterRead: data.durationBoundsAfterRead, now: new Date() }),
       effectFlags,
       isViewOnce: data.isViewOnce || false,
       maxViewOnceCount: data.maxViewOnceCount ?? null,
@@ -491,7 +496,7 @@ export class MessageProcessor {
                 }
               }
             },
-            attachments: true,
+            attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },
             replyTo: {
               include: {
                 sender: {
@@ -517,7 +522,9 @@ export class MessageProcessor {
                 // Parité avec le chemin REST (messages.ts) : le snapshot du
                 // message cité doit porter ses pièces jointes, sinon l'aperçu
                 // de citation n'affiche rien sur les messages reçus en socket.
-                attachments: { select: attachmentFullSelect, take: 4 }
+                attachments: { select: attachmentFullSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 4 },
+                // #9915 — le « +N » de la citation compte TOUTES ses tuiles.
+                ...QUOTED_VISUAL_ATTACHMENT_COUNT
               }
             }
           }
@@ -601,7 +608,7 @@ export class MessageProcessor {
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
         () => this.prisma.messageAttachment.findMany({
-          where: { messageId: message.id }, select: attachmentSocketSelect // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
+          where: { messageId: message.id }, select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
         }),
         corrWithMsg
       );
@@ -737,84 +744,20 @@ export class MessageProcessor {
   private async copyForwardedAttachments(originalMessageId: string, newMessageId: string, senderId: string): Promise<void> {
     try {
       const originalAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: originalMessageId }
+        where: { messageId: originalMessageId }, orderBy: MESSAGE_ATTACHMENT_ORDER
       });
 
       if (originalAttachments.length === 0) return;
 
       const createdAttachments = await Promise.all(
-        originalAttachments.map(att =>
+        originalAttachments.map((att, rank) =>
           this.prisma.messageAttachment.create({
             data: {
-              messageId: newMessageId,
-              fileName: att.fileName,
-              originalName: att.originalName,
-              mimeType: att.mimeType,
-              fileSize: att.fileSize,
-              filePath: att.filePath,
-              fileUrl: att.fileUrl,
-              title: att.title,
-              alt: att.alt,
-              caption: att.caption,
+              ...copiedAttachmentFields(att),
+              messageId: newMessageId, rank,
               forwardedFromAttachmentId: att.id,
               isForwarded: true,
-              width: att.width,
-              height: att.height,
-              thumbnailPath: att.thumbnailPath,
-              thumbnailUrl: att.thumbnailUrl,
-              duration: att.duration,
-              bitrate: att.bitrate,
-              sampleRate: att.sampleRate,
-              codec: att.codec,
-              channels: att.channels,
-              fps: att.fps,
-              videoCodec: att.videoCodec,
-              pageCount: att.pageCount,
-              lineCount: att.lineCount,
               uploadedBy: senderId,
-              isAnonymous: false,
-              transcription: att.transcription ?? undefined,
-              translations: att.translations ?? undefined,
-              metadata: att.metadata ?? undefined,
-
-              // Le placeholder instantané et les variantes WebP sont DÉJÀ
-              // dérivés de ces octets-là. Les laisser derrière condamnait la
-              // copie au téléchargement pleine taille pour un travail déjà fait.
-              thumbHash: att.thumbHash,
-              imageVariants: att.imageVariants ?? undefined,
-
-              // ── Ce que la copie doit dire de SES PROPRES OCTETS ───────────
-              //
-              // `filePath`/`fileUrl` sont repris à l'identique : les deux lignes
-              // désignent le MÊME blob. Quand l'original est chiffré, ce blob
-              // est du chiffré — et la copie naissait pourtant sans un seul de
-              // ces champs, donc avec le défaut Prisma `isEncrypted: false`.
-              //
-              // Le gateway ne déchiffre rien : `routes/attachments/download.ts`
-              // sert les octets bruts et c'est le CLIENT qui déchiffre, d'après
-              // ce que la ligne déclare (`attachmentIncludes` publie
-              // `isEncrypted`, `encryptionMode`, `encryptionIv`,
-              // `encryptionAuthTag` exactement pour ça). Une copie qui annonce
-              // « clair » en pointant du chiffré fait donc rendre le chiffré
-              // TEL QUEL comme s'il était le média : le client ne déchiffre pas,
-              // puisqu'on vient de lui dire qu'il n'y a rien à déchiffrer.
-              //
-              // Le fait est porté par les OCTETS ; le drapeau n'en est que
-              // l'écho. Copier les octets par référence en laissant l'écho
-              // derrière, c'est faire mentir la ligne sur ce qu'elle contient.
-              // `originalFileSize` compte au même titre : `fileSize` porte la
-              // taille CHIFFRÉE (cf. `UploadProcessor`) et il EST copié.
-              isEncrypted: att.isEncrypted,
-              encryptionMode: att.encryptionMode,
-              encryptionIv: att.encryptionIv,
-              encryptionAuthTag: att.encryptionAuthTag,
-              encryptionHmac: att.encryptionHmac,
-              originalFileHash: att.originalFileHash,
-              encryptedFileHash: att.encryptedFileHash,
-              originalFileSize: att.originalFileSize,
-              serverKeyId: att.serverKeyId,
-              thumbnailEncryptionIv: att.thumbnailEncryptionIv,
-              thumbnailEncryptionAuthTag: att.thumbnailEncryptionAuthTag,
             }
           })
         )

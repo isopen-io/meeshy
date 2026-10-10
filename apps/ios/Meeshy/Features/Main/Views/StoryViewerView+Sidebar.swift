@@ -76,28 +76,21 @@ nonisolated struct StoryActionRailPlan: Equatable {
     }
 }
 
-// MARK: - Export Rail Buttons (Partager / Enregistrer)
+// MARK: - Export Rail Button (Enregistrer)
 
-/// Résolution PURE de la paire Partager/Enregistrer du rail — extraite pour
-/// être testée sans instancier de vue (Task 10, revue « le reader a perdu
-/// tout accès au partage externe »).
+/// Résolution PURE du bouton Enregistrer du rail auteur — testée sans
+/// instancier de vue. Membership = `showsExport` (== `isOwnStory`, voir
+/// `StoryActionRailPlan.resolve`) ; pendant un job de sauvegarde, le bouton
+/// cède la place à l'anneau de progression.
 ///
-/// Membership des DEUX boutons = `showsExport` (== `isOwnStory`, voir
-/// `StoryActionRailPlan.resolve`) : Partager et Enregistrer apparaissent ou
-/// disparaissent TOUJOURS ensemble. Seul Enregistrer bascule vers l'anneau de
-/// progression pendant un job de sauvegarde — Partager reste au premier plan
-/// tout du long : il doit rester atteignable jusqu'à la présentation de la
-/// share sheet système, jamais relégué derrière une tâche de fond, sinon
-/// cette sheet surgirait après coup alors que l'utilisateur a déjà navigué
-/// ailleurs.
+/// Le bouton « Partager » (export vidéo) n'en fait plus partie (#9953) : le
+/// menu « … » l'offre à tout lecteur sous « Partager ▸ Exporter en vidéo ».
 nonisolated struct StoryExportRailButtons: Equatable {
-    let showsShareButton: Bool
     let showsSaveButton: Bool
     let showsSaveProgressRing: Bool
 
     static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
         StoryExportRailButtons(
-            showsShareButton: showsExport,
             showsSaveButton: showsExport && saveProgress == nil,
             showsSaveProgressRing: showsExport && saveProgress != nil
         )
@@ -165,7 +158,6 @@ struct StoryActionSidebarView: View {
     @Binding var showLanguageOptions: Bool
     @Binding var showFullLanguagePicker: Bool
     @Binding var showViewersSheet: Bool
-    @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
     /// Republication en STORY : ouvre le composeur prérempli au lieu de
@@ -231,6 +223,31 @@ struct StoryActionSidebarView: View {
     }
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
+
+    /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
+    /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
+    @ObservedObject private var participationStore = StoryViewerParticipationStore.shared
+
+    /// **Le contour de chaque action** (directive porteur 2026-10-01) — le son ouvert,
+    /// le cœur posé, et l'anneau du cœur sur chaque geste déjà fait. `nil` ⇒ aucun.
+    private func outlineTint(_ action: StoryRailEmphasisAction) -> Color? {
+        let contour = StoryRailContour.resolve(
+            action,
+            live: StoryRailContour.Live(soundOn: !isGlobalMuted,
+                                        reactionBarOpen: showEmojiStrip,
+                                        commentsOpen: showCommentsOverlay,
+                                        languagesOpen: showLanguageOptions || showFullLanguagePicker),
+            participation: participationStore.participation(for: currentStory?.id,
+                                                            hasReacted: storyCurrentUserHasReacted)
+        )
+        switch contour {
+        case .none: return nil
+        case .live: return MeeshyColors.indigo400
+        case .participated:
+            guard let accentColor = currentGroup?.avatarColor else { return MeeshyColors.error }
+            return Color(hex: accentColor)
+        }
+    }
 
     /// Quick pop on the heart button that confirms the reaction landed —
     /// ticked at the ARRIVAL of the reaction flight (`StoryReactionFlightView.onArrived`),
@@ -387,11 +404,11 @@ struct StoryActionSidebarView: View {
         // retrouve la compacité TikTok/IG, chaque action reste ≥ 44pt de zone
         // tappable via le padding du bouton.
         ViewThatFits(in: .vertical) {
-            sidebarContent(spacing: 8)
-            sidebarContent(spacing: 6)
+            sidebarContent(spacing: FullscreenChromeMetrics.railSpacing)
+            sidebarContent(spacing: MeeshySpacing.xsPlus)
             ScrollView(.vertical, showsIndicators: false) {
-                sidebarContent(spacing: 6)
-                    .padding(.vertical, 4)
+                sidebarContent(spacing: MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xs)
             }
         }
         // #6704 — le glyphe et le libellé de chaque bouton se teintent depuis la slide
@@ -496,8 +513,7 @@ struct StoryActionSidebarView: View {
                         ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
                         : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
                     isActive: !isGlobalMuted,
-                    activeColor: MeeshyColors.indigo400,
-                    activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
+                    outlineTint: outlineTint(.sound)
                 ) {
                     // VoiceOver active un Button par son ACTION d'accessibilité,
                     // il ne synthétise pas de `TapGesture` — laisser ce closure
@@ -520,27 +536,34 @@ struct StoryActionSidebarView: View {
 
             // Reaction (heart) — primary action, brand-colored when active
             if railPlan.showsReact {
-                StoryActionButton(
-                    icon: "heart.fill",
-                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main),
-                    isActive: showEmojiStrip || storyCurrentUserHasReacted,
-                    activeColor: MeeshyColors.indigo500,
-                    activeGlow: MeeshyColors.indigo500,
-                    accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
+                let reactLabel = String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main)
+                let reactIsActive = showEmojiStrip || storyCurrentUserHasReacted
+                // LE CŒUR, pas l'émoji « + » (directive porteur 2026-10-01 : « le cœur
+                // et non réaction, car on ne voit pas ») : un glyphe qu'on lit, blanc,
+                // et c'est son CONTOUR qui dit l'état — l'avatar de l'auteur une fois
+                // la réaction posée, l'indigo tant que la barre est ouverte.
+                FullscreenActionButton.react(
+                    label: reactLabel,
+                    hint: StoryActionButton.hint(label: reactLabel, isActive: reactIsActive),
+                    caption: storyReactionCount > 0 ? "\(storyReactionCount)" : reactLabel,
+                    accessibilityValue: storyReactionCount > 0 ? LocalizedNumber.exact(storyReactionCount) : nil,
+                    systemImage: FullscreenChromeSymbol.likeActive,
+                    badgeSystemImage: nil,
+                    isOpen: reactIsActive,
+                    activeTint: nil,
+                    outlineTint: outlineTint(.react)
                 ) {
                     // Tap simple = la barre s'ouvre (directive user 2026-08-20).
                     // L'émoji part au tap sur une tuile de la barre — plus de
                     // ❤️ envoyé à l'aveugle, plus de longpress.
                     toggleReactionBar()
                 }
+                .mediaChromeGlyph()
+                // Sonde NON isolée (#9456) : ce rail est un candidat de
+                // `ViewThatFits`, mesuré sur le rendu asynchrone d'iOS 26.
                 .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: StoryHeartFrameKey.self,
-                            value: proxy.frame(in: .named(StoryScrubSpace.name))
-                        )
-                    }
+                    GeometryReader(content: FramePreferenceProbe(StoryHeartFrameKey.self,
+                                                                 in: .named(StoryScrubSpace.name)) { $0 }.content)
                 )
                 .scaleEffect(heartScale)
                 // Bounce on every reaction that LANDS — via the quick strip
@@ -552,20 +575,8 @@ struct StoryActionSidebarView: View {
                 }
                 .overlay(alignment: .trailing) {
                     if showEmojiStrip {
-                        EmojiReactionPicker(
+                        FullscreenReactionStrip(
                             quickEmojis: quickEmojis,
-                            style: .dark,
-                            // Échelle 1,5 + aucun habillage : la rangée se pose
-                            // NUE sur la scène, qui est déjà son fond (directive
-                            // porteur 2026-09-11, #6083 ; l'échelle a été RAMENÉE
-                            // de 2 à 1,5 le soir même — « ×0,75, elles sont trop
-                            // grosses »). `scrollable` reste le COROLLAIRE de
-                            // l'agrandissement, pas une option : même à 1,5, six
-                            // émojis et le « + » demandent ~340 pt de large, soit
-                            // plus que les ~318 pt utiles d'un iPhone de 390.
-                            scale: 1.5,
-                            scrollable: true,
-                            chrome: .none,
                             onReact: { emoji in
                                 let index = quickEmojis.firstIndex(of: emoji)
                                 triggerStoryReaction(emoji, index.flatMap { reactionTileFrames[$0] })
@@ -588,11 +599,15 @@ struct StoryActionSidebarView: View {
                         .frame(width: reactionStripWidth)
                         .fixedSize(horizontal: false, vertical: true)
                         .simultaneousGesture(reactionStripDragGesture)
+                        .background(
+                            GeometryReader(content: FramePreferenceProbe(StoryReactionStripFrameKey.self,
+                                                                         in: .global) { $0 }.content)
+                        )
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity
                         ))
-                        .offset(x: -56)
+                        .offset(x: FullscreenChromeMetrics.reactionStripLeadingOffset)
                     }
                 }
                 .zIndex(10)
@@ -600,9 +615,11 @@ struct StoryActionSidebarView: View {
 
             // Reply privately (opens DM with story context)
             if railPlan.showsReply {
-                StoryActionButton(
-                    icon: "arrowshape.turn.up.left.fill",
-                    label: String(localized: "story.viewer.action.reply", defaultValue: "Répondre", bundle: .main)
+                let replyLabel = String(localized: "story.viewer.action.reply", defaultValue: "Répondre", bundle: .main)
+                FullscreenActionButton.reply(
+                    label: replyLabel,
+                    hint: StoryActionButton.hint(label: replyLabel, isActive: false),
+                    caption: replyLabel
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
@@ -621,6 +638,7 @@ struct StoryActionSidebarView: View {
                     ))
                     isPresented = false
                 }
+                .mediaChromeGlyph()
             }
 
             // Forward (send to someone) — label = count when > 0
@@ -628,10 +646,10 @@ struct StoryActionSidebarView: View {
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main)
+                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
+                outlineTint: outlineTint(.forward)
             ) {
                 HapticFeedback.light()
-                pauseTimer()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
                     sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
@@ -656,7 +674,8 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main)
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main),
+                    outlineTint: outlineTint(.repost)
                 ) {
                     // Republication : ouvre le COMPOSEUR prérempli au lieu de
                     // republier d'un tap côté serveur.
@@ -686,48 +705,23 @@ struct StoryActionSidebarView: View {
                     label: storyViewCount > 0 ? "\(storyViewCount)" : String(localized: "story.viewer.action.views", defaultValue: "Vues", bundle: .main)
                 ) {
                     HapticFeedback.light()
-                    pauseTimer()
                     showViewersSheet = true
                 }
             }
 
-            // Author-only Partager + Enregistrer — deux actions DISTINCTES
-            // (Task 10, revue Task 7 : le rail avait perdu tout accès au
-            // partage externe en passant l'ancien bouton « Exporter » par
-            // `StoryPhotoSaveService`, silencieusement, sous une icône et un
-            // libellé de partage). Alignées sur la ligne « Mes stories » :
+            // Author-only Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
+            // EXACTEMENT comme sur la ligne « Mes stories » : un export lancé ici
+            // apparaît aussi dans la liste et réciproquement. Tant qu'un job est
+            // en vol pour cette story, ce bouton devient l'anneau de progression
+            // et son tap annule. NEVER uploads to the Meeshy backend.
             //
-            //   Partager    → sheet `StoryExportShareSheet` (choix de langue)
-            //                 → `UIActivityViewController` (WhatsApp, Messages,
-            //                 AirDrop, Photos…). Reste au PREMIER PLAN — une
-            //                 sheet modale, jamais une tâche de fond, sinon
-            //                 elle surgirait après coup alors que l'utilisateur
-            //                 a déjà navigué ailleurs.
-            //   Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
-            //                 EXACTEMENT comme sur la ligne « Mes stories »
-            //                 (Task 7) : même source de vérité, donc un export
-            //                 lancé ici apparaît aussi dans la liste et
-            //                 réciproquement. Tant qu'un job est en vol pour
-            //                 cette story, ce bouton (lui seul) devient
-            //                 l'anneau de progression et son tap annule.
+            // Le bouton « Partager » (export vidéo) a quitté le rail de l'auteur
+            // (#9953) : le menu « … » offre « Exporter en vidéo » à TOUT lecteur,
+            // la même feuille au choix de la langue. « Envoyer » reste au rail.
             //
-            // NEVER uploads to the Meeshy backend (stories publish RAW, see
-            // CLAUDE.md "Story Architecture").
-            //
-            // Membership des DEUX boutons = `railPlan.showsExport` SEUL,
-            // jamais `currentStory` — même patron que Reply (L276) et Repost
-            // (L322) : `currentStory` n'est déballé que DANS les closures, pas
-            // pour décider si un bouton existe. Conditionner l'existence sur
-            // `let story = currentStory` romprait l'invariant documenté plus
-            // haut (L160-164) : un bouton ne doit jamais apparaître/disparaître
-            // en cours de lecture — seul le rail figé à l'entrée du slide en
-            // décide. `currentStory` n'a aucune raison structurelle de
-            // s'aligner sur ce figement (revue Task 7, finding Important).
-            //
-            // Résolution PURE extraite dans `StoryExportRailButtons` (testée
-            // par `StoryViewerExportRailTests`) : Partager reste vrai que la
-            // sauvegarde soit ou non en vol, seul Enregistrer bascule vers
-            // l'anneau.
+            // Membership = `railPlan.showsExport` SEUL, jamais `currentStory` :
+            // un bouton n'apparaît ni ne disparaît en cours de lecture. Résolution
+            // PURE dans `StoryExportRailButtons` (`StoryViewerExportRailTests`).
             let exportSaveProgress = railPlan.showsExport
                 ? currentStory.flatMap { saveService.progress(for: $0.id) }
                 : nil
@@ -740,20 +734,6 @@ struct StoryActionSidebarView: View {
             // strictement rien à l'écran (cf. `StorySaveProgressRing.appearance`).
             let exportIsCancellable = currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false
 
-            if exportRailButtons.showsShareButton {
-                StoryActionButton(
-                    icon: "square.and.arrow.up.fill",
-                    label: String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main)
-                ) {
-                    HapticFeedback.light()
-                    // Sheet MODALE : on pause tout de suite (comme Envoyer /
-                    // Vues / Éditer-et-republier) — `resumeTimer()` est déjà
-                    // câblé sur `onDismiss` de cette sheet (StoryViewerView).
-                    pauseTimer()
-                    showExportShareSheet = true
-                }
-            }
-
             if exportRailButtons.showsSaveProgressRing, let progress = exportSaveProgress {
                 // Même job, même source de vérité que la ligne « Mes
                 // stories » : un export lancé depuis l'une des deux
@@ -764,7 +744,7 @@ struct StoryActionSidebarView: View {
                     saveService.cancel(storyId: story.id)
                 } label: {
                     StorySaveProgressRing(progress: progress, tint: MeeshyColors.indigo400,
-                                          diameter: 32, isCancellable: exportIsCancellable)
+                                          diameter: MeeshyControlSize.compact, isCancellable: exportIsCancellable)
                 }
                 .buttonStyle(.plain)
                 // Le tap cesse d'être actif dès que l'écriture photothèque a
@@ -809,11 +789,10 @@ struct StoryActionSidebarView: View {
             // avant affichage, depuis le payload feed.
             if railPlan.showsComments {
                 StoryActionButton(
-                    icon: "bubble.left.fill",
+                    icon: FullscreenChromeSymbol.comments,
                     label: "\(storyCommentCount)",
                     isActive: showCommentsOverlay,
-                    activeColor: MeeshyColors.indigo400,
-                    activeGlow: showCommentsOverlay ? MeeshyColors.indigo400 : nil
+                    outlineTint: outlineTint(.comments)
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -837,8 +816,7 @@ struct StoryActionSidebarView: View {
                     icon: "textformat.abc",
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions || showFullLanguagePicker,
-                    activeColor: MeeshyColors.indigo400,
-                    activeGlow: MeeshyColors.indigo400,
+                    outlineTint: outlineTint(.translations),
                     handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()
@@ -850,13 +828,13 @@ struct StoryActionSidebarView: View {
                 .overlay(alignment: .topLeading) {
                     if let code = displayedLanguageCode, !code.isEmpty {
                         Text(code.uppercased())
-                            .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, MeeshySpacing.xs)
+                            .padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(MeeshyColors.indigo500))
-                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.5))
-                            .offset(x: -12, y: -2)
+                            .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.strong), lineWidth: MeeshyBorder.hairline))
+                            .offset(x: -18, y: -2)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }
@@ -897,7 +875,7 @@ struct StoryActionSidebarView: View {
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity
                         ))
-                        .offset(x: -56)
+                        .offset(x: FullscreenChromeMetrics.reactionStripLeadingOffset)
                     }
                 }
                 .zIndex(10)
@@ -912,12 +890,7 @@ struct StoryActionSidebarView: View {
     /// comportement — la divergence entre les deux était la cause du mute
     /// inatteignable au lecteur d'écran.
     private func toggleGlobalMute() {
-        HapticFeedback.light()
-        isGlobalMutedBinding.toggle()
-        NotificationCenter.default.post(
-            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-            object: nil
-        )
+        StoryGlobalMute.toggle($isGlobalMutedBinding)
     }
 
 }

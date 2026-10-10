@@ -1,5 +1,12 @@
 # Meeshy — plan de captures App Store & App Preview (brouillon, 2026-09-24)
 
+> **Refonte du 2026-09-30 (#8825), en ligne sur la 1.1.2.** À la demande du porteur, la vitrine
+> garde son esprit (fonds violets en panorama, légende en deux tons, cadre d'appareil, 7 langues)
+> mais ouvre sur des CONVERSATIONS aux photos RÉELLES : une conversation amoureuse à distance
+> (vocal entendu dans la langue de l'autre, photos échangées, appel sous-titré), un groupe drôle et
+> un débat acharné. L'iPad passe en PORTRAIT 2064×2752. Les § 2, 3, 4 et 6 ci-dessous sont à jour ;
+> le reste du document garde l'état du 2026-09-24.
+
 Base : fiche 2026-08 (§ 3, 4, 6), `fastlane/metadata/*/`, `project.yml` (`TARGETED_DEVICE_FAMILY: "1,2"` ⇒ iPad 13" OBLIGATOIRE).
 
 ## 0. Deux écarts à trancher avant de tourner quoi que ce soit
@@ -18,7 +25,7 @@ Base : fiche 2026-08 (§ 3, 4, 6), `fastlane/metadata/*/`, `project.yml` (`TARGE
 | Format | `.jpeg`, `.jpg`, `.png`, **sans canal alpha** | idem |
 | App Preview | 15–30 s, jusqu'à 3 par taille, 30 fps max, H.264 10–12 Mbps ou ProRes 422 HQ, stéréo AAC 256 kbps ; iPhone 6,9"/6,5" : 886×1920 ; iPad 13" : 1200×1600 ; ≤ 500 Mo ; image d'affiche par défaut à 5 s | [App preview specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/app-preview-specifications) |
 
-Décision : **un seul jeu iPhone en 1320×2868** (6,9", le 6,5" est alors dérivé par Apple) — la fiche § 4/§ 7 (« 6.7" 1290×2796 + 6.5" ») est périmée : 1290×2796 est désormais rangé sous 6,9". **iPad en paysage 2752×2064** pour montrer les deux colonnes de `iPadRootView`.
+Décision : **un seul jeu iPhone en 1320×2868** (6,9", le 6,5" est alors dérivé par Apple) — la fiche § 4/§ 7 (« 6.7" 1290×2796 + 6.5" ») est périmée : 1290×2796 est désormais rangé sous 6,9". **iPad en portrait 2064×2752** depuis #8825 (le format par défaut d'App Store Connect pour le 13") ; les deux colonnes de `iPadRootView` y tiennent (38 % / 62 %, `leftColumnRatio`). Le jeu paysage 2752×2064 de la 1.1.0 est sauvegardé hors dépôt.
 
 Guideline 2.3 ([App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)) :
 - **2.3.3** : « Screenshots should show the app in use, and not merely the title art, login page, or splash screen. They may also include text and image overlays » ⇒ fond, légende, cadre d'appareil, flèche/halo : oui. Connexion, splash, maquette absente du build : non.
@@ -30,38 +37,28 @@ Technique : `xcrun simctl status_bar <udid> override --time 9:41 --batteryState 
 
 Garde-fous § 6 à l'image : aucun Dynamic Island / Live Activity, aucun mode Focal, aucun agent ✦, aucun cadenas E2EE sur un écran qui montre une traduction (DM chiffré = traduction serveur coupée), aucun « Signal ». Monnaie **Meesh** : elle se **frappe** avec les points (`ProgressionMeeshEntry`), elle ne s'achète pas — ne jamais écrire « gagne de l'argent » ni afficher un prix.
 
-## 2. Séquence iPhone (10 captures, 1320×2868)
+## 2. Séquence iPhone (10 captures, 1320×2868) — refonte #8825
 
-Les 3 premières vendent seules (elles sont visibles dans les résultats de recherche) : **vocal traduit → groupe multilingue → Meeshy Global**. Le « lecteur » (compte connecté) est **Léa** en fr-FR ; il change par locale (§ 5).
+Les 3 premières vendent seules (visibles dans les résultats de recherche) : **le vocal amoureux traduit → les photos échangées → le fou rire de groupe**. Le « lecteur » (compte connecté) change par locale (§ 6) ; son **partenaire** aussi : Min-jun (Séoul, coréen) pour une lectrice (fr, en, es, it), Aiko (Osaka, japonais) pour un lecteur (de, pt, ar) — `partenaireDe()`.
 
-| # | Vue iOS | Données de démo | Légende (clé) | Mode |
+| # | Écran du kit | Contenu | Légende | Mode |
 |---|---|---|---|---|
-| 1 | `ConversationView` DM Léa ↔ Min-jun ; bulle audio avec `AudioCarouselView` ouvert, langue « 한국어 » sélectionnée, forme d'onde en lecture | Vocal de Léa 0:12 « On se voit au concert samedi ? » ; transcription coréenne sous la bulle ; drapeaux 🇫🇷→🇰🇷 en surimpression (overlay 2.3.3) | L1 | sombre |
-| 2 | `ConversationView` groupe « Nova Club 🌍 » (4 participants), badge de traduction discret par bulle | Min-jun (ko), Sofía (es), Aiko (ja), Léa (fr) : chacun a écrit dans sa langue, tout s'affiche en français ; réactions 🔥 | L2 | clair |
-| 3 | `ConversationView` de **Meeshy Global** (`identifier: meeshy`, type `global`) : messages système « X a rejoint » (posés par `ensureGlobalConversationMembership`) suivis de bonjours | « Amara a rejoint », « Yusuf a rejoint » ; « Salut tout le monde 👋 » ×6 langues, toutes lues en français ; compteur de membres en en-tête | L3 | sombre |
-| 4 | `FeedView` → `FeedPostCard` (post public d'Aiko, photo Osaka), `TranslationToggle` visible | Légende japonaise lue en français, 24 commentaires multilingues, bouton « Ajouter en ami » | L4 | clair |
-| 5 | `PeopleDiscoveryView` (onglet Découvrir de `ContactsHubView`) + bannière `FriendRequestListView` | 5 profils (Kwame, Giulia, Lucas, Priya, Jonas) avec langue et ville ; 1 demande acceptée | L5 | sombre |
-| 6 | Viewer de story (`Features/Stories`, `StoryViewerView`) ou `ReelsPlayerView` | Story de Lucas (São Paulo, texte pt-BR affiché en français), barre de progression, réactions | L6 | sombre |
-| 7 | `ProgressionView` — `ProgressionFlammeHero` (« Série », 12 jours, record 21) + `ProgressionLevelHero` + `ProgressionElansHero` | Niveau 7, 3 familles tenues (vocaux, stories, conversations) ⇒ multiplicateur actif | L7 | clair |
-| 8 | `AchievementRevealView` (succès révélé plein écran) avec le glyphe `MeeshCoin` du solde en haut | Succès « Amitiés nouées » palier 10 ; solde 340 Meesh | L8 | sombre |
-| 9 | `CallView` appel vidéo Léa ↔ Min-jun avec sous-titres de `CallTranscriptionService` | Sous-titre coréen traduit en français sous la vignette (VÉRIFIER au simulateur que le sous-titre est bien TRADUIT et pas seulement transcrit — sinon retirer la capture) | L9 | sombre |
-| 10 | Fiche de lien d'invitation (`CommunityLinkDetailView`) — rejoindre sans compte | Lien « Nova Club », répartition des langues des arrivants | L10 | clair |
+| 1 | `amour` | La vue du soir envoyée par le partenaire (photo de Séoul ou d'Osaka), « tu me manques », le **vocal du lecteur joué dans la langue du partenaire** (transcription 한국어 / 日本語), sa réaction ; flèche 🇫🇷 → 🇰🇷 ancrée au vocal | L1 | sombre |
+| 2 | `amour-photos` | Le jour du départ : photo du hublot, puis la table aux chandelles et le bouquet (grille de deux photos), « tu es parfait » ; surimpression 🇫🇷 ❤️ 🇰🇷 | L11 | clair |
+| 3 | `drole` | Groupe « Lisboa ✈️ » : le chat dans la valise, les rires en plusieurs langues, un **vocal coréen servi dans la langue du lecteur** | L2 | sombre |
+| 4 | `debat` | Groupe « Pizza Night 🍕 » : la pizza à l'ananas, l'Italie s'embrase, le Brésil défend le chocolat, Giulia quitte le groupe | L12 | clair |
+| 5 | `appel-amour` | Appel vidéo : la caméra du partenaire filme la pluie sur sa vitre, sous-titre traduit, original en rappel | L9 | sombre |
+| 6 | `global` | Meeshy Global (inchangé) | L3 | clair |
+| 7 | `fil` | Post d'Aiko, photo réelle d'Osaka au couchant | L4 | sombre |
+| 8 | `story` | Story de Lucas (São Paulo au couchant) ; celle de Sofía (Madrid) pour le lecteur Lucas | L6 | sombre |
+| 9 | `progression` | Progression (inchangé) | L7 | clair |
+| 10 | `invitation` | Lien d'invitation (inchangé) | L10 | clair |
 
-Alternance clair/sombre : S-C-S-C-S-S-C-S-S-C (6 et 9 restent sombres : média plein écran et appel).
+Alternance : S-C-S-C-S-C-S-S-C-C. Sortis de la vitrine : Découvrir (L5) et le badge révélé (L8) — leurs légendes restent au catalogue.
 
-## 3. Séquence iPad (7 captures, 2752×2064 paysage)
+## 3. Séquence iPad (9 captures, 2064×2752 portrait) — refonte #8825
 
-`iPadRootView` = colonne gauche `ConversationListView` (`leftColumnRatio`) + panneau droit (`FeedView`, `ConversationView` ou `iPadRightPanel`).
-
-| # | Gauche | Droite | Légende | Mode |
-|---|---|---|---|---|
-| P1 | Liste : Nova Club, Min-jun, Meeshy Global (non lus) | DM Min-jun, vocal traduit en lecture (= iPhone 1) | L1 | sombre |
-| P2 | Liste, Meeshy Global sélectionné | Meeshy Global plein panneau, 12 bonjours visibles (le grand écran en montre deux fois plus) | L3 | clair |
-| P3 | Liste | `FeedView` : deux posts publics + stories en haut | L4 | sombre |
-| P4 | Liste, Nova Club sélectionné | Groupe à 4 langues, un post partagé dans le fil | L2 | clair |
-| P5 | Liste | `ProgressionView` (série + badges en grille, qui respire en largeur) | L7 | clair |
-| P6 | — (plein écran) | `CallView` à 3 participants, sous-titres | L9 | sombre |
-| P7 | Liste | `ReelsPlayerView` en format régulier (`sizeClass == .regular`) | L6 | sombre |
+Le même récit que l'iPhone (`ipad-amour`, `ipad-amour-photos`, `ipad-drole`, `ipad-debat`, `ipad-appel-amour`, `ipad-global`, `ipad-fil`, `ipad-story`, `ipad-progression`), colonne des conversations à gauche. La hauteur du portrait montre un historique plus long : le déjeuner du partenaire (ramen) avant la vue du soir, le café du matin du départ, le chien de Lucas dans son sac, la pizza au chocolat du Brésil. Alternance S-C-S-C-S-C-S-S-C.
 
 ## 4. Légendes (≤ 40 caractères, décompte vérifié par script)
 
@@ -77,6 +74,10 @@ Alternance clair/sombre : S-C-S-C-S-S-C-S-S-C (6 et 9 restent sombres : média p
 | L8 | Débloque des succès. Frappe tes Meesh. | Unlock badges. Mint your Meesh. | Desbloquea logros. Acuña tus Meesh. | Schalte Erfolge frei. Präg deine Meesh. | Sblocca traguardi. Conia i tuoi Meesh. | Desbloqueie conquistas. Cunhe Meesh. | افتح الإنجازات. واسكّ عملات Meesh. |
 | L9 | Appelle Séoul. Lis chaque mot. | Call Seoul. Read every word. | Llama a Seúl. Lee cada palabra. | Ruf Seoul an. Lies jedes Wort. | Chiama Seul. Leggi ogni parola. | Ligue para Seul. Leia cada palavra. | اتصل بسيول. واقرأ كل كلمة. |
 | L10 | Un lien. Sans compte. | One link. No account. | Un enlace. Sin cuenta. | Ein Link. Kein Konto. | Un link. Nessun account. | Um link. Sem conta. | رابط واحد. بلا حساب. |
+| L11 | Loin des yeux. Près du cœur. | Out of sight. Never out of mind. | Lejos de los ojos. Cerca del corazón. | Aus den Augen. Nie aus dem Sinn. | Lontano dagli occhi. Vicino al cuore. | Longe dos olhos. Perto do coração. | بعيد عن العين. قريب من القلب. |
+| L12 | Ça chauffe. Tout le monde suit. | Things heat up. Everyone keeps up. | Se arma el debate. Todos lo siguen. | Es wird hitzig. Alle reden mit. | Si accende il dibattito. Tutti seguono. | O debate esquenta. Todo mundo acompanha. | النقاش يحتدم. والكل يتابع. |
+
+Depuis #8825, **L9 nomme la ville du partenaire** : Séoul pour fr, en, es, it ; **Osaka** pour de (« Ruf Osaka an. Lies jedes Wort. »), pt (« Ligue para Osaka. Leia cada palavra. ») et ar (« اتصل بأوساكا. واقرأ كل كلمة. »). L11 détourne dans chaque langue le proverbe « loin des yeux, loin du cœur ».
 
 Notes : L9 remplace « Comprends tout » (§ 4) — affirmation invérifiable au sens de 2.3.7 ; « Lis chaque mot » décrit ce qu'on voit. L8 : le verbe « frapper » est celui de l'app (`progression.meesh.mint`, « frappées depuis toujours »). Le mot « défis » n'est pas employé : aucun écran iOS ne porte ce nom (Série, Élans, Succès, Badges). web-v2 a une page « Défis » (`progression-defis.tsx`), mais ce sont les succès À PALIERS, pas des défis datés — l'employer sur une capture iOS créerait une promesse que le build ne tient pas.
 
@@ -99,6 +100,8 @@ Image d'affiche = la seconde 5 : la bulle vocale avec « 🇫🇷 → 🇰🇷 �
 Un tournage par locale : l'interface ET le contenu doivent arriver dans la langue du spectateur.
 
 ## 6. Données de démo pour staging
+
+**Photos réelles (#8825).** Les médias des scènes sont quinze photos Pexels (licence libre pour un usage commercial, attribution non requise), **sans aucune personne à l'image** : villes au crépuscule, table aux chandelles, bouquet, hublot, pluie sur une vitre, chat dans une valise, chien dans un sac, pizzas, ramen, café. Elles sont versionnées dans `scripts/marketing-kit/photos/`, chacune avec son auteur, sa page source et la licence dans `credits.json`, et incrustées hors réseau au rendu. Les avatars restent des initiales illustrées.
 
 Règles : personnes **fictives, majeures (18-24 ans)**, aucune marque ni personnalité ; avatars **illustrés maison** ou banque d'images **avec autorisation de modèle** ; comptes `demo+<prénom>@meeshy.me` ; messages envoyés par les comptes eux-mêmes pour que la **vraie** chaîne de traduction les traduise (2.3.3). Vocal de Léa : comédien avec cession de droits, clonage activé par le consentement de l'app.
 

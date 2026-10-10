@@ -5,7 +5,9 @@ import {
   pageWithSound,
   pageWithVisual,
   pageWithVisualAspectRatio,
+  studioSoundFileOf,
   type StudioDoor,
+  type StudioPage,
   type StudioUploadState,
 } from '@/lib/stories/studio-page';
 import { studioPlaceRefusal, withPage, withPlacedWhileAnimated, type StudioDraft } from '@/lib/stories/studio';
@@ -14,6 +16,19 @@ import type { StudioPlaceRefusalNotice } from '@/routes/story-compose-footer';
 import { measureAspectRatio, measureDurationMs } from '@/routes/story-compose-measure';
 
 const UPLOADING: StudioUploadState = { phase: 'uploading', progress: 0 };
+
+function revokeIfLocal(url: string | undefined): void {
+  if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
+/** Les TROIS aperçus locaux d'UNE page — fond, calque, son — révoqués
+ * ensemble : une page qui quitte le brouillon (retrait, publication) ne
+ * laisse aucun `blob:` derrière elle. */
+export function revokePageMedia(page: StudioPage): void {
+  revokeIfLocal(page.background?.previewUrl);
+  revokeIfLocal(page.overlay?.previewUrl);
+  revokeIfLocal(page.sound?.previewUrl);
+}
 
 /**
  * **POSER UN MÉDIA, OU EN IMPORTER PLUSIEURS** — sorti de `story-compose.tsx`
@@ -77,7 +92,8 @@ export function studioPlacer({
     pose,
   });
 
-  function place(door: StudioDoor, file: File) {
+  function place(door: StudioDoor, picked: File) {
+    const file = door === 'sound' ? studioSoundFileOf(picked) : picked;
     const draft = latest.current;
     const refusal = studioPlaceRefusal(draft, door, file.type);
     if (refusal !== null) {
@@ -100,19 +116,20 @@ export function studioPlacer({
 
   /** LA PORTE DU FOND accepte plusieurs fichiers (#8533) : un seul se pose
    * comme avant (il remplace le fond de la page courante) ; plusieurs
-   * ouvrent autant de scènes. */
-  function importMedia(files: readonly File[]) {
+   * ouvrent autant de scènes. Rend la page de chaque fichier posé (#9126). */
+  function importMedia(files: readonly File[]): readonly { readonly pageId: string; readonly file: File }[] {
     const [only] = files;
     if (files.length <= 1) {
       if (only !== undefined) place('visual', only);
-      return;
+      return only === undefined ? [] : [{ pageId: latest.current.currentPage, file: only }];
     }
     const plan = studioImportPlan(latest.current, files, language);
     refuse(plan.refused === null ? null : { door: 'visual', reason: plan.refused.reason, count: plan.refused.count });
-    if (plan.placements.length === 0) return;
+    if (plan.placements.length === 0) return [];
     const placed = plan.placements.map((placement) => ({ ...placement, previewUrl: localUrl(placement.file) }));
     edit(() => placed.reduce((draft, p) => withPage(draft, p.pageId, (page) => pageWithVisual(page, 'visual', visualAsset(p.file, p.previewUrl))), plan.draft));
     placed.forEach((p) => follow(p.pageId, 'visual', p.file, p.previewUrl));
+    return plan.placements;
   }
 
   return { place, importMedia };

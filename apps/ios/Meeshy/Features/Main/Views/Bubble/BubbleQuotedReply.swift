@@ -52,14 +52,14 @@ import MeeshyUI
 /// generique reste, le tap retombe en zone 3, et le media garde son propre
 /// geste de revelation sur la rangee d'origine.
 ///
-/// **Carrousel** : la citation est une PORTE, pas une galerie. `ReplyReference`
-/// ne porte qu'UNE `attachmentThumbnailUrl` et aucun compte de pieces jointes
-/// (le gateway n'en selectionne pas), donc ni liste de miniatures ni badge
-/// « +N » ne serait honnete. Le tap ouvre le plein ecran de la conversation,
-/// ou les images 2..N sont atteignables au balayage.
+/// **Carrousel** : la citation est une PORTE, pas une galerie : UNE miniature,
+/// et depuis #9911 le badge « +N » quand elle cite un message ENTIER à
+/// plusieurs tuiles (`ReplyReference.quotedPieceCount`). Le tap ouvre le plein
+/// ecran de la conversation, ou les images 2..N sont atteignables au balayage.
 ///
 /// Gardes : `BubbleQuotedReplyZoneLawTests`.
 struct BubbleQuotedReply: View, Equatable {
+    @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
     /// Style d'enveloppe de la citation.
     /// - `.card` : variante historique — RR12 + bgColor teinté + paddings extérieurs (top 6, horizontal 6). Hôte = bulle chat colorée.
     /// - `.inline` : sans RR12 ni paddings extérieurs — la surface vient du parent (widget audio `playerBackground` ou conteneur unifié média+reply).
@@ -143,7 +143,8 @@ struct BubbleQuotedReply: View, Equatable {
             storyCommentCount: reply.storyCommentCount,
             storyThumbnailUrl: reply.storyThumbnailUrl,
             moodEmoji: reply.moodEmoji,
-            storyUnavailable: reply.storyUnavailable
+            storyUnavailable: reply.storyUnavailable,
+            quotedPieceCount: reply.quotedPieceCount
         )
     }
 
@@ -189,6 +190,9 @@ struct BubbleQuotedReply: View, Equatable {
         let storyThumbnailUrl: String?
         let moodEmoji: String?
         let storyUnavailable: Bool?
+        /// « +N » (#9911) — arrive avec l'écho serveur ; absent de la
+        /// projection, le badge resterait figé sur la première résolution.
+        let quotedPieceCount: Int?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -242,7 +246,7 @@ struct BubbleQuotedReply: View, Equatable {
         if let details = quotedDetails {
             Text(details)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(0.8))
+                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
         }
     }
@@ -255,7 +259,7 @@ struct BubbleQuotedReply: View, Equatable {
         if reply.moodEmoji != nil, let date = reply.storyPublishedAt {
             Text(date, style: .relative)
                 .font(.caption2)
-                .foregroundColor(previewColor.opacity(0.8))
+                .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 .layoutPriority(-1)
         }
@@ -340,7 +344,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// La teinte des textes secondaires de la citation — celle de l'aperçu,
     /// que l'aperçu d'un vocal cité reprend.
     private var quotePreviewColor: Color {
-        parentIsMe ? .white.opacity(0.65) : theme.textMuted
+        parentIsMe ? .white.opacity(MeeshyOpacity.heavy) : theme.textMuted
     }
 
     /// ZONE 1 — l'avatar de l'auteur cite, seule porte vers son profil. Le NOM
@@ -393,7 +397,7 @@ struct BubbleQuotedReply: View, Equatable {
     private var playBadge: some View {
         if mediaGateTap != nil, attachmentKind?.hasTimebasedTrack == true {
             Image(systemName: "play.circle.fill")
-                .font(MeeshyFont.relative(16, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(radius: 2)
                 .accessibilityHidden(true)
@@ -444,7 +448,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// L'aplat d'attente d'une miniature citée — vignette ou poster —, à la
     /// couleur de l'auteur cité. Une seule résolution pour les deux faces.
     private var mediaPlaceholder: Color {
-        Color(hex: reply.authorColor).opacity(0.3)
+        Color(hex: reply.authorColor).opacity(MeeshyOpacity.medium)
     }
 
     @ViewBuilder
@@ -549,24 +553,31 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
+    /// #9574 — la citation d'un contenu qui disparaît se rend dans la couche
+    /// sécurisée, même dans un message ordinaire.
     var body: some View {
+        quotedBody.captureShield(reply.quotedCapture(quotedMessage: nil).shieldsCapture(surfaceAnnounces: announcesCapture))
+    }
+
+    @ViewBuilder
+    private var quotedBody: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
-            ? .white.opacity(0.9)
+            ? .white.opacity(MeeshyOpacity.intense)
             : Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let previewColor = quotePreviewColor
         let bgColor: Color = parentIsMe
-            ? Color.white.opacity(0.15)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+            ? Color.white.opacity(MeeshyOpacity.light)
+            : MeeshyColors.surfaceFill(isDark: isDark)
 
         let contentBody = HStack(spacing: 0) {
             // Left accent bar
             RoundedRectangle(cornerRadius: 2)
-                .fill(parentIsMe ? Color.white.opacity(0.7) : accentBarColor)
+                .fill(parentIsMe ? Color.white.opacity(MeeshyOpacity.heavy) : accentBarColor)
                 .frame(width: 4)
 
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     // **Le texte part du deux-points de l'auteur** (#5103,
                     // directive porteur du 2026-09-04). Le nom occupait sa
                     // propre rangée et le texte commençait à la suivante :
@@ -611,8 +622,9 @@ struct BubbleQuotedReply: View, Equatable {
                         // (#4946) ; la directive déplace cette géographie, elle
                         // ne l'abandonne pas — les trois peaux la suivent.
                         quotedThumbnail
+                            .quotedExtraPieces(reply)
 
-                        HStack(spacing: 5) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             // Le glyphe reste la SEULE affordance du média quand
                             // aucune miniature ne voyage : le retirer ici
                             // fermerait la zone 2 pour un audio ou un document.
@@ -627,10 +639,10 @@ struct BubbleQuotedReply: View, Equatable {
 
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
+            .padding(.leading, MeeshySpacing.sm)
+            .padding(.trailing, MeeshySpacing.smPlus)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         // La barre d'accent (RoundedRectangle) est infiniment flexible en
         // hauteur : sans fixedSize, un hôte qui sur-propose de la hauteur
         // (VStack du conteneur média+citation quand la vidéo letterboxe)
@@ -644,11 +656,11 @@ struct BubbleQuotedReply: View, Equatable {
         case .card:
             contentBody
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                         .fill(bgColor)
                 )
-                .padding(.horizontal, 6)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.xsPlus)
+                .padding(.top, MeeshySpacing.xsPlus)
         case .inline:
             contentBody
         }
@@ -699,7 +711,7 @@ struct BubbleMoodReplyPreview: View, Equatable {
     var body: some View {
         // La date est rendue par la ligne de titre de `BubbleQuotedReply` : ici
         // elle consommait la largeur du contenu, qui se coupait à mi-phrase.
-        HStack(alignment: .top, spacing: 5) {
+        HStack(alignment: .top, spacing: MeeshySpacing.xs) {
             if let emoji = reply.moodEmoji {
                 Text(emoji)
                     .font(.footnote)
@@ -754,7 +766,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
 
     @ViewBuilder
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "camera.fill")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(previewColor)
@@ -771,7 +783,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
                     .foregroundColor(previewColor.opacity(0.6))
                 Text(date, style: .relative)
                     .font(.caption2)
-                    .foregroundColor(previewColor.opacity(0.8))
+                    .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
             }
 
             let reactions = reply.storyReactionCount ?? 0
@@ -810,12 +822,12 @@ struct BubbleStoryReplyPreview: View, Equatable {
             Text("\(value)")
                 .font(.caption2.weight(.medium))
         }
-        .foregroundColor(previewColor.opacity(0.8))
+        .foregroundColor(previewColor.opacity(MeeshyOpacity.intense))
     }
 
     private var storyMetricSeparator: some View {
         Text("\u{2022}")
             .font(.caption2)
-            .foregroundColor(previewColor.opacity(0.5))
+            .foregroundColor(previewColor.opacity(MeeshyOpacity.strong))
     }
 }

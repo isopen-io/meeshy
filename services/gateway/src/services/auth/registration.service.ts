@@ -508,6 +508,7 @@ export async function registerAccount(
       registrationDevice: requestContext?.userAgent || null,
       registrationCountry: requestContext?.geoData?.country || null,
       timezone: requestContext?.geoData?.timezone || null,
+      lastLoginAt: new Date(),
       lastLoginIp: requestContext?.ip || null,
       lastLoginLocation: requestContext?.geoData?.location || null,
       lastLoginDevice: requestContext?.userAgent || null,

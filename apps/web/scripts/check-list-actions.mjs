@@ -68,11 +68,16 @@
  *     jusqu'à son maximum RÉEL (gestes `wheel`, jamais un `scrollTop`
  *     programmé — seul un geste réel arme le même défilement qu'un doigt),
  *     la dernière rangée et son bouton doivent retomber sur EUX-MÊMES.
+ * 14. L'HEURE ET LES POINTS D'UNE RANGÉE NE PARAISSENT QU'AU DÉFILEMENT
+ *     (#9570) — au repos effacés mais lus, montrés à la molette, au focus et
+ *     au survol, place réservée, sans fondu sous « animations réduites »
+ *     (`lib/check-lens-row-meta.mjs`).
  */
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -974,6 +979,9 @@ for (const scheme of ['light', 'dark']) {
   );
   await enContext.close();
 }
+
+// ------------- 14. l'heure et les points ne paraissent qu'au défilement (#9570)
+await checkLensRowMetaRest({ browser, base: BASE, row: SUBJECT, check });
 
 await browser.close();
 served.close();

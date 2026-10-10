@@ -22,28 +22,46 @@ import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { apiConfig } from '@/lib/api/config';
 import { webOriginOf } from '@/lib/links/web-origin';
-import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from '@/components/thread-chrome';
+import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
+import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
+import { ThreadWriteLock } from '@/components/thread-write-lock';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
+import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
-import { useParams } from '@/lib/router';
+import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
+import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
+import {
+  ActivePeersContext,
+  FocusedPeersContext,
+  HerePeersContext,
+  useActiveIn,
+  useConversationActivity,
+  useConversationViewing,
+  useFocusedIn,
+  useHereIn,
+} from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
+import { useLivingMessages } from '@/lib/view/ephemeral-gone';
+import { isMineOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
@@ -54,11 +72,15 @@ import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
-import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
+import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
+import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
+import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
@@ -89,12 +111,18 @@ import { ThreadModes } from './thread-modes';
  * (`ThreadMessageSheets`) vivent désormais chacun dans leur propre fichier —
  * même doctrine qu'iOS (`ConversationView.swift`, découpé en quatorze
  * extensions PAR SURFACE) : cet écran ne fait plus que CÂBLER ce que chacun
- * lui rend. La prochaine surface s'ajoute dans SA pièce (le saut `?around=`
- * de #7420 dans `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
+ * lui rend. La prochaine surface s'ajoute dans SA pièce (la fenêtre `?around=`
+ * de #7420 vit dans `useThreadData` et `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
  * rougit dès que cet hôte ou l'une de ses pièces franchit 1000 lignes.
+ *
+ * EN APERÇU (#8821, `preview`) — le MÊME fil, posé par la feuille tirée
+ * depuis la bannière (`conversation-preview-host.tsx`) : la conversation vient
+ * de l'aperçu et non de l'adresse, la racine remplit la feuille au lieu du
+ * viewport, et l'en-tête se montre COMPLET, sans chevron retour.
  */
-export default function ThreadScreen() {
-  const { conversation: id } = useParams<'/c/$conversation'>();
+export default function ThreadScreen({ preview }: { readonly preview?: { readonly conversationId: string } } = {}) {
+  const route = useOptionalRoute();
+  const id = preview?.conversationId ?? route?.params['conversation'] ?? '';
 
   /**
    * LA SOURCE (#5650, F2/F5/§5 étape 10) — `useThreadData(id)` compose
@@ -134,7 +162,6 @@ export default function ThreadScreen() {
    */
   const conversationId = threadData.conversationId;
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
   /**
    * LES DÉTAILS DE LA CONVERSATION (#7829) — une feuille de CE fil : le titre
    * de l'en-tête et le menu de chaque avatar d'auteur (#7828) l'ouvrent par la
@@ -153,6 +180,7 @@ export default function ThreadScreen() {
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const storyRingOf = useAuthorStoryRings(viewer);
+  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -251,6 +279,11 @@ export default function ThreadScreen() {
    */
   const { languages: readerLanguages, locale: readerLocale } = useReaderLanguages();
   const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
+  /** L'EN-TÊTE DÉPLIÉ ET LA FLAMME MASQUÉE, retenus par conversation (#9031). */
+  const header = useHeaderMemory({ scope, conversationId, preview: preview !== undefined });
+  const expanded = header.expanded;
+  /** Chaque message parti rejoue la flamme du jour sous l'avatar (#9031). */
+  const [flameReplay, setFlameReplay] = useState(0);
 
   /**
    * LA RÉGION LIVE UNIQUE DE L'ÉCRAN (revue #5814, défaut majeur 9) — UN
@@ -286,10 +319,15 @@ export default function ThreadScreen() {
    * revue-correction #5813, défaut majeur 5 (voir le doc-comment de
    * `mergeTimeline` pour le scénario qu'une concaténation inverse).
    */
-  const messages = useMemo(
+  const timeline = useMemo(
     () => mergeTimeline(threadData.messages, pending),
     [threadData.messages, pending],
   );
+  /* UN ÉPHÉMÈRE PARTI QUITTE LE FIL (#8900) — pas seulement sa peau : sa
+     rangée, son `aria-label`, sa hauteur virtualisée, et le Résumé qui lit
+     ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
+  const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
+  const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
@@ -332,13 +370,18 @@ export default function ThreadScreen() {
    * que la Lentille — seuls `transform` et `opacity` bougent.
    */
   const scroller = useRef<HTMLElement | null>(null);
+  /* L'ANCRE D'UNE PAGE PRÉFIXÉE est tenue par le virtualiseur lui-même, au
+     rendu qui l'insère (#9216, #9219) — doc-comment de `useOlderMessages`. */
+  const anchorTo = useHeadAnchor(placed[0]?.message.id);
   const virtualizer = useVirtualizer({
     count: placed.length,
     getScrollElement: () => scroller.current,
     estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
     getItemKey: (index) => placed[index]?.message.id ?? index,
+    anchorTo,
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   /**
    * LA SCÈNE DU FIL (#5648) — l'ÉLECTION d'une rangée au défilement soutenu
@@ -380,7 +423,17 @@ export default function ThreadScreen() {
     group,
     readerLanguages,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
+    detached: threadData.detached,
+    onReturnToPresent: threadData.returnToPresent,
   });
+  /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
+  useConversationViewing(conversationId);
+  /* … et chaque avatar d'auteur du fil dit qui l'a ouvert — et qui y regarde,
+     écoute ou agit en ce moment (#9061), ou regarde en plein écran (#9065). */
+  const herePeers = useHereIn(conversationId);
+  const activePeers = useActiveIn(conversationId);
+  const focusedPeers = useFocusedIn(conversationId);
+  useConversationActivity(conversationId, chrome.host);
 
   /**
    * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
@@ -411,7 +464,7 @@ export default function ThreadScreen() {
     virtualizer,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
     mode: reading.readingDecision.mode,
-    older: { state: threadData.olderState, fetchOlder: threadData.fetchOlder },
+    around: threadData.around,
   });
 
   /**
@@ -432,6 +485,17 @@ export default function ThreadScreen() {
     readerLanguages,
     send,
   });
+  const composeSend = compose.onSend;
+  const returnToPresent = threadData.returnToPresent;
+  const sendAndReplayFlame = useCallback(
+    (input: Parameters<typeof composeSend>[0]) => {
+      /* Un envoi depuis une fenêtre ancrée revient au présent, où il paraît (#7420). */
+      returnToPresent();
+      composeSend(input);
+      setFlameReplay((count) => count + 1);
+    },
+    [composeSend, returnToPresent],
+  );
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -458,7 +522,7 @@ export default function ThreadScreen() {
     readerLocale,
     viewerId: viewer.id ?? '',
     canStar: !viewer.isAnonymous,
-    onReply: (messageId) => compose.setReplyTarget(messageId),
+    reply: compose,
     announce: announcer.announce,
   });
 
@@ -496,6 +560,8 @@ export default function ThreadScreen() {
     fetchOlder: threadData.fetchOlder,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
+  /** … et le PRÉSENT, au pied d'une fenêtre ancrée loin de lui (#7420). */
+  const newer = useNewerMessages({ scroller, state: threadData.newerState, rowCount: placed.length, fetchNewer: threadData.fetchNewer });
 
   /**
    * LE MARQUAGE-LU SANS GESTE (#7201, W1) — ouvrir ce fil, le faire défiler
@@ -521,6 +587,8 @@ export default function ThreadScreen() {
     queryClient,
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
+  /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
+  useEngagementRevalidation(conversationId);
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
@@ -528,6 +596,8 @@ export default function ThreadScreen() {
       caughtUpToMessageId,
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
+    /* Le fil lu quitte la barre de notifications, comme sur iOS (#8781). */
+    void clearConversationBanners(markedConversationId);
   }, [queryClient, noteAfterReadSeen]);
   /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
      modale — visionneuse plein écran comprise, que cet écran ne monte pas :
@@ -536,7 +606,8 @@ export default function ThreadScreen() {
   const readTracking = useReadTracking({
     scroller,
     conversationId,
-    lastMessageId: lastConfirmedMessageId,
+    /* Une fenêtre détachée du présent n'accuse rien (#7420, `windowIsAtTip` iOS). */
+    lastMessageId: threadData.detached ? undefined : lastConfirmedMessageId,
     enabled: placed.length > 0,
     onMark: onMarkCaughtUp,
   });
@@ -572,6 +643,10 @@ export default function ThreadScreen() {
     ready: threadData.status === 'success',
     virtualizer,
     onProgrammaticScroll: scene.noteProgrammaticScroll,
+    /* #9294 — l'adresse qui nomme un message (`?message=`) ouvre le fil sur lui, par le saut de la citation. */
+    anchorMessageId: preview === undefined ? threadAnchorOf(route?.search) : null,
+    onAnchor: jump.requestJump,
+    followTail: threadData.around.target === null,
   });
 
   /**
@@ -584,9 +659,10 @@ export default function ThreadScreen() {
    * TypeScript qui suit rend `conversation` NON-optionnel pour le reste de
    * la fonction.
    */
-  if (threadData.status === 'refused') return <ThreadRefused />;
-  if (threadData.status === 'error') return <ThreadError onRetry={threadData.refetch} />;
-  if (threadData.status === 'pending' || conversation === undefined) return <ThreadSkeleton />;
+  const inPreview = preview !== undefined;
+  if (threadData.status === 'refused') return <ThreadRefused preview={inPreview} />;
+  if (threadData.status === 'error') return <ThreadError onRetry={threadData.refetch} preview={inPreview} />;
+  if (threadData.status === 'pending' || conversation === undefined) return <ThreadSkeleton preview={inPreview} />;
 
   const title = titleOf(conversation, viewer.id ?? '');
   const accent = accentOf(conversation);
@@ -629,9 +705,13 @@ export default function ThreadScreen() {
        par cette racine, qui doit rester exactement haute de `100dvh` pour que
        le contenu puisse transiter sous la bande. */
     <ThreadMediaContext.Provider value={threadMedia}>
+    <HerePeersContext.Provider value={herePeers}>
+    <ActivePeersContext.Provider value={activePeers}>
+    <FocusedPeersContext.Provider value={focusedPeers}>
+    <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
-      className="relative h-dvh overflow-hidden"
+      className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
@@ -645,13 +725,17 @@ export default function ThreadScreen() {
         activeMembers={activeMembers}
         otherUnread={otherUnread}
         expanded={expanded}
-        onToggleExpanded={() => setExpanded((v) => !v)}
+        onToggleExpanded={header.toggleExpanded}
+        flameDismissed={header.flameDismissed}
+        onDismissFlame={header.dismissFlame}
+        flameReplay={flameReplay}
         onOpenDetails={openDetails}
         currentRowTitle={reading.currentRow?.title ?? ''}
         isAuto={reading.readingDecision.reason !== 'sticky'}
         readingMenuRows={reading.readingMenuRows}
         onSelectReadingMode={reading.selectReadingMode}
         onResetReadingModeToAuto={reading.resetReadingModeToAuto}
+        preview={preview !== undefined}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
@@ -676,9 +760,9 @@ export default function ThreadScreen() {
         défileur, borné par le header au-dessus et le composeur en dessous
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
-      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded || preview !== undefined} />
       <main
-          id="contenu"
+          id={preview === undefined ? 'contenu' : undefined}
           ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
            l'ordre de tabulation naturel) : c'est ce qui permet à `PageUp` /
@@ -752,6 +836,7 @@ export default function ThreadScreen() {
             group={group}
             storyRingOf={storyRingOf}
             highlightedId={jump.highlightedId}
+            highlightedPieceId={jump.highlightedPieceId}
             expiredIds={expiredIds}
             destroyingIds={destroyingIds}
             jumpToMessage={jump.jumpToMessage}
@@ -767,6 +852,8 @@ export default function ThreadScreen() {
             selection={messageMenu.selection}
             onRowTap={messageMenu.onRowTap}
             longPress={messageMenu.longPress}
+            swipeActionsOf={messageMenu.swipeActionsOf}
+            onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
             onReact={messageMenu.onMenuReact}
             onOpenDetail={messageMenu.setDetailFor}
@@ -774,6 +861,7 @@ export default function ThreadScreen() {
             typistAvatarOf={typistAvatarOf}
             accent={accent}
             older={{ state: older.state, sentinelRef: older.sentinelRef }}
+            newer={newer}
             readTrackingSentinelRef={readTracking.sentinelRef}
             unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
             unreadCount={unreadBoundary?.unreadCount ?? 0}
@@ -783,13 +871,7 @@ export default function ThreadScreen() {
       </main>
       <OlderLoadIndicator state={older.state} onRetry={older.retry} />
 
-      <ScrollToBottomButton
-        visible={chrome.scrollButtonVisible}
-        unreadCount={chrome.scrollButtonUnreadCount}
-        senderName={chrome.scrollButtonSenderName}
-        previewText={chrome.scrollButtonPreviewText}
-        onClick={chrome.onScrollToBottom}
-      />
+      <ThreadReturnToBottom chrome={chrome} windowLoading={threadData.windowLoading} newerState={threadData.newerState} />
 
       <NoticePill text={announcer.text} />
 
@@ -826,10 +908,10 @@ export default function ThreadScreen() {
         <SelectionToolbar
           count={messageMenu.selection.ids.length}
           onEnd={messageMenu.onEndSelection}
-          onCopy={() => messageMenu.onCopySelection(placed)}
+          onCopy={messageMenu.selectionOffers.copy ? () => messageMenu.onCopySelection(placed) : null}
           /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
              transferts, jamais l'ordre des coches (#5866). */
-          onForward={() => messageMenu.onForwardSelection(placed)}
+          onForward={messageMenu.selectionOffers.forward ? () => messageMenu.onForwardSelection(placed) : null}
         />
       ) : (
         /*
@@ -850,12 +932,12 @@ export default function ThreadScreen() {
             flottant (« aucun flottant ne recouvre un texte au repos »), et
             `glass-prominent` est la densité que D-51 réserve à « ce qui se pose
             SUR un contenu qu'on lit » — l'en-tête, lui, porte `glass`.
-
             La classe, jamais une couleur : aucune densité écrite ici, aucune
             seconde source à côté de `styles/glass.css` (D-4). Et jamais un
             dégradé de masquage — le porteur a fait retirer ces voiles
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
+        <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
         <div
           className="thread-composer-chrome glass-prominent"
           onFocus={chrome.onComposerFocus}
@@ -863,13 +945,11 @@ export default function ThreadScreen() {
         >
           <Composer
             preferred={readerLanguages}
-            onSend={compose.onSend}
+            onSend={sendAndReplayFlame}
             onTextChange={typing.onTextChange}
             draft={compose.initialDraft}
             stickyProtection={compose.stickyProtection}
-            /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) —
-               `Composer` ne connaît que la citation PRÉ-ADRESSÉE
-               (`replyTo.author`/`excerpt`), jamais l'identifiant. */
+            /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) — `Composer` ne connaît que la citation PRÉ-ADRESSÉE. */
             onDraftChange={compose.reportComposerDraft}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
             {...(compose.replyTo
@@ -877,6 +957,7 @@ export default function ThreadScreen() {
               : {})}
           />
         </div>
+        </ThreadWriteLock>
       )}
       </div>
 
@@ -894,7 +975,6 @@ export default function ThreadScreen() {
           setDetailsOpen(false);
           jump.requestJump(messageId);
         }}
-        canJumpTo={(messageId) => messages.some((message) => message.id === messageId)}
       />
 
       <ThreadMessageSheets
@@ -910,6 +990,10 @@ export default function ThreadScreen() {
         announce={announcer.announce}
       />
     </div>
+    </AuthorMoodsContext.Provider>
+    </FocusedPeersContext.Provider>
+    </ActivePeersContext.Provider>
+    </HerePeersContext.Provider>
     </ThreadMediaContext.Provider>
   );
 }

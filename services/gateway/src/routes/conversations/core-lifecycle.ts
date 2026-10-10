@@ -40,7 +40,9 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 import {
   composeConversationUpdate,
@@ -248,9 +250,12 @@ export function registerCreateConversationRoute(
       const allUserIds = [userId, ...uniqueParticipantIds];
       const allUsers = await prisma.user.findMany({
         where: { id: { in: allUserIds } },
-        select: { id: true, displayName: true, username: true, avatar: true }
+        select: { id: true, displayName: true, username: true, avatar: true, ...RECIPIENT_LANG_SELECT }
       });
       const userMap = new Map(allUsers.map(u => [u.id, u]));
+      // #9711 — la langue de chaque fondateur, descendue de SON prisme ; une
+      // ligne sans `language` prenait le défaut `"en"` du schéma.
+      const languageByUserId = new Map(allUsers.map((u) => [u.id, recipientLanguage(u, 'fr')]));
       // #6080 — la table vient du site UNIQUE (`services/participantRights.ts`),
       // pour le créateur comme pour chaque membre initial. Le littéral écrit ici
       // fermait `canSendVideos`/`canSendAudios`, ce que la garde de pièce jointe
@@ -282,6 +287,7 @@ export function registerCreateConversationRoute(
                 type: 'user',
                 displayName: creatorUser?.displayName || creatorUser?.username || 'User',
                 role: 'creator',
+                language: languageByUserId.get(userId) ?? 'fr',
                 permissions: defaultPermissions
               },
               ...uniqueParticipantIds.map((participantId: string) => {
@@ -291,6 +297,7 @@ export function registerCreateConversationRoute(
                   type: 'user',
                   displayName: pUser?.displayName || pUser?.username || 'User',
                   role: 'member',
+                  language: languageByUserId.get(participantId) ?? 'fr',
                   permissions: defaultPermissions
                 };
               })
@@ -318,6 +325,10 @@ export function registerCreateConversationRoute(
       // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
       // évaluées par les deux événements, chacun ne mesurant que la sienne.
       void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId }).catch(() => undefined);
+      // Créer un groupe rapporte, une fois par ENSEMBLE de membres (#8906).
+      if (type === 'group') {
+        void new EngagementService(prisma).recordGroupCreation(userId, conversation.id, uniqueParticipantIds).catch(() => undefined);
+      }
       void new CerclesAchievements(prisma).recordEvent({
         kind: 'conversation.join',
         userId,

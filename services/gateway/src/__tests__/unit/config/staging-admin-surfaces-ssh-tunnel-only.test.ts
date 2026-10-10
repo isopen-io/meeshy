@@ -85,6 +85,21 @@ describe("les surfaces d'administration base de données du staging ne sont plus
     });
   });
 
+  describe("API ML (#9662) — 44 routes sans authentification, dont /api/v1/admin/* et /debug/*", () => {
+    it("translator-staging n'est routé par aucun routeur Traefik", () => {
+      const block = serviceBlock(source, 'translator-staging');
+      expect({
+        traefikActive: /traefik\.enable=true/.test(block),
+        routeur: /traefik\.http\.routers\./.test(block),
+        desactiveExplicitement: /"traefik\.enable=false"/.test(block),
+      }).toEqual({ traefikActive: false, routeur: false, desactiveExplicitement: true });
+    });
+
+    it("aucun service du fichier ne déclare l'hôte public ml.staging.", () => {
+      expect(/Host\(`ml\.staging\./.test(source)).toBe(false);
+    });
+  });
+
   describe('ports bruts Mongo/Redis (#6255)', () => {
     it.each(RAW_DB_SERVICES)('%s publie son port lié à 127.0.0.1 uniquement', (service) => {
       const block = serviceBlock(source, service);

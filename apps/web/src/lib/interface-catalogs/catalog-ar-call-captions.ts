@@ -13,7 +13,7 @@ const arCallCaptions = {
   'callCaptions.mode.translated': 'مترجمة إلى لغتك',
   'callCaptions.mode.original': 'باللغة الأصلية',
   'callCaptions.listening': 'يتم تحويل صوتك إلى نص',
-  'callCaptions.unsupported': 'هذا المتصفح لا يحوّل صوتك إلى نص: يمكنك قراءة الآخرين',
+  'callCaptions.unsupported': 'لا يُحوَّل صوتك إلى نص على هذا الجهاز: يمكنك قراءة الآخرين',
   'callCaptions.denied': 'تم رفض التعرف على الكلام: يمكنك قراءة الآخرين',
   'callCaptions.journal.title': 'سجل المكالمة',
   'callCaptions.participant': 'مشارك',

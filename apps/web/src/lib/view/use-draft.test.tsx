@@ -165,6 +165,42 @@ describe('useComposerDraft — politique de persistance (fin de mot / milieu de 
     expect(backend.data.has('meeshy.draft.u_a.c1')).toBe(true);
   });
 
+  /* #8790 — iOS vide la valeur en attente sur `willResignActive` ; la coque
+     Android tue sa WebView en arrière-plan et l'onglet se ferme sans démonter. */
+  test('la page masquée écrit immédiatement la valeur en attente', () => {
+    const { handle, backend } = mount({ conversationId: 'c1' });
+    act(() => {
+      handle().report(reportOf({ text: 'on se voit dem' }));
+    });
+    const visibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    try {
+      document.dispatchEvent(new Event('visibilitychange'));
+    } finally {
+      if (visibility === undefined) delete (document as { visibilityState?: unknown }).visibilityState;
+      else Object.defineProperty(document, 'visibilityState', visibility);
+    }
+    expect(JSON.parse(backend.data.get('meeshy.draft.u_a.c1') ?? 'null')?.text).toBe('on se voit dem');
+  });
+
+  test('la page redevenue visible n’écrit rien d’avance', () => {
+    const { handle, backend } = mount({ conversationId: 'c1' });
+    act(() => {
+      handle().report(reportOf({ text: 'bonjou' }));
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(backend.data.has('meeshy.draft.u_a.c1')).toBe(false);
+  });
+
+  test('la page fermée (pagehide) écrit immédiatement la valeur en attente', () => {
+    const { handle, backend } = mount({ conversationId: 'c1' });
+    act(() => {
+      handle().report(reportOf({ text: 'à dem' }));
+    });
+    window.dispatchEvent(new Event('pagehide'));
+    expect(JSON.parse(backend.data.get('meeshy.draft.u_a.c1') ?? 'null')?.text).toBe('à dem');
+  });
+
   test('texte ET langue ET protection voyagent ensemble dans la même écriture', () => {
     const { handle, backend } = mount({ conversationId: 'c1' });
     act(() => {

@@ -149,7 +149,6 @@ describe('AnonymousSessionDetailsSchema', () => {
     const result = AnonymousSessionDetailsSchema.parse(minimal)
     expect(result.sessionTokenHash).toBe('abc123')
     expect(result.connectedAt).toBeInstanceOf(Date)
-    expect(result.ipAddress).toBeUndefined()
     expect(result.country).toBeUndefined()
     expect(result.deviceFingerprint).toBeUndefined()
   })
@@ -157,15 +156,23 @@ describe('AnonymousSessionDetailsSchema', () => {
   it('should accept full session with all optional fields', () => {
     const full = {
       sessionTokenHash: 'hash123',
-      ipAddress: '10.0.0.1',
       country: 'FR',
       deviceFingerprint: 'fp-xyz',
       connectedAt: '2026-01-01T00:00:00.000Z',
     }
     const result = AnonymousSessionDetailsSchema.parse(full)
-    expect(result.ipAddress).toBe('10.0.0.1')
     expect(result.country).toBe('FR')
     expect(result.deviceFingerprint).toBe('fp-xyz')
+  })
+
+  it('never carries an IP address, even when a legacy row still has one (#9342)', () => {
+    const legacy = {
+      sessionTokenHash: 'hash123',
+      ipAddress: '203.0.113.7',
+      connectedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const result = AnonymousSessionDetailsSchema.parse(legacy)
+    expect(JSON.stringify(result)).not.toContain('203.0.113.7')
   })
 
   it('should reject missing sessionTokenHash', () => {

@@ -131,8 +131,8 @@ describe('RichText — les blocs', () => {
     );
     expect(html.startsWith('<div data-rich-text=""')).toBe(true);
     expect(html).toContain('data-md-heading="1"');
-    expect(html).toContain('<ul class="list-disc pl-6"><li>un <strong>gras</strong></li><li>deux</li></ul>');
-    expect(html).toContain('<ol start="1" class="list-decimal pl-6"><li>premier</li></ol>');
+    expect(html).toContain('<ul class="list-disc ps-6"><li>un <strong>gras</strong></li><li>deux</li></ul>');
+    expect(html).toContain('<ol start="1" class="list-decimal ps-6"><li>premier</li></ol>');
     expect(html).toContain('>cité</blockquote>');
     expect(html).toContain('<code>**brut**</code></pre>');
   });

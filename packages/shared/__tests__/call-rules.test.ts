@@ -22,6 +22,7 @@ import {
   CALL_HEARTBEAT_TIMEOUT_MS,
   CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS,
   CALL_PUSH_TTL_MS,
+  CALL_REJOIN_GRACE_MS,
   CALL_MAX_PARTICIPANTS,
   CALL_MESH_CEILING,
 } from '../types/call-rules.js';
@@ -52,6 +53,12 @@ describe('règles d’appel — relations entre les délais', () => {
 
   it('un pair en arrière-plan a plus de grâce qu’un pair au premier plan', () => {
     expect(CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS).toBeGreaterThan(CALL_HEARTBEAT_TIMEOUT_MS);
+  });
+
+  it('la grâce de reprise laisse le temps de revenir, sans dépasser le nettoyage par battements', () => {
+    expect(CALL_REJOIN_GRACE_MS).toBe(60_000);
+    expect(CALL_REJOIN_GRACE_MS).toBeGreaterThanOrEqual(3 * CALL_HEARTBEAT_INTERVAL_MS);
+    expect(CALL_REJOIN_GRACE_MS).toBeLessThan(CALL_HEARTBEAT_TIMEOUT_MS);
   });
 
   it('le plafond de participants tient dans le maillage — pas de 9999 sans SFU', () => {
@@ -86,6 +93,7 @@ describe('règles d’appel — le miroir Swift dit les mêmes valeurs', () => {
     ['heartbeatTimeout', seconds(CALL_HEARTBEAT_TIMEOUT_MS)],
     ['backgroundHeartbeatTimeout', seconds(CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS)],
     ['pushTimeToLive', seconds(CALL_PUSH_TTL_MS)],
+    ['rejoinGrace', seconds(CALL_REJOIN_GRACE_MS)],
     ['maxParticipants', CALL_MAX_PARTICIPANTS],
   ] as const)('CallRules.%s = %d', (name, expected) => {
     expect(swiftConstant(source, name)).toBe(expected);

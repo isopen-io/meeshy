@@ -26,8 +26,10 @@ enum GroupCallStage {
 
     /// La grille ne remplace l'écran 1:1 qu'à partir de DEUX membres distants :
     /// avec le seul pair principal, `CallView` est déjà la bonne disposition.
+    /// Un membre tenu par le maillage (le principal parti, #9085) n'a que la
+    /// grille pour être vu : l'écran 1:1 ne montre que le principal.
     static func isShown(isMeshActive: Bool, roster: GroupCallRoster) -> Bool {
-        isMeshActive && roster.members.count >= 2
+        isMeshActive && (roster.members.count >= 2 || roster.members.contains { !$0.isPrimary })
     }
 
     /// Moi d'abord, puis les membres dans l'ordre d'arrivée : la grille ne se
@@ -93,6 +95,9 @@ struct GroupCallStageView: View {
     @ObservedObject var mesh: GroupCallMeshCoordinator
     @ObservedObject var callManager: CallManager
     @Binding var isFullScreen: Bool
+    /// #8735 — chrome masqué, toucher une vignette le RALLUME (comme partout
+    /// sur la scène) ; chrome visible, elle se met à la une.
+    var isChromeVisible = true
     var onStageTap: () -> Void = {}
     var onSelfFeaturedChange: (Bool) -> Void = { _ in }
 
@@ -173,10 +178,17 @@ struct GroupCallStageView: View {
             .accessibilityHidden(true)
     }
 
+    private func tapTile(_ tile: GroupCallStageTile) {
+        switch GroupStageTapRule.outcome(isChromeVisible: isChromeVisible) {
+        case .revealChrome: onStageTap()
+        case .spotlight: choose(.tile(tile.id))
+        }
+    }
+
     private func selectableTile(_ tile: GroupCallStageTile) -> some View {
-        GroupCallTileView(tile: tile, track: track(for: tile), mirror: tile.isLocal && callManager.isUsingFrontCamera)
+        GroupCallTileView(tile: tile, track: track(for: tile), intendedFront: callManager.isUsingFrontCamera)
             .contentShape(Rectangle())
-            .onTapGesture { choose(.tile(tile.id)) }
+            .onTapGesture { tapTile(tile) }
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "call.group.spotlight.hint", defaultValue: "Touchez pour mettre à la une", bundle: .main))
             .accessibilityAction { choose(.tile(tile.id)) }
@@ -212,19 +224,25 @@ struct GroupCallStageView: View {
         GroupCallTileView(
             tile: tile,
             track: track(for: tile),
-            mirror: tile.isLocal && callManager.isUsingFrontCamera,
+            intendedFront: callManager.isUsingFrontCamera,
             contentMode: isScreenShare ? .scaleAspectFit : .scaleAspectFill,
             title: isScreenShare ? CallScreenShareCopy.screenOf(name: tile.displayName) : nil,
             zoom: isScreenShare ? GroupCallSpotlight.clampedZoom(zoom * pinch) : 1
         )
         .gesture(zoomGesture, including: isScreenShare ? .all : .subviews)
         .callCameraZoom(isEnabled: tile.isLocal && tile.showsVideo)
-        .onTapGesture(count: 2) {
-            guard isScreenShare else { return }
+        // #8735 — le double toucher n'existe que pour un écran partagé : posé
+        // partout, il faisait attendre CHAQUE toucher simple (rallumer les
+        // commandes) le délai d'un éventuel second toucher.
+        .gesture(zoomResetTap, including: isScreenShare ? .all : .subviews)
+        .onTapGesture { onStageTap() }
+        .overlay(alignment: .topTrailing) { spotlightControls.padding(MeeshySpacing.sm) }
+    }
+
+    private var zoomResetTap: some Gesture {
+        TapGesture(count: 2).onEnded {
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { zoom = 1 }
         }
-        .onTapGesture { onStageTap() }
-        .overlay(alignment: .topTrailing) { spotlightControls.padding(8) }
     }
 
     private var zoomGesture: some Gesture {
@@ -235,10 +253,10 @@ struct GroupCallStageView: View {
 
     /// Grille (revenir) et plein écran, dans UN verre.
     private var spotlightControls: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Button { choose(.grid) } label: {
                 Image(systemName: "square.grid.2x2")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -249,7 +267,7 @@ struct GroupCallStageView: View {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { isFullScreen.toggle() }
             } label: {
                 Image(systemName: isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -286,7 +304,8 @@ struct GroupCallStageView: View {
 struct GroupCallTileView: View {
     let tile: GroupCallStageTile
     let track: Any?
-    let mirror: Bool
+    /// Ma caméra voulue avant/arrière ; ignorée pour la vignette d'un autre.
+    let intendedFront: Bool
     var contentMode: UIView.ContentMode = .scaleAspectFill
     /// Remplace le nom sur la plaque (« Écran de X » à la une).
     var title: String? = nil
@@ -302,7 +321,7 @@ struct GroupCallTileView: View {
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(MeeshyColors.indigo950)
                 if tile.showsVideo, track != nil {
-                    CallVideoView(track: track, mirror: mirror, contentMode: contentMode)
+                    tileVideo
                         .scaleEffect(zoom)
                 } else {
                     CachedAvatarImage(
@@ -314,7 +333,7 @@ struct GroupCallTileView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 nameplate
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous))
             .overlay(
@@ -335,8 +354,17 @@ struct GroupCallTileView: View {
             : tile.displayName
     }
 
+    @ViewBuilder
+    private var tileVideo: some View {
+        if tile.isLocal {
+            LocalCameraVideoView(track: track, intendedFront: intendedFront, contentMode: contentMode)
+        } else {
+            CallVideoView(track: track, contentMode: contentMode)
+        }
+    }
+
     private var nameplate: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             if tile.isMicMuted {
                 Image(systemName: "mic.slash.fill")
                     .foregroundStyle(MeeshyColors.error)
@@ -353,8 +381,8 @@ struct GroupCallTileView: View {
         }
         .font(.caption.weight(.semibold))
         .foregroundColor(.white)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(.ultraThinMaterial, in: Capsule())
     }
 

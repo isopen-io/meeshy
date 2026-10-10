@@ -87,7 +87,8 @@ extension StoryViewModel {
             // Une valeur inconnue (row écrite par une version future) retombe
             // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
             // le format historique.
-            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story
+            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story,
+            alsoAsReel: item.alsoAsReelPayload ?? false
         )
 
         let ids: [String]
@@ -250,6 +251,9 @@ extension StoryViewModel {
         /// `.story` par défaut : toute surface qui n'offre pas d'éventail
         /// publie exactement ce qu'elle publiait.
         var targetType: PostType = .story
+        /// « Publier AUSSI en réel » (#9476) — le réel part avec la story, sur
+        /// ses propres médias copiés par le serveur. `false` = la story seule.
+        var alsoAsReel: Bool = false
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -309,7 +313,10 @@ extension StoryViewModel {
         composerMediaTexts: ComposerMediaTexts = .none,
         /// L'opt-in d'extraction de bande-son du post entier. `nil` = l'auteur
         /// n'a rien tranché.
-        allowSoundExtraction: Bool? = nil
+        allowSoundExtraction: Bool? = nil,
+        /// « Publier AUSSI en réel » (#9476) : la story part avec son réel, en un
+        /// geste. Ignoré hors d'une story — `runStoryUpload` ne l'envoie qu'avec elle.
+        alsoAsReel: Bool = false
     ) {
         let declaredMentions = ComposerReferences.payload(references)
         // **Ce que CHAQUE publication emporte** (#4068). En profil Story une
@@ -348,7 +355,8 @@ extension StoryViewModel {
                     declaredMentions: declaredMentions,
                     mentionsBySlide: mentionsBySlide,
                     composerMediaTexts: composerMediaTexts,
-                    allowSoundExtraction: allowSoundExtraction
+                    allowSoundExtraction: allowSoundExtraction,
+                    alsoAsReel: alsoAsReel
                 )
             }
             showStoryComposer = false
@@ -382,7 +390,8 @@ extension StoryViewModel {
             mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction,
-            targetType: targetType
+            targetType: targetType,
+            alsoAsReel: alsoAsReel
         )
         let uploadId = upload.id
         activeUploads.append(upload)
@@ -418,7 +427,8 @@ extension StoryViewModel {
                 repostOfId: repostOfId,
                 declaredMentions: declaredMentions,
                 composerMediaTexts: composerMediaTexts,
-                allowSoundExtraction: allowSoundExtraction
+                allowSoundExtraction: allowSoundExtraction,
+                alsoAsReel: alsoAsReel
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -531,7 +541,8 @@ extension StoryViewModel {
         /// Les mentions PAR SLIDE (#4068) — vide ⇒ repli sur `declaredMentions`.
         mentionsBySlide: [String: [PostMentionInput]] = [:],
         composerMediaTexts: ComposerMediaTexts = .none,
-        allowSoundExtraction: Bool? = nil
+        allowSoundExtraction: Bool? = nil,
+        alsoAsReel: Bool = false
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             targetType: targetType,
@@ -549,7 +560,8 @@ extension StoryViewModel {
             declaredMentions: declaredMentions,
             mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
-            allowSoundExtraction: allowSoundExtraction
+            allowSoundExtraction: allowSoundExtraction,
+            alsoAsReel: alsoAsReel
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -621,7 +633,9 @@ extension StoryViewModel {
         /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
         /// pas publierait une story muette pour les lecteurs d'écran.
         composerMediaTexts: ComposerMediaTexts = .none,
-        allowSoundExtraction: Bool? = nil
+        allowSoundExtraction: Bool? = nil,
+        /// « Aussi en réel » (#9476) — persisté : un rejeu sans lui publierait la story seule.
+        alsoAsReel: Bool = false
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -707,7 +721,8 @@ extension StoryViewModel {
             mediaAltPayload: composerMediaTexts.payload(.alt),
             mediaCaptionPayload: composerMediaTexts.payload(.caption),
             allowSoundExtractionPayload: allowSoundExtraction,
-            targetTypePayload: targetType.rawValue
+            targetTypePayload: targetType.rawValue,
+            alsoAsReelPayload: alsoAsReel ? true : nil
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)

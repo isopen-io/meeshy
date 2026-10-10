@@ -48,6 +48,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         //   in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
+            ProtectedContentSnapshotVeil.shared.install()
+            ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that
@@ -62,7 +64,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         UNUserNotificationCenter.current().delegate = self
-        registerNotificationCategories()
+        Self.registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
 
         // VoIP push registration MUST happen unconditionally, on every
@@ -341,62 +343,66 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     /// Register interactive actions so notifications on the banner / lock screen /
     /// notification center expose quick replies and mark-as-read buttons.
-    private func registerNotificationCategories() {
+    ///
+    /// Les titres se résolvent dans la langue que l'app publie à ses
+    /// extensions (#8951) : sous une notification déployée, un bouton de
+    /// l'extension et une action de l'app parlent la même langue.
+    static func registerNotificationCategories(bundle: Bundle = InterfaceLanguageResolver.bundle()) {
         let replyAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.reply.rawValue,
-            title: String(localized: "notifications.action.reply", defaultValue: "Répondre"),
+            title: String(localized: "notifications.action.reply", defaultValue: "Répondre", bundle: bundle),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer"),
-            textInputPlaceholder: String(localized: "notifications.action.message", defaultValue: "Message…")
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer", bundle: bundle),
+            textInputPlaceholder: String(localized: "notifications.action.message", defaultValue: "Message…", bundle: bundle)
         )
 
         let markReadAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.markRead.rawValue,
-            title: String(localized: "notifications.action.markRead", defaultValue: "Marquer comme lu"),
+            title: String(localized: "notifications.action.markRead", defaultValue: "Marquer comme lu", bundle: bundle),
             options: []
         )
 
         let commentAction = UNTextInputNotificationAction(
             identifier: MeeshyNotificationAction.comment.rawValue,
-            title: String(localized: "notifications.action.comment", defaultValue: "Commenter"),
+            title: String(localized: "notifications.action.comment", defaultValue: "Commenter", bundle: bundle),
             options: [],
-            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer"),
-            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Commenter…")
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Envoyer", bundle: bundle),
+            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Commenter…", bundle: bundle)
         )
 
         let viewAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.view.rawValue,
-            title: String(localized: "notifications.action.view", defaultValue: "Voir"),
+            title: String(localized: "notifications.action.view", defaultValue: "Voir", bundle: bundle),
             options: [.foreground]
         )
 
         let acceptAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.accept.rawValue,
-            title: String(localized: "notifications.action.accept", defaultValue: "Accepter"),
+            title: String(localized: "notifications.action.accept", defaultValue: "Accepter", bundle: bundle),
             options: []
         )
 
         let declineAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.decline.rawValue,
-            title: String(localized: "notifications.action.decline", defaultValue: "Refuser"),
+            title: String(localized: "notifications.action.decline", defaultValue: "Refuser", bundle: bundle),
             options: [.destructive]
         )
 
         let callbackAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.callback.rawValue,
-            title: String(localized: "notifications.action.callback", defaultValue: "Rappeler"),
+            title: String(localized: "notifications.action.callback", defaultValue: "Rappeler", bundle: bundle),
             options: [.foreground]
         )
 
         let answerCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.answerCall.rawValue,
-            title: String(localized: "notifications.action.answer", defaultValue: "Répondre"),
+            title: String(localized: "notifications.action.answer", defaultValue: "Répondre", bundle: bundle),
             options: [.foreground]
         )
 
         let declineCallAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.declineCall.rawValue,
-            title: String(localized: "notifications.action.declineCall", defaultValue: "Refuser"),
+            title: String(localized: "notifications.action.declineCall", defaultValue: "Refuser", bundle: bundle),
             options: [.destructive]
         )
 
@@ -466,7 +472,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories([
+        UNUserNotificationCenter.current().setNotificationCategories(Set([
             messageCategory,
             mentionCategory,
             friendRequestCategory,
@@ -475,7 +481,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             callIncomingCategory,
             callMissedCategory,
             legacyCallCategory
-        ])
+        ] + NotificationDetailCategories.categories(reply: replyAction, markRead: markReadAction, bundle: bundle)))
     }
 
     // MARK: - Crash Reporting Bootstrap
@@ -602,6 +608,14 @@ enum MeeshyNotificationCategory: String {
     /// Legacy single call category — superseded by the incoming/missed split,
     /// kept for pushes categorized by a stale NSE during rollout.
     case call = "MEESHY_CALL"
+    /// #8858 — les catégories du DÉTAIL d'un message, choisies par la NSE
+    /// (`NotificationDetailPolicy.refinedCategory`).
+    case location = "MEESHY_LOCATION"
+    case contact = "MEESHY_CONTACT"
+    case invite = "MEESHY_INVITE"
+    /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
+    /// fait écouter (`MeeshyNotificationContentExtension`).
+    case audio = "MEESHY_AUDIO"
 }
 
 enum MeeshyNotificationAction: String {
@@ -614,6 +628,9 @@ enum MeeshyNotificationAction: String {
     case callback = "MEESHY_ACTION_CALLBACK"
     case answerCall = "MEESHY_ACTION_ANSWER_CALL"
     case declineCall = "MEESHY_ACTION_DECLINE_CALL"
+    case openInMaps = "MEESHY_ACTION_OPEN_IN_MAPS"
+    case addContact = "MEESHY_ACTION_ADD_CONTACT"
+    case joinInvite = "MEESHY_ACTION_JOIN_INVITE"
 }
 
 // MARK: - UNUserNotificationCenterDelegate
@@ -680,14 +697,28 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         // relais, pas de bannière native. Socket down → bannière système
         // UNIQUEMENT si les préférences l'autorisent (master push, DND, toggle
         // par catégorie), son/badge gatés par « Sons »/« Badges ».
-        completionHandler(NotificationPresentationResolver.options(
+        let options = NotificationPresentationResolver.options(
             socketConnected: socketConnected,
             prefs: UserPreferencesManager.shared.notification,
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
             activeConversationId: MessageSocketManager.shared.activeConversationId
-        ))
+        )
+
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
+        // que la version d'après soit présentée — même règle que la NSE, pour
+        // le cas où elle n'a pas tourné (expirée, push non mutable).
+        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
+            completionHandler(options)
+            return
+        }
+        Task { @MainActor in
+            await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+                matching: { replacement.covers($0) }
+            )
+            completionHandler(options)
+        }
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).

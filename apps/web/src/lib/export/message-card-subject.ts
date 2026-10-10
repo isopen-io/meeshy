@@ -1,55 +1,187 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
-import { served } from '@/lib/api/prism';
-import type { Message } from '@/lib/api/types';
+import { electServedAudio, served } from '@/lib/api/prism';
+import type { Attachment, Message } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { protectionOf } from '@/lib/reading-mode/protection';
+import { messageExitOffers, pieceIsOpen } from '@/lib/view/content-exit';
+import { kindOf, waveformOf } from '@/lib/view/message';
 import { quotedPreviewOf } from '@/lib/view/quoted-preview';
 
 import type { MessageCardPart } from './message-card-layout';
+import type { CardMedia } from './message-card-media';
 
 /**
  * **CE QU'UNE CARTE D'EXPORT A LE DROIT DE MONTRER** — la loi qui décide si
- * un message s'exporte, et avec quels mots.
+ * un message s'image, et avec quels mots et quels médias.
  *
- * GARDE : un message protégé (flouté, à vue unique, éphémère échu, supprimé)
- * ne s'exporte pas — c'est `protectionOf`, la loi qui retire déjà « Copier ».
- * Une image est une copie qu'on partage : ce qui ne se copie pas ne se peint
- * pas. La CITATION suit `quotedPreviewOf`, le site unique des citations : une
- * citation protégée montre son placeholder, jamais son contenu.
+ * GARDE : la loi de sortie (`lib/view/content-exit.ts`, #9573). Une image est
+ * une copie qu'on partage : un message flouté, à vue unique, supprimé, échu,
+ * ou QUI DISPARAÎT (flamme à durée ou après lecture) ne s'image pas — jugé
+ * sur le message ENTIER, la pièce à vue unique d'un message ordinaire ferme
+ * la carte. Une pièce floutée ou chiffrée n'est jamais peinte.
+ *
+ * UNE RÉPONSE QUI CITE UN CONTENU PROTÉGÉ NE S'IMAGE PAS (décision porteur
+ * du 2026-10-08, `messageExitOffers`) : qu'elle cite une flamme, une vue
+ * unique, un flou, un chiffré ou une citation dont la nature n'est pas
+ * déclarée dans la charge reçue (`quotedExitOf`), la carte se refuse
+ * entière — la réponse peinte sans ce qu'elle cite n'est plus l'échange.
  *
  * LES MOTS SONT CEUX QUE LE LECTEUR VOIT : le texte SERVI (le Prisme, avec la
  * langue que le lecteur a peut-être imposée par « Traduire »), jamais
  * l'original en douce — sauf quand l'exportateur CHOISIT une langue d'export
  * (`language`) : la réponse part alors dans cette langue, et la citation la
  * suit si elle l'a, sinon elle garde le prisme du lecteur.
+ *
+ * LES MÉDIAS (#8693) : les images, les vidéos (leur première image) et les
+ * audios (leur représentation) ; un document n'a rien à montrer sur une carte.
+ * Un message fait d'un seul média s'image, même sans texte. Une pièce CHIFFRÉE
+ * ne se peint pas : son fichier n'est pas lisible hors de la bulle. Le message
+ * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901) — quand la
+ * citation a le droit de sortir. Chaque
+ * média porte son AUTEUR (#9236) — le message d'où il vient — pour que la
+ * carte puisse signer les visuels comme elle signe les messages.
  */
 
 type AuthorFields = Pick<Message, 'senderId'> & {
   readonly sender?: { readonly displayName?: string | null; readonly username?: string | null } | null;
 };
 
+type Viewer = { readonly id: string; readonly displayName: string; readonly handle?: string | null };
+
 const nonBlank = (value: string | null | undefined): string | null => (value !== undefined && value !== null && value.trim() !== '' ? value.trim() : null);
 
-export function cardAuthorOf(message: AuthorFields, viewer: { readonly id: string; readonly displayName: string }): string {
-  if (message.senderId !== undefined && message.senderId !== null && message.senderId === viewer.id) {
+const isViewer = (message: AuthorFields, viewer: Viewer): boolean => message.senderId !== undefined && message.senderId !== null && message.senderId === viewer.id;
+
+export function cardAuthorOf(message: AuthorFields, viewer: Viewer): string {
+  if (isViewer(message, viewer)) {
     return nonBlank(viewer.displayName) ?? nonBlank(message.sender?.displayName) ?? nonBlank(message.sender?.username) ?? 'Meeshy';
   }
   return nonBlank(message.sender?.displayName) ?? nonBlank(message.sender?.username) ?? 'Meeshy';
 }
 
+/** Le pseudo public d'un auteur, sans « @ » — `null` quand on ne le connaît pas. */
+export function cardHandleOf(message: AuthorFields, viewer: Viewer): string | null {
+  const handle = isViewer(message, viewer) ? (nonBlank(viewer.handle) ?? nonBlank(message.sender?.username)) : nonBlank(message.sender?.username);
+  return handle === null ? null : handle.replace(/^@+/, '');
+}
+
+export type MessageCardSubjectPart = MessageCardPart & { readonly handle: string | null };
+
+/**
+ * L'AUTEUR D'UN MÉDIA (#9236) — son nom, son pseudo, et le bloc d'où vient la
+ * pièce : un média `quoted` suit l'anonymat de la citation (et des suites, les
+ * « autres »), les autres celui de la réponse. Il se peint comme les autres noms.
+ */
+export type CardMediaAuthor = { readonly name: string; readonly handle: string | null; readonly quoted: boolean };
+
+/** Un média de la carte : sa forme pour la mise en page, de quoi aller chercher ses pixels, et qui l'a posté. */
+export type MessageCardMediaItem = {
+  readonly id: string;
+  readonly card: CardMedia;
+  readonly url: string;
+  readonly mimeType: string;
+  /** L'image d'attente d'une vidéo, servie par la passerelle — la première image quand elle existe. */
+  readonly posterUrl: string | null;
+  /** Qui l'a posté — absent : inconnu, la carte ne le signe pas. */
+  readonly author?: CardMediaAuthor | null;
+};
+
+/** Les mêmes médias, attribués à `author`. */
+export const authoredBy = (items: readonly MessageCardMediaItem[], author: CardMediaAuthor): readonly MessageCardMediaItem[] => items.map((item) => ({ ...item, author }));
+
+/** L'auteur des médias d'un bloc de la carte — son nom et son pseudo tels que la carte les connaît. */
+export const mediaAuthorOf = (part: MessageCardSubjectPart, quoted: boolean): CardMediaAuthor => ({ name: part.author, handle: part.handle, quoted });
+
 export type MessageCardSubject = {
-  readonly quoted: MessageCardPart | null;
-  readonly reply: MessageCardPart;
+  readonly quoted: MessageCardSubjectPart | null;
+  readonly reply: MessageCardSubjectPart;
   /** L'heure d'envoi de la réponse — la date qu'une carte peut afficher. */
   readonly sentAt: Date;
+  /** L'heure du message cité, quand on la connaît. */
+  readonly quotedAt: Date | null;
+  readonly media: readonly MessageCardMediaItem[];
+  /** Ce qui suit la réponse sur la carte — les réponses d'un commentaire (#8734). */
+  readonly followUps?: readonly MessageCardSubjectPart[];
 };
+
+/** Ce qu'il faut d'une pièce — celle d'un message (`Attachment`) comme celle d'un commentaire (`FeedMedia`). */
+export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
+  readonly mimeType?: string | null;
+  readonly thumbnailUrl?: string | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+  readonly duration?: number | null;
+  readonly originalName?: string | null;
+  readonly isViewOnce?: boolean;
+  readonly isBlurred?: boolean;
+  readonly isEncrypted?: boolean;
+  readonly effectFlags?: number | null;
+};
+
+/** Des effets qui MASQUENT un contenu — vue unique, flou. Lu par les cartes de commentaire, qui n'ont pas de nature de disparition. */
+export const maskedByEffects = (effectFlags: number | null | undefined): boolean =>
+  ((effectFlags ?? 0) & (MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED)) !== 0;
+
+/** Les médias peignables d'un message, dans leur ordre. */
+export function cardMediaOf(attachments: readonly CardMediaFields[] | null | undefined): readonly MessageCardMediaItem[] {
+  return (attachments ?? []).flatMap((piece): MessageCardMediaItem[] => {
+    if (!pieceIsOpen(piece)) return [];
+    const mimeType = piece.mimeType ?? '';
+    const kind = kindOf({ mimeType });
+    const base = { id: piece.id, url: piece.fileUrl, mimeType, posterUrl: nonBlank(piece.thumbnailUrl) };
+    if (kind === 'image' || kind === 'video') return [{ ...base, card: { kind, width: piece.width ?? 0, height: piece.height ?? 0 } }];
+    if (kind === 'audio') {
+      const peaks = waveformOf(piece, 40);
+      return [{ ...base, card: { kind: 'audio', durationMs: piece.duration ?? 0, name: nonBlank(piece.originalName) ?? 'audio', peaks } }];
+    }
+    return [];
+  });
+}
+
+/** Ce qu'il faut d'une pièce pour élire la piste d'un VOCAL — sa transcription et ses pistes traduites. */
+export type CardAudioFields = {
+  readonly transcription?: Attachment['transcription'] | null;
+  readonly translations?: Attachment['translations'] | null;
+  readonly alt?: string | null;
+  readonly originalName?: string | null;
+};
+
+/** Le prisme qui élit la piste d'un vocal — `null` : la piste originale. */
+export type CardAudioPrism = { readonly readerLanguages: readonly string[]; readonly fallbackLanguage: string } | null;
+
+/**
+ * LES MÉDIAS PEIGNABLES, UN VOCAL DANS LA PISTE DE SON TEXTE SERVI (#9687,
+ * parité iOS `MessageCardSubject.paintableMedia(audioLanguages:)`) —
+ * `electServedAudio` (`api/prism.ts`) élit la transcription PUIS reçoit sa langue pour élire la
+ * piste : une seule descente (CLAUDE.md § Prisme, cycle 128). Fichier et durée
+ * de la piste servie voyagent ensemble ; sans piste dans la langue servie,
+ * l'original.
+ */
+export function servedCardMediaOf(pieces: readonly (CardMediaFields & CardAudioFields)[] | null | undefined, prism: CardAudioPrism): readonly MessageCardMediaItem[] {
+  return cardMediaOf(pieces).map((item) => {
+    const piece = pieces?.find((candidate) => candidate.id === item.id);
+    if (prism === null || piece === undefined || item.card.kind !== 'audio') return item;
+    const { track } = electServedAudio({
+      preferredLanguages: prism.readerLanguages,
+      attachment: {
+        fileUrl: piece.fileUrl,
+        originalName: piece.originalName ?? '',
+        ...(piece.transcription == null ? {} : { transcription: piece.transcription }),
+        ...(piece.translations == null ? {} : { translations: piece.translations }),
+        ...(piece.alt == null ? {} : { alt: piece.alt }),
+      },
+      fallbackLanguage: prism.fallbackLanguage,
+    });
+    return track.translated ? { ...item, url: track.url, card: { ...item.card, durationMs: track.durationMs ?? item.card.durationMs } } : item;
+  });
+}
 
 export function messageCardSubjectOf(params: {
   readonly message: Message;
   /** Le texte SERVI du message (`servedOf` du menu). */
   readonly servedText: string | undefined;
-  readonly viewer: { readonly id: string; readonly displayName: string };
+  readonly viewer: Viewer;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
   readonly now: number;
@@ -57,7 +189,7 @@ export function messageCardSubjectOf(params: {
   readonly language?: string | null;
 }): MessageCardSubject | null {
   const { message, servedText, viewer } = params;
-  if (protectionOf(message, params.now) !== 'standard') return null;
+  if (!messageExitOffers(message, 'image', params.now)) return null;
   const language = params.language ?? null;
   const chosen =
     language === null
@@ -65,15 +197,32 @@ export function messageCardSubjectOf(params: {
       : served({ preferredLanguages: [language], originalLanguage: message.originalLanguage, translations: message.translations, original: message.content }).text;
   const text = chosen.trim();
   const readerLanguages = language === null ? params.readerLanguages : [language, ...params.readerLanguages];
-  if (text === '') return null;
+  const media = servedCardMediaOf(message.attachments, { readerLanguages, fallbackLanguage: message.originalLanguage ?? '' });
+  if (text === '' && media.length === 0) return null;
 
   const replyTo = message.replyTo;
-  let quoted: MessageCardPart | null = null;
+  const replyPart: MessageCardSubjectPart = { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) };
+  let quoted: MessageCardSubjectPart | null = null;
+  let quotedAt: Date | null = null;
+  let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
-    if (preview.text.trim() !== '') quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text };
+    const quotedLeaves = !preview.isProtected;
+    if (quotedLeaves && preview.text.trim() !== '') {
+      quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
+      quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
+    }
+    const quotedAuthor: CardMediaAuthor = { name: cardAuthorOf(replyTo, viewer), handle: cardHandleOf(replyTo, viewer), quoted: true };
+    quotedMedia = quotedLeaves ? authoredBy(servedCardMediaOf(replyTo.attachments, { readerLanguages, fallbackLanguage: replyTo.originalLanguage ?? '' }), quotedAuthor) : [];
   }
-  return { quoted, reply: { author: cardAuthorOf(message, viewer), text }, sentAt: new Date(message.createdAt) };
+  const ownIds = new Set(media.map((item) => item.id));
+  return {
+    quoted,
+    reply: replyPart,
+    sentAt: new Date(message.createdAt),
+    quotedAt,
+    media: [...authoredBy(media, mediaAuthorOf(replyPart, false)), ...quotedMedia.filter((item) => !ownIds.has(item.id))],
+  };
 }
 
 /** Les langues dans lesquelles la réponse EXISTE : son original d'abord, puis chaque traduction servie. */
@@ -83,8 +232,8 @@ export function messageCardLanguagesOf(message: Pick<Message, 'originalLanguage'
   return [...new Set([original, ...Object.keys(buildTranslationRecord(message.translations))])];
 }
 
-/** Le nom du fichier : lisible dans une galerie, sans rien du contenu. */
-export function messageCardFileName(now: Date): string {
+/** Le nom du fichier : lisible dans une galerie, sans rien du contenu — son extension dit sa nature. */
+export function messageCardFileName(now: Date, extension: 'png' | 'gif' | 'mp4' | 'webm' = 'png'): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  return `meeshy-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.png`;
+  return `meeshy-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.${extension}`;
 }

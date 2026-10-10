@@ -54,9 +54,12 @@ public final class StoryInlineTextEditor: UITextView {
     public func apply(textObject: StoryTextObject,
                       geometry: CanvasGeometry,
                       setText: Bool) {
-        let designFontSize = CGFloat(textObject.fontSize * textObject.scale)
+        // Taille de l'ÉDITION, comme le calque (#9139) : le champ montre la
+        // coupe que le pincement agrandira sans la recouper.
+        let designFontSize = CGFloat(textObject.fontSize)
+        let renderedFontSize = StoryTextLayer.renderedFontSize(of: textObject, in: geometry)
         let resolved = StoryTextFontResolver.resolveFont(forTextObject: textObject,
-                                                         size: geometry.render(designFontSize))
+                                                         size: renderedFontSize)
         let color = Self.color(hex: textObject.textColor) ?? .white
         let align = Self.alignment(from: textObject.textAlign)
 
@@ -88,7 +91,7 @@ public final class StoryInlineTextEditor: UITextView {
         // lui aussi — `NSShadow`, que TextKit rend en temps réel comme le
         // contour. Même site de conversion que le canvas et le composite.
         if let shadow = StoryTextEffectRendering.nsShadow(
-            for: textObject, fontSize: geometry.render(designFontSize), textColor: color) {
+            for: textObject, fontSize: renderedFontSize, textColor: color) {
             attrs[.shadow] = shadow
         }
         typingAttributes = attrs

@@ -43,6 +43,19 @@ nonisolated enum OverlayPreviewMediaLayout {
         return CGFloat(width) / CGFloat(height)
     }
 
+    /// La grille montre quatre pièces au plus (#9950) : celles qu'elle tait se
+    /// disent « +N » sur sa DERNIÈRE case, comme la grille de la bulle.
+    static let visibleLimit = 4
+
+    static func hiddenCount(total: Int) -> Int {
+        max(0, total - visibleLimit)
+    }
+
+    /// L'index de la case qui porte « +N », `nil` quand rien n'est tu.
+    static func overflowCell(total: Int) -> Int? {
+        hiddenCount(total: total) > 0 ? visibleLimit - 1 : nil
+    }
+
     /// La taille de chaque cellule, rangée par rangée, dans l'ordre reçu.
     static func rows(ratios: [CGFloat], width: CGFloat, spacing: CGFloat, maxHeight: CGFloat) -> [[CGSize]] {
         let groups = grouping(ratios)
@@ -77,7 +90,9 @@ struct OverlayPreviewMediaGrid: View {
     private static let spacing: CGFloat = 3
 
     var body: some View {
-        let items = Array(attachments.prefix(4))
+        let items = Array(attachments.prefix(OverlayPreviewMediaLayout.visibleLimit))
+        let overflowCell = OverlayPreviewMediaLayout.overflowCell(total: attachments.count)
+        let hidden = OverlayPreviewMediaLayout.hiddenCount(total: attachments.count)
         let rows = OverlayPreviewMediaLayout.rows(
             ratios: items.map(OverlayPreviewMediaLayout.aspectRatio(of:)),
             width: width, spacing: Self.spacing, maxHeight: maxHeight
@@ -86,13 +101,24 @@ struct OverlayPreviewMediaGrid: View {
             ForEach(rows.indices, id: \.self) { rowIndex in
                 HStack(spacing: Self.spacing) {
                     ForEach(rows[rowIndex].indices, id: \.self) { cellIndex in
-                        cell(items[Self.flatIndex(rows: rows, row: rowIndex, cell: cellIndex)],
-                             size: rows[rowIndex][cellIndex])
+                        let index = Self.flatIndex(rows: rows, row: rowIndex, cell: cellIndex)
+                        cell(items[index], size: rows[rowIndex][cellIndex])
+                            .overlay {
+                                if index == overflowCell {
+                                    ZStack {
+                                        MeeshyColors.mediaScrim
+                                        Text(verbatim: "+\(hidden)")
+                                            .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                                            .foregroundColor(.white)
+                                    }
+                                    .accessibilityHidden(true)
+                                }
+                            }
                     }
                 }
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     private static func flatIndex(rows: [[CGSize]], row: Int, cell: Int) -> Int {
@@ -120,12 +146,13 @@ struct OverlayPreviewMediaGrid: View {
 }
 
 /// Une pièce masquée : aucun pixel du média, le seul pictogramme du flou.
-private struct MaskedMediaTile: View {
+/// Partagée avec l'aperçu d'UNE pièce (`MessagePieceOverlay`, #9907).
+struct MaskedMediaTile: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.85)
             Image(systemName: MessageProtectionSymbols.blurredFilled)
-                .font(MeeshyFont.relative(18, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                 .foregroundStyle(.white.opacity(0.9))
         }
         .accessibilityHidden(true)
@@ -160,7 +187,7 @@ struct OverlayProtectedPreview: View {
     }
 
     private var blurred: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
             if !visual.isEmpty {
                 OverlayPreviewMediaGrid(attachments: visual, masked: true)
             }
@@ -177,13 +204,13 @@ struct OverlayProtectedPreview: View {
     /// ligne de substitution de même longueur, floutée, que VoiceOver ignore.
     private var blurredBubble: some View {
         Text(verbatim: String(repeating: "▆ ", count: max(3, min(24, message.content.count / 3))))
-            .font(MeeshyFont.relative(15))
+            .font(MeeshyFont.relative(MeeshyFont.bodySize))
             .foregroundColor(message.isMe ? .white : (isDark ? .white : .black))
             .blur(radius: 6)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(BubbleBackground(isMe: message.isMe, accentHex: accentHex, isDark: isDark))
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
             .overlay {
                 Image(systemName: MessageProtectionSymbols.blurredFilled)
                     .font(MeeshyFont.relative(15, weight: .semibold))

@@ -14,6 +14,7 @@ import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requ
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
+import { belowScreenTop } from '@/lib/view/safe-area';
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
@@ -72,10 +73,10 @@ import { Link, href, navigate } from '@/routes/route-table';
  * décorative : c'est le BOUTON qui annonce le compte, dans son nom.
  */
 
-/** Le dégradé du disque — les deux couples de teintes d'iOS, à l'hexadécimal près. */
-const FEED_GRADIENT = 'linear-gradient(135deg, #F87171, #A5B4FC)';
-const MENU_GRADIENT = 'linear-gradient(135deg, #4F46E5, #A5B4FC)';
-const MENU_GRADIENT_OPEN = 'linear-gradient(135deg, #F87171, #A5B4FC)';
+/** Le dégradé du disque — les deux couples de teintes d'iOS. */
+const FEED_GRADIENT = 'linear-gradient(135deg, var(--ios-error), var(--color-i300))';
+const MENU_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-600), var(--color-i300))';
+const MENU_GRADIENT_OPEN = 'linear-gradient(135deg, var(--ios-error), var(--color-i300))';
 
 /** Le nom du bouton FERMÉ — il dit le compte quand il y en a un, une fois. */
 function closedMenuLabel(language: InterfaceLanguage, unread: number): string {
@@ -218,11 +219,13 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
       className="floating-menus pointer-events-none fixed inset-0 z-30"
       /* LES COULOIRS SONT POSÉS DEPUIS LA LOI (`lib/view/floating-corridor.ts`),
          que le chrome du Flux lit aussi — la feuille ne garde que le couloir
-         bas, qu'aucun écran ne partage. */
+         bas, qu'aucun écran ne partage. Le couloir haut part de `--safe-top`, pas
+         de `env()` : quand le bandeau du haut réserve sa place (#9536), l'en-tête
+         descend, et des disques restés à l'encoche recouvraient ses contrôles. */
       style={
         {
           '--float-side': `${FLOATING_SIDE}px`,
-          '--float-top': `calc(env(safe-area-inset-top, 0px) + ${FLOATING_TOP}px)`,
+          '--float-top': belowScreenTop(FLOATING_TOP),
         } as React.CSSProperties
       }
     >
@@ -292,7 +295,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
         onClick={(event) => {
           if (flux.consumeClick()) event.preventDefault();
         }}
-        className="floating-disc glass-prominent glass-card pointer-events-auto absolute grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="floating-disc glass-prominent glass-card pointer-events-auto absolute grid touch-none place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           left: floatingLeft(flux.position),
           top: floatingTop(flux.position),
@@ -344,7 +347,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
                 }}
                 onClick={() => setOpen(false)}
                 aria-label={rungLabel(langue, destination, counts)}
-                className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="floating-rung pointer-events-auto absolute grid place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={
                   {
                     '--rung': index,
@@ -352,7 +355,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
                     top: `calc(50% + ${ladderRungOffset(index, expandsDown, pitch)}px)`,
                     width: LADDER_RUNG,
                     height: LADDER_RUNG,
-                    backgroundImage: `linear-gradient(135deg, ${destination.tint}, color-mix(in srgb, ${destination.tint} 70%, #000))`,
+                    backgroundImage: `linear-gradient(135deg, ${destination.tint}, color-mix(in srgb, ${destination.tint} 70%, var(--color-media-backdrop)))`,
                     boxShadow: `0 4px 12px color-mix(in srgb, ${destination.tint} 45%, transparent)`,
                     outlineColor: destination.tint,
                   } as React.CSSProperties
@@ -380,7 +383,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
           aria-haspopup="menu"
           aria-expanded={open}
           aria-label={open ? translate(langue, PROFILE_DESTINATION.labelKey) : closedMenuLabel(langue, unread)}
-          className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="floating-disc glass-prominent glass-card pointer-events-auto absolute inset-0 grid touch-none place-items-center rounded-full text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{
             backgroundImage: open ? MENU_GRADIENT_OPEN : MENU_GRADIENT,
             outlineColor: 'var(--color-ios-brand)',

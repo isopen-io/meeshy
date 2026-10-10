@@ -19,7 +19,7 @@ struct MessageDetailTimelineBanner: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
@@ -40,24 +40,24 @@ struct MessageDetailTimelineBanner: View {
                 Text(count)
                     .font(.system(.caption, design: .monospaced).weight(.bold))
                     .foregroundColor(accent)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
-                            .fill(accent.opacity(0.12))
+                            .fill(accent.opacity(MeeshyOpacity.light))
                     )
                     // Numeric badge duplicates the count already spelled out in
                     // `detail` ("3 versions précédentes") — hidden from VoiceOver.
                     .accessibilityHidden(true)
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(accent.opacity(colorScheme == .dark ? 0.06 : 0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(accent.opacity(0.12), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
                 )
         )
         // Header banner reads as one stop: title + detail sentence.
@@ -72,11 +72,11 @@ struct MessageDetailEmptyState: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             // Decorative empty-state glyph — kept at a fixed 28pt (illustration,
             // not text) and hidden from VoiceOver via the `.combine` parent.
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)
@@ -84,7 +84,7 @@ struct MessageDetailEmptyState: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .accessibilityElement(children: .combine)
     }
 }

@@ -4,6 +4,7 @@
  * (souverain, #4157). Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
@@ -11,6 +12,7 @@ import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { withAudit } from '../../middleware/authorize';
+import { requireReasonUnlessSovereign } from '../../middleware/sovereign-reason';
 import {
   requireAgentAdmin,
   requireAgentSovereign,
@@ -84,6 +86,10 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
         redisKeysDeleted++;
       }
       const invalidationStatus = await broadcastInvalidation({ conversationId });
+      await auditAgentGesture(request, {
+        action: 'AGENT_CONVERSATION_RESET', entity: 'Conversation', entityId: conversationId,
+        changes: { configs: config.count, roles: roles.count, summaries: summary.count, analytics: analytic.count },
+      });
 
       return sendSuccess(reply, {
         conversationId,
@@ -154,6 +160,7 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
       // anywhere sees the change instead of resurrecting the deleted
       // profile from a stale cached config.
       const invalidationStatus = await broadcastInvalidation({ global: true });
+      await auditAgentGesture(request, { action: 'AGENT_USER_RESET', entity: 'User', entityId: userId, changes: { roles: roles.count, globalProfiles: globalProfile.count } });
 
       return sendSuccess(reply, {
         userId,
@@ -176,26 +183,28 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
   // l'agent, voir la note à côté de `requireAgentSovereign`.
   fastify.delete('/reset', {
     onRequest: [fastify.authenticate, requireAgentSovereign],
+    // Rang souverain seul : motif facultatif, validé s'il est écrit (spec
+    // 2026-10-04 § 4).
+    preHandler: [requireReasonUnlessSovereign({ source: 'body', min: 10 })],
     schema: {
-      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache. Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
+      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache. Rang souverain (BIGBOSS) ; motif écrit facultatif pour lui, validé s\'il est fourni (spec 2026-10-04 § 4) — #4157.',
       tags: ['admin-agent'],
       summary: 'Reset all agent data',
       security: securityBearerAuth,
       body: {
         type: 'object',
-        required: ['reason'],
         properties: {
-          reason: { type: 'string', minLength: 10, description: 'Motif écrit du reset complet (10 caractères minimum), consigné dans AdminAuditLog' }
+          reason: { type: 'string', description: 'Motif écrit du reset complet (10 caractères minimum s\'il est fourni), consigné dans AdminAuditLog' }
         }
       },
       response: { 200: resetResultResponse, 400: errorResponseSchema, ...stdErrors },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Le schéma ci-dessus REFUSE déjà (400, avant ce handler) un corps sans
-      // `reason` d'au moins 10 caractères — Fastify/AJV valide `body` avant
-      // d'invoquer le handler, ce n'est pas une revérification défensive.
-      const { reason } = request.body as { reason: string };
+      // `requireReasonUnlessSovereign` a déjà refusé (400, avant ce handler)
+      // un motif fourni de moins de 10 caractères ; absent, il est permis au
+      // seul rang qui atteint cette route.
+      const { reason } = (request.body ?? {}) as { reason?: string };
 
       const [configs, roles, summaries, analytics, globalProfiles] = await fastify.prisma.$transaction([
         fastify.prisma.agentConfig.deleteMany(),

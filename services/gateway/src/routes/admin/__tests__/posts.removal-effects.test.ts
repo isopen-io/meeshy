@@ -52,13 +52,13 @@ const mockPrisma = {
   sound: { update: soundUpdate },
 } as any;
 
-async function buildApp(actorId: string = ADMIN_ID): Promise<FastifyInstance> {
+async function buildApp(actorId: string = ADMIN_ID, role = 'ADMIN'): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', mockPrisma);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = {
       isAuthenticated: true,
-      registeredUser: { id: actorId, role: 'ADMIN' },
+      registeredUser: { id: actorId, role },
     };
   });
   app.register(adminPostRoutes);
@@ -134,23 +134,52 @@ describe('DELETE /admin/posts/:postId — effets durables du retrait', () => {
     await app.close();
   });
 
-  it("n'invente pas de raison quand la console n'en fournit aucune", async () => {
+  // Spec 2026-10-04 § 4 : le motif est obligatoire (3 caractères) pour tout
+  // rang non souverain ; le rang souverain retire sans motif.
+  it("refuse un retrait sans motif d'un ADMIN — 400, rien n'est retiré", async () => {
     const app = await buildApp();
 
-    await deleteInject(app);
+    const res = await deleteInject(app);
 
+    expect(res.statusCode).toBe(400);
+    expect(postUpdate).not.toHaveBeenCalled();
+    expect(auditCreate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("refuse un motif fourni de moins de 3 caractères, même au rang souverain", async () => {
+    const app = await buildApp(ADMIN_ID, 'BIGBOSS');
+
+    const res = await deleteInject(app, 'ok');
+
+    expect(res.statusCode).toBe(400);
+    expect(postUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("n'invente pas de raison quand le rang souverain n'en fournit aucune", async () => {
+    const app = await buildApp(ADMIN_ID, 'BIGBOSS');
+
+    const res = await deleteInject(app);
+
+    expect(res.statusCode).toBe(200);
     const { data } = auditCreate.mock.calls[0][0] as any;
     expect(JSON.parse(data.metadata).reason).toBeUndefined();
     await app.close();
   });
 
-  it("n'ouvre aucune ligne d'audit quand l'admin retire son propre post", async () => {
+  // Un retrait décidé DEPUIS LA CONSOLE est un geste d'administration, même
+  // quand l'administrateur est l'auteur : il laisse sa ligne (spec § 4,
+  // « chaque geste d'administration qui écrit laisse une ligne au journal »).
+  it("trace aussi le retrait de son propre post depuis la console", async () => {
     const app = await buildApp(AUTHOR_ID);
 
     const res = await deleteInject(app, 'Erreur de publication');
 
     expect(res.statusCode).toBe(200);
-    expect(auditCreate).not.toHaveBeenCalled();
+    expect(auditCreate).toHaveBeenCalledTimes(1);
+    const { data } = auditCreate.mock.calls[0][0] as any;
+    expect(data).toMatchObject({ userId: AUTHOR_ID, adminId: AUTHOR_ID, action: 'DELETE_POST', entityId: POST_ID });
     expect(trackingLinkUpdateMany).toHaveBeenCalled();
     await app.close();
   });

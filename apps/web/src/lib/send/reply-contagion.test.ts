@@ -87,11 +87,13 @@ describe('localMessageOf — la bulle optimiste porte les bits contaminés (#855
     expect(local.isBlurred).toBe(true);
     expect((local.effectFlags ?? 0) & (BLURRED | EPHEMERAL | EPHEMERAL_AFTER_READ)).toBe(BLURRED | EPHEMERAL | EPHEMERAL_AFTER_READ);
     expect(local.expiresAt).toBeUndefined();
+    expect(local.ephemeralDuration).toBeUndefined();
   });
 
-  test('la durée citée remplace la durée choisie, échéance recalculée', () => {
+  test('la durée citée remplace la durée choisie — une DURÉE, jamais une échéance (#8905)', () => {
     const local = localMessageOf({ ...base, replyToId: fiveMinutes.id, replyTo: fiveMinutes, protection: { ephemeralSeconds: 15 } });
-    expect(local.expiresAt?.getTime()).toBe(now.getTime() + 300_000);
+    expect(local.ephemeralDuration).toBe(300);
+    expect(local.expiresAt).toBeUndefined();
     expect((local.effectFlags ?? 0) & EPHEMERAL).toBe(EPHEMERAL);
   });
 

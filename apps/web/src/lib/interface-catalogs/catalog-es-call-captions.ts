@@ -13,7 +13,7 @@ const esCallCaptions = {
   'callCaptions.mode.translated': 'Traducidos a tu idioma',
   'callCaptions.mode.original': 'En el idioma original',
   'callCaptions.listening': 'Tu voz se está transcribiendo',
-  'callCaptions.unsupported': 'Este navegador no transcribe tu voz: lees a los demás',
+  'callCaptions.unsupported': 'Tu voz no se transcribe en este dispositivo: lees a los demás',
   'callCaptions.denied': 'Reconocimiento de voz denegado: lees a los demás',
   'callCaptions.journal.title': 'Registro de la llamada',
   'callCaptions.participant': 'Participante',

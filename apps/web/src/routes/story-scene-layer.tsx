@@ -94,13 +94,17 @@ export type StorySceneLayerProps = {
    * objet temporisé, l'horloge MÈNE alors la scène et ses vidéos et sons
    * suivent sa timeline (#7879, retour porteur). */
   readonly durationSeconds?: number;
+  /** LE BUFFER (#6925) — relayé du moteur (`ScenePlayer.onPlaybackProgressing`,
+   * la piste de fond comprise : elle écoute la même horloge) : le lecteur y
+   * gèle sa barre. */
+  readonly onPlaybackProgressing?: (progressing: boolean) => void;
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 /** L'aplat quand aucune empreinte n'existe — le voile du chrome du lecteur,
  * jamais la teinte de carte du thème (le lecteur est un canevas sombre forcé). */
-const NEUTRAL_PLACEHOLDER = 'rgba(255,255,255,0.08)';
+const NEUTRAL_PLACEHOLDER = 'var(--color-media-fill)';
 
 function clipInset(rect: Rect, canvas: { readonly width: number; readonly height: number }, radius: number): string {
   const right = canvas.width - rect.x - rect.width;
@@ -124,6 +128,7 @@ export function StorySceneLayer({
   mediaDeps,
   onClock,
   durationSeconds,
+  onPlaybackProgressing,
 }: StorySceneLayerProps) {
   const storyId = story.id;
   const carrier = useMemo(() => storyCarrier(story), [story]);
@@ -297,6 +302,7 @@ export function StorySceneLayer({
           onDurationKnown={(ms) => reportDuration('video', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
           onClock={receiveClock}
+          {...(onPlaybackProgressing !== undefined ? { onPlaybackProgressing } : {})}
           {...(durationSeconds !== undefined ? { fallbackDurationSeconds: durationSeconds } : {})}
         />
       </Suspense>

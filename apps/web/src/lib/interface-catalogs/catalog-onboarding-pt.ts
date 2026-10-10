@@ -31,6 +31,12 @@ const pt = {
   'onboarding.email.sent': 'Link enviado. Abre-o e volta aqui.',
   'onboarding.email.failed': 'O link não foi enviado. Tenta de novo.',
 
+  'onboarding.age.title': 'A tua data de nascimento',
+  'onboarding.age.body': 'Para te propor os espaços certos. Podes saltar.',
+  'onboarding.age.skip': 'Saltar',
+  'onboarding.age.check': 'Verifica a tua data de nascimento.',
+  'onboarding.age.failed': 'A tua data não foi guardada. Tenta de novo.',
+
   'onboarding.global.title': 'Diz olá ao mundo',
   'onboarding.global.body': 'O Meeshy Global é a sala onde toda a gente anda. Manda um olá, sem pressão.',
   'onboarding.global.field': 'O teu olá, editável',
@@ -88,6 +94,7 @@ const pt = {
   'onboarding.recap.friends': 'Pedidos a caminho: {count}',
   'onboarding.recap.tomorrow': 'Amanhã a tua sequência pode chegar a {next}.',
   'onboarding.recap.explore': 'Continuar a explorar',
+  'onboarding.recap.game': 'Descobrir o jogo com Mee e Meo',
   'onboarding.recap.done': 'Chega por hoje',
 } satisfies OnboardingCatalog;
 

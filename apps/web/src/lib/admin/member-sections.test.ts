@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { MEMBER_EXTRAS } from '@/lib/admin/member-fixture';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 
 import {
@@ -50,6 +51,7 @@ const membre = (surcharge: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  ...MEMBER_EXTRAS,
   ...surcharge,
 });
 

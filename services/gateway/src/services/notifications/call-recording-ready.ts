@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { NotificationContext } from '@meeshy/shared/types/notification';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import type { CallRecordingKind } from '@meeshy/shared/types/call-recording';
+import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language.js';
 import type { NotificationService } from './NotificationService.js';
 
@@ -9,7 +10,8 @@ import type { NotificationService } from './NotificationService.js';
  * fichier rattaché à la bulle d'appel, pour chaque participant qui y a
  * CONSENTI (jamais pour l'enregistreur lui-même), dans la langue de cadrage du
  * destinataire. Le type était déjà routé par la NSE iOS
- * (`MEESHY_CALL_MISSED`) et par `push-header.ts`, sans producteur.
+ * (`MEESHY_CALL_MISSED`) et par `push-header.ts`, sans producteur. Le texte
+ * dit ce que le fichier LIÉ est — audio ou vidéo (#8469).
  */
 
 export type CallRecordingReadyDeps = {
@@ -23,7 +25,13 @@ export type CallRecordingReadyParams = {
   readonly conversationId: string;
   readonly callSessionId: string;
   readonly messageId: string;
+  readonly kind: CallRecordingKind;
 };
+
+const READY_STRING = {
+  audio: 'call.recordingReady',
+  video: 'call.recordingReady.video',
+} as const satisfies Record<CallRecordingKind, NotificationStringKey>;
 
 export async function notifyCallRecordingReady(
   deps: CallRecordingReadyDeps,
@@ -64,7 +72,7 @@ export async function notifyCallRecordingReady(
         type: 'call_recording_ready',
         priority: 'normal',
         lang,
-        content: notificationString(lang, 'call.recordingReady'),
+        content: notificationString(lang, READY_STRING[params.kind]),
         actor: {
           id: recorder.id,
           username: recorder.username,
@@ -72,7 +80,7 @@ export async function notifyCallRecordingReady(
           avatar: recorder.avatar,
         },
         context,
-        metadata: { action: 'view_conversation', callType: 'audio' },
+        metadata: { action: 'view_conversation', callType: params.kind, recordingKind: params.kind },
         collapseId: `call-recording-${params.callSessionId}`,
       });
     }),

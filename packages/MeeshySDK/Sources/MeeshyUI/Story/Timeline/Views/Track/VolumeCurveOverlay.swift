@@ -23,7 +23,7 @@ struct VolumeCurveOverlay: View {
                     path.move(to: pts[0])
                     for p in pts.dropFirst() { path.addLine(to: p) }
                 }
-                .stroke(tint, lineWidth: 1.5)
+                .stroke(tint, lineWidth: MeeshyBorder.emphasis)
 
                 ForEach(Array(pts.enumerated()), id: \.offset) { _, p in
                     Circle()

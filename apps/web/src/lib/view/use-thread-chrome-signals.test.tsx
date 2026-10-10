@@ -72,6 +72,7 @@ function mount(params: {
   readonly scrollToIndex?: (index: number, options?: unknown) => void;
   readonly noteProgrammaticScroll?: () => void;
   readonly mode?: ConversationReadingMode;
+  readonly detached?: { readonly onReturnToPresent: () => void };
 }): { scroller: HTMLElement; setGeometry: (g: { scrollTop: number; clientHeight: number }) => void; signals: () => ThreadChromeSignals } {
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -95,6 +96,7 @@ function mount(params: {
       group: params.group,
       readerLanguages: ['fr'],
       noteProgrammaticScroll: params.noteProgrammaticScroll ?? (() => {}),
+      ...(params.detached === undefined ? {} : { detached: true, onReturnToPresent: params.detached.onReturnToPresent }),
     });
     captured = signals;
     return (
@@ -243,6 +245,32 @@ describe('useThreadChromeSignals — composition (#5774, travail 3/3)', () => {
 
     expect(top).toBe(4321);
     expect(noted).toBe(1);
+  });
+
+  /**
+   * #7420 — UNE FENÊTRE ANCRÉE LOIN DU PRÉSENT garde le bouton « revenir en
+   * bas » même posée sur son propre bas (`isInJumpedState` iOS,
+   * `showsScrollToBottomButton`) : le bas de la fenêtre n'est pas le bas du
+   * fil. Le toucher REVIENT AU PRÉSENT (`returnToLatest`), puis pose le fil en bas.
+   */
+  test('fenêtre détachée : bouton visible même au bas de la fenêtre, et son toucher revient au présent', () => {
+    let returned = 0;
+    const placed: readonly PlacedMessage[] = [{ message: messageOf('m1', 'v1'), head: true, tail: true, opensDay: 'Aujourd’hui' }];
+    const { setGeometry, signals } = mount({
+      placed,
+      messages: placed.map((p) => p.message),
+      viewerId: 'v1',
+      group: false,
+      items: [{ index: 0, start: 0, end: 88 }],
+      totalSize: 5000,
+      detached: { onReturnToPresent: () => (returned += 1) },
+    });
+    setGeometry({ scrollTop: 4200, clientHeight: 800 });
+    expect(signals().scrollButtonVisible).toBe(true);
+    act(() => {
+      signals().onScrollToBottom();
+    });
+    expect(returned).toBe(1);
   });
 
   test('scrollButtonSenderName : jamais renseigné hors GROUPE (DM)', () => {

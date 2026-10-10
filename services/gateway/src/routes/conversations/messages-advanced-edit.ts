@@ -31,6 +31,7 @@ import {
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import {
   admitEditedContent,
   isEditedContentRefused,
@@ -46,7 +47,8 @@ import type {
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
-import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { servedQuotedMessage, withSealedQuote } from '../../services/messaging/servedQuotedMessage';
+import { loadSealedQuoteAudience } from '../../socketio/quotedEphemeralAudience';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -187,7 +189,7 @@ export function registerEditMessagePutRoute(
             },
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-            conversation: { select: { isActive: true, closedAt: true } },
+            conversation: { select: { isActive: true, closedAt: true, type: true } },
             attachments: { select: { id: true } }
           }
         })
@@ -211,6 +213,8 @@ export function registerEditMessagePutRoute(
           conversationId,
           conversation: existingMessage.conversation,
           createdAt: existingMessage.createdAt,
+          messageType: existingMessage.messageType,
+          metadata: existingMessage.metadata,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
@@ -221,6 +225,9 @@ export function registerEditMessagePutRoute(
         // sujet est « plus personne, plus jamais ».
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
@@ -474,6 +481,11 @@ export function registerEditMessagePutRoute(
 
       logger.info(`Edit - Response includes ${(updatedMessage.validatedMentions || []).length} validated mentions`);
 
+      // #8562 — la citation d'un éphémère déjà échu pour un lecteur lui part
+      // scellée ; l'éditeur, lecteur du message cité comme les autres, aussi.
+      const sealedQuoteAudience = await loadSealedQuoteAudience(prisma, updatedMessage.replyTo);
+      const editorSealedAt = sealedQuoteAudience.get(userId);
+
       // Diffuser la mise à jour via Socket.IO (room + aperçu de liste + file
       // de livraison hors ligne — voir broadcastMessageMutation)
       await broadcastMessageMutation({
@@ -483,6 +495,7 @@ export function registerEditMessagePutRoute(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
+        sealedQuoteAudience,
         // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
         // sibling `PUT /messages/:messageId`) : le `as unknown as
         // Record<string, unknown>` qui vivait ici n'était pas une commodité de
@@ -500,7 +513,7 @@ export function registerEditMessagePutRoute(
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
       });
 
-      return sendSuccess(reply, messageResponse);
+      return sendSuccess(reply, editorSealedAt ? withSealedQuote(messageResponse, editorSealedAt) : messageResponse);
 
     } catch (error) {
       // P2025 = la garde `deletedAt: null` de l'écriture a mordu : le message a
@@ -640,6 +653,8 @@ export function registerEditMessagePatchRoute(
           // `include` : l'état terminal était en main, sans personne pour le lire.
           conversation: message.conversation,
           createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
@@ -647,6 +662,9 @@ export function registerEditMessagePatchRoute(
       if (isEditRefused(admission)) {
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         if (admission.reason === 'edit-window-expired') {
           return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');

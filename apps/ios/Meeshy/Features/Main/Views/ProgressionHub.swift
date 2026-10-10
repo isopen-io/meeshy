@@ -145,13 +145,13 @@ struct ProgressionLastAchievementHero: View {
         // seule identité de la vue.
         let teinte = obtenu ? MeeshyColors.success : MeeshyColors.textMuted(isDark: isDark)
         HStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(teinte.opacity(0.22))
                 .frame(width: 48, height: 48)
                 .overlay(Image(systemName: "trophy.fill").foregroundStyle(teinte))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(bandeau(montre: montre != nil, obtenu: obtenu))
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
@@ -167,12 +167,12 @@ struct ProgressionLastAchievementHero: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(teinte.opacity(0.12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(teinte.opacity(0.28), lineWidth: 1)
                 )
         )
@@ -219,7 +219,7 @@ struct ProgressionLevelHero: View {
                 .font(.caption)
                 .foregroundStyle(theme.textMuted)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimary))
@@ -253,7 +253,7 @@ struct ProgressionElansHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "wand.and.stars").foregroundStyle(MeeshyColors.brandPrimary)
                 Text(titre).font(.body.weight(.bold)).foregroundStyle(theme.textPrimary)
                 Spacer(minLength: 0)
@@ -264,19 +264,23 @@ struct ProgressionElansHero: View {
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
             } else {
-                ProgressionWrap(items: famillesActives.map { ProgressionCopy.title(for: $0) })
-                    .foregroundStyle(theme.textPrimary)
+                // Une famille d'élan SE TOUCHE (#9564) : sa pastille rebondit et ouvre ses précisions.
+                ProgressionWrap(
+                    items: famillesActives.map { ProgressionCopy.title(for: $0) },
+                    details: famillesActives.map { GameElementDetails.elanFamily($0, elan: progress.elan) }
+                )
+                .foregroundStyle(theme.textPrimary)
                 Text(explication)
                     .font(.caption)
                     .foregroundStyle(theme.textMuted)
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(MeeshyColors.brandPrimary.opacity(0.10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(MeeshyColors.brandPrimary.opacity(0.24), lineWidth: 1)
                 )
         )
@@ -298,90 +302,6 @@ struct ProgressionElansHero: View {
     }
 }
 
-/// Une PORTE du hub : son titre, son compte, et le geste qui l'ouvre.
-///
-/// Le compte est ce qui donne envie d'ouvrir — un lien sans chiffre ne dit pas
-/// s'il vaut le geste.
-struct ProgressionSectionLink: View {
-
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    let section: ProgressionSection
-    let progress: EngagementProgress
-    let isDark: Bool
-    let onOpen: () -> Void
-
-    private var titre: String {
-        switch section {
-        case .badges: return ProgressionCopy.badgesTitle
-        case .defis: return AchievementCopy.sectionsHeader
-        case .succes: return ProgressionCopy.achievementsTitle
-        }
-    }
-
-    private var symbole: String {
-        switch section {
-        case .badges: return "rosette"
-        case .defis: return "star.fill"
-        case .succes: return "trophy.fill"
-        }
-    }
-
-    private var teinte: Color {
-        switch section {
-        case .badges: return MeeshyColors.brandPrimary
-        case .defis: return MeeshyColors.warning
-        case .succes: return MeeshyColors.success
-        }
-    }
-
-    private var compte: String {
-        switch section {
-        case .badges:
-            return "\(progress.badgesEarned) / \(progress.badgesTotal)"
-        case .succes:
-            return "\(progress.achievements.filter(\.unlocked).count) / \(progress.achievements.count)"
-        case .defis:
-            let fait = progress.achievementSections.reduce(0) { $0 + $1.unlockedCount }
-            let total = progress.achievementSections.reduce(0) { $0 + $1.attainableCount }
-            return "\(fait) / \(total)"
-        }
-    }
-
-    var body: some View {
-        Button(action: onOpen) {
-            HStack(spacing: MeeshySpacing.md) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(teinte.opacity(0.16))
-                    .frame(width: 36, height: 36)
-                    .overlay(Image(systemName: symbole).font(.subheadline).foregroundStyle(teinte))
-                    .accessibilityHidden(true)
-
-                Text(titre).font(.body.weight(.semibold)).foregroundStyle(theme.textPrimary)
-                Spacer(minLength: MeeshySpacing.sm)
-                Text(compte).font(.body.weight(.bold)).foregroundStyle(teinte)
-                // `forward`, pas `right` : ce chevron dit « ouvre cette section »,
-                // pas « va vers la droite de l'écran ». En arabe la lecture court
-                // de droite à gauche, et un chevron nommé par un côté PHYSIQUE y
-                // pointe à rebours du geste qu'il annonce. La variante sémantique
-                // se retourne avec la langue ; garde : `RightToLeftLayoutGuardTests`.
-                Image(systemName: "chevron.forward").font(.footnote).foregroundStyle(theme.textMuted)
-            }
-            .padding(.horizontal, 16)
-            .frame(minHeight: 56)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.surfaceGradient(tint: teinte))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.border(tint: teinte), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(titre), \(compte)")
-    }
-}
 
 /// LE HERO DE LA FLAMME — la série de jours, seule (directive porteur).
 ///
@@ -397,13 +317,13 @@ struct ProgressionFlammeHero: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(MeeshyColors.warning.opacity(0.20))
                 .frame(width: 48, height: 48)
                 .overlay(Image(systemName: "flame.fill").foregroundStyle(MeeshyColors.warning))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 // La SÉMANTIQUE d'abord, comme ses deux voisins : le hero
                 // s'ouvrait sur un chiffre sans nom.
                 Text(ProgressionCopy.heroStreakTitle)
@@ -429,12 +349,12 @@ struct ProgressionFlammeHero: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(MeeshyColors.warning.opacity(0.12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(MeeshyColors.warning.opacity(0.26), lineWidth: 1)
                 )
         )
@@ -449,17 +369,27 @@ struct ProgressionFlammeHero: View {
 /// le disait — « `FlowLayout` existe déjà dans l'app ».
 struct ProgressionWrap: View {
     let items: [String]
+    /// Les précisions de chaque pastille, dans l'ordre de `items` ; vide : les pastilles se lisent sans se toucher.
+    var details: [GameElementDetail] = []
 
     var body: some View {
         FlowLayout(spacing: 8) {
-            ForEach(items, id: \.self) { item in
-                Text(item)
-                    .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))
+            ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                pill(item)
+                    .frame(minHeight: details.indices.contains(index) ? MeeshyControlSize.tapTarget : nil)
+                    .gameElement(details.indices.contains(index) ? details[index] : nil)
             }
         }
+    }
+
+    private func pill(_ item: String) -> some View {
+        Text(item)
+            .font(.caption)
+            .lineLimit(1)
+            .minimumScaleFactor(GameChip.minimumScale)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))
     }
 }
 
@@ -487,7 +417,8 @@ struct ProgressionSectionPage: View {
     /// rend instantané : aucun spinner ne s'ajoute (Cache-First).
     @StateObject private var viewModel = ProgressionViewModel()
 
-    @Environment(\.dismiss) private var dismiss
+    /// Lu au seul toucher de « Comprendre les badges » (#9640), jamais dans le corps.
+    @EnvironmentObject private var router: Router
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var progress: EngagementProgress? { viewModel.progress }
@@ -530,71 +461,46 @@ struct ProgressionSectionPage: View {
     }
 
     var body: some View {
-        ZStack {
-            theme.backgroundGradient.ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                HStack {
-                    // Le retour passe par la PILE — pas par une fermeture de
-                    // feuille. Le glissement depuis le bord gauche fait donc le
-                    // même geste, sans qu'aucun code ne le porte.
-                    Button {
-                        HapticFeedback.light()
-                        dismiss()
-                    } label: {
-                        Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(16, weight: .semibold))
-                            .foregroundColor(MeeshyColors.brandPrimary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                    .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
-
-                    Text(titre)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(theme.textPrimary)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Spacer(minLength: MeeshySpacing.sm)
-
-                    // La VALEUR est du verre elle aussi : posée nue sur le
-                    // dégradé, elle flottait sans matière, et rien ne disait
-                    // qu'elle appartenait au chrome plutôt qu'au contenu.
+        // L'en-tête dynamique des pages de Progression (#9564) : grand titre au repos, barre compacte au
+        // défilement, retour en disque de verre — et le geste de bord, que `navigationBarHidden(true)` retire.
+        GamePageScaffold(
+            title: titre,
+            onRefresh: { await viewModel.load(forceNetwork: true) },
+            trailing: {
+                // La VALEUR est du verre elle aussi : posée nue sur le
+                // dégradé, elle flottait sans matière, et rien ne disait
+                // qu'elle appartenait au chrome plutôt qu'au contenu.
+                if let progress {
+                    Text(compte(progress))
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(teinte)
+                        .lineLimit(1)
+                        .minimumScaleFactor(GameChip.minimumScale)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
+                }
+            },
+            content: {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                     if let progress {
-                        Text(compte(progress))
-                            .font(.body.weight(.bold))
-                            .foregroundStyle(teinte)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 7)
-                            .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
+                        contenu(progress)
                     }
                 }
-                .padding(.horizontal, 16)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-                        if let progress {
-                            contenu(progress)
-                        }
-                        Spacer().frame(height: 40)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-        }
-        // Le geste de bord, que `navigationBarHidden(true)` retire en silence.
-        // Sans lui, la page est bien POUSSÉE mais ne se quitte qu'au bouton —
-        // et l'utilisateur qui glisse depuis le bord n'obtient rien, ce qui se
-        // lit comme une page bloquée plutôt que comme un geste non servi.
-        .background(InteractivePopEnabler())
+        )
+        // « Comprendre les badges » (#9640) : le lien de la page et la feuille d'un badge mènent à la section badges du carnet.
+        .environment(\.gameOpenBadgesGuide, { router.openGame(at: GameNavigationMap.badgesGuide) })
         .task { await viewModel.load() }
         .fullScreenCover(item: $reveal) { palier in
             AchievementRevealView(
                 reveal: palier.reveal,
-                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt)
-            ) { reveal = nil }
+                occasion: .consultation(unlocked: palier.unlocked, reachedAt: palier.reachedAt),
+                onContinue: { reveal = nil },
+                // Le liseré de la rareté mesurée (#9390), comme sur la ligne du succès — « Jeu masqué » le retire.
+                rarity: RevealRim.entry(of: palier.reveal, in: viewModel.game, hidden: GameDevicePrefsStore.current().prefs.hidden)
+            )
         }
     }
 
@@ -602,6 +508,7 @@ struct ProgressionSectionPage: View {
     private func contenu(_ progress: EngagementProgress) -> some View {
         switch section {
         case .badges:
+            GameBadgeGuideLink { router.openGame(at: GameNavigationMap.badgesGuide) }
             ForEach(progress.axesByFamily) { group in
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     Text(ProgressionCopy.title(for: group.family))
@@ -615,6 +522,11 @@ struct ProgressionSectionPage: View {
                             ForEach(Array(group.axes.enumerated()), id: \.element.id) { index, axis in
                                 if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
                                 ProgressionAxisRow(axis: axis)
+                                    // Le badge de l'axe SE TOUCHE (#9564) : sa ligne rebondit et ouvre ses précisions.
+                                    .gameElement(GameElementDetails.badge(for: axis, progress: progress))
+                                // La SUITE du badge (#9640) : ses paliers à venir, leur matière et leur seuil.
+                                GameBadgeUpcomingView(model: GameBadgeGuideModel.make(BadgeGuideResolver.resolve(axis)))
+                                    .padding(.bottom, MeeshySpacing.xs)
                             }
                         }
                     }
@@ -626,16 +538,19 @@ struct ProgressionSectionPage: View {
                 VStack(spacing: 0) {
                     ForEach(Array(progress.achievements.enumerated()), id: \.element.id) { index, achievement in
                         if index > 0 { Divider().overlay(theme.textMuted.opacity(0.2)) }
+                        // Un succès SE TOUCHE : il rebondit, et sa précision reste la célébration en grand — jamais
+                        // deux modales pour un même élément.
                         Button {
+                            HapticFeedback.light()
                             reveal = ProgressionRevealRequest(
                                 reveal: .achievement(achievement.key),
                                 reachedAt: achievement.reachedAt,
                                 unlocked: achievement.unlocked
                             )
                         } label: {
-                            ProgressionAchievementRow(achievement: achievement)
+                            ProgressionAchievementRow(achievement: achievement, rarity: viewModel.game?.wave2.achievementRarities?[achievement.key.rawValue])
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GameBounceButtonStyle())
                         .accessibilityAddTraits(.isButton)
                         .accessibilityHint(Text(String(
                             localized: "progression.achievement.a11y.hint",
