@@ -247,6 +247,16 @@ extension UniversalComposerBar {
 /// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
 /// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
 /// épaisseur perçue (#9173).
+/// **Le ⌄ pendant une prise vocale** (#9893). La barre d'outils, qui le porte,
+/// s'efface pendant l'enregistrement. Un hôte qui le demande
+/// (`ComposerFoldControl.survivesRecording`) garde le ⌄ seul, tout à droite,
+/// sur une rangée à lui ; les autres (fils, posts) gardent la barre nue.
+nonisolated enum ComposerFoldPlacement {
+    static func rowDuringRecording(isRecording: Bool, survivesRecording: Bool) -> Bool {
+        false
+    }
+}
+
 nonisolated enum ComposerGlassDoors {
     static let glyphWeight: Font.Weight = .regular
 

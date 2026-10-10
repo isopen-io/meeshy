@@ -111,6 +111,24 @@ nonisolated enum StoryComposerFold {
     /// second geste, que l'utilisateur choisit.
     static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
 
+    static func readerPresentation(userFolded: Bool) -> Presentation {
+        .expanded
+    }
+
+    static func unfoldsOnReply(from oldReplyId: String?, to newReplyId: String?) -> Bool {
+        false
+    }
+
+    enum BubbleBadge: Equatable, Sendable {
+        case none
+        case recording
+        case reply
+    }
+
+    static func bubbleBadge(isRecording: Bool, isReplying: Bool) -> BubbleBadge {
+        .none
+    }
+
     static let foldSymbol = "chevron.down"
     static let unfoldSymbol = "bubble.left.fill"
 }
