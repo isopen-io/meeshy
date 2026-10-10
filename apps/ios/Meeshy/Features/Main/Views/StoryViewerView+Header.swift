@@ -65,9 +65,9 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
     /// `isPublicStory` ne garde que « Partager à un ami » : son lien
     /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
     /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
-    /// comme l'était « Enregistrer » (#8823). Republier en post ou en réel suit
-    /// la règle du rail : la story d'AUTRUI seulement, sur toute audience — la
-    /// loi d'audience du serveur borne le résultat.
+    /// comme l'était « Enregistrer » (#8823). Republier en post ou en réel est
+    /// offert sur TOUTE story, la sienne comprise (porteur, 2026-10-10), et sur
+    /// toute audience — la loi d'audience du serveur borne le résultat.
     static func resolve(
         hasStory: Bool,
         isOwnStory: Bool,
@@ -81,8 +81,7 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         }
         let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
         let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
-        let reposting: [StoryShareMenuEntry] = isOwnStory ? [] : [.repostAsPost, .repostAsReel]
-        let sharing = exporting + reposting
+        let sharing: [StoryShareMenuEntry] = exporting + [.repostAsPost, .repostAsReel]
         let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
         return StoryOptionsMenuPlan(
             sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },

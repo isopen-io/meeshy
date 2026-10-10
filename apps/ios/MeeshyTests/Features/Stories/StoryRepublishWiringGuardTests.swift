@@ -90,8 +90,9 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
 
     /// #9953 : le rail garde « Envoyer » (qui transfère n'importe où dans
     /// l'app) et « Republier » (en story). Le menu (…) offre « Republier en
-    /// post » et « Republier en réel » par la MÊME mécanique, sur la story
-    /// d'autrui seulement. « Citer en post » a disparu : « Composer » le fait.
+    /// post » et « Republier en réel » par la MÊME mécanique, sur TOUTE story
+    /// (la sienne comprise depuis la v4). « Citer en post » a disparu :
+    /// « Composer » le fait.
     func test_sendStaysOnTheRail_postAndReelAreInTheShareMenu_quoteIsGone() throws {
         let sidebar = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
@@ -109,14 +110,12 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
             try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
         XCTAssertFalse(viewer.contains("editAndRepostAsPostSource"), "Le cover de « Citer en post » est parti avec son entrée.")
 
-        let other = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: false, isPublicStory: false,
-                                                 hasAudioTranscript: false, canCompose: false)
-        XCTAssertTrue(other.shareEntries.contains(.repostAsPost) && other.shareEntries.contains(.repostAsReel),
-                      "Toute audience : la loi d'audience du serveur borne le résultat.")
-        let own = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: true, isPublicStory: true,
-                                               hasAudioTranscript: false, canCompose: false)
-        XCTAssertFalse(own.shareEntries.contains(.repostAsPost) || own.shareEntries.contains(.repostAsReel),
-                       "Même règle que le rail : on ne republie pas sa propre story.")
+        for isOwnStory in [true, false] {
+            let plan = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: isOwnStory, isPublicStory: false,
+                                                    hasAudioTranscript: false, canCompose: false)
+            XCTAssertTrue(plan.shareEntries.contains(.repostAsPost) && plan.shareEntries.contains(.repostAsReel),
+                          "Toute story, la sienne comprise, sur toute audience (porteur, v4).")
+        }
     }
 
     // MARK: - 2. L'audience est plafonnée

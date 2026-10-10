@@ -30,6 +30,7 @@ import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { repostSnapshotStoryEffects } from './posts/repostCreditChips';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
@@ -2361,7 +2362,7 @@ export class PostService {
         }
 
         snapshotMedia = duplicatedMedia;
-        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+        snapshotStoryEffects = repostSnapshotStoryEffects(original.storyEffects as Prisma.InputJsonValue | undefined, original.visibility as string | null | undefined);
 
         // STATUS carries its text in `content` (the mood caption); STORY carries
         // its text inside `storyEffects` (rendered on the canvas). Inherit the

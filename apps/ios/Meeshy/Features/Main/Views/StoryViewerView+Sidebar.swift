@@ -42,6 +42,10 @@ nonisolated struct StoryActionRailPlan: Equatable {
     let showsSound: Bool
     let showsComments: Bool
     let showsTranslations: Bool
+    /// « Composer » au rail sur la story d'une AUTRE personne (#9953) — le même
+    /// geste que l'entrée « Composer » du menu « … », qui reste. Sur sa propre
+    /// story, le rail ne change pas.
+    let showsCompose: Bool
 
     static func resolve(
         isOwnStory: Bool,
@@ -49,7 +53,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
         isPublicStory: Bool,
         hasAudibleSound: Bool,
         commentCount: Int,
-        hasTranslatableContent: Bool
+        hasTranslatableContent: Bool,
+        canCompose: Bool = false
     ) -> StoryActionRailPlan {
         StoryActionRailPlan(
             showsReact: !isOwnStory,
@@ -71,7 +76,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // 2026-07-25) : l'auteur explore les langues de sa propre story
             // comme il choisit déjà sa langue d'export. Le Prisme est un outil
             // de lecture, pas une permission.
-            showsTranslations: hasTranslatableContent
+            showsTranslations: hasTranslatableContent,
+            showsCompose: !isOwnStory && canCompose
         )
     }
 }
@@ -281,11 +287,27 @@ struct StoryActionSidebarView: View {
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
             commentCount: currentStory?.commentCount ?? 0,
-            hasTranslatableContent: storyHasTranslatableContent
+            hasTranslatableContent: storyHasTranslatableContent,
+            canCompose: composeTarget != nil
         )
     }
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
+
+    /// La porte « Composer » de l'hôte (#6085) : le rail DEMANDE, le conteneur
+    /// présente. `nil` hors du lecteur (aperçu du composer) : aucun bouton.
+    @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+
+    /// La cible de « Composer » pour la slide COURANTE, par la même règle d'offre
+    /// que le menu « … ». Lue au gel du rail et au tap seulement — jamais à
+    /// chaque passe de rendu.
+    private var composeTarget: ComposerSeedTarget? {
+        guard demanderComposer != nil, !isOwnStory, let story = currentStory else { return nil }
+        return ComposerSeedTarget(
+            story: story,
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
+    }
 
     /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
     /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
@@ -535,7 +557,8 @@ struct StoryActionSidebarView: View {
                 isPublicStory: currentStory?.isPublic == true,
                 hasAudibleSound: storyHasAudibleSound,
                 commentCount: storyCommentCount,
-                hasTranslatableContent: storyHasTranslatableContent
+                hasTranslatableContent: storyHasTranslatableContent,
+                canCompose: railPlan.showsCompose
             )
         }
     }
@@ -739,6 +762,20 @@ struct StoryActionSidebarView: View {
                 ) {
                     HapticFeedback.light()
                     showViewersSheet = true
+                }
+            }
+
+            // « Composer » au rail sur la story d'une AUTRE personne (#9953) :
+            // le même geste que l'entrée du menu « … » — la porte du conteneur.
+            if railPlan.showsCompose {
+                StoryActionButton(
+                    icon: "wand.and.stars",
+                    label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
+                ) {
+                    guard let cible = composeTarget, let demanderComposer else { return }
+                    HapticFeedback.light()
+                    pauseTimer()
+                    demanderComposer(cible)
                 }
             }
 
