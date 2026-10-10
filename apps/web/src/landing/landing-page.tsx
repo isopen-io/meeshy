@@ -33,7 +33,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
   return (
     <div className="ld" data-landing={language}>
       <div className="ld-glow" aria-hidden="true" />
-      <header className="ld-header">
+      <header className="ld-header glass">
         <div className="ld-wrap ld-bar">
           <a href={landingPath(language)} className="ld-brand">
             <img src={BRAND_LOGO_PATH} alt="" width={36} height={36} />

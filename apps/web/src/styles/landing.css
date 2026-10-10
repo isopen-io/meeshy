@@ -14,9 +14,16 @@
  * `:root.light` posé par `INLINE_SCHEME_BOOTSTRAP` avant la première peinture.
  */
 @import '@meeshy/design-tokens/ios.css';
+/* LE VERRE passe par son site unique (#6124) : l'en-tête porte `.glass`, la
+ * même matière que les bandes de l'application. `glass.css` lit les noms de
+ * l'application (`--color-ios-*`, posés par `ios.css` via Tailwind, absent
+ * ici) : ils sont nommés ci-dessous sur les jetons, sans valeur nouvelle. */
+@import './glass.css';
 
 :root {
   color-scheme: dark;
+  --color-ios-surface: var(--ios-surface);
+  --color-ios-card: var(--ios-surface-card);
 }
 :root.light {
   color-scheme: light;
@@ -88,9 +95,6 @@ body {
   top: 0;
   z-index: 5;
   padding-top: env(safe-area-inset-top);
-  background: color-mix(in srgb, var(--ios-surface) 80%, transparent);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
   border-bottom: 0.5px solid var(--ios-edge);
 }
 .ld-bar {
