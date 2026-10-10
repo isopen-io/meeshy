@@ -132,7 +132,7 @@ export const REPERES = [
   { son: 'scintille', plan: 'story', etape: 'story', gainDb: -6 },
   { son: 'souffle', temps: 20, gainDb: -4 },
   { son: 'scintille', plan: 'vocal', etape: 'traduction', gainDb: -6 },
-  { son: 'frappe', plan: 'frappe', retardS: 0.41, gainDb: 0 },
+  { son: 'frappe', plan: 'frappe', retardS: 0.52, gainDb: 0 },
   { son: 'piece', plan: 'frappe', retardS: 1.0, gainDb: -2 },
   { son: 'balayage', temps: 36, gainDb: -6 },
   { son: 'coffre', plan: 'coffre', retardS: 0.15, gainDb: -2 },

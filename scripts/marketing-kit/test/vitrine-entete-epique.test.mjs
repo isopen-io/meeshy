@@ -89,9 +89,9 @@ describe('l’en-tête épique : le montage suit la musique (#9904)', () => {
     const p = plan('fr')
     const frappe = p.plans.find((x) => x.id === 'frappe')
     const coup = p.reperes.find((r) => r.son === 'frappe')
-    // l'entrée dans le clip précède le premier mouvement de 0,25 s : le coup, 0,41 s après ce mouvement, tombe 0,66 s
-    // après le début du plan.
-    expect(coup.instantS).toBeCloseTo(frappe.debutS + 0.66, 3)
+    // l'entrée dans le clip précède le premier mouvement de 0,25 s : le « Tchak ! », 0,52 s après ce mouvement (mesuré
+    // image par image sur la prise française), tombe 0,77 s après le début du plan.
+    expect(coup.instantS).toBeCloseTo(frappe.debutS + 0.77, 3)
     expect(frappe.entreeS).toBeCloseTo(0.6 + 0.04 - 0.25, 3)
   })
 
