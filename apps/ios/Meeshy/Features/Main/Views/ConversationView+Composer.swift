@@ -228,7 +228,10 @@ extension ConversationView {
             pendingEffects: $viewModel.pendingEffects,
             hideEffects: composerState.editingMessageId != nil,
             // Porte de focus (#6003) : une réponse lève le clavier sans tap.
-            focusTrigger: $composerState.focusRequested
+            focusTrigger: $composerState.focusRequested,
+            // #9955 — le ⌄ tout à droite de la barre, clavier levé : il ferme
+            // le clavier et réduit la barre, comme dans un espace commentaire.
+            offersKeyboardFold: true
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralChoice != nil)

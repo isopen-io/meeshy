@@ -322,6 +322,11 @@ struct UniversalComposerBar: View {
     /// Caller must reset to false after triggering.
     var focusTrigger: Binding<Bool> = .constant(false)
 
+    /// **La barre pose son propre ⌄ clavier levé** (#9955) — pour l'hôte qui
+    /// n'a pas de repli à lui confier (la conversation). Le toucher ferme le
+    /// clavier et réduit la barre (`keyboardFoldControl`).
+    var offersKeyboardFold: Bool = false
+
     /// Called when composer content changes (text, attachments, or recording).
     /// True = has pending content that should block story timer.
     var onHasContentChange: ((Bool) -> Void)? = nil
@@ -388,7 +393,9 @@ struct UniversalComposerBar: View {
     /// sur un espace commentaire sans toucher à l'appel de la barre.
     @Environment(\.composerFoldControl) var environmentFoldControl
 
-    var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
+    /// Le repli de l'hôte d'abord (story, commentaires) ; sinon, si l'hôte l'a
+    /// demandé, celui du clavier (#9955).
+    var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl ?? keyboardFoldControl }
 
     /// La caméra confiée par l'ENVIRONNEMENT (#9736) — `commentCamera` la pose
     /// sur un composeur de commentaire sans toucher à l'appel de la barre.

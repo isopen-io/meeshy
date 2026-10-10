@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshyUI
 @testable import Meeshy
 
 /// #7997 — en Dynamic Type XXXL, la barre d'outils du composer (protections,
@@ -296,5 +297,143 @@ final class ComposerToolbarOverflowTests: XCTestCase {
 
     func test_scrollsFurther_offBeforeTheViewportIsMeasured() {
         XCTAssertFalse(ComposerToolbarOverflow.scrollsFurther(offset: 0, contentWidth: 250, viewportWidth: 0))
+    }
+}
+
+/// #9954 — directive porteur 2026-10-10 : dans la pastille de langue, le code
+/// passe en petit SOUS le drapeau, et la pastille ne grandit pas.
+///
+/// La référence est la pastille d'avant, sur une ligne (« 🇫🇷 FR ⌄ »), mesurée
+/// par le même harnais : la nouvelle garde sa HAUTEUR, à toute taille de texte
+/// où la barre se lit, et ne s'élargit pas.
+@MainActor
+final class ComposerLanguagePillLabelTests: XCTestCase {
+
+    private static let textSizes: [DynamicTypeSize] = [.small, .large, .xxxLarge, .accessibility3]
+
+    private func measured<V: View>(_ view: V, textSize: DynamicTypeSize) -> CGSize {
+        let host = UIHostingController(rootView: view.environment(\.dynamicTypeSize, textSize))
+        return host.sizeThatFits(in: CGSize(width: 1024, height: 1024))
+    }
+
+    private func inlineLabel(flag: String, code: String) -> some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            Text(flag)
+                .font(.caption)
+            Text(code.uppercased())
+                .font(.caption2).fontWeight(.semibold)
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.bold))
+        }
+        .fixedSize()
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+    }
+
+    func test_pill_keepsTheHeightOfTheInlineLabel_atEveryTextSize() {
+        for option in LanguageOption.defaults {
+            for textSize in Self.textSizes {
+                let stacked = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: textSize)
+                let inline = measured(inlineLabel(flag: option.flag, code: option.code), textSize: textSize)
+                XCTAssertEqual(stacked.height, inline.height, accuracy: 0.5,
+                               "\(option.code) en \(textSize) : la pastille passe de \(inline.height) à \(stacked.height) pt")
+            }
+        }
+    }
+
+    func test_pill_isNoWiderThanTheInlineLabel() {
+        for option in LanguageOption.defaults {
+            let stacked = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: .large)
+            let inline = measured(inlineLabel(flag: option.flag, code: option.code), textSize: .large)
+            XCTAssertLessThan(stacked.width, inline.width,
+                              "\(option.code) : la pastille s'élargit (\(inline.width) → \(stacked.width) pt)")
+        }
+    }
+
+    /// Fusible : le harnais voit une hauteur qui grandit — sans lui, une
+    /// mesure qui rendrait toujours la même hauteur passerait pour une preuve.
+    func test_harness_seesATallerStack() {
+        let unbounded = VStack(spacing: 0) {
+            Text("🇫🇷").font(.caption)
+            Text("FR").font(.caption2)
+        }
+        .padding(.vertical, MeeshySpacing.xs)
+        let inline = measured(inlineLabel(flag: "🇫🇷", code: "fr"), textSize: .large)
+        XCTAssertGreaterThan(measured(unbounded, textSize: .large).height, inline.height + 0.5)
+    }
+
+    func test_stackedMark_drawsTheFlagAboveASmallerCode() {
+        XCTAssertLessThan(ComposerLanguagePillMetrics.codeSize, ComposerLanguagePillMetrics.flagSize)
+        XCTAssertLessThanOrEqual(ComposerLanguagePillMetrics.lineSpacing, 0, "Les deux lignes se serrent.")
+    }
+
+    func test_toolbar_drawsThePillWithTheStackedLabel() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        guard let start = code.range(of: "private var languageSelectorPill: some View {") else {
+            return XCTFail("languageSelectorPill introuvable")
+        }
+        let body = code[start.upperBound...].prefix(900)
+        XCTAssertTrue(body.contains("ComposerLanguagePillLabel(flag: currentLangOption.flag, code: currentLangOption.code)"),
+                      "La pastille de la barre pose le drapeau et son code empilés (#9954).")
+        XCTAssertTrue(body.contains(".accessibilityValue(currentLangOption.name)"),
+                      "VoiceOver lit le NOM de la langue, pas le code.")
+    }
+}
+
+/// #9955 — directive porteur 2026-10-10 : dans la conversation aussi, la barre
+/// porte tout à droite le ⌄ qui ferme le clavier et la réduit.
+final class ComposerKeyboardFoldTests: XCTestCase {
+
+    func test_fold_appearsOnlyWhileTheKeyboardOrThePanelIsUp() {
+        XCTAssertTrue(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: true, isPanelOpen: false))
+        XCTAssertTrue(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: false, isPanelOpen: true))
+        XCTAssertFalse(ComposerKeyboardFold.offersFold(hostOffers: true, isFocused: false, isPanelOpen: false))
+    }
+
+    func test_fold_needsTheHostToAskForIt() {
+        XCTAssertFalse(ComposerKeyboardFold.offersFold(hostOffers: false, isFocused: true, isPanelOpen: true))
+    }
+
+    func test_fold_wearsTheSameGlyphAsTheOtherComposerSurfaces() {
+        XCTAssertEqual(ComposerKeyboardFold.symbol, StoryComposerFold.foldSymbol)
+    }
+
+    func test_fold_sitsAtTheVeryEndOfTheRow() {
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: true, offersCamera: true, offersFold: true).last, .fold)
+    }
+
+    private func source(_ relative: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relative)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    func test_conversation_asksTheBarForTheKeyboardFold() throws {
+        let composer = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        XCTAssertTrue(composer.contains("offersKeyboardFold: true"),
+                      "La barre de la conversation pose le ⌄ clavier levé (#9955).")
+    }
+
+    func test_bar_fallsBackOnItsKeyboardFold_afterTheHostFold() throws {
+        let bar = try source("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
+        XCTAssertTrue(bar.contains("foldControl ?? environmentFoldControl ?? keyboardFoldControl"),
+                      "Le repli de l'hôte passe devant celui du clavier.")
+    }
+
+    func test_keyboardFold_closesTheKeyboardAndThePanels() throws {
+        let toolbar = try source("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        guard let start = toolbar.range(of: "private func foldKeyboard() {") else {
+            return XCTFail("foldKeyboard introuvable")
+        }
+        let body = toolbar[start.upperBound...].prefix(500)
+        XCTAssertTrue(body.contains("isFocused = false"), "Le ⌄ ferme le clavier.")
+        XCTAssertTrue(body.contains("showAttachOptions = false"), "Le ⌄ referme le tiroir qui tient la place du clavier.")
+        XCTAssertTrue(toolbar.contains("\"composer.keyboard.fold\""), "Le ⌄ a son libellé VoiceOver.")
     }
 }
