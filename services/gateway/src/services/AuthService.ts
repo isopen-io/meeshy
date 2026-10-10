@@ -59,7 +59,6 @@ import { verifyEmailProof, type EmailProof, type EmailProofResult } from './auth
 import { emailCodeLink, mintEmailCodePair, verificationTtlMinutes } from './auth/email-code';
 import { isPhoneVerified, sendPhoneVerificationCode, verifyPhoneCode } from './auth/phone-verification';
 import { isActivationBlocked, resolveAccountActivation } from './auth/account-activation';
-import { assertAccountMeetsMinimumAge } from './auth/minimum-age-gate';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -255,11 +254,6 @@ export class AuthService {
         throw new ActivationRequiresEmailProofError(user.email);
       }
 
-      // #9927 — moins de 13 ans déclarés : aucune session, pas même « en
-      // ligne ». Même place que le délai de grâce, pour la même raison : seul
-      // qui connaît le mot de passe l'apprend.
-      await assertAccountMeetsMinimumAge(this.prisma, user.id, this.now());
-
       // Check if 2FA is enabled
       if (user.twoFactorEnabledAt) {
 
@@ -349,7 +343,8 @@ export class AuthService {
       if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
         throw error;
       }
-      // #9927 — le refus de l'âge minimal est une décision, pas une panne.
+      // #9927 — le refus de l'âge minimal (levé par `createSession`, porte de
+      // toutes les connexions) est une décision, pas une panne.
       if (error instanceof AgeBelowMinimumError) {
         throw error;
       }

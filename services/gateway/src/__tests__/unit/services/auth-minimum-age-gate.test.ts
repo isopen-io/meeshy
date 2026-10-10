@@ -82,23 +82,16 @@ beforeEach(() => {
   mockCompare.mockResolvedValue(true);
 });
 
-describe('connexion par mot de passe — la porte de l’âge minimal', () => {
-  it('12 ans et 364 jours : AgeBelowMinimumError (403 AGE_BELOW_MINIMUM), aucune session, pas « en ligne »', async () => {
-    const { svc, update } = service(account(yearsAgo(13, 1)));
+describe('connexion par mot de passe — le refus de createSession remonte tel quel', () => {
+  it('createSession refuse (moins de 13 ans) : authenticate RELAIE AgeBelowMinimumError (403 AGE_BELOW_MINIMUM), jamais un null', async () => {
+    mockCreateSession.mockRejectedValueOnce(new AgeBelowMinimumError());
+    const { svc } = service(account(yearsAgo(13, 1)));
 
     const refus = await svc.authenticate({ username: 'kid', password: 'ok' }).catch((e: unknown) => e);
 
     expect(refus).toBeInstanceOf(AgeBelowMinimumError);
     expect((refus as AgeBelowMinimumError).statusCode).toBe(403);
     expect((refus as AgeBelowMinimumError).code).toBe('AGE_BELOW_MINIMUM');
-    expect(mockCreateSession).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ isOnline: true }) }));
-  });
-
-  it('13 ans le jour même : la session s’ouvre', async () => {
-    const { svc } = service(account(yearsAgo(13)));
-    const res = await svc.authenticate({ username: 'kid', password: 'ok' });
-    expect(res?.sessionToken).toBe('session-token');
   });
 
   it('un mot de passe faux ne révèle pas l’âge : échec ordinaire', async () => {
