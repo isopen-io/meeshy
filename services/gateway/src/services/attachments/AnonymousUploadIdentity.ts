@@ -24,7 +24,12 @@
 import { promises as fs } from 'fs';
 import { hashSessionToken } from '../../utils/session-token.js';
 import { GUEST_ATTACHMENT_MAX_BYTES, GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
-import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict, type ShareLinkAnonymousFlags } from './ContentSignature.js';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentNeedsFullContent,
+  type AnonymousAttachmentVerdict,
+  type ShareLinkAnonymousFlags,
+} from './ContentSignature.js';
 
 export interface AnonymousUploadIdentityPrisma {
   participant: {
@@ -130,6 +135,25 @@ export async function readFilePrefix(filePath: string, length: number): Promise<
  * avoir borné la taille sans le charger (`GUEST_ATTACHMENT_MAX_BYTES`), puisque
  * le chemin resumable accepte jusqu'à 4 Go.
  */
+const guestTooLarge = (): Extract<AnonymousAttachmentVerdict, { allowed: false }> => ({
+  allowed: false,
+  reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
+  code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
+});
+
+/**
+ * Le refus d'un téléversement d'invité ANNONCÉ trop lourd, avant le premier
+ * octet — `null` quand le lien ne restreint pas par famille ou que la taille
+ * tient sous le plafond.
+ */
+export function guestUploadSizeRefusal(
+  shareLink: ShareLinkAnonymousFlags | null,
+  announcedSize: number,
+): Extract<AnonymousAttachmentVerdict, { allowed: false }> | null {
+  if (!shareLink || !guestAttachmentNeedsFullContent(shareLink)) return null;
+  return announcedSize > GUEST_ATTACHMENT_MAX_BYTES ? guestTooLarge() : null;
+}
+
 export async function classifyGuestFileOnDisk(params: {
   readonly filePath: string;
   readonly mimeType: string;
@@ -137,13 +161,7 @@ export async function classifyGuestFileOnDisk(params: {
   readonly shareLink: ShareLinkAnonymousFlags;
 }): Promise<AnonymousAttachmentVerdict> {
   const { size } = await fs.stat(params.filePath);
-  if (size > GUEST_ATTACHMENT_MAX_BYTES) {
-    return {
-      allowed: false,
-      reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
-      code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
-    };
-  }
+  if (size > GUEST_ATTACHMENT_MAX_BYTES) return guestTooLarge();
   const content = await fs.readFile(params.filePath);
   return classifyAnonymousAttachment(params.mimeType, content, params.shareLink, { fileName: params.fileName });
 }
