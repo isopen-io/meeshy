@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
-import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
+import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, storiesServiesEnLocal, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
 import { exporterVitrine } from '../vitrine/fixtures.mjs'
 
 describe('capture des vrais écrans (#8855)', () => {
@@ -47,15 +47,18 @@ describe('capture des vrais écrans (#8855)', () => {
     expect(['lien', 'progression'].some(montreUnFil)).toBe(false)
   })
 
-  test('chaque média a sa source sur le Mac : la photo du kit, la vidéo du réel préparée, ou le vocal synthétisé', () => {
+  test('chaque média a sa source sur le Mac : la photo du kit, la vidéo préparée et son affiche, ou le vocal synthétisé', () => {
     const f = exporterVitrine({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z') })
-    for (const media of f.medias.filter((m) => m.genre === 'image')) expect(existsSync(sourceDuMedia(media))).toBe(true)
+    for (const media of f.medias.filter((m) => m.genre === 'image' && !m.affiche)) expect(existsSync(sourceDuMedia(media))).toBe(true)
+    const affiches = f.medias.filter((m) => m.affiche)
+    for (const media of affiches) expect(sourceDuMedia(media, { affiche: (nom) => `/affiches/${nom}.jpg` })).toBe(`/affiches/${media.affiche}.jpg`)
+    expect(affiches.map((m) => m.affiche)).toEqual(['miroir-brosse', 'louche-micro', 'emoji-reunion', 'menage-danse'])
     for (const media of f.medias.filter((m) => m.genre === 'audio')) expect(sourceDuMedia(media)).toMatch(/out\/vitrine\/voix\/[0-9a-f]{16}\.m4a$/)
     const preparees = []
     for (const media of f.medias.filter((m) => m.genre === 'video')) {
       expect(sourceDuMedia(media, { video: (nom) => { preparees.push(nom); return `/videos/${nom}.mp4` } })).toBe(`/videos/${media.video}.mp4`)
     }
-    expect(preparees).toEqual(['coucher-ocean'])
+    expect(preparees).toEqual(['coucher-ocean', 'miroir-brosse', 'louche-micro', 'emoji-reunion', 'menage-danse'])
   })
 
   test('les captures natives ont déjà la taille App Store', () => {
@@ -97,5 +100,14 @@ describe('capture des vrais écrans (#8855)', () => {
     let regards = 0
     await attendreLeSignal({ existe: () => ++regards > 2, maintenant: () => 0, dormir: async () => {}, etiquette: 'x' })
     expect(regards).toBe(3)
+  })
+
+  test('la photo d’une story est servie à son fichier déposé : le fond d’une story ne résout pas une adresse relative face à l’hôte mort', () => {
+    const f = exporterVitrine({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z') })
+    const servies = storiesServiesEnLocal(f, '/conteneur/Documents/vitrine')
+    const [media] = servies.stories[0].media
+    expect(media.fileUrl).toBe(`file:///conteneur/Documents/vitrine/medias/${media.fileName}`)
+    expect(servies.posts).toEqual(f.posts)
+    expect(f.stories[0].media[0].fileUrl).toMatch(/^\/api\/v1\//)
   })
 })

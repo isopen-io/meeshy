@@ -13,7 +13,7 @@ import { CREDITS } from '../lib/photos.mjs'
 import { pngInfo } from '../lib/png.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
 import { exporterVitrine } from './fixtures.mjs'
-import { DOSSIER_PHOTOS, fichierVoix, lireVoix, preparerVideo, synthetiser } from './medias.mjs'
+import { DOSSIER_PHOTOS, fichierVoix, lireVoix, preparerAffiche, preparerVideo, synthetiser } from './medias.mjs'
 import { SIMULATEURS, assurerSimulateur, barreDEtat, demarrer } from './simulateurs.mjs'
 
 export const BUNDLE = 'me.meeshy.app'
@@ -75,13 +75,25 @@ export const vocalTropCourt = (f, lang) => {
 
 // La source d'un média sur le Mac : la photo du kit, la vidéo du réel (téléchargée et réduite une fois), ou le vocal
 // synthétisé. `video` est injectable : un test n'a rien à télécharger.
-export const sourceDuMedia = (media, { video = preparerVideo } = {}) => {
+export const sourceDuMedia = (media, { video = preparerVideo, affiche = preparerAffiche } = {}) => {
   switch (media.genre) {
-    case 'image': return resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier)
+    case 'image': return media.affiche ? affiche(media.affiche) : resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier)
     case 'video': return video(media.video)
     default: return fichierVoix(media)
   }
 }
+
+// Le fond d'une story se résout par `StoryBackgroundLayer.directURLIfAny` : face à l'hôte injoignable, une adresse
+// relative n'y donne rien (`resolveMediaURL` refuse 127.0.0.1) et la story tourne sur sa roue d'attente. La photo de la
+// story est donc servie à son fichier déposé dans le conteneur — la forme `file://` que le lecteur lit telle quelle, celle
+// d'une story que son auteur vient de composer (#9904).
+export const storiesServiesEnLocal = (fixtures, dossier) => ({
+  ...fixtures,
+  stories: (fixtures.stories ?? []).map((story) => ({
+    ...story,
+    media: story.media.map((m) => ({ ...m, fileUrl: pathToFileURL(resolve(dossier, 'medias', m.fileName)).href })),
+  })),
+})
 
 const deposer = (fixtures, dossier) => {
   const medias = resolve(dossier, 'medias')
@@ -139,7 +151,7 @@ export const preparerScene = ({ udid, lang, scene, theme, voix, etiquette, fil =
   }
   const court = scene === 'amour' ? vocalTropCourt(fixtures, lang) : null
   if (court) throw new Error(`${etiquette} : la piste ${court.lang} dure ${court.dureeMs} ms — elle serait finie avant la photo (minimum ${DUREE_MIN_VOCAL_MS} ms)`)
-  deposer(fixtures, dossier)
+  deposer(storiesServiesEnLocal(fixtures, dossier), dossier)
   return dossier
 }
 

@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
-  DOSSIER_PHOTOS, RACINE_MEDIAS, VIDEOS, VIDEO_DU_REEL, argumentsExtrait, choisirVoix, dimensionsJpeg, dureeDepuisAfinfo, empreinte,
+  DOSSIER_PHOTOS, RACINE_MEDIAS, VIDEOS, VIDEOS_DES_REELS_DROLES, VIDEO_DU_REEL, afficheMedia, argumentsAffiche, argumentsExtrait, preparerAffiche, choisirVoix, dimensionsJpeg, dureeDepuisAfinfo, empreinte,
   fichierSourceVideo, fichierVideo, fichierVoix, lireVoix, photoMedia, preparerVideo, segmenter, videoMedia, vocalMedia,
 } from '../vitrine/medias.mjs'
 
@@ -126,3 +126,40 @@ describe('la vidéo du réel (#9820)', () => {
   })
 })
 
+
+describe('les réels drôles de l’en-tête (#9904)', () => {
+  test.each(VIDEOS_DES_REELS_DROLES)('%s vient de Mixkit, sous sa licence gratuite commerciale, et sa source est épinglée', (nom) => {
+    const v = VIDEOS[nom]
+    expect(v.licence).toBe('https://mixkit.co/license/#videoFree')
+    expect(v.page).toMatch(/^https:\/\/mixkit\.co\/free-stock-video\/[a-z0-9-]+-\d+\/$/)
+    expect(v.source).toMatch(/^https:\/\/assets\.mixkit\.co\//)
+    expect(v.sha256).toMatch(/^[0-9a-f]{64}$/)
+    expect([v.width, v.height]).toEqual([720, 1280])
+    expect(v.extrait.dureeS).toBeGreaterThanOrEqual(4)
+  })
+
+  test('quatre vidéos distinctes, chacune avec son fichier', () => {
+    expect(new Set(VIDEOS_DES_REELS_DROLES.map((v) => VIDEOS[v].fichier)).size).toBe(4)
+  })
+
+  test('l’affiche d’une vidéo est une image relative, à ses dimensions, tirée de son extrait', () => {
+    expect(afficheMedia('louche-micro')).toEqual({
+      url: `${RACINE_MEDIAS}/reel-louche-micro.jpg`, fichier: 'reel-louche-micro.jpg', genre: 'image', affiche: 'louche-micro', width: 720, height: 1280,
+    })
+    const args = argumentsAffiche({ extrait: '/e.mp4', sortie: '/a.jpg' })
+    expect(args.slice(args.indexOf('-i'), args.indexOf('-i') + 2)).toEqual(['-i', '/e.mp4'])
+    expect(args[args.indexOf('-frames:v') + 1]).toBe('1')
+    expect(args.at(-1)).toBe('/a.jpg')
+  })
+
+  test('l’affiche se tire une fois, puis se ressert', () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'vitrine-affiche-'))
+    let tirages = 0
+    const tirer = (args) => { tirages += 1; writeFileSync(args.at(-1), 'jpeg') }
+    const extraireVideo = () => '/e.mp4'
+    const chemin = preparerAffiche('menage-danse', { dossier, tirer, extraireVideo })
+    expect(chemin).toBe(join(dossier, 'reel-menage-danse.jpg'))
+    expect(preparerAffiche('menage-danse', { dossier, tirer, extraireVideo })).toBe(chemin)
+    expect(tirages).toBe(1)
+  })
+})
