@@ -10088,9 +10088,9 @@
 			sourceTree = "<group>";
 		};
 		ED468E0EE7FC2876B3E735CA /* Bubble */ = {
-				E3C7AD0E47B6478E097E73DA /* AttachmentReactionPickerOverlay.swift */,
 			isa = PBXGroup;
 			children = (
+				E3C7AD0E47B6478E097E73DA /* AttachmentReactionPickerOverlay.swift */,
 				0327327AFEAB2172F21A1564 /* AudioBubbleRouter.swift */,
 				FDDF15A8DA45DB357ACAD0DC /* AudioCarouselView.swift */,
 				C53F0A5069E0FC64C23F67C6 /* BubbleAttachmentView.swift */,
