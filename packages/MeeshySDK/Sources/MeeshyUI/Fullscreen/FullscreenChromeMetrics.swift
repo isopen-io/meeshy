@@ -66,6 +66,7 @@ public nonisolated enum FullscreenChromeMetrics {
 /// **Les glyphes du chrome plein écran — un verbe, un symbole, partout** (#8878).
 public nonisolated enum FullscreenChromeSymbol {
     public static let close = "xmark"
+    public static let back = "chevron.backward"
     public static let more = "ellipsis"
     public static let react = "face.smiling"
     public static let reactBadge = "plus"
