@@ -960,8 +960,11 @@ export default defineConfig({
            * la table de préchargement que porte l'entrée — mesuré, chaque nom
            * coûte ~13 octets gzip à la première peinture de tous. Un nom pour
            * la famille : le même code, chargé par les mêmes écrans.
+           * `boosts`, `personal-mission` et `photo-moments` (#9961) la rejoignent
+           * pour la même raison : dev était à 90,00 Ko pile, et la seule entropie
+           * des empreintes faisait basculer le gate (mesuré : 90,01 → 89,9 Ko).
            */
-          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity)\.[jt]s$/.test(id)) return 'game-law';
+          if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },
       },
