@@ -53,6 +53,8 @@ extension ConversationView {
     /// referme.
     func presentLongPressMenu(for message: Message, cellFrame: CGRect?, pieceId: String? = nil) {
         overlayState.overlayMessage = message
+        // Fail-closed : un message protégé n'ouvre que l'aperçu du message entier.
+        let pieceId = MessagePieceTarget.piece(pieceId, in: message)?.id
         overlayState.overlayPieceId = pieceId
         overlayState.restoreAfterLongPress = (isTyping: isTyping, showOptions: composerState.showOptions)
         isTyping = false

@@ -348,4 +348,42 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertTrue(try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
             .contains("PieceSpotlightRing(attachmentId: attachment.id"))
     }
+
+    // MARK: - Fail-closed sur la protection du MESSAGE (pièces sans drapeau)
+
+    private func protectedLots() -> [String: Message] {
+        let clear = [photo("p1"), photo("p2"), photo("p3")]
+        var blurred = message(clear); blurred.isBlurred = true
+        var viewOnce = message(clear); viewOnce.isViewOnce = true
+        var encrypted = message(clear); encrypted.isEncrypted = true
+        var flame = message(clear); flame.effects = MessageEffects(flags: .ephemeral, ephemeralDuration: 300)
+        var afterRead = message(clear); afterRead.effects = MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])
+        return ["flou": blurred, "vue unique": viewOnce, "chiffré": encrypted,
+                "éphémère": flame, "après lecture": afterRead]
+    }
+
+    func test_piece_protectedMessageWithUnflaggedPieces_opensNoPiecePreview() {
+        for (nature, lot) in protectedLots() {
+            XCTAssertTrue(MessagePieceTarget.messageIsProtected(lot), "\(nature) : le message est protégé")
+            XCTAssertNil(MessagePieceTarget.piece("p2", in: lot),
+                         "\(nature) : l'appui long retombe sur l'aperçu protégé du message")
+        }
+    }
+
+    func test_pieceMenu_protectedMessageWithUnflaggedPieces_offersNeitherSaveNorReply() {
+        for (nature, lot) in protectedLots() {
+            let piece = photo("p2")
+            XCTAssertTrue(MessagePieceTarget.isProtected(piece, in: lot), "\(nature) : la pièce hérite de la protection")
+            let actions = MessagePieceMenu.actions(MessagePieceMenu.Context(
+                isProtected: MessagePieceTarget.isProtected(piece, in: lot), exits: lot.exitOffer, canDelete: false))
+            XCTAssertFalse(actions.contains(.saveMedia), "\(nature) : rien ne s'enregistre")
+            XCTAssertFalse(actions.contains(.replyToPiece), "\(nature) : rien ne se cite")
+            XCTAssertNil(MessageExitTransport.saveRequest(for: lot, piece: "p2"), "\(nature) : le transport refuse aussi")
+        }
+    }
+
+    func test_piece_clearMessage_stillOpensThePiecePreview() {
+        XCTAssertFalse(MessagePieceTarget.messageIsProtected(lotOfFive))
+        XCTAssertEqual(MessagePieceTarget.piece("p2", in: lotOfFive)?.id, "p2")
+    }
 }

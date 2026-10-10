@@ -39,9 +39,26 @@ nonisolated enum MessagePieceTarget {
 
     /// La pièce visée, si elle est bien une tuile de CE message. `nil` ⇒ l'appui
     /// long vise le message entier, et l'aperçu reste celui du message.
+    ///
+    /// **Fail-closed sur le MESSAGE** : un message protégé n'ouvre jamais
+    /// l'aperçu d'une pièce, même quand la pièce ne porte aucun drapeau (cache
+    /// ancien, envoi optimiste). L'appui long retombe sur l'aperçu du message,
+    /// qui rend sa forme protégée (`OverlayPreviewProtection`).
     static func piece(_ attachmentId: String?, in message: Message) -> MessageAttachment? {
-        guard let attachmentId else { return nil }
+        guard let attachmentId, !messageIsProtected(message) else { return nil }
         return pieces(of: message).first { $0.id == attachmentId }
+    }
+
+    /// **Le message retient-il son contenu ?** Le prédicat de l'appui long
+    /// existant (`OverlayPreviewProtection.form` : vue unique, flou du message
+    /// ou d'une pièce), le chiffrement, et la loi de sortie (flamme, flamme
+    /// après lecture) — un contenu qui ne peut pas sortir ne se montre pas en
+    /// clair, pièce par pièce, dans un aperçu qui offrirait de l'enregistrer.
+    static func messageIsProtected(_ message: Message) -> Bool {
+        OverlayPreviewProtection.form(for: message) != .clear
+            || message.isEncrypted
+            || message.attachments.contains { $0.isEncrypted }
+            || !message.exitOffer.offers(.save)
     }
 
     /// Le rang (à partir de 0) de la pièce parmi les tuiles du message.
@@ -58,10 +75,7 @@ nonisolated enum MessagePieceTarget {
     /// ou son message, est à vue unique, floutée ou chiffrée : l'appui long ne
     /// dévoile pas ce que le fil retient (#8009), et ne l'enregistre pas.
     static func isProtected(_ piece: MessageAttachment, in message: Message) -> Bool {
-        ComposableAttachment.isProtected(piece)
-            || message.holdsViewOnce
-            || message.isBlurred
-            || message.isEncrypted
+        ComposableAttachment.isProtected(piece) || messageIsProtected(message)
     }
 
     /// **La taille d'une pièce dans la scène de l'aperçu, à son RATIO.**
