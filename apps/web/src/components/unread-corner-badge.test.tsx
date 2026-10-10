@@ -74,7 +74,7 @@ describe('la pastille d’un barreau', () => {
     expect(html).toContain('data-unread="3"');
     expect(html).toContain('data-badge-pose="rung"');
     expect(html).toContain('>3<');
-    expect(html).toContain('background-color:#fff');
+    expect(html).toContain('background-color:var(--color-ios-on-brand)');
     expect(html).toContain(TEINTE);
     expect(html).not.toContain('var(--color-error)');
     expect(html).toContain('min-width:16px');

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -25,6 +26,7 @@ import {
   truncateMessagePreview
 } from './utils/last-message-preview';
 import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-message-nature';
+import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 
 const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
@@ -55,7 +57,7 @@ const conversationSearchPreviewInclude = {
       },
     },
   },
-  attachments: { take: 1 },
+  attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 },
   _count: { select: { attachments: true } },
 } as const;
 
@@ -154,15 +156,24 @@ export function registerSearchRoutes(
                   id: true,
                   username: true,
                   displayName: true,
+                  // #8970 — `generateDefaultConversationTitle` nomme un membre
+                  // `displayName` → `firstName lastName` → `username`. Ne pas
+                  // charger le nom réel ici ne dégradait pas le titre : il le
+                  // rendait IMPOSSIBLE — la fonction ne recevait que deux des
+                  // quatre champs, et cette route était la seule des quatre
+                  // appelantes dans ce cas. Ses trois soeurs
+                  // (`conversationCard.ts`, `core-detail.ts`, `core-list.ts`)
+                  // les chargent depuis toujours.
+                  firstName: true,
+                  lastName: true,
                 },
               },
             },
             take: 5,
           },
           messages: {
-            where: {
-              deletedAt: null
-            },
+            // #9630 — un avis de capture n'est jamais l'aperçu d'une ligne.
+            where: withoutCaptureNotices({ deletedAt: null }),
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: conversationSearchPreviewInclude,
@@ -292,6 +303,8 @@ export function registerSearchRoutes(
                     id: m.userId,
                     displayName: m.user?.displayName,
                     username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName,
                   })),
                   userId
                 ));
@@ -325,6 +338,7 @@ export function registerSearchRoutes(
               isEncrypted?: boolean | null;
               expiresAt?: Date | null;
               ephemeralDuration?: number | null;
+              effectFlags?: number | null;
             }))
           : false;
         const place = isMsgProtected

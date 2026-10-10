@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationAnimatedBackground.swift
 
@@ -114,16 +115,16 @@ struct ConvBgFixedAvatar: View {
                 .blur(radius: 6)
 
             Circle()
-                .fill(color.opacity(0.25))
-                .frame(width: 40, height: 40)
+                .fill(color.opacity(MeeshyOpacity.medium))
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
             Image(systemName: "person.fill")
-                .font(.system(size: 16))
-                .foregroundColor(color.opacity(0.50))
+                .font(.system(size: MeeshyIconSize.md))
+                .foregroundColor(color.opacity(MeeshyOpacity.strong))
 
             Circle()
-                .stroke(color.opacity(glowPulse ? 0.45 : 0.30), lineWidth: 2)
-                .frame(width: 40, height: 40)
+                .stroke(color.opacity(glowPulse ? 0.45 : 0.30), lineWidth: MeeshyBorder.strong)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
         }
     }
 }
@@ -245,7 +246,7 @@ struct ConvBgSatellite: View {
             let endY = -sin(currentAngle) * orbitRadius * 0.55
             path.addLine(to: CGPoint(x: endX, y: endY))
         }
-        .stroke(color.opacity(0.12), style: StrokeStyle(lineWidth: 2, dash: [5, 5], dashPhase: beamPhase))
+        .stroke(color.opacity(MeeshyOpacity.light), style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: [5, 5], dashPhase: beamPhase))
     }
 
     private var satelliteWithPulse: some View {
@@ -256,8 +257,8 @@ struct ConvBgSatellite: View {
                 .blur(radius: 8)
 
             Image(systemName: "antenna.radiowaves.left.and.right")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(color.opacity(0.50))
+                .font(.system(size: MeeshyIconSize.md, weight: .medium))
+                .foregroundColor(color.opacity(MeeshyOpacity.strong))
 
             Circle()
                 .fill(color.opacity(signalPulse ? 0.60 : 0.22))
@@ -287,7 +288,7 @@ struct ConvBgSignalWave: View {
 
     var body: some View {
         Circle()
-            .stroke(color.opacity(0.22 * (1 - progress)), lineWidth: 2)
+            .stroke(color.opacity(0.22 * (1 - progress)), lineWidth: MeeshyBorder.strong)
             .frame(width: 12 + progress * 15, height: 12 + progress * 15)
             .offset(
                 x: -cos(angle) * progress * 60,

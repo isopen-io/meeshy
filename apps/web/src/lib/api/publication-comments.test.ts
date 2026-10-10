@@ -28,6 +28,7 @@ import {
   type CommentInfiniteData,
   type PostComment,
 } from './publication-comments';
+import { ownerPresent } from '@/test-support/comment-owner';
 
 const author = { id: 'u-me', username: 'moi', displayName: 'Moi', avatar: null };
 
@@ -140,7 +141,7 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       postId: 'p1',
       content: 'bonjour',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result.ok).toBe(true);
@@ -160,7 +161,7 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       postId: 'p1',
       content: 'bonjour',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });
@@ -181,7 +182,7 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       postId: 'p1',
       content: 'bonjour',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result).toEqual({ ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE });
@@ -200,7 +201,7 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       postId: 'p1',
       content: '   ',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result.ok).toBe(false);
@@ -220,7 +221,7 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       postId: 'p2',
       content: 'salut',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(countOf(queryClient, 'p2')).toBe(5);
@@ -241,7 +242,7 @@ describe('le compteur bouge LÀ OÙ LE RAIL LE LIT — `STORY_FEED_QUERY_KEY` (#
       postId: 'st-1',
       content: 'joli',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(railCountOf(queryClient, 'st-1')).toBe(4);
@@ -259,7 +260,7 @@ describe('le compteur bouge LÀ OÙ LE RAIL LE LIT — `STORY_FEED_QUERY_KEY` (#
       postId: 'st-1',
       content: 'joli',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(result).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });
@@ -275,7 +276,7 @@ describe('le compteur bouge LÀ OÙ LE RAIL LE LIT — `STORY_FEED_QUERY_KEY` (#
       postId: 'st-1',
       content: 'le premier',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(railCountOf(queryClient, 'st-1')).toBe(1);
@@ -291,7 +292,7 @@ describe('le compteur bouge LÀ OÙ LE RAIL LE LIT — `STORY_FEED_QUERY_KEY` (#
       postId: 'p-du-flux',
       content: 'ailleurs',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(queryClient.getQueryData(STORY_FEED_QUERY_KEY)).toBe(corpus);
@@ -570,7 +571,7 @@ describe('le compteur bouge AUSSI sur la story ouverte par LIEN — `storyPostQu
       postId: 'st-lien',
       content: 'joli',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(railLinkCountOf(queryClient, 'st-lien')).toBe(4);
@@ -586,7 +587,7 @@ describe('le compteur bouge AUSSI sur la story ouverte par LIEN — `storyPostQu
       postId: 'st-lien',
       content: 'joli',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     /* L'optimiste EST posé — sans ce relevé À MI-VOL, le témoin verdirait sur
@@ -606,7 +607,7 @@ describe('le compteur bouge AUSSI sur la story ouverte par LIEN — `storyPostQu
       postId: 'p-du-flux',
       content: 'ailleurs',
       author,
-      deps: { source: 'gateway', transport: transport as never, queryClient },
+      deps: { source: 'gateway', transport: transport as never, queryClient, owner: ownerPresent },
     });
 
     expect(queryClient.getQueryData(storyPostQueryKey('p-du-flux'))).toBeUndefined();

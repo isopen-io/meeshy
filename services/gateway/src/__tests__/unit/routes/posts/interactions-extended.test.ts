@@ -603,6 +603,34 @@ describe('GET /posts/:postId/interactions', () => {
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
     expect(res.statusCode).toBe(404);
   });
+
+  // #9727 — la porte est l'auteur seul ; le rôle GLOBAL reste transmis pour la
+  // lecture ADMIN/BIGBOSS qui rouvrira avec sa trace d'audit (#9733).
+  it("transmet le rôle global du lecteur à la porte", async () => {
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false });
+    await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions?limit=10&offset=20` });
+    expect(mockGetPostInteractions).toHaveBeenLastCalledWith(POST_ID, USER_ID, 10, 20, expect.objectContaining({ role: 'USER' }));
+  });
+
+  it("sert chaque ligne enrichie telle quelle, compteurs absents compris", async () => {
+    const enriched = {
+      id: 'viewer-1', username: 'v', displayName: 'V', avatarUrl: null, viewedAt: '2026-10-10T12:00:00.000Z',
+      reaction: '😂', reactions: ['❤️', '😂'], shareCount: 1, repostCount: 2, commentCount: 3, replyCount: 1,
+    };
+    const bare = { id: 'viewer-2', username: 'w', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [enriched, bare], total: 2, hasMore: false });
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data.viewers).toEqual([enriched, bare]);
+    expect(res.json().pagination).toEqual(expect.objectContaining({ total: 2, hasMore: false }));
+    expect(res.json().data).not.toHaveProperty('engagement');
+  });
+
+  it("dit quand le détail de l'activité n'a pas pu être établi — engagement: 'unavailable'", async () => {
+    const bare = { id: 'viewer-1', username: 'v', displayName: null, avatarUrl: null, viewedAt: '2026-10-10T11:00:00.000Z', reaction: null };
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [bare], total: 1, hasMore: false, engagement: 'unavailable' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data).toEqual({ viewers: [bare], engagement: 'unavailable' });
+  });
 });
 
 // ─── POST /posts/:postId/repost ───────────────────────────────────────────────

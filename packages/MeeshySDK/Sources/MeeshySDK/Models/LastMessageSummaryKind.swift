@@ -12,6 +12,9 @@ public enum LastMessageSummaryKind: Sendable, Equatable {
     case viewOnce
     /// Message éphémère dont la date d'expiration est dépassée.
     case expired
+    /// Flamme-œil (#8634) : disparaît quand son lecteur l'a VU — la lire dans
+    /// une ligne de liste ne la consommerait pas, le contenu ne doit pas être exposé.
+    case afterRead
     /// Message éphémère encore lisible (expiration future).
     case ephemeralActive
 }
@@ -28,6 +31,10 @@ extension MeeshyConversation {
         }
         if lastMessageIsViewOnce {
             return .viewOnce
+        }
+        let flags = MessageEffectFlags(rawValue: UInt32(truncatingIfNeeded: lastMessageNature?.effectFlags ?? 0))
+        if flags.contains(.ephemeralAfterRead) {
+            return .afterRead
         }
         if let expiresAt = lastMessageExpiresAt, expiresAt > now {
             return .ephemeralActive

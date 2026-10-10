@@ -45,7 +45,10 @@ export type LoiDeChamp = {
   readonly permission: keyof AdminPermissions;
   /** BIGBOSS et lui seul — aucune permission ne délègue ce geste. */
   readonly souverain: boolean;
-  /** Un motif écrit est exigé ; sans lui l'écriture est refusée. */
+  /**
+   * Un motif écrit est exigé ; sans lui l'écriture est refusée — sauf pour le
+   * rang souverain, qui n'a rien à justifier (spec 2026-10-04 § 4).
+   */
   readonly motifObligatoire: boolean;
 };
 
@@ -145,11 +148,16 @@ export function evaluerLoiDesChamps(options: {
   role: UserRoleEnum;
   champs: readonly string[];
   motif?: string;
+  /** Pour les témoins : une carte de lois substituée à `LOI_PAR_CHAMP`. */
+  lois?: Readonly<Record<string, LoiDeChamp>>;
 }): RefusDeChamp | null {
   const motifEcrit = (options.motif ?? '').trim().length > 0;
+  const souverain = String(options.role) === String(UserRoleEnum.BIGBOSS);
 
   for (const champ of options.champs) {
-    const loi = loiDuChamp(champ);
+    const loi = options.lois
+      ? (Object.prototype.hasOwnProperty.call(options.lois, champ) ? options.lois[champ] : null)
+      : loiDuChamp(champ);
 
     if (!loi) {
       return {
@@ -159,7 +167,7 @@ export function evaluerLoiDesChamps(options: {
       };
     }
 
-    if (loi.souverain && String(options.role) !== String(UserRoleEnum.BIGBOSS)) {
+    if (loi.souverain && !souverain) {
       return {
         champ,
         cause: 'souverain',
@@ -175,7 +183,7 @@ export function evaluerLoiDesChamps(options: {
       };
     }
 
-    if (loi.motifObligatoire && !motifEcrit) {
+    if (loi.motifObligatoire && !motifEcrit && !souverain) {
       return {
         champ,
         cause: 'motif',

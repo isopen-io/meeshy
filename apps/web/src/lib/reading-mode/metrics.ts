@@ -238,6 +238,14 @@ export const STICKER_SIDE = 112;
 export const BUBBLE_STICKER_SIDE = 160;
 export const STICKER_EMOJI_BOX = 60;
 
+/**
+ * LE WEB REND LE STICKER DEUX FOIS PLUS GRAND (#9319, porteur 2026-10-04) —
+ * dans les fils comme dans les commentaires. Les cotes ci-dessus restent
+ * celles d'iOS (que `check-curve.mjs` compare) ; ce facteur s'applique au
+ * RENDU, et le carré se borne à la largeur de sa colonne.
+ */
+export const STICKER_RENDER_SCALE = 2;
+
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;
 export const HIGH_VELOCITY_THRESHOLD = 1200;

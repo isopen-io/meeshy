@@ -210,8 +210,9 @@ class ConversationViewModel: ObservableObject {
               context.messageId == messageId,
               let (message, attachment) = findAudioAttachment(id: context.attachmentId)
         else { return }
+        let track = queuedAudio(for: attachment, message: message)
         audioCoordinator.syncActiveTrack(
-            urlString: effectiveAudioTrackUrl(for: attachment, message: message)
+            urlString: track.fileUrl, language: track.trackLanguage, isTranslated: track.isTranslatedTrack
         )
     }
 
@@ -254,6 +255,10 @@ class ConversationViewModel: ObservableObject {
     /// successful load so older messages are ready before the user reaches them.
     var isCurrentlyNearBottom: Bool = true
 
+    /// Stockée ici et non dans l'extension qui la pilote (`ConversationViewModel+JumpToMessage.swift`) :
+    /// une extension Swift ne peut pas déclarer de propriété stockée.
+    var newerPagesChain: Task<Void, Never>?
+
     /// Dernier message dont l'affichage a fait « rattraper » la conversation.
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
@@ -283,6 +288,9 @@ class ConversationViewModel: ObservableObject {
 
     /// True when the conversation has been closed (no more messages can be sent)
     @Published var isConversationClosed = false
+    /// Restriction d'écriture APPRISE à l'envoi (#9929) : un 403 `GLOBAL_ADULTS_ONLY`.
+    /// Celle que la liste SERT vit sur la conversation ; la vue lit les deux.
+    @Published var learnedWriteRestriction: ConversationWriteRestriction?
 
     /// True when the server has revoked access to this conversation (user
     /// removed from the participants list, group disbanded, etc.). The
@@ -694,6 +702,7 @@ class ConversationViewModel: ObservableObject {
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        newerPagesChain?.cancel()
         // Only undo the singleton mutations `start()` performed. A throwaway VM
         // (eagerly allocated by `ConversationView.init`, never activated because
         // `@StateObject` discarded it before its `.task` ran) MUST NOT clear the
@@ -770,11 +779,11 @@ class ConversationViewModel: ObservableObject {
         // guest can trigger the OS microphone permission prompt from a bubble
         // tap before the gateway's own isAnonymous check ever runs.
         guard anonymousSession == nil else { return }
-        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         if summary.isLive {
             Task { await joinOngoingCall(summary) }
             return
         }
+        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         Task { @MainActor in
@@ -803,7 +812,8 @@ class ConversationViewModel: ObservableObject {
                 isVideo: summary.callType == .video,
                 currentUserId: currentUserId,
                 fallbackRemoteUserId: participantUserId,
-                fallbackDisplayName: resolvedPeerDisplayName
+                fallbackDisplayName: isDirect ? resolvedPeerDisplayName : currentConversationName,
+                isGroup: !isDirect
             )
         )
     }
@@ -816,65 +826,10 @@ class ConversationViewModel: ObservableObject {
             .senderName
     }
 
-    /// Kicks off conversation-wide audio playback starting at `attachmentId`.
-    ///
-    /// Resolves the message/attachment in the current `messages` snapshot,
-    /// asks `AudioQueueBuilder` for the unlistened, non-self tail of audios
-    /// strictly after this one, then routes the whole queue through the app
-    /// coordinator (which gates on CallKit + auth and exposes the mini-player
-    /// state to the rest of the app).
-    func playAudio(attachmentId: String) {
-        guard let (message, attachment) = findAudioAttachment(id: attachmentId),
-              attachment.type == .audio,
-              authManager.currentUser?.id != nil else { return }
-
-        let current = QueuedAudio(
-            attachmentId: attachment.id,
-            messageId: message.id,
-            conversationId: message.conversationId,
-            // La piste EFFECTIVE, pas l'original en dur : le drapeau-toggle
-            // et le Prisme décident (user 2026-08-18 — le widget affichait
-            // la piste traduite pendant que le coordinateur rejouait
-            // l'original).
-            fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
-            durationMs: attachment.duration ?? 0,
-            senderName: message.senderName ?? "",
-            senderAvatarURL: message.senderAvatarURL,
-            receivedAt: message.createdAt
-        )
-
-        let tail = audioQueueTail(after: attachment.id)
-
-        audioCoordinator.play(
-            current: current,
-            tail: tail,
-            conversationName: currentConversationName,
-            conversationArtworkURL: currentConversationArtworkURL
-        )
-    }
-
-    /// File des vocaux non écoutés strictement APRÈS `attachmentId` — partagée
-    /// entre `playAudio` et le plein écran (`AudioFullscreenSource.queueTailProvider`).
-    func audioQueueTail(after attachmentId: String) -> [QueuedAudio] {
-        guard let currentUserId = authManager.currentUser?.id else { return [] }
-        return AudioQueueBuilder.build(
-            from: messages,
-            startingAfterAttachmentId: attachmentId,
-            currentUserId: currentUserId,
-            listenedAttachmentIds: listenedAttachmentIds,
-            // L'auto-avance joue la piste EFFECTIVE de chaque vocal — sans
-            // ce résolveur, le 2e vocal sortait en V.O. pendant que sa bulle
-            // affichait le karaoké traduit (revue adversariale 2026-08-18).
-            trackUrlResolver: { [weak self] message, attachment in
-                self?.effectiveAudioTrackUrl(for: attachment, message: message) ?? attachment.fileUrl
-            }
-        )
-    }
-
     /// O(n) scan over `messages` for the message that owns `attachmentId`.
     /// `messages` rarely exceeds a few hundred rows in memory; an index would
     /// have to invalidate on every attachment update for negligible gain.
-    private func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
+    func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
         for message in messages {
             if let att = message.attachments.first(where: { $0.id == id && $0.type == .audio }) {
                 return (message, att)
@@ -896,14 +851,27 @@ class ConversationViewModel: ObservableObject {
     /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
     /// l'audio entendu corresponde au texte et aux segments affichés.
     func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
-        let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
-        let lang = AudioTrackLanguageResolver.resolve(
+        servedAudioTrack(for: attachment, message: message).url
+    }
+
+    /// La piste SERVIE entière (URL, durée, texte) — la descente de
+    /// `effectiveAudioTrackUrl`, que l'aperçu d'appui long reçoit (#9010).
+    func servedAudioTrack(for attachment: MessageAttachment, message: Message) -> ServedAudioTrack {
+        let transcript = messageTranscriptionsByAttachment[attachment.id]
+            ?? messageTranscriptions[message.id].flatMap { $0.attachmentId == attachment.id ? $0 : nil }
+        return AudioTrackLanguageResolver.servedTrack(
+            of: attachment,
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
             originalLanguage: message.originalLanguage,
             preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
-            translatedAudios: tracks
+            translatedAudios: translatedAudioTracks(for: attachment, messageId: message.id),
+            originalTranscript: transcript?.text ?? attachment.transcription?.text
         )
-        return AudioTrackLanguageResolver.url(for: lang, translatedAudios: tracks, originalUrl: attachment.fileUrl)
+    }
+
+    func servedAudioTracks(of message: Message) -> [String: ServedAudioTrack] {
+        Dictionary(message.attachments.filter { $0.type == .audio }.map { ($0.id, servedAudioTrack(for: $0, message: message)) },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     /// Subscribes to `$messages` and forwards any newly-inserted audio messages
@@ -977,17 +945,8 @@ class ConversationViewModel: ObservableObject {
             for attachment in message.attachments
                 where attachment.type == .audio
                 && !listenedAttachmentIds.contains(attachment.id) {
-                audioCoordinator.appendUpcoming(QueuedAudio(
-                    attachmentId: attachment.id,
-                    messageId: message.id,
-                    conversationId: message.conversationId,
-                    // Piste EFFECTIVE — même loi que playAudio/la tail.
-                    fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
-                    durationMs: attachment.duration ?? 0,
-                    senderName: message.senderName ?? "",
-                    senderAvatarURL: message.senderAvatarURL,
-                    receivedAt: message.createdAt
-                ))
+                // Piste EFFECTIVE — même loi que playAudio/la tail.
+                audioCoordinator.appendUpcoming(queuedAudio(for: attachment, message: message))
             }
         }
     }
@@ -1009,6 +968,9 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
+        #if DEBUG
+        VitrineRendu.shared.conversationAffichee(self, visibles: visibleIds)
+        #endif
         afterReadVisit.note(displayed: (messageIds ?? []) + visibleIds, among: messages)
         let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
         if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }

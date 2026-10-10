@@ -13,7 +13,7 @@ const itCallCaptions = {
   'callCaptions.mode.translated': 'Tradotti nella tua lingua',
   'callCaptions.mode.original': 'Nella lingua originale',
   'callCaptions.listening': 'La tua voce viene trascritta',
-  'callCaptions.unsupported': 'Questo browser non trascrive la tua voce: leggi gli altri',
+  'callCaptions.unsupported': 'La tua voce non viene trascritta su questo dispositivo: leggi gli altri',
   'callCaptions.denied': 'Riconoscimento vocale negato: leggi gli altri',
   'callCaptions.journal.title': 'Registro della chiamata',
   'callCaptions.participant': 'Partecipante',

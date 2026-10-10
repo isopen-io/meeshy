@@ -40,7 +40,7 @@ final class GalleryCaptionSharedRuleGuardTests: XCTestCase {
 
     func test_laGalerieMonteLaCouchePartagee() throws {
         let code = try source()
-        guard let couche = corps("private func captionOverlay(_ text: String) -> some View {", dans: code) else {
+        guard let couche = corps("private func captionOverlay(_ text: String, links: [String: String]) -> some View {", dans: code) else {
             return XCTFail("`captionOverlay` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(couche.contains("MediaCaptionOverlay("),
@@ -56,7 +56,7 @@ final class GalleryCaptionSharedRuleGuardTests: XCTestCase {
     /// choisie par le lecteur.
     func test_laGalerieNeReplieJamaisParElleMeme() throws {
         let code = try source()
-        guard let couche = corps("private func captionOverlay(_ text: String) -> some View {", dans: code) else {
+        guard let couche = corps("private func captionOverlay(_ text: String, links: [String: String]) -> some View {", dans: code) else {
             return XCTFail("`captionOverlay` introuvable.")
         }
         XCTAssertFalse(couche.contains("lineLimit("),
@@ -72,7 +72,7 @@ final class GalleryCaptionSharedRuleGuardTests: XCTestCase {
     /// que le nom de l'auteur — deux alignements pour une même colonne.
     func test_leRetraitEstCeluiDeSaColonne() throws {
         let code = try source()
-        guard let couche = corps("private func captionOverlay(_ text: String) -> some View {", dans: code) else {
+        guard let couche = corps("private func captionOverlay(_ text: String, links: [String: String]) -> some View {", dans: code) else {
             return XCTFail("`captionOverlay` introuvable.")
         }
         XCTAssertTrue(couche.contains("horizontalInset:"),

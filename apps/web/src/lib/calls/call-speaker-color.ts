@@ -14,7 +14,7 @@
 
 export const SPEAKER_PALETTE: readonly string[] = ['#93c5fd', '#fca5a5', '#86efac', '#fcd34d', '#c4b5fd', '#f9a8d4', '#67e8f9', '#fdba74'];
 
-export const SELF_SPEAKER_COLOR = '#ffffff';
+export const SELF_SPEAKER_COLOR = 'var(--color-on-media)';
 
 const hash = (id: string): number => [...id].reduce((acc, char) => (Math.imul(acc, 31) + (char.codePointAt(0) ?? 0)) >>> 0, 7);
 

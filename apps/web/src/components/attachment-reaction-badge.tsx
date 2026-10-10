@@ -36,7 +36,7 @@ export function AttachmentReactionBadge({ attachment }: { readonly attachment: A
               backgroundColor: 'color-mix(in srgb, var(--accent) 55%, transparent)',
               boxShadow: 'inset 0 0 0 2px var(--accent), 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent)',
             }
-          : { backgroundColor: 'rgba(0,0,0,0.55)' }
+          : { backgroundColor: 'var(--color-scrim)' }
       }
     >
       {badge.emojis.map((emoji) => (
@@ -45,7 +45,7 @@ export function AttachmentReactionBadge({ attachment }: { readonly attachment: A
         </span>
       ))}
       {badge.total > 1 ? (
-        <span aria-hidden data-reaction-total className="font-semibold tabular-nums text-white" style={{ fontSize: 9 }}>
+        <span aria-hidden data-reaction-total className="font-semibold tabular-nums text-on-media" style={{ fontSize: 9 }}>
           {badge.total}
         </span>
       ) : null}

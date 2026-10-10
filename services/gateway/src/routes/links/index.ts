@@ -10,6 +10,7 @@ import { registerUserRoutes } from './user';
 import { registerLinkStatsRoutes } from './stats';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { registerShareLinkCardRoute } from '../conversations/card';
+import { publicAppOrigin, registerLinkUnfurlRoute } from './unfurl';
 
 /**
  * Point d'entrée principal pour toutes les routes de liens de partage
@@ -31,5 +32,6 @@ export async function linksRoutes(fastify: FastifyInstance) {
     fastify.prisma,
     createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: false, allowAnonymous: true })
   );
+  registerLinkUnfurlRoute(fastify, { prisma: fastify.prisma, origin: publicAppOrigin() });
   await registerAdminRoutes(fastify);
 }

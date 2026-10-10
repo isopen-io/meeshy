@@ -20,6 +20,17 @@ export function reelStageOf(model: Pick<FeedCardModel, 'scene' | 'media'>): Reel
 }
 
 /**
+ * LA SOURCE QUE L'AMORCEUR TÉLÉCHARGE (#9702) — celle que `ReelPlayable` lira,
+ * donc par la MÊME élection (`reelStageOf`) : un cache alimenté sous une clé
+ * que le lecteur ne lit pas ne préchauffe rien (#7009). Une scène composée ou
+ * une galerie d'images n'a pas de source unique à amorcer.
+ */
+export function reelPrimeSourceOf(model: Pick<FeedCardModel, 'scene' | 'media'>): string | undefined {
+  const stage = reelStageOf(model);
+  return stage.kind === 'video' || stage.kind === 'audio' ? stage.media.src : undefined;
+}
+
+/**
  * `reelSceneProgress` — miroir `ReelSceneProgress.fraction(elapsed:duration:)`
  * (`ReelPlaybackRules.swift:93-98`) : `0` si `duration ≤ 0`, sinon borné
  * `[0, 1]`.

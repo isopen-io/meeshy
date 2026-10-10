@@ -62,6 +62,8 @@ export type FixtureCallPeerProbe = {
   readonly muteMe: () => void;
   /** Le pair réagit (`call:reaction-received`, #8439). */
   readonly react: (emoji: string) => void;
+  /** Une AUTRE personne rejoint l'appel, caméra coupée (`call:participant-joined`) : l'appel passe à trois (#8743). */
+  readonly join: (person: { readonly userId: string; readonly name: string }) => void;
 };
 
 export type FixtureCallPeer = {
@@ -247,6 +249,9 @@ export function createFixtureCallPeer(deps: FixtureCallPeerDeps): FixtureCallPee
       },
       react: (emoji) => {
         if (callId !== null) deps.fire(SERVER_EVENTS.CALL_REACTION_RECEIVED, { callId, userId: CALL_PEER_USER_ID, emoji, timestamp: Date.now() });
+      },
+      join: (person) => {
+        if (callId !== null) deps.fire(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId, participant: { id: `p-${person.userId}`, userId: person.userId, displayName: person.name, isAudioEnabled: true, isVideoEnabled: false } });
       },
     },
   };

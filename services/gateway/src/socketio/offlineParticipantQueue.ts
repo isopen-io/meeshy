@@ -4,7 +4,7 @@ import {
   resolveParticipantLanguage,
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { QueuedEventVariant } from './queuedEventContract';
 
@@ -110,6 +110,11 @@ export type OfflineParticipantQueueParams = QueuedEventVariant & {
    * rend le payload à déposer pour LUI. Absent, tout le monde reçoit `payload`.
    */
   resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
+  /**
+   * Les clés de file qui ne reçoivent RIEN — un lecteur dont le plancher
+   * d'historique est postérieur au message (`translationReaders`, #9709).
+   */
+  excludedQueueKeys?: ReadonlySet<string>;
 }
 
 /**
@@ -179,13 +184,20 @@ export async function enqueueForOfflineParticipants(
   if (!deliveryQueue) return;
 
   const { conversationId, actorParticipantId, actorUserId, eventType, messageId, payload, dedupKey, resolvePayloadForReader } = params;
-  // Normalisée une fois, du MÊME côté que le prisme : `resolveUserLanguagesOrdered`
-  // et `resolveParticipantLanguage` rendent des codes réduits et minusculés
-  // ('PT-BR' → 'pt'). Comparer une langue cible brute à un prisme normalisé
-  // raterait le lecteur qu'on cherche précisément à servir.
+  // Normalisée une fois, du MÊME côté que le prisme, et par la MÊME SSOT :
+  // `resolveUserLanguagesOrdered` et `resolveParticipantLanguage` rendent des
+  // codes région-strippés et minusculés — pour TOUT code depuis #9247, pas
+  // seulement pour ceux que le catalogue sait réduire. Comparer une langue cible
+  // brute à un prisme normalisé raterait le lecteur qu'on cherche précisément à
+  // servir.
+  //
+  // Le repli écrit ici à la main (`normalizeLanguageCode ?? toLowerCase`) était la
+  // porte jumelle du même défaut : aucune panne, le seul appelant de production
+  // passant une cible que le pipeline a déjà canonicalisée — mais le premier à
+  // passer un code verbatim hors catalogue aurait comparé un 'yue-hk' qui ne
+  // matche plus personne.
   const restrictToLanguage = params.restrictToReadersOfLanguage
-    ? normalizeLanguageCode(params.restrictToReadersOfLanguage) ??
-      params.restrictToReadersOfLanguage.toLowerCase()
+    ? normalizeLanguageForDedup(params.restrictToReadersOfLanguage)
     : null;
   try {
     // La restriction par langue exige les préférences du lecteur, que la
@@ -224,7 +236,7 @@ export async function enqueueForOfflineParticipants(
       const isActor =
         (actorParticipantId != null && p.id === actorParticipantId) ||
         (actorUserId != null && p.userId === actorUserId);
-      if (isActor || connectedUsers.has(queueKey)) continue;
+      if (isActor || connectedUsers.has(queueKey) || params.excludedQueueKeys?.has(queueKey)) continue;
       if (restrictToLanguage !== null) {
         // Échec OUVERT sur prisme vide : un participant dont aucune langue n'est
         // résoluble reçoit l'entrée, exactement comme avant ce filtre. Le pire

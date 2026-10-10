@@ -376,14 +376,14 @@ struct GalleryScenePlayPause: View {
             onToggle()
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(MeeshyFont.relative(28, weight: .bold))
-                .foregroundColor(.white)
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .bold))
+                .foregroundColor(MeeshyColors.mediaChromeForeground)
                 .offset(x: isPlaying ? 0 : 2)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 64),
                        height: UIFontMetrics.default.scaledValue(for: 64))
-                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.intense))
         }
-        .opacity(0.55)
+        .opacity(MeeshyOpacity.strong)
         // **L'annonce SUIT l'état** : un libellé figé ferait dire « Lecture » à
         // un bouton qui met en pause.
         .accessibilityLabel(isPlaying

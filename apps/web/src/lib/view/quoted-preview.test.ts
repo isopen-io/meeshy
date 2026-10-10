@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { quotedPreviewOf } from './quoted-preview';
@@ -285,11 +286,80 @@ describe('quotedPreviewOf — la pièce NOMMÉE prime sur la première', () => {
     expect(preview.media?.durationLabel).toBe('0:12');
   });
 
-  test('une pièce nommée ABSENTE (retirée, masquée) retombe sur la première', () => {
-    const orphan = Object.assign(quoted({ attachments: [attachment({ id: 'a-1', mimeType: 'image/png' })] }), {
-      attachmentReplyTo: { attachmentId: 'a-9', kind: 'audio' },
-    });
-    expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media?.kind).toBe('image');
+  /* #9911 — aligné sur iOS : une pièce nommée qui a disparu ne se remplace
+     JAMAIS par sa voisine. La citation dit seulement sa NATURE, que
+     l'instantané gravé par la passerelle garde (`attachmentReplyTo.kind`). */
+  test('une pièce nommée ABSENTE ne retombe pas sur la première : seule sa nature reste', () => {
+    const orphan = Object.assign(
+      quoted({ attachments: [attachment({ id: 'a-1', mimeType: 'image/png', thumbnailUrl: 'https://cdn.meeshy.me/t.png' })] }),
+      { attachmentReplyTo: { attachmentId: 'a-9', kind: 'audio' } },
+    );
+    const media = quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media;
+    expect(media?.kind).toBe('audio');
+    expect(media?.label).toBe('Audio');
+    expect(media?.thumbnailSrc).toBeNull();
+    expect(media?.placeholderSrc).toBeNull();
+    expect(media?.openable).toBeNull();
+    expect(media?.fileSrc).toBeNull();
+    expect(media?.frame).toBeNull();
+    expect(media?.more).toBe(0);
+  });
+
+  test('une nature inconnue ou un lieu disparus se disent « Fichier »', () => {
+    const orphan = Object.assign(quoted({ attachments: [PHOTO] }), { attachmentReplyTo: { attachmentId: 'a-9', kind: 'location' } });
+    expect(quotedPreviewOf({ quoted: orphan, readerLanguages: ['fr'], interfaceLanguage: 'fr' }).media?.kind).toBe('file');
+  });
+});
+
+/**
+ * #9911 — LA CITATION DIT COMBIEN DE PIÈCES PORTE LE MESSAGE. Citer un message
+ * de sept photos montrait la première, seule, comme si elle était tout le
+ * message ; `more` compte les AUTRES pièces, que la peau affiche « +N ».
+ */
+describe('quotedPreviewOf — « +N » sur la citation d’un message à plusieurs pièces (#9911)', () => {
+  const pieces = (count: number): readonly Attachment[] =>
+    Array.from({ length: count }, (_, i) => ({ ...PHOTO, id: `a-${i + 1}` }));
+
+  test('sept photos citées en entier : la première, et six de plus', () => {
+    expect(preview(quoted({ attachments: pieces(7) })).media?.more).toBe(6);
+  });
+
+  test('une seule pièce : rien de plus', () => {
+    expect(preview(quoted({ attachments: pieces(1) })).media?.more).toBe(0);
+  });
+
+  test('une pièce NOMMÉE vise une pièce, pas le lot : rien de plus', () => {
+    const named = Object.assign(quoted({ attachments: pieces(7) }), { attachmentReplyTo: { attachmentId: 'a-3', kind: 'image' } });
+    expect(preview(named).media?.more).toBe(0);
+  });
+
+  test('flouté ou chiffré : aucun « +N », aucune vignette', () => {
+    for (const protection of [{ isBlurred: true }, { isEncrypted: true }] as const) {
+      const media = preview(quoted({ content: '🔒', attachments: pieces(7), ...protection })).media;
+      expect(media?.more).toBe(0);
+      expect(media?.thumbnailSrc).toBeNull();
+      expect(media?.openable).toBeNull();
+    }
+  });
+
+  test('un message protégé ne dit pas combien de pièces il cache', () => {
+    expect(preview(quoted({ content: '👁️ 🖼️', isViewOnce: true, attachments: pieces(7) })).media?.more).toBe(0);
+  });
+
+  /* #9915 — la passerelle ne sert que QUATRE pièces du message cité, et dit à
+     côté combien de tuiles il porte en tout (`visualAttachmentCount`). */
+  test('six photos servies par la passerelle (quatre pièces + le compte) : « +5 », pas « +3 »', () => {
+    const served = Object.assign(quoted({ attachments: pieces(4) }), { visualAttachmentCount: 6 });
+    expect(preview(served).media?.more).toBe(5);
+  });
+
+  test('sans compte servi (ancienne passerelle), les pièces servies font foi', () => {
+    expect(preview(quoted({ attachments: pieces(4) })).media?.more).toBe(3);
+  });
+
+  test('un compte servi plus petit que les pièces ne les retranche pas', () => {
+    const served = Object.assign(quoted({ attachments: pieces(4) }), { visualAttachmentCount: 2 });
+    expect(preview(served).media?.more).toBe(3);
   });
 });
 
@@ -388,6 +458,39 @@ describe('quotedPreviewOf — un message cité SUPPRIMÉ', () => {
     expect(shown.text).toBe('Message supprimé');
     expect(shown.media).toBeNull();
     expect(shown.inventory).toEqual([]);
+  });
+});
+
+/**
+ * #8631 — UNE CITATION SCELLÉE PARCE QUE L'ÉPHÉMÈRE A EXPIRÉ POUR SON LECTEUR
+ * n'a pas été SUPPRIMÉE. La passerelle la sert sous la forme d'une suppression
+ * datée de l'échéance du lecteur, et y joint `expiresAt` = cette même date
+ * (`sealedQuotedMessage`) ; le scellement local (`tombstoneQuotesOf`, à
+ * l'expiration ou à la consommation d'une flamme-œil) en fait autant.
+ */
+describe('quotedPreviewOf — un éphémère cité ÉCHU pour son lecteur', () => {
+  const sealedAt = '2026-09-25T10:00:00.000Z' as unknown as Date;
+  const lapsed = quoted({ content: '', translations: [], attachments: [], deletedAt: sealedAt, expiresAt: sealedAt });
+
+  test('dit « Message éphémère expiré », pas « Message supprimé »', () => {
+    expect(preview(lapsed).text).toBe('Message éphémère expiré');
+  });
+
+  test('dans la langue du lecteur', async () => {
+    await loadInterfaceCatalog('en');
+    expect(quotedPreviewOf({ quoted: lapsed, readerLanguages: ['en'], interfaceLanguage: 'en' }).text).toBe('Ephemeral message expired');
+  });
+
+  test('rien ne voyage, comme une suppression', () => {
+    const shown = preview(lapsed);
+    expect(shown.media).toBeNull();
+    expect(shown.inventory).toEqual([]);
+    expect(shown.isProtected).toBe(true);
+  });
+
+  test('une suppression AVANT l’échéance reste « Message supprimé »', () => {
+    const deletedEarly = quoted({ deletedAt: sealedAt, expiresAt: '2026-09-25T11:00:00.000Z' as unknown as Date });
+    expect(preview(deletedEarly).text).toBe('Message supprimé');
   });
 });
 

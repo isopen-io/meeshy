@@ -1,6 +1,6 @@
 import * as z from 'zod/mini';
 
-import type { SessionStorage, SessionStoreApi, SessionUser } from './session';
+import { anonymousSessionsKey, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 
 /**
  * PLUSIEURS COMPTES SUR L'APPAREIL (#8286, D-142) — le COFFRE des comptes et
@@ -92,6 +92,9 @@ export type AccountVault = {
   /** Le compte ACTIF entre (ou reste) dans la liste. `keepsSession` absent
    * garde le choix déjà fait, et vaut `true` pour un compte neuf. */
   noteActive(user: SessionUser, keepsSession?: boolean): void;
+  /** L'identité d'un compte DÉJÀ listé change (photo, nom confirmés, #8886) :
+   * sa ligne suit, sans le faire remonter ni toucher à ses jetons. */
+  refreshUser(user: SessionUser): void;
   /** Range les jetons du compte qu'on QUITTE. */
   stash(userId: string, session: PreservedSession): void;
   /** Reprend les jetons d'un compte, s'ils sont encore valables — et les
@@ -132,6 +135,7 @@ export function createAccountVault({ storage, now }: { readonly storage: Session
       };
       writeAccounts(storage, [entry, ...accounts.filter((account) => account.user.id !== user.id)]);
     },
+    refreshUser: (user) => update(user.id, (account) => ({ ...account, user: projectUser(user) })),
     stash: (userId, session) => update(userId, (account) => ({ ...account, session })),
     take: (userId) => {
       const session = readAccounts(storage).find((account) => account.user.id === userId)?.session ?? null;
@@ -140,6 +144,22 @@ export function createAccountVault({ storage, now }: { readonly storage: Session
     },
     hasPreservedSession: (userId) => live(readAccounts(storage).find((account) => account.user.id === userId)?.session ?? null),
     forget: (userId) => update(userId, () => null),
+  };
+}
+
+/**
+ * « RETIRER CE COMPTE » EFFACE AUSSI CE QU'IL A LAISSÉ SUR L'APPAREIL (#8674)
+ * — son cache de requêtes rangé, ses brouillons, ses modes de lecture : un
+ * compte qui quitte la liste ne laisse rien derrière lui. Changer de compte,
+ * lui, n'appelle jamais `forget`.
+ */
+export function forgettingLocalData(vault: AccountVault, cleanup: (userId: string) => void): AccountVault {
+  return {
+    ...vault,
+    forget: (userId) => {
+      vault.forget(userId);
+      cleanup(userId);
+    },
   };
 }
 
@@ -173,6 +193,7 @@ export function createAccountSwitcher({
     if (current.status !== 'authenticated') return;
     const known = vault.list().find((account) => account.user.id === current.user.id);
     if (known === undefined) vault.noteActive(current.user);
+    else vault.refreshUser(current.user);
     const held: PreservedSession = { token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt };
     if (known?.keepsSession ?? true) vault.stash(current.user.id, held);
     else endServerSession(held);
@@ -213,7 +234,8 @@ export function createAccountSwitcher({
  * CE QU'UN COMPTE LAISSE SUR L'APPAREIL, hors session et cache de requêtes
  * (que l'identité suivante purge déjà, `query-client.ts`) : ses brouillons de
  * message et de story, son audience de studio, ses modes de lecture et ses
- * dernières ouvertures. La DÉCONNEXION l'efface ; changer de compte le garde,
+ * dernières ouvertures, et les identités anonymes qu'il tenait (#8816). La
+ * DÉCONNEXION l'efface ; changer de compte le garde,
  * chaque clé portant l'identité (`u_<id>`, `<id>`) : aucun autre compte ne la lit.
  */
 export function purgeAccountLocalData({
@@ -226,8 +248,13 @@ export function purgeAccountLocalData({
   readonly keys: readonly string[];
 }): void {
   const scope = `u_${userId}`;
-  const prefixes = [`meeshy.draft.${scope}.`, `meeshy.reading-mode.${scope}.`, `meeshy.last-opened.${scope}.`, `meeshy.composer-protection.${scope}.`];
-  const exact = new Set([`meeshy.draft.story.${userId}`, `meeshy.studio.audience.${userId}`]);
+  const prefixes = [`meeshy.draft.${scope}.`, `meeshy.reading-mode.${scope}.`, `meeshy.last-opened.${scope}.`, `meeshy.composer-protection.${scope}.`, `meeshy.call-journal.${scope}.`];
+  const exact = new Set([
+    `meeshy.draft.story.${userId}`,
+    `meeshy.studio.audience.${userId}`,
+    `meeshy.call-journal.${scope}`,
+    anonymousSessionsKey(userId),
+  ]);
   keys
     .filter((key) => exact.has(key) || prefixes.some((prefix) => key.startsWith(prefix)))
     .forEach((key) => {

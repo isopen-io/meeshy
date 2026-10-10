@@ -41,6 +41,12 @@ import { spokenLanguageName } from '@/lib/view/language-name';
  * « sa CAPSULE PEINTE tient dans le cadre » — la RÉUNION bouton+descendants
  * contre le cadre, jamais le seul rectangle du bouton.
  *
+ * DANS LE COMPOSEUR, ELLE LIT LA LOI DE TEINTE D'ICÔNE (#9121) — comme sur
+ * iOS (`languageSelectorPill` → `iconTint`) : `--composer-icon`, posé par
+ * `composerIconTintStyle` sur la racine du composeur (couleur commune au
+ * repos, couleur de l'effet armé sinon). Hors composeur (`legende-plan.tsx`),
+ * aucune racine ne pose le jeton : elle garde `--color-ios-ink`.
+ *
  * `aria-label` DIT ce qui partira — jamais « Langue du message » (le libellé
  * iOS, qui ne nomme pas la CONSÉQUENCE) : « Langue d’écriture : anglais »
  * répond directement au critère de fin de #5828, et `spokenLanguageName`
@@ -69,7 +75,7 @@ export function ComposerLanguagePill({
       className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
     >
       <span
-        className="flex items-center gap-1 rounded-chip px-2 text-[var(--color-ios-ink)] bg-[color-mix(in_srgb,white_15%,transparent)] light:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
+        className="flex items-center gap-1 rounded-chip px-2 text-[var(--composer-icon,var(--color-ios-ink))] bg-[color-mix(in_srgb,white_15%,transparent)] light:bg-[color-mix(in_srgb,var(--accent)_15%,transparent)]"
         style={{ height: 24 }}
       >
         <span aria-hidden>{flag}</span>

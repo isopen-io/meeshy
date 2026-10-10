@@ -24,23 +24,29 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { computeMeeshMintPlan, MEESH_MINT_COST } from '@meeshy/shared/utils/meesh';
-import {
-  computeEngagementElan,
-  elanInputsFromRows,
-  ELAN_WINDOW_DAYS,
-} from '@meeshy/shared/utils/engagement-elan';
+import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
+import { meeshPrice } from '@meeshy/shared/utils/game/mint';
+import type { GameBlock } from '@meeshy/shared/types/game';
+import { elanUnderScaleFromRows } from '@meeshy/shared/types/engagement-scale';
+import { engagementScaleServiceFor } from '../../services/engagement/EngagementScaleService';
 import { engagementAxisFamily, isEngagementAxisKey, maxEngagementMilestonesPerUser } from '@meeshy/shared/types/engagement';
 import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
+import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
+import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
+import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
+import { PersonalMissionService } from '../../services/game/PersonalMissionService';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { logError } from '../../utils/logger';
 
 // Le solde et les frappes n'y sont PAS : ils se lisent au registre (#6428),
 // une colonne absente en ressortant zéro après une frappe bien réelle.
+const log = enhancedLogger.child({ module: 'me-engagement' });
+
 const USER_ENGAGEMENT_SELECT = {
   currentStreakDays: true,
   longestStreakDays: true,
@@ -151,19 +157,41 @@ const engagementResponseSchema = {
             lastMintedAt: { type: ['string', 'null'] },
           },
         },
+        // Le JEU (#9378) — ajouté à côté de l'existant : un ancien client
+        // l'ignore. `additionalProperties` parce que la forme est tenue par le
+        // schéma Zod partagé (`gameBlockSchema`), validé avant de partir.
+        game: { type: 'object', additionalProperties: true },
       },
     },
   },
 } as const;
 
+/**
+ * Le bloc `game` (#9378) : servi À CÔTÉ des champs actuels, jamais à leur place.
+ * Un `null` — jeu en panne, bloc refusé par le schéma partagé — fait partir la
+ * charge SANS lui, comme un serveur d'avant le jeu : le client sait ne pas l'avoir.
+ */
+export type EngagementRoutesOptions = {
+  readonly gameBlock?: (params: { readonly userId: string; readonly counters: readonly AxisRow[] }) => Promise<GameBlock | null>;
+};
+
 /** Tout ce qu'un compte PEUT porter — calculé, donc jamais périmé. */
 const PLAFOND_PALIERS = maxEngagementMilestonesPerUser(ACHIEVEMENT_FAMILIES);
 
-export async function meEngagementRoutes(fastify: FastifyInstance) {
+export async function meEngagementRoutes(fastify: FastifyInstance, options: EngagementRoutesOptions = {}) {
   // UNE instance pour la vie du plugin (#7909) : son cache d'une heure ne sert
   // que si elle survit à la requête. Construite par requête, elle rejouait
   // trois `groupBy` sur des collections entières à chaque ouverture.
   const reachService = new AchievementReachService(fastify.prisma);
+  // La lecture du jeu ne crédite rien : `READ_ONLY_CREDIT` le garantit, la
+  // pose des missions du jour est la seule écriture qu'elle puisse faire.
+  const gameMissions = new MissionService(fastify.prisma, { creditPoints: READ_ONLY_CREDIT });
+  const gameBlocks = new GameBlockService(fastify.prisma, {
+    missions: gameMissions,
+    // La mission personnelle du jour (#9539) : la lecture la tire au premier accès du jour, comme les trois autres.
+    personal: new PersonalMissionService(fastify.prisma, { missions: gameMissions }),
+  });
+  const buildGameBlock = options.gameBlock ?? ((params) => gameBlocks.build(params));
 
   fastify.get(
     '/engagement',
@@ -200,7 +228,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones, frappes, totauxMeesh, reach] = await Promise.all([
+        const [user, counters, milestones, frappes, totauxMeesh, reach, scale] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -250,6 +278,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           // du plugin : la plus grande conversation du produit ne bouge pas
           // plus vite. Lue EN MÊME TEMPS que le reste, jamais après.
           reachService.load(),
+          // Le barème de l'administration (#8906) : l'élan AFFICHÉ est celui
+          // que le crédit appliquera, fenêtre, seuils et plafond par niveau
+          // compris — jamais les constantes d'avant le barème.
+          engagementScaleServiceFor(fastify.prisma).current(),
         ]);
 
         if (!user) {
@@ -268,29 +300,44 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // déjà lues, jamais relu : la route paierait deux fois la même
         // information. Même LOI que le crédit (`computeEngagementElan`), donc le
         // chiffre affiché est celui qui sera appliqué.
-        const elan = computeEngagementElan(
-          elanInputsFromRows({
-            counters,
-            milestones,
-            familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
-          }),
-        );
+        const elan = elanUnderScaleFromRows({
+          rules: scale.multiplier,
+          counters,
+          milestones,
+          familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
+          engagementScore: streakUser.engagementScore ?? 0,
+        });
 
+        // Au PRIX de la prochaine pièce (la rareté croît, #9374) : les anciens
+        // clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
+        const mintCost = meeshPrice(totauxMeesh.mintedLifetime + 1);
         const plan = computeMeeshMintPlan(
           counters.map((c: { axisKey: string; count: number; points: number }) => ({
             axisKey: c.axisKey as EngagementAxisKey,
             count: c.count,
             points: c.points,
           })),
+          { mintCost },
         );
 
+        const counterRows = counters.map((c: { axisKey: string; count: number; points: number }) => ({
+          axisKey: c.axisKey,
+          count: c.count,
+          points: c.points,
+        }));
+        const game = await buildGameBlock({ userId, counters: counterRows }).catch((error: unknown) => {
+          log.warn('game block unavailable, engagement served without it', {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        });
+
         return sendSuccess(reply, {
-          counters: counters.map((c: { axisKey: string; count: number; points: number }) => ({
-            axisKey: c.axisKey,
-            count: c.count,
-            points: c.points,
-          })),
-          milestones: milestones.map((m: { milestoneType: string; milestoneKey: string; reachedAt: Date }) => ({
+          counters: counterRows,
+          // Les paliers 1 000 et 5 000 ne partent qu'aux clients qui déclarent la vague 2 :
+          // un ancien client garde sa liste d'avant (#9392, rétrocompatibilité).
+          milestones: milestonesServedTo(milestones, { knowsExtendedTiers: knowsGameWave2(request.headers) }).map((m: { milestoneType: string; milestoneKey: string; reachedAt: Date }) => ({
             milestoneType: m.milestoneType,
             milestoneKey: m.milestoneKey,
             reachedAt: m.reachedAt.toISOString(),
@@ -308,7 +355,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             activeFamilyCount: elan.activeFamilyCount,
             activeFamilies: elan.activeFamilies,
             hasStanding: elan.hasStanding,
-            windowDays: ELAN_WINDOW_DAYS,
+            windowDays: scale.multiplier.windowDays,
           },
           meesh: {
             balance: totauxMeesh.balance,
@@ -316,11 +363,12 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             debitablePoints: plan.debitablePoints,
             floorPoints: plan.floorPoints,
             missingPoints: plan.missingPoints,
-            mintCost: MEESH_MINT_COST,
+            mintCost,
             firstMintedAt: frappes._min.createdAt?.toISOString() ?? null,
             lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
-});
+          ...(game ? { game } : {}),
+        });
       } catch (error) {
         logError('Error fetching engagement', error, { source: 'me-engagement-routes' });
         return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch engagement' });

@@ -16,11 +16,11 @@ final class ComposerConversationImageTests: XCTestCase {
     /// L'origine ne propose AUCUN format : l'image repart dans le fil, elle ne
     /// se publie pas. Un choix de format serait une question sans objet.
     func test_laRetoucheDUneImageDuFil_neProposeQueLaScene() {
-        let profil = ComposerProfile.profile(for: .conversationDraftImage)
+        let profil = ComposerProfile.profile(for: .conversationDraftMedia(staged: true))
         XCTAssertEqual(profil.offeredFormats, [.story])
         XCTAssertEqual(profil.opensWith, .mediaSeeded)
-        XCTAssertNil(ComposerOrigin.conversationDraftImage.resumedDraftId)
-        XCTAssertNil(ComposerOrigin.conversationDraftImage.repostedPostId)
+        XCTAssertNil(ComposerOrigin.conversationDraftMedia(staged: true).resumedDraftId)
+        XCTAssertNil(ComposerOrigin.conversationDraftMedia(staged: true).repostedPostId)
     }
 
     /// Le composite rendu garde le FORMAT de la scène — une photo paysage
@@ -38,7 +38,7 @@ final class ComposerConversationImageTests: XCTestCase {
     func test_leSocleDUneRetouche_neMontreQueTermine() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("ifreturnsImageToConversation{Spacer();returnImageButton}else{"),
+        XCTAssertTrue(code.contains("ifreturnsToConversation{Spacer();returnImageButton}else{"),
                       "En retouche, le socle ne porte que la capsule Terminé.")
     }
 
@@ -51,5 +51,39 @@ final class ComposerConversationImageTests: XCTestCase {
         for sansObjet in [ComposerRailDoor.mention, .hashtag, .place, .description, .content, .sound] {
             XCTAssertFalse(ComposerReturnImage.paintingDoors.contains(sansObjet), "\(sansObjet)")
         }
+    }
+}
+
+/// **Chaque pièce en attente porte « Éditer » en son centre, et le toucher
+/// l'édite** (#9119). Le geste éditait déjà ; l'icône annonçait « voir »
+/// (œil en coin pour l'image, lecture au centre pour la vidéo et l'audio).
+@MainActor
+final class ComposerPendingTileGlyphTests: XCTestCase {
+
+    func test_center_imageVideoAudio_returnsEditGlyph() {
+        XCTAssertEqual(ComposerPendingTileGlyph.center(for: .image, mimeType: "image/jpeg"), "pencil")
+        XCTAssertEqual(ComposerPendingTileGlyph.center(for: .video, mimeType: "video/mp4"), "pencil")
+        XCTAssertEqual(ComposerPendingTileGlyph.center(for: .audio, mimeType: "audio/m4a"), "pencil")
+    }
+
+    func test_center_imageTheSceneCannotRetouch_returnsNil() {
+        XCTAssertNil(ComposerPendingTileGlyph.center(for: .image, mimeType: "image/gif"))
+    }
+
+    func test_center_fileAndLocation_returnsNil() {
+        XCTAssertNil(ComposerPendingTileGlyph.center(for: .file, mimeType: "application/pdf"))
+        XCTAssertNil(ComposerPendingTileGlyph.center(for: .location, mimeType: ""))
+    }
+
+    func test_tile_drawsTheLawAndNoLongerAnnouncesViewing() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("ComposerPendingTileGlyph.center("), "La tuile consulte la loi.")
+        XCTAssertFalse(source.contains("\"eye.fill\""), "L'œil annonçait « voir » sur un geste qui édite.")
+        XCTAssertFalse(source.contains("\"play.circle.fill\""), "La lecture annonçait « voir » sur un geste qui édite.")
+        XCTAssertTrue(source.contains("conversation.composer.attachment.edit"), "Le rôle d'accessibilité dit « Éditer ».")
     }
 }

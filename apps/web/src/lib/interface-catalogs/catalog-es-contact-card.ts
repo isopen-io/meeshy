@@ -9,6 +9,7 @@ const esContactCard = {
   'contactCard.failed': 'No se pudo leer la tarjeta de contacto',
   'contactCard.retry': 'Reintentar',
   'contactCard.download': 'Descargar la tarjeta',
+  'contactCard.downloadFailed': 'No se pudo descargar la tarjeta',
   'contactCard.onMeeshy': 'En Meeshy',
   'contactCard.connect': 'Conectar',
   'contactCard.write': 'Escribir',

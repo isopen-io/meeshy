@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **Une pièce jointe ouverte en plein écran se réagit sur ELLE-MÊME** (#6084,
@@ -226,10 +227,12 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
             "L'appui doit BASCULER l'ouverture : un second appui referme."
         )
         XCTAssertTrue(
-            plat.contains("\"face.smiling\"") && plat.contains("\"plus\""),
-            "L'icône est un émoji AVEC un « + » (motif `emoji +` demandé par le porteur), "
-                + "cohérente avec le « + » que la rangée porte déjà en fin de course."
+            plat.contains("FullscreenActionButton.react(") && plat.contains("isOpen:reactionBarOpen"),
+            "L'action est `FullscreenActionButton.react` du SDK (#8878) : un émoji AVEC un « + » "
+                + "(motif `emoji +` demandé par le porteur), teinté tant que la rangée est ouverte."
         )
+        XCTAssertEqual(FullscreenChromeSymbol.react, "face.smiling")
+        XCTAssertEqual(FullscreenChromeSymbol.reactBadge, "plus")
     }
 
     func test_laRangeeDuPleinEcran_estAuGabaritDeLaStory() throws {
@@ -239,25 +242,16 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         }
         let plat = compact(site)
 
-        XCTAssertTrue(plat.contains("EmojiReactionPicker("),
-                      "La rangée est la brique SDK partagée, pas une rangée réécrite.")
-        XCTAssertTrue(plat.contains("scale:1.5"),
-                      "Échelle 1,5 — le gabarit arrêté pour la story (#6083), ramené de 2 à 1,5 "
-                          + "le 2026-09-11 au soir (« ×0,75, elles sont trop grosses »). Ce site n'a "
-                          + "pas d'échelle à lui : il rend celle de la story, et les deux bougent ensemble.")
-        XCTAssertFalse(plat.contains("scale:2,"),
-                       "L'échelle 2 a été explicitement RETIRÉE des deux barres.")
-        XCTAssertTrue(plat.contains("chrome:.none"),
-                      "Sans fond ni contour : le média EST le fond, comme la scène d'une story.")
-        XCTAssertTrue(plat.contains("scrollable:true"),
-                      "La rangée DÉFILE. À l'échelle 1,5, six émojis (22 pt de police, ~26 pt de "
-                          + "large chacun), le « + » (32 pt) et six intervalles de 6 pt demandent "
-                          + "~330 pt une fois multipliés — plus que la largeur utile d'un iPhone de "
-                          + "390 (306 pt une fois les marges du plein écran retirées). Le seuil "
-                          + "dépend donc de la LARGEUR autant que de l'échelle : sur un Pro Max la "
-                          + "rangée tiendrait, et le ScrollView ne ferait simplement rien. C'est "
-                          + "pourquoi cette assertion se lit « elle défile QUAND il le faut », et "
-                          + "non « elle dépasse toujours ».")
+        XCTAssertTrue(plat.contains("FullscreenReactionStrip("),
+                      "La rangée est la brique SDK partagée (#8878), pas une rangée réécrite.")
+        XCTAssertFalse(plat.contains("scale:1.5") || plat.contains("scale:2"),
+                       "Ce site n'a pas d'échelle à lui : `FullscreenReactionStrip` rend le défaut "
+                           + "d'`EmojiReactionPicker` (1,5, le gabarit de la story, #6083), que "
+                           + "`ReactionBarScaleParityTests` garde. Une surcharge ici serait une seconde vérité.")
+        XCTAssertFalse(plat.contains("EmojiReactionPicker("),
+                       "La rangée n'est plus montée en direct : `FullscreenReactionStrip` fixe "
+                           + "`chrome: .none` (le média EST le fond) et `scrollable: true` (à 1,5 la "
+                           + "rangée demande ~330 pt, plus que la largeur utile d'un iPhone de 390).")
         XCTAssertTrue(plat.contains("onExpandFullPicker:"),
                       "Le « + » de fin de rangée garde son rôle : ouvrir le sélecteur complet.")
     }

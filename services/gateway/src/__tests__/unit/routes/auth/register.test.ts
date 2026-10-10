@@ -240,6 +240,7 @@ describe('POST /register — le compte frais naît AVEC une session (#4264)', ()
       userId: expect.any(String),
       token: 'session-token-inscription',
       requestContext: expect.objectContaining({ ip: '127.0.0.1' }),
+      loginMethod: 'registration',
     });
     await app.close();
   });

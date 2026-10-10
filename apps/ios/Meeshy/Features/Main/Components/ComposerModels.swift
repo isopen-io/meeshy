@@ -36,7 +36,15 @@ struct ComposerAttachment: Identifiable, Equatable {
     var duration: TimeInterval?
     var thumbnailColor: String = "808080"
 
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.id == rhs.id }
+    /// **Égales seulement si ELLES SONT les mêmes** (#9743). Comparer le seul
+    /// identifiant faisait tenir pour inchangée une pièce dont le fichier
+    /// venait d'arriver : SwiftUI sautait le rendu de la zone et de la barre,
+    /// la tuile tournait sans fin, et l'envoi lisait une pièce « en
+    /// préparation » qui ne l'était plus.
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id && lhs.url == rhs.url && lhs.size == rhs.size
+            && lhs.duration == rhs.duration && lhs.type == rhs.type && lhs.name == rhs.name
+    }
 
     // Convenience factories
     static func voice(duration: TimeInterval) -> ComposerAttachment {
@@ -221,11 +229,17 @@ class KeyboardObserver: ObservableObject {
                 // Use the keyboard-hosting window's height (not the full
                 // display) so split-screen on iPad produces the correct
                 // visible keyboard portion.
-                let screenHeight = DeviceLayout.windowSize.height
-                let newHeight = max(screenHeight - endFrame.origin.y, 0)
+                // A degenerate or floating end frame is not a measurement
+                // (#8869): it docks nothing, and it must never become the
+                // height the attachment panel reopens at.
+                let measured = ComposerPanelHeightLaw.keyboardHeight(
+                    endFrame: endFrame,
+                    windowHeight: DeviceLayout.windowSize.height
+                )
+                let newHeight = measured ?? 0
 
-                if newHeight > 0 {
-                    self.lastKnownHeight = newHeight
+                if let measured, measured > 0 {
+                    self.lastKnownHeight = measured
                 }
 
                 withAnimation(.easeInOut(duration: max(duration, 0.15))) {
@@ -261,7 +275,7 @@ struct ComposerWaveformBar: View {
         RoundedRectangle(cornerRadius: 2)
             .fill(
                 LinearGradient(
-                    colors: [Color(hex: accentColor).opacity(0.8), Color(hex: accentColor).opacity(0.4)],
+                    colors: [Color(hex: accentColor).opacity(MeeshyOpacity.intense), Color(hex: accentColor).opacity(0.4)],
                     startPoint: .top,
                     endPoint: .bottom
                 )

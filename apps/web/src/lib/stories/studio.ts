@@ -1,7 +1,9 @@
 import { isRememberableAudience, type ChoosableAudience } from './publication-audience';
 import { sceneBackdropOf, sceneFitModeOf } from '@/lib/canvas/backdrop';
 import { isStoryFilter, type StoryFilterId } from '@/lib/canvas/media-filter';
+import { isSceneTransition } from '@/lib/canvas/scene-transition';
 
+import type { PublicationKind } from './publication-kind';
 import type { StoryFrame, StudioPlane } from './story-document';
 import {
   emptyStudioPage,
@@ -471,6 +473,8 @@ function pageFromSnapshot(snapshot: StudioPageSnapshot, resolveUrl: (fileUrl: st
     texts,
     selected: texts[0]?.id ?? null,
     ...(durationOf(snapshot.duration) !== undefined ? { duration: durationOf(snapshot.duration)! } : {}),
+    ...(isSceneTransition(snapshot.opening) ? { opening: snapshot.opening } : {}),
+    ...(isSceneTransition(snapshot.closing) ? { closing: snapshot.closing } : {}),
     background: visual(snapshot.background),
     overlay: visual(snapshot.overlay),
     sound:
@@ -515,6 +519,8 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
     id: page.id,
     texts: page.texts.map((layer) => ({ ...layer })),
     ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(overlay !== undefined ? { overlay } : {}),
     ...(sound !== null && page.sound !== null
@@ -523,10 +529,11 @@ function pageSnapshotOf(page: StudioPage): StudioPageSnapshot {
   };
 }
 
-/** Ce qui se PERSISTE — les PAGES, la page courante, et l'audience choisie.
+/** Ce qui se PERSISTE — les PAGES, la page courante, l'audience choisie et le
+ * FORMAT de la création (#8849), qui vit dans l'écran, pas dans le brouillon.
  * `language` part SI au moins une page porte du texte : c'est la graine de
  * `useComposeLanguage`, un concept de SESSION plutôt que par page. */
-export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDraftSnapshot {
+export function studioSnapshotOf(draft: StudioDraft, language: string, kind?: PublicationKind): StudioDraftSnapshot {
   return {
     schema: 2,
     pages: draft.pages.map(pageSnapshotOf),
@@ -534,6 +541,7 @@ export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDr
     ...(allTexts(draft).some((layer) => layer.text.trim() !== '') ? { language } : {}),
     ...(draft.visibility !== null ? { visibility: draft.visibility } : {}),
     ...(draft.postText !== '' ? { postText: draft.postText } : {}),
+    ...(kind !== undefined ? { kind } : {}),
   };
 }
 

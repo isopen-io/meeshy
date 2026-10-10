@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Attachment } from '@/lib/api/types';
+import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -157,6 +158,29 @@ describe('la pièce d’une vue unique s’ouvre EN CLAIR dans le plein écran (
     expect(stage?.querySelector('img')).not.toBe(null);
   });
 
+  test('floutée ET à vue unique, la pièce s’ouvre en plein écran EN CLAIR (#8567)', async () => {
+    const blurredViewOncePhoto = { ...photo, isViewOnce: true, isBlurred: true } as Attachment;
+    const host = await mounter.mount(
+      <ProtectedContent
+        messageId="m-vu"
+        kind="viewOnce"
+        isViewOnce
+        isBlurred
+        contentLength={0}
+        attachments={[blurredViewOncePhoto]}
+        surface="bubble"
+        onConsumeViewOnce={async () => true}
+      >
+        <Attachments attachments={[blurredViewOncePhoto]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />
+      </ProtectedContent>,
+    );
+    await mounter.click(host.querySelector('[data-view-once-chip="sealed"]'));
+
+    const stage = document.body.querySelector('[data-view-once-stage]');
+    expect(stage?.querySelector('[data-protected-attachment]')).toBe(null);
+    expect(stage?.querySelector('img')).not.toBe(null);
+  });
+
   test('hors de l’ouverture, la même pièce reste masquée', async () => {
     const host = await mounter.mount(
       <Attachments attachments={[viewOncePhoto]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />,
@@ -176,6 +200,65 @@ describe('un TEXTE à vue unique s’ouvre à sa place', () => {
 
     expect(host.textContent).not.toContain('SECRET-VU');
     expect(host.querySelector('[data-view-once-chip]')?.getAttribute('data-view-once-chip')).toBe('opened');
+  });
+
+  test('FLOUTÉ, il s’ouvre à sa place en restant voilé ; le geste du flou le révèle sans le refermer (#8567)', async () => {
+    const host = await mounter.mount(
+      <ProtectedContent
+        messageId="m-vu"
+        kind="viewOnce"
+        isViewOnce
+        isBlurred
+        contentLength={12}
+        attachments={[]}
+        surface="bubble"
+        onConsumeViewOnce={async () => true}
+      >
+        <p data-secret>SECRET-VU</p>
+      </ProtectedContent>,
+    );
+    await mounter.click(host.querySelector('[data-view-once-chip="sealed"]'));
+
+    expect(host.querySelector('[data-view-once-open]')).not.toBe(null);
+    expect(document.body.innerHTML).not.toContain('SECRET-VU');
+    const veil = host.querySelector<HTMLButtonElement>('[data-view-once-open] button[data-protected="hidden"]');
+    expect(veil).not.toBe(null);
+
+    await mounter.click(veil);
+
+    expect(host.textContent).toContain('SECRET-VU');
+    expect(host.querySelector('[data-view-once-open]')).not.toBe(null);
+    const visibleOpenedChips = [...host.querySelectorAll('[data-view-once-chip="opened"]')].filter(
+      (chip) => chip.closest('[data-protected-rest]') === null,
+    );
+    expect(visibleOpenedChips).toEqual([]);
+  });
+
+  test('FLOUTÉ et ouvert, la rangée dit « masqué » tant que le flou n’est pas levé (#8567)', async () => {
+    const published: string[] = [];
+    const host = await mounter.mount(
+      <RevealPhaseChannel publish={(_id, phase) => published.push(phase.phase)}>
+        <ProtectedContent
+          messageId="m-vu"
+          kind="viewOnce"
+          isViewOnce
+          isBlurred
+          contentLength={12}
+          attachments={[]}
+          surface="bubble"
+          onConsumeViewOnce={async () => true}
+        >
+          <p data-secret>SECRET-VU</p>
+        </ProtectedContent>
+      </RevealPhaseChannel>,
+    );
+    await mounter.click(host.querySelector('[data-view-once-chip="sealed"]'));
+    await mounter.settle();
+    expect(published.at(-1)).toBe('hidden');
+
+    await mounter.click(host.querySelector('[data-view-once-open] button[data-protected="hidden"]'));
+    await mounter.settle();
+    expect(published.at(-1)).toBe('revealed');
   });
 
   test('sorti de l’écran au défilement, il passe à « Déjà ouvert »', async () => {

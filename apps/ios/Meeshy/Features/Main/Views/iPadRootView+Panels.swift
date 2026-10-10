@@ -5,6 +5,33 @@ import MeeshyUI
 
 // MARK: - iPad Root View Right Panel Content (Hub Routes)
 
+/// La pile du JEU au-dessus de la route racine du panneau droit (#9564, amendement n° 4). Elle ne vaut que pour SA
+/// racine : un panneau ouvert sur une autre route part d'une pile vide, sans jamais rejouer une page d'avant.
+struct GamePanelTrail {
+    var root: Route?
+    var path = NavigationPath()
+
+    func path(over route: Route) -> NavigationPath { root == route ? path : NavigationPath() }
+
+    mutating func push(_ route: Route, over root: Route) {
+        if self.root != root { self = GamePanelTrail(root: root) }
+        path.append(route)
+    }
+
+    mutating func pop() {
+        guard !path.isEmpty else { return }
+        path.removeLast()
+    }
+}
+
+/// La pile du jeu, tenue par RÉFÉRENCE : une `Route` est lourde, et `iPadRootView` est une valeur que chaque
+/// closure de son corps copie (budget de `ConversationViewValueSizeGuardTests`).
+final class GamePanelTrailStore: ObservableObject {
+    // Même garde que `Router` : une deinit synthétisée isolée plante au démontage hors d'une tâche (iOS 26.1).
+    nonisolated deinit {}
+    @Published var trail = GamePanelTrail()
+}
+
 /// Le panneau droit de l'iPad quand une route (autre qu'une conversation) y
 /// est ouverte : une `NavigationStack` locale autour de `iPadPanelDestination`.
 ///
@@ -16,12 +43,14 @@ import MeeshyUI
 struct iPadRightPanel: View {
     let route: Route
     @Binding var rightPanelRoute: Route?
+    /// La pile du jeu au-dessus de `route` (#9564) : vide hors de Progression.
+    @Binding var gamePath: NavigationPath
     let notificationManager: NotificationToastManager
     let onOpenConversation: (Conversation) -> Void
     let onNotificationTap: (APINotification) -> Void
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $gamePath) {
             iPadPanelDestination(
                 route: route,
                 rightPanelRoute: $rightPanelRoute,
@@ -29,6 +58,17 @@ struct iPadRightPanel: View {
                 onOpenConversation: onOpenConversation,
                 onNotificationTap: onNotificationTap
             )
+            // Les pages du jeu poussées DANS le panneau : fiche, sous-page — le retour système et le glissement
+            // depuis le bord y ramènent à la page d'au-dessus (#9564).
+            .navigationDestination(for: Route.self) { pushed in
+                iPadPanelDestination(
+                    route: pushed,
+                    rightPanelRoute: $rightPanelRoute,
+                    notificationManager: notificationManager,
+                    onOpenConversation: onOpenConversation,
+                    onNotificationTap: onNotificationTap
+                )
+            }
             // Filet de sécurité pour les écrans qui délèguent leur chrome à la
             // barre système (membres d'une communauté…) :
             // racine du panneau, ils n'ont ni bouton retour propre ni geste de
@@ -157,11 +197,24 @@ struct iPadPanelDestination: View {
         case .userStats:
             UserStatsView()
                                 .navigationBarHidden(true)
-        case .progression:
+        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
+        case .progression, .progressionDashboard:
             ProgressionView()
                                 .navigationBarHidden(true)
         case .progressionSection(let section):
             ProgressionSectionPage(section: section)
+                .navigationBarHidden(true)
+        case .progressionRules(let rule, let section):
+            GameRulesPage(focusedRule: rule, focusedSection: section)
+                .navigationBarHidden(true)
+        case .progressionNotebook:
+            GameNotebookPage()
+                .navigationBarHidden(true)
+        case .gamePage(let page):
+            GamePageView(page: page)
+                .navigationBarHidden(true)
+        case .progressionConcept(let concept, let section):
+            ProgressionConceptPage(concept: concept, section: section)
                 .navigationBarHidden(true)
         case .links:
             LinksHubView()
@@ -227,17 +280,17 @@ struct iPadLeftColumnHeader: View {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             if showFeedButton {
                 Button {
                     HapticFeedback.light()
                     onFeedTap?()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                         Text(String(localized: "root.ipad.feed", defaultValue: "Flux", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -246,8 +299,8 @@ struct iPadLeftColumnHeader: View {
                             endPoint: .trailing
                         )
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -256,7 +309,7 @@ struct iPadLeftColumnHeader: View {
             }
 
             Text(title)
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -269,17 +322,17 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(MeeshyFont.relative(16, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text(NotificationBadge.displayed(notificationCount))
                                 // Doctrine 86i : le compteur reste figé face au Dynamic
                                 // Type, mais la pastille s'élargit — « 99+ » entier.
-                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
-                                .padding(.horizontal, 5)
+                                .padding(.horizontal, MeeshySpacing.xs)
                                 .frame(minWidth: 16, minHeight: 16)
                                 .background(Capsule().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
@@ -297,14 +350,14 @@ struct iPadLeftColumnHeader: View {
                     onSettingsTap()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
                 .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(theme.backgroundPrimary.opacity(0.95))
     }
 }
@@ -326,11 +379,11 @@ struct iPadResizableHandle: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.subtle))
                 .frame(width: 1)
 
             RoundedRectangle(cornerRadius: 2)
-                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(0.2) : Color.black.opacity(0.15)))
+                .fill(isDragging ? MeeshyColors.indigo400 : (isDark ? Color.white.opacity(MeeshyOpacity.light) : Color.black.opacity(MeeshyOpacity.light)))
                 .frame(width: 4, height: 36)
                 .animation(.easeInOut(duration: 0.15), value: isDragging)
         }

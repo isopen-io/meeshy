@@ -16,6 +16,9 @@ struct MediaDownloadSettingsView: View {
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared
     /// #8307 — les images et vidéos reçues rejoignent l'album Meeshy. Actif par défaut.
     @AppStorage(ReceivedMediaAutoSaveUserSetting.key) private var autoSaveToAlbum = true
+    /// #9684 — à la prise de vue : l'original (défaut : non) et la version avec effets et cadre.
+    @AppStorage(CaptureSavePolicy.savesOriginalKey) private var captureSavesOriginal = CaptureSavePolicy.standard.savesOriginal
+    @AppStorage(CaptureSavePolicy.renderedModeKey) private var captureRenderedMode = CaptureSavePolicy.standard.renderedMode
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -37,9 +40,10 @@ struct MediaDownloadSettingsView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             infoSection
             autoSaveSection
+            captureSaveSection
             policyPicker(
                 title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
                 binding: $store.preferences.image
@@ -58,33 +62,33 @@ struct MediaDownloadSettingsView: View {
             )
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Info Section
 
     private var infoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.neutral500Hex)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("arrow.down.circle.fill", color: accentColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "settings.media.download.auto_title", defaultValue: "Téléchargement automatique", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
                         Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand télécharger automatiquement chaque type de média selon votre connexion.", bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .accessibilityElement(children: .combine)
             }
             .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
@@ -94,30 +98,77 @@ struct MediaDownloadSettingsView: View {
     // MARK: - Enregistrement automatique (#8307)
 
     private var autoSaveSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.media.autosave.header", defaultValue: "Galerie", bundle: .main),
                           icon: "photo.on.rectangle", color: accentColor)
             Toggle(isOn: $autoSaveToAlbum) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("square.and.arrow.down.on.square.fill", color: accentColor)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "settings.media.autosave.title", defaultValue: "Enregistrer dans Photos", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "settings.media.autosave.subtitle",
                                     defaultValue: "Les images et vidéos reçues rejoignent l'album Meeshy, une seule fois. Jamais un média éphémère, flouté ou à vue unique.",
                                     bundle: .main))
-                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
                     }
                 }
             }
             .tint(Color(hex: accentColor))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(sectionBackground(tint: accentColor))
         }
+    }
+
+    // MARK: - À la prise de vue (#9684)
+
+    private var captureSaveSection: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.media.capture.header", defaultValue: "À la prise de vue", bundle: .main),
+                          icon: "camera.fill", color: MeeshyColors.indigo600Hex)
+            VStack(spacing: 0) {
+                captureToggle(isOn: $captureSavesOriginal, icon: "photo",
+                              title: String(localized: "settings.media.capture.original.title",
+                                            defaultValue: "Enregistrer l'original", bundle: .main),
+                              subtitle: String(localized: "settings.media.capture.original.subtitle",
+                                               defaultValue: "La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.",
+                                               bundle: .main))
+                Divider().padding(.leading, 54)
+                captureToggle(isOn: Binding(get: { captureRenderedMode == .automatic },
+                                            set: { captureRenderedMode = $0 ? .automatic : .manual }),
+                              icon: "camera.filters",
+                              title: String(localized: "settings.media.capture.rendered.title",
+                                            defaultValue: "Enregistrer la version avec effets et cadre", bundle: .main),
+                              subtitle: String(localized: "settings.media.capture.rendered.subtitle",
+                                               defaultValue: "Automatiquement en validant la retouche. Sinon, la flèche de la retouche l'enregistre à la demande.",
+                                               bundle: .main))
+            }
+            .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
+        }
+    }
+
+    private func captureToggle(isOn: Binding<Bool>, icon: String, title: String, subtitle: String) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon(icon, color: MeeshyColors.indigo600Hex)
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
+                    Text(subtitle)
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                        .foregroundColor(theme.textMuted)
+                        .lineSpacing(2)
+                }
+            }
+        }
+        .tint(Color(hex: accentColor))
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     // MARK: - Policy picker section
@@ -129,7 +180,7 @@ struct MediaDownloadSettingsView: View {
         color: String,
         binding: Binding<AutoDownloadPolicy>
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: title, icon: icon, color: color)
 
             VStack(spacing: 0) {
@@ -138,20 +189,20 @@ struct MediaDownloadSettingsView: View {
                         HapticFeedback.light()
                         binding.wrappedValue = policy
                     } label: {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             fieldIcon(policyIcon(policy), color: color)
                             Text(policy.shortLabel)
-                                .font(MeeshyFont.relative(14, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             if binding.wrappedValue == policy {
                                 Image(systemName: "checkmark")
-                                    .font(MeeshyFont.relative(14, weight: .bold))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                                     .foregroundColor(Color(hex: accentColor))
                             }
                         }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -179,38 +230,38 @@ struct MediaDownloadSettingsView: View {
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
                 .accessibilityHidden(true)
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color(hex: color).opacity(0.12))
             )
     }

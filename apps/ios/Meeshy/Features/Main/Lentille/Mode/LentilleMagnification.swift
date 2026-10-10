@@ -159,7 +159,7 @@ struct LentilleCategoryPill: View {
                 }
             }
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: currentSection?.icon ?? "folder.badge.plus")
                     .imageScale(.small)
                 Text(label)
@@ -370,7 +370,7 @@ struct LentilleMemberCountChip: View {
 
     var body: some View {
         Button(action: onShowParticipants) {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: Self.icon(for: conversation.type))
                     .imageScale(.small)
                 if conversation.memberCount > 1 {

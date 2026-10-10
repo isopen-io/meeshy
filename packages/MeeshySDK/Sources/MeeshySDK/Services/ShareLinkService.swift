@@ -11,10 +11,11 @@ public protocol ShareLinkInfoProviding: Sendable {
 }
 
 /// La gestion des liens par leur PROPRIÉTAIRE — la fiche détails + édition
-/// (#7797) n'a besoin que de ces cinq capacités.
+/// (#7797) et la liste complète de ses arrivées (#7813).
 public protocol ShareLinkManaging: Sendable {
     func listMyLinks(offset: Int, limit: Int) async throws -> [MyShareLink]
     func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats
+    func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage
     func updateLink(linkId: String, settings: ShareLinkSettings) async throws
     func toggleLink(linkId: String, isActive: Bool) async throws
     func deleteLink(linkId: String) async throws
@@ -22,6 +23,11 @@ public protocol ShareLinkManaging: Sendable {
 
 public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, @unchecked Sendable {
     public static let shared = ShareLinkService()
+    #if DEBUG
+    /// Vitrine App Store (#8855, DEBUG uniquement) : un aperçu de lien fixé, servi sans
+    /// passerelle, pour capturer le VRAI accueil d'un invité. `nil` hors vitrine.
+    nonisolated(unsafe) public static var debugLinkInfoOverride: (@Sendable (String) -> ShareLinkInfo?)?
+    #endif
     private let api: APIClientProviding
 
     init(api: APIClientProviding = APIClient.shared) {
@@ -51,6 +57,19 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
         return response.data
     }
 
+    /// Une page des arrivées d'UN lien, des plus récentes aux plus anciennes
+    /// (#7813). `cursor` est celui que la page précédente a rendu, jamais
+    /// fabriqué ; `nil` demande la première page.
+    public func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))]
+            + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
+        let response: APIResponse<ShareLinkArrivalsPage> = try await api.request(
+            LinksEndpoint.byLinkIdArrivals(linkId: linkId),
+            queryItems: query
+        )
+        return response.data
+    }
+
     /// Enregistre la configuration ENTIÈRE du lien (`PATCH /links/:linkId`).
     public func updateLink(linkId: String, settings: ShareLinkSettings) async throws {
         let _: APIResponse<EmptySuccess> = try await api.patch(
@@ -70,6 +89,9 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
     // MARK: - Get Link Info (public, no auth required)
 
     public func getLinkInfo(identifier: String) async throws -> ShareLinkInfo {
+        #if DEBUG
+        if let info = Self.debugLinkInfoOverride?(identifier) { return info }
+        #endif
         let response: APIResponse<ShareLinkInfo> = try await api.request(
             AnonymousEndpoint.linkByIdentifier(identifier: identifier)
         )

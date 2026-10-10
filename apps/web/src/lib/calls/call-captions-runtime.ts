@@ -2,10 +2,12 @@ import { currentDeviceLocale } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { coqueCourante } from '@/lib/native-shell';
 import { resolveReaderLanguages } from '@/lib/reader';
 
 import { createCaptions, type CaptionsContext, type CaptionsPort } from './call-captions-controller';
-import { browserSpeech, recognitionOf } from './call-speech';
+import { recognitionFor } from './call-shell-speech';
+import { browserSpeech, recognitionOf, type RecognitionConstructor } from './call-speech';
 
 /**
  * **LES SOUS-TITRES DANS LE NAVIGATEUR** (#8048) — l'entrée du chunk
@@ -28,6 +30,15 @@ function viewerName(): string {
   return resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).displayName;
 }
 
+/**
+ * La reconnaissance du navigateur ; dans la coque, celle qu'elle prête quand
+ * la WebView n'en a pas (#9446). Le build web ne porte pas l'adaptateur.
+ */
+function recognition(): RecognitionConstructor | null {
+  const scope = typeof window === 'undefined' ? null : window;
+  return __SHELL__ ? recognitionFor(scope, coqueCourante()) : recognitionOf(scope);
+}
+
 let sequence = 0;
 
 function utteranceId(): string {
@@ -38,7 +49,7 @@ function utteranceId(): string {
 
 export function createBrowserCaptions(ctx: CaptionsContext): CaptionsPort {
   return createCaptions(ctx, {
-    speech: browserSpeech(typeof window === 'undefined' ? null : recognitionOf(window)),
+    speech: browserSpeech(recognition()),
     language: spokenLanguage,
     viewerName,
     newId: utteranceId,

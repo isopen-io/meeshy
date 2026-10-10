@@ -179,7 +179,7 @@ describe('BanExpirySweepJob', () => {
         userId: ban.userId,
         adminId: SYSTEM_ACTOR_ID,
         action: UserAuditAction.UNBAN_USER,
-        entityId: ban.id,
+        entityId: ban.userId, // entity 'User' : l'identifiant est celui du MEMBRE ; le ban vit dans metadata
         changes: {},
         metadata: { reason: 'expired', banId: ban.id, expiresAt: ban.expiresAt!.toISOString() },
       });

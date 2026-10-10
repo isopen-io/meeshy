@@ -24,6 +24,11 @@ final class CallDeclineReplyTests: XCTestCase {
         ) async throws -> String {
             "ofqm_unused"
         }
+
+        @discardableResult
+        func enqueueComment(_ comment: CreateCommentPayload, ownerId: String?) async throws -> String {
+            try await enqueue(.createComment, payload: comment, conversationId: comment.postId)
+        }
     }
 
     private final class MockOptimisticPersistence: OptimisticMessagePersisting {

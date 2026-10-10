@@ -4,8 +4,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// Single inline pill at the top of every NavigationStack content view
-/// (mounted via `.safeAreaInset(edge: .top, spacing: 0)` on `RootView` /
-/// `iPadRootView`). Acts as the **orchestrator** for the unified
+/// (mounted in the status-bar band by `.inSyncPillBand()` on `RootView` /
+/// `iPadRootView`, see `SyncPillPlacement`, #9680). Acts as the **orchestrator** for the unified
 /// `SyncPill` chip: it collects every signal worth surfacing
 /// (`ConnectionStatus`, offline outbox items, transient online return)
 /// and emits a single list of `SyncPillEntry` to rotate through.
@@ -261,47 +261,6 @@ struct ConnectionBanner: View {
                 )
             }
     }
-
-    /// Marge haute d'un point de montage, une fois la remontée appliquée.
-    ///
-    /// Les quatre hôtes de la pastille lui réservaient chacun leur propre marge
-    /// (72 pt sous le header de conversation, 56/72 pt en flux invité, 8 pt sur
-    /// le viewer de story, 0 sur iPad). La remontée se retranche de cette marge
-    /// plutôt que de s'appliquer en `offset` : bornée à `0`, elle ne peut
-    /// jamais pousser la pastille par-dessus la barre d'état ou la Dynamic
-    /// Island — un hôte déjà collé en haut reste où il est, un hôte qui a de la
-    /// marge la rend.
-    ///
-    /// Fonction pure `static` : c'est la DÉCISION qui se teste, pas le rendu.
-    static func liftedTopPadding(base: CGFloat) -> CGFloat {
-        max(0, base - SyncPillMetrics.topLift)
-    }
-
-    /// **Le bas du chrome flottant d'une conversation**, mesuré au simulateur
-    /// (`idb ui describe-all`, 2026-09-10) : les boutons Retour / Appeler /
-    /// Rechercher / Mode de lecture / avatar occupent `y = 70…114`.
-    ///
-    /// Une constante plutôt qu'un couplage à l'état privé de `ConversationView`
-    /// — c'est le compromis que le site d'appel assumait déjà. Ce qui change,
-    /// c'est qu'elle est NOMMÉE et épinglée par un témoin : la valeur d'avant
-    /// (72) était écrite en littéral, et rien ne disait à quoi elle se
-    /// comparait.
-    static let conversationChromeBottom: CGFloat = 114
-
-    /// **La marge haute de la pastille DANS une conversation** (#5941).
-    ///
-    /// Le site d'appel passait `liftedTopPadding(base: 72)`. Or `topLift` vaut
-    /// 88 : la soustraction est négative, la borne la ramène à `0`, et la
-    /// bannière se posait donc à `y = 0` — sur le chrome, qu'elle recouvrait.
-    /// Le bandeau « @pseudo » masquait le bouton « Mode de lecture », constaté
-    /// à l'écran.
-    ///
-    /// **La remontée sous la Dynamic Island et le respect du chrome sont
-    /// incompatibles ici** : le chrome commence à 70 pt, l'île est au-dessus.
-    /// Il faut choisir, et c'est le chrome qui gagne — un contrôle recouvert
-    /// est un contrôle qu'on ne peut plus lire, alors qu'une annonce posée
-    /// 8 pt plus bas reste parfaitement visible.
-    static let conversationTopPadding: CGFloat = conversationChromeBottom + MeeshySpacing.sm
 
     var body: some View {
         // Skip rendering when StoryViewerView est présenté plein écran —

@@ -3,41 +3,27 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **Les contrôles du viseur vivent DANS la scène, et le mode se lit du GESTE**
-/// (#4080, vue `2b` — directive porteur 2026-09-04).
+/// **La rangée haute du viseur et la bande de ses segments** (#4080, vue `2b`
+/// — directive porteur 2026-09-04 ; #9351).
 ///
 /// > « Les contrôles sont apparus mais hors de la zone scène alors que tout
 /// > doit être dans la scène ! Et la gestion photo vidéo ou mains libres se
 /// > fait par la gestuelle uniquement et non des boutons disponibles. »
 ///
-/// ## Deux corrections, et la première renverse une doctrine
+/// Un VISEUR n'est pas un aperçu de composition — c'est un instrument de
+/// cadrage, et son chrome ne part avec aucune publication : la planche `2b` le
+/// dessine par-dessus l'image. Il n'y a plus de déclencheur ( o ) (#9351) : la
+/// scène et la miniature choisie, en bas, prennent la photo et la vidéo ; le
+/// rail, en bas à gauche, ouvre les filtres et les cadres.
 ///
-/// **La géographie.** Le lot précédent posait cette barre dans le couloir bas
-/// du plateau, au nom de la loi 6 — « aucun contrôle sur le canvas, le player
-/// EST l'aperçu ». C'était une mauvaise lecture : cette loi protège l'APERÇU
-/// d'une composition, pour qu'il ne mente pas sur le rendu. Un VISEUR n'est pas
-/// un aperçu de composition — c'est un instrument de cadrage, et son chrome ne
-/// part avec aucune publication. La planche `2b` le dessine d'ailleurs
-/// par-dessus l'image, et le porteur le confirme.
-///
-/// **Le geste.** Trois pastilles à choisir AVANT de déclencher demandaient une
-/// décision avant l'intention. Le geste la lit APRÈS — appuyer prend, tenir
-/// filme, remonter verrouille — ce qui est l'ordre dans lequel elle vient. Les
-/// seuils vivent dans `ComposerShutterGesture`, hors du corps de cette vue.
+/// **La croix en haut à GAUCHE, suivie de la puce du chrono ; à DROITE les
+/// contrôleurs de segment, le flash et, au bord, le retournement ; sous le
+/// flash — allumé, et 2 s après la dernière interaction — le curseur vertical
+/// de son intensité** (porteur 2026-10-05, 2026-10-07 #9566, 2026-10-09 #9753 —
+/// la disposition est la loi `ComposerCaptureTopRow`).
 struct ComposerSceneCameraBar: View {
 
     let stage: ComposerSceneCameraStage
-    let mode: ComposerSceneCameraMode
-
-    /// Un appui bref : une photo.
-    let onPhoto: () -> Void
-    /// Le doigt a tenu : la prise commence.
-    let onStartFilming: () -> Void
-    /// Le doigt a remonté sans relâcher : la prise continue sans lui.
-    let onLock: () -> Void
-    /// La prise se clôt — relâchement d'une prise tenue, ou appui sur une
-    /// prise verrouillée.
-    let onCloseTake: () -> Void
 
     let flashMode: AVCaptureDevice.FlashMode
     let onCycleFlash: () -> Void
@@ -45,97 +31,227 @@ struct ComposerSceneCameraBar: View {
     let onDisarm: () -> Void
 
     /// La taille courante, et ce qu'un appui sur `[ ]` produit. La règle
-    /// (`ComposerSceneCameraSize`) décide du glyphe et de qui montre la croix ;
-    /// cette vue peint.
+    /// (`ComposerSceneCameraSize`) décide du glyphe ; cette vue peint.
     let size: ComposerSceneCameraSize
     let onToggleSize: () -> Void
+    /// Le viseur servi SEUL en plein écran (#9125) n'a pas de carte où
+    /// rentrer : il ne montre pas `[ ]`. La croix, elle, reste.
+    var offersSizeToggle = true
 
     let segments: [ComposerCaptureSegment]
     let onDropLastSegment: () -> Void
     let onValidateSegments: () -> Void
 
-    /// **La durée de la prise EN COURS**, remise par le meuble depuis
-    /// `CameraModel.recordingDuration`.
-    ///
-    /// Elle est distincte des `segments` parce qu'elle n'a pas la même NATURE :
-    /// un segment est une prise CLOSE, avec un fichier et une durée arrêtée ;
-    /// ceci est une horloge qui court. Les additionner est la règle
-    /// (`ComposerCaptureSegments.elapsed`), et la barre ne fait que l'appeler —
-    /// le « + » écrit ici n'aurait été éprouvable qu'en montant une vue.
+    /// **La durée de la prise EN COURS**, distincte des `segments` : un segment
+    /// est une prise CLOSE, ceci une horloge qui court. Les additionner est la
+    /// règle (`ComposerCaptureSegments.elapsed`).
     var liveDuration: TimeInterval = 0
+    var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
+    var onFlashIntensity: (Double) -> Void = { _ in }
+    /// Une bascule d'objectif est en cours, ou la prise précédente se
+    /// finalise : le bouton se tait (#9464, #9351).
+    var flipping = false
+    /// **On retouche** (#9352) : l'objectif se repose, donc ni flash ni
+    /// retournement — et la croix abandonne la retouche.
+    var editing = false
+    /// « Terminé » rend : il attend, et le dit.
+    var rendering = false
+    var onDone: () -> Void = {}
+    /// **La flèche ⬇︎ de la retouche** (#9684) : la prise, avec ses effets et
+    /// son cadre, rejoint Photos — une fois, puis ✓.
+    var saveState = ComposerTakeSaveState.idle
+    var onSave: (() -> Void)?
 
-    /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
-    /// différence entre une photo et une prise, et il ne peut pas vivre
-    /// ailleurs : la vue est le seul endroit qui voit le doigt.
-    /// La pulsation du témoin d'enregistrement. Elle vit dans la vue parce
-    /// qu'elle ne décrit RIEN du modèle : c'est une animation, et une animation
-    /// rangée dans l'état métier se rejoue à chaque changement de ce dernier.
-    /// **Reduce Motion coupe le battement, jamais le témoin** (dimension 5 du
-    /// `CLAUDE.md` racine). Une boucle sans fin doit choisir : se taire, ou se
-    /// poser sur une valeur qui DIT encore ce que le mouvement disait. Ici le
-    /// point rouge PLEIN le dit déjà — c'est sa couleur qui porte « ça
-    /// enregistre », le battement ne faisait que le rendre impossible à
-    /// confondre avec un état figé.
+    /// **Ce que la machine sait du doigt, du zoom et de la lumière** (#8671) —
+    /// lu par le bas de la capture (`ComposerCaptureBottomRow`).
+    struct Capture: Equatable {
+        var holding = false
+        var lockProgress: Double = 0
+        var locked = false
+        var zoomFactor: CGFloat = 1
+        /// Les crans du zoom que l'objectif sert (#9350) — vide sans zoom.
+        var zoomPresets: [CGFloat] = []
+        var flipping = false
+        /// L'objectif bascule — la barre des zooms morphe (#9753).
+        var switchingCamera = false
+        var flashIntensity: Double = ComposerFlashIntensity.defaultLevel
+    }
+
+    /// **Reduce Motion coupe le battement, jamais le témoin** : le point rouge
+    /// PLEIN dit déjà « ça enregistre ».
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     @State private var recordingBlink: Double = 1
+    /// Le curseur du flash paraît à l'interaction et s'efface 2 s après (#9753).
+    @State private var sliderTimer = ComposerFlashSliderTimer()
 
-    @State private var pressedAt: Date?
-    @State private var locked = false
-    @State private var holdTask: Task<Void, Never>?
-    /// Où en est le glissement vers le verrou, de 0 à 1. Rendu pendant le
-    /// geste : la directive du 2026-08-30 veut qu'un glissement se VOIE
-    /// pendant qu'il se fait, et reste annulable jusqu'au bout.
-    @State private var lockProgress: Double = 0
+    private var row: ComposerCaptureTopRow.Input {
+        ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
+                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil)
+    }
+
+    private var trailingItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.trailing(row) }
+
+    private var showsFlashSlider: Bool {
+        trailingItems.contains(.flash) && ComposerFlashIntensity.showsSlider(flash: flashMode) && sliderTimer.visible
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             topControls
-            if !segments.isEmpty { segmentStrip }
-            Spacer(minLength: 0)
-            shutterRow
-            hint
+            if !segments.isEmpty, !editing { segmentBar }
+            if showsFlashSlider {
+                HStack {
+                    Spacer(minLength: 0)
+                    ComposerFlashIntensitySlider(level: flashIntensity, onChange: onFlashIntensity,
+                                                 onInteraction: { sliderTimer.hold($0) })
+                }
+                .padding(.trailing, ComposerCaptureTopRow.flashSliderTrailingInset(
+                    trailingItems, tapTarget: MeeshyControlSize.tapTarget))
+                .padding(.top, MeeshySpacing.sm)
+                .transition(.opacity)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.md)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsFlashSlider)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: trailingItems)
+        .adaptiveOnChange(of: flashMode) { _, mode in
+            guard ComposerFlashIntensity.showsSlider(flash: mode) else { return sliderTimer.hide() }
+            sliderTimer.touch()
+        }
+        .task(id: sliderTimer.generation) { @MainActor in
+            let echeance = sliderTimer.generation
+            try? await Task.sleep(nanoseconds: UInt64(ComposerFlashSliderTimer.lifetime * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            sliderTimer.expire(echeance, voiceOver: voiceOverEnabled)
+        }
     }
 
     // MARK: - En tête de la carte
 
+    /// **La rangée haute, disposée par sa loi** (#9753) : (x) puis le chrono à
+    /// gauche ; à droite `[ ]`, les contrôleurs de segment, le flash et, au
+    /// bord, le retournement. **La croix est TOUJOURS là** (#8653 : « permettre
+    /// de quitter à tout moment »), pendant l'enregistrement compris.
     private var topControls: some View {
-        HStack(spacing: 8) {
-            glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
-                         label: ComposerCameraFlash.label(for: flashMode),
-                         tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
-                         action: onCycleFlash)
+        HStack(spacing: ComposerCaptureTopRow.spacing) {
+            ForEach(ComposerCaptureTopRow.leading(row), id: \.self) { control($0) }
             Spacer(minLength: 0)
-            // **`[ ]` a pris la place de `(x)`** (directive porteur
-            // 2026-09-04). En carte, le plateau reste visible et le viseur a
-            // déjà ses sorties — la croix y faisait double emploi et occupait
-            // la place du seul contrôle que la carte ne peut pas offrir
-            // autrement. En plein écran, il n'y a plus rien autour : la croix
-            // revient, et c'est la règle qui le dit.
-            if size.showsClose {
-                glassControl(symbol: "xmark",
-                             label: ComposerSceneCameraCopy.disarmLabel,
-                             tint: .white,
-                             action: onDisarm)
+            ForEach(trailingItems, id: \.self) { control($0) }
+        }
+    }
+
+    @ViewBuilder
+    private func control(_ item: ComposerCaptureTopItem) -> some View {
+        switch item {
+        case .close:
+            glassControl(symbol: "xmark",
+                         label: editing ? ComposerCaptureCopy.cancelEdit : ComposerSceneCameraCopy.disarmLabel,
+                         tint: .white, action: onDisarm)
+        case .chrono:
+            chronoChip
+        case .size:
+            glassControl(symbol: size.toggleSymbol, label: ComposerSceneCameraCopy.sizeLabel(size),
+                         tint: .white, action: onToggleSize)
+        case .dropSegment:
+            glassControl(symbol: "delete.left", label: ComposerSceneCameraCopy.dropSegmentLabel,
+                         tint: .white.opacity(0.9), action: onDropLastSegment)
+        case .validate:
+            glassControl(symbol: "checkmark", label: ComposerSceneCameraCopy.validateLabel,
+                         tint: .white, action: onValidateSegments)
+        case .flash:
+            flashCluster
+        case .flip:
+            glassControl(symbol: "arrow.triangle.2.circlepath.camera", label: ComposerSceneCameraCopy.flipLabel,
+                         tint: .white, action: onFlipCamera)
+                .disabled(flipping)
+        case .save:
+            if let onSave { saveButton(onSave) }
+        case .done:
+            doneButton
+        }
+    }
+
+    /// **Le flash.** Le toucher change son mode et, allumé, fait paraître le
+    /// curseur d'intensité SOUS lui (#9566) pour 2 s (#9753).
+    private var flashCluster: some View {
+        glassControl(symbol: ComposerCameraFlash.symbol(for: flashMode),
+                     label: ComposerCameraFlash.label(for: flashMode),
+                     tint: flashMode == .off ? .white.opacity(0.75) : .yellow,
+                     action: onCycleFlash)
+    }
+
+    /// **✓ Terminé, en haut à droite, aligné sur la croix** (porteur 2026-10-07,
+    /// #9567) : les deux sont au-dessus du sol, jamais sur la scène retouchée.
+    /// Pendant le rendu il attend : un second toucher ne remet rien.
+    private var doneButton: some View {
+        Button {
+            HapticFeedback.light()
+            onDone()
+        } label: {
+            Label(ComposerCaptureCopy.done, systemImage: "checkmark")
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(minHeight: 40)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+                .opacity(rendering ? 0.5 : 1)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .disabled(rendering)
+        .accessibilityLabel(ComposerCaptureCopy.done)
+    }
+
+    /// **⬇︎ Enregistrer dans Photos**, à gauche de « Terminé » : la flèche, puis
+    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps), puis ✓.
+    /// Une prise ne s'enregistre qu'une fois ; pendant « Terminé », elle attend.
+    private func saveButton(_ action: @escaping () -> Void) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            ZStack {
+                switch saveState {
+                case .idle:
+                    Image(systemName: "arrow.down.to.line")
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                        .foregroundStyle(.white)
+                case .saving:
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                case .saved:
+                    Image(systemName: "checkmark")
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
+                        .foregroundStyle(MeeshyColors.success)
+                }
             }
-            glassControl(symbol: size.toggleSymbol,
-                         label: ComposerSceneCameraCopy.sizeLabel(size),
-                         tint: .white,
-                         action: onToggleSize)
-            glassControl(symbol: "arrow.triangle.2.circlepath.camera",
-                         label: ComposerSceneCameraCopy.flipLabel,
-                         tint: .white,
-                         action: onFlipCamera)
+            .frame(width: 40, height: 40)
+            .adaptiveLiquidGlass(in: Circle(), interactive: true)
+            .opacity(rendering && saveState.offersSave ? 0.5 : 1)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Circle())
+        }
+        .buttonStyle(ComposerBounceButtonStyle())
+        .disabled(!saveState.offersSave || rendering)
+        .accessibilityLabel(saveLabel)
+        .accessibilityAddTraits(saveState == .saving ? .updatesFrequently : [])
+    }
+
+    private var saveLabel: String {
+        switch saveState {
+        case .idle: return ComposerCaptureCopy.saveToPhotos
+        case .saving: return ComposerCaptureCopy.savingToPhotos
+        case .saved: return ComposerCaptureCopy.savedToPhotos
         }
     }
 
     /// **Sur du verre, jamais à nu.** Ces contrôles flottent sur une image que
     /// l'objectif choisit : une glyphe blanche posée sur un mur clair
-    /// disparaîtrait. Même arbitrage que la description du volet de scène.
+    /// disparaîtrait.
     private func glassControl(symbol: String,
                               label: String,
                               tint: Color,
@@ -145,218 +261,136 @@ struct ComposerSceneCameraBar: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: symbol)
-                // **Un glyphe de contrôle SUIT le Dynamic Type.** `.system(size:)`
-                // le fige : à la plus grande taille système, la rangée du viseur
-                // resterait minuscule pendant que tout le reste grandit — et une
-                // cible de 40 pt avec un glyphe de 15 pt est illisible pour qui
-                // a besoin de la grande taille.
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                // **Un glyphe de contrôle SUIT le Dynamic Type.**
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 40, height: 40)
-                .adaptiveGlass(in: Circle())
-                .contentShape(Circle().inset(by: -2))
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+                .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ComposerBounceButtonStyle())
         .accessibilityLabel(label)
     }
 
-    // MARK: - La bande des segments (#4099, vue `4b`)
+    // MARK: - La bande des segments (#4099, vue `4b`) et la puce du chrono (#9753)
 
-    private var segmentStrip: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geo in
-                HStack(spacing: 2) {
-                    ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
-                            id: \.0.id) { segment, part in
-                        Capsule()
-                            .fill(segment.id == segments.last?.id
-                                  ? MeeshyColors.error : Color.white.opacity(0.8))
-                            .frame(width: max(2, geo.size.width * part - 2))
-                    }
-                }
-            }
-            .frame(height: 3)
-
-            HStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    // **Le témoin d'enregistrement BAT.** Un point rouge fixe
-                    // ne distingue pas « ça tourne » de « il y a des segments »
-                    // — et c'est précisément la confusion que le chrono figé
-                    // entretenait.
-                    Circle()
-                        .fill(MeeshyColors.error)
-                        .frame(width: 6, height: 6)
-                        .opacity(stage == .recording && !reduceMotion ? recordingBlink : 1)
-                        .animation(stage == .recording && !reduceMotion
-                                   ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
-                                   : .default,
-                                   value: recordingBlink)
-                        .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
-                    Text(LocalizedNumber.duration(
-                        seconds: ComposerCaptureSegments.elapsed(
-                            segments: segments,
-                            live: liveDuration,
-                            recording: stage == .recording)))
-                        .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.white)
-                }
-                .padding(.horizontal, 9)
-                .frame(height: 24)
-                .adaptiveGlass(in: Capsule())
-
-                Text(ComposerSceneCameraCopy.segmentCount(segments.count))
-                    .font(MeeshyFont.relative(10, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Spacer(minLength: 4)
-
-                glassControl(symbol: "delete.left",
-                             label: ComposerSceneCameraCopy.dropSegmentLabel,
-                             tint: .white.opacity(0.9),
-                             action: onDropLastSegment)
-                if ComposerCaptureSegments.canValidate(segments) {
-                    glassControl(symbol: "checkmark",
-                                 label: ComposerSceneCameraCopy.validateLabel,
-                                 tint: .white,
-                                 action: onValidateSegments)
+    /// La part de chaque segment, sous la rangée haute ; le dernier en rouge.
+    private var segmentBar: some View {
+        GeometryReader { geo in
+            HStack(spacing: MeeshySpacing.xxs) {
+                ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
+                        id: \.0.id) { segment, part in
+                    Capsule()
+                        .fill(segment.id == segments.last?.id
+                              ? MeeshyColors.error : Color.white.opacity(0.8))
+                        .frame(width: max(2, geo.size.width * part - 2))
                 }
             }
         }
-        .padding(.top, 10)
-    }
-
-    // MARK: - Le déclencheur — un seul, trois intentions
-
-    /// **Le déclencheur et la PISTE de verrouillage, sur une rangée.**
-    ///
-    /// La piste ne paraît que pendant une prise non verrouillée — hors de ce
-    /// moment elle n'a rien à dire, et un rail permanent laisserait croire à
-    /// une commande qu'on peut presser.
-    private var shutterRow: some View {
-        HStack(spacing: 10) {
-            shutter
-            if stage == .recording && !locked { lockTrack }
-        }
-    }
-
-    /// La cible du verrou, avec la progression du doigt. Le cadenas se
-    /// remplit ; à 1, le geste bascule.
-    private var lockTrack: some View {
-        HStack(spacing: 6) {
-            // `forward`, jamais `right` : ce chevron montre la direction du
-            // GESTE — remonter vers le cadenas pour verrouiller la prise — et
-            // en arabe la piste part de l'autre bord. Un côté physique y
-            // pointerait à l'opposé du doigt.
-            Image(systemName: "chevron.forward")
-                .font(MeeshyFont.relative(11, weight: .bold))
-                .foregroundStyle(.white.opacity(0.35 + 0.65 * lockProgress))
-            Image(systemName: "lock.fill")
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4 + 0.6 * lockProgress))
-        }
-        .padding(.horizontal, 12)
-        .frame(height: 34)
-        .adaptiveGlass(in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(.white.opacity(0.25 * lockProgress), lineWidth: 2)
-        )
+        .frame(height: 3)
+        .padding(.top, MeeshySpacing.smPlus)
         .accessibilityHidden(true)
-        .transition(.opacity)
     }
 
-    private var shutter: some View {
-        ZStack {
+    private var elapsed: TimeInterval {
+        ComposerCaptureSegments.elapsed(segments: segments, live: liveDuration, recording: stage == .recording)
+    }
+
+    /// **La puce du chrono et de l'indicateur de segment, à DROITE de (x)**
+    /// (#9753). **Le témoin d'enregistrement BAT** : un point rouge fixe ne
+    /// distingue pas « ça tourne » de « il y a des segments ».
+    private var chronoChip: some View {
+        let compte = ComposerCaptureTopRow.segmentCount(pending: segments.count, recording: stage == .recording)
+        return HStack(spacing: MeeshySpacing.xs) {
             Circle()
-                .stroke(locked ? MeeshyColors.error : .white, lineWidth: 4)
-                .frame(width: 76, height: 76)
-            if stage == .recording {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(MeeshyColors.error)
-                    .frame(width: 30, height: 30)
-            } else {
-                Circle().fill(MeeshyColors.error).frame(width: 62, height: 62)
-            }
+                .fill(MeeshyColors.error)
+                .frame(width: 6, height: 6)
+                .opacity(stage == .recording && !reduceMotion ? recordingBlink : 1)
+                .animation(stage == .recording && !reduceMotion
+                           ? .easeInOut(duration: 0.55).repeatForever(autoreverses: true)
+                           : .default,
+                           value: recordingBlink)
+                .onAppear { if !reduceMotion { recordingBlink = 0.25 } }
+            Text(LocalizedNumber.duration(seconds: elapsed))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.white)
+            Text(ComposerSceneCameraCopy.segmentCount(compte))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
+                .foregroundStyle(.white.opacity(0.85))
         }
-        .contentShape(Circle().inset(by: -10))
-        .gesture(shutterGesture)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .frame(height: 32)
+        .adaptiveLiquidGlass(in: Capsule())
+        .frame(minHeight: MeeshyControlSize.tapTarget)
+        // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT en mots.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(LocalizedNumber.spokenDuration(seconds: elapsed))
+        .accessibilityValue(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+// MARK: - Le badge du zoom (#8671)
+
+/// Le facteur courant, avec la flèche du geste qui le change. Ajustable à la
+/// voix : un lecteur d'écran ne glisse pas.
+struct ComposerCaptureZoomChip: View {
+    let factor: CGFloat
+    let onStep: (Bool) -> Void
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "arrow.up.and.down")
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
+            Text(ComposerSceneCameraCopy.zoomValue(factor))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+        }
+        .foregroundStyle(ComposerCaptureZoom.showsBadge(factor) ? Color.yellow : .white)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .frame(height: 32)
+        .adaptiveLiquidGlass(in: Capsule())
         .accessibilityElement()
-        .accessibilityLabel(ComposerSceneCameraCopy.shutterLabel(mode: mode, stage: stage))
-        .accessibilityAddTraits(.isButton)
-        // VoiceOver ne TIENT pas un doigt : sans cette action, la vidéo serait
-        // inatteignable au lecteur d'écran — une capacité offerte à la main et
-        // refusée à la voix.
-        .accessibilityAction(named: Text(ComposerSceneCameraCopy.filmActionLabel)) {
-            stage == .recording ? onCloseTake() : onStartFilming()
+        .accessibilityLabel(ComposerSceneCameraCopy.zoomLabel)
+        .accessibilityValue(ComposerSceneCameraCopy.zoomValue(factor))
+        .accessibilityAdjustableAction { sens in
+            switch sens {
+            case .increment: onStep(true)
+            case .decrement: onStep(false)
+            @unknown default: break
+            }
         }
     }
+}
 
-    private var shutterGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { valeur in
-                if pressedAt == nil {
-                    pressedAt = Date()
-                    locked = false
-                    armHold()
-                }
-                guard stage == .recording, !locked else { return }
-                // **Le geste se montre pendant qu'il se fait** — et revenir en
-                // arrière l'annule, ce que la progression rend tout seul en
-                // retombant à zéro.
-                lockProgress = ComposerShutterGesture.lockProgress(
-                    translationX: valeur.translation.width)
-                guard ComposerShutterGesture.locks(
-                    translationX: valeur.translation.width) else { return }
-                locked = true
-                lockProgress = 1
-                onLock()
-                HapticFeedback.medium()
-            }
-            .onEnded { _ in
-                holdTask?.cancel()
-                holdTask = nil
-                let tenu = pressedAt.map { Date().timeIntervalSince($0) } ?? 0
-                pressedAt = nil
-                lockProgress = locked ? 1 : 0
-                switch ComposerShutterGesture.outcome(heldFor: tenu, locked: locked) {
-                case .photo:
-                    // Une prise a pu démarrer et le doigt partir avant le seuil
-                    // — la course est possible. Ce qui EST en train de s'écrire
-                    // prime sur ce que la durée dit.
-                    if stage == .recording { onCloseTake() } else { onPhoto() }
-                case .closeTake:
-                    onCloseTake()
-                case .keepFilming:
-                    break
-                }
-            }
-    }
+/// **Les crans du zoom** (#9350) : ×0,5 / ×1 / ×2, ceux que l'objectif sert. Le
+/// cran courant est jaune ; chacun est une cible de 44 pt, nommée à la voix.
+struct ComposerCaptureZoomPresets: View {
+    let factor: CGFloat
+    let presets: [CGFloat]
+    let onSelect: (CGFloat) -> Void
 
-    /// **Le maintien se compte au temps, pas au mouvement.** `onChanged` ne
-    /// refire que si le doigt BOUGE ; un doigt parfaitement immobile ne
-    /// démarrerait jamais la prise. La tâche différée est ce qui rend le geste
-    /// possible sans exiger un tremblement.
-    private func armHold() {
-        holdTask?.cancel()
-        holdTask = Task {
-            try? await Task.sleep(nanoseconds:
-                UInt64(ComposerShutterGesture.holdToFilm * 1_000_000_000))
-            guard !Task.isCancelled, pressedAt != nil, stage != .recording else { return }
-            onStartFilming()
-            HapticFeedback.medium()
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(presets, id: \.self) { cran in
+                Button {
+                    onSelect(cran)
+                    HapticFeedback.light()
+                } label: {
+                    Text(ComposerSceneCameraCopy.zoomPresetValue(cran))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                        .foregroundStyle(abs(factor - cran) < 0.05 ? Color.yellow : .white)
+                        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ComposerSceneCameraCopy.zoomLabel)
+                .accessibilityValue(ComposerSceneCameraCopy.zoomValue(cran))
+                .accessibilityAddTraits(abs(factor - cran) < 0.05 ? .isSelected : [])
+            }
         }
-    }
-
-    // MARK: - La phrase
-
-    private var hint: some View {
-        Text(ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
-            .font(MeeshyFont.relative(11, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.85))
-            .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
-            .multilineTextAlignment(.center)
-            .lineLimit(2)
-            .minimumScaleFactor(0.75)
-            .padding(.top, 10)
-            .accessibilityHidden(true)
+        .adaptiveLiquidGlass(in: Capsule())
     }
 }

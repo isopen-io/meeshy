@@ -1,0 +1,579 @@
+{
+  "mood": "feerique",
+  "motifs": [
+    {
+      "id": "feerique.conte",
+      "mood": "feerique",
+      "name": "Conte",
+      "base": {
+        "layout": {
+          "arrangement": "grid",
+          "margin": 0.08,
+          "gap": 0.035,
+          "top": 0.19,
+          "bottom": 0.13
+        },
+        "slot": {
+          "shape": "round",
+          "radius": 0.2,
+          "stroke": {
+            "color": "#F4B6C8",
+            "width": 0.008
+          },
+          "card": {
+            "color": "#FFFFFF",
+            "pad": 0.04,
+            "foot": 0.06
+          },
+          "shadow": true,
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#FFF1F5",
+            "#FDF6EC",
+            "#EAF4FB"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "waves",
+          "color": "#F4B6C8",
+          "opacity": 0.16
+        },
+        "border": {
+          "kind": "vines",
+          "color": "#7FA37A",
+          "width": 0.014,
+          "inset": 0.02
+        },
+        "ornaments": [
+          {
+            "kind": "petals",
+            "color": "#F4B6C8",
+            "density": "mid",
+            "layer": "back"
+          },
+          {
+            "kind": "stars",
+            "color": "#E9B949",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#E9B949",
+            "density": "low",
+            "layer": "front"
+          }
+        ],
+        "brand": {
+          "mark": "wordmark",
+          "place": "bottom",
+          "color": "#8A6A4A",
+          "size": "s",
+          "font": "curve"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "handwriting",
+          "color": "#5A3E2E"
+        },
+        "title": {
+          "source": "group",
+          "font": "curve",
+          "color": "#7A3E62",
+          "place": "top",
+          "size": "l",
+          "effect": "none",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "handwriting",
+          "color": "#8A6A4A",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "cascade",
+            "margin": 0.08,
+            "gap": 0.03,
+            "top": 0.19,
+            "bottom": 0.13
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.2,
+            "stroke": {
+              "color": "#F4B6C8",
+              "width": 0.008
+            },
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.04,
+              "foot": 0.06
+            },
+            "shadow": true,
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "title": {
+            "source": "names",
+            "font": "curve",
+            "color": "#7A3E62",
+            "place": "top",
+            "size": "l",
+            "effect": "none",
+            "case": "as-is"
+          }
+        },
+        "comite": {
+          "layout": {
+            "arrangement": "arch",
+            "margin": 0.08,
+            "gap": 0.035,
+            "top": 0.19,
+            "bottom": 0.13
+          }
+        },
+        "groupe": {
+          "layout": {
+            "arrangement": "tiers",
+            "margin": 0.07,
+            "gap": 0.025,
+            "top": 0.17,
+            "bottom": 0.12
+          },
+          "slot": {
+            "shape": "round",
+            "radius": 0.2,
+            "stroke": {
+              "color": "#F4B6C8",
+              "width": 0.006
+            },
+            "card": {
+              "color": "#FFFFFF",
+              "pad": 0.035,
+              "foot": 0.04
+            },
+            "shadow": true,
+            "tilt": "none",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "name",
+            "style": "ribbon",
+            "font": "handwriting",
+            "color": "#5A3E2E",
+            "fill": "#F9C6D3"
+          }
+        }
+      }
+    },
+    {
+      "id": "feerique.lucioles",
+      "mood": "feerique",
+      "name": "Lucioles",
+      "base": {
+        "layout": {
+          "arrangement": "scatter",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.16,
+          "bottom": 0.1
+        },
+        "slot": {
+          "shape": "blob",
+          "glow": "#FFD98A",
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "radial",
+          "colors": [
+            "#1D3530",
+            "#0C1A18",
+            "#050B0A"
+          ]
+        },
+        "ornaments": [
+          {
+            "kind": "fireflies",
+            "color": "#FFE9A8",
+            "density": "high",
+            "layer": "back"
+          },
+          {
+            "kind": "bokeh",
+            "color": "#F6D58A33",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "leaves",
+            "color": "#2F5A47",
+            "density": "mid",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "top-right",
+          "color": "#FFE9A8",
+          "size": "s"
+        },
+        "names": {
+          "show": "handle",
+          "style": "badge",
+          "font": "curve",
+          "color": "#FFE9A8",
+          "fill": "#0A1412CC"
+        },
+        "title": {
+          "source": "group",
+          "font": "curve",
+          "color": "#FFE9A8",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "diagonal",
+            "margin": 0.07,
+            "gap": 0.03,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "names": {
+            "show": "handle",
+            "style": "tag",
+            "font": "handwriting",
+            "color": "#FFE9A8",
+            "fill": "#0A1412CC"
+          },
+          "title": {
+            "source": "names",
+            "font": "curve",
+            "color": "#FFE9A8",
+            "place": "top",
+            "size": "l",
+            "effect": "glow",
+            "case": "as-is"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "hero",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.15,
+            "bottom": 0.1
+          },
+          "ornaments": [
+            {
+              "kind": "fireflies",
+              "color": "#FFE9A8",
+              "density": "high",
+              "layer": "back"
+            },
+            {
+              "kind": "bokeh",
+              "color": "#F6D58A33",
+              "density": "mid",
+              "layer": "back"
+            },
+            {
+              "kind": "sparkles",
+              "color": "#FFE9A8",
+              "density": "low",
+              "layer": "front"
+            }
+          ]
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.018,
+            "top": 0.14,
+            "bottom": 0.09
+          },
+          "slot": {
+            "shape": "circle",
+            "glow": "#FFD98AAA",
+            "tilt": "gentle",
+            "tone": "warm"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "curve",
+            "color": "#FFE9A8"
+          }
+        }
+      }
+    },
+    {
+      "id": "feerique.clair-de-lune",
+      "mood": "feerique",
+      "name": "Clair de lune",
+      "base": {
+        "layout": {
+          "arrangement": "orbit",
+          "margin": 0.07,
+          "gap": 0.03,
+          "top": 0.18,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "circle",
+          "stroke": {
+            "color": "#F9C6D3",
+            "width": 0.006
+          },
+          "glow": "#C7B8F0",
+          "tilt": "none",
+          "tone": "cool"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#1E2A5A",
+            "#4B4A8F",
+            "#6E5BA8"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "stars",
+          "color": "#FFFFFF",
+          "opacity": 0.25
+        },
+        "ornaments": [
+          {
+            "kind": "moon",
+            "color": "#FFF6D8",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "clouds",
+            "color": "#FFFFFF2E",
+            "density": "low",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#FFF6D8",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "snow",
+            "color": "#FFFFFFB3",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "both",
+          "place": "bottom-left",
+          "color": "#FFF6D8",
+          "size": "s",
+          "font": "curve"
+        },
+        "names": {
+          "show": "name",
+          "style": "caption",
+          "font": "curve",
+          "color": "#FFFFFF"
+        },
+        "title": {
+          "source": "group",
+          "font": "calligraphy",
+          "color": "#FFF6D8",
+          "place": "top",
+          "size": "l",
+          "effect": "glow",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "curve",
+          "color": "#F9C6D3",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {
+          "layout": {
+            "arrangement": "column",
+            "margin": 0.08,
+            "gap": 0.04,
+            "top": 0.2,
+            "bottom": 0.14
+          },
+          "title": {
+            "source": "names",
+            "font": "calligraphy",
+            "color": "#FFF6D8",
+            "place": "top",
+            "size": "l",
+            "effect": "glow",
+            "case": "as-is"
+          }
+        },
+        "comite": {},
+        "groupe": {
+          "layout": {
+            "arrangement": "scatter",
+            "margin": 0.06,
+            "gap": 0.025,
+            "top": 0.17,
+            "bottom": 0.12
+          },
+          "names": {
+            "show": "name",
+            "style": "badge",
+            "font": "curve",
+            "color": "#FFFFFF",
+            "fill": "#1E2A5ACC"
+          }
+        },
+        "tablee": {
+          "layout": {
+            "arrangement": "grid",
+            "margin": 0.05,
+            "gap": 0.018,
+            "top": 0.16,
+            "bottom": 0.1
+          },
+          "slot": {
+            "shape": "circle",
+            "stroke": {
+              "color": "#F9C6D3",
+              "width": 0.004
+            },
+            "tilt": "none",
+            "tone": "cool"
+          },
+          "names": {
+            "show": "none",
+            "style": "badge",
+            "font": "curve",
+            "color": "#FFFFFF"
+          }
+        }
+      }
+    },
+    {
+      "id": "feerique.coeur-de-rose",
+      "mood": "feerique",
+      "name": "Cœur de rose",
+      "base": {
+        "layout": {
+          "arrangement": "split",
+          "margin": 0.08,
+          "gap": 0.04,
+          "top": 0.16,
+          "bottom": 0.12
+        },
+        "slot": {
+          "shape": "heart",
+          "stroke": {
+            "color": "#FFFFFF",
+            "width": 0.008
+          },
+          "glow": "#FFB3C7",
+          "tilt": "gentle",
+          "tone": "warm"
+        },
+        "background": {
+          "kind": "linear",
+          "colors": [
+            "#F9C6D3",
+            "#FCE3EA",
+            "#BFE6D2"
+          ],
+          "angle": 0
+        },
+        "pattern": {
+          "kind": "hearts",
+          "color": "#FFFFFF",
+          "opacity": 0.35
+        },
+        "ornaments": [
+          {
+            "kind": "petals",
+            "color": "#F28FAD",
+            "density": "high",
+            "layer": "back"
+          },
+          {
+            "kind": "sparkles",
+            "color": "#D4AF6A",
+            "density": "low",
+            "layer": "front"
+          },
+          {
+            "kind": "hearts",
+            "color": "#F28BA8",
+            "density": "low",
+            "layer": "back"
+          }
+        ],
+        "brand": {
+          "mark": "logo",
+          "place": "bottom",
+          "color": "#8C3B5C",
+          "size": "m"
+        },
+        "names": {
+          "show": "both",
+          "style": "ribbon",
+          "font": "curve",
+          "color": "#FFFFFF",
+          "fill": "#C24D78"
+        },
+        "title": {
+          "source": "names",
+          "font": "calligraphy",
+          "color": "#8C3B5C",
+          "place": "top",
+          "size": "l",
+          "effect": "none",
+          "case": "as-is"
+        },
+        "subtitle": {
+          "source": "date",
+          "font": "handwriting",
+          "color": "#A0587A",
+          "place": "top",
+          "size": "s",
+          "effect": "none",
+          "case": "as-is"
+        }
+      },
+      "variants": {
+        "duo": {}
+      }
+    }
+  ]
+}

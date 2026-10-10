@@ -17,6 +17,7 @@
 
 import pino from 'pino';
 import { createHash } from 'crypto';
+import { redactReaderFileUrl } from './redact-reader-file-url';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -554,7 +555,7 @@ export function requestLogger() {
     enhancedLogger.info('Incoming request', {
       requestId,
       method: request.method,
-      url: request.url,
+      url: redactReaderFileUrl(request.url),
       userAgent: request.headers['user-agent'],
       ip: request.ip
     });
@@ -567,7 +568,7 @@ export function requestLogger() {
       enhancedLogger[level]('Request completed', {
         requestId,
         method: request.method,
-        url: request.url,
+        url: redactReaderFileUrl(request.url),
         statusCode: reply.statusCode,
         durationMs: duration
       });

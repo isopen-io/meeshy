@@ -4,7 +4,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { INTERFACE_LANGUAGE_KEY } from './inline-interface-language-bootstrap.js';
 import { translate } from './i18n-catalog';
-import { currentInterfaceLanguage, setInterfaceLanguage } from './interface-language';
+import { currentInterfaceLanguage, followBrowserInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage } from './interface-language';
 
 /**
  * `currentInterfaceLanguage`/`setInterfaceLanguage` (#6206) — même patron que
@@ -24,6 +24,7 @@ afterAll(async () => {
 
 afterEach(() => {
   document.documentElement.lang = 'fr';
+  document.documentElement.dir = 'ltr';
   try {
     localStorage.removeItem(INTERFACE_LANGUAGE_KEY);
   } catch {
@@ -73,5 +74,31 @@ describe('setInterfaceLanguage — pose ET persiste, contrairement au suivi syst
   test('charge le catalogue de la langue AVANT de la poser', async () => {
     await setInterfaceLanguage('it');
     expect(translate(currentInterfaceLanguage(), 'root.menu.settings')).toBe('Impostazioni');
+  });
+});
+
+describe('le sens de lecture suit la langue d’interface (#8803)', () => {
+  test('passer à l’arabe retourne la page, en revenir la remet à l’endroit', async () => {
+    await setInterfaceLanguage('ar');
+    expect(document.documentElement.dir).toBe('rtl');
+    await setInterfaceLanguage('fr');
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+
+  test('« Automatique » pose aussi le sens de la langue résolue', async () => {
+    await followBrowserInterfaceLanguage(['ar-EG']);
+    expect(document.documentElement.dir).toBe('rtl');
+    await followBrowserInterfaceLanguage(['en-US']);
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+});
+
+describe('interfaceLanguageOf — la langue d’interface qu’un code désigne (#9710)', () => {
+  test('une langue du produit se reconnaît, région et casse comprises ; une autre n’en désigne aucune', () => {
+    expect(interfaceLanguageOf('en')).toBe('en');
+    expect(interfaceLanguageOf('pt-BR')).toBe('pt');
+    expect(interfaceLanguageOf('AR')).toBe('ar');
+    expect(interfaceLanguageOf('ja')).toBeNull();
+    expect(interfaceLanguageOf('')).toBeNull();
   });
 });

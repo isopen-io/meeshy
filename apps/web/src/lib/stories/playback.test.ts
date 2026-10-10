@@ -11,6 +11,7 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  scopeToLiveStories,
   scopeToSingleGroup,
   slideDurationForScene,
   slideDurationMs,
@@ -431,5 +432,42 @@ describe('stableGroupOrder — l\'ordre de lecture ne bouge pas sous le lecteur 
   test('un gel VIDE rend le corpus tel quel — l\'ouverture n\'a encore rien figé', () => {
     const frais = groupForPlayback(corpus(true), { viewerId: undefined });
     expect(stableGroupOrder(frais, [])).toBe(frais);
+  });
+});
+
+describe('scopeToLiveStories — mes stories ne montrent que les barres des stories EN COURS (#7889)', () => {
+  const corpus = [
+    story({ id: 'old1', authorId: 'me', createdAt: '2026-09-10T09:00:00.000Z', expiresAt: '2026-09-11T05:00:00.000Z' }),
+    story({ id: 'live1', authorId: 'me', createdAt: '2026-09-13T08:00:00.000Z', expiresAt: '2026-09-14T04:00:00.000Z' }),
+    story({ id: 'old2', authorId: 'me', createdAt: '2026-09-12T09:00:00.000Z', expiresAt: '2026-09-13T05:00:00.000Z' }),
+    story({ id: 'live2', authorId: 'me', createdAt: '2026-09-13T10:00:00.000Z', expiresAt: '2026-09-14T06:00:00.000Z' }),
+    story({ id: 'ref', authorId: 'them', createdAt: '2026-09-12T09:00:00.000Z', expiresAt: '2026-09-13T05:00:00.000Z' }),
+    story({ id: 'theirs', authorId: 'them', createdAt: '2026-09-13T09:00:00.000Z' }),
+  ];
+  const groups = groupForPlayback(corpus, { viewerId: 'me' });
+  const idsOf = (scoped: ReturnType<typeof scopeToLiveStories>, authorId: string) =>
+    scoped.find((g) => g.authorId === authorId)?.stories.map((s) => s.id);
+
+  test('mon groupe ne garde que les stories en cours — une barre par story en cours, jamais une par archive', () => {
+    expect(idsOf(scopeToLiveStories(groups, { keeping: [], now: NOW }), 'me')).toEqual(['live1', 'live2']);
+  });
+
+  test('l\'archive ouverte explicitement reste, et elle seule parmi les archives', () => {
+    expect(idsOf(scopeToLiveStories(groups, { keeping: ['old1'], now: NOW }), 'me')).toEqual(['old1', 'live1', 'live2']);
+  });
+
+  test('les groupes des autres auteurs ne sont pas touchés', () => {
+    expect(idsOf(scopeToLiveStories(groups, { keeping: [], now: NOW }), 'them')).toEqual(['ref', 'theirs']);
+  });
+
+  test('sans aucune story en cours, mon groupe reste entier — le lecteur ne s\'ouvre jamais vide', () => {
+    const archivesOnly = groupForPlayback(corpus.filter((s) => s.id.startsWith('old')), { viewerId: 'me' });
+    expect(idsOf(scopeToLiveStories(archivesOnly, { keeping: [], now: NOW }), 'me')).toEqual(['old1', 'old2']);
+  });
+
+  test('la lecture ne joue plus les archives écartées : après ma dernière story en cours, le lecteur ferme', () => {
+    const scoped = scopeToSingleGroup(scopeToLiveStories(groups, { keeping: [], now: NOW }), 'live1');
+    expect(resolvePlayablePosition(scoped, { groupIndex: 0, storyIndex: 0 }, NOW)).toEqual({ groupIndex: 0, storyIndex: 0 });
+    expect(nextPosition(scoped, { groupIndex: 0, storyIndex: 1 }, NOW)).toBe('close');
   });
 });

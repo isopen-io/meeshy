@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { attachmentSrc } from '@/lib/api/media-url';
 import type { StoryTrayMedia, StoryTrayPost } from '@/lib/api/stories';
 import { myActiveStories, myStoryDateLabel, myStoryThumbnail } from '@/lib/view/my-stories';
 
@@ -70,6 +71,22 @@ describe('myStoryThumbnail — composite, distante, aplat', () => {
     expect(myStoryThumbnail(undefined)).toEqual({ kind: 'placeholder' });
     expect(myStoryThumbnail([])).toEqual({ kind: 'placeholder' });
     expect(myStoryThumbnail([media()])).toEqual({ kind: 'placeholder' });
+  });
+
+  /* #8820 — relevé sur l'émulateur de la coque : la carte d'une story VIDÉO
+     posait le `.mov` dans un `<img>` (image cassée), et la clé de stockage
+     RELATIVE se résolvait contre l'origine de la page (`https://localhost/…`
+     dans la coque) au lieu de la route de flux de la passerelle. */
+  test('une vidéo sans `thumbnailUrl` ⇒ le placeholder, jamais le fichier vidéo dans une image', () => {
+    const thumb = myStoryThumbnail([media({ fileUrl: 'stories/2026/09/u/clip.mov', mimeType: 'video/quicktime' })]);
+    expect(thumb).toEqual({ kind: 'placeholder' });
+  });
+
+  test('une clé de stockage relative passe par la résolution UNIQUE des pièces jointes', () => {
+    const thumb = myStoryThumbnail([media({ fileUrl: 'stories/2026/09/u/photo.jpg', mimeType: 'image/jpeg' })]);
+    if (thumb.kind !== 'photo') throw new Error('photo attendue');
+    expect(thumb.url).toBe(attachmentSrc('stories/2026/09/u/photo.jpg'));
+    expect(thumb.url).not.toBe('stories/2026/09/u/photo.jpg');
   });
 
   test('un thumbHash illisible ne casse rien — la photo reste servie, sans aplat', () => {

@@ -11,10 +11,15 @@ import {
   decodeAdminVoiceProfile,
   loadAdminUserReportsReceived,
   loadAdminUserSessions,
+  revokeAdminUserSession,
+  revokeAllAdminUserSessions,
+  sessionStateOf,
+  withAllSessionsClosed,
+  withoutSession,
 } from './admin-user-dossier';
 import { estClefSouveraine } from './souverain';
 
-const transport = (reponse: { readonly data: unknown; readonly pagination?: unknown }, vu: string[] = []) =>
+const transport = (reponse: { readonly data: unknown; readonly pagination?: unknown; readonly meta?: unknown }, vu: string[] = []) =>
   ({
     request: async (requete: { path: string }) => {
       vu.push(requete.path);
@@ -39,6 +44,19 @@ describe('les contacts d’un membre', () => {
       ['f1', 'sent', 'accepted', 'Bob'],
     ]);
     expect([activite.shareLinks, activite.trackingLinks, activite.affiliateTokens]).toEqual([2, 0, 1]);
+    expect(activite.totals).toBeNull();
+  });
+
+  test('lisent les TOTAUX servis : la longueur d’une liste bornée à cinquante n’est pas le compte (audit 2026-10-04)', () => {
+    const activite = decodeAdminActivity({
+      shareLinks: Array.from({ length: 50 }, () => ({})),
+      trackingLinks: [],
+      affiliateTokens: [],
+      contacts: { sent: [], received: [] },
+      totals: { shareLinks: 212, trackingLinks: 3, affiliateTokens: 0, contactsSent: 140, contactsReceived: 61 },
+    });
+    expect([activite.shareLinks, activite.trackingLinks, activite.affiliateTokens]).toEqual([212, 3, 0]);
+    expect(activite.totals).toEqual({ contactsSent: 140, contactsReceived: 61 });
   });
 });
 
@@ -94,9 +112,17 @@ describe('le profil vocal', () => {
       consents: { voiceProfileConsentAt: '2026-05-01T00:00:00Z', voiceDataConsentAt: null },
     });
     expect(voix).toEqual({
-      profile: { audioCount: 3, totalDurationMs: 42000, model: 'openvoice_v2', createdAt: null, updatedAt: null },
+      profile: { audioCount: 3, totalDurationMs: 42000, model: 'openvoice_v2', qualityScore: null, analysisAt: null, publicAt: null, createdAt: null, updatedAt: null },
       consents: { voiceProfile: '2026-05-01T00:00:00Z', voiceData: null, voiceCloning: null },
     });
+  });
+
+  test('lit la qualité, l’analyse et la publication servies (audit 2026-10-04)', () => {
+    const voix = decodeAdminVoiceProfile({
+      voiceProfile: { audioCount: 3, totalDurationMs: 42000, embeddingModel: 'openvoice_v2', qualityScore: 0.72, voiceAnalysisAt: '2026-06-01T00:00:00Z', voicePublicAt: '2026-06-02T00:00:00Z' },
+      consents: {},
+    });
+    expect([voix.profile?.qualityScore, voix.profile?.analysisAt, voix.profile?.publicAt]).toEqual([0.72, '2026-06-01T00:00:00Z', '2026-06-02T00:00:00Z']);
   });
 
   test('un membre sans profil vocal le dit', () => {
@@ -148,17 +174,95 @@ describe('les sessions', () => {
         {
           id: 's1',
           device: 'Chrome 140 · Android 15',
+          deviceName: '',
           ipAddress: '10.0.0.1',
           place: 'Lyon, FR',
+          appVersion: '',
+          appBuild: '',
+          platform: '',
+          loginMethod: '',
+          timezone: '',
+          userAgent: '',
           isValid: true,
           isTrusted: false,
           createdAt: null,
           lastActivityAt: '2026-09-20T00:00:00Z',
+          expiresAt: null,
+          invalidatedAt: null,
+          invalidatedReason: null,
         },
       ],
       total: 30,
       hasMore: true,
+      geolocation: null,
     });
+  });
+
+  test('TOUT ce que la passerelle retient est lu (#9613) : version, build, plateforme, nom, moyen, fuseau, agent', async () => {
+    const resultat = await loadAdminUserSessions({
+      source: 'gateway',
+      transport: transport({
+        data: [
+          {
+            id: 's1',
+            deviceName: 'Pixel 7',
+            appVersion: '2.13.0',
+            appBuild: '1874',
+            platform: 'android-shell',
+            loginMethod: 'magic_link',
+            timezone: 'Africa/Dakar',
+            userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7)',
+            isValid: true,
+          },
+        ],
+      }),
+      userId: 'u1',
+      offset: 0,
+    });
+    const row = resultat.ok ? resultat.data.rows[0] : undefined;
+    expect(row?.deviceName).toBe('Pixel 7');
+    expect(row?.appVersion).toBe('2.13.0');
+    expect(row?.appBuild).toBe('1874');
+    expect(row?.platform).toBe('android-shell');
+    expect(row?.loginMethod).toBe('magic_link');
+    expect(row?.timezone).toBe('Africa/Dakar');
+    expect(row?.userAgent).toContain('Pixel 7');
+  });
+
+  test('l’attribution DB-IP servie en `meta.geolocation` accompagne la page ; une adresse non https n’est pas un lien', async () => {
+    const geolocation = { provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true };
+    const servie = await loadAdminUserSessions({ source: 'gateway', transport: transport({ data: [], meta: { geolocation } }), userId: 'u1', offset: 0 });
+    expect(servie.ok && servie.data.geolocation).toEqual({ text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', approximate: true });
+    const hostile = await loadAdminUserSessions({ source: 'gateway', transport: transport({ data: [], meta: { geolocation: { text: 'x', url: 'http://x' } } }), userId: 'u1', offset: 0 });
+    expect(hostile.ok && hostile.data.geolocation).toBeNull();
+  });
+});
+
+describe('tout fermer (#9613)', () => {
+  test('DELETE sur les sessions du membre, et le nombre réellement fermé', async () => {
+    const calls: { path: string; method: string; body?: unknown }[] = [];
+    const recording = {
+      request: async (requete: { path: string; method: string; body?: unknown }) => {
+        calls.push(requete);
+        return { ok: true as const, data: { revokedCount: 3 } };
+      },
+    } as unknown as HttpTransport;
+    const resultat = await revokeAllAdminUserSessions({ source: 'gateway', transport: recording, userId: 'u 1' });
+    expect(calls).toEqual([{ method: 'DELETE', path: '/api/v1/admin/users/u%201/sessions' }]);
+    expect(resultat).toEqual({ ok: true, data: { revokedCount: 3 } });
+  });
+
+  test('l’effet immédiat ferme chaque session ouverte de la page, au motif de l’administration', () => {
+    const page = { rows: [{ id: 's1', isValid: true, invalidatedAt: null, invalidatedReason: null }, { id: 's2', isValid: false, invalidatedAt: '2026-01-01T00:00:00Z', invalidatedReason: 'logout' }], total: 2, hasMore: false };
+    expect(withAllSessionsClosed(page, '2026-10-08T12:00:00.000Z')).toEqual({
+      rows: [
+        { id: 's1', isValid: false, invalidatedAt: '2026-10-08T12:00:00.000Z', invalidatedReason: 'admin_revoke' },
+        { id: 's2', isValid: false, invalidatedAt: '2026-01-01T00:00:00Z', invalidatedReason: 'logout' },
+      ],
+      total: 2,
+      hasMore: false,
+    });
+    expect(withAllSessionsClosed('autre chose', 'x')).toBe('autre chose');
   });
 });
 
@@ -182,6 +286,77 @@ describe('les signalements reçus', () => {
       status: 'pending',
       createdAt: null,
       excerpt: null,
+      messageState: 'withheld',
+      conversation: null,
+      resolvedAt: null,
+      actionTaken: null,
     });
+  });
+
+  test('un message DISPARU (`message: null`, ou `deletedAt` posé) se distingue d’un texte retenu (audit 2026-10-04)', async () => {
+    const resultat = await loadAdminUserReportsReceived({
+      source: 'gateway',
+      transport: transport({
+        data: [
+          { id: 'r1', reportType: 'spam', status: 'pending', message: null, conversation: null },
+          { id: 'r2', reportType: 'spam', status: 'resolved', resolvedAt: '2026-09-02T00:00:00Z', message: { id: 'm2', content: 'texte', deletedAt: '2026-09-01T00:00:00Z' }, conversation: { id: 'c1', title: ' Famille ' } },
+          { id: 'r3', reportType: 'spam', status: 'pending', message: { id: 'm3', content: 'bonjour', deletedAt: null }, conversation: { id: 'c1', title: null } },
+        ],
+        pagination: { total: 3 },
+      }),
+      userId: 'u1',
+      offset: 0,
+    });
+    const rows = resultat.ok ? resultat.data.rows : [];
+    expect(rows.map((row) => [row.messageState, row.excerpt])).toEqual([
+      ['deleted', null],
+      ['deleted', null],
+      ['shown', 'bonjour'],
+    ]);
+    expect(rows[1]?.conversation).toEqual({ id: 'c1', title: 'Famille' });
+    expect(rows[1]?.resolvedAt).toBe('2026-09-02T00:00:00Z');
+    expect(rows[2]?.conversation).toEqual({ id: 'c1', title: null });
+  });
+});
+
+describe('l’état d’une session', () => {
+  const NOW = new Date('2026-09-30T12:00:00Z');
+  test('une session encore valide dont l’échéance est passée est EXPIRÉE, pas valide (audit 2026-10-04)', () => {
+    expect(sessionStateOf({ isValid: true, expiresAt: '2026-09-01T00:00:00Z' }, NOW)).toBe('expired');
+    expect(sessionStateOf({ isValid: true, expiresAt: '2026-10-30T00:00:00Z' }, NOW)).toBe('valid');
+    expect(sessionStateOf({ isValid: true, expiresAt: null }, NOW)).toBe('valid');
+    expect(sessionStateOf({ isValid: false, expiresAt: '2026-10-30T00:00:00Z' }, NOW)).toBe('closed');
+  });
+});
+
+describe('révoquer une session', () => {
+  test('DELETE sur la session nommée, par le catalogue — l’accusé ne porte rien de la charge', async () => {
+    const calls: { path: string; method: string }[] = [];
+    const recording = {
+      request: async (requete: { path: string; method: string }) => {
+        calls.push(requete);
+        return { ok: true as const, data: { message: 'Session révoquée avec succès' } };
+      },
+    } as unknown as HttpTransport;
+
+    const resultat = await revokeAdminUserSession({ source: 'gateway', transport: recording, userId: 'u1', sessionId: 's/1' });
+
+    expect(calls).toEqual([{ method: 'DELETE', path: '/api/v1/admin/users/u1/sessions/s%2F1' }]);
+    expect(resultat).toEqual({ ok: true, data: { acknowledged: true } });
+  });
+
+  test('un refus passe tel quel, avec son statut', async () => {
+    const refusing = { request: async () => ({ ok: false as const, status: 403, error: 'Forbidden' }) } as unknown as HttpTransport;
+
+    expect(await revokeAdminUserSession({ source: 'gateway', transport: refusing, userId: 'u1', sessionId: 's1' })).toEqual({ ok: false, status: 403, error: 'Forbidden' });
+  });
+
+  test('l’effet immédiat retire la ligne et baisse le total ; une charge inconnue est rendue telle quelle', () => {
+    const page = { rows: [{ id: 's1' }, { id: 's2' }], total: 7, hasMore: true };
+
+    expect(withoutSession(page, 's1')).toEqual({ rows: [{ id: 's2' }], total: 6, hasMore: true });
+    expect(withoutSession(page, 'inconnue')).toEqual(page);
+    expect(withoutSession('autre chose', 's1')).toBe('autre chose');
+    expect(withoutSession({ rows: [{ id: 's1' }], total: 0 }, 's1')).toEqual({ rows: [], total: 0 });
   });
 });

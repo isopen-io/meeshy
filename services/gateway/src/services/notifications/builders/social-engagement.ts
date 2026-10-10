@@ -11,6 +11,8 @@
  * Ce que ces cinq partagent, et qui justifie le regroupement :
  *  - la vignette du contenu visé (`resolvePostMedia`) voyage jusqu'au push iOS ;
  *  - le SUBTITLE nomme la cible, le CORPS la MONTRE (cf. `targetPreviewBody`) ;
+ *  - l'extrait du POST visé est RELU et descend le Prisme du destinataire
+ *    (`../served-post-excerpt`, #8731) — jamais reçu tout fait d'un appelant ;
  *  - l'auteur ne se notifie jamais lui-même.
  *
  * Les éventails batch (mentions, amis, commentaires de story) vivent chez eux,
@@ -27,6 +29,7 @@ import type { Notification } from '@meeshy/shared/types/notification';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { buildOwnerSubtitleWithDetail, targetPreviewBody } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
+import { loadServedPostExcerpt } from '../served-post-excerpt';
 import type { NotificationBuilderDependencies } from './dependencies';
 
 export async function createPostLikeNotification(
@@ -37,8 +40,6 @@ export async function createPostLikeNotification(
     postAuthorId: string;
     emoji: string;
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Aperçu du contenu réagi (≤ ~80 chars) — identifie QUELLE entité. */
-    postPreview?: string;
     /** Date de publication ISO du contenu réagi (contexte expiry côté client). */
     postCreatedAt?: string | Date;
     /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
@@ -66,13 +67,15 @@ export async function createPostLikeNotification(
       ? 'status_reaction'
       : 'post_like';
 
-  const lang = await deps.resolveRecipientLang(params.postAuthorId);
+  const prism = await deps.resolveRecipientPrism(params.postAuthorId);
+  const lang = prism.lang;
   const subtitlePostType = params.postType ?? 'POST';
 
   // Détail du contenu réagi : extrait texte si présent, sinon vignette/résumé
   // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
-  // contenu sans ouvrir l'app, et le push iOS attache la miniature.
-  const trimmedPreview = params.postPreview?.trim() ?? '';
+  // contenu sans ouvrir l'app, et le push iOS attache la miniature. L'extrait
+  // descend le Prisme du destinataire (#8731).
+  const trimmedPreview = await servedExcerpt(deps, params.postId, prism.ordered);
   const media = await resolvePostMedia(deps.prisma, params.postId);
   // Le sous-titre nomme la cible, le corps la MONTRE : le détail (texte /
   // média) descend dans le corps, que la phrase d'action n'occupe plus.
@@ -133,8 +136,6 @@ export async function createPostCommentNotification(
     commentPreview: string;
     /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
-    postPreview?: string;
     /** Date de publication ISO du post (le client en dérive « du JJ/MM/AAAA HH:MM »). */
     postCreatedAt?: string | Date;
     /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
@@ -152,8 +153,9 @@ export async function createPostCommentNotification(
   // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
   // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
   // ouvrir l'app. Libellé localisé (Prisme-first) — plus de français codé en dur.
-  const lang = await deps.resolveRecipientLang(params.postAuthorId);
-  const trimmedPostPreview = params.postPreview?.trim() ?? '';
+  const prism = await deps.resolveRecipientPrism(params.postAuthorId);
+  const lang = prism.lang;
+  const trimmedPostPreview = await servedExcerpt(deps, params.postId, prism.ordered);
   // Cible du commentaire : extrait texte du post si présent, sinon résumé
   // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
   const media = await resolvePostMedia(deps.prisma, params.postId);
@@ -214,8 +216,6 @@ export async function createPostRepostNotification(
     repostId: string;
     /** Type du post partagé — pilote le wording. Défaut POST. */
     postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Extrait du post partagé pour identifier LE contenu repris. */
-    postPreview?: string;
     /** Date de publication ISO du contenu partagé (contexte expiry côté client). */
     postCreatedAt?: string | Date;
     /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
@@ -230,8 +230,9 @@ export async function createPostRepostNotification(
   });
   if (!actor) return null;
 
-  const lang = await deps.resolveRecipientLang(params.postAuthorId);
-  const trimmedPostPreview = params.postPreview?.trim() ?? '';
+  const prism = await deps.resolveRecipientPrism(params.postAuthorId);
+  const lang = prism.lang;
+  const trimmedPostPreview = await servedExcerpt(deps, params.originalPostId, prism.ordered);
   const media = await resolvePostMedia(deps.prisma, params.originalPostId);
   // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
   // détail du contenu partagé descend donc dans le corps.
@@ -319,8 +320,10 @@ export async function createCommentReplyNotification(
   // (source unique localisée). Le subtitle précise l'ENTITÉ portant le
   // commentaire (« Story », « Réel »…) — pas « publication » générique ; le
   // client y append la date locale (« · 23/06/2026 14:30 ») depuis postCreatedAt.
-  const lang = await deps.resolveRecipientLang(params.commentAuthorId);
+  const prism = await deps.resolveRecipientPrism(params.commentAuthorId);
+  const lang = prism.lang;
   const trimmedParent = params.parentCommentPreview?.trim() ?? '';
+  const postExcerpt = await servedExcerpt(deps, params.postId, prism.ordered);
   // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
   const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
   // Vignette du contenu portant le commentaire → attachée au push iOS.
@@ -362,6 +365,7 @@ export async function createCommentReplyNotification(
       ...(trimmedParent !== ''
         ? { parentCommentPreview: deps.truncateMessage(trimmedParent) }
         : {}),
+      ...postPreviewField(deps, postExcerpt),
       ...(media ? { mediaType: media.mediaType } : {}),
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
@@ -400,8 +404,10 @@ export async function createCommentLikeNotification(
   });
   if (!actor) return null;
 
-  const lang = await deps.resolveRecipientLang(params.commentAuthorId);
+  const prism = await deps.resolveRecipientPrism(params.commentAuthorId);
+  const lang = prism.lang;
   const trimmedPreview = params.commentPreview?.trim() ?? '';
+  const postExcerpt = await servedExcerpt(deps, params.postId, prism.ordered);
   // Vignette du post portant le commentaire → attachée au push iOS.
   const media = await resolvePostMedia(deps.prisma, params.postId);
   // La cible est LE COMMENTAIRE : son extrait est ce que le corps doit
@@ -441,6 +447,166 @@ export async function createCommentLikeNotification(
       ...(trimmedPreview !== ''
         ? { commentPreview: deps.truncateMessage(trimmedPreview) }
         : {}),
+      ...postPreviewField(deps, postExcerpt),
+      ...(media ? { mediaType: media.mediaType } : {}),
+      ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
+    },
+  });
+}
+
+/**
+ * L'extrait du POST visé, sous la clé que la réécriture d'édition connaît
+ * (`reproduceEditedSubjectNotifications` → `postPreview`) : une notification
+ * sur un COMMENTAIRE décrit aussi le contenu qui le porte (#8724). Vide ⇒ rien.
+ */
+export function postPreviewField(
+  deps: Pick<NotificationBuilderDependencies, 'truncateMessage'>,
+  postPreview: string | undefined,
+): { postPreview?: string } {
+  const trimmed = postPreview?.trim() ?? '';
+  return trimmed !== '' ? { postPreview: deps.truncateMessage(trimmed) } : {};
+}
+
+/**
+ * L'extrait du post, RELU et résolu dans le Prisme du destinataire (#8731) —
+ * chaîne vide quand rien ne doit partir (post sans texte, supprimé, expiré,
+ * illisible), la forme qu'attendent les compositeurs voisins.
+ */
+async function servedExcerpt(
+  deps: Pick<NotificationBuilderDependencies, 'prisma'>,
+  postId: string,
+  preferredLanguages: readonly string[],
+): Promise<string> {
+  return (await loadServedPostExcerpt(deps.prisma, { postId, preferredLanguages })) ?? '';
+}
+
+// ==============================================
+// SOCIAL — COMMENT_REACTION
+// ==============================================
+
+export async function createCommentReactionNotification(
+  deps: NotificationBuilderDependencies,
+  params: {
+  commentAuthorId: string;
+  reactorUserId: string;
+  commentId: string;
+  postId: string;
+  reactionEmoji: string;
+  /** Truncated comment content (≤ 80 chars) to inject into the body. */
+  commentPreview?: string;
+  /** Display name (fallback: username) of the post/story author. */
+  postAuthorName?: string;
+  /**
+   * Type d'entité portant le commentaire réagi. Mirror du sibling
+   * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
+   * dans la métadonnée ni dans le corps localisé.
+   */
+  postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+}): Promise<void> {
+  if (params.commentAuthorId === params.reactorUserId) return;
+
+  // Anti-spam: throttle reaction notifications per sender→recipient pair
+  if (!deps.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
+    return;
+  }
+
+  if (!(await deps.canNotifyAboutPost(params.postId, params.commentAuthorId))) return;
+
+  const reactor = await deps.prisma.user.findUnique({
+    where: { id: params.reactorUserId },
+    select: { username: true, displayName: true, avatar: true },
+  });
+
+  if (!reactor) return;
+
+  const prism = await deps.resolveRecipientPrism(params.commentAuthorId);
+  const lang = prism.lang;
+
+  // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
+  // commentaire qui a reçu la réaction. Permet au destinataire de savoir
+  // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
+  // notification.
+  // Extrait NORMALISÉ une fois : il sert au sertissage du sous-titre ET, en
+  // métadonnée, de clé de réécriture quand le commentaire est édité. Les
+  // dériver deux fois les ferait diverger au premier changement de troncature,
+  // et la substitution ne retrouverait alors plus sa chaîne.
+  const trimmedCommentPreview = params.commentPreview?.trim() ?? '';
+  const subtitle = trimmedCommentPreview !== ''
+    ? `« ${trimmedCommentPreview} »`
+    : undefined;
+
+  // Le CORPS dit ce qui a été visé, jamais la phrase d'action (#9049) : le
+  // titre porte déjà « Alice a réagi ❤️ à votre commentaire », et le répéter
+  // en corps le faisait lire deux fois — sur la liste, le push et la bannière.
+  // L'extrait du commentaire d'abord ; à défaut, le contexte (« Sur le réel de
+  // Bob ») ; en dernier recours la phrase d'action, pour qu'une ligne ne soit
+  // jamais vide.
+  const context = notificationString(lang, 'reaction.commentContext', {
+    author: params.postAuthorName,
+    postType: params.postType,
+  }).trim();
+  const body = subtitle
+    ?? (context !== '' ? context.charAt(0).toLocaleUpperCase(lang) + context.slice(1) : undefined)
+    ?? notificationString(lang, 'reaction.comment', { emoji: params.reactionEmoji });
+
+  // Vignette + nature du média du post (#8724) : la ligne montre DE QUOI il
+  // s'agit — même source que les quatre bâtisseurs voisins.
+  const media = await resolvePostMedia(deps.prisma, params.postId);
+  const postExcerpt = await servedExcerpt(deps, params.postId, prism.ordered);
+
+  await deps.createNotification({
+    userId: params.commentAuthorId,
+    type: 'comment_reaction',
+    priority: 'low',
+    content: body,
+    subtitle,
+    lang,
+
+    actor: {
+      id: params.reactorUserId,
+      username: reactor.username,
+      displayName: reactor.displayName,
+      avatar: reactor.avatar,
+    },
+
+    // postId/commentId vivent dans context (cible de navigation = contexte
+    // central de la notif). Ils sont désormais exposés par le schema de
+    // réponse (notificationContextSchema) — plus de strip côté REST.
+    context: {
+      postId: params.postId,
+      commentId: params.commentId,
+      ...(media?.thumbnailUrl
+        ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+        : {}),
+    },
+
+    metadata: {
+      action: 'view_post',
+      reactionEmoji: params.reactionEmoji,
+      // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+      // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
+      // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
+      postType: params.postType ?? 'POST',
+      // L'extrait est SERTI dans le `subtitle` composé juste au-dessus
+      // (« « … » »), et le sertissage n'est pas inversible. Le ranger aussi
+      // ici rend la ligne AUTO-DESCRIPTIVE : c'est la seule chose qui permet
+      // à `reproduceEditedSubjectNotifications` de savoir quelle portion du
+      // sous-titre décrivait le commentaire, donc de la réécrire quand
+      // celui-ci est édité. Sans elle, ce type — et lui seul de toute la
+      // famille du fil — garderait l'ancien texte pour toujours. Même clé
+      // que ses voisins `comment_like` / `post_comment`.
+      //
+      // Stocké VERBATIM, et non re-tronqué : la réécriture cherche cette
+      // chaîne DANS le sous-titre, donc les deux doivent être identiques au
+      // caractère près. `truncateMessage` coupe aux MOTS — l'appliquer ici
+      // ferait diverger la copie du sertissage sur tout extrait long, et la
+      // substitution ne trouverait plus rien. Les appelants bornent déjà à
+      // ~80 caractères.
+      ...(trimmedCommentPreview !== ''
+        ? { commentPreview: trimmedCommentPreview }
+        : {}),
+      ...postPreviewField(deps, postExcerpt),
+      ...(media ? { mediaType: media.mediaType } : {}),
       ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
     },
   });

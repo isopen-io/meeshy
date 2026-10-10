@@ -56,6 +56,10 @@ final class ComposerSceneCaptureGestureTests: XCTestCase {
             "func armOpeningCameraIfPromised",
             "armOpeningCameraIfPromised()",
             "ComposerSurfaceRouting.armsCameraOnAppear",
+            // L'exception d'ORIGINE (#9123) est partie avec sa porte (#9298) :
+            // la caméra de la barre prend hors scène depuis #9295.
+            "armViewfinderIfTheDoorAsks()",
+            "armsViewfinderOnOpen(",
         ] {
             XCTAssertFalse(source.contains(interdit),
                            "`\(interdit)` présentait le viseur AU MONTAGE — révoqué le 2026-09-03 (#4036, #4851)")

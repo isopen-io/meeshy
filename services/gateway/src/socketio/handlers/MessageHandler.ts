@@ -42,7 +42,7 @@ import { carriesNonTextBody } from '../../services/messaging/nonTextBody';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
@@ -65,12 +65,12 @@ import {
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import { agentSenderIdentity } from './agentSenderIdentity.js';
-import {
-  resolveForwardSourceBroadcastPayload,
-  withoutForwardSourceOrItsPath,
-} from '../../services/preferences/forward-source-visibility.js';
+import { resolvePeerBroadcastSplit } from '../peerBroadcastSplit.js';
+import { emitMessageNew } from '../messageNewEmission';
+import { readerSignedPlan, readerSignedPlanForMessageId } from '../readerSignedDelivery';
 import { buildMessageAckData, buildMessageFailureAck, messageRefusalEvent, stripClientMessageId, type MessageAckSource } from '../utils/message-ack-shaping.js';
 import { messageTypeFromMimeTypes } from '../../services/messaging/attachmentMessageType.js';
+import { admitLoadedMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
@@ -98,7 +98,7 @@ import {
 import {
   admitMessageEdit,
   isEditRefused,
-  CONVERSATION_CLOSED_EDIT_MESSAGE,
+  describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
@@ -366,6 +366,7 @@ export class MessageHandler {
         originalLanguage: validated.originalLanguage,
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
@@ -557,11 +558,12 @@ export class MessageHandler {
       // Le tableau reste aligné sur `attachmentIds`, donc `invalidIndex`
       // ci-dessous continue de nommer la pièce fautive.
       const attachments = await attachmentService.getAttachmentsByIds(validated.attachmentIds);
-      const invalidIndex = attachments.findIndex(
-        (attachment) => !attachment || attachment.uploadedBy !== (userId || participantId)
-      );
-      if (invalidIndex !== -1) {
-        this._sendError(callback, `Attachment ${validated.attachmentIds[invalidIndex]} invalid`, socket);
+      const admission = await admitLoadedMessageAttachments(this.prisma, {
+        attachments, attachmentIds: validated.attachmentIds, ownerId: userId || participantId,
+        conversationId: validated.conversationId, clientMessageId: validated.clientMessageId,
+      });
+      if (!admission.ok) {
+        this._sendError(callback, `Attachment ${admission.invalidAttachmentId} invalid`, socket);
         return;
       }
 
@@ -595,6 +597,7 @@ export class MessageHandler {
         // lieu de l'icône média dans `protectedPreview`/`contentTypeIcon`.
         messageType: messageTypeFromMimeTypes(attachments.map((a) => a?.mimeType)) ?? 'text',
         replyToId: validated.replyToId,
+        attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
@@ -742,7 +745,7 @@ export class MessageHandler {
               conversationId: true,
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true } },
               senderId: true,
               content: true,
               originalLanguage: true,
@@ -766,7 +769,7 @@ export class MessageHandler {
               // `attachmentMediaSelect` est délibérément SANS drapeau de
               // protection. Sans les trois colonnes, l'édition d'un message
               // rediffusait une pièce MUETTE sur sa propre protection.
-              attachments: { select: attachmentSocketSelect },
+              attachments: { select: attachmentSocketSelect, orderBy: MESSAGE_ATTACHMENT_ORDER },
             },
           })
       );
@@ -791,7 +794,7 @@ export class MessageHandler {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
           conversation: message.conversation,
-          createdAt: message.createdAt,
+          createdAt: message.createdAt, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
@@ -801,15 +804,7 @@ export class MessageHandler {
         // `else` et s'annoncerait « vous n'êtes pas autorisé » — un refus
         // d'autorisation pour un état qui n'en est pas un, et que l'éditeur
         // corrigerait indéfiniment sans comprendre.
-        this._sendGenericError(
-          callback,
-          admission.reason === 'conversation-closed'
-            ? CONVERSATION_CLOSED_EDIT_MESSAGE
-            : admission.reason === 'edit-window-expired'
-              ? 'You can no longer edit this message (24-hour limit exceeded)'
-              : 'Message not found or you are not authorized to edit it',
-          socket
-        );
+        this._sendGenericError(callback, describeEditRefusalForSocket(admission.reason), socket);
         return;
       }
 
@@ -983,8 +978,11 @@ export class MessageHandler {
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
+      // #9646 — un message protégé : par destinataire, adresses signées.
       const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+      const editPlan = await readerSignedPlanForMessageId(this.prisma, { conversationId: message.conversationId, messageId: validated.messageId, attachments: editedPayload.attachments });
+      if (editPlan) for (const t of editPlan.targets) this.io.to(t.room).emit(SERVER_EVENTS.MESSAGE_EDITED, editPlan.signFor(editedPayload, t.participantId));
+      else this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
       // Fan a conversation:updated preview refresh to participants sitting on
       // the conversation list (in user:<id> but not conversation:<id>) so an
@@ -1104,7 +1102,7 @@ export class MessageHandler {
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
-          conversationId: message.conversationId,
+          conversationId: message.conversationId, messageType: message.messageType, metadata: message.metadata,
         },
         onError: (err) => handlerLogger.warn('delete admission read failed', { messageId: validated.messageId, error: err }),
       });
@@ -1138,7 +1136,7 @@ export class MessageHandler {
         messageType: message.messageType,
         attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
-        metadata: message.metadata,
+        metadata: message.metadata, removedByParticipantId: admission.actorParticipantId ?? null,
       });
 
       const room = ROOMS.conversation(message.conversationId);
@@ -1259,7 +1257,7 @@ export class MessageHandler {
               // position sur le chemin socket (parité avec le chemin REST).
               metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER, take: 1 }
             }
           }),
           message.forwardedFromConversationId
@@ -1371,75 +1369,37 @@ export class MessageHandler {
 
       // Réciprocité de la SOURCE d'un transfert (directive produit 2026-08-23) —
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
-      // inconnue. Extrait dans `resolveForwardSourceBroadcastPayload`
-      // (services/preferences/forward-source-visibility.ts), qui documente le
-      // découpage par SALONS UTILISATEUR et le fail-closed en détail.
-      const { peerPayload, forwardSourceHiddenRooms, forwardSourceHiddenUserIds } =
-        await resolveForwardSourceBroadcastPayload(this.prisma, {
+      // inconnue — composée avec le scellement de la citation d'un éphémère
+      // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
+      const { peerPayload, hiddenKeys, payloadForKey } =
+        await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
           broadcastPayload,
-          userRoom: (userId) => ROOMS.user(userId),
+          userRoom: (key) => ROOMS.user(key),
+          quoted: message.replyTo,
+          senderKeys: [senderUserId, message.senderId],
         });
 
-      // Opt-in (OFF by default) — flip per-deploy after staging measurement.
-      //
-      // Désactivé d'office dès qu'un lecteur doit être masqué : une règle de
-      // confidentialité ne se subordonne pas à un drapeau d'optimisation de
-      // bande passante, et `_emitMessageNewByLanguage` ne sait pas exclure de
-      // salon utilisateur.
-      const langFilterOn =
-        process.env.SOCKET_LANG_FILTER === 'true' && forwardSourceHiddenRooms.length === 0;
-
-      if (senderUserId) {
-        // Multi-device : send the cid-aware payload to the sender's
-        // user room (catches every iOS / web session of this user)
-        // and the cid-stripped payload to the conversation room
-        // EXCEPT the sender's user room so peers do not receive a
-        // duplicate.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeUserId: senderUserId });
-        } else {
-          this.io
-            .to(room)
-            .except([ROOMS.user(senderUserId), ...forwardSourceHiddenRooms])
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else if (senderSocket) {
-        // Anonymous sender with an active socket : same single-session
-        // split as before. Multi-device anonymous is undefined.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, { excludeSocketId: senderSocket.id });
-        } else {
-          const peers = senderSocket.broadcast.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
-      } else {
-        // No senderSocket context (REST path or background flush) and
-        // no resolvable user id : fall back to the cid-stripped payload
-        // for the whole room. The sender's other sessions still
-        // reconcile via the REST / socket ACK path which carries the cid.
-        if (langFilterOn) {
-          this._emitMessageNewByLanguage(room, peerPayload, {});
-        } else {
-          const peers = this.io.to(room);
-          (forwardSourceHiddenRooms.length > 0 ? peers.except(forwardSourceHiddenRooms) : peers)
-            .emit(SERVER_EVENTS.MESSAGE_NEW, peerPayload);
-        }
-      }
-
-      // Les lecteurs qui se sont retirés : le MÊME message, sans sa provenance.
-      // Émis après l'exclusion ci-dessus, jamais en plus d'elle — un
-      // destinataire reçoit exactement UN `message:new`, sinon le client
-      // insère la bulle deux fois.
-      if (forwardSourceHiddenRooms.length > 0) {
-        this.io
-          .to(forwardSourceHiddenRooms)
-          .emit(SERVER_EVENTS.MESSAGE_NEW, withoutForwardSourceOrItsPath(peerPayload));
-      }
+      // L'émission — diffusion de room, masqués, filtre de langue opt-in
+      // (`SOCKET_LANG_FILTER`) ou, pour un message dont une pièce se lit par
+      // lecteur, remise par destinataire avec ses adresses signées (#9646) —
+      // vit dans `messageNewEmission.ts`, partagée avec le chemin REST/ZMQ.
+      emitMessageNew({
+        io: this.io,
+        room,
+        senderPayload,
+        peerPayload,
+        senderUserId,
+        senderParticipantId: message.senderId,
+        senderSocket,
+        hiddenKeys,
+        payloadForKey,
+        emitByLanguage: process.env.SOCKET_LANG_FILTER === 'true'
+          ? (payload, exclusion) => this._emitMessageNewByLanguage(room, payload, exclusion)
+          : null,
+        readerSigned: await readerSignedPlan(this.prisma, { conversationId: normalizedId, message, attachments: peerPayload.attachments }),
+      });
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Offline delivery queue — parity with the REST send path
@@ -1485,14 +1445,7 @@ export class MessageHandler {
           // retrait quand c'est l'AUTEUR qui s'est retiré ; ceci ajoute le
           // retrait par LECTEUR, que seule la boucle par participant peut
           // faire.
-          ...(forwardSourceHiddenUserIds.size > 0
-            ? {
-                resolvePayloadForReader: (queueKey: string) =>
-                  forwardSourceHiddenUserIds.has(queueKey)
-                    ? withoutForwardSourceOrItsPath(peerPayload)
-                    : peerPayload,
-              }
-            : {}),
+          ...(hiddenKeys.size > 0 ? { resolvePayloadForReader: payloadForKey } : {}),
           participants: sharedParticipants,
         }
       );

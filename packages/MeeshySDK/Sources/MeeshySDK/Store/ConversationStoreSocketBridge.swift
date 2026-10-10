@@ -389,7 +389,8 @@ public final class ConversationStoreSocketBridge {
             media: mediaGroup(of: event),
             nature: event.lastMessageNature,
             lastReaction: event.lastReaction,
-            activeCall: event.activeCall
+            activeCall: event.activeCall,
+            listRankAt: event.listRankAt
         )
     }
 

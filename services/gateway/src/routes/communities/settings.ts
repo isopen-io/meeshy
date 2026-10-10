@@ -83,8 +83,9 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       // Verifier que l'utilisateur est le createur de la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: { createdBy: true, identifier: true }
       });
 
@@ -155,7 +156,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
   fastify.delete('/communities/:id', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Delete a community permanently. Only the community creator can delete the community. This will also cascade delete all associated members and conversations.',
+      description: 'Delete a community permanently. Only the community creator can delete the community. Members, member preferences and shares are removed; its conversations are detached (kept, no longer in the community).',
       tags: ['communities'],
       summary: 'Delete a community',
       params: {
@@ -226,9 +227,13 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community creator can delete community');
       }
 
-      await fastify.prisma.community.delete({
-        where: { id }
-      });
+      await fastify.prisma.$transaction([
+        fastify.prisma.conversation.updateMany({ where: { communityId: id }, data: { communityId: null } }),
+        fastify.prisma.communityMember.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.userCommunityPreferences.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.conversationShare.deleteMany({ where: { communityId: id } }),
+        fastify.prisma.community.delete({ where: { id } })
+      ]);
 
       return sendSuccess(reply, { message: 'Community deleted successfully' });
     } catch (error) {

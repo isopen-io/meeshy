@@ -8,6 +8,8 @@ struct CallDetailSheet: View {
     let record: APICallRecord
 
     @Environment(\.dismiss) private var dismiss
+    @State private var networkJournal: CallNetworkJournalPresentation?
+    @State private var transcript: CallTranscript?
     private var theme: ThemeManager { ThemeManager.shared }
     private var unknownCallerFallback: String {
         String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
@@ -23,7 +25,7 @@ struct CallDetailSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 header
                 if record.peer != nil {
                     redialButtons
@@ -32,8 +34,16 @@ struct CallDetailSheet: View {
                 if !record.participants.isEmpty {
                     participantsSection
                 }
+                if let networkJournal {
+                    CallNetworkJournalSection(presentation: networkJournal, accentColor: accentColor)
+                }
+                if let transcript {
+                    CallTranscriptSection(transcript: transcript, accentHex: accentHex, tint: accentColor) {
+                        self.transcript = nil
+                    }
+                }
             }
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
             // 560pt ceiling: without it, `redialButtons`/`detailRow`'s Spacer()
             // stretch edge-to-edge on a wide sheet instead of reading as a
@@ -44,13 +54,19 @@ struct CallDetailSheet: View {
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task(id: record.callId) {
+            networkJournal = await CallNetworkJournalStore.shared.journal(for: record.callId)
+                .map { CallNetworkJournalPresentation(journal: $0) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+            transcript = await CallTranscriptLoader.load(callId: record.callId)
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         let name = record.displayName(fallback: unknownCallerFallback)
-        return VStack(spacing: 10) {
+        return VStack(spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .profileSheet,
@@ -59,9 +75,9 @@ struct CallDetailSheet: View {
                 presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
             )
             Text(name)
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: record.isVideo ? "video.fill" : "phone.fill")
                     .font(.caption)
                     .accessibilityHidden(true)
@@ -71,7 +87,7 @@ struct CallDetailSheet: View {
             .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
             .accessibilityElement(children: .combine)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     private var statusLine: String {
@@ -81,7 +97,7 @@ struct CallDetailSheet: View {
     // MARK: - Redial
 
     private var redialButtons: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             redialButton(isVideo: false, title: String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), icon: "phone.fill")
             redialButton(isVideo: true, title: String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), icon: "video.fill")
         }
@@ -99,13 +115,13 @@ struct CallDetailSheet: View {
             HapticFeedback.medium()
             dismiss()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
                 Text(title).font(.subheadline.weight(.semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(Capsule().fill(accentColor))
         }
         .accessibilityLabel(title)
@@ -157,7 +173,7 @@ struct CallDetailSheet: View {
                 )
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(theme.backgroundSecondary)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
@@ -175,7 +191,7 @@ struct CallDetailSheet: View {
                 .padding(.top, MeeshySpacing.md)
                 .accessibilityAddTraits(.isHeader)
             ForEach(record.participants) { participant in
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     MeeshyAvatar(
                         name: participant.displayName,
                         context: .userListItem,
@@ -194,14 +210,14 @@ struct CallDetailSheet: View {
                 .accessibilityElement(children: .combine)
             }
         }
-        .padding(.bottom, 4)
+        .padding(.bottom, MeeshySpacing.xs)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(theme.backgroundSecondary)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(.subheadline)
                 .foregroundColor(accentColor)

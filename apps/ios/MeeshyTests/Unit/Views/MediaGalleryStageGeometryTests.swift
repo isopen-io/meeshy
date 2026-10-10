@@ -355,7 +355,7 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
         XCTAssertTrue(plateau.contains("railCorridor"),
                       "le plateau doit monter son couloir bas")
 
-        guard let haut = plateau.range(of: "xmark"),
+        guard let haut = plateau.range(of: "FullscreenCloseButton"),
               let cadre = plateau.range(of: "cadreRegion"),
               let rail = plateau.range(of: "railCorridor") else {
             return XCTFail("les trois bandes du plateau ne se lisent pas dans l'ordre")

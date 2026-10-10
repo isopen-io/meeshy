@@ -30,6 +30,16 @@ describe('la capture photo de la coque Android (#7930)', () => {
     expect(lire('src', 'components', 'composer-attachment-panel.tsx')).toContain('capture="environment"');
   });
 
+  test('la photothèque (#9120) choisit images ET vidéos, et n’ouvre jamais l’appareil photo', () => {
+    for (const source of [lire('src', 'components', 'composer-attachment-panel.tsx'), lire('src', 'components', 'composer-top-row.tsx')]) {
+      expect(source).toContain('accept="image/*,video/*"');
+    }
+    const panneau = lire('src', 'components', 'composer-attachment-panel.tsx');
+    const tuile = panneau.slice(panneau.indexOf('id="photo"'), panneau.indexOf('</FileSource>', panneau.indexOf('id="photo"')));
+    expect(tuile).toContain('accept="image/*,video/*"');
+    expect(tuile).not.toContain('capture');
+  });
+
   test('le manifeste rend les applications photo visibles au pont', () => {
     const manifeste = lire('android', 'app', 'src', 'main', 'AndroidManifest.xml');
     expect(intentionsInterrogees(manifeste)).toContain('android.media.action.IMAGE_CAPTURE');

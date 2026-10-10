@@ -22,18 +22,43 @@ struct StoryComposerBlockHeightKey: PreferenceKey {
 extension StoryCardView {
 
     var composerFoldPresentation: StoryComposerFold.Presentation { // internal for cross-file extension access
-        StoryComposerFold.presentation(userFolded: isComposerFolded,
-                                       isReplying: replyingToStoryComment != nil)
+        StoryComposerFold.readerPresentation(userFolded: isComposerFolded)
     }
 
     /// **Le sol du texte de la story** : le haut de la plaque du composeur
-    /// (#8431). Sans composeur (story de l'auteur), la place historique.
+    /// (#8431). Sans composeur (story de l'auteur) ou chrome caché, le ras du
+    /// bas (#9072).
     func captionBottomInset(geometry: GeometryProxy) -> CGFloat { // internal for cross-file extension access
         StoryCaptionPlacement.bottomInset(
             composerBlockHeight: composerBlockHeight,
             composerBottomPadding: composerBottomPadding(geometry),
-            isComposerShown: chromeVisible,
-            fallback: topInset + 130)
+            isComposerShown: chromeVisible)
+    }
+
+    /// **Ce que la carte dit du composeur à la liste des commentaires**
+    /// (#9893) : son état (absent, replié, déplié, soulevé), sa hauteur
+    /// mesurée et ce qui le soulève. Le panneau d'émojis soulève la plaque
+    /// comme le clavier ; il ne compte pas dans la hauteur de la plaque.
+    func commentsZoneReading(geometry: GeometryProxy) -> StoryCommentsZone.ComposerReading { // internal for cross-file extension access
+        let isFolded = composerFoldPresentation == .folded
+        let panel = showTextEmojiPicker && !isFolded ? emojiPanelHeight(geometry) : 0
+        let lift = panel > 0
+            ? composerBottomPadding(geometry) + panel
+            : (keyboard.isVisible ? keyboard.height : 0)
+        return StoryCommentsZone.ComposerReading(
+            state: StoryCommentsZone.state(hasComposer: !isOwnStory || replyingToStoryComment != nil,
+                                           isShown: chromeVisible,
+                                           presentation: composerFoldPresentation,
+                                           keyboardHeight: lift),
+            composerHeight: composerBlockHeight.map { max($0 - panel, 0) },
+            keyboardHeight: lift,
+            windowHeight: geometry.size.height,
+            topReserved: topInset + 100)
+    }
+
+    /// Le panneau d'émojis prend la place du clavier, à sa dernière hauteur.
+    private func emojiPanelHeight(_ geometry: GeometryProxy) -> CGFloat {
+        max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260)
     }
 
     @ViewBuilder
@@ -83,8 +108,11 @@ extension StoryCardView {
         // le bloc se cadre sur l'écran réel et reste centré — même principe que
         // le pin `.frame(width: geometry.size.width)` du header et du sidebar.
         .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
+        // Pas d'`.animation(value: keyboard.height)` ici : le composeur suit
+        // le clavier dans la transaction de `KeyboardObserver` (sa durée), la
+        // MÊME que la liste des commentaires — une courbe propre à chacun les
+        // désynchronisait (#9893).
         .padding(.bottom, composerBottomPadding(geometry))
-        .animation(.easeInOut(duration: 0.25), value: keyboard.height)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
         // Glissement vers le BAS à la disparition + fondu. L'offset 240pt
         // couvre l'ensemble composer + picker emoji + safe area inférieure
@@ -96,12 +124,25 @@ extension StoryCardView {
         .opacity(chromeVisible ? 1 : 0)
         .allowsHitTesting(chromeVisible)
         .onPreferenceChange(StoryComposerBlockHeightKey.self) { height in
-            composerBlockHeight = height
+            // La première mesure est sèche ; les suivantes (repli, bannière de
+            // réponse, plaque qui grandit) déplacent la liste sans saut.
+            guard composerBlockHeight != nil else {
+                composerBlockHeight = height
+                return
+            }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                composerBlockHeight = height
+            }
         }
         // « Répondre » depuis le rail demande le focus : un composeur replié
         // se rouvre pour le recevoir.
         .adaptiveOnChange(of: composerFocusTrigger) { _, requested in
             if requested { isComposerFolded = false }
+        }
+        // Replier garde la réponse en cours ; une NOUVELLE demande rouvre.
+        .adaptiveOnChange(of: replyingToStoryComment?.id) { old, new in
+            guard StoryComposerFold.unfoldsOnReply(from: old, to: new) else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { isComposerFolded = false }
         }
     }
 
@@ -120,17 +161,6 @@ extension StoryCardView {
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
 
-            if StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation,
-                                                  isComposerEngaged: isComposerEngaged) {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    composerFoldButton
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 2)
-                .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .bottomTrailing)))
-            }
-
             StoryComposerBarView(
                 accentColor: currentGroup?.avatarColor ?? "6366F1",
                 storyId: currentStory?.id,
@@ -144,13 +174,15 @@ extension StoryCardView {
                 composerFocusTrigger: $composerFocusTrigger,
                 storyDrafts: $storyDrafts,
                 replyingToStoryComment: $replyingToStoryComment,
+                isRecordingVoice: $isComposerRecording,
+                foldControl: composerFoldControl,
                 sendComment: sendComment
             )
                 // Marge latérale 16pt, alignée sur le `sideInset` (16) de
                 // la carte reader (`readerCanvasFraming`) et le
                 // `.padding(.trailing, 16)` du sidebar — même rythme 16pt
                 // pour les trois colonnes de chrome.
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .simultaneousGesture(composerDragGesture)
                 .frame(height: isFolded ? 0 : nil, alignment: .top)
                 .opacity(isFolded ? 0 : 1)
@@ -165,7 +197,7 @@ extension StoryCardView {
                         emojiToInject = emoji
                     }
                 )
-                .frame(height: max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260))
+                .frame(height: emojiPanelHeight(geometry))
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -195,50 +227,93 @@ extension StoryCardView {
             }
     }
 
+    /// Le ⌄ (et le glissé bas) : ferme le clavier s'il est ouvert ET replie
+    /// le composeur en bulle (#9893).
     private func foldComposer() {
-        dismissComposer()
-        HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            isComposerFolded = true
-        }
+        applyComposerTap(StoryComposerFold.chevronTapped)
     }
 
+    /// La bulle rouvre le composeur, sans rouvrir le clavier.
     private func unfoldComposer() {
+        applyComposerTap(StoryComposerFold.bubbleTapped)
+    }
+
+    private func applyComposerTap(_ tap: StoryComposerFold.Tap) {
+        if tap.resignsKeyboard { dismissComposer() }
         HapticFeedback.light()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
-            isComposerFolded = false
+            isComposerFolded = tap.userFolded
         }
+        if tap.focusesField { composerFocusTrigger = true }
     }
 
-    /// ⌄ en verre adaptatif, à l'angle haut-droit du bloc, en rédaction.
-    private var composerFoldButton: some View {
-        Button(action: foldComposer) {
-            Image(systemName: StoryComposerFold.foldSymbol)
-                .font(MeeshyFont.relative(14, weight: .bold))
-                .foregroundColor(.white.opacity(0.9))
-                .frame(width: 32, height: 32)
-                .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.composer.fold",
-                                   defaultValue: "Masquer la zone de commentaire", bundle: .main))
+    /// **Le ⌄ vit DANS la plaque de verre** (#8642) : le lecteur ne le peint
+    /// plus au-dessus d'elle, il le CONFIE à la barre, qui le pose au bout de sa
+    /// rangée d'outils. La loi qui dit QUAND il existe reste celle de #8431.
+    var composerFoldControl: ComposerFoldControl? {
+        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation) else { return nil }
+        return ComposerFoldControl(
+            symbol: StoryComposerFold.foldSymbol,
+            label: String(localized: "story.composer.fold",
+                          defaultValue: "Masquer la zone de commentaire", bundle: .main),
+            hint: String(localized: "story.composer.fold.hint",
+                         defaultValue: "Ferme le clavier et replie la zone de commentaire en bulle", bundle: .main),
+            survivesRecording: true,
+            action: foldComposer)
     }
 
-    /// Replié, il ne reste que ce bouton, centré, à l'icône de commentaire.
+    /// Replié, il ne reste que ce bouton, centré, à l'icône de commentaire —
+    /// et la pastille de ce que le repli garde : une prise en cours, une
+    /// réponse (#9893).
     private var composerUnfoldButton: some View {
-        Button(action: unfoldComposer) {
+        let badge = StoryComposerFold.bubbleBadge(isRecording: isComposerRecording,
+                                                  isReplying: replyingToStoryComment != nil)
+        return Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
+                .overlay(alignment: .topTrailing) { unfoldBadge(badge) }
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
         .accessibilityLabel(String(localized: "story.composer.unfold",
                                    defaultValue: "Afficher la zone de commentaire", bundle: .main))
+        .accessibilityHint(String(localized: "story.composer.unfold.hint",
+                                  defaultValue: "Rouvre la zone de commentaire sans ouvrir le clavier", bundle: .main))
+        .accessibilityValue(unfoldBadgeValue(badge))
+    }
+
+    @ViewBuilder
+    private func unfoldBadge(_ badge: StoryComposerFold.BubbleBadge) -> some View {
+        switch badge {
+        case .none:
+            EmptyView()
+        case .recording:
+            Circle()
+                .fill(MeeshyColors.error)
+                .frame(width: MeeshySpacing.smPlus, height: MeeshySpacing.smPlus)
+                .accessibilityHidden(true)
+        case .reply:
+            Image(systemName: "arrowshape.turn.up.left.fill")
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.white)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func unfoldBadgeValue(_ badge: StoryComposerFold.BubbleBadge) -> String {
+        switch badge {
+        case .none:
+            return ""
+        case .recording:
+            return String(localized: "story.composer.unfold.recording",
+                          defaultValue: "Enregistrement vocal en cours", bundle: .main)
+        case .reply:
+            return String(localized: "story.composer.unfold.replying",
+                          defaultValue: "Réponse en cours", bundle: .main)
+        }
     }
 }

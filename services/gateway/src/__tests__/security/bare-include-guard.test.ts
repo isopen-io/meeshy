@@ -577,7 +577,7 @@ describe('Mutation (#4888 critère 4) — le défaut réintroduit sur le vrai fi
   it('`select: { attachments: true }` réintroduit sur messages-pin.ts fait tomber le balayage', () => {
     const original = readFileSync(join(ROUTES_DIR, 'conversations/messages-pin.ts'), 'utf8');
     const muté = original.replace(
-      'attachments: { select: attachmentForwardPreviewSelect }',
+      'attachments: { select: attachmentForwardPreviewSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }',
       'attachments: true'
     );
     // La mutation doit avoir PRIS — sans quoi ce témoin passerait pour la

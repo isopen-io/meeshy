@@ -241,15 +241,15 @@ public struct VideoClipBar: View, Equatable {
     private var titleLabel: some View {
         if width >= 44 && !title.isEmpty {
             VStack(spacing: 0) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(title)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: Self.titleBandHeight)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
@@ -286,11 +286,11 @@ public struct VideoClipBar: View, Equatable {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(.white)
-                    .padding(4)
+                    .padding(MeeshySpacing.xs)
                     .background(
                         Circle().fill(MeeshyColors.indigo700.opacity(0.85))
                     )
-                    .padding(4)
+                    .padding(MeeshySpacing.xs)
             }
             Spacer()
         }
@@ -365,7 +365,7 @@ public struct VideoClipBar: View, Equatable {
 
     private var selectionHalo: some View {
         RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .stroke(MeeshyColors.indigo400, lineWidth: 2)
+            .stroke(MeeshyColors.indigo400, lineWidth: MeeshyBorder.strong)
             .shadow(color: MeeshyColors.indigo500.opacity(0.45), radius: 6)
             .allowsHitTesting(false)
     }

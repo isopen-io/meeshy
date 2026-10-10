@@ -222,7 +222,7 @@ extension UniversalComposerBar {
             }
         }
         .frame(width: QuickEmojiGrid.frameWidth, height: QuickEmojiGrid.rowHeight)
-        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         // La rangée revient à l'emplacement même du bouton d'envoi : le second
         // appui d'un double appui sur « Envoyer » tombe sur elle (#7985).
         .onAppear { quickEmojiArrivedAt = Date() }

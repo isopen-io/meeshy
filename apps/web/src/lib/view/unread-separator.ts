@@ -17,6 +17,7 @@ export function unreadSeparatorLabel(language: InterfaceLanguage, count: number)
 }
 
 export type ThreadOpenScrollDecision =
+  | { readonly kind: 'jump-to-message'; readonly messageId: string }
   | { readonly kind: 'jump-to-separator'; readonly index: number }
   | { readonly kind: 'pin-to-bottom' };
 
@@ -39,13 +40,21 @@ export type PlacedLike = { readonly message: { readonly id: string } };
  * fenêtre CHARGÉE, `useMessages` ne sert que les 50 derniers messages), il
  * n'y a pas de rangée où sauter — repli sur l'ancrage en bas plutôt qu'un
  * saut vers un index qui n'existe pas.
+ *
+ * **L'OUVERTURE ANCRÉE (#9294)** — une adresse qui nomme un message
+ * (`?message=`, `thread-anchor.ts`) prime sur le séparateur, à l'ouverture
+ * seulement, comme `pendingHighlightMessageId` iOS. Le saut lui-même — trouver
+ * la rangée, charger les pages plus anciennes, mettre en évidence — reste
+ * celui de la citation (`useThreadJump`) : d'où un identifiant, jamais un index.
  */
 export function threadOpenScrollDecision(params: {
   readonly isInitialOpen: boolean;
   readonly unreadBoundary: UnreadBoundarySnapshot;
   readonly placed: readonly PlacedLike[];
+  readonly anchorMessageId?: string | null;
 }): ThreadOpenScrollDecision {
-  const { isInitialOpen, unreadBoundary, placed } = params;
+  const { isInitialOpen, unreadBoundary, placed, anchorMessageId = null } = params;
+  if (isInitialOpen && anchorMessageId !== null) return { kind: 'jump-to-message', messageId: anchorMessageId };
   if (isInitialOpen && unreadBoundary !== null) {
     const index = placed.findIndex((p) => p.message.id === unreadBoundary.firstUnreadId);
     if (index !== -1) return { kind: 'jump-to-separator', index };

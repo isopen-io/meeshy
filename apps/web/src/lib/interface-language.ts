@@ -23,8 +23,10 @@ import {
   DEFAULT_INTERFACE_LANGUAGE,
   INTERFACE_LANGUAGE_KEY,
   SUPPORTED_INTERFACE_LANGUAGES,
+  interfaceDirection,
   resolveInterfaceLanguageCode,
 } from './inline-interface-language-bootstrap.js';
+import { syncShellLocale } from './shell-locale';
 
 export type InterfaceLanguage = (typeof SUPPORTED_INTERFACE_LANGUAGES)[number];
 
@@ -50,6 +52,13 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
   return isSupported(declared) ? declared : DEFAULT;
 }
 
+/** `lang` ET `dir` ensemble (#8803) : l'arabe retourne la page, en revenir la
+ *  remet à l'endroit — la même règle que le script d'amorçage. */
+function applyToDocument(language: InterfaceLanguage): void {
+  document.documentElement.lang = language;
+  document.documentElement.dir = interfaceDirection(language);
+}
+
 /**
  * Pose la langue d'interface — PERSISTE le choix (contrairement à
  * `applyScheme`/`followSystem`, qui ne persiste jamais un simple suivi
@@ -65,13 +74,25 @@ export function currentInterfaceLanguage(): InterfaceLanguage {
  */
 export async function setInterfaceLanguage(language: InterfaceLanguage): Promise<void> {
   await loadInterfaceCatalog(language);
-  document.documentElement.lang = language;
+  applyToDocument(language);
   try {
     localStorage.setItem(KEY, language);
   } catch {
     /* Stockage refusé : la langue tient pour la session, sans se souvenir. */
   }
   notify();
+  void syncShellLocale(language);
+}
+
+/**
+ * La langue d'interface qu'un code de langue DÉSIGNE, ou `null` quand le
+ * produit n'a pas d'interface dans cette langue (#9710). Le code de base
+ * suffit (`'pt-BR'` → `'pt'`) : une langue de CONTENU peut porter une région
+ * que l'interface ne distingue pas.
+ */
+export function interfaceLanguageOf(code: string): InterfaceLanguage | null {
+  const base = code.trim().toLowerCase().split(/[-_]/u)[0] ?? '';
+  return isSupported(base) ? base : null;
 }
 
 const listeners = new Set<() => void>();
@@ -124,6 +145,7 @@ export async function followBrowserInterfaceLanguage(languages: readonly string[
   } catch {
     /* Stockage refusé : rien n'était retenu. */
   }
-  document.documentElement.lang = language;
+  applyToDocument(language);
   notify();
+  void syncShellLocale('');
 }

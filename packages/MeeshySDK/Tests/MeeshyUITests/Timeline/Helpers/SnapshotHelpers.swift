@@ -102,7 +102,11 @@ enum SnapshotHelpers {
                        perceptualPrecision: 0.98,
                        layout: .fixed(width: size.width, height: size.height)),
             named: perOSBaseline ? name + osBaselineSuffix : name,
-            record: record,
+            // `nil` plutôt que `false` : `record: false` force le mode
+            // `.missing` et ÉCRASE la variable SNAPSHOT_TESTING_RECORD que la CI
+            // pose pour ré-enregistrer les références sur le runtime qui juge
+            // (sdk-tests.yml, entrée `record_snapshots` — #9701).
+            record: record ? true : nil,
             file: file,
             testName: testName,
             line: line

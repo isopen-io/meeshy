@@ -42,22 +42,22 @@ struct UserStatsView: View {
     // MARK: - Content
 
     private var statsContent: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             if let errorMessage = viewModel.errorMessage {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(MeeshyColors.error)
                         .accessibilityHidden(true)
                     Text(errorMessage)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                     Spacer()
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(MeeshyColors.error.opacity(0.1))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                 )
             }
             statsCards
@@ -67,61 +67,61 @@ struct UserStatsView: View {
             achievementsSection
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Stats Cards
 
     private var statsCards: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.md) {
                 statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: MeeshyColors.brandPrimaryHex, icon: "bubble.left.fill")
                 statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: MeeshyColors.indigo300Hex, icon: "person.2.fill")
             }
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: MeeshyColors.indigo600Hex, icon: "globe")
-                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: "3498DB", icon: "character.book.closed.fill")
+                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: MeeshyColors.tileBlueHex, icon: "character.book.closed.fill")
             }
-            HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: String(localized: "user.stats.member", defaultValue: "Membre", bundle: .main), color: "F8B500", icon: "calendar")
+            HStack(spacing: MeeshySpacing.md) {
+                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: String(localized: "user.stats.member", defaultValue: "Membre", bundle: .main), color: MeeshyColors.tileSaffronHex, icon: "calendar")
                 statCard(value: "\(viewModel.stats?.friendRequestsReceived ?? 0)", label: String(localized: "user.stats.requests", defaultValue: "Demandes", bundle: .main), color: "E91E63", icon: "person.badge.plus")
             }
         }
     }
 
     private func statCard(value: String, label: String, color: String, icon: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Icône figée : glyphe décoratif verrouillé dans une puce 36×36 à géométrie fixe
             // (doctrine 74i/83i — la valeur/label scalent, le chip ne bouge pas). Masqué VoiceOver.
             Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(hex: color).opacity(0.12))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(value)
-                    .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
 
                 Text(label)
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
 
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: color))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
@@ -131,30 +131,30 @@ struct UserStatsView: View {
     // MARK: - Timeline Chart
 
     private var timelineChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "chart.xyaxis.line")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(MeeshyColors.info)
                     .accessibilityHidden(true)
                 Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITÉ", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
-            StatsTimelineChart(timeline: viewModel.timeline, color: "3498DB")
+            StatsTimelineChart(timeline: viewModel.timeline, color: MeeshyColors.tileBlueHex)
                 .frame(height: 180)
-                .padding(14)
+                .padding(MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(theme.surfaceGradient(tint: "3498DB"))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(theme.surfaceGradient(tint: MeeshyColors.tileBlueHex))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(theme.border(tint: "3498DB"), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(theme.border(tint: MeeshyColors.tileBlueHex), lineWidth: 1)
                         )
                 )
         }
@@ -163,18 +163,18 @@ struct UserStatsView: View {
     // MARK: - Achievements
 
     private var achievementsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "trophy.fill")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                     .accessibilityHidden(true)
                 Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(MeeshyColors.warning)
                     .tracking(1.2)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 

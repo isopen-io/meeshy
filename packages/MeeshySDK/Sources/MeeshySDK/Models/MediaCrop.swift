@@ -35,21 +35,48 @@ public struct MediaCropRect: Codable, Equatable, Hashable, Sendable {
     public var isFull: Bool { self == .full }
 }
 
-/// Les proportions que la vue `2d` offre — `9:16 · 4:5 · 1:1 · LIBRE`.
+/// Les proportions qu'on offre à une image — **UNE liste** (#9499).
+///
+/// La vue `2d` dessine `9:16 · 4:5 · 1:1 · LIBRE` ; l'ancien éditeur d'image
+/// offrait 1:1 · 4:3 · 16:9 · 9:16. La liste est leur union, ordonnée — le
+/// cadre d'origine, les portraits, puis les paysages — et c'est cas pour cas
+/// celle du web (`MEDIA_CROP_RATIOS`, `packages/shared/utils/media-crop.ts`).
+/// `allCases` EST l'ordre servi : ajouter une proportion se fait ici et là, et
+/// les deux témoins (`MediaCropRuleTests`, `media-crop.test.ts`) le disent.
 public enum MediaCropRatio: String, CaseIterable, Sendable {
-    case portrait916
-    case portrait45
-    case square
     case free
+    case square
+    case portrait45
+    case portrait34
+    case portrait916
+    case landscape43
+    case landscape169
 
-    /// Le rapport largeur/hauteur VISÉ. `nil` pour `LIBRE`, qui n'en impose
-    /// aucun — et c'est la seule des quatre qui laisse l'auteur décider.
+    /// Le rapport largeur/hauteur VISÉ. `nil` pour `free` — le cadre
+    /// d'origine, qui n'en impose aucun et défait un recadrage.
     public var value: Double? {
         switch self {
-        case .portrait916: return 9.0 / 16.0
-        case .portrait45:  return 4.0 / 5.0
-        case .square:      return 1
-        case .free:        return nil
+        case .portrait916:  return 9.0 / 16.0
+        case .portrait45:   return 4.0 / 5.0
+        case .portrait34:   return 3.0 / 4.0
+        case .square:       return 1
+        case .landscape43:  return 4.0 / 3.0
+        case .landscape169: return 16.0 / 9.0
+        case .free:         return nil
+        }
+    }
+
+    /// La notation, qui se lit telle quelle dans toutes les langues. `nil` pour
+    /// le cadre d'origine, dont le libellé se traduit chez l'appelant.
+    public var notation: String? {
+        switch self {
+        case .square:       return "1:1"
+        case .portrait45:   return "4:5"
+        case .portrait34:   return "3:4"
+        case .portrait916:  return "9:16"
+        case .landscape43:  return "4:3"
+        case .landscape169: return "16:9"
+        case .free:         return nil
         }
     }
 }

@@ -1,5 +1,8 @@
+import { clampMediaCrop, isFullMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+
 import type { ApiFailure } from '@/lib/api/http';
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import type { SceneTransition } from '@/lib/canvas/scene-transition';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
 import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
@@ -66,7 +69,17 @@ export type StudioVisualAsset = {
   /** LE FILTRE de CE média (lot 7, `payload.filter`) — il ne peint que lui.
    * Absent ⇒ aucun filtre. */
   readonly filter?: StoryFilterId;
+  /** LA COUPE d'une vidéo (#9136, `sourceStart`/`sourceEnd`) — en secondes du
+   * fichier. Absente ⇒ le fichier entier. */
+  readonly trim?: StudioMediaTrim;
+  /** LE SON COUPÉ d'une vidéo (#9136). Absent ⇒ elle garde son son. */
+  readonly muted?: true;
+  /** LE RECADRAGE d'une image (#9136, `MediaCropRect` normalisé sur la
+   * source). Absent ⇒ le cadre entier. */
+  readonly crop?: MediaCropRect;
 };
+
+export type StudioMediaTrim = { readonly start: number; readonly end: number };
 
 export type StudioSoundAsset = {
   readonly file?: File;
@@ -96,6 +109,10 @@ export type StudioPage = {
   /** LA DURÉE de la scène animée (#8415), en secondes — `timelineDuration`
    * du document. Absente : une scène statique. */
   readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `scene.opening` /
+   * `scene.closing` de CanvasV3. Absentes : aucune transition. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 };
 
 /** Une page NEUVE, avec UN texte vide sélectionné — même loi que
@@ -111,6 +128,12 @@ export function emptyStudioPage(id: string, textId: string, language: string): S
 
 export function isStudioPageEmpty(page: StudioPage): boolean {
   return page.texts.every((layer) => layer.text.trim() === '') && page.background === null && page.overlay === null && page.sound === null;
+}
+
+/** La VIDÉO de la page (#9124) — le fond d'abord, sinon le calque. */
+export function studioPageVideo(page: StudioPage): StudioVisualAsset | null {
+  if (page.background?.mediaType === 'video') return page.background;
+  return page.overlay?.mediaType === 'video' ? page.overlay : null;
 }
 
 /** Une page ne peut pas partir si un de ses trois assets a ÉCHOUÉ — l'auteur
@@ -214,6 +237,27 @@ export function pageWithBackgroundFrame(page: StudioPage, frame: StoryFrame): St
   return page.background === null ? page : { ...page, background: { ...page.background, frame } };
 }
 
+/** LES ÉDITIONS DE BASE du fond (#9136) — une coupe vide, un son rendu ou un
+ * cadre entier s'écrivent par leur ABSENCE : une pièce ramenée à son état
+ * d'origine repart intacte. */
+export function pageWithBackgroundTrim(page: StudioPage, trim: StudioMediaTrim | null): StudioPage {
+  if (page.background === null) return page;
+  const { trim: _previous, ...rest } = page.background;
+  return { ...page, background: trim === null || trim.end <= trim.start ? rest : { ...rest, trim } };
+}
+
+export function pageWithBackgroundMuted(page: StudioPage, muted: boolean): StudioPage {
+  if (page.background === null) return page;
+  const { muted: _previous, ...rest } = page.background;
+  return { ...page, background: muted ? { ...rest, muted: true } : rest };
+}
+
+export function pageWithBackgroundCrop(page: StudioPage, crop: MediaCropRect | null): StudioPage {
+  if (page.background === null) return page;
+  const { crop: _previous, ...rest } = page.background;
+  return { ...page, background: crop === null || isFullMediaCrop(crop) ? rest : { ...rest, crop: clampMediaCrop(crop) } };
+}
+
 /** LE TEXTE ALTERNATIF de CE média (#8518) — même borne que la légende
  * (`CreatePostSchema.mediaAlt`, 1000 caractères). */
 export function pageWithVisualAlt(page: StudioPage, door: 'visual' | 'overlay', alt: string): StudioPage {
@@ -259,9 +303,20 @@ export function pageWithSoundPlane(page: StudioPage, plane: StudioPlane): Studio
 /** La porte décide du rôle ; `accept` n'est qu'un CONSEIL au sélecteur natif
  * — ce prédicat est la garde. Un MIME vide (inconnu du navigateur) passe : la
  * passerelle juge les octets (`tus-handler.ts:384-400`). */
+/** Un `.mp4` n'a qu'un type système, `video/mp4`, qu'il porte une image ou
+ * non : la porte SONORE le prend pour un son (#9693). */
+const SOUND_CONTAINER_NAMED_VIDEO = 'video/mp4';
+
+/** Le fichier posé à la porte SONORE part comme un son : un `.mp4` y est
+ * déclaré `audio/mp4` — mêmes octets, que `<audio>` lit et que la passerelle
+ * vérifie par leur boîte `ftyp` (#9693). */
+export function studioSoundFileOf(file: File): File {
+  return file.type === SOUND_CONTAINER_NAMED_VIDEO ? new File([file], file.name, { type: 'audio/mp4', lastModified: file.lastModified }) : file;
+}
+
 export function studioDoorAccepts(door: StudioDoor, mimeType: string): boolean {
   if (mimeType === '') return true;
-  if (door === 'sound') return mimeType.startsWith('audio/');
+  if (door === 'sound') return mimeType.startsWith('audio/') || mimeType === SOUND_CONTAINER_NAMED_VIDEO;
   return mimeType.startsWith('image/') || mimeType.startsWith('video/');
 }
 

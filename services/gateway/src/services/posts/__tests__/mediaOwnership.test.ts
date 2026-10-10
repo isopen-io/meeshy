@@ -146,6 +146,19 @@ describe('claimableMediaWhere', () => {
   });
 });
 
+describe('claimableMediaWhere — un propriétaire absent ne RETIRE pas le filtre (#9745)', () => {
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['chaîne vide', ''],
+    ['le repli littéral du handler d’upload', 'anonymous'],
+    ['un jeton de session', 'sess_0123456789abcdef'],
+    ['un objet de filtre', { not: null }],
+  ])('refuse %s au lieu de rendre une clause sans propriété', (_label, owner) => {
+    expect(() => claimableMediaWhere(owner as unknown as string)).toThrow('MEDIA_OWNER_REQUIRED');
+  });
+});
+
 describe('describeClaimShortfall', () => {
   it('rend_null_quand_tout_a_ete_rattache', () => {
     expect(describeClaimShortfall(['a', 'b'], 2)).toBeNull();

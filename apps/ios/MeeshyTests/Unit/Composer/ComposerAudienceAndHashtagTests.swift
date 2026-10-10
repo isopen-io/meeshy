@@ -233,4 +233,69 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
                        "`composerHashtags` est le site unique — la feuille et le sélecteur "
                        + "le lisent, ils ne le recalculent pas.")
     }
+    // MARK: - #9179 — le texte d'un RÉEL sans texte, c'est sa légende
+
+    func test_unReelSansTexte_publieSaLegendeDeScene() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "", captions: ["Coucher de soleil"]),
+                       "Coucher de soleil")
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: nil, captions: [nil, " Plage "]),
+                       "Plage")
+    }
+
+    /// L'outil hashtag ÉCRIT dans le texte : un texte qui n'est fait que de
+    /// balises n'est pas un texte, la légende passe devant et les balises
+    /// suivent — ainsi l'analytique les lit dans `Post.content`.
+    func test_desBalisesSeules_suiventLaLegende() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "#voyage #mer",
+                                                    captions: ["Coucher de soleil"]),
+                       "Coucher de soleil\n#voyage #mer")
+    }
+
+    func test_unVraiTexte_resteInchange() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "Vacances #voyage",
+                                                    captions: ["Coucher de soleil"]),
+                       "Vacances #voyage")
+    }
+
+    func test_sansLegende_leTexteResteCeQuIlEtait() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "#voyage", captions: [nil, "  "]), "#voyage")
+        XCTAssertNil(ReelPublishedContent.content(type: .reel, text: nil, captions: []))
+    }
+
+    /// Plusieurs scènes : chaque légende une fois, dans l'ordre des scènes.
+    func test_plusieursLegendes_sEnchainent_sansDoublon() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "",
+                                                    captions: ["Un", "Deux", "Un"]),
+                       "Un\nDeux")
+    }
+
+    /// Le texte du post recopié dans une slide (balises seules) n'est pas une
+    /// légende : il ne se double pas.
+    func test_uneLegendeFaiteDeBalises_nEstPasUneLegende() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "#voyage",
+                                                    captions: ["#voyage", "Plage"]),
+                       "Plage\n#voyage")
+        XCTAssertEqual(ReelPublishedContent.content(type: .reel, text: "#voyage", captions: ["#voyage"]),
+                       "#voyage")
+    }
+
+    /// Un POST affiche déjà la légende SUR son média et son texte AU-DESSUS de
+    /// la carte : la recopier l'afficherait deux fois. La règle ne vaut que
+    /// pour le réel, dont le lecteur ne montre que `content`.
+    func test_horsDuReel_rienNeSeRecopie() {
+        XCTAssertEqual(ReelPublishedContent.content(type: .post, text: "", captions: ["Plage"]), "")
+        XCTAssertNil(ReelPublishedContent.content(type: .story, text: nil, captions: ["Plage"]))
+    }
+
+    func test_lesSurfacesDuReel_lisentLaMemeRegle() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        for fichier in ["ReelFeedCard.swift", "ReelsPlayerView.swift"] {
+            let source = try String(contentsOf: views.appendingPathComponent(fichier), encoding: .utf8)
+            XCTAssertTrue(source.contains("ReelPublishedContent.content(type: .reel"),
+                          "\(fichier) montre la légende d'un réel sans texte par la règle unique.")
+        }
+    }
 }

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
@@ -273,10 +273,67 @@ export function StudioAnimatedToggle({
 }
 
 /**
- * **LA BORNE D'UNE PLAQUE DU BAS** (#8517) — Cadre, édition, frise et texte du
- * post : toute la largeur sur un téléphone, 36 rem au plus et centrés au
- * bureau. Sans elle, une plaque s'étirait sur 1264 px et, ses choix posés en
+ * **LA BORNE D'UNE PLAQUE DU BAS** (#8517) — frise, carrousel d'effets et
+ * texte du post — le Cadre et l'édition d'un objet s'ouvrent à droite, depuis
+ * le haut, depuis #9140 (`StudioInlinePanel`) : toute la largeur sur un
+ * téléphone, 36 rem au plus et centrés au bureau. Sans elle, une plaque s'étirait sur 1264 px et, ses choix posés en
  * une ligne, la scène retombait à 170 px. `mx-auto` centre dans un parent en
  * bloc comme dans la colonne du socle.
  */
 export const STUDIO_PLATE = 'mx-auto w-full min-w-0 max-w-xl';
+
+/**
+ * **LE (X) DE L'OUTIL OUVERT** (#8654, jumelle de #8652) — un outil ouvert
+ * prend toute la place : ses réglages et ce (X), rien d'autre. Le toucher
+ * referme l'outil et rend la scène complète. `probe` garde l'attribut que les
+ * témoins et les gates touchent (`data-story-section-done` pour les options
+ * d'un objet, `data-story-frame-done` pour celles du fond).
+ */
+export function StudioToolClose({
+  lang,
+  probe,
+  onClose,
+  focusOnOpen = false,
+}: {
+  readonly lang: InterfaceLanguage;
+  readonly probe: 'section' | 'frame';
+  readonly onClose: () => void;
+  /** Le chrome qui portait le focus (la tuile qui a ouvert l'outil) vient de
+   * devenir inerte : le focus entre dans l'outil, par son (X). Jamais pour
+   * l'édition d'un texte, dont la saisie garde le clavier. */
+  readonly focusOnOpen?: boolean;
+}) {
+  const ref = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (focusOnOpen) ref.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      {...{ [`data-story-${probe}-done`]: '' }}
+      data-story-tool-close
+      onClick={onClose}
+      aria-label={translate(lang, 'story.studio.tool.close')}
+      className={ROUND_GLASS}
+      style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
+    >
+      <Glyph name="x" size={18} />
+    </button>
+  );
+}
+
+/**
+ * **LE CHROME QUI CÈDE** (#8654) — un élément du chrome (en-tête, rails,
+ * socle) que l'outil ouvert efface : il s'estompe en fondu (coupé sous
+ * `prefers-reduced-motion`), ne se touche plus et sort de l'arbre
+ * d'accessibilité. Il garde sa place : la scène ne saute pas.
+ */
+export function chromeFade(visible: boolean): {
+  readonly 'data-studio-chrome': 'shown' | 'hidden';
+  readonly inert?: boolean;
+  readonly 'aria-hidden'?: true;
+} {
+  return visible ? { 'data-studio-chrome': 'shown' } : { 'data-studio-chrome': 'hidden', inert: true, 'aria-hidden': true };
+}

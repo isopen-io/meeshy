@@ -169,7 +169,7 @@ export function containRect(source: Size, target: Rect): Rect {
 }
 
 /** Le nom du fichier : `meeshy-appel-<style>-AAAAMMJJ-HHMMSS.png`, ou `…-visage-<n>` pour un portrait. */
-export function captureFileName(options: { readonly at: Date; readonly style: MontageStyle | 'visage'; readonly index?: number }): string {
+export function captureFileName(options: { readonly at: Date; readonly style: string; readonly index?: number }): string {
   const suffix = options.index === undefined ? '' : `-${options.index + 1}`;
-  return `meeshy-appel-${options.style}-${captureStamp(options.at)}${suffix}.png`;
+  return `meeshy-appel-${options.style}-${captureStamp(options.at)}${suffix}.jpg`;
 }

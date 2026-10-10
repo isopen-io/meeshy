@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armAutoPip, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
+import { armAutoPip, pipAspect, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -17,7 +17,9 @@ const videoStream = (live = true) => ({ getVideoTracks: () => (live ? [{ readySt
 
 const member = (userId: string, cameraOn: boolean): CallMember => ({ userId, name: userId, avatar: null, micMuted: false, cameraOn, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected' });
 
-const call = (patch: Partial<ActiveCall> = {}): Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase'> => ({
+const call = (patch: Partial<ActiveCall> = {}): Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'> => ({
+  facing: 'user',
+  screenSharing: false,
   members: { peer: member('peer', true) },
   remoteStreams: { peer: videoStream() },
   localStream: videoStream(),
@@ -38,10 +40,23 @@ describe('pipSupport', () => {
 describe('pipSource', () => {
   test('la vidéo du pair d’abord ; à défaut ma caméra ; sans vidéo, rien', () => {
     const both = call();
-    expect(pipSource(both)).toEqual({ stream: both.remoteStreams.peer, mirrored: false });
+    expect(pipSource(both)).toEqual({ stream: both.remoteStreams.peer, mirrored: false, fit: 'cover' });
     const mine = call({ members: { peer: member('peer', false) } });
-    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true });
+    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true, fit: 'cover' });
     expect(pipSource(call({ members: { peer: member('peer', false) }, cameraOn: false }))).toBeNull();
+  });
+
+  test('ma caméra arrière flotte sans miroir (#8696)', () => {
+    const rear = call({ members: { peer: member('peer', false) }, facing: 'environment' });
+    expect(pipSource(rear)).toEqual({ stream: rear.localStream, mirrored: false, fit: 'cover' });
+  });
+
+  test('un écran partagé flotte ENTIER (#8164) : le pair qui partage comme le mien ; une caméra reste recadrée', () => {
+    const sharing = call({ members: { peer: { ...member('peer', false), screenSharing: true } } });
+    expect(pipSource(sharing)?.fit).toBe('contain');
+    const mine = call({ members: { peer: member('peer', false) }, screenSharing: true });
+    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: false, fit: 'contain' });
+    expect(pipSource(call())?.fit).toBe('cover');
   });
 });
 
@@ -83,3 +98,21 @@ describe('armAutoPip', () => {
     expect(() => armAutoPip(undefined, () => undefined)()).not.toThrow();
   });
 });
+
+const sized = (width?: number, height?: number, readyState = 'live') =>
+  ({ getVideoTracks: () => [{ readyState, getSettings: () => ({ width, height }) }] }) as unknown as MediaStream;
+
+describe('pipAspect — le format de la fenêtre flottante de la coque (#8144)', () => {
+  test('le format de l’image qui flotte, tel que la piste le déclare', () => {
+    expect(pipAspect({ stream: sized(720, 1280), mirrored: false, fit: 'cover' })).toEqual({ width: 720, height: 1280 });
+    expect(pipAspect({ stream: sized(1920, 1080), mirrored: false, fit: 'contain' })).toEqual({ width: 1920, height: 1080 });
+  });
+
+  test('rien ne flotte, ou la piste ne connaît pas encore sa taille : aucun format imposé', () => {
+    expect(pipAspect(null)).toBeNull();
+    expect(pipAspect({ stream: sized(), mirrored: false, fit: 'cover' })).toBeNull();
+    expect(pipAspect({ stream: sized(0, 720), mirrored: false, fit: 'cover' })).toBeNull();
+    expect(pipAspect({ stream: sized(720, 1280, 'ended'), mirrored: false, fit: 'cover' })).toBeNull();
+  });
+});
+

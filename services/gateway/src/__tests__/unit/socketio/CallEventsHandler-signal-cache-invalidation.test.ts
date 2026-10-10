@@ -215,7 +215,11 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
 
   it('call:force-leave evicts the cached session for that callId', async () => {
     const prisma = makePrisma();
-    (prisma as any).callSession.findMany = jest.fn<any>().mockResolvedValue([makeActiveSession()]);
+    // Un appel où A est seul (B parti) : un appel vivant à deux est épargné par force-leave (#9111).
+    const zombie = makeActiveSession();
+    (prisma as any).callSession.findMany = jest.fn<any>().mockResolvedValue([
+      { ...zombie, participants: [zombie.participants[0], { ...zombie.participants[1], leftAt: new Date() }] },
+    ]);
     const handlers: Record<string, (...args: any[]) => any> = {};
     const socket = {
       id: 'socket-inv-2',

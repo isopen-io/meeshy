@@ -184,7 +184,7 @@ export function VerifyEmailFlow({
           <Link
             to="login"
             replace
-            className="grid place-items-center rounded-[14px] px-6 font-semibold"
+            className="grid place-items-center rounded-field px-6 font-semibold"
             style={{ minHeight: 44, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)', color: 'var(--color-ios-ink)' }}
           >
             {translate(language, 'verifyEmail.backToLogin')}
@@ -219,7 +219,7 @@ export function VerifyEmailFlow({
           <Link
             to={closeTarget}
             replace
-            className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
+            className="grid w-full place-items-center rounded-field px-8 font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: VERIFY_TINT }}
           >
             {translate(language, 'verifyEmail.continue')}
@@ -236,7 +236,7 @@ export function VerifyEmailFlow({
           <button
             type="button"
             onClick={() => setLinkPhase('checking')}
-            className="grid w-full place-items-center rounded-[14px] px-8 font-semibold"
+            className="grid w-full place-items-center rounded-field px-8 font-semibold"
             style={{ minHeight: 44, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)', color: 'var(--color-ios-ink)' }}
           >
             {translate(language, 'verifyEmail.handoff.stay')}

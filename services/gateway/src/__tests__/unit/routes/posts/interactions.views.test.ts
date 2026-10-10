@@ -10,7 +10,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 
 // ─── Mocks — hissés au sommet de CE module, donc déclarés ici ────────────────
 
@@ -28,7 +28,7 @@ jest.mock('../../../../services/CacheStore', () => require('./interactions.harne
 
 // ─── Import après les mocks ──────────────────────────────────────────────────
 
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 import { ConflictError } from '../../../../errors/custom-errors';
@@ -715,5 +715,43 @@ describe('POST /posts/impressions/batch — caps at IMPRESSION_BATCH_CAP (100) e
     expect(res.statusCode).toBe(400);
     expect(prisma.postImpression.createMany).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+// ─── Les deux listes des vues — rôle transmis, trace d'audit fail-closed (#9727, #9733) ─────────
+
+describe.each([
+  ['views', () => mockGetPostViews],
+  ['interactions', () => mockGetPostInteractions],
+] as const)('GET /posts/:postId/%s — la porte et sa trace', (list, mockOf) => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('transmet le rôle global, l’adresse et l’agent de la requête à la porte', async () => {
+    mockOf().mockResolvedValueOnce(null);
+    await app.inject({ method: 'GET', url: `/posts/${POST_ID}/${list}`, headers: { 'user-agent': 'console-admin' } });
+    expect(mockOf()).toHaveBeenLastCalledWith(
+      POST_ID,
+      USER_ID,
+      50,
+      0,
+      expect.objectContaining({ role: 'USER', userAgent: 'console-admin', ipAddress: expect.any(String) }),
+    );
+  });
+
+  it('403 quand la porte refuse (l’auteur d’un post n’en voit que les nombres)', async () => {
+    mockOf().mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/${list}` });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual(expect.objectContaining({ success: false, code: 'FORBIDDEN' }));
+  });
+
+  it('503 AUDIT_UNAVAILABLE quand la trace d’une lecture administrateur ne s’écrit pas — rien n’est servi', async () => {
+    mockOf().mockRejectedValueOnce(new Error('AUDIT_UNAVAILABLE'));
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/${list}` });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual(expect.objectContaining({ success: false, code: 'AUDIT_UNAVAILABLE' }));
+    expect(res.json()).not.toHaveProperty('data');
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { REPORT_REASONS, reportUser, type ReportOutcome } from './reports';
+import { REPORT_REASONS, reportComment, reportUser, type ReportOutcome } from './reports';
 
 /**
  * **SIGNALER — LE PORT QUI EXISTAIT SANS APPELANT** (#7187).
@@ -68,6 +68,19 @@ describe('la charge est celle que le serveur DÉCLARE', () => {
       reportedEntityId: 'u-cible',
       reportType: 'hate_speech',
     });
+  });
+
+  test('un COMMENTAIRE se signale sous son propre type (#8734)', async () => {
+    const { transport, appels } = transportQui(() => ({ ok: true, data: {} }));
+
+    const issue = await reportComment({
+      commentId: 'c-cible',
+      reason: 'harassment',
+      deps: { source: 'gateway', transport: transport as never },
+    });
+
+    expect(issue).toBe('done');
+    expect(appels[0]?.body).toEqual({ reportedType: 'comment', reportedEntityId: 'c-cible', reportType: 'harassment' });
   });
 
   /**

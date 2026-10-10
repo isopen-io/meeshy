@@ -52,7 +52,7 @@ function conversationOf(input: ConversationPreviewInput): Conversation {
   const m = input.lastMessage ?? null;
   const base = {
     id: CONVERSATION_ID,
-    type: 'group',
+    type: input.isDirect === true ? 'direct' : 'group',
     status: 'active',
     visibility: 'private',
     isActive: true,

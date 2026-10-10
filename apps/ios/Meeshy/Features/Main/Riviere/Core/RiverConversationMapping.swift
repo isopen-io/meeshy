@@ -242,7 +242,8 @@ nonisolated enum RiverConversationMapping {
                     RiverReplyPreview(
                         authorDisplayName: singleLine($0.authorName),
                         text: singleLine($0.previewText),
-                        media: RiverQuotedMedia.resolve($0)
+                        media: RiverQuotedMedia.resolve($0),
+                        capturesBlocked: $0.quotedCapture(quotedMessage: nil).shieldsCapture()
                     )
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
@@ -286,11 +287,13 @@ nonisolated enum RiverConversationMapping {
                 protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
+                offersCopy: message.exitOffer.offers(.copy),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 protectedTap: protectedTap(of: message),
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
                 contactCards: RiverContactCards(items: contactCards(of: message)),
+                capturesBlocked: message.exitOffer.capture.shieldsCapture(),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
@@ -325,7 +328,8 @@ nonisolated enum RiverConversationMapping {
         )
         if let joinNotice = content.joinNotice { return .join(joinNotice) }
         if let callNotice = content.callNotice { return .call(callNotice) }
-        return .plain(text(message))
+        // #9617 — un avis de capture se compose chez le lecteur, comme dans le fil.
+        return .plain(BubbleContent.captureNoticeText(for: message) ?? text(message))
     }
 
     /// R-6 — la citation mène à sa cible : le curseur du message cité,

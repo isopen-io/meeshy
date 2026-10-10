@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import MeeshySDK
+import os
 
 // L'appel de groupe côté `CallManager` (#3585). `CallManager` garde UN pair —
 // le « principal » — et tout le reste du groupe vit dans le maillage de
@@ -39,6 +40,10 @@ extension CallManager: GroupCallHostProviding {
     }
 
     var isGroupPrimaryConnected: Bool { callState == .connected }
+    var isGroupPrimaryReconnecting: Bool {
+        if case .reconnecting = callState { return true }
+        return false
+    }
     var isLocalMicMuted: Bool { isMuted }
     var isLocalVideoEnabled: Bool { isVideoEnabled }
     var primaryRemoteVideoTrack: Any? { webRTCService.remoteVideoTrack }
@@ -70,10 +75,35 @@ extension CallManager: GroupCallHostProviding {
 
     /// La caméra ou le micro d'un membre du maillage n'est pas celui du pair
     /// principal : `isRemoteVideoEnabled` / `isRemoteAudioEnabled` restent à lui.
+    /// Son siège libéré (#9085), tout membre est du maillage.
     func isGroupMeshMediaToggle(_ event: CallMediaToggleData) -> Bool {
         guard let mesh = groupMesh, mesh.isGroupConversation(conversationId),
               let userId = event.userId, !userId.isEmpty else { return false }
-        return userId != groupPrimaryUserId
+        return mesh.isPrimaryVacated || userId != groupPrimaryUserId
+    }
+
+    /// Un appel de groupe tenu par le maillage — le 1:1 n'y entre jamais.
+    var isGroupMeshCall: Bool { groupMesh?.isGroupConversation(conversationId) ?? false }
+
+    /// #9085 — le principal est parti, le groupe continue sans lui.
+    var isGroupPrimaryVacated: Bool { groupMesh?.isPrimaryVacated ?? false }
+
+    /// #9085 — le `bye` in-band vient toujours du principal. En groupe, s'il
+    /// reste des membres, il libère son siège sans finir l'appel ; sinon
+    /// (1:1, ou plus personne) l'appel finit comme avant.
+    func handleRemoteBye(callId: String, rawReason: String?) {
+        if groupMesh?.primaryDidLeave() == true {
+            Logger.calls.info("[GROUP] bye from the primary — seat vacated, call continues")
+            return
+        }
+        handleRemoteEnd(callId: callId, rawReason: rawReason)
+    }
+
+    /// #9091 — l'en-tête, la pastille et la bulle lisent `remoteUsername` :
+    /// le principal parti, ils nomment le groupe qui continue, plus le partant.
+    func groupCallTitleDidChange(_ title: String) {
+        guard remoteUsername != title else { return }
+        remoteUsername = title
     }
 
     /// L'appelant d'un groupe n'a pas de pair désigné : le PREMIER membre qui
@@ -128,6 +158,8 @@ final class GroupCallMeshBinding {
     private var cancellables = Set<AnyCancellable>()
     private weak var boundManager: CallManager?
 
+    private lazy var syncCoalescer = MainTurnCoalescer { [weak self] in self?.mesh.syncWithHost() }
+
     init(mesh: GroupCallMeshCoordinator = .shared) {
         self.mesh = mesh
     }
@@ -159,14 +191,20 @@ final class GroupCallMeshBinding {
             .sink { [weak self] in self?.mesh.handleIceServersRefreshed($0) }
             .store(in: &cancellables)
 
-        let state = manager.$callState.map { _ in () }
-        let primary = manager.$remoteUserId.map { _ in () }
-        let muted = manager.$isMuted.map { _ in () }
-        let video = manager.$isVideoEnabled.map { _ in () }
-        let call = manager.$currentCallId.map { _ in () }
+        // #9089 — pendant la négociation, ces cinq sources changent en rafale :
+        // chacune ne publie que ce qui CHANGE, et la rafale se resynchronise UNE
+        // fois, au prochain tour de boucle principale.
+        let state = manager.$callState.removeDuplicates().map { _ in () }
+        let primary = manager.$remoteUserId.removeDuplicates().map { _ in () }
+        let muted = manager.$isMuted.removeDuplicates().map { _ in () }
+        let video = manager.$isVideoEnabled.removeDuplicates().map { _ in () }
+        let call = manager.$currentCallId.removeDuplicates().map { _ in () }
         Publishers.Merge5(state, primary, muted, video, call)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.mesh.syncWithHost() }
+            .sink { [weak self] in self?.syncCoalescer.request() }
             .store(in: &cancellables)
     }
+}
+
+private extension Logger {
+    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }

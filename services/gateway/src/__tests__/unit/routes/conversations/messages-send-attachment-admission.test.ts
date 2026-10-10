@@ -22,6 +22,8 @@ const CONV_ID = '507f1f77bcf86cd799439022';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439099';
 const OWNED_ATTACHMENT_ID = '507f1f77bcf86cd799439033';
 const FOREIGN_ATTACHMENT_ID = '507f1f77bcf86cd799439044';
+const CARRIER_MESSAGE_ID = '507f1f77bcf86cd799439077';
+const CLIENT_MESSAGE_ID = 'cid_3f2b8c1e-5d4a-4b7e-9a1c-2f6e8d0b4a11';
 
 async function fakeOptionalAuth(request: FastifyRequest): Promise<void> {
   (request as any).authContext = {
@@ -34,7 +36,8 @@ async function fakeOptionalAuth(request: FastifyRequest): Promise<void> {
 
 async function buildApp(
   handleMessage: jest.Mock,
-  attachmentRows: Array<{ id: string; uploadedBy: string }>
+  attachmentRows: Array<{ id: string; uploadedBy: string; messageId?: string | null }>,
+  carrierRows: Array<{ id: string; conversationId: string; clientMessageId: string | null }> = []
 ): Promise<{ app: FastifyInstance; findMany: jest.Mock }> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const findMany = jest.fn().mockResolvedValue(attachmentRows);
@@ -42,6 +45,7 @@ async function buildApp(
     participant: { findFirst: jest.fn() },
     conversation: { findUnique: jest.fn(), findFirst: jest.fn() },
     messageAttachment: { findMany },
+    message: { findMany: jest.fn().mockResolvedValue(carrierRows.map((row) => ({ ...row, conversation: { identifier: null } }))) },
   } as never;
   registerSendMessageRoute(
     app as never,
@@ -132,5 +136,43 @@ describe('POST /conversations/:id/messages — admission des attachmentIds (#687
 
     expect(res.statusCode).toBe(200);
     expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('#9587 — rend 404 nommé quand la pièce est déjà attachée à un message, sans appeler handleMessage', async () => {
+    const handleMessage = jest.fn();
+    ({ app } = await buildApp(handleMessage, [
+      { id: OWNED_ATTACHMENT_ID, uploadedBy: PARTICIPANT_ID, messageId: CARRIER_MESSAGE_ID },
+    ]));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { content: 'ordinaire', attachmentIds: [OWNED_ATTACHMENT_ID] },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('ATTACHMENT_NOT_FOUND');
+    expect(handleMessage).not.toHaveBeenCalled();
+  });
+
+  it('#9587 — laisse passer le réessai du même envoi : même conversation, même clientMessageId', async () => {
+    const handleMessage = jest.fn().mockResolvedValue({
+      success: true,
+      data: { id: CARRIER_MESSAGE_ID, isDuplicate: true },
+    });
+    ({ app } = await buildApp(
+      handleMessage,
+      [{ id: OWNED_ATTACHMENT_ID, uploadedBy: PARTICIPANT_ID, messageId: CARRIER_MESSAGE_ID }],
+      [{ id: CARRIER_MESSAGE_ID, conversationId: CONV_ID, clientMessageId: CLIENT_MESSAGE_ID }]
+    ));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { attachmentIds: [OWNED_ATTACHMENT_ID], clientMessageId: CLIENT_MESSAGE_ID },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(handleMessage).toHaveBeenCalled();
   });
 });

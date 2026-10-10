@@ -65,7 +65,9 @@ function user(id: string, email: string, overrides: Partial<MongoDoc> = {}): Mon
     systemLanguage: 'fr',
     registrationCountry: 'FR',
     isActive: true,
-    deletedAt: null,
+    // `deletedAt` ABSENT, la forme RÉELLE d'un compte jamais supprimé (leçon
+    // 318) : `deletedAt: null` ne l'apparie pas, et la diffusion n'atteignait
+    // personne.
     emailVerifiedAt: new Date('2026-09-15T00:00:00.000Z'),
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     ...overrides,

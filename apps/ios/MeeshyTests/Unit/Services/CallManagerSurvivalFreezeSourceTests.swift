@@ -33,13 +33,7 @@ import XCTest
 final class CallManagerSurvivalFreezeSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Services/
-            .deletingLastPathComponent()   // Unit/
-            .deletingLastPathComponent()   // MeeshyTests/
-            .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// Body of `actuateSurvivalVideoSend(enabled:callId:)` — the actuator

@@ -166,6 +166,25 @@ describe('loadStoryPost', () => {
     expect(calls[0]?.init.method).toBe('GET');
   });
 
+  /* #9172 — sur réseau lent, une requête de 2,5 s n'est pas un échec : elle
+     coupait la lecture d'un visiteur et lui montrait « Réessayer » à la place
+     de la story. La marche garde le délai du transport, jamais un plus court. */
+  test('une réponse lente reste servie : la marche ne coupe pas la requête avant le délai du transport', async () => {
+    const slow = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, 2_700);
+        init?.signal?.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+      return new Response(JSON.stringify({ success: true, data: { id: 'p1', type: 'STORY', createdAt: '2026-09-01T00:00:00Z' } }), { status: 200 });
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: slow });
+    const result = await loadStoryPost({ source: 'gateway', transport, postId: 'p1' });
+    expect(result.ok && result.data.id).toBe('p1');
+  }, 10_000);
+
   test('un 404 (hors audience ou inexistante) rend un échec — jamais un oracle d’existence', async () => {
     const { impl } = fakeFetch({ status: 404, body: { success: false, error: 'Post not found', code: 'POST_NOT_FOUND' } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });

@@ -2,6 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   emptyStudioPage,
+  pageWithBackgroundCrop,
+  pageWithBackgroundMuted,
+  pageWithBackgroundTrim,
   isStudioPageEmpty,
   isStudioPagePublishable,
   pageMediaCount,
@@ -25,6 +28,8 @@ import {
   selectedTextLayerOf,
   studioDoorAccepts,
   studioFailureKey,
+  studioSoundFileOf,
+  type StudioPage,
 } from './studio-page';
 import { IDENTITY_POSE } from './studio-pose';
 
@@ -309,6 +314,19 @@ describe('studioDoorAccepts — le rôle vient de la PORTE, et un fichier hors d
     expect(studioDoorAccepts('sound', 'audio/mp4')).toBe(true);
     expect(studioDoorAccepts('sound', 'image/png')).toBe(false);
   });
+  test('#9693 — la porte sonore prend un .mp4 (un son dans un conteneur que le système nomme vidéo)', () => {
+    expect(studioDoorAccepts('sound', 'video/mp4')).toBe(true);
+    expect(studioDoorAccepts('sound', 'video/webm')).toBe(false);
+  });
+  test('#9693 — un .mp4 posé à la porte sonore part comme un son (audio/mp4), octets inchangés', () => {
+    const mp4 = new File([new Uint8Array([1, 2, 3])], 'podcast.mp4', { type: 'video/mp4' });
+    const sound = studioSoundFileOf(mp4);
+    expect(sound.type).toBe('audio/mp4');
+    expect(sound.name).toBe('podcast.mp4');
+    expect(sound.size).toBe(3);
+    const mp3 = new File([new Uint8Array([1])], 'son.mp3', { type: 'audio/mpeg' });
+    expect(studioSoundFileOf(mp3)).toBe(mp3);
+  });
   test('un MIME INCONNU du navigateur (chaîne vide) passe : la passerelle juge les OCTETS (tus-handler.ts:384-400)', () => {
     expect(studioDoorAccepts('visual', '')).toBe(true);
     expect(studioDoorAccepts('sound', '')).toBe(true);
@@ -334,4 +352,21 @@ describe('studioFailureKey — la cause se DIT dans la langue de l’interface, 
     expect(studioFailureKey(failure(503), 'publish')).toBe('story.studio.failure.unavailable');
     expect(studioFailureKey(failure(0, 'MEDIA_NOT_CLAIMED'), 'publish')).toBe('story.studio.failure.refused');
   });
+});
+
+describe('les éditions de base du fond (#9136)', () => {
+  const withBackground = (): StudioPage => ({
+    ...emptyStudioPage('p', 't', 'fr'),
+    background: { previewUrl: 'blob:v', mediaType: 'video', upload: { phase: 'uploading', progress: 0 }, caption: '', pose: IDENTITY_POSE },
+  });
+
+  test('une coupe, un muet, un recadrage s’écrivent ; leur valeur neutre s’écrit par l’ABSENCE', () => {
+    const coupee = pageWithBackgroundTrim(withBackground(), { start: 1, end: 4 });
+    expect(coupee.background?.trim).toEqual({ start: 1, end: 4 });
+    expect('trim' in (pageWithBackgroundTrim(coupee, null).background ?? {})).toBe(false);
+    expect(pageWithBackgroundMuted(withBackground(), true).background?.muted).toBe(true);
+    expect('muted' in (pageWithBackgroundMuted(pageWithBackgroundMuted(withBackground(), true), false).background ?? {})).toBe(false);
+    expect('crop' in (pageWithBackgroundCrop(withBackground(), { x: 0, y: 0, width: 1, height: 1 }).background ?? {})).toBe(false);
+  });
+
 });

@@ -17,6 +17,7 @@
  *
  * Miroir de `postReplySnapshot.ts` pour la relecture.
  */
+import { hoistStickerOnto } from '../stickers/messageSticker';
 
 export interface SharedPlace {
   latitude: number;
@@ -121,9 +122,12 @@ export function hoistLocationDeep<T extends Record<string, unknown>>(entity: T):
   if (!Array.isArray(comments) || comments.length === 0) {
     return hoisted;
   }
+  // Un commentaire embarqué se sert comme la liste complète
+  // (`hoistCommentCarriers`, routes/posts/comments.ts) : son lieu ET son
+  // sticker (#9080) hissés — sinon le sticker disparaît selon la surface.
   const hoistedComments = comments.map((comment) =>
     comment && typeof comment === 'object' && !Array.isArray(comment)
-      ? hoistLocationOnto(comment as Record<string, unknown>)
+      ? hoistStickerOnto(hoistLocationOnto(comment as Record<string, unknown>))
       : comment
   );
   return { ...hoisted, comments: hoistedComments } as T;

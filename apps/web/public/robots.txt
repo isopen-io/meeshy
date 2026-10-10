@@ -26,4 +26,44 @@ Disallow: /l/
 Disallow: /links
 Disallow: /u
 
+# Les robots d'APERÇU des messageries (#9712) déplient une invitation /chat/<lien> :
+# la page qu'ils reçoivent (passerelle, routeur Traefik *-unfurl) porte
+# `noindex`, rien ne s'indexe. Le reste leur est fermé comme à tous.
+User-Agent: Twitterbot
+User-Agent: LinkedInBot
+User-Agent: facebookexternalhit
+User-Agent: Facebot
+User-Agent: Slackbot
+User-Agent: Slackbot-LinkExpanding
+User-Agent: Discordbot
+User-Agent: TelegramBot
+User-Agent: WhatsApp
+User-Agent: SkypeUriPreview
+Allow: /chat/
+Disallow: /api/
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /account
+Disallow: /auth/
+Disallow: /auth-status
+Disallow: /settings
+Disallow: /notifications
+Disallow: /conversation
+Disallow: /conversations
+Disallow: /chat
+Disallow: /call
+Disallow: /feed
+Disallow: /feeds
+Disallow: /groups
+Disallow: /contacts
+Disallow: /search
+Disallow: /mood
+Disallow: /story
+Disallow: /reel
+Disallow: /post
+Disallow: /hashtag
+Disallow: /l/
+Disallow: /links
+Disallow: /u
+
 Sitemap: https://meeshy.me/sitemap.xml

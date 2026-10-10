@@ -249,13 +249,15 @@ export class UserAuditService {
     adminId: string,
     userId: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    reason?: string
   ): Promise<UserAuditLog> {
     return this.createAuditLog({
       userId,
       adminId,
       action: UserAuditAction.RESET_PASSWORD,
       entityId: userId,
+      metadata: reason?.trim() ? { reason: reason.trim() } : null,
       ipAddress,
       userAgent
     });

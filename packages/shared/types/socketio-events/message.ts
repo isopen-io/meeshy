@@ -9,6 +9,7 @@
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
 import type { MessageSticker } from '../message-sticker.js';
+import type { LastMessageSystemEvent } from '../conversation-preview.js';
 
 /**
  * Données pour l'événement de suppression de message
@@ -317,6 +318,14 @@ export interface MentionCreatedEventData {
 }
 
 /**
+ * Ce qu'un client DÉCLARE en citant une pièce : son identifiant, rien d'autre.
+ * La nature n'est jamais crue — la passerelle la relit du MIME en base.
+ */
+export interface AttachmentReplyToInput {
+  readonly attachmentId: string;
+}
+
+/**
  * Données pour l'envoi de message
  *
  * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
@@ -330,6 +339,13 @@ export interface MessageSendData {
   readonly originalLanguage?: string;
   readonly messageType?: string;
   readonly replyToId?: string;
+  /**
+   * La PIÈCE NOMMÉE que cette réponse vise (#9909) — la même que
+   * `POST /messages`. Exige `replyToId` : la pièce doit appartenir au message
+   * cité, sans quoi l'envoi est REFUSÉ. La passerelle en relit la nature dans
+   * la base et grave l'instantané dans `metadata.attachmentReplyTo`.
+   */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
   readonly clientMessageId: string;
   /** Réponse privée à une story — DM porteur du contexte de la story. */
   readonly storyReplyToId?: string;
@@ -419,6 +435,8 @@ export interface MessageSendWithAttachmentsData {
   readonly originalLanguage?: string;
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
+  /** La pièce nommée citée (#9909) — même contrat que `MessageSendData`. */
+  readonly attachmentReplyTo?: AttachmentReplyToInput;
   readonly clientMessageId: string;
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
@@ -595,4 +613,13 @@ export interface SocketIOMessage {
   /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
   readonly originalContent?: string;
   readonly metadata?: unknown;
+
+  /**
+   * L'événement système localisable d'un avis que le SERVEUR complète sur
+   * place (#8565) — la ligne d'arrivées regroupées de Meeshy Global, qui ne
+   * part qu'en `message:edited`. Même forme que `lastMessageSystemEvent` de
+   * `conversation:updated` : la ligne de liste y relit sa clé, ses noms et son
+   * compte sans recalcul client ni seconde diffusion.
+   */
+  readonly systemEvent?: LastMessageSystemEvent;
 }

@@ -73,12 +73,15 @@ extension ConversationViewModel {
         }
     }
 
-    /// La vue unique AFFICHÉE : exclusive du flou (#7667), elle s'éteint — et
-    /// ne s'arme plus — tant qu'un flou est imposé.
+    /// La vue unique AFFICHÉE. Exclusive d'un flou CHOISI (#7667), elle se
+    /// COMBINE à un flou IMPOSÉ par la citation (#8567, directive porteur
+    /// 2026-09-29 : « une réponse floutée par contagion peut être vue
+    /// unique »). L'armer sous un flou imposé éteint le flou que l'auteur avait
+    /// lui-même armé : retirer la citation rend alors un armement exclusif.
     var composerViewOnceEnabled: Bool {
-        get { isViewOnceEnabled && !replyImposedProtection.blurred }
+        get { isViewOnceEnabled }
         set {
-            guard !replyImposedProtection.blurred else { return }
+            if newValue, replyImposedProtection.blurred, isBlurEnabled { isBlurEnabled = false }
             isViewOnceEnabled = newValue
         }
     }

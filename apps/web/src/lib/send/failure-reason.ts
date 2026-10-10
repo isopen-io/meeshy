@@ -1,6 +1,7 @@
 import type { ApiFailure } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { GLOBAL_ADULTS_ONLY } from '@/lib/write-restriction';
 
 /**
  * LA CAUSE D'UN ENVOI QUI N'EST PAS PARTI (#5813, revue-correction) — le
@@ -65,6 +66,9 @@ export function sendFailureReason(
       ? translate(language, 'send.failure.newcomerSlowMode.soon')
       : translate(language, 'send.failure.newcomerSlowMode', { seconds: String(failure.retryAfter) });
   }
+  /* #9928 — Meeshy Global est fermée en écriture aux 13-17 ans : la cause dit
+     quand elle s'ouvrira (le composeur bascule dans le même état). */
+  if (failure.code === GLOBAL_ADULTS_ONLY) return translate(language, 'composer.writeRestriction.minorGlobal');
   if (failure.status === 401) return translate(language, 'send.failure.sessionExpired');
   if (failure.status === 403) return translate(language, 'send.failure.forbidden');
   if (failure.status === 429) return translate(language, 'send.failure.tooMany');

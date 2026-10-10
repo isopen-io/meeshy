@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { resolveParticipantLanguage } from '../../utils/conversation-helpers'
+import { normalizeLanguageForDedup } from '../../utils/language-normalize'
 
 describe('resolveParticipantLanguage', () => {
   it('should return systemLanguage when configured (Prisme priority 1)', () => {
@@ -238,5 +239,34 @@ describe('resolveParticipantLanguage', () => {
   it('should preserve an unknown 2-letter fallback code verbatim (lowercased)', () => {
     const participant = { type: 'anonymous' as const, language: 'QQ' }
     expect(resolveParticipantLanguage(participant)).toBe('qq')
+  })
+
+  // #9247 — LE DÉFAUT NE S'OBSERVE QUE HORS CATALOGUE.
+  //
+  // Pour un code catalogué ('pt-BR' → 'pt', 'EN' → 'en'), l'ancien repli
+  // `normalizeLanguageCode(x) ?? x.toLowerCase()` et la SSOT rendent le MÊME
+  // verdict : un témoin posé là ne peut pas tomber, et c'est pourquoi les
+  // témoins ci-dessus étaient tous verts pendant la vie du défaut. Hors
+  // catalogue, `normalizeLanguageCode` rend `undefined` et le repli
+  // `.toLowerCase()` GARDE le sous-tag de région, quand le chemin INSCRIT
+  // (`normalizeInAppLanguage`) le strippe — deux formes pour une même langue.
+  it.each([
+    ['yue-HK', 'yue'],
+    ['fil-PH', 'fil'],
+    ['xyz_AB', 'xyz'],
+    ['zh-Hant-HK', 'zh'],
+  ])('should strip the region of an UNCATALOGUED fallback code (%s -> %s)', (declared, expected) => {
+    const participant = { type: 'anonymous' as const, language: declared }
+    expect(resolveParticipantLanguage(participant)).toBe(expected)
+  })
+
+  // Parité par CONFRONTATION à la SSOT, jamais par recopie d'une table de
+  // valeurs attendues : une copie dériverait, et c'est précisément la dérive
+  // entre deux formes de la même normalisation qui a produit le défaut.
+  it('should delegate its fallback to normalizeLanguageForDedup — the SSOT of the couple', () => {
+    for (const declared of ['yue-HK', 'fil-PH', 'xyz_AB', 'zh-Hant-HK', 'pt-BR', 'EN', 'en-US', 'QQ', '-US', '@@@']) {
+      const participant = { type: 'anonymous' as const, language: declared }
+      expect(resolveParticipantLanguage(participant)).toBe(normalizeLanguageForDedup(declared))
+    }
   })
 })

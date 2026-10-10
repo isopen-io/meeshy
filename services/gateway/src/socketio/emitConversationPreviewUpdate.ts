@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
@@ -17,6 +18,7 @@ import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '..
 import type { ServerEmitIO } from './serverEmit';
 import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
+import { withoutCaptureNotices } from '../services/messaging/captureNoticeVisibility';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -79,7 +81,7 @@ const PREVIEW_MESSAGE_SELECT = {
   sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
   // Bornée, plus plafonnée à 1 : le résumé (« 3 photos · 1,4 Mo ») lit
   // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
-  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT },
+  attachments: { take: PREVIEW_ATTACHMENT_SUMMARY_LIMIT, select: PREVIEW_MEDIA_ATTACHMENT_SELECT, orderBy: MESSAGE_ATTACHMENT_ORDER },
   _count: { select: { attachments: true } },
 } as const;
 
@@ -287,7 +289,8 @@ export async function emitConversationPreviewUpdate(
       }),
       withOrphanedSenderRepair({ prisma: realPrisma, conversationIds: [conversationId] }, () =>
         prisma.message.findFirst({
-          where: { conversationId, deletedAt: null },
+          // #9630 — un avis de capture n'est jamais l'aperçu poussé.
+          where: withoutCaptureNotices({ conversationId, deletedAt: null }),
           orderBy: { createdAt: 'desc' },
           select: PREVIEW_MESSAGE_SELECT,
         })

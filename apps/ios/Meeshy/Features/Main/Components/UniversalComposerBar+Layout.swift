@@ -83,14 +83,14 @@ extension UniversalComposerBar {
     // MARK: - Minimized Floating Button
 
     private var minimizedFloatingButton: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Mic button
             if resolvedShowVoice {
                 Button {
                     HapticFeedback.medium()
                     expandAndStartRecording()
                 } label: {
-                    VStack(spacing: 3) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         ZStack {
                             Circle()
                                 .fill(.ultraThinMaterial)
@@ -126,7 +126,7 @@ extension UniversalComposerBar {
                 HapticFeedback.medium()
                 expandComposer()
             } label: {
-                VStack(spacing: 3) {
+                VStack(spacing: MeeshySpacing.xxs) {
                     ZStack {
                         Circle()
                             .fill(
@@ -148,8 +148,8 @@ extension UniversalComposerBar {
                 }
             }
         }
-        .padding(.trailing, 16)
-        .padding(.bottom, 12)
+        .padding(.trailing, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.md)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -184,7 +184,7 @@ extension UniversalComposerBar {
                     muted: mutedColor,
                     surface: railSurface
                 )
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.top, Self.railTopInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -200,18 +200,32 @@ extension UniversalComposerBar {
             // Hidden during recording for a clean, iMessage-like full-width bar
             if !effectiveIsRecording {
                 topToolbar
-                    .padding(.horizontal, 8)
-                    .padding(.top, 6)
-                    .padding(.bottom, 2)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.top, MeeshySpacing.xsPlus)
+                    .padding(.bottom, MeeshySpacing.xxs)
                     .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
+            // Pendant la prise, la barre d'outils s'efface ; un hôte qui le
+            // demande garde son ⌄ seul, tout à droite (#9893).
+            if let fold = resolvedFoldControl,
+               ComposerFoldPlacement.rowDuringRecording(isRecording: effectiveIsRecording,
+                                                        survivesRecording: fold.survivesRecording) {
+                HStack {
+                    Spacer(minLength: 0)
+                    foldButton(fold)
+                }
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xsPlus)
+                .transition(.opacity)
             }
 
             // Composer row — either the recording bar (full-width pill, iMessage-style)
             // or the regular layout: [ (+) attach ]  [ text field ]  [ mic / send ]
             if effectiveIsRecording {
                 recordingBar
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .transition(
                         reduceMotion
                             ? .opacity
@@ -225,11 +239,11 @@ extension UniversalComposerBar {
                 // sélectionné (#7849, iOS 18+).
                 if showsFormatBar {
                     ComposerFormatBar(accent: servedAccent, onFormat: applyEmphasis)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 6)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xsPlus)
                         .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
-                HStack(alignment: .bottom, spacing: 12) {
+                HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                     // Left: (+) attach / keyboard toggle button
                     if resolvedShowAttachment {
                         attachButton
@@ -253,8 +267,8 @@ extension UniversalComposerBar {
                     actionButton
                 }
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: hasContent)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .transition(.opacity)
             }
 
@@ -264,13 +278,13 @@ extension UniversalComposerBar {
             // perfectly still.
             if showAttachOptions && !effectiveIsRecording {
                 attachmentCarouselPanel
-                    .frame(height: attachmentPanelHeight)
+                    .modifier(ComposerPanelFrame(resting: attachmentPanelHeight, yields: panelYieldsToHost))
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .adaptiveLiquidGlass(in: Self.panelShape, tint: panelGlassTint)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showEphemeralPicker)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dominantProtection)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showPermanentEffectsPicker)
@@ -285,6 +299,7 @@ extension UniversalComposerBar {
         )
         .adaptiveOnChange(of: attachments.count) { _, _ in notifyContentChange() }
         .adaptiveOnChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: showAttachOptions) { _, open in onAttachmentsVisibilityChange?(open) }
         .onAppear {
             currentLanguage = selectedLanguage
             // Load initial draft if available
@@ -355,7 +370,8 @@ extension UniversalComposerBar {
         .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
             applyDetectedLanguage(force: true)
         }
-        .adaptiveOnChange(of: text) { _, newValue in
+        .adaptiveOnChange(of: text) { oldValue, newValue in
+            caretFollowsWrite(newValue)
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
@@ -390,8 +406,8 @@ extension UniversalComposerBar {
                     showAttachOptions = false
                 }
             }
-            // Clipboard content: auto-create when pasting 2000+ chars
-            handleClipboardCheck(newValue)
+            // Collage : fichier `file://` → pièce jointe ; au-delà de la limite → `.txt` (#9037)
+            handleClipboardCheck(newValue, previous: oldValue)
         }
         .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
@@ -445,11 +461,11 @@ extension UniversalComposerBar {
     @ViewBuilder
     var panelHeader: some View {
         if editBanner != nil || replyBanner != nil {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 if let banner = editBanner { banner.clipShape(Self.bannerShape) }
                 if let banner = replyBanner { banner.clipShape(Self.bannerShape) }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
             .padding(.top, Self.railTopInset)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
@@ -457,8 +473,8 @@ extension UniversalComposerBar {
         // Custom attachments (real thumbnails from parent) or default chips
         if let custom = customAttachmentsPreview {
             custom
-                .padding(.horizontal, 8)
-                .padding(.top, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xs)
                 .transition(.scale.combined(with: .opacity))
         } else if !allAttachments.isEmpty {
             attachmentsPreview
@@ -468,12 +484,12 @@ extension UniversalComposerBar {
         // Clipboard content preview (for pasted text > 2000 chars)
         if let clip = clipboardContent {
             clipboardContentPreview(clip)
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
-    static let bannerShape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+    static let bannerShape = RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
 
     // ========================================================================
     // MARK: - Panneau de verre
@@ -483,12 +499,12 @@ extension UniversalComposerBar {
     /// porteur 2026-09-25) — réel sur iOS 26, fait maison avant. Il remplace le
     /// fond transparent de #3920 ; les éléments posés dessus (champ, (+),
     /// enregistrement, pastille de langue) sont du verre aussi.
-    static let panelShape = RoundedRectangle(cornerRadius: 26, style: .continuous)
-    static let fieldShape = RoundedRectangle(cornerRadius: 22, style: .continuous)
+    static let panelShape = RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
+    static let fieldShape = RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
 
     /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
     /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
     var panelGlassTint: Color? {
-        dominantProtection.map { $0.tint.opacity(isDark ? 0.30 : 0.22) }
+        dominantProtection.map { $0.panelWash(isDark: isDark) }
     }
 }

@@ -16,10 +16,13 @@ import {
   settleFog,
   showsAffordance,
   surrogateOf,
+  viewOnceOpeningOf,
   type ProtectionKind,
   type RevealPhase,
 } from '@/lib/reading-mode/protection';
-import { useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
+import { RevealPhaseChannel, useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
+import { captureShield } from '@/lib/capture/capture-shield';
+import { useCaptureShield } from '@/lib/capture/use-capture-shield';
 import type { Attachment } from '@/lib/api/types';
 import { purgeViewOnceMedia, viewOnceMediaUrlsOf } from '@/lib/api/view-once';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -53,6 +56,7 @@ export function ProtectedContent({
   messageId,
   kind,
   isViewOnce,
+  isBlurred = false,
   contentLength,
   attachments,
   surface,
@@ -66,6 +70,13 @@ export function ProtectedContent({
   readonly messageId: string;
   readonly kind: ProtectionKind;
   readonly isViewOnce: boolean;
+  /**
+   * LE FLOU D'UNE VUE UNIQUE (#8567) — lu à l'OUVERTURE seulement : au repos,
+   * la puce de la vue unique garde la priorité (`protectionOf`). Ouvert, un
+   * TEXTE flouté reste voilé ; une pièce s'ouvre en plein écran, en clair
+   * (`viewOnceOpeningOf`).
+   */
+  readonly isBlurred?: boolean;
   readonly contentLength: number;
   /**
    * LES PIÈCES DU MESSAGE — l'OBJET, plus seulement leur nombre (#7020).
@@ -147,9 +158,15 @@ export function ProtectedContent({
    * vue unique déjà ouverte annonce `consumed` sans qu’aucun geste n’ait eu lieu.
    */
   const publishPhase = useRevealPhasePublisher();
+  /* LE VOILE D'UNE VUE UNIQUE FLOUTÉE OUVERTE (#8567) tient sa propre phase ;
+     tant que la fenêtre est ouverte, c'est elle que la rangée dit — elle dit
+     « masqué » tant que le flou n'est pas levé. */
+  const [openedVeil, setOpenedVeil] = useState<RevealPhase | null>(null);
+  const publishOpenedVeil = useCallback((_messageId: string, veilPhase: RevealPhase) => setOpenedVeil(veilPhase), []);
+  const publishedPhase = phase.phase === 'revealed' && openedVeil !== null ? openedVeil : phase;
   useEffect(() => {
-    publishPhase(messageId, phase);
-  }, [publishPhase, messageId, phase]);
+    publishPhase(messageId, publishedPhase);
+  }, [publishPhase, messageId, publishedPhase]);
 
   const attachmentCount = attachments?.length ?? 0;
   const [pending, setPending] = useState(false);
@@ -229,6 +246,7 @@ export function ProtectedContent({
     if (phase.phase !== 'consumed' || frozen === null) return;
     void purgeViewOnceMedia(frozen.urls);
     setFrozen(null);
+    setOpenedVeil(null);
   }, [phase, frozen]);
 
   /**
@@ -277,8 +295,19 @@ export function ProtectedContent({
     [now],
   );
 
+  /**
+   * LA VUE UNIQUE AFFICHÉE TIENT LE BOUCLIER DE CAPTURE (#9574) — texte
+   * ouvert, plein écran ou visionneuse : dans la coque Android, rien ne se
+   * peint avant `FLAG_SECURE` ; une coque sans pont ne l'ouvre pas du tout
+   * (fermé par défaut) ; un pont qui refuse garde la puce à la place du
+   * contenu pendant que le bouclier réessaie.
+   */
+  const viewOnceShown = isViewOnceKind(kind) && (viewing !== null || (rendersContent(kind, phase) && frozen !== null));
+  const shieldState = useCaptureShield(messageId, viewOnceShown);
+  const shieldUnavailable = isViewOnceKind(kind) && captureShield.mode() === 'unguarded';
+
   const viewer =
-    viewing !== null && media !== undefined ? (
+    viewing !== null && media !== undefined && shieldState === 'open' ? (
       <ProtectedMediaViewer items={viewing.items} startIndex={viewing.startIndex} media={media} onClose={closeMedia} />
     ) : null;
 
@@ -330,12 +359,15 @@ export function ProtectedContent({
       );
     }
     if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    if (shieldUnavailable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
     return <ViewOnceChip state="sealed" onTap={() => openMedia(0)} />;
   }
 
   if (isViewOnceKind(kind)) {
     if (rendersContent(kind, phase) && frozen !== null) {
-      if (frozen.media) {
+      if (shieldState !== 'open') return <ViewOnceChip state="viewing" />;
+      const opening = viewOnceOpeningOf({ isBlurred, attachmentCount: frozen.media ? 1 : 0 });
+      if (opening === 'fullscreen') {
         return (
           <>
             <ViewOnceChip state="viewing" />
@@ -345,7 +377,24 @@ export function ProtectedContent({
       }
       return (
         <ViewOnceTextWindow fogging={phase.phase === 'fogging'} onClose={() => closeOpened(false)}>
-          {frozen.children}
+          {opening === 'veiled-text' ? (
+            <RevealPhaseChannel publish={publishOpenedVeil}>
+              <ProtectedContent
+                messageId={messageId}
+                kind="veiled"
+                isViewOnce={false}
+                contentLength={contentLength}
+                attachments={undefined}
+                surface={surface}
+                isMine={isMine}
+                now={now}
+              >
+                {frozen.children}
+              </ProtectedContent>
+            </RevealPhaseChannel>
+          ) : (
+            frozen.children
+          )}
           <ProtectedRest>
             <ViewOnceChip state="opened" />
           </ProtectedRest>
@@ -353,6 +402,7 @@ export function ProtectedContent({
       );
     }
     if (kind === 'opened' || !showsAffordance(kind, phase)) return <ViewOnceChip state="opened" />;
+    if (shieldUnavailable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
     const chipLanguage = currentInterfaceLanguage();
     return (
       <>

@@ -104,11 +104,12 @@ type Recorded = {
   readonly joins: Array<readonly [string, string | null]>;
   readonly guestJoins: Array<readonly [string, GuestJoinBody]>;
   readonly adopted: Array<readonly [string, GuestIdentity]>;
+  readonly interfaceLanguages: string[];
   readonly order: string[];
 };
 
 function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJoinDeps; readonly recorded: Recorded } {
-  const recorded: Recorded = { copies: [], shares: [], loads: [], joins: [], guestJoins: [], adopted: [], order: [] };
+  const recorded: Recorded = { copies: [], shares: [], loads: [], joins: [], guestJoins: [], adopted: [], interfaceLanguages: [], order: [] };
   const deps: ChatJoinDeps = {
     load: async (link) => {
       recorded.loads.push(link);
@@ -125,6 +126,10 @@ function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJ
     adoptGuest: (sessionToken, guest) => {
       recorded.adopted.push([sessionToken, guest]);
       recorded.order.push('adopt');
+    },
+    adoptInterfaceLanguage: (language) => {
+      recorded.interfaceLanguages.push(language);
+      recorded.order.push(`interface ${language}`);
     },
     go: (url, replace) => {
       recorded.order.push(`go ${url} ${replace ? 'replace' : 'push'}`);
@@ -156,13 +161,13 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(deps: ChatJoinDeps, link = LINK): Promise<HTMLDivElement> {
+async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
   await act(async () => {
-    root.render(<ChatJoin link={link} deps={deps} />);
+    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} />);
   });
   await settle();
   return container;
@@ -550,12 +555,30 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(recorded.adopted).toEqual([
       [
         'anon_du_temoin',
-        { participantId: 'p-invitee', nickname: 'Awa', conversationId: 'c-deploiement', link: LINK, mayWrite: true },
+        { participantId: 'p-invitee', nickname: 'Awa', conversationId: 'c-deploiement', link: LINK, mayWrite: true, language: 'fr' },
       ],
     ]);
     /* L'ADOPTION PRÉCÈDE LA NAVIGATION : le fil doit trouver la créance déjà
        posée quand il monte, sinon sa première requête part nue. */
-    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+    expect(recorded.order).toEqual(['adopt', 'interface fr', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  /**
+   * #9710 — recette du 2026-10-08 : l'invitée choisit « English », rejoint, et
+   * le fil s'ouvre sous une pastille « FR » et des libellés français. La
+   * langue choisie EST sa langue : elle voyage avec son identité (rang 1 de
+   * son Prisme, donc langue de composition) ET devient la langue d'interface.
+   */
+  test('la langue CHOISIE devient celle de l’invité : son identité la porte, l’interface la prend', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    typeInto(languageField(el), 'en');
+    await settle();
+    await fillAndSubmit(el, 'Emma');
+
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'en', nickname: 'Emma' }]]);
+    expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
+    expect(recorded.interfaceLanguages).toEqual(['en']);
   });
 
   test('aucune jonction de MEMBRE ne part sur ce chemin', async () => {
@@ -677,7 +700,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     const join: HTMLElement = el;
     expect(join?.querySelector('[data-guest-form]')).toBeNull();
     expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
-    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-white');
+    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-ios-on-brand');
   });
 });
 
@@ -772,5 +795,70 @@ describe('hors ligne', () => {
     expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
     expect(joinButton(el)?.disabled).toBe(true);
     expect(text(el)).toContain('Hors ligne');
+  });
+});
+
+/* ========================================================================= *
+ *  UN COMPTE CONNECTÉ REJOINT EN ANONYME (#8816, jumelle de #8726)
+ * ========================================================================= */
+
+const modeOf = (anchor: HTMLAnchorElement | null) => new URL(anchor?.getAttribute('href') ?? '', 'http://localhost').searchParams.get('mode');
+
+describe('un compte CONNECTÉ peut rejoindre en « Anonyme » sans perdre sa session', () => {
+  test('son compte reste l’action primaire, et « Continuer en anonyme » est offert à côté', async () => {
+    signIn();
+    const el = await mount(depsWith().deps);
+    expect(joinButton(el)).not.toBeNull();
+    expect(guestForm(el)).toBeNull();
+    const anonymous = el.querySelector<HTMLAnchorElement>('[data-invite-anonymous-offer]');
+    expect(text(anonymous)).toBe('Continuer en anonyme');
+    expect(new URL(anonymous?.getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/chat/mshy_equipe_7f3a');
+    expect(modeOf(anonymous)).toBe('anonymous');
+  });
+
+  test('un lien réservé aux comptes n’offre rien d’anonyme, même demandé', async () => {
+    signIn();
+    const el = await mount(depsWith(withTerms({ allowed: false })).deps, LINK, true);
+    expect(el.querySelector('[data-invite-anonymous-offer]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+    expect(joinButton(el)).not.toBeNull();
+  });
+
+  test('« Anonyme » choisi : le formulaire d’invité, VIDE de tout ce que le compte porte', async () => {
+    signIn();
+    const el = await mount(depsWith().deps, LINK, true);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('');
+    expect(joinButton(el)).toBeNull();
+    const back = el.querySelector<HTMLAnchorElement>('[data-invite-account-offer]');
+    expect(text(back)).toBe('Rejoindre avec mon compte');
+    expect(modeOf(back)).toBeNull();
+  });
+
+  test('la jonction anonyme ouvre l’identité à côté du compte, puis le fil — le compte reste connecté', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true);
+    await fillAndSubmit(el, 'Masque');
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Masque' }]]);
+    expect(recorded.joins).toEqual([]);
+    expect(recorded.adopted.map(([token, guest]) => [token, guest.conversationId, guest.nickname])).toEqual([
+      ['anon_du_temoin', 'c-deploiement', 'Masque'],
+    ]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+    expect(sessionStore.getState().session.status).toBe('authenticated');
+  });
+
+  /** #9710 — l'identité anonyme porte sa langue, mais l'INTERFACE reste celle
+   * du compte : le compte n'est ni remplacé ni fermé (#8816). */
+  test('la jonction anonyme d’un compte ne touche pas à sa langue d’interface', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true);
+    typeInto(languageField(el), 'en');
+    await settle();
+    await fillAndSubmit(el, 'Masque');
+    expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
+    expect(recorded.interfaceLanguages).toEqual([]);
   });
 });

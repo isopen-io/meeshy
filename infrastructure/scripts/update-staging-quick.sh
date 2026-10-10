@@ -65,10 +65,9 @@ else
   echo "❌ FAIL"
 fi
 
-echo -n "   ML Service: "
-if curl -sf https://ml.staging.meeshy.me:8443/health >/dev/null 2>&1; then
+echo -n "   ML Service (interne, aucun routage public — #9662): "
+if ssh $REMOTE_HOST "docker exec meeshy-translator-staging python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\"" >/dev/null 2>&1; then
   echo "✅ OK"
-  curl -s https://ml.staging.meeshy.me:8443/health | grep -o '"version":"[^"]*"' || echo ""
 else
   echo "❌ FAIL"
 fi
@@ -86,4 +85,4 @@ echo ""
 echo "URLs staging:"
 echo "  - Frontend: https://staging.meeshy.me:8443"
 echo "  - Gateway: https://gate.staging.meeshy.me:8443"
-echo "  - ML Service: https://ml.staging.meeshy.me:8443"
+echo "  - ML Service: interne seulement (translator-staging:8000)"

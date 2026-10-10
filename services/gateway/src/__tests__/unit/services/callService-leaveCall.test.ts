@@ -609,3 +609,67 @@ describe('CallService.leaveCall() — endReasonHint (disconnect-grace vs explici
     expect(getData().endReason).toBe(CallEndReason.connectionLost);
   });
 });
+
+describe('CallService.leaveCall() — un groupe réduit à un seul se termine après la grâce de reprise (#9109)', () => {
+  const callId = 'call-group-lone';
+  const leaver = { id: 'cp-b', callSessionId: callId, participantId: 'part-b', leftAt: null, participant: { userId: 'user-b' } };
+  const survivor = { id: 'cp-a', callSessionId: callId, participantId: 'part-a', leftAt: null, participant: { userId: 'user-a' } };
+  const callRow = {
+    id: callId,
+    conversationId: 'conv-group',
+    status: CallStatus.active,
+    startedAt: new Date(Date.now() - 120_000),
+    answeredAt: new Date(Date.now() - 60_000),
+    participants: [survivor, leaver],
+    metadata: null,
+  };
+  const aloneState = {
+    ...callRow,
+    conversation: { type: 'group' },
+    participants: [survivor, { ...leaver, leftAt: new Date() }],
+  };
+
+  let prisma: ReturnType<typeof buildMockPrisma>;
+  let service: CallService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    prisma = buildMockPrisma();
+    service = new CallService(prisma as any);
+    prisma.callParticipant.findFirst.mockResolvedValue(leaver);
+    prisma.callSession.findUnique.mockResolvedValueOnce(callRow).mockResolvedValue(aloneState);
+    prisma.conversation.findUnique.mockResolvedValue({ type: 'group' });
+    setupTransactionPassthrough(prisma, 1);
+  });
+
+  afterEach(() => {
+    service.destroy();
+    jest.useRealTimers();
+  });
+
+  it('le dernier participant est sorti à l’échéance, et call:ended part au nom du dernier parti', async () => {
+    const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+    service.setCallEndedBroadcaster(broadcaster);
+    await service.leaveCall({ callId, userId: 'user-b', participantId: 'part-b' });
+
+    const ended = { ...aloneState, status: CallStatus.ended, endedAt: new Date(), endReason: CallEndReason.completed, duration: 60 };
+    const leaveSpy = jest.spyOn(service, 'leaveCall').mockResolvedValue(ended as any);
+
+    await jest.advanceTimersByTimeAsync(59_000);
+    expect(leaveSpy).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(1_500);
+    expect(leaveSpy).toHaveBeenCalledWith(expect.objectContaining({ callId, userId: 'user-a', participantId: 'part-a', endReasonHint: CallEndReason.completed }));
+    expect(broadcaster).toHaveBeenCalledWith(callId, 'conv-group', expect.objectContaining({ endedBy: 'user-b', reason: CallEndReason.completed }));
+  });
+
+  it('un retour pendant la grâce garde l’appel', async () => {
+    await service.leaveCall({ callId, userId: 'user-b', participantId: 'part-b' });
+    prisma.callSession.findUnique.mockResolvedValue({ ...aloneState, participants: [...aloneState.participants, { ...leaver, id: 'cp-b2' }] });
+    const leaveSpy = jest.spyOn(service, 'leaveCall');
+
+    await jest.advanceTimersByTimeAsync(61_000);
+    expect(leaveSpy).not.toHaveBeenCalled();
+  });
+});

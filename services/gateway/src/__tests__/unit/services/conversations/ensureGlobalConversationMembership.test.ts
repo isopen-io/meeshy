@@ -15,6 +15,11 @@ import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from '../../../../services/conversations/ensureGlobalConversationMembership';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
+import {
+  subscribeConversationLanguageChanges,
+  type ConversationLanguageChange,
+} from '../../../../services/message-translation/conversationLanguageChanges';
 
 const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
 const USER_ID = 'user-new';
@@ -30,7 +35,13 @@ type Harness = {
       count: jest.Mock;
     };
     message: { create: jest.Mock; findMany: jest.Mock; update: jest.Mock };
+    user: { findUnique: jest.Mock };
   };
+};
+
+/** Le compte rend ce que le `select` DEMANDE (#9711) — rang 2 de son prisme. */
+const COMPTE: Record<string, unknown> = {
+  id: USER_ID, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null,
 };
 
 function harness(overrides: { globalConv?: any; existingMember?: any; memberCount?: number } = {}): Harness {
@@ -49,6 +60,13 @@ function harness(overrides: { globalConv?: any; existingMember?: any; memberCoun
         create: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
         findMany: jest.fn<any>().mockResolvedValue([]),
         update: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }),
+      },
+      user: {
+        findUnique: jest.fn<any>(async (args: any) =>
+          args?.select
+            ? Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, COMPTE[k]]))
+            : COMPTE
+        ),
       },
     },
   };
@@ -134,6 +152,7 @@ describe('ensureGlobalConversationMembership', () => {
         type: 'user',
         displayName: 'New User',
         role: 'member',
+        language: 'es',
         permissions: {
           canSendMessages: true,
           canSendFiles: true,
@@ -300,8 +319,33 @@ describe('ensureGlobalConversationMembership', () => {
     // plafond, tout lecteur non autorisé à l'effectif exact reçoit une charge
     // IDENTIQUE à celle de la room de conversation, donc sa room personnelle
     // n'apporte rien.
-    expect(Array.isArray(where.OR)).toBe(true);
-    expect(where.OR).toHaveLength(2);
+    const titles = where.AND?.find((clause: any) => clause.OR?.some((branch: any) => 'role' in branch));
+    expect(titles?.OR).toHaveLength(2);
+  });
+
+  // #9106 — un invité par lien n'a pas de clé `userId`, et sur MongoDB une
+  // négation écarte la clé ABSENTE : `NOT: { userId }` seul le retirait de
+  // l'audience. Le double évalue le `where` avec les sémantiques mesurées.
+  it('adresse l\'effectif aux invités par lien, nommés par leur Participant.id', async () => {
+    const { io, broadcast } = makeIo();
+    const rows: MongoDocument[] = [
+      { id: 'p-member', conversationId: GLOBAL_CONV.id, isActive: true, userId: 'user-member', role: 'member', user: null },
+      { id: 'p-guest', conversationId: GLOBAL_CONV.id, isActive: true, role: 'member', user: null },
+      { id: 'part-new', conversationId: GLOBAL_CONV.id, isActive: true, userId: USER_ID, role: 'member', user: null },
+    ];
+    h.prisma.participant.findMany.mockImplementation(async (args: any) =>
+      rows.filter((row) => matchesMongoWhere(row, args.where)).map((row) => ({ userId: null, ...row })),
+    );
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    const rooms = [...io.to.mock.calls, ...broadcast.to.mock.calls].map((call) => call[0]);
+    expect(rooms).toEqual(expect.arrayContaining(['user:user-member', 'user:p-guest']));
+    expect(rooms).not.toContain(`user:${USER_ID}`);
   });
 
   it('AVALE une panne de l\'effectif temps réel — accessoire, jamais une condition de l\'ajout', async () => {
@@ -376,5 +420,34 @@ describe('ensureGlobalConversationMembership — un départ est respecté (#4010
     const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
 
     expect(result).toEqual({ outcome: 'already-member', participantId: 'part-here' });
+  });
+});
+
+describe('#9711 — le participant du salon global porte la langue de son compte', () => {
+  it('descendue de son prisme (rang 2 ici), jamais le défaut `"en"` du schéma', async () => {
+    const h = harness();
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    const data = (h.prisma.participant.create.mock.calls[0] as any[])[0].data;
+    expect(data.language).toBe('es');
+  });
+});
+
+describe('#9708 — l’entrée au salon global est annoncée à la composition linguistique', () => {
+  it('avec la langue du compte, une seule fois, et rien pour un déjà-membre', async () => {
+    const annonces: ConversationLanguageChange[] = [];
+    const desabonner = subscribeConversationLanguageChanges((change) => { annonces.push(change); });
+    try {
+      await ensureGlobalConversationMembership({ prisma: harness().prisma as never }, baseInput);
+      await ensureGlobalConversationMembership(
+        { prisma: harness({ existingMember: { id: 'p', isActive: true } }).prisma as never },
+        baseInput,
+      );
+    } finally {
+      desabonner();
+    }
+
+    expect(annonces).toEqual([{ kind: 'arrival', conversationId: GLOBAL_CONV.id, language: 'es', readerUserId: USER_ID }]);
   });
 });

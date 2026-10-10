@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
@@ -8,6 +8,8 @@ import { appQueryClient } from '@/lib/api/query-client';
 import type { Viewer } from '@/lib/api/viewer';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { createActMounter } from '@/test-support/act-mount';
+import { adminIdentityFixture } from '@/test-support/admin-assertions';
+import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -114,6 +116,12 @@ afterAll(async () => {
 });
 
 const mounter = createActMounter();
+/* Le lecteur est un ADMIN : le motif écrit précède la lecture. Le rang souverain, qui lit
+   sans motif (spec 2026-10-04 § 4), a son propre témoin. Posée dans le cache, la matrice
+   ne part pas sur le réseau. */
+beforeEach(() => {
+  appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+});
 afterEach(() => {
   mounter.unmountAll();
   appQueryClient.clear();

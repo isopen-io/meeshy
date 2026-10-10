@@ -22,7 +22,12 @@ extension CallManager {
     }
 
     func publishQualitySample(stats: CallStats, packetLossPercent: Double) {
-        CallQualityStatsFeed.shared.record(CallQualitySample(stats: stats, packetLossPercent: packetLossPercent, at: Date()))
+        CallQualityStatsFeed.shared.record(CallQualitySample(
+            stats: stats,
+            packetLossPercent: packetLossPercent,
+            at: Date(),
+            profile: webRTCService.dataProfile
+        ))
     }
 
     func currentOutputKind() -> CallAudioPortKind? {

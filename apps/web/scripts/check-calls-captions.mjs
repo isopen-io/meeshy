@@ -145,14 +145,11 @@ const tapSize = async (locator) => {
 };
 
 /**
- * Les actions vivent derrière le (…) de la pilule (#8391), et en vidéo les
- * commandes s'effacent après 4 s sans geste — jamais les sous-titres : un
- * toucher sur la scène les rappelle, puis le (…) déplie les actions.
+ * Les actions vivent derrière le (…) de la pilule (#8391), qui les déplie.
+ * En vidéo, aucune attente n'efface les commandes (#8988) : seul un toucher
+ * sur la scène les range — jamais les sous-titres.
  */
 const openActions = async (page) => {
-  const { width, height } = page.viewportSize();
-  await page.mouse.move(width / 2, height / 3);
-  await page.mouse.move(width / 2 + 8, height / 3 + 8);
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();

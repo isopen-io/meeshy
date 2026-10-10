@@ -1,5 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
-import { loadListEphemeralExpiries } from '../list-ephemeral-expiry';
+import { loadListEphemeralExpiries, loadListInheritedExpiries } from '../list-ephemeral-expiry';
+import { resolvePreviewProtection } from '../last-message-nature';
 
 const INTERNAL_DESTRUCTION = new Date('2026-09-30T12:00:00Z');
 const BOB_DEADLINE = new Date('2026-09-23T12:04:00Z');
@@ -40,5 +41,43 @@ describe('loadListEphemeralExpiries (#7451 × #7545)', () => {
     const served = await loadListEphemeralExpiries(prisma as never, [rows[1]], () => 'p-bob');
     expect(prisma.messageStatusEntry.findMany).not.toHaveBeenCalled();
     expect(served.has('m-plain')).toBe(false);
+  });
+});
+
+/**
+ * #8630 — le dernier message d'une ligne est une RÉPONSE à une flamme-œil que
+ * ce lecteur a consommée : la réponse est morte pour lui, et l'aperçu le dit
+ * (« expiré ») au lieu de republier son texte.
+ */
+describe('loadListInheritedExpiries (#8630)', () => {
+  const CONSUMED = new Date('2026-09-29T10:00:00Z');
+  const prisma = () => ({
+    message: {
+      findMany: jest.fn(async ({ where }: any) =>
+        where?.id?.in?.includes('m-flamme')
+          ? [{ id: 'm-flamme', replyToId: null, senderId: 'p-alice', ephemeralDuration: null, effectFlags: 9, expiresAt: null }]
+          : [],
+      ),
+    },
+    messageStatusEntry: {
+      findMany: jest.fn(async () => [{ messageId: 'm-flamme', participantId: 'p-bob', ephemeralExpiresAt: CONSUMED }]),
+    },
+  });
+  const replyRows = [{ conversationId: 'c-1', message: { id: 'm-reply', replyToId: 'm-flamme', senderId: 'p-carol' } }];
+
+  it('sert au lecteur échu la mort de ce que le dernier message cite', async () => {
+    const inherited = await loadListInheritedExpiries(prisma() as never, replyRows, () => 'p-bob');
+    expect(inherited.get('m-reply')).toEqual(CONSUMED);
+  });
+
+  it("ne sert rien à qui n'a pas consommé la flamme-œil", async () => {
+    const inherited = await loadListInheritedExpiries(prisma() as never, replyRows, () => 'p-dave');
+    expect(inherited.has('m-reply')).toBe(false);
+  });
+
+  it("l'aperçu d'une réponse non éphémère passe à « expiré » quand ce qu'elle cite est mort", () => {
+    const after = new Date(CONSUMED.getTime() + 1000);
+    expect(resolvePreviewProtection({ quotedDeathAt: CONSUMED }, after)).toBe('expired');
+    expect(resolvePreviewProtection({ quotedDeathAt: null }, after)).toBeNull();
   });
 });

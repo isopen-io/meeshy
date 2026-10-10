@@ -1,0 +1,338 @@
+# =============================================================================
+# MEESHY — PROMOTION EN PRODUCTION (PROPOSITION : .github/workflows/promote-production.yml)
+# =============================================================================
+# Directive porteur 2026-10-04 (#9223) : Claude promeut lui-même le CODE en
+# production quand la CI est verte, la recette sur staging passée et le
+# retour arrière prêt, puis rend compte. Les migrations et purges de données
+# de production attendent le feu vert du porteur, et ne passent JAMAIS ici.
+#
+# Ce workflow :
+#   - ne part QUE sur `workflow_dispatch`, depuis `dev`, dans l'environnement
+#     GitHub protégé `production` (secrets d'environnement, branche `dev` seule) ;
+#   - promeut un DIGEST que le conteneur de staging exécute — jamais une
+#     reconstruction, jamais un tag ;
+#   - n'envoie à l'hôte que des NOMS et des DIGESTS : la clé est contrainte par
+#     `command="/usr/local/bin/meeshy-promote-production.sh",restrict` ;
+#   - refuse un diff qui touche au schéma, aux rattrapages ou aux index sans
+#     le feu vert écrit du porteur ;
+#   - teste la production après bascule et revient en arrière seul si le test
+#     échoue (l'hôte revient déjà seul si la santé Docker ne vient pas).
+#
+# La webapp n'est PAS promouvable : son image de staging porte
+# `VITE_API_BASE=https://gate.staging.meeshy.me`, figée au build (docker.yml).
+#
+# Retour arrière en une commande :
+#   gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback
+# =============================================================================
+
+name: Promote to production
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'status = lire ; promote = basculer ; rollback = revenir au digest noté avant la dernière bascule'
+        required: true
+        type: choice
+        default: status
+        options: [status, promote, rollback]
+      gateway:
+        description: 'promote : sha256:<digest validé sur staging> ; rollback : rollback ; vide = ne pas toucher'
+        required: false
+        type: string
+      translator:
+        description: 'promote : sha256:<digest validé sur staging> ; rollback : rollback ; vide = ne pas toucher'
+        required: false
+        type: string
+      agent:
+        description: 'promote : sha256:<digest validé sur staging> ; rollback : rollback ; vide = ne pas toucher'
+        required: false
+        type: string
+      recette:
+        description: 'promote : URL de la preuve de recette sur staging (commentaire d issue ou PR isopen-io/meeshy)'
+        required: false
+        type: string
+      feu_vert_porteur:
+        description: 'seulement si le diff touche schéma / rattrapage / index : URL du commentaire du porteur qui l autorise'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+jobs:
+  promote-production:
+    name: Production — ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    # Garde lue par `scripts/check-docker-prune-noninteractive.mjs` (règle C) :
+    # le job est épinglé à `dev` et ne part que sur un déclenchement manuel.
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'workflow_dispatch'
+    environment:
+      name: production
+      url: https://meeshy.me
+    timeout-minutes: 60
+    env:
+      ACTION: ${{ inputs.action }}
+      IN_GATEWAY: ${{ inputs.gateway }}
+      IN_TRANSLATOR: ${{ inputs.translator }}
+      IN_AGENT: ${{ inputs.agent }}
+      RECETTE: ${{ inputs.recette }}
+      FEU_VERT: ${{ inputs.feu_vert_porteur }}
+      PORTEUR: ${{ vars.PORTEUR_GITHUB_LOGIN }}
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      GATE_URL: https://gate.${{ vars.DOMAIN || 'meeshy.me' }}
+      WEB_URL: https://${{ vars.DOMAIN || 'meeshy.me' }}
+    steps:
+      - name: Checkout (historique complet, pour comparer les révisions)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node (sonde de routes)
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.19'
+
+      # Les entrées sont des DONNÉES : elles passent par `env`, jamais par
+      # `${{ }}` dans le script, et se valident ici avant tout contact avec l'hôte.
+      - name: Valider la demande
+        id: demande
+        run: |
+          set -euo pipefail
+          DIGEST_RE='^sha256:[0-9a-f]{64}$'
+          MOTS=""
+          SERVICES=""
+          for SVC in translator agent gateway; do
+            VAR="IN_${SVC^^}"
+            VAL="${!VAR:-}"
+            [ -z "$VAL" ] && continue
+            case "$ACTION" in
+              promote)
+                [[ "$VAL" =~ $DIGEST_RE ]] || { echo "::error::$SVC : « $VAL » n'est pas un digest sha256"; exit 1; }
+                MOTS="$MOTS $SVC=$VAL" ;;
+              rollback)
+                [ "$VAL" = "rollback" ] || { echo "::error::$SVC : écrire « rollback » pour revenir en arrière"; exit 1; }
+                MOTS="$MOTS $SVC" ;;
+              status)
+                echo "::error::status ne prend aucun service"; exit 1 ;;
+            esac
+            SERVICES="$SERVICES $SVC"
+          done
+          if [ "$ACTION" != "status" ] && [ -z "$SERVICES" ]; then
+            echo "::error::aucun service demandé"; exit 1
+          fi
+          if [ "$ACTION" = "promote" ]; then
+            [[ "${RECETTE:-}" =~ ^https://github\.com/${REPO}/(issues|pull)/[0-9]+ ]] \
+              || { echo "::error::promote exige l'URL de la preuve de recette sur staging (input recette)"; exit 1; }
+          fi
+          echo "mots=$(echo $MOTS | xargs)" >> "$GITHUB_OUTPUT"
+          echo "services=$(echo $SERVICES | xargs)" >> "$GITHUB_OUTPUT"
+
+      - name: Préparer la clé SSH (production)
+        env:
+          SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          # En production, PAS de repli `accept-new` : sans empreinte d'hôte
+          # vérifiée, on ne parle pas à la machine.
+          if [ -z "${SSH_KEY:-}" ] || [ -z "${SSH_HOST:-}" ] || [ -z "${KNOWN_HOSTS:-}" ]; then
+            echo "::error::canal non armé — secrets d'environnement PRODUCTION_SSH_KEY / _HOST / _KNOWN_HOSTS requis"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_prod && chmod 600 ~/.ssh/id_prod
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts && chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/hote-prod <<EOF
+          #!/bin/bash
+          exec ssh -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20 \
+            -o ServerAliveInterval=30 -i ~/.ssh/id_prod "${SSH_USER:-root}@${SSH_HOST}" "\$*"
+          EOF
+          chmod 700 ~/.ssh/hote-prod
+
+      - name: État (staging et production)
+        run: ~/.ssh/hote-prod status | tee etat.txt
+
+      # ----------------------------------------------------------------------
+      # PROMOTE — plan, portes, bascule, fumée, retour automatique
+      # ----------------------------------------------------------------------
+      - name: Plan (l'hôte vérifie que staging exécute ces digests)
+        id: plan
+        if: inputs.action == 'promote'
+        env:
+          MOTS: ${{ steps.demande.outputs.mots }}
+        run: |
+          set -euo pipefail
+          ~/.ssh/hote-prod plan $MOTS | tee plan.txt
+          grep -q '^PLAN ' plan.txt || { echo "::error::l'hôte n'a rendu aucun plan"; exit 1; }
+
+      - name: Portes — CI verte, code fusionné dans dev, aucun changement de données
+        if: inputs.action == 'promote'
+        run: |
+          set -euo pipefail
+          grep -q '^PLAN ' plan.txt || { echo "::error::plan absent"; exit 1; }
+          git fetch --quiet origin dev
+          BESOIN_FEU_VERT=""
+          while read -r LIGNE; do
+            SVC=$(sed -n 's/.* service=\([a-z]*\).*/\1/p' <<<"$LIGNE")
+            STATUT=$(sed -n 's/.* statut=\([a-z-]*\).*/\1/p' <<<"$LIGNE")
+            REV=$(sed -n 's/.* revision=\([0-9a-f]\{40\}\).*/\1/p' <<<"$LIGNE")
+            PROD_REV=$(sed -n 's/.* prod_revision=\([0-9a-f]\{40\}\|inconnue\).*/\1/p' <<<"$LIGNE")
+            [ "$STATUT" = "deja-en-production" ] && { echo "$SVC : déjà en production"; continue; }
+            [ -n "$REV" ] || { echo "::error::$SVC : révision cible illisible"; exit 1; }
+
+            git merge-base --is-ancestor "$REV" origin/dev \
+              || { echo "::error::$SVC : $REV n'est pas dans dev"; exit 1; }
+
+            CI_OK=$(gh run list --repo "$REPO" --workflow ci.yml --commit "$REV" --status success \
+              --limit 1 --json databaseId --jq 'length')
+            [ "$CI_OK" = "1" ] || { echo "::error::$SVC : aucun run CI vert sur $REV"; exit 1; }
+
+            # AUCUNE migration ni purge par ce chemin. Une image qui change le
+            # schéma, un rattrapage au démarrage, un job de purge ou un index
+            # EST un changement de données : il attend le feu vert du porteur.
+            # Heuristique (cliquet à resserrer, pas une preuve) ; une révision
+            # de production illisible compte comme un changement.
+            if [ "$PROD_REV" = "inconnue" ] || [ -z "$PROD_REV" ]; then
+              echo "::warning::$SVC : révision de production inconnue — diff de données impossible"
+              BESOIN_FEU_VERT="$BESOIN_FEU_VERT $SVC(révision-prod-inconnue)"
+              continue
+            fi
+            git cat-file -e "$PROD_REV^{commit}" 2>/dev/null \
+              || { BESOIN_FEU_VERT="$BESOIN_FEU_VERT $SVC(révision-prod-absente)"; continue; }
+            FICHIERS=$(git diff --name-only "$PROD_REV" "$REV" -- \
+              'packages/shared/prisma/**' \
+              'services/gateway/src/jobs/**' \
+              'services/translator/**/migrations/**' \
+              ':(glob)**/*migrat*' ':(glob)**/*backfill*' ':(glob)**/*ensure*Index*' \
+              ':(exclude)**/__tests__/**' ':(exclude)**/*.test.ts' ':(exclude)services/gateway/scripts/**' || true)
+            INDEX=$(git diff "$PROD_REV" "$REV" -- services packages/shared \
+              ':(exclude)**/__tests__/**' ':(exclude)**/*.test.ts' \
+              | grep -E '^\+[^+].*\b(createIndex(es)?|dropIndex(es)?|renameCollection|collMod)\b' | head -5 || true)
+            if [ -n "$FICHIERS$INDEX" ]; then
+              echo "::warning::$SVC : le diff $PROD_REV..$REV touche aux données"
+              printf '%s\n' "$FICHIERS" "$INDEX" | sed '/^$/d;s/^/  /'
+              BESOIN_FEU_VERT="$BESOIN_FEU_VERT $SVC"
+            fi
+          done < <(grep '^PLAN ' plan.txt)
+
+          if [ -n "$BESOIN_FEU_VERT" ]; then
+            [[ "${FEU_VERT:-}" =~ ^https://github\.com/${REPO}/(issues|pull)/[0-9]+#issuecomment-([0-9]+)$ ]] \
+              || { echo "::error::changement de données ($BESOIN_FEU_VERT) — feu vert du porteur requis (input feu_vert_porteur)"; exit 1; }
+            AUTEUR=$(gh api "repos/$REPO/issues/comments/${BASH_REMATCH[2]}" --jq .user.login)
+            [ -n "${PORTEUR:-}" ] && [ "$AUTEUR" = "$PORTEUR" ] \
+              || { echo "::error::le feu vert doit venir du porteur ($PORTEUR), pas de « $AUTEUR »"; exit 1; }
+            echo "::notice::feu vert du porteur : $FEU_VERT"
+          fi
+
+      - name: Bascule (l'hôte revient seul si la santé ne vient pas)
+        id: bascule
+        if: inputs.action == 'promote'
+        env:
+          MOTS: ${{ steps.demande.outputs.mots }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          # `+e` : le shell des étapes est `bash -eo pipefail` ; il faut lire le
+          # code de retour de l'hôte, pas mourir dessus.
+          set +e -u -o pipefail
+          ~/.ssh/hote-prod promote $MOTS run=$RUN_ID | tee bascule.txt
+          RC=${PIPESTATUS[0]}
+          grep -q '^PROMU ' bascule.txt && echo "basculee=true" >> "$GITHUB_OUTPUT"
+          if [ "$RC" -ne 0 ]; then
+            echo "::error::bascule refusée ou annulée par l'hôte (rc=$RC)"
+            grep -E '^RETOUR' bascule.txt || true
+            echo "retour_fait=true" >> "$GITHUB_OUTPUT"
+            exit "$RC"
+          fi
+          grep -o 'service=[a-z]*' <(grep '^PROMU ' bascule.txt) | cut -d= -f2 | xargs > promus.txt || true
+
+      - name: Test de fumée de la production
+        id: fumee
+        if: steps.bascule.outputs.basculee == 'true'
+        run: |
+          # `+e` : chaque contrôle note son échec ; le retour arrière doit
+          # toujours pouvoir s'exécuter en fin d'étape.
+          set +e -u -o pipefail
+          ECHEC=""
+          for i in $(seq 1 24); do
+            curl -fsS --max-time 5 "$GATE_URL/health" -o health.json 2>/dev/null && break
+            sleep 5
+          done
+          [ -s health.json ] || ECHEC="$ECHEC /health-injoignable"
+
+          if [ -z "$ECHEC" ]; then
+            jq -e '(.services.database.status // .data.services.database.status) == "up"' health.json >/dev/null \
+              || ECHEC="$ECHEC base-down"
+            if grep -q 'service=translator' bascule.txt; then
+              jq -e '(.services.translation.status // .data.services.translation.status) == "up"' health.json >/dev/null \
+                || ECHEC="$ECHEC traduction-down"
+            fi
+            # La passerelle SERVIE est-elle bien la révision promue ?
+            if grep -q '^PROMU service=gateway' bascule.txt; then
+              ATTENDU=$(sed -n 's/^PLAN service=gateway .* revision=\([0-9a-f]\{40\}\).*/\1/p' plan.txt)
+              SERVI=$(jq -r '.build.commit // .data.build.commit // empty' health.json)
+              [ "$SERVI" = "$ATTENDU" ] || ECHEC="$ECHEC commit-servi=$SERVI≠$ATTENDU"
+              # Routes : GET seulement — en production, aucune sonde n'émet
+              # d'écriture, même anonyme. Manifeste de la révision PROMUE.
+              git show "$ATTENDU:services/gateway/route-manifest.json" \
+                | jq '.routes |= map(select(.method == "GET"))' > manifest-get.json
+              npx --yes tsx@4 services/gateway/scripts/route-smoke-test.ts \
+                --base-url "$GATE_URL" --manifest manifest-get.json --concurrency 4 \
+                || ECHEC="$ECHEC routes"
+            fi
+          fi
+          curl -fsS --max-time 10 -o /dev/null "$WEB_URL/" || ECHEC="$ECHEC frontend"
+
+          if [ -n "$ECHEC" ]; then
+            echo "::error::test de fumée en échec :$ECHEC — retour arrière"
+            ~/.ssh/hote-prod rollback $(cat promus.txt) | tee retour.txt
+            echo "retour_fait=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      # Filet : un échec APRÈS la bascule que la fumée n'a pas traité
+      # (étape annulée, timeout) revient quand même en arrière.
+      - name: Retour arrière de secours
+        if: failure() && steps.bascule.outputs.basculee == 'true' && steps.bascule.outputs.retour_fait != 'true' && steps.fumee.outputs.retour_fait != 'true'
+        run: ~/.ssh/hote-prod rollback $(cat promus.txt)
+
+      # ----------------------------------------------------------------------
+      # ROLLBACK manuel
+      # ----------------------------------------------------------------------
+      - name: Retour arrière demandé
+        if: inputs.action == 'rollback'
+        env:
+          MOTS: ${{ steps.demande.outputs.mots }}
+        run: |
+          set -euo pipefail
+          ~/.ssh/hote-prod rollback $MOTS | tee retour.txt
+          for i in $(seq 1 24); do
+            curl -fsS --max-time 5 "$GATE_URL/health" > /dev/null 2>&1 && exit 0
+            sleep 5
+          done
+          echo "::error::retour effectué mais $GATE_URL/health ne répond pas"; exit 1
+
+      - name: Compte rendu
+        if: always()
+        run: |
+          {
+            echo "## Production — ${ACTION}"
+            echo ""
+            [ -n "${RECETTE:-}" ] && echo "Recette staging : $RECETTE"
+            for F in plan.txt bascule.txt retour.txt etat.txt; do
+              [ -s "$F" ] || continue
+              echo ""; echo "### ${F%.txt}"; echo '```'; cat "$F"; echo '```'
+            done
+            echo ""
+            echo "Retour arrière : \`gh workflow run promote-production.yml --ref dev -f action=rollback -f <service>=rollback\`"
+          } >> "$GITHUB_STEP_SUMMARY"

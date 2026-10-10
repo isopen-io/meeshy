@@ -712,7 +712,11 @@ export interface CallQualityAlertEvent {
 export interface CallInitiateAck {
   readonly success: boolean;
   readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[]; ttl?: number };
-  readonly error?: { code: string; message: string };
+  /**
+   * `activeCallId` accompagne un refus `CALL_ALREADY_ACTIVE` (#9111) : l'appel
+   * en cours dans la conversation, que le client REJOINT au lieu d'échouer.
+   */
+  readonly error?: { code: string; message: string; activeCallId?: string };
 }
 
 /**

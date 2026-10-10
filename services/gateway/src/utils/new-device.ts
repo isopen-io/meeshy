@@ -124,3 +124,67 @@ export function isLoginFromNewDevice(
   if (brut === '') return true;
   return !previous.some((p) => normalise(p.userAgent) === brut);
 }
+
+/**
+ * **Ce que les en-têtes du client ne peuvent PAS taire** (#9608).
+ *
+ * L'empreinte ci-dessus se calculait sur l'appareil ENRICHI par
+ * `X-Meeshy-Device` / `X-Meeshy-Platform` : un voleur de mot de passe qui
+ * recopiait deux en-têtes de sa victime se faisait reconnaître comme « le même
+ * appareil », et l'alerte se taisait. Une connexion n'est désormais reconnue
+ * que si une session ANTÉRIEURE concorde sur les trois points suivants :
+ *
+ * 1. **L'appareil que le serveur LIT dans l'agent utilisateur** — ré-analysé
+ *    des DEUX côtés par `parseAgent`, jamais lu dans les colonnes enrichies :
+ *    l'ancienne session est relue depuis son agent brut stocké, la nouvelle
+ *    depuis le sien. L'agent n'est pas une preuve (le client l'écrit aussi),
+ *    mais c'est le seul descripteur d'appareil que le serveur analyse lui-même.
+ * 2. **Le pays que le serveur déduit de l'adresse attestée par le proxy** —
+ *    le seul attribut que l'appelant ne choisit pas. Une session antérieure
+ *    sans pays n'atteste aucun lieu ; une connexion dont le pays est INCONNU
+ *    (géolocalisation en échec, adresse privée) ne compare pas ce point —
+ *    sinon chaque panne du tiers de géolocalisation ferait crier toutes les
+ *    connexions, le défaut #7035 rejoué.
+ * 3. **Le modèle** — quand la session antérieure en porte un, la connexion doit
+ *    déclarer LE MÊME. Ne rien déclarer ne vaut pas concordance : le SDK iOS
+ *    envoie l'agent par défaut de CFNetwork, que le serveur réduit à
+ *    `desktop|||ios|` pour TOUS les iPhone, si bien que le modèle est le seul
+ *    discriminant d'un appareil iOS — un voleur muni d'un agent CFNetwork
+ *    quelconque et d'aucun en-tête passait pour l'iPhone de sa victime (audit
+ *    du 2026-10-08, A1). Une session antérieure sans modèle (un navigateur)
+ *    n'en exige aucun.
+ *
+ * Le pays n'est pas l'adresse : passer du Wi-Fi à la 4G, changer de café ne
+ * le change pas (la raison pour laquelle l'IP n'entre pas dans l'empreinte
+ * tient toujours). Un voyage, oui — une alerte par pays, ce qui est le prix
+ * assumé de « se tromper en criant une fois de trop, jamais en se taisant ».
+ */
+export type SessionEvidence = DeviceIdentity & { readonly country?: string | null };
+
+export type LoginEvidence = {
+  readonly userAgent: string | null;
+  readonly declaredModel: string | null;
+  readonly attestedCountry: string | null;
+};
+
+export function isLoginFromUnrecognisedDevice(
+  previous: readonly SessionEvidence[],
+  current: LoginEvidence,
+  parseAgent: (userAgent: string | null) => RequestDeviceInfo | null
+): boolean {
+  const lu = (userAgent: string | null | undefined): DeviceIdentity =>
+    deviceIdentityFromInfo(parseAgent(userAgent ?? null), userAgent ?? null);
+
+  const appareilCourant = lu(current.userAgent);
+  const paysCourant = normalise(current.attestedCountry);
+  const modeleCourant = normalise(current.declaredModel);
+
+  const concorde = (session: SessionEvidence): boolean => {
+    if (isLoginFromNewDevice([lu(session.userAgent)], appareilCourant)) return false;
+    if (paysCourant !== '' && normalise(session.country) !== paysCourant) return false;
+    const modele = normalise(session.deviceModel);
+    return modele === '' || modele === modeleCourant;
+  };
+
+  return !previous.some(concorde);
+}

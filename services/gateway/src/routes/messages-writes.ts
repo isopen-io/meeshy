@@ -6,7 +6,7 @@
  */
 import { FastifyInstance } from 'fastify';
 import { UnifiedAuthRequest } from '../middleware/auth.js';
-import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentMediaSelect, MESSAGE_ATTACHMENT_ORDER } from '../services/attachments/attachmentIncludes';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
 import {
@@ -18,6 +18,7 @@ import {
   isEditRefused,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../services/messaging/messageEditAdmission';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
@@ -156,8 +157,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               sender: { select: { userId: true } },
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true } },
-              attachments: { select: attachmentMediaSelect }
+              conversation: { select: { isActive: true, closedAt: true, type: true } },
+              attachments: { select: attachmentMediaSelect, orderBy: MESSAGE_ATTACHMENT_ORDER }
             }
           })
       );
@@ -184,6 +185,8 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
           conversationId: message.conversationId,
           conversation: message.conversation,
           createdAt: message.createdAt,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
@@ -196,6 +199,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'minor-global') {
+          return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
@@ -494,12 +500,14 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //     donnait à lire une permission inexistante.
       // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
       // révoqué depuis l'émission du jeton ne supprime plus.
-      const { admitted: canDelete } = await admitMessageDelete({
+      const { admitted: canDelete, actorParticipantId } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          messageType: message.messageType,
+          metadata: message.metadata,
         },
         onError: (err) => logger.error('delete admission read failed', err as Error),
       });
@@ -559,6 +567,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         attachmentMimeTypes: (message.attachments ?? []).map((att) => att.mimeType ?? ''),
         content: message.content,
         metadata: message.metadata,
+        removedByParticipantId: actorParticipantId ?? null,
       });
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file

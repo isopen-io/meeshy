@@ -51,6 +51,11 @@ public enum StoryStaticSnapshot {
             paintBackground(slide: slide, loadedImages: loadedImages, bgImage: bgImage,
                             in: rect, ctx: cg)
             layer.render(in: cg)
+            // Les puces des sons de premier plan (#8610) : une surcouche
+            // SwiftUI à l'écran, que `render(in:)` ne voit pas. Toutes, comme
+            // le composer les montre — la couverture n'a pas d'horloge.
+            StoryAudioChipPainter().paint(slide: slide, into: geometry, at: .zero,
+                                          in: cg, respectingWindow: false)
         }
     }
 

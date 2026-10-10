@@ -1,5 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { guardedInterval } from '../utils/guarded-timer';
+import { enhancedLogger } from '../utils/logger-enhanced';
 
 /**
  * Canonicalise un code de langue avant qu'il ne serve de CLÉ à un compteur.
@@ -57,12 +59,12 @@ export class ConversationStatsService {
   }
 
   private startPeriodicCleanup(): void {
-    this.cleanupInterval = setInterval(() => {
+    this.cleanupInterval = guardedInterval({ name: 'conversation-stats-cache-purge', everyMs: 15 * 60 * 1000, logger: enhancedLogger, run: () => {
       const now = Date.now();
       for (const [key, entry] of this.cache) {
         if (now >= entry.expiresAt) this.cache.delete(key);
       }
-    }, 15 * 60 * 1000);
+    } });
     this.cleanupInterval.unref?.();
   }
 

@@ -131,6 +131,8 @@ function makeAuthService(overrides: Record<string, any> = {}) {
     }),
     updateOnlineStatus: jest.fn<any>().mockResolvedValue(undefined),
     logout: jest.fn<any>().mockResolvedValue(true),
+    logoutCurrent: jest.fn<any>().mockResolvedValue(1),
+    getUserActiveSessions: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;
 }
@@ -435,7 +437,8 @@ describe('POST /logout — success', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
     expect(authService.updateOnlineStatus).toHaveBeenCalledWith(USER_ID, false);
-    expect(authService.logout).toHaveBeenCalledWith('session-token-123');
+    expect(authService.logoutCurrent).toHaveBeenCalledWith(USER_ID, { sessionId: null, sessionToken: 'session-token-123' });
+    expect(authService.logout).not.toHaveBeenCalled();
     await app.close();
   });
 });

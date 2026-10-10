@@ -2,6 +2,7 @@ import type { PrismaClient, PostType } from '@meeshy/shared/prisma/client';
 import { NOT_DELETED } from './softDelete';
 import { isEphemeralPostType } from './postVisibility';
 import { withAudienceListFor, type ServedAudienceList } from './audienceList';
+import { loadViewerPostPointsOrNone, servedViewerPoints, type ViewerPointsReader } from '../engagement/viewerPostPoints';
 
 /**
  * L'ÉTAT DU LECTEUR sur une page de publications — la SEULE fonction qui le
@@ -21,11 +22,18 @@ import { withAudienceListFor, type ServedAudienceList } from './audienceList';
  * `isLikedByMe`. Toute lecture qui sert une liste de publications passe par
  * ici ; aucune ne réécrit les requêtes.
  *
- * ## Coût : TROIS requêtes GROUPÉES par page, jamais une par publication
+ * ## Coût : des requêtes GROUPÉES par page, jamais une par publication
  *
  * Réactions, favoris et republications du lecteur sont lus chacun par UN
  * `findMany … { in: ids }` sur la page entière, en parallèle. Sans lecteur (ou
  * page vide), AUCUNE requête : les quatre clés partent à faux.
+ *
+ * `viewerPoints` (#9569) — ce que chaque publication a rapporté au lecteur —
+ * se lit dans le même mouvement, par la loi unique `loadViewerPostPoints` : une
+ * lecture du cumul pour la page, plus celle de la mémoire de publication quand
+ * la page porte des publications du lecteur. Sans lecteur, la clé est ABSENTE,
+ * jamais à zéro ; elle l'est aussi quand le cumul ne se lit pas, sans faire
+ * tomber la page.
  *
  * ## Ce qui part À CÔTÉ
  *
@@ -64,6 +72,8 @@ export type ViewerPostState = {
   readonly currentUserReactions: string[];
   readonly isBookmarkedByMe: boolean;
   readonly isRepostedByMe: boolean;
+  /** Ce que la publication a rapporté au lecteur (#9569) — absent sans lecteur. */
+  readonly viewerPoints?: number;
 };
 
 export type ViewerStateSubject = {
@@ -75,7 +85,7 @@ export type ViewerStateSubject = {
   readonly repostOf?: { readonly type?: string | null } | null;
 };
 
-type ViewerStatePrisma = Pick<PrismaClient, 'postReaction' | 'postBookmark' | 'post'>;
+type ViewerStatePrisma = Pick<PrismaClient, 'postReaction' | 'postBookmark' | 'post'> & ViewerPointsReader;
 
 /** `isLikedByMe` se lit sur les réactions du lecteur — la même règle pour toute publication servie. */
 export const likedFromReactions = (reactions: readonly string[]): boolean => reactions.length > 0;
@@ -106,7 +116,7 @@ export async function withViewerPostState<T extends ViewerStateSubject>(
   const postIds = posts.map((post) => post.id);
   const targetIds = [...new Set(posts.map(reactionTargetId))];
 
-  const [reactions, bookmarks, reposts] = await Promise.all([
+  const [reactions, bookmarks, reposts, points] = await Promise.all([
     prisma.postReaction.findMany({
       where: { userId: viewerUserId, postId: { in: targetIds } },
       select: { postId: true, emoji: true },
@@ -119,6 +129,7 @@ export async function withViewerPostState<T extends ViewerStateSubject>(
       where: { authorId: viewerUserId, repostOfId: { in: postIds }, deletedAt: NOT_DELETED },
       select: { repostOfId: true },
     }),
+    loadViewerPostPointsOrNone(prisma, viewerUserId, posts),
   ]);
 
   const emojisByTarget = reactions.reduce((byTarget, reaction) => {
@@ -136,6 +147,7 @@ export async function withViewerPostState<T extends ViewerStateSubject>(
       currentUserReactions,
       isBookmarkedByMe: bookmarkedIds.has(post.id),
       isRepostedByMe: repostedIds.has(post.id),
+      ...servedViewerPoints(points, post.id),
     };
   });
 }

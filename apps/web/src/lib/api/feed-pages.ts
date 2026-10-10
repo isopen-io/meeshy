@@ -1,4 +1,5 @@
 import type { InfiniteData } from '@tanstack/react-query';
+import type { Attachment } from '@meeshy/shared/types/attachment';
 import type { PostVisibility } from '@meeshy/shared/types/post';
 
 /**
@@ -76,6 +77,10 @@ export type FeedMedia = {
   readonly captionTranslations?: unknown;
   readonly alt?: string | null;
   readonly order?: number | null;
+  /** La transcription d'un vocal (`PostMedia.transcription`, forme de `Attachment.transcription`). */
+  readonly transcription?: Attachment['transcription'] | null;
+  /** Les pistes audio traduites et leurs transcriptions (`PostMedia.translations`) — dépouillées par `transcriptTranslationTracks`. */
+  readonly translations?: Attachment['translations'] | null;
 };
 
 /**
@@ -178,6 +183,20 @@ export type FeedPost = {
   readonly isLikedByMe?: boolean | null;
   readonly isBookmarkedByMe?: boolean | null;
   readonly isRepostedByMe?: boolean | null;
+  /**
+   * CE QUE CE POST A RAPPORTÉ AU LECTEUR (#9570, contrat #9569) — entier ≥ 0,
+   * servi sur les LECTURES à un lecteur connecté, jamais sur `repostOf` ni sur
+   * une réponse d'écriture. Absent ⇒ « garde ce que tu sais », jamais zéro.
+   * Il peut BAISSER (une reprise, #9584) : la loi est `lib/feed/viewer-points.ts`.
+   */
+  readonly viewerPoints?: number | null;
+  /**
+   * L'INSTANT SERVEUR DE LA DERNIÈRE ANNONCE appliquée à `viewerPoints`
+   * (`engagement:post-updated`, ms) — JAMAIS servi : le client le pose dans
+   * son cache pour qu'une annonce plus ancienne arrivée en retard ne défasse
+   * pas une plus récente. `null`/absent ⇒ aucune annonce appliquée.
+   */
+  readonly viewerPointsAt?: number | null;
   /**
    * L'AUDIENCE DE LA CARTE (#6484) — `postScalarSelect` la sert TOUJOURS
    * (`postIncludes.ts:341`) ; absente seulement quand un `select` plus

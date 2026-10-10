@@ -94,3 +94,50 @@ nonisolated enum AudioTrackLanguageResolver {
         }?.url ?? originalUrl
     }
 }
+
+/// **La piste SERVIE d'un vocal** — ce que la bulle joue, avec ce qui voyage
+/// avec elle : son URL, sa durée, son texte (#9010). `language == nil` ⇒
+/// l'original. Une surface qui montre un vocal reçoit CETTE valeur, jamais
+/// `attachment.fileUrl` : l'aperçu d'appui long jouait l'original coréen
+/// pendant que la bulle servait la piste française.
+nonisolated struct ServedAudioTrack: Equatable, Sendable {
+    let language: String?
+    let url: String
+    let durationMs: Int?
+    let transcript: String?
+
+    static func original(of attachment: MessageAttachment, transcript: String? = nil) -> ServedAudioTrack {
+        ServedAudioTrack(language: nil, url: attachment.fileUrl, durationMs: attachment.duration, transcript: transcript)
+    }
+}
+
+nonisolated extension AudioTrackLanguageResolver {
+
+    /// La piste servie, par la MÊME descente que `resolve` — la langue élue
+    /// désigne une piste traduite, dont l'URL, la durée et le texte partent
+    /// ENSEMBLE. Aucune seconde descente : la piste suit la langue servie.
+    static func servedTrack(
+        of attachment: MessageAttachment,
+        manualOverride: String?,
+        originalLanguage: String,
+        preferredLanguages: [String],
+        translatedAudios: [MessageTranslatedAudio],
+        originalTranscript: String?
+    ) -> ServedAudioTrack {
+        let language = resolve(
+            manualOverride: manualOverride,
+            originalLanguage: originalLanguage,
+            preferredLanguages: preferredLanguages,
+            translatedAudios: translatedAudios
+        )
+        guard let language,
+              let track = translatedAudios.first(where: { $0.targetLanguage.lowercased() == language })
+        else { return .original(of: attachment, transcript: originalTranscript) }
+        return ServedAudioTrack(
+            language: language,
+            url: track.url,
+            durationMs: track.durationMs > 0 ? track.durationMs : attachment.duration,
+            transcript: track.transcription.isEmpty ? nil : track.transcription
+        )
+    }
+}

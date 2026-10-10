@@ -51,20 +51,21 @@ extension UniversalComposerBar {
                 permanentEffectsToggleButton
             }
 
-            // Sentiment indicator — LECTURE SEULE.
-            // C'était un `Button` dont l'action se limitait à un retour
-            // haptique : il se présentait comme actionnable (et comme tel à
-            // VoiceOver) sans mener nulle part. Rendu passif, il reste lisible
-            // par les technologies d'assistance via label + valeur.
-            Text(textAnalyzer.sentiment.emoji)
-                .font(.callout)
-                .frame(width: 30, height: 30)
-                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
-                .accessibilityElement()
-                .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
-                .accessibilityValue(textAnalyzer.sentiment.emoji)
+            // **Le sticker à la place de l'humeur** (#9082, directive porteur
+            // 2026-10-02) : l'indicateur passif de tonalité laisse sa place à
+            // la porte du sélecteur de stickers — rendue seulement si l'hôte
+            // sait l'ouvrir (loi 4).
+            if let openStickers = onRequestStickerPicker {
+                glassDoorButton(
+                    symbol: "rectangle.portrait.on.rectangle.portrait.angled",
+                    label: String(localized: "composer.attach.sticker", defaultValue: "Sticker", bundle: .main),
+                    action: openStickers)
+            }
 
-            // Language selector
+        } pinned: {
+            // **La langue d'écriture ferme la bande sans y défiler** (#9254,
+            // jumelle web D-164) : dernière de la bande défilante, elle passait
+            // sous les portes de droite dès que la rangée débordait.
             languageSelectorPill
         } trailing: {
             // Character counter
@@ -77,49 +78,121 @@ extension UniversalComposerBar {
                         .transition(.opacity)
                 }
             }
+
+            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄ ;
+            // la photothèque (images ET vidéos) à côté d'elle (#9120).
+            // Construites ICI, sur le fil principal : le `ForEach` ne fait que
+            // les relire (#9456, `AsyncRenderRow`).
+            ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
+                                                offersCamera: resolvedOnCamera != nil,
+                                                offersFold: resolvedFoldControl != nil)
+                        .map { AsyncRenderRow(id: $0, content: trailingGlassDoor($0)) },
+                    content: asyncRenderRowContent)
         }
+    }
+
+    @ViewBuilder
+    private func trailingGlassDoor(_ door: ComposerGlassDoors.TrailingDoor) -> some View {
+        switch door {
+        case .library:
+            if let openLibrary = onPhotoLibrary {
+                glassDoorButton(
+                    symbol: "photo.on.rectangle.angled",
+                    label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
+                    action: openLibrary)
+            }
+        case .camera:
+            if let openCamera = resolvedOnCamera {
+                glassDoorButton(
+                    symbol: "camera.fill",
+                    label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main),
+                    action: openCamera)
+            }
+        case .fold:
+            if let fold = resolvedFoldControl {
+                foldButton(fold)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
+            }
+        }
+    }
+
+    // ========================================================================
+    // MARK: - Repli (#8642)
+    // ========================================================================
+
+    /// **Le ⌄ vit DANS le verre** (directive porteur 2026-09-29 : « doit être à
+    /// l'intérieur, angle à droite de la plaque de verre »). Il flottait au-dessus
+    /// de la plaque ; il ferme désormais la rangée d'outils, dont la bande
+    /// `trailing` ne défile jamais — Dynamic Type ne peut pas le pousser hors de
+    /// l'écran. Glyphe au format des outils (30 pt), cible de 44 pt.
+    func foldButton(_ fold: ComposerFoldControl) -> some View {
+        Button(action: fold.action) {
+            Image(systemName: fold.symbol)
+                .font(.footnote.weight(.bold))
+                .foregroundColor(iconTint)
+                .frame(width: 30, height: 30)
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -7)
+        .accessibilityLabel(fold.label)
+        .accessibilityHint(fold.hint ?? "")
+    }
+
+    /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
+    /// cible de 44 pt, à la couleur servie.
+    private func glassDoorButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.callout.weight(ComposerGlassDoors.glyphWeight))
+                .foregroundColor(iconTint)
+                .frame(width: 30, height: 30)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -7)
+        .accessibilityLabel(label)
     }
 
     // ========================================================================
     // MARK: - Language Selector Pill
     // ========================================================================
 
-    private var languageSelectorPill: some View {
-        Menu {
-            ForEach(availableLanguages) { lang in
-                Button {
-                    currentLanguage = lang.code
-                    onLanguageChange?(lang.code)
-                    if let detected = DetectedLanguage.find(code: lang.code) {
-                        textAnalyzer.lockToLanguage(detected)
-                    }
-                } label: {
-                    HStack {
-                        Text("\(lang.flag) \(lang.name)")
-                        if lang.code == currentLanguage {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
+    private func languageChoice(_ lang: LanguageOption) -> some View {
+        Button {
+            currentLanguage = lang.code
+            onLanguageChange?(lang.code)
+            if let detected = DetectedLanguage.find(code: lang.code) {
+                textAnalyzer.lockToLanguage(detected)
             }
         } label: {
-            HStack(spacing: 3) {
-                Text(currentLangOption.flag)
-                    .font(.caption)
-                Text(currentLangOption.code.uppercased())
-                    .font(.caption2).fontWeight(.semibold)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
+            HStack {
+                Text("\(lang.flag) \(lang.name)")
+                if lang.code == currentLanguage {
+                    Image(systemName: "checkmark")
+                }
             }
-            .fixedSize()
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))
-            .foregroundColor(
-                style == .dark
-                    ? .white.opacity(0.9)
-                    : servedAccent
-            )
+        }
+    }
+
+    /// La pastille ferme la bande d'outils, donc vit dans les candidats du
+    /// `ViewThatFits` de `ComposerToolbarStrip` : ses choix sont construits ici,
+    /// le `ForEach` ne fait que les relire (#9456, `AsyncRenderRow`).
+    private var languageSelectorPill: some View {
+        let choices = availableLanguages.map { AsyncRenderRow(id: $0.id, content: languageChoice($0)) }
+        return Menu {
+            ForEach(choices, content: asyncRenderRowContent)
+        } label: {
+            ComposerLanguagePillLabel(flag: currentLangOption.flag, code: currentLangOption.code)
+                .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+                .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)
@@ -142,8 +215,8 @@ extension UniversalComposerBar {
                 .frame(width: 36, height: 4)
             Spacer()
         }
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 }
 
@@ -159,22 +232,219 @@ extension UniversalComposerBar {
 // telle quelle quand elle tient, et la fait DÉFILER horizontalement sinon :
 // sa largeur ne dépasse jamais celle proposée.
 
-struct ComposerToolbarStrip<Leading: View, Trailing: View>: View {
+/// **L'angle droit du verre** (#9082) : la caméra se pose juste avant le ⌄,
+/// la photothèque à côté d'elle (#9120), et chaque porte n'existe que si
+/// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
+/// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
+/// épaisseur perçue (#9173).
+/// **Le ⌄ pendant une prise vocale** (#9893). La barre d'outils, qui le porte,
+/// s'efface pendant l'enregistrement. Un hôte qui le demande
+/// (`ComposerFoldControl.survivesRecording`) garde le ⌄ seul, tout à droite,
+/// sur une rangée à lui ; les autres (fils, posts) gardent la barre nue.
+nonisolated enum ComposerFoldPlacement {
+    static func rowDuringRecording(isRecording: Bool, survivesRecording: Bool) -> Bool {
+        isRecording && survivesRecording
+    }
+}
+
+nonisolated enum ComposerGlassDoors {
+    static let glyphWeight: Font.Weight = .regular
+
+    enum TrailingDoor: Hashable, Sendable {
+        case library
+        case camera
+        case fold
+    }
+
+    static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
+        (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
+    }
+}
+
+/// **La pastille de langue : le drapeau, et le code en petit DESSOUS** (#9954,
+/// directive porteur 2026-10-10). Sur une ligne, « 🇫🇷 FR » élargissait la
+/// pastille ; empilés, drapeau réduit et code minuscule tiennent dans la
+/// hauteur qu'avait la ligne.
+///
+/// La hauteur ne se devine pas, elle se REPREND : un drapeau `.caption`
+/// invisible et sans largeur donne à la pastille exactement la hauteur de
+/// l'ancienne ligne, à toute taille de texte. La pile mord sur la marge
+/// verticale (`ComposerLanguagePillMetrics.bleed`) sans jamais la dépasser, et
+/// Dynamic Type la borne pour qu'elle ne pousse pas la barre.
+struct ComposerLanguagePillLabel: View {
+    let flag: String
+    let code: String
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            ZStack {
+                Text(flag)
+                    .font(.caption)
+                    .fixedSize()
+                    .frame(width: 0)
+                    .hidden()
+                ComposerStackedLanguageMark(flag: flag, code: code.uppercased())
+                    .padding(.vertical, -ComposerLanguagePillMetrics.bleed)
+                    .dynamicTypeSize(...ComposerLanguagePillMetrics.largestTextSize)
+            }
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.bold))
+        }
+        .fixedSize()
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+    }
+}
+
+/// Le drapeau et son code, l'un sur l'autre, serrés.
+struct ComposerStackedLanguageMark: View {
+    let flag: String
+    let code: String
+
+    @ScaledMetric(relativeTo: .caption) private var flagSize: CGFloat = ComposerLanguagePillMetrics.flagSize
+    @ScaledMetric(relativeTo: .caption2) private var codeSize: CGFloat = ComposerLanguagePillMetrics.codeSize
+
+    init(flag: String, code: String) {
+        self.flag = flag
+        self.code = code
+    }
+
+    var body: some View {
+        VStack(spacing: ComposerLanguagePillMetrics.lineSpacing) {
+            Text(flag)
+                .font(.system(size: flagSize))
+            Text(code)
+                .font(.system(size: codeSize, weight: .bold))
+        }
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+nonisolated enum ComposerLanguagePillMetrics {
+    static let flagSize: CGFloat = 10
+    static let codeSize: CGFloat = 7
+    static let lineSpacing: CGFloat = -2
+    static let bleed: CGFloat = MeeshySpacing.xs - 1
+    static let largestTextSize: DynamicTypeSize = .xLarge
+}
+
+/// Le repli qu'un hôte confie à la barre (#8642) : son glyphe, son libellé
+/// VoiceOver et son geste. La barre le pose ; l'hôte décide QUAND il existe.
+struct ComposerFoldControl {
+    let symbol: String
+    let label: String
+    var hint: String? = nil
+    /// Le ⌄ reste visible pendant une prise vocale (`ComposerFoldPlacement`).
+    var survivesRecording: Bool = false
+    let action: () -> Void
+}
+
+/// **Ce que la bande d'outils dit de son débordement** (#9254, jumelle web
+/// D-164 `useScrollsFurtherMark`) : tant qu'un outil reste au-delà du bord de
+/// fin, les 44 derniers points s'estompent — une CIBLE, si bien que le fondu
+/// recouvre toujours une partie d'un glyphe et dit qu'il y a plus loin.
+/// Défilée jusqu'au bout, la bande s'éclaire.
+nonisolated enum ComposerToolbarOverflow {
+    static let fadeWidth: CGFloat = 44
+
+    static func scrollsFurther(offset: CGFloat, contentWidth: CGFloat, viewportWidth: CGFloat) -> Bool {
+        viewportWidth > 0 && contentWidth - viewportWidth - abs(offset) > 0.5
+    }
+}
+
+/// La rangée d'outils du composeur : les outils (`leading`), la pastille qui
+/// les ferme (`pinned`) et l'angle droit du verre (`trailing`).
+///
+/// Quand tout tient, la rangée se lit d'un bloc, pastille accolée aux outils.
+/// Sinon, SEULS les outils défilent : la pastille et l'angle droit gardent
+/// leur place et leur largeur (#9254), et la bande signale qu'elle défile
+/// (`ComposerToolbarOverflow`). Sa largeur ne dépasse jamais celle proposée
+/// (#7997).
+struct ComposerToolbarStrip<Leading: View, Pinned: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
+    @ViewBuilder let pinned: Pinned
     @ViewBuilder let trailing: Trailing
+
+    @State private var contentWidth: CGFloat = 0
+    @State private var viewportWidth: CGFloat = 0
+    @State private var scrollsFurther = false
+    @State private var lastOffset = ComposerToolbarOffsetBox()
+
+    private static var scrollSpace: String { "composer.toolbar.strip" }
 
     var body: some View {
         HStack(spacing: 6) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) {
                     leading
+                    pinned
                     Spacer(minLength: 0)
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) { leading }
+                HStack(spacing: 6) {
+                    scrollingTools
+                    pinned
                 }
             }
             trailing
         }
     }
+
+    /// Le décalage se lit par le cadre du contenu dans la fenêtre défilante
+    /// jusqu'à iOS 17, par `onScrollGeometryChange` à partir d'iOS 18. Il est
+    /// gardé hors du rendu (`ComposerToolbarOffsetBox`) : la bande ne se
+    /// réévalue qu'au moment où le fondu s'allume ou s'éteint, jamais à chaque
+    /// image du défilement.
+    ///
+    /// **Aucun `GeometryReader`** (#9456) : ce candidat du `ViewThatFits` est
+    /// mesuré sur le rendu asynchrone d'iOS 26 quand le clavier ou Dynamic
+    /// Type change la largeur, et la fermeture d'un `GeometryReader`, isolée au
+    /// main actor, y trapperait. `onGeometryChange` prend une transformation
+    /// `@Sendable` — non isolée — et rend son action sur le fil principal.
+    private var scrollingTools: some View {
+        let space = Self.scrollSpace
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) { leading }
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(space)) } action: { frame in
+                    contentWidth = frame.width
+                    record(offset: -frame.minX)
+                }
+        }
+        .coordinateSpace(name: space)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            viewportWidth = width
+            refreshFade()
+        }
+        .trackScrollContentOffsetX { record(offset: $0) }
+        .mask {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                    .flipsForRightToLeftLayoutDirection(true)
+                    .frame(width: scrollsFurther ? ComposerToolbarOverflow.fadeWidth : 0)
+            }
+        }
+    }
+
+    private func record(offset: CGFloat) {
+        lastOffset.value = offset
+        refreshFade()
+    }
+
+    private func refreshFade() {
+        let next = ComposerToolbarOverflow.scrollsFurther(
+            offset: lastOffset.value, contentWidth: contentWidth, viewportWidth: viewportWidth)
+        if next != scrollsFurther { scrollsFurther = next }
+    }
+}
+
+/// Le dernier décalage lu, tenu HORS du graphe de rendu : le muter ne
+/// réévalue rien.
+nonisolated final class ComposerToolbarOffsetBox {
+    var value: CGFloat = 0
 }

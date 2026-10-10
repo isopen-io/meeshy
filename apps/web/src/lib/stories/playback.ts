@@ -1,4 +1,4 @@
-import { parseCanvasDocument, type CanvasScene } from '@/lib/canvas/document';
+import { parseCanvasDocument, type CanvasDocument, type CanvasScene } from '@/lib/canvas/document';
 
 /**
  * LA LECTURE D'UNE STORY — lois PURES, miroir vecteur à vecteur de la
@@ -174,7 +174,38 @@ export type StoryPlaybackStory = {
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
+  /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
+  /** La SOURCE d'une story repartagée (`repostOfInclude`, `postIncludes.ts`) :
+   * sa scène et ses médias, lus par {@link playedStoryScene}. */
+  readonly repostOf?: StoryRepostSource | null;
 };
+
+export type StoryRepostSource = {
+  readonly id: string;
+  readonly storyEffects?: unknown;
+  readonly media?: readonly StoryPlaybackMedia[] | null;
+};
+
+/**
+ * LA SCÈNE QU'UNE STORY JOUE (#9678) — son propre document, sinon, pour une
+ * story REPARTAGÉE dont l'enveloppe n'a pas d'effets propres, celui de sa
+ * SOURCE, avec les médias de la source pour porteur (ils vivent sur elle,
+ * jamais sur l'enveloppe). Le lecteur rend cette scène et annonce son son :
+ * le crédit dit ce qui joue. `null` ⇒ le chemin v1.
+ */
+export function playedStoryScene(
+  story: Pick<StoryPlaybackStory, 'id' | 'media' | 'storyEffects' | 'repostOf'>,
+): { readonly document: CanvasDocument; readonly carrierStory: Pick<StoryPlaybackStory, 'id' | 'media'> } | null {
+  const own = parseCanvasDocument(story.storyEffects);
+  if (own !== null) return { document: own, carrierStory: { id: story.id, ...(story.media !== undefined ? { media: story.media } : {}) } };
+  const source = story.repostOf;
+  if (source === undefined || source === null) return null;
+  const borrowed = parseCanvasDocument(source.storyEffects);
+  if (borrowed === null) return null;
+  return { document: borrowed, carrierStory: { id: source.id, ...(source.media !== undefined && source.media !== null ? { media: source.media } : {}) } };
+}
 
 export type StoryPlaybackGroup = {
   readonly authorId: string;
@@ -227,11 +258,11 @@ export function storyEffectsBackgroundOf(storyEffects: unknown): string | null |
  * {@link resolvePlayablePosition} — alors que `parseCanvasDocument` (O3) l'a
  * déjà jugée non vide en refusant tout document sans scène. */
 export function hasRenderableStoryContent(
-  story: Pick<StoryPlaybackStory, 'content' | 'media' | 'storyEffects'>,
+  story: Pick<StoryPlaybackStory, 'content' | 'media' | 'storyEffects' | 'repostOf'>,
 ): boolean {
   if (story.content !== undefined && story.content !== null && story.content.trim() !== '') return true;
   if (story.media !== undefined && story.media.length > 0) return true;
-  if (parseCanvasDocument(story.storyEffects) !== null) return true;
+  if (playedStoryScene({ id: '', ...story }) !== null) return true;
   const background = storyEffectsBackgroundOf(story.storyEffects);
   if (background !== undefined && background !== null && background !== '') return true;
   return false;
@@ -407,6 +438,28 @@ export function scopeToSingleGroup(
 ): readonly StoryPlaybackGroup[] {
   const position = resolvePosition(groups, postId);
   return position === null ? groups : [groups[position.groupIndex]!];
+}
+
+/**
+ * `StoryViewerScope.liveOnly` (`StoryViewerScope.swift`, #7887) — **MES
+ * STORIES NE TRACENT QUE LES BARRES DES STORIES EN COURS** (#7889, directive
+ * porteur 2026-09-25). Le corpus sert à l'auteur ses propres stories expirées
+ * depuis moins de 7 jours (`PostFeedService.getStories`,
+ * `AUTHOR_ARCHIVE_WINDOW_MS`) : sans cette portée, le lecteur traçait une
+ * barre par archive et les jouait, {@link resolvePlayablePosition} ne sautant
+ * jamais le groupe `isMine`. Seule l'archive ouverte explicitement
+ * (`keeping`) reste ; sans story en cours, le groupe reste entier — le
+ * lecteur ne s'ouvre jamais vide. Les autres auteurs ne sont pas touchés.
+ */
+export function scopeToLiveStories(
+  groups: readonly StoryPlaybackGroup[],
+  options: { readonly keeping: readonly string[]; readonly now: number },
+): readonly StoryPlaybackGroup[] {
+  return groups.map((group) => {
+    if (!group.isMine) return group;
+    const live = group.stories.filter((s) => !isStoryExpired(s, options.now) || options.keeping.includes(s.id));
+    return live.length === 0 || live.length === group.stories.length ? group : { ...group, stories: live };
+  });
 }
 
 function isPlayable(story: StoryPlaybackStory, now: number): boolean {

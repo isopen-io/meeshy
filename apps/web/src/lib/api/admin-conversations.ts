@@ -1,18 +1,19 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
+import { adminPageOf, type AdminPage } from './admin-page';
 import { decodeMessage } from './decode';
 import type { ApiResult } from './http';
 import type { Message } from './types';
 
 /**
  * **LA LECTURE SOUVERAINE DES CONVERSATIONS** (#6862) — les décodeurs des deux
- * adresses que seul un BIGBOSS atteint :
+ * adresses que seul le rang d'ADMINISTRATION atteint (BIGBOSS et ADMIN) :
  *
  * | adresse | ce qu'elle sert | motif écrit |
  * |---|---|---|
  * | `GET /admin/conversations` (#6861) | l'INVENTAIRE — métadonnées seules | non |
- * | `GET /admin/conversations/:id/messages` (#4333, #6860) | le CONTENU et ses pièces | **oui, ≥ 10 caractères** |
+ * | `GET /admin/conversations/:id/messages` (#4333, #6860) | le CONTENU et ses pièces | **oui, ≥ 10 caractères** (facultatif pour le rang souverain) |
  *
  * ## CE QUE CE MODULE NE DOIT JAMAIS LAISSER PERSISTER
  *
@@ -94,13 +95,25 @@ const asTextOrNull = (value: unknown): string | null =>
 // L'INVENTAIRE — GET /admin/conversations
 // ---------------------------------------------------------------------------
 
+export type AdminParticipantKind = 'user' | 'anonymous' | 'bot';
+
+/**
+ * Un membre de l'APERÇU (six au plus, actifs). Il porte l'identifiant de sa
+ * LIGNE de participation — pas seulement celui du compte : un invité anonyme n'a
+ * pas de compte (`userId` nul) et n'en est pas moins un membre qu'un nom doit
+ * désigner.
+ */
 export type AdminInstanceParticipant = {
-  readonly userId: string;
-  readonly displayName: string;
+  readonly id: string;
+  readonly userId: string | null;
+  readonly kind: AdminParticipantKind;
+  readonly displayName: string | null;
   readonly avatar: string | null;
   readonly role: string;
   readonly joinedAt: string | null;
 };
+
+export type AdminConversationCommunity = { readonly id: string; readonly name: string };
 
 export type AdminInstanceConversation = {
   readonly id: string;
@@ -108,7 +121,12 @@ export type AdminInstanceConversation = {
   /** `null` sur un direct, qui porte le nom de l'autre et non un titre stocké (D-75). */
   readonly title: string | null;
   readonly type: string;
+  readonly avatar: string | null;
   readonly isActive: boolean;
+  /** Fermée à l'écriture depuis cette date — `null` si ouverte. */
+  readonly closedAt: string | null;
+  /** La communauté NOMMÉE, ou `null` : une conversation hors communauté n'en invente pas. */
+  readonly community: AdminConversationCommunity | null;
   /** Le compte des participants ACTIFS, recalculé par la passerelle — jamais la colonne morte. */
   readonly memberCount: number;
   readonly createdAt: string | null;
@@ -117,86 +135,75 @@ export type AdminInstanceConversation = {
   readonly participants: readonly AdminInstanceParticipant[];
 };
 
-export type AdminInstanceConversationPage = {
-  readonly conversations: readonly AdminInstanceConversation[];
-  readonly total: number;
-  readonly offset: number;
-  readonly hasMore: boolean;
-};
+const KINDS: readonly AdminParticipantKind[] = ['user', 'anonymous', 'bot'];
 
-function decodeParticipant(raw: unknown): AdminInstanceParticipant | null {
+/** Un type de participant inconnu se lit « compte » : c'est le cas nominal, et un anonyme se déclare. */
+const kindOf = (value: unknown): AdminParticipantKind => KINDS.find((kind) => kind === value) ?? 'user';
+
+/** Un membre de l'aperçu — exporté : la fiche sert le MÊME aperçu (`participantsPreview`), un second décodeur divergerait. */
+export function decodeAdminInstanceParticipant(raw: unknown): AdminInstanceParticipant | null {
   const ligne = asRecord(raw);
-  if (ligne === null || typeof ligne.userId !== 'string' || ligne.userId === '') return null;
+  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
 
   return {
-    userId: ligne.userId,
-    displayName: asText(ligne.displayName),
+    id: ligne.id,
+    userId: asTextOrNull(ligne.userId),
+    kind: kindOf(ligne.type),
+    displayName: asTextOrNull(ligne.displayName),
     avatar: asTextOrNull(ligne.avatar),
-    role: asText(ligne.role),
+    role: asText(ligne.role).toLowerCase(),
     joinedAt: asTextOrNull(ligne.joinedAt),
   };
 }
 
-export function decodeAdminInstanceConversations(page: PageServie, offset: number): AdminInstanceConversationPage {
-  const conversations = page.lignes
-    .map((entree): AdminInstanceConversation | null => {
-      const ligne = asRecord(entree);
-      if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
-
-      return {
-        id: ligne.id,
-        identifier: asTextOrNull(ligne.identifier),
-        title: asTextOrNull(ligne.title),
-        type: asText(ligne.type),
-        isActive: ligne.isActive !== false,
-        memberCount: asCount(ligne.memberCount),
-        createdAt: asTextOrNull(ligne.createdAt),
-        lastMessageAt: asTextOrNull(ligne.lastMessageAt),
-        participants: (Array.isArray(ligne.participants) ? ligne.participants : [])
-          .map(decodeParticipant)
-          .filter((p): p is AdminInstanceParticipant => p !== null),
-      };
-    })
-    .filter((conversation): conversation is AdminInstanceConversation => conversation !== null);
-
-  const total = asCount(page.meta.total);
-  const hasMore =
-    typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + conversations.length < total;
-
-  return { conversations, total: total || conversations.length, offset, hasMore };
+function decodeCommunity(raw: unknown): AdminConversationCommunity | null {
+  const ligne = asRecord(raw);
+  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
+  return { id: ligne.id, name: asText(ligne.name) };
 }
 
-export async function loadAdminInstanceConversations(
-  params: AdminDeps & {
-    readonly offset: number;
-    readonly search?: string;
-    readonly limit?: number;
-    /** Le tri et les filtres de la liste (#7873), déjà passés par sa liste blanche. */
-    readonly sort?: string;
-    readonly order?: 'asc' | 'desc';
-    readonly filters?: Readonly<Record<string, string>>;
-    readonly signal?: AbortSignal;
-  },
-): Promise<ApiResult<AdminInstanceConversationPage>> {
-  const query = new URLSearchParams({
-    offset: String(params.offset),
-    limit: String(params.limit ?? ADMIN_CONVERSATIONS_PAGE_SIZE),
-    // Un filtre VIDE n'est pas un filtre — la passerelle l'ignore, et
-    // l'envoyer quand même ferait varier la clé de cache pour rien.
-    ...(params.search === undefined || params.search === '' ? {} : { search: params.search }),
-    ...(params.sort === undefined ? {} : { sort: params.sort }),
-    ...(params.order === undefined ? {} : { order: params.order }),
-    ...Object.fromEntries(Object.entries(params.filters ?? {}).filter(([, valeur]) => valeur !== '')),
-  });
+/** UNE ligne de l'inventaire — une ligne sans identifiant est écartée, jamais « réparée ». */
+export function decodeAdminInstanceConversation(entree: unknown): AdminInstanceConversation | null {
+  const ligne = asRecord(entree);
+  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
 
+  return {
+    id: ligne.id,
+    identifier: asTextOrNull(ligne.identifier),
+    title: asTextOrNull(ligne.title),
+    type: asText(ligne.type),
+    avatar: asTextOrNull(ligne.avatar),
+    isActive: ligne.isActive !== false,
+    closedAt: asTextOrNull(ligne.closedAt),
+    community: decodeCommunity(ligne.community),
+    memberCount: asCount(ligne.memberCount),
+    createdAt: asTextOrNull(ligne.createdAt),
+    lastMessageAt: asTextOrNull(ligne.lastMessageAt),
+    participants: (Array.isArray(ligne.participants) ? ligne.participants : [])
+      .map(decodeAdminInstanceParticipant)
+      .filter((p): p is AdminInstanceParticipant => p !== null),
+  };
+}
+
+/** La RACINE des listes d'inventaire — ce qu'un geste sur un membre invalide (l'effectif change). */
+export const ADMIN_CONVERSATIONS_ROOT_KEY = [ADMIN_SOUVERAIN_PREFIXE, 'conversations'] as const;
+
+/**
+ * LA PAGE D'INVENTAIRE, prête pour `useAdminList` : la passerelle sert sa
+ * pagination À CÔTÉ de `data` (`sendPaginatedSuccess`), ce que `adminPageOf`
+ * `top` lit au bon niveau. La requête est composée par `conversationListQuery`
+ * (`lib/admin/conversation-list.ts`), qui porte la liste blanche.
+ */
+export async function loadAdminConversationList(
+  params: AdminDeps & { readonly query: URLSearchParams; readonly signal?: AbortSignal },
+): Promise<ApiResult<AdminPage<AdminInstanceConversation>>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: `${adminEndpoints.conversations}?${query.toString()}`,
+    path: `${adminEndpoints.conversations}?${params.query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
-  if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminInstanceConversations(pageServie(result), params.offset) };
+  return adminPageOf(result, decodeAdminInstanceConversation, { kind: 'top' });
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +269,17 @@ export type AdminSovereignThreadPage = {
   readonly messages: readonly Message[];
   /** Les messages dont la passerelle a RETENU le contenu — rien à révéler. */
   readonly protectedIds: ReadonlySet<string>;
+  /**
+   * LA DURÉE DES ÉPHÉMÈRES (secondes, `ec175875e1`) — mise À CÔTÉ du message,
+   * jamais dedans. Un `Message` qui porte `ephemeralDuration` fait poser par le
+   * fil une RÉCEPTION locale (`resolveEphemeralDeadline`) : le décompte
+   * partirait, le message disparaîtrait sous les yeux de l'administrateur, et
+   * le poste garderait la réception d'un lecteur qui n'en est pas un. La
+   * lecture souveraine constate, elle ne reçoit pas : la durée se DIT (une
+   * marque sur la rangée), elle ne se décompte pas. Absente d'un ancien
+   * serveur, la carte est vide.
+   */
+  readonly ephemeralDurations: ReadonlyMap<string, number>;
   readonly total: number;
   readonly offset: number;
   readonly hasMore: boolean;
@@ -281,8 +299,10 @@ function decodeThreadMessage(entree: unknown): Message | null {
   if (typeof ligne.id !== 'string' || ligne.id === '') return null;
   if (typeof ligne.createdAt !== 'string' || ligne.createdAt === '') return null;
 
+  /* La durée d'un éphémère RESTE HORS du message : voir `ephemeralDurations`. */
+  const { ephemeralDuration: _horsDuMessage, ...sansDuree } = ligne;
   const complete = {
-    ...ligne,
+    ...sansDuree,
     content: typeof ligne.content === 'string' ? ligne.content : '',
     translations: Array.isArray(ligne.translations) ? ligne.translations : [],
     deliveredCount: 0,
@@ -307,11 +327,15 @@ function decodeThreadMessage(entree: unknown): Message | null {
  */
 export function decodeAdminSovereignThread(page: PageServie, offset: number): AdminSovereignThreadPage {
   const protectedIds = new Set<string>();
+  const ephemeralDurations = new Map<string, number>();
   const messages = page.lignes
     .map((entree): Message | null => {
       const message = decodeThreadMessage(entree);
       if (message === null) return null;
-      if (asRecord(entree)?.isProtected === true) protectedIds.add(message.id);
+      const ligne = asRecord(entree);
+      if (ligne?.isProtected === true) protectedIds.add(message.id);
+      const duree = ligne?.ephemeralDuration;
+      if (typeof duree === 'number' && Number.isFinite(duree) && duree > 0) ephemeralDurations.set(message.id, duree);
       return message;
     })
     .filter((message): message is Message => message !== null)
@@ -320,22 +344,26 @@ export function decodeAdminSovereignThread(page: PageServie, offset: number): Ad
   const total = asCount(page.meta.total);
   const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + messages.length < total;
 
-  return { messages, protectedIds, total: total || messages.length, offset, hasMore };
+  return { messages, protectedIds, ephemeralDurations, total: total || messages.length, offset, hasMore };
 }
 
 export async function loadAdminSovereignThread(
   params: AdminDeps & {
     readonly conversationId: string;
     readonly offset: number;
-    /** Dix caractères au moins — la route refuse au SCHÉMA, avant son handler. */
-    readonly reason: string;
+    /**
+     * Dix caractères au moins — la route refuse au SCHÉMA, avant son handler.
+     * Absent (`null`) : la lecture part sans `reason`, ce que la passerelle
+     * n'admet que du rang souverain (spec 2026-10-04 § 4).
+     */
+    readonly reason: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminSovereignThreadPage>> {
   const query = new URLSearchParams({
     offset: String(params.offset),
     limit: String(ADMIN_MESSAGES_PAGE_SIZE),
-    reason: params.reason,
+    ...(params.reason === null ? {} : { reason: params.reason }),
   });
 
   const result = await params.transport.request<unknown>({

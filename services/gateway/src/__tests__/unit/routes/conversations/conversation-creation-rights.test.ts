@@ -69,10 +69,19 @@ function prismaDouble() {
     },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
     user: {
-      findMany: jest.fn<any>().mockResolvedValue([
-        { id: MOI, displayName: 'Moi', username: 'moi', avatar: null },
-        { id: AUTRE, displayName: 'Alice', username: 'alice', avatar: null },
-      ]),
+      // Rend ce que le `select` DEMANDE (#9711) : un double qui rendrait les
+      // colonnes du Prisme d'office passerait au vert sur une requête qui ne
+      // les ramène pas.
+      findMany: jest.fn<any>(async (args: any) =>
+        [
+          { id: MOI, displayName: 'Moi', username: 'moi', avatar: null, systemLanguage: 'de', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null },
+          { id: AUTRE, displayName: 'Alice', username: 'alice', avatar: null, systemLanguage: '', regionalLanguage: 'es', customDestinationLanguage: null, deviceLocale: null },
+        ].map((ligne: Record<string, unknown>) =>
+          args?.select
+            ? Object.fromEntries(Object.keys(args.select).filter((k) => args.select[k]).map((k) => [k, ligne[k]]))
+            : ligne
+        )
+      ),
     },
   };
 }
@@ -122,7 +131,7 @@ async function creerGroupe() {
 
   expect(prisma.conversation.create).toHaveBeenCalledTimes(1);
   const data = (prisma.conversation.create.mock.calls[0] as any[])[0].data;
-  return data.participants.create as Array<{ userId: string; role: string; permissions: Record<string, boolean> }>;
+  return data.participants.create as Array<{ userId: string; role: string; language?: string; permissions: Record<string, boolean> }>;
 }
 
 beforeEach(() => {
@@ -158,5 +167,16 @@ describe('#6080 — `POST /conversations` écrit la table du site unique', () =>
     const [premiere] = await creerGroupe();
 
     expect(premiere.permissions.canViewHistory).toBe(true);
+  });
+});
+
+describe('#9711 — `POST /conversations` pose la langue de chaque fondateur, jamais le défaut `"en"` du schéma', () => {
+  it('le créateur au rang 1, le membre initial au rang 2 de son prisme', async () => {
+    const [createur, membre] = await creerGroupe();
+
+    expect(createur.userId).toBe(MOI);
+    expect(createur.language).toBe('de');
+    expect(membre.userId).toBe(AUTRE);
+    expect(membre.language).toBe('es');
   });
 });

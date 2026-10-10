@@ -31,6 +31,7 @@ export {
 export * from './conversation.js';
 export * from './conversation-preview.js';
 export * from './conversation-card.js';
+export * from './world.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -56,6 +57,7 @@ export * from './share-link-stats.js';
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
+export * from './sticker-pack.js';
 
 // Favori de message (#7377) — étoile personnelle, liste et paramètres
 export * from './message-star.js';
@@ -71,6 +73,7 @@ export * from './call-rules.js';
 export * from './call-recording.js';
 export * from './call-controls.js';
 export * from './call-preview.js';
+export * from './call-live-frame.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -104,6 +107,9 @@ export * from './mention.js';
 
 // Export des types d'engagement (streaks/badges — catalogue des axes, #5530)
 export * from './engagement.js';
+// Barème réglable et état par conversation « N (M) 🔥 » (#8906)
+export * from './engagement-scale.js';
+export * from './engagement-operations.js';
 
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
@@ -210,6 +216,7 @@ export {
 
 // Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
 export type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+export type { NotificationContentDetail, NotificationContentCategory } from './notification-content-detail.js';
 
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
@@ -759,3 +766,9 @@ export { AGENT_TYPES, SCAN_STALE_MS, isScanActive } from './agent.js';
 export * from './reading-modes.js';
 export * from './conversation-bridge.js';
 export * from './contact-card.js';
+
+// ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
+export * from './content-capture.js';
+
+// ===== CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) =====
+export type { PostViewerEngagement, PostViewerRow } from './publication-viewers.js';

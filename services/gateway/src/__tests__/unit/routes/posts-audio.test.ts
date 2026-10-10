@@ -216,7 +216,7 @@ describe('GET /stories/audio — recherche', () => {
   it('matches the uploader username as well as the title', async () => {
     await app.inject({ method: 'GET', url: '/stories/audio?q=alice' });
     const where = (findMany.mock.calls[0][0] as any).where;
-    expect(where.AND[1].OR).toEqual([
+    expect(where.AND[2].OR).toEqual([
       { title: { contains: 'alice', mode: 'insensitive' } },
       { uploader: { username: { contains: 'alice', mode: 'insensitive' } } },
     ]);
@@ -226,6 +226,8 @@ describe('GET /stories/audio — recherche', () => {
     // 2026-08-02 : bibliothèque entière invisible).
     expect(where.isPublic).toBe(true);
     expect(where.AND[0]).toEqual({ OR: [{ mutedAt: null }, { mutedAt: { isSet: false } }] });
+    // #9848 — ni retirés de la bibliothèque par leur auteur.
+    expect(where.AND[1]).toEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
   });
 
   it('includes the uploader so the list can credit an author', async () => {

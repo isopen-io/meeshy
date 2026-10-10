@@ -67,7 +67,8 @@ extension MeeshyComposerHost {
         return ComposerMediaAccessibility(
             mediaAlt: (base.mediaAlt ?? [:]).merging(altsDuComposer) { _, composer in composer },
             mediaCaption: (base.mediaCaption ?? [:]).merging(duComposer) { _, composer in composer },
-            allowSoundExtraction: base.allowSoundExtraction
+            allowSoundExtraction: base.allowSoundExtraction,
+            alsoAsReel: base.alsoAsReel
         )
     }
 

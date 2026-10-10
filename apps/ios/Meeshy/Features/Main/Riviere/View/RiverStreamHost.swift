@@ -44,10 +44,12 @@ import MeeshyUI
 struct RiverStreamHost: View {
     let geometry: RiverLaneResolver.RiverGeometry
     /// Contenu résolu (texte, nom, heure — le Prisme déjà appliqué par
-    /// l'appelant) pour CHAQUE bulle de `geometry.bubbles`. Une bulle sans
-    /// entrée correspondante reste une cellule vide — jamais un crash, la
-    /// géométrie et le contenu peuvent transiter par des passes différentes.
-    let contents: [RiverBubbleContent]
+    /// l'appelant) pour CHAQUE bulle de `geometry.bubbles`, DÉJÀ indexé par
+    /// rang et par message (#3946) : la grille le lit à chaque rang et chaque
+    /// couloir réalisés, jamais elle ne le réindexe. Une bulle sans entrée
+    /// correspondante reste une cellule vide — jamais un crash, la géométrie
+    /// et le contenu peuvent transiter par des passes différentes.
+    let rendering: RiverRendering
     /// Largeur de couloir — défaut `RiverMetrics.Lane.widthReference`,
     /// abaissable par l'appelant sur un écran étroit (§7ter, jamais une
     /// troncature de texte).
@@ -96,13 +98,16 @@ struct RiverStreamHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
-    /// #8283 — ouvre en plein écran le média d'une citation ; rend `false`
-    /// quand il n'y a rien d'honnête à ouvrir (média protégé, document, pièce
+    /// #8283 — la zone média d'une citation : joue un vocal sur place (#8320)
+    /// ou ouvre une image ou une vidéo en plein écran ; rend `false` quand il
+    /// n'y a rien d'honnête à jouer ni à ouvrir (média protégé, document, pièce
     /// introuvable), et la citation retombe alors sur son saut (`openReply`).
     var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
     /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
 
+    /// #9617 — reçoit les cadres mesurés : une capture y lit ce qui est à l'écran.
+    var captureSurface: MeasuredCaptureSurface? = nil
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -148,13 +153,9 @@ struct RiverStreamHost: View {
         RiverColumnLayout(laneWidth: laneWidth, gutter: RiverMetrics.Lane.gutter, laneCount: laneCount)
     }
 
-    private var contentByMessageId: [String: RiverBubbleContent] {
-        Dictionary(uniqueKeysWithValues: contents.map { ($0.bubble.messageId, $0) })
-    }
+    private var contentByMessageId: [String: RiverBubbleContent] { rendering.contentByMessageId }
 
-    private var bubbleByRank: [Int: RiverLaneResolver.RiverBubble] {
-        Dictionary(uniqueKeysWithValues: geometry.bubbles.map { ($0.rank, $0) })
-    }
+    private var bubbleByRank: [Int: RiverLaneResolver.RiverBubble] { rendering.bubbleByRank }
 
     /// La frappe porte la couleur de SA VOIX — la MÊME loi que la bande des
     /// couloirs (`RiverLaneHeaderStrip` : `DynamicColorGenerator.colorForName`
@@ -205,6 +206,12 @@ struct RiverStreamHost: View {
         return Double(best?.rank ?? navigation.cursor.rank)
     }
 
+    /// La partie LUE du pane, dans le repère des cadres : sous l'en-tête et
+    /// au-dessus du composeur (#9617).
+    private var readViewport: CGRect {
+        CGRect(x: 0, y: headerInset, width: paneWidth, height: max(0, paneHeight - headerInset - bottomInset))
+    }
+
     /// La ligne de lecture — un tiers sous le haut du pane, là où l'œil se
     /// pose quand il descend une conversation (même parti pris que la bande
     /// de focus du fil).
@@ -212,12 +219,7 @@ struct RiverStreamHost: View {
 
     /// R-3 — l'échelle du temps, RÉSOLUE par la règle pure depuis ce que la
     /// loi sert (rang + instant) ; `nil` quand il n'y a rien à graduer.
-    private var timeScale: RiverTimeScale? {
-        RiverTimeScale.resolve(
-            ranks: geometry.bubbles.map { RiverTimeScale.RankTime(rank: $0.rank, timeMs: $0.createdAtMs) },
-            calendar: .current
-        )
-    }
+    private var timeScale: RiverTimeScale? { rendering.timeScale }
 
     private var laneHeaders: [RiverLaneResolver.RiverLaneHeader] {
         RiverLaneResolver.resolveRiverLaneHeaders(
@@ -382,7 +384,10 @@ struct RiverStreamHost: View {
                 topExclusion: headerInset + RiverMetrics.LaneHeader.height
             )
         )
-        .onPreferenceChange(MessageFramePreferenceKey.self) { frames = $0 }
+        .onPreferenceChange(MessageFramePreferenceKey.self) { measured in
+            frames = measured
+            captureSurface?.update(frames: measured, viewport: readViewport)
+        }
         .onPreferenceChange(HorizontalScrollOffsetKey.self) { horizontalOffset = $0 } // iOS 16–17
         .trackScrollContentOffsetX { horizontalOffset = $0 } // iOS 18+
         // La bande NOMME les couloirs et suit leur défilement horizontal : sa
@@ -484,8 +489,8 @@ struct RiverStreamHost: View {
                     isDark: colorScheme == .dark,
                     isFlat: true
                 )
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(.ultraThinMaterial, in: Capsule())
                 .padding(.bottom, bottomInset)
                 // Décoration : elle ne prend jamais un doigt destiné à la

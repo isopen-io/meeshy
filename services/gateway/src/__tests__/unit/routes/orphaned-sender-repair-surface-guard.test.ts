@@ -71,6 +71,10 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // jumelle de la 1re sur `GET /admin/translations`, même portée découverte.
   'admin/content.ts': { kind: 'applies', reads: 5, applications: 2 },
   'admin/conversation-messages-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #8876 — `enrichReports` nomme l'entité qu'un signalement désigne ; sa lecture
+  // de messages charge `sender` (l'auteur) et est enveloppée — un expéditeur
+  // disparu ne doit pas faire rejeter toute la page de modération.
+  'admin/reports-enrichment.ts': { kind: 'applies', reads: 1, applications: 1 },
   // `rankMessages` (la seule des trois à charger `sender`) est enveloppée ;
   // les deux lectures de `rankConversations` ne chargent qu'identifiant/titre.
   'admin/system-rankings.ts': { kind: 'applies', reads: 3, applications: 1 },
@@ -108,6 +112,8 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'admin/user-reports.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'attachments/metadata.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #9927 — lit le TYPE de la conversation du message visé (règle des 13-17 ans), jamais son expéditeur.
+  'attachments/upload.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-advanced-reads.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-list-views.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
@@ -139,10 +145,20 @@ const SOCKETIO_SURFACES: Record<string, Classification> = {
   'emitConversationPreviewUpdate.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   'handlers/ReactionHandler.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
-  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 7, why: DOES_NOT_SELECT_SENDER },
+  // 7 → 6 (#9709) : la livraison d'une traduction texte est partie, entière,
+  // dans `deliverTextTranslation.ts` (déclaré juste en dessous) — sa lecture
+  // (`conversationId`, `senderId` scalaire, `createdAt`) a changé de fichier,
+  // pas de nature.
+  'MeeshySocketIOManager.ts': { kind: 'exempt', reads: 6, why: DOES_NOT_SELECT_SENDER },
+  'deliverTextTranslation.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/participant-resolver.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'utils/personalPreviewOverride.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'announceCitedPostWithdrawal.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — relit les CINQ colonnes de protection d'un message édité ou dont
+  // une pièce est enrichie, pour décider de la remise par lecteur. Jamais
+  // `sender`. Absent du garde du masquage personnel : une `findUnique`, hors
+  // de son périmètre (`findMany`/`count`), et elle ne sert aucun contenu.
+  'readerSignedDelivery.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 };
 
 /** `services/` — même règle, troisième racine. */
@@ -160,8 +176,18 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
 
-  'AttachmentReactionService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
+  // `conversationId`) et la garde d'admission d'écriture de
+  // `addAttachmentReaction` (projette `conversation: { isActive, closedAt }`).
+  // Ni l'une ni l'autre ne demande la relation `sender` — un expéditeur disparu
+  // n'entre dans aucune de leurs branches.
+  'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
+  'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces
+  // (galerie, détail), pour signer celles qui disparaissent. Jamais `sender`.
+  'attachments/signServedAttachments.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
   // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
   // même raison que #6501 l'a nommé dans l'issue — `sender` y est
@@ -171,6 +197,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // par exhaustivité avec #6516, qui l'énumérait explicitement.)
   'message-translation/EncryptionHelper.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'message-translation/MessageTranslationService.ts': { kind: 'exempt', reads: 8, why: DOES_NOT_SELECT_SENDER },
+  // #9709 — le rattrapage d'une langue qui arrive lit le contenu, la langue,
+  // les traductions et les colonnes de protection ; `senderId` est le SCALAIRE,
+  // jamais la relation `sender`.
+  'message-translation/ArrivalHistoryBackfill.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // 12 → 11 (#7199) : le calcul de non-lu a QUITTÉ ce fichier pour
   // `unreadCountsCore.ts` (déclaré plus bas), afin que la liste et le push
   // temps réel comptent par la même implémentation. Aucune lecture n'a
@@ -189,10 +219,15 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #7740 — la ligne d'arrivées de Global relit ses messages système (`id`,
   // `metadata`, `deletedAt`) pour retrouver la ligne ouverte : aucun `sender`.
   'conversations/globalArrivalsNotice.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9539 — heures habituelles d'écriture pour la mission personnelle : `select: { createdAt: true }`, aucun expéditeur chargé.
+  'game/MissionHabits.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7729 — suggestions d'onboarding : `select: { senderId: true }`, la relation n'est jamais chargée.
   'onboarding/OnboardingService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7578 — purge serveur du contenu d'une vue unique : ni expéditeur ni contenu servi.
   'messaging/purgeViewOnceContent.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9382 — le signal de jeu « réponse reçue » : `select: { createdAt: true }`
+  // seul, pour mesurer la fenêtre d'éligibilité du bonus. Aucun expéditeur servi.
+  'game/MessageGameSignals.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7451 — CELLE-CI sélectionne bien `sender`, et reste pourtant exempte : elle
   // n'en lit que `{ id, userId }` pour NOMMER la room personnelle de
   // l'expéditeur, et retombe explicitement sur `row.senderId` quand la relation
@@ -212,6 +247,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // #8557 — la contagion d'une réponse relit le message CITÉ :
   // `{ select: { effectFlags, isBlurred, ephemeralDuration } }`, jamais `sender`.
   'messaging/replyProtectionContagion.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #8630 — la chaîne citée (vers le haut) et les réponses (vers le bas) :
+  // `senderId` en COLONNE, jamais la relation `sender`.
+  'messaging/quoteCascade.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/ephemeralCountdown.ts': {
     kind: 'exempt',
     reads: 1,
@@ -229,8 +267,24 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // les écritures du message-résumé de `CallService` (initiateur de l'appel).
   'calls/callRecordingLink.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/attachmentSendAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/copyExitProtection.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9641 — la suppression d'un avis de capture relit l'expéditeur
+  // (`senderId`) du message qu'il nomme, jamais la relation `sender`.
+  'messaging/messageDeleteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — la durée des avis : identité, horloge, métadonnée, échéance.
+  'messaging/captureNoticeRetention.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
+  // #9629 — l'audience d'un avis de capture : `NOTICE_SELECT` et
+  // `CAPTURED_SELECT`, identité, horloge, `senderId` et métadonnée — jamais la
+  // relation `sender`.
+  'messaging/captureNoticeVisibility.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
+  // #9617 — la capture déclarée relit les messages désignés par
+  // `CAPTURED_MESSAGE_SELECT` : identité, horloge, auteur par son seul
+  // `senderId` et colonnes de la loi de sortie — jamais la relation `sender`.
+  'messaging/contentCaptureNotices.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  'messaging/messageReadAccess.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules
@@ -246,6 +300,8 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // `senderId` (pour soustraire les messages du lecteur lui-même), jamais la
   // relation `sender` : un expéditeur disparu n'entre dans aucune de ses branches.
   'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #9630 — les candidats avis de capture du compteur unitaire : identité et marque.
+  'unreadCountOfParticipant.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule
@@ -254,14 +310,17 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // orphelin qui bloque cette passe reste couvert par le balayage nocturne de
   // maintenance (`MaintenanceService.cleanupExpiredData`), qui répare AVANT
   // de nettoyer.
+  // #8630 — la 2e lecture charge les RÉPONSES que la destruction emporte, avec
+  // le même `select` que la passe : même balayage, même portée, même raison.
   'ExpiredMessagesCleanupService.ts': {
     kind: 'exempt',
-    reads: 1,
+    reads: 2,
     why:
       "Balayage de rétention côté serveur, sans lecteur et de portée GLOBALE (toute la base, " +
       "filtrée par `expiresAt` — jamais une conversation) : aucune liste de `conversationIds` " +
       "bornable ne peut être donnée à la réparation sans lire aussi large que la passe " +
-      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage.',
+      'elle-même. Le balayage nocturne de maintenance répare les orphelins AVANT ce nettoyage. ' +
+      "La lecture des réponses emportées (#8630) suit la passe qui les découvre, avec le même `select`.",
   },
   'CallService.ts': {
     kind: 'exempt',

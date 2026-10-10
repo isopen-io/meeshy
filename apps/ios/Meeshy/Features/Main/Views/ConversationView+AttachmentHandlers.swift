@@ -107,6 +107,16 @@ extension ConversationView {
     func startRecording() {
         audioRecorder.startRecording()
         HapticFeedback.medium()
+        // #9784 — la prise se suit dans l'îlot quand on quitte l'app, et s'y
+        // arrête par les MÊMES gestes que le composeur.
+        let recorder = audioRecorder
+        VoiceRecordingLiveActivityCoordinator.shared.track(
+            recorder: recorder,
+            conversationId: viewModel.conversationId,
+            title: viewModel.currentConversationName,
+            onStop: { _ = stopRecordingToAttachment() },
+            onCancel: { recorder.cancelRecording() }
+        )
     }
 
     /// Stop the recorder and drop the audio into the composer's attachment
@@ -163,6 +173,7 @@ extension ConversationView {
         }
 
         let route = outgoingReplyRoute
+        let replyAnchor = outgoingAttachmentAnchor
         let replyId = route.replyToId
         let storyReplyId = route.storyReplyToId
         let storyRef = route.storyReference
@@ -220,7 +231,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place)
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place, attachmentReplyTo: replyAnchor)
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -317,7 +328,7 @@ extension ConversationView {
             )
             viewModel.insertOptimisticMediaMessage(
                 tempId: send.tempId,
-                content: "",
+                content: send.group.messageContent,
                 attachments: send.locals,
                 messageType: msgType,
                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -337,12 +348,13 @@ extension ConversationView {
         }
 
         // --- Optimistic TEXT insert: upfront, like every media group ---
-        // Le groupe texte est ENVOYÉ en dernier (règle A2.2 de la spec
-        // multi-pièces : le texte est toujours son propre message, après les
-        // pièces). Mais son insert optimiste vivait À L'INTÉRIEUR de
-        // `sendMessage`, appelé après la boucle d'upload : la bulle texte
-        // n'apparaissait donc qu'une fois le DERNIER octet du dernier fichier
-        // monté — l'utilisateur voyait « les pièces d'abord, le message
+        // La légende d'un lot VISUEL voyage avec ses pièces, dans le même
+        // message (#9860) : le plan n'a alors pas de groupe texte. Sans pièce
+        // visuelle (vocaux seuls), le texte reste son propre message, ENVOYÉ
+        // en dernier (règle A2.2 de la spec multi-pièces). Mais son insert
+        // optimiste vivait À L'INTÉRIEUR de `sendMessage`, appelé après la
+        // boucle d'upload : la bulle texte n'apparaissait donc qu'une fois le
+        // DERNIER octet du dernier fichier monté — l'utilisateur voyait « les pièces d'abord, le message
         // ensuite ». On pose la ligne ici, dans le même tour MainActor que les
         // bulles média, en conservant l'ordre d'affichage : `createdAt` est
         // postérieur aux groupes média puisque l'insert suit, et l'envoi réel
@@ -436,7 +448,7 @@ extension ConversationView {
                         _ = try await OfflineQueue.shared.enqueueAudios(
                             sourceAudioURLs: urls,
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -473,7 +485,7 @@ extension ConversationView {
                             sourceMediaURLs: pairs.map { $0.url },
                             kinds: pairs.map { $0.kind },
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -542,6 +554,10 @@ extension ConversationView {
                                 localTranscriptions[att.id]?.tusUploadMetadata
                             )
                         }
+                    let uploadItems = pendingUploads.map {
+                        (fileURL: $0.fileURL, mimeType: $0.mimeType, thumbHash: $0.thumbHash,
+                         transcription: $0.transcription, capturedInApp: $0.attachment.capturedInApp)
+                    }
 
                     // Déclarer le lot complet AVANT de lancer les uploads, pour
                     // que la barre de progression affiche d'emblée le vrai total
@@ -561,28 +577,18 @@ extension ConversationView {
                     // `catch` ci-dessous, qui renvoie le groupe entier vers
                     // l'outbox durable. Le dedup par `clientMessageId` côté
                     // gateway couvre le rejeu des pièces déjà montées.
-                    var uploadResults = [TusUploadResult?](repeating: nil, count: pendingUploads.count)
-                    try await withThrowingTaskGroup(of: (Int, TusUploadResult).self) { group in
-                        for (index, item) in pendingUploads.enumerated() {
-                            let fileURL = item.fileURL
-                            let mime = item.mimeType
-                            let thumbHash = item.thumbHash
-                            let transcription = item.transcription
-                            group.addTask {
-                                let result = try await uploader.uploadFile(
-                                    fileURL: fileURL, mimeType: mime, credential: credential,
-                                    thumbHash: thumbHash, transcription: transcription
-                                )
-                                return (index, result)
-                            }
-                        }
-                        for try await (index, result) in group {
-                            uploadResults[index] = result
-                        }
+                    // L'ORDRE DU COMPOSEUR (#9776) : les fichiers finissent dans
+                    // le désordre, les ids partent dans l'ordre des pièces — la
+                    // passerelle en fait le rang de chacune.
+                    let uploadResults = try await OrderedParallelUpload.run(uploadItems) { item in
+                        try await uploader.uploadFile(
+                            fileURL: item.fileURL, mimeType: item.mimeType, credential: credential,
+                            thumbHash: item.thumbHash, transcription: item.transcription,
+                            capturedInApp: item.capturedInApp
+                        )
                     }
 
-                    for (index, item) in pendingUploads.enumerated() {
-                        guard let result = uploadResults[index] else { continue }
+                    for (item, result) in zip(pendingUploads, uploadResults) {
                         let att = item.attachment
                         let fileURL = item.fileURL
                         // Off-MainActor read: this `Task` inherits the
@@ -624,7 +630,8 @@ extension ConversationView {
                                 DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
                             }
                         }
-                        localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
+                        localAttachments.append(PreparationTracking.promoted(
+                            result.toMessageAttachment(uploadedBy: currentUserId), capturedInApp: att.capturedInApp))
                         // La bulle réconciliée porte l'id SERVEUR de la pièce :
                         // la transcription locale la suit sous cet id, le temps
                         // que `transcription:completed` la confirme.
@@ -634,7 +641,7 @@ extension ConversationView {
                         }
                     }
                     let ok = await viewModel.sendMessage(
-                        content: "",
+                        content: send.group.messageContent,
                         replyToId: send.group.carriesReply ? replyId : nil,
                         storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
                         storyReplyReference: send.group.carriesReply ? storyRef : nil,
@@ -642,7 +649,8 @@ extension ConversationView {
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         protection: protection,
                         originalLanguage: lang,
-                        existingTempId: send.tempId
+                        existingTempId: send.tempId,
+                        attachmentReplyTo: send.group.carriesReply ? replyAnchor : nil
                     )
                     anySuccess = anySuccess || ok
                 } catch {
@@ -666,7 +674,7 @@ extension ConversationView {
                             requeued = (try? await OfflineQueue.shared.enqueueAudios(
                                 sourceAudioURLs: urls,
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -684,7 +692,7 @@ extension ConversationView {
                                 sourceMediaURLs: pairs.map { $0.url },
                                 kinds: pairs.map { $0.kind },
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -731,7 +739,8 @@ extension ConversationView {
                     protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
-                    location: place
+                    location: place,
+                    attachmentReplyTo: textGroup.carriesReply ? replyAnchor : nil
                 )
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok
@@ -778,22 +787,36 @@ extension ConversationView {
 
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
-        guard !items.isEmpty else { return }
+        // Une sélection VIDE n'est une confirmation que si le sélecteur a été
+        // ouvert avec des pièces jointes cochées (#9697) : tout décocher puis
+        // valider les retire. Sinon c'est l'écho d'une remise à zéro.
+        guard !items.isEmpty || !composerState.pickerPreselectedAttached.isEmpty else { return }
         // Priming echo (strip multi-selection injected before presenting the
         // picker) — not a user confirmation, nothing to ingest yet.
-        if composerState.photoPickerPriming {
+        if composerState.photoPickerPriming, !items.isEmpty {
             composerState.photoPickerPriming = false
             return
         }
+        // #9697 — décocher dans le sélecteur une image déjà jointe la retire
+        // de la zone. Lu AVANT la remise à zéro, dont l'écho ne retire rien.
+        detachPendingPieces(composerState.consumePickerDeselection(returned: items.map(\.itemIdentifier)))
         composerState.selectedPhotoItems.removeAll()
+        // #9683 — ce qui est déjà dans la zone (présélectionné à l'ouverture)
+        // n'est pas une sélection nouvelle : écarté, comme les doublons.
+        let fresh = RecentMediaAttachmentLink.ingestibleIndices(
+            of: items.map(\.itemIdentifier),
+            excluding: Set(composerState.attachedLibraryAssetIds)
+        )
+        guard !fresh.isEmpty else { return }
         HapticFeedback.light()
-        for item in items {
+        for item in fresh.map({ items[$0] }) {
             let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
                 item,
                 context: .message,
                 accentColor: accentColor
             )
             trackPreparation(prep)
+            if let assetId = item.itemIdentifier { composerState.linkLibraryAsset(assetId, to: prep.id) }
         }
     }
 
@@ -1005,23 +1028,25 @@ extension ConversationView {
         HapticFeedback.light()
     }
 
-    func handleCameraVideo(_ url: URL) {
+    @discardableResult
+    func handleCameraVideo(_ url: URL, capturedInApp: Bool = false) -> PreparingAttachment {
         let prep = AttachmentPreparationService.shared.prepareVideo(
             sourceURL: url,
             deleteSourceAfterCompression: true,
             context: .message,
             accentColor: MeeshyColors.errorHex
         )
-        trackPreparation(prep)
+        trackPreparation(prep, capturedInApp: capturedInApp)
+        return prep
     }
 
-    func handleCameraCapture(_ image: UIImage) {
+    func handleCameraCapture(_ image: UIImage, capturedInApp: Bool = false) {
         let prep = AttachmentPreparationService.shared.prepareImage(
             image,
             context: .message,
             accentColor: accentColor
         )
-        trackPreparation(prep)
+        trackPreparation(prep, capturedInApp: capturedInApp)
     }
 
     /// Wire a `PreparingAttachment` into the composer:
@@ -1029,9 +1054,10 @@ extension ConversationView {
     /// 2. Observe the handle and, when it reaches `.ready`, promote the
     ///    result into the legacy pending dicts the send pipeline already
     ///    knows how to consume. `.failed` simply drops the tile + toasts.
-    func trackPreparation(_ prep: PreparingAttachment) {
+    func trackPreparation(_ prep: PreparingAttachment, capturedInApp: Bool = false) {
         PreparationTracking.track(prep, preparing: $composerState.preparingAttachments, attachments: $composerState.pendingAttachments,
-                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails)
+                                  mediaFiles: $composerState.pendingMediaFiles, thumbnails: $composerState.pendingThumbnails,
+                                  capturedInApp: capturedInApp)
     }
 
     func sendMessage() {

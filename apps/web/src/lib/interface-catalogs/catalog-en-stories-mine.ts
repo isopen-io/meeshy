@@ -6,6 +6,7 @@ const enStoriesMine = {
   'storiesMine.empty.title': 'No stories sent',
   'storiesMine.empty.subtitle': 'Your published stories will appear here while they’re active.',
   'storiesMine.action.open': 'Open',
+  'storiesMine.action.edit': 'Edit',
   'storiesMine.action.delete': 'Delete',
   'storiesMine.delete.title': 'Delete this story?',
   'storiesMine.delete.body': 'This action is permanent. The story will no longer be visible to anyone.',

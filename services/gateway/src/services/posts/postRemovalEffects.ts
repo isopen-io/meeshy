@@ -5,6 +5,8 @@ import type { RetractedNotificationAnnouncer } from '../notifications/retractedN
 import { deactivatePostTrackingLinks } from './deactivatePostTrackingLinks';
 import { retractPostNotifications } from './retractPostNotifications';
 import { SoundCaptureService } from './SoundCaptureService';
+import { reclaimRemovedContent, type PostEngagementRecorder } from './postEngagementCredits';
+import { purgePostPoints } from '../engagement/PostPointsRecorder';
 
 const log = enhancedLogger.child({ module: 'postRemovalEffects' });
 
@@ -46,6 +48,12 @@ export interface PostRemovalActor {
    * promesse était fausse — la raison n'allait que dans une ligne de log.
    */
   reason?: string;
+  /**
+   * Le retrait est décidé depuis la CONSOLE d'administration. Il se trace
+   * alors même quand l'administrateur est l'auteur : c'est un geste
+   * d'administration, pas la suppression ordinaire d'un auteur.
+   */
+  viaAdministration?: boolean;
 }
 
 /** La seule chose dont ce chemin a besoin de `SoundCaptureService`. */
@@ -62,12 +70,14 @@ export async function applyPostRemovalEffects(
   // résolution que le jumeau `applyMessageRemovalEffects` : les deux routes qui
   // retirent un post n'ont ainsi rien à câbler, et un appelant hors serveur
   // (worker, script, test) retire quand même les lignes, sans annonce.
-  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService()
+  announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+  engagement?: PostEngagementRecorder
 ): Promise<void> {
   // Retrait par un tiers habilité : trace d'audit. Un auteur qui retire son
-  // propre contenu n'est pas un acte de modération — c'est ce qui distingue
-  // les deux, pas la route empruntée.
-  if (actor.id !== post.authorId) {
+  // propre contenu depuis l'app n'est pas un acte de modération ; depuis la
+  // console, si (`viaAdministration`) — tout geste d'administration qui écrit
+  // laisse sa ligne.
+  if (actor.id !== post.authorId || actor.viaAdministration === true) {
     try {
       await prisma.adminAuditLog.create({
         data: {
@@ -86,6 +96,12 @@ export async function applyPostRemovalEffects(
       log.warn('post removal: audit log write failed', { postId: post.id, actorId: actor.id, err });
     }
   }
+
+  // Les points d'un contenu lourd retiré dans la fenêtre du barème reviennent
+  // sur le compte de son AUTEUR (#8959) — que le retrait vienne de lui ou d'un
+  // modérateur : c'est ici, et non dans chaque route, pour que les deux
+  // chemins de retrait l'appliquent. Hors du chemin, ne rejette jamais.
+  reclaimRemovedContent(prisma, post, engagement);
 
   // Les notifications que le post a produites. Placées juste après l'audit —
   // qui doit rester le premier effet écrit, c'est la trace de modération — et
@@ -113,6 +129,18 @@ export async function applyPostRemovalEffects(
     await deactivatePostTrackingLinks(prisma, [post.id]);
   } catch (err) {
     log.warn('post removal: tracking link deactivation failed', { postId: post.id, err });
+  }
+
+  // Ce que ce post a rapporté à chacun de ses lecteurs (#9569). La ligne de
+  // cumul n'a ni relation ni cascade vers `Post` : sans ce retrait elle
+  // resterait orpheline pour toujours, plus aucune lecture ne la demandant.
+  // Les points eux-mêmes restent acquis au score — seul ce qui les rattachait
+  // à un post disparu s'en va. Placé APRÈS les notifications et les liens :
+  // rien ne lit cette ligne en temps réel, son retard ne se voit nulle part.
+  try {
+    await purgePostPoints(prisma, [post.id]);
+  } catch (err) {
+    log.warn('post removal: post points purge failed', { postId: post.id, err });
   }
 
   // Les usages meurent avec le post ; le `Sound`, lui, SURVIT. Sans ceci, une

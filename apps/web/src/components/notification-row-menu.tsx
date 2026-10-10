@@ -93,7 +93,7 @@ export function NotificationRowMenu({
   const label = translate(language, 'notifications.actions');
 
   return (
-    <div className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2">
+    <div className="pointer-events-none absolute top-1/2 end-2 -translate-y-1/2">
       <button
         ref={buttonRef}
         type="button"
@@ -140,7 +140,7 @@ export function NotificationRowMenu({
                     item.run();
                     closeAndFocusButton();
                   }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
                   style={{ color: item.id === 'delete' ? 'var(--color-error)' : 'var(--color-ios-ink)', minHeight: MENU_ITEM_HEIGHT }}
                 >
                   <span className="grid place-items-center" style={{ color: item.id === 'delete' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}>

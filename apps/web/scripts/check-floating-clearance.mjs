@@ -85,7 +85,11 @@ const releve = (page, chrome) =>
         const r = d.getBoundingClientRect();
         return { top: r.top, left: r.left, width: r.width };
       });
-      if (port === null) return { port: null, disques, textes: [], controles: [], tuiles: [] };
+      /* Le bandeau du haut (#9536) allonge l'encoche de la coquille pendant les
+         trente secondes de l'ouverture : le couloir des disques descend d'autant. */
+      const hote = document.querySelector('[data-top-band-host]');
+      const bande = hote === null ? 0 : Number.parseFloat(getComputedStyle(hote).getPropertyValue('--top-band')) || 0;
+      if (port === null) return { port: null, bande, disques, textes: [], controles: [], tuiles: [] };
 
       const clipTop = Math.max(port.top, 0);
       const clipBottom = Math.min(port.bottom, innerHeight);
@@ -168,7 +172,7 @@ const releve = (page, chrome) =>
         })
         .filter((t) => t !== null);
 
-      return { port: { top: port.top, bottom: port.bottom }, disques, textes, controles, tuiles };
+      return { bande, port: { top: port.top, bottom: port.bottom }, disques, textes, controles, tuiles };
     },
     { chrome, cible: CIBLE },
   );
@@ -187,8 +191,8 @@ const cotes = (page, variant) =>
 const exigeRepos = (tag, mesure) => {
   constate(mesure.port !== null, `${tag} : le scrollport #contenu est introuvable`);
   constate(
-    mesure.disques.length === 2 && mesure.disques.every((d) => Math.round(d.top) === IOS.floatingTop),
-    `${tag} : les deux disques ne sont pas posés au couloir par défaut (${IOS.floatingTop}) — ${JSON.stringify(mesure.disques)}`,
+    mesure.disques.length === 2 && mesure.disques.every((d) => Math.round(d.top) === Math.round(IOS.floatingTop + mesure.bande)),
+    `${tag} : les deux disques ne sont pas posés au couloir par défaut (${IOS.floatingTop} + bandeau ${mesure.bande}) — ${JSON.stringify(mesure.disques)}`,
   );
   constate(mesure.controles.length > 0, `${tag} : aucun contrôle du chrome mesuré`);
   constate(mesure.tuiles.length > 0, `${tag} : aucune tuile du grand plateau mesurée`);
@@ -243,8 +247,8 @@ for (const scheme of ['light', 'dark']) {
     bilan.textes += flux.textes.length;
     const premiereCarte = await page.evaluate(() => document.querySelector('[data-feed-card]')?.getBoundingClientRect().top ?? null);
     constate(
-      premiereCarte !== null && premiereCarte >= IOS.floatingTop + IOS.floatingButton - 0.5,
-      `${tagFlux} : la première carte commence DANS le couloir des disques (${premiereCarte} < ${IOS.floatingTop + IOS.floatingButton})`,
+      premiereCarte !== null && premiereCarte >= IOS.floatingTop + flux.bande + IOS.floatingButton - 0.5,
+      `${tagFlux} : la première carte commence DANS le couloir des disques (${premiereCarte} < ${IOS.floatingTop + flux.bande + IOS.floatingButton})`,
     );
 
     const grandeFlux = await cotes(page, 'grande');

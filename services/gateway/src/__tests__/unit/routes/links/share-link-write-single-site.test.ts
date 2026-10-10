@@ -50,10 +50,16 @@ function buildFastify() {
   return {
     prisma: {
       conversationShareLink: {
+        // #9713 — rouvrir relit la ligne et son créateur (la loi des liens
+        // actifs) ; un créateur à l'adresse prouvée n'a pas de plafond.
+        findUnique: jest.fn<any>(async () => ({ createdBy: 'creator-1', isActive: false, expiresAt: null })),
         update: jest.fn<any>(async (args: any) => {
           journal.push('update');
           return { id: args.where.id, ...args.data };
         }),
+      },
+      user: {
+        findUnique: jest.fn<any>(async () => ({ createdAt: new Date(), emailVerifiedAt: new Date(), phoneNumber: null, emailReleasedAt: null })),
       },
     },
     socketIOHandler: {

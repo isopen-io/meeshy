@@ -211,3 +211,52 @@ describe('SceneObjectAudio — un son POSÉ emprunté à la bibliothèque (#7015
     expect(defaultAudioMediaDeps).toBe(protectedMediaDeps);
   });
 });
+
+/**
+ * #9737 — UN SON DE PREMIER PLAN SE VOIT : une pastille sur la scène, dans la
+ * forme que sa provenance décide (`sceneAudioChipForm`, miroir
+ * `StoryAudioIdentity.form`). La couche ne rendait qu'une balise `<audio>` :
+ * un son posé par l'auteur à un endroit de la scène n'y laissait rien.
+ */
+describe('SceneObjectAudio — la pastille du son de premier plan (#9737)', () => {
+  const posed = (payload: Record<string, unknown>): CanvasObject => ({ ...posedSound('/api/v1/attachments/file/voix.m4a'), payload: { mediaURL: '/api/v1/attachments/file/voix.m4a', ...payload } });
+  const render = (object: CanvasObject) =>
+    mount(<SceneObjectAudio object={object} carrier={CARRIER} playing={false} muted clock={null} onPlaybackBlocked={undefined} mediaDeps={depsDeTest()} />);
+
+  test('un enregistrement ⇒ la note et l’onde de SES échantillons, une barre par échantillon retenu', () => {
+    const el = render(posed({ waveformSamples: [0.1, 0.5, 1, 0.3] }));
+    const chip = el.querySelector('[data-scene-audio-chip="recording"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.querySelector('svg')).not.toBeNull();
+    expect(chip?.querySelectorAll('[data-scene-audio-bar]').length).toBe(4);
+    expect(chip?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  test('100 000 échantillons FORGÉS par un auteur ⇒ au plus 24 barres rendues : le contenu ne commande jamais la taille du DOM', () => {
+    const el = render(posed({ waveformSamples: Array.from({ length: 100_000 }, (_, i) => (i % 10) / 10) }));
+    const bars = el.querySelectorAll('[data-scene-audio-bar]').length;
+    expect(bars).toBeGreaterThan(0);
+    expect(bars).toBeLessThanOrEqual(24);
+  });
+
+  test('un enregistrement sans échantillons ⇒ l’onde de repos, jamais une pastille vide ni des barres qui se diraient les siennes', () => {
+    const el = render(posed({}));
+    const chip = el.querySelector('[data-scene-audio-chip="recording"]');
+    expect(chip?.lastElementChild?.childElementCount).toBe(7);
+    expect(chip?.querySelectorAll('[data-scene-audio-bar]').length).toBe(0);
+  });
+
+  test('un emprunt ⇒ la note et « titre · @auteur », sans onde', () => {
+    const el = render(posed({ soundId: 'snd1', name: 'Pluie', soundAuthorUsername: 'sam', waveformSamples: [0.4] }));
+    const chip = el.querySelector('[data-scene-audio-chip="borrowed"]');
+    expect(chip?.textContent).toBe('Pluie · @sam');
+    expect(chip?.querySelector('[data-scene-audio-bar]')).toBeNull();
+    expect(chip?.getAttribute('aria-hidden')).toBeNull();
+  });
+
+  test('une piste que rien n’adresse ⇒ ni balise ni pastille : rien à annoncer', () => {
+    const el = render({ ...posed({}), payload: {} });
+    expect(el.querySelector('[data-scene-audio-chip]')).toBeNull();
+    expect(audioOf(el)).toBeNull();
+  });
+});

@@ -32,12 +32,19 @@ public struct StoryExportInputs: @unchecked Sendable {
     /// Fichiers audio de session, keyés par id d'`StoryAudioPlayerObject`.
     public let audioURLs: [String: URL]
 
+    /// Octets ANIMÉS des stickers collés (GIF, APNG…), keyés comme `images`
+    /// (#8610). `images[clé]` n'en porte que la PREMIÈRE image : sans les
+    /// octets, un GIF collé sortait figé du fichier exporté.
+    public let animations: [String: Data]
+
     public init(stickerImageSources: [String: String] = [:],
                 images: [String: UIImage] = [:],
-                audioURLs: [String: URL] = [:]) {
+                audioURLs: [String: URL] = [:],
+                animations: [String: Data] = [:]) {
         self.stickerImageSources = stickerImageSources
         self.images = images
         self.audioURLs = audioURLs
+        self.animations = animations
     }
 
     public static let none = StoryExportInputs()
@@ -71,6 +78,7 @@ extension StoryExporter {
                          audioResolver: inputs.audioResolver,
                          stickerImageSources: inputs.stickerImageSources,
                          images: inputs.images,
+                         animations: inputs.animations,
                          progress: progress)
     }
 }

@@ -103,13 +103,9 @@ struct DocumentComposerDoor: View {
     @State private var previewAssets: StoryPreviewAssets?
 
     var body: some View {
+        // L'hôte des toasts est monté par le meuble lui-même
+        // (`ComposerHostChromeLayer`, #4872) : le reposer ici les doublerait.
         composerHost
-            // **Le composer porte son propre hôte de toasts** (#4872). Il est
-            // présenté en `fullScreenCover`, donc il COUVRE celui de la racine :
-            // sans cette ligne, chacun de ses refus — publication impossible,
-            // micro refusé, format sans canal — se levait derrière l'écran et
-            // l'auteur voyait une flèche qui semble ne rien faire.
-            .feedbackToastOverlay()
             .fullScreenCover(item: $previewAssets) { assets in
                 apercu(assets)
             }
@@ -157,7 +153,8 @@ struct DocumentComposerDoor: View {
                     references: references,
                     composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
                                                            caption: accessibility.mediaCaption ?? [:]),
-                    allowSoundExtraction: accessibility.allowSoundExtraction
+                    allowSoundExtraction: accessibility.allowSoundExtraction,
+                    alsoAsReel: accessibility.alsoAsReel
                 )
                 // La publication accepte TOUJOURS : hors-ligne, elle part en
                 // file d'attente plutôt que de rester dans le composer.

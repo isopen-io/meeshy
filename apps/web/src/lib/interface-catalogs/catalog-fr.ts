@@ -14,6 +14,7 @@ import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
+import frWriteRestriction from './catalog-fr-write-restriction';
 import frConversationCard from './catalog-fr-conversation-card';
 import frComposerAttach from './catalog-fr-composer-attach';
 import frThreadStates from './catalog-fr-thread-states';
@@ -27,6 +28,7 @@ import frPassword from './catalog-fr-password';
 import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
+import frEngagement from './catalog-fr-engagement';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
@@ -44,6 +46,9 @@ import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
+import frDownload from './catalog-fr-download';
+import frPhonePrompt from './catalog-fr-phone-prompt';
+import frUserProfile from './catalog-fr-user-profile';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -52,21 +57,10 @@ const fr = {
   'announce.messageProtected': 'Message protégé',
   'announce.selectionCap': 'Maximum {count} messages',
   'announce.nothingToCopy': 'Rien à copier',
-
   'message.author.self': 'Vous',
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
 
-  'selection.toolbar': 'Sélection de messages',
-  'selection.cancel': 'Annuler',
-  'selection.count': '{count} sélectionnés',
-  'forward.title': 'Transférer à…',
-  'forward.empty': 'Aucune conversation',
-  'forward.search.label': 'Rechercher une conversation',
-  'forward.search.placeholder': 'Rechercher',
-  'forward.announce.sent': 'Message transféré',
-  'forward.announce.sentMany': '{count} messages transférés',
-  'forward.announce.failed': 'Le transfert a échoué',
   'forward.refusal.viewOnce': 'Un message à vue unique ne peut pas être transféré',
   'forward.refusal.unavailable': 'Le message d’origine n’est plus disponible : rien à transférer',
 
@@ -97,7 +91,6 @@ const fr = {
   'reels.sound.off': 'Couper le son',
   'reels.play': 'Lire le réel',
   'reels.pause': 'Mettre le réel en pause',
-  'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
   /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
@@ -215,6 +208,7 @@ const fr = {
   ...frAccounts,
   ...frCall,
   ...frRowActions,
+  ...frEngagement,
   ...frCallShell,
   ...frCallJoin,
   ...frCallDecline,
@@ -226,7 +220,6 @@ const fr = {
   ...frCallCaptions,
   ...frCallRecording,
   ...frSignup,
-  'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
   'report.action': 'Signaler',
@@ -246,7 +239,6 @@ const fr = {
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',
   'feed.share.error': 'Impossible de partager la publication',
   'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
-  'feed.share.text': 'Une publication sur Meeshy',
 
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
@@ -271,6 +263,7 @@ const fr = {
   'notifications.category.reactions': 'Réactions',
   'notifications.category.mentions': 'Mentions',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engagements',
   'notifications.category.contacts': 'Contacts',
   'notifications.category.groups': 'Groupes',
   'notifications.category.calls': 'Appels',
@@ -483,6 +476,7 @@ const fr = {
   'settings.export_data': 'Exporter mes données',
   'settings.section.tools': 'Outils',
   'settings.tools.progression': 'Progression',
+  'settings.tools.game': 'Jeu',
   'settings.section.about': 'À propos',
   'settings.terms': "Conditions d'utilisation",
   'settings.privacy_policy': 'Politique de confidentialité',
@@ -497,6 +491,7 @@ const fr = {
   'settings.save.error': "Le réglage n'a pas été enregistré.",
   'settings.theme.sync_error': 'Thème appliqué sur cet appareil, sans synchronisation.',
   'common.cancel': 'Annuler',
+  'common.close': 'Fermer',
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
@@ -504,6 +499,9 @@ const fr = {
   'media.audio.position': 'Position de lecture',
   'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
+  'media.video.duration': 'Durée',
+  'media.video.remaining': 'Temps restant',
+  'media.buffering': 'Chargement…',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',
   'media.video.more_options': "Plus d'options",
@@ -629,7 +627,6 @@ const fr = {
   'discover.blocked.empty.title': 'Aucun utilisateur bloqué',
   'discover.blocked.empty.subtitle': 'Les personnes que vous bloquez apparaîtront ici.',
   'discover.unknown': 'Inconnu',
-  'discover.loading': 'Chargement',
   'discover.allLoaded': 'Toute la liste est chargée',
   'discover.error.title': 'Cette liste n’a pas pu être chargée',
   'discover.error.body': 'Vérifiez votre connexion puis réessayez.',
@@ -649,71 +646,20 @@ const fr = {
   'discover.announce.unblockFailed': 'Impossible de débloquer',
   'discover.announce.offline': 'Hors ligne : rien n’a été envoyé.',
 
-  /* LE PROFIL PUBLIC DE QUELQU'UN (#7083) — préfixe `userProfile.*` : le
-     préfixe `profile.*` appartient à /me, et deux écrans qui partageraient un
-     préfixe partageraient ses retouches. Ce qui EXISTE déjà est réutilisé, pas
-     redit : `discover.connection.*` et `discover.announce.*` (les mêmes
-     gestes), `profile.stats.*`, `profile.section.stats`,
-     `profile.section.member_since`, `profile.retry`, `profile.offline.title`. */
-  'userProfile.title': 'Profil',
-  'userProfile.loading': 'Chargement du profil',
-  'userProfile.section.publications': 'PUBLICATIONS',
-  'userProfile.section.relation': 'CONNEXION',
-  'userProfile.section.conversations': 'CONVERSATIONS',
-  'userProfile.conversations.empty': 'Aucune conversation en commun',
-  'userProfile.conversations.emptyBody': 'Rien ne vous relie encore — « Écrire » ouvre la première.',
-  'userProfile.conversations.error': 'Impossible de charger les conversations',
-  'userProfile.conversations.loading': 'Chargement des conversations',
-  'userProfile.refused.title': 'Ce profil n’est pas accessible',
-  'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
-  'userProfile.throttled.title': 'Trop de demandes',
-  'userProfile.throttled.body': 'Réessayez dans un instant.',
-  'userProfile.error.title': 'Impossible de charger ce profil',
-  'userProfile.error.body': 'Réessayez dans un instant.',
-  'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
-  'userProfile.posts.empty': 'Aucune publication',
-  'userProfile.posts.emptyBody': 'Rien de public à lire pour l’instant.',
   /* LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE (miroir de
      `filteredEmptyState`, `ProfileUserPostsList.swift:498-510`) : dire
      « Aucune publication » à qui vient de toucher « Réels » est FAUX — le
      compte publie, c'est le filtre qui ne trouve rien ICI. */
-  'userProfile.posts.emptyPosts': 'Aucun poste',
-  'userProfile.posts.emptyReels': 'Aucun réel',
-  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
-  'userProfile.posts.error': 'Impossible de charger les publications',
-  'userProfile.posts.loadMore': 'Charger plus',
   /* CE QUI EST ARRIVÉ SE DIT (revue #7083) : « Charger plus » était le seul
      geste de l'écran à changer la LONGUEUR de la liste, et le seul à ne rien
      annoncer. La forme « Publications ajoutées : {count} » évite l'accord de
      pluriel dans les sept langues — un seul libellé pour 1 comme pour 12. */
-  'userProfile.posts.loaded': 'Publications ajoutées : {count}',
-  'userProfile.posts.loadedNone': 'Aucune publication de plus à afficher',
-  'userProfile.posts.loading': 'Chargement…',
-  'userProfile.stat.posts': 'Postes',
-  'userProfile.stat.reels': 'Réels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filtrer sur {name}',
-  'userProfile.stat.filterClear': 'Tout afficher',
-  'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
-  'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
-  'userProfile.action.write': 'Écrire',
-  'userProfile.action.writeLabel': 'Écrire à {name}',
-  'userProfile.action.block': 'Bloquer',
-  'userProfile.action.blockLabel': 'Bloquer {name}',
-  'userProfile.blocked.title': 'Vous avez bloqué cette personne',
-  'userProfile.blocked.body': 'Ses publications et ses statistiques restent masquées tant que le blocage dure.',
-  'userProfile.signin.title': 'Connectez-vous pour entrer en contact',
-  'userProfile.signin.body': 'Les demandes de connexion et les messages demandent un compte.',
-  'userProfile.signin.cta': 'Se connecter',
-  'userProfile.announce.blocked': 'Personne bloquée',
-  'userProfile.announce.blockFailed': 'Impossible de bloquer',
-  'userProfile.announce.writeFailed': 'Impossible d’ouvrir la conversation',
 
   'a11y.floating.rung.discover.requests.one': 'Découvrir, {count} demande reçue',
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 
   'links.hub.banner.title': 'Gérez vos liens',
-  'links.hub.banner.subtitle': 'Invitez qui vous voulez dans vos conversations',
+  'links.hub.banner.subtitle': 'Partagez, suivez et développez votre audience',
   'links.hub.share.title': 'Liens de partage',
   'links.hub.share.description': 'Invitez des contacts à rejoindre vos conversations',
   'links.hub.share.create': 'Créer un lien de partage',
@@ -743,8 +689,6 @@ const fr = {
   'links.detail.disable': 'Désactiver',
   'links.detail.activate': 'Activer',
   'links.detail.stats': 'Statistiques',
-  'links.detail.stats.uses': 'Utilisations',
-  'links.detail.stats.max': 'Maximum',
   'links.detail.info': 'Informations',
   'links.detail.identifier': 'Identifiant',
   'links.detail.createdAt': 'Créé le',
@@ -820,8 +764,6 @@ const fr = {
   'feed.scene.mosaic.more': 'Scène {index}, et {count} de plus',
   'feed.scene.mosaic.video': 'Scène {index}, vidéo',
   'feed.scene.shared_by': 'Scène partagée par {author}',
-  'feed.scene.open.fullscreen': 'Touche deux fois pour voir en plein écran',
-  'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
   'scene.fullscreen.play': 'Tout reprendre',
@@ -841,7 +783,6 @@ const fr = {
      comme iOS. */
   'story.studio.title': 'Nouvelle story',
   'story.studio.cancel': 'Annuler',
-  'story.studio.publish': 'Publier',
   'story.studio.publishing': 'Publication…',
   'story.studio.publish.waiting': 'En attente du réseau…',
   'story.studio.publishing.progress': 'Publication {current}/{total}…',
@@ -872,7 +813,6 @@ const fr = {
   'story.studio.text.label': 'Texte de la story',
   'story.studio.text.placeholder': 'Ajouter du texte',
   'story.studio.hint.duration': 'Une story reste visible vingt heures.',
-  'story.studio.error.upload': 'Le fichier n’a pas pu être envoyé.',
   'story.studio.error.publish': 'La story n’a pas pu être publiée.',
   'story.studio.refusal.title': 'Un compte est nécessaire pour créer une story.',
   'story.studio.refusal.login': 'Se connecter',
@@ -891,11 +831,8 @@ const fr = {
   'story.studio.failure.refused': 'Publication refusée.',
   'story.studio.failure.unavailable': 'La passerelle est indisponible.',
   'story.studio.text.add': 'Ajouter un texte',
-  'story.studio.text.remove': 'Retirer ce texte',
   'story.studio.object.text': 'Texte {index}',
   'story.studio.object.overlay': 'Calque',
-  'story.studio.object.select': 'Sélectionner {name}',
-  'story.studio.objects.label': 'Objets de la scène',
   'story.studio.overlay.add': 'Poser une image sur la scène',
   'story.studio.overlay.label': 'Calque',
   'story.studio.overlay.remove': 'Retirer le calque',
@@ -968,8 +905,6 @@ const fr = {
   'story.studio.pose.rotateLeft': 'Tourner à gauche',
   'story.studio.pose.rotateRight': 'Tourner à droite',
   'story.studio.pose.reset': 'Recentrer',
-  'story.studio.pose.handle': 'Déplacer {name} — flèches pour déplacer, + et − pour la taille, [ et ] pour tourner',
-  'story.studio.pose.grip': 'Redimensionner et faire tourner {name}',
 
   /* LA FEUILLE D'AUDIENCE DU STUDIO (#7683) — les six PostVisibility,
      miroir de PostVisibility.swift (packages/MeeshySDK). */
@@ -1082,7 +1017,6 @@ const fr = {
   'comment.refused.session': 'Session expirée — reconnectez-vous.',
   'comment.refused.right': 'Ce geste ne vous est pas ouvert.',
   'comment.like.limit': 'Cinq réactions au maximum par personne.',
-  'feed.action.comment': 'Commenter',
 
   'admin.title': 'Administration',
 
@@ -1117,11 +1051,8 @@ const fr = {
      est ce que le produit tient : la fiche App Store, qui existe, et le web,
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
-  'download.title': 'Téléchargez Meeshy',
-  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
-  'download.appStore': 'Télécharger dans l’App Store',
-  'download.web': 'Ouvrir Meeshy dans le navigateur',
-  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
+  ...frDownload,
+  ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
      Les libellés et les gestes annoncés reprennent le catalogue d'iOS
@@ -1155,6 +1086,7 @@ const fr = {
   ...frMentions,
   ...frStudioChrome,
   ...frEphemeral,
+  ...frWriteRestriction,
   ...frGallery,
   ...frMessageCard,
   ...frConversationCard,
@@ -1189,11 +1121,13 @@ const fr = {
   'message.detail.language.original': '{language} (original)',
 
   ...frStoriesMine,
+  'settings.tools.sounds': 'Mes sons',
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,
   ...frCommentRow,
   ...frContactDiscovery,
+  ...frUserProfile,
 } as const;
 
 export default fr;

@@ -2,6 +2,7 @@ import XCTest
 import SwiftUI
 @testable import MeeshySDK
 @testable import Meeshy
+import MeeshyUI
 
 /// Une story ne compte comme « vue » qu'une fois réellement montrée.
 ///
@@ -205,5 +206,144 @@ final class StoryViewedMarkingTests: XCTestCase {
         XCTAssertEqual(postService.recordImpressionCallCount, 1,
                        "Une story servie par le serveur doit toujours compter son impression")
         XCTAssertEqual(postService.lastRecordImpressionPostId, serverStoryId(0))
+    }
+
+    // MARK: - #9804 — une story vue reste vue après la relance
+
+    /// Un registre jetable, relu par une NOUVELLE instance pour chaque
+    /// « lancement » : c'est le stockage, pas l'objet, qui doit porter la vue.
+    private func makeLedgerStorage() -> (defaults: UserDefaults, suite: String) {
+        let suite = "StoryViewedDurability-\(UUID().uuidString)"
+        return (UserDefaults(suiteName: suite)!, suite)
+    }
+
+    private static func iso(_ offset: TimeInterval) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date().addingTimeInterval(offset))
+    }
+
+    /// Une story telle que le tray du serveur la sert.
+    private static func trayStoryJSON(id: String, authorId: String, isViewedByMe: Bool,
+                                      contentEditedAt: String? = nil) -> String {
+        let edited = contentEditedAt.map { ",\"contentEditedAt\":\"\($0)\"" } ?? ""
+        return """
+        {"id":"\(id)","type":"STORY","content":"c","createdAt":"\(iso(-600))",\
+        "updatedAt":"\(iso(-60))","expiresAt":"\(iso(36_000))","isViewedByMe":\(isViewedByMe)\(edited),\
+        "author":{"id":"\(authorId)","username":"\(authorId)"}}
+        """
+    }
+
+    private static func trayPage(_ storiesJSON: String) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode("""
+        {"success":true,"data":[\(storiesJSON)],\
+        "pagination":{"limit":50,"hasMore":false,"nextCursor":null},"error":null,\
+        "meta":{"deletedStoryIds":[],"deletedStoryIdsTruncated":false}}
+        """)
+    }
+
+    private func makeViewer(service: StoryServiceProviding = MockStoryService(),
+                            ledgerDefaults: UserDefaults,
+                            recorder: Recorder = Recorder()) -> StoryViewModel {
+        let vm = StoryViewModel(storyService: service, postService: MockPostService())
+        vm.viewedLedger = StoryViewedLedger(userDefaults: ledgerDefaults)
+        vm.markViewedOutboxEnqueuer = { id in
+            await MainActor.run { recorder.ids.append(id) }
+        }
+        return vm
+    }
+
+    private func makeGroup(author: String, storyId: String) -> StoryGroup {
+        StoryGroup(id: author, username: "alice", avatarColor: "#6366F1",
+                   avatarURL: nil, stories: [makeStory(id: storyId)])
+    }
+
+    private func purgeTrayCache() async {
+        await CacheCoordinator.shared.stories.invalidate(for: StoryViewModel.storiesCacheKey)
+    }
+
+    /// Démarrage à froid sur cache vide (premier lancement, cache périmé, ou
+    /// tirer-pour-rafraîchir qui l'a invalidé) pendant que le serveur n'a pas
+    /// encore la vue : le tray est reconstruit depuis le serveur seul.
+    func test_viewedStory_staysThinAfterColdStart_whileServerHasNotConfirmed() async {
+        let storage = makeLedgerStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suite) }
+        let storyId = serverStoryId(0)
+        let author = "author-cold-\(UUID().uuidString)"
+
+        let before = makeViewer(ledgerDefaults: storage.defaults)
+        before.storyGroups = [makeGroup(author: author, storyId: storyId)]
+        before.markViewed(storyId: storyId)
+        await settle()
+
+        let service = MockStoryService()
+        service.listResult = .success(Self.trayPage(
+            Self.trayStoryJSON(id: storyId, authorId: author, isViewedByMe: false)))
+        let relaunched = makeViewer(service: service, ledgerDefaults: storage.defaults)
+        await relaunched.fetchStoriesFromNetwork()
+        await purgeTrayCache()
+
+        XCTAssertEqual(relaunched.storyRingState(forUserId: author), .read,
+                       "Une story vue garde son anneau fin après la relance, même avant la confirmation du serveur")
+    }
+
+    /// Vue hors ligne, puis un autre écrivain du tray (le préchargement de la
+    /// liste des conversations) réécrit l'instantané avec la version serveur,
+    /// encore « non vue ». La relance hors ligne sert ce cache : l'anneau doit
+    /// rester fin. La vue part vers le serveur par la file durable, et la
+    /// confirmation serveur la garde fine.
+    func test_viewedOffline_staysThinOnCachedColdStart_thenServerConfirms() async {
+        let storage = makeLedgerStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suite) }
+        let storyId = serverStoryId(1)
+        let author = "author-offline-\(UUID().uuidString)"
+        let recorder = Recorder()
+
+        let before = makeViewer(ledgerDefaults: storage.defaults, recorder: recorder)
+        before.storyGroups = [makeGroup(author: author, storyId: storyId)]
+        before.markViewed(storyId: storyId)
+        await settle()
+        XCTAssertEqual(recorder.ids, [storyId], "La vue doit partir par la file durable pour être confirmée")
+
+        try? await CacheCoordinator.shared.stories.save(
+            [makeGroup(author: author, storyId: storyId)], for: StoryViewModel.storiesCacheKey)
+
+        let offline = MockStoryService()
+        offline.listResult = .failure(URLError(.notConnectedToInternet))
+        let relaunched = makeViewer(service: offline, ledgerDefaults: storage.defaults)
+        await relaunched.loadStories()
+
+        XCTAssertEqual(relaunched.storyRingState(forUserId: author), .read,
+                       "Hors ligne, le cache réécrit par un autre écrivain ne doit pas rallumer l'anneau")
+
+        offline.listResult = .success(Self.trayPage(
+            Self.trayStoryJSON(id: storyId, authorId: author, isViewedByMe: true)))
+        await relaunched.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 0))
+        await purgeTrayCache()
+
+        XCTAssertEqual(relaunched.storyRingState(forUserId: author), .read,
+                       "La confirmation du serveur garde l'anneau fin")
+    }
+
+    /// Contrôle : le registre ne fige pas un « vu » que l'édition du contenu a
+    /// remis à zéro — une story éditée APRÈS la vue redevient non vue.
+    func test_storyEditedAfterTheView_relightsTheRing() async {
+        let storage = makeLedgerStorage()
+        defer { storage.defaults.removePersistentDomain(forName: storage.suite) }
+        let storyId = serverStoryId(2)
+        let author = "author-edited-\(UUID().uuidString)"
+        StoryViewedLedger(userDefaults: storage.defaults)
+            .record(storyId: storyId, ownerId: AuthManager.shared.currentUser?.id ?? "",
+                    at: Date().addingTimeInterval(-3_600))
+
+        let service = MockStoryService()
+        service.listResult = .success(Self.trayPage(Self.trayStoryJSON(
+            id: storyId, authorId: author, isViewedByMe: false, contentEditedAt: Self.iso(-60))))
+        let relaunched = makeViewer(service: service, ledgerDefaults: storage.defaults)
+        await relaunched.fetchStoriesFromNetwork()
+        await purgeTrayCache()
+
+        XCTAssertEqual(relaunched.storyRingState(forUserId: author), .unread,
+                       "Une story éditée après la vue doit rallumer son anneau")
     }
 }

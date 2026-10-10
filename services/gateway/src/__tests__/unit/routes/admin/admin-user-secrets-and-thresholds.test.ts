@@ -147,6 +147,7 @@ const prisma: Record<string, Record<string, jest.Mock>> = {
     count: jest.fn(async () => 2),
   },
   conversationShareLink: {
+    count: jest.fn(async () => 61),
     findMany: jest.fn(async (args: { select?: unknown }) => {
       selects.conversationShareLink = args?.select;
       return [projeter({ id: 'sl1', linkId: 'mshy_SECRET', identifier: 'mshy_IDENT', name: 'n', description: null,
@@ -155,6 +156,7 @@ const prisma: Record<string, Record<string, jest.Mock>> = {
     }),
   },
   trackingLink: {
+    count: jest.fn(async () => 2),
     findMany: jest.fn(async (args: { select?: unknown }) => {
       selects.trackingLink = args?.select;
       return [projeter({ id: 'tl1', token: 'TOKEN_TRACK', name: 'n', campaign: null, source: null, medium: null,
@@ -163,13 +165,14 @@ const prisma: Record<string, Record<string, jest.Mock>> = {
     }),
   },
   affiliateToken: {
+    count: jest.fn(async () => 1),
     findMany: jest.fn(async (args: { select?: unknown }) => {
       selects.affiliateToken = args?.select;
       return [projeter({ id: 'af1', token: 'TOKEN_AFFIL', name: 'n', maxUses: null, currentUses: 0,
                 clickCount: 0, isActive: true, expiresAt: null, createdAt: new Date(), _count: { affiliations: 0 } }, args?.select)];
     }),
   },
-  friendRequest: { findMany: jest.fn(async () => []) },
+  friendRequest: { findMany: jest.fn(async () => []), count: jest.fn(async (args: { where: Record<string, unknown> }) => ('senderId' in args.where ? 3 : 4)) },
   report: { findMany: jest.fn(async () => []), count: jest.fn(async () => 0) },
   conversation: { findMany: jest.fn(async () => []), findUnique: jest.fn(), count: jest.fn(async () => 0) },
   participant: { findMany: jest.fn(async () => []), count: jest.fn(async () => 0), groupBy: jest.fn(async () => []) },
@@ -293,6 +296,19 @@ describe("#4157 R4 — aucun secret d'accès ne voyage dans l'activité", () => 
     expect((selects.conversationShareLink as Record<string, unknown>)?.identifier).toBeUndefined();
     expect((selects.affiliateToken as Record<string, unknown>)?.token).toBeUndefined();
 
+    await app.close();
+  });
+});
+
+describe("l'activité sert le TOTAL de chaque liste bornée", () => {
+  it('sert totals à côté des listes de cinquante', async () => {
+    const app = monter();
+    const res = await app.inject({ method: 'GET', url: '/admin/users/u1/activity' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.totals).toEqual({
+      shareLinks: 61, trackingLinks: 2, affiliateTokens: 1, contactsSent: 3, contactsReceived: 4,
+    });
+    expect(prisma.conversationShareLink.count).toHaveBeenCalledWith({ where: { createdBy: 'u1' } });
     await app.close();
   });
 });

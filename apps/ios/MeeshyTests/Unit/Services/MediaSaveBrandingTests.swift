@@ -23,6 +23,15 @@ final class MediaSaveBrandingTests: XCTestCase {
 
     // MARK: - Le prédicat décide par l'ORIGINE
 
+    /// Recette #9681 — un réel de @demo-test-staging enregistré par @atabeth
+    /// sortait signé « @atabeth ». Le pseudo gravé est celui de l'AUTEUR ; le
+    /// spectateur n'est nommé que s'il est lui-même l'auteur (`author == nil`).
+    func test_handle_namesTheAuthor_neverTheViewerWhoSaves() {
+        XCTAssertEqual(MeeshyMediaSaveBranding.handle(author: "demo-test-staging", viewer: "atabeth"), "demo-test-staging")
+        XCTAssertEqual(MeeshyMediaSaveBranding.handle(author: nil, viewer: "atabeth"), "atabeth")
+        XCTAssertNil(MeeshyMediaSaveBranding.handle(author: "", viewer: "atabeth"), "auteur inconnu : aucun pseudo, pas celui du spectateur")
+    }
+
     func test_stamps_theTwoImages_partWays_onTheirOriginAlone() {
         // MÊME famille, verdicts OPPOSÉS : c'est l'origine, et elle seule, qui
         // tranche. Le rendu d'une scène de post porte la marque ; la photo

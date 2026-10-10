@@ -1,7 +1,8 @@
 import { raw } from './html.mjs'
 
-// Illustrations vectorielles maison pour les médias de démo (photos, stories, vidéo d'appel) :
-// aucune photo réelle, aucune personne identifiable, aucune ressource réseau.
+// Illustrations vectorielles maison des visuels sociaux (la ville générique « ma ville », la vidéo
+// d'appel floutée) : aucune personne identifiable, aucune ressource réseau. Les scènes de la
+// vitrine App Store ont, elles, des photos réelles (lib/photos.mjs, #8825).
 
 const skyline = (seed, base, color, { width = 400, count = 14, min = 40, max = 150 } = {}) => {
   const step = width / count
@@ -26,38 +27,6 @@ const skyline = (seed, base, color, { width = 400, count = 14, min = 40, max = 1
 }
 
 const SCENES = {
-  'coucher-osaka': (id) => `
-    <defs>
-      <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#312e81"/><stop offset=".38" stop-color="#8b5cf6"/>
-        <stop offset=".68" stop-color="#f28482"/><stop offset="1" stop-color="#fbbf24"/>
-      </linearGradient>
-      <radialGradient id="${id}u" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff7d6"/><stop offset=".45" stop-color="#fcd34d"/><stop offset="1" stop-color="#fcd34d" stop-opacity="0"/></radialGradient>
-    </defs>
-    <rect width="400" height="300" fill="url(#${id}s)"/>
-    <circle cx="250" cy="186" r="90" fill="url(#${id}u)"/>
-    <circle cx="250" cy="186" r="30" fill="#fff4c2"/>
-    <path d="M0 150 Q60 138 120 150 T240 146 T400 152" stroke="#fff" stroke-opacity=".18" stroke-width="10" fill="none"/>
-    <g fill="#2e1065" fill-opacity=".85"><path d="M70 236h60v-14l-8-6h-44l-8 6z M84 216l16-18 16 18z M92 198l8-9 8 9z"/></g>
-    <g opacity=".7">${skyline(4, 256, '#4c1d95', { count: 20, min: 40, max: 110 })}</g>${skyline(7, 262, '#1e1b4b', { count: 14, min: 24, max: 80 })}
-    <rect y="252" width="400" height="48" fill="#1e1b4b"/>
-    <g stroke="#fbbf24" stroke-opacity=".5" stroke-width="3" stroke-linecap="round"><path d="M40 270h40M120 282h60M230 270h50M300 286h70"/></g>`,
-  paulista: (id) => `
-    <defs>
-      <linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#1e1b4b"/><stop offset=".35" stop-color="#6366f1"/>
-        <stop offset=".62" stop-color="#f4845f"/><stop offset=".82" stop-color="#fbbf24"/><stop offset="1" stop-color="#f28482"/>
-      </linearGradient>
-    </defs>
-    <rect width="400" height="700" fill="url(#${id}s)"/>
-    <circle cx="200" cy="430" r="62" fill="#fff1c1" fill-opacity=".95"/>
-    <circle cx="200" cy="430" r="130" fill="#fde68a" fill-opacity=".18"/>
-    <g opacity=".75">${skyline(3, 575, '#6d4aa8', { count: 22, min: 70, max: 230 })}</g>
-    ${skyline(11, 590, '#2a2566', { count: 14, min: 40, max: 150 })}
-    <rect y="586" width="400" height="120" fill="#1e1b4b"/>
-    <path d="M0 700 L175 586 H225 L400 700z" fill="#15123a"/>
-    <g stroke="#fbbf24" stroke-width="4" stroke-linecap="round" stroke-opacity=".8"><path d="M200 580v12M200 610v18M200 648v26"/></g>
-    <g fill="#fde68a" fill-opacity=".9"><circle cx="150" cy="620" r="3"/><circle cx="120" cy="650" r="4"/><circle cx="260" cy="630" r="3"/><circle cx="290" cy="664" r="4"/></g>`,
   madrid: (id) => `
     <defs><linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4a261"/><stop offset=".5" stop-color="#e76f51"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
     <rect width="400" height="700" fill="url(#${id}s)"/>
@@ -94,7 +63,7 @@ const SCENES = {
     <rect width="400" height="860" filter="url(#${id}g)"/>`,
 }
 
-const TAILLES = { 'coucher-osaka': [400, 300], paulista: [400, 700], madrid: [400, 700], 'appel-seoul': [400, 860] }
+const TAILLES = { madrid: [400, 700], 'appel-seoul': [400, 860] }
 
 export const illustration = (nom, { className = '', fit = 'slice' } = {}) => {
   const scene = SCENES[nom]

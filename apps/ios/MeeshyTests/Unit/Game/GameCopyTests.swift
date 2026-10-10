@@ -1,0 +1,304 @@
+import XCTest
+@testable import Meeshy
+import MeeshySDK
+import MeeshyUI
+
+/// Ce que le jeu DIT (#9383, #9379) : aucun nom ne sort comme une clé brute, l'accord
+/// ne passe pas par un `== 1` isolé, et chaque refus a sa phrase.
+@MainActor
+final class GameCopyTests: XCTestCase {
+
+    private func assertNotRaw(_ text: String, _ label: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(text.isEmpty, "\(label) : vide", file: file, line: line)
+        XCTAssertFalse(text.hasPrefix("game."), "\(label) rend une clé brute : \(text)", file: file, line: line)
+        XCTAssertFalse(text.hasPrefix("onboarding."), "\(label) rend une clé brute : \(text)", file: file, line: line)
+    }
+
+    // MARK: - La Gloire dite est celle que la passerelle verse (#9674)
+
+    func test_seasonCompleted_saysTheSeasonGloryTheGatewayPays_neverACopiedNumber() {
+        let said = GameText.seasonCompleted
+        XCTAssertTrue(said.contains(GameCopy.formatCount(GameGlory.points.season)), said)
+        XCTAssertFalse(said.contains(" 500 "), said)
+    }
+
+    // MARK: - L'accord
+
+    func test_zeroIsSingularInFrenchAndPortuguese_notInEnglish() {
+        XCTAssertTrue(GameCopy.isSingular(0, languageCode: "fr"))
+        XCTAssertTrue(GameCopy.isSingular(0, languageCode: "pt"))
+        XCTAssertFalse(GameCopy.isSingular(0, languageCode: "en"))
+    }
+
+    func test_oneIsSingularEverywhere_twoNever() {
+        for language in ["fr", "en", "es", "de", "it", "pt", "ar"] {
+            XCTAssertTrue(GameCopy.isSingular(1, languageCode: language), language)
+            XCTAssertFalse(GameCopy.isSingular(2, languageCode: language), language)
+        }
+    }
+
+    func test_pointsAndMeeshes_carryTheCount_andTheSingularDiffersFromThePlural() {
+        XCTAssertNotEqual(GameCopy.points(1), GameCopy.points(2))
+        XCTAssertTrue(GameCopy.points(1294).contains(GameCopy.formatCount(1294)))
+        XCTAssertTrue(GameCopy.meeshes(9).contains(GameCopy.formatCount(9)))
+        assertNotRaw(GameCopy.meeshes(0), "aucune Meesh")
+    }
+
+    // MARK: - Les noms
+
+    func test_everyTierRankTreasuryFlameFormEditionAndDifficulty_hasAName() {
+        for tier in LevelTierKey.allCases { assertNotRaw(GameCopy.tierName(tier), "palier \(tier)") }
+        for rank in GloryRank.allCases { assertNotRaw(GameCopy.rankName(rank), "rang \(rank)") }
+        for tier in TreasuryTierKey.allCases { assertNotRaw(GameCopy.treasuryName(tier), "trésor \(tier)") }
+        for form in FlameFormKey.allCases { assertNotRaw(GameCopy.flameFormName(form), "flamme \(form)") }
+        for edition in MeeshEdition.allCases { assertNotRaw(GameCopy.editionName(edition), "édition \(edition)") }
+        for difficulty in MissionDifficulty.allCases { assertNotRaw(GameCopy.difficultyName(difficulty), "difficulté \(difficulty)") }
+    }
+
+    func test_everyMaterialAndEveryTierOrdinal_hasAWord_andTheOrdinalsAreDistinct() {
+        for material in GameMaterial.allCases { assertNotRaw(GameCopy.materialName(material), "matière \(material)") }
+        for tier in LevelTierKey.allCases { assertNotRaw(GameCopy.tierOrdinal(tier), "ordinal \(tier)") }
+        XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierOrdinal)).count, LevelTierKey.allCases.count)
+    }
+
+    func test_theLevelRingReads_levelTierAndItsOrdinal() {
+        let text = GameCopy.levelRingAccessibility(level: 34, tier: .eclat)
+        assertNotRaw(text, "anneau")
+        XCTAssertTrue(text.contains(GameCopy.formatCount(34)))
+        XCTAssertTrue(text.contains(GameCopy.tierName(.eclat)))
+        XCTAssertTrue(text.contains(GameCopy.tierOrdinal(.eclat)))
+    }
+
+    func test_theNamesAreAllDistinct() {
+        XCTAssertEqual(Set(GloryRank.allCases.map(GameCopy.rankName)).count, GloryRank.allCases.count)
+        XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierName)).count, LevelTierKey.allCases.count)
+    }
+
+    // MARK: - Le plafond du niveau (#9688)
+
+    func test_rankOpening_namesTheRankThatLiftsEachCap_derivedFromTheLaw() {
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capBase), .ambassadeur)
+        XCTAssertEqual(GameCopy.rankOpening(beyond: GameLevels.capAmbassador), .oracle)
+        XCTAssertNil(GameCopy.rankOpening(beyond: nil), "sans limite : aucun rang à attendre")
+    }
+
+    func test_levelTop_atACap_saysTheCapAndTheRankThatOpensIt_insteadOfTheTop() {
+        let base = GameCopy.levelTop(cap: GameLevels.capBase)
+        assertNotRaw(base, "plafond 499")
+        XCTAssertTrue(base.contains(GameCopy.formatCount(499)), base)
+        XCTAssertTrue(base.contains(GameCopy.rankName(.ambassadeur)), base)
+        let ambassador = GameCopy.levelTop(cap: GameLevels.capAmbassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.formatCount(1000)), ambassador)
+        XCTAssertTrue(ambassador.contains(GameCopy.rankName(.oracle)), ambassador)
+        XCTAssertNotEqual(base, GameCopy.levelTop(cap: nil), "au plafond du rang, on n'est pas « au sommet »")
+        XCTAssertTrue(GameCopy.levelTopShort(cap: GameLevels.capBase).contains(GameCopy.rankName(.ambassadeur)))
+        XCTAssertEqual(GameCopy.levelTopShort(cap: nil), GameText.bannerTop, "un serveur antérieur s'arrêtait à 100 : au sommet")
+    }
+
+    func test_theTierOrdinals_reachTheTwentiethTier() {
+        XCTAssertEqual(LevelTierKey.allCases.count, 20)
+        assertNotRaw(GameCopy.tierOrdinal(.singularite), "vingtième palier")
+        assertNotRaw(GameCopy.tierName(.singularite), "Singularité")
+        let text = GameCopy.levelRingAccessibility(level: 1_234, tier: .singularite)
+        XCTAssertTrue(text.contains(GameCopy.formatCount(1_234)), text)
+        XCTAssertTrue(text.contains(GameCopy.tierName(.singularite)), text)
+    }
+
+    func test_rankLabel_addsTheRomanDivision_exceptForMyth() {
+        XCTAssertEqual(GameCopy.rankLabel(.voix, division: .ii), "\(GameCopy.rankName(.voix)) II")
+        XCTAssertEqual(GameCopy.rankLabel(.mythe, division: nil), GameCopy.rankName(.mythe))
+    }
+
+    func test_rankLabel_readsTheFiveDivisions_VToI() {
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .v), "\(GameCopy.rankName(.echo)) V")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .iv), "\(GameCopy.rankName(.echo)) IV")
+        XCTAssertEqual(GameCopy.rankLabel(.echo, division5: .i), "\(GameCopy.rankName(.echo)) I")
+    }
+
+    func test_rankLabel_ofAServedMyth_saysItsSeatNumber_andAnUnreadableSeatStaysTheName() {
+        let seated = GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 42, edition: 57))
+        XCTAssertTrue(seated.contains(GameCopy.formatCount(42)), seated)
+        XCTAssertNotEqual(seated, GameCopy.rankName(.mythe))
+        assertNotRaw(seated, "Mythe n° 42")
+        XCTAssertEqual(GameCopy.rankLabel(.mythe, division5: nil, mythic: MythicSeatRef(number: 101, edition: 1)), GameCopy.rankName(.mythe))
+    }
+
+    func test_rankLabel_ofTheServedBlock_prefersDivision5_overTheLegacyProjection() {
+        let glory = GameBlock.Glory(glory: 6000, rank: .voix, division: .iii, division5: .v, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(glory), "\(GameCopy.rankName(.voix)) V")
+        let legacy = GameBlock.Glory(glory: 6000, rank: .voix, division: .ii, next: nil, gloryMissing: nil, progress: 0)
+        XCTAssertEqual(GameCopy.rankLabel(legacy), "\(GameCopy.rankName(.voix)) II")
+    }
+
+    // MARK: - Les missions
+
+    func test_everyTemplateOfTheLaw_hasAPhrase_neverTheGenericOne() {
+        let generic = GameCopy.missionTitle(templateKey: "inconnu", target: 3)
+        for template in GameMissions.templates {
+            let phrase = GameCopy.missionTitle(templateKey: template.key, target: max(2, template.baseTarget))
+            assertNotRaw(phrase, template.key)
+            XCTAssertNotEqual(phrase, generic, "le gabarit \(template.key) n'a pas sa phrase")
+        }
+    }
+
+    func test_aTemplateThisClientDoesNotKnow_staysAGenericMission() {
+        XCTAssertEqual(GameCopy.missionTitle(templateKey: "futur", target: 1), GameCopy.missionTitle(templateKey: "autre-futur", target: 9))
+    }
+
+    func test_aMissionPhraseAgreesWithItsTarget() {
+        XCTAssertNotEqual(
+            GameCopy.missionTitle(templateKey: "send-voice", target: 1),
+            GameCopy.missionTitle(templateKey: "send-voice", target: 4)
+        )
+        XCTAssertTrue(GameCopy.missionTitle(templateKey: "react-messages", target: 5).contains(GameCopy.formatCount(5)))
+    }
+
+    // MARK: - Les refus
+
+    func test_everyRefusalCodeHasItsOwnSentence_distinctFromTheGenericOne() {
+        let generic = GameCopy.errorMessage(for: nil as GameErrorCode?)
+        assertNotRaw(generic, "refus générique")
+        let sentences = GameErrorCode.allCases.map { GameCopy.errorMessage(for: $0) }
+        XCTAssertEqual(Set(sentences).count, GameErrorCode.allCases.count)
+        for code in GameErrorCode.allCases {
+            let sentence = GameCopy.errorMessage(for: code)
+            assertNotRaw(sentence, code.rawValue)
+            XCTAssertNotEqual(sentence, generic, code.rawValue)
+        }
+    }
+
+    func test_aRejectionOfTheServer_isReadFromItsCode() {
+        let error = MeeshyError.rejected(APIRejection(statusCode: 409, code: "CHEST_NOT_READY", message: "x"))
+        XCTAssertEqual(GameCopy.errorMessage(for: error), GameCopy.errorMessage(for: .chestNotReady))
+    }
+
+    func test_aNetworkFailure_isTheGenericSentence() {
+        XCTAssertEqual(GameCopy.errorMessage(for: URLError(.timedOut)), GameCopy.errorMessage(for: nil as GameErrorCode?))
+    }
+
+    // MARK: - Les chiffres lus
+
+    func test_clock_isWrittenByTheLocale_notByHand() {
+        let french = Locale(identifier: "fr_FR")
+        XCTAssertTrue(["09:05", "9:05"].contains(GameCopy.clock(minuteOfDay: 9 * 60 + 5, locale: french)), "heure et minutes, à la française")
+        XCTAssertEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: french), "21:00")
+        XCTAssertNotEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: Locale(identifier: "en_US")), "21:00", "12 h en anglais américain")
+    }
+
+    func test_chance_isOneOverTheOdds() {
+        XCTAssertTrue(GameCopy.chance(1.0 / 6.0).contains(GameCopy.formatCount(6)))
+        XCTAssertTrue(GameCopy.chance(1.0 / 20.0).contains(GameCopy.formatCount(20)))
+    }
+
+    // MARK: - Mee et Meo
+
+    func test_everyGuideAction_hasALabel() {
+        for action in GuideAction.allCases { assertNotRaw(GameGuideCopy.actionLabel(action), action.rawValue) }
+    }
+
+    func test_everyOnboardingStep_saysFourThingsAndItsButton() {
+        for step in GameGuide.onboardingSteps {
+            let copy = GameGuideCopy.step(step)
+            for (label, text) in [("what", copy.what), ("means", copy.means), ("next", copy.next), ("short", copy.short), ("action", copy.action)] {
+                assertNotRaw(text, "\(step.key) \(label)")
+            }
+        }
+    }
+
+    func test_theEightRulesAreInOrder() {
+        XCTAssertEqual(GameGuideCopy.rules.map(\.index), Array(1...8))
+        for rule in GameGuideCopy.rules {
+            assertNotRaw(rule.title, "règle \(rule.index)")
+            assertNotRaw(rule.body, "règle \(rule.index)")
+        }
+    }
+
+    func test_everyMomentOfTheLaw_isToldWithItsNumbers() {
+        let events: [GuideEvent] = [
+            .firstLevel(level: 2, pointsToNext: 50),
+            .newTier(tier: .lueur, nextTierLevel: 20),
+            .newTier(tier: .galaxie, nextTierLevel: 101),
+            .newTier(tier: .singularite, nextTierLevel: nil),
+            .missionsUnlocked,
+            .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100),
+            .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100),
+            .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14),
+            .badgeExtinguished(missingActions: 37),
+            .priceRises(nextPrice: 1294),
+            .newRank(rank: .voix, division: .ii, glory: 1700, gloryMissing: 466),
+            .newRank(rank: .legende, division: .i, glory: 160_000, gloryMissing: nil),
+            .treasuryTier(tier: .escarcelle, nextTierMissing: 40),
+            .treasuryTier(tier: .reserve, nextTierMissing: nil),
+            .flameAtRisk(days: 12),
+            .flameOut(lostDays: 0, relightPrice: 3, canRelight: true),
+            .flameOut(lostDays: 0, relightPrice: 3, canRelight: false),
+            .returnAfterAbsence(daysAway: 9),
+            .level100(canPrestige: true),
+            .level100(canPrestige: false),
+        ]
+        for event in events {
+            let moment = GameGuide.moment(for: event, seen: [])
+            let copy = GameGuideCopy.moment(moment)
+            for (label, text) in [("what", copy.what), ("means", copy.means), ("next", copy.next), ("short", copy.short), ("action", copy.action)] {
+                assertNotRaw(text, "\(event.key.rawValue) \(label)")
+            }
+        }
+    }
+
+    func test_theFirstMintCard_citesTheLevelsBeforeAndAfter() {
+        let moment = GameGuide.moment(for: .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14), seen: [])
+        let means = GameGuideCopy.moment(moment).means
+        XCTAssertTrue(means.contains(GameCopy.formatCount(14)))
+        XCTAssertTrue(means.contains(GameCopy.formatCount(9)))
+    }
+
+    // MARK: - Le minuteur d'une mission (#9539)
+
+    func test_calmDuration_showsHoursAndMinutes_neverSeconds() {
+        let text = GameCopy.calmDuration(3600 + 23 * 60 + 40)
+        XCTAssertTrue(text.contains("1"))
+        XCTAssertTrue(text.contains("24"), "les secondes s'arrondissent à la minute supérieure : \(text)")
+        assertNotRaw(text, "durée")
+    }
+
+    func test_calmDuration_underAnHour_isMinutesOnly_andNeverZero() {
+        XCTAssertTrue(GameCopy.calmDuration(12 * 60).contains("12"))
+        XCTAssertTrue(GameCopy.calmDuration(5).contains("1"), "moins d'une minute se lit « 1 min », jamais « 0 »")
+    }
+
+    func test_missionEnding_speaksOnlyOncePastTheWindow() {
+        XCTAssertNil(GameCopy.missionEnding(.running(remaining: 60)))
+        XCTAssertNil(GameCopy.missionEnding(.upcoming(startsIn: 60)))
+        XCTAssertNil(GameCopy.missionEnding(.done))
+        XCTAssertNil(GameCopy.missionEnding(nil))
+        XCTAssertEqual(GameCopy.missionEnding(.finished)?.isSuccess, true)
+        XCTAssertEqual(GameCopy.missionEnding(.missed)?.isSuccess, false)
+        assertNotRaw(GameCopy.missionEnding(.finished)?.text ?? "", "Terminée")
+        assertNotRaw(GameCopy.missionEnding(.missed)?.text ?? "", "Manquée")
+    }
+
+    func test_missionTimerLine_countsWhileTheWindowRuns_andIsSilentOnceDone() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let window = GameMissionWindow(start: start, end: start.addingTimeInterval(7200))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.running(remaining: 4500), window: window))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.upcoming(startsIn: 900), window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(.done, window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(nil, window: window))
+    }
+
+    func test_missionTimerLine_afterThePersonalWindow_recallsTheRange_butNotForADailyMission() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let window = GameMissionWindow(start: start, end: start.addingTimeInterval(7200))
+        XCTAssertNotNil(GameCopy.missionTimerLine(.missed, window: window))
+        XCTAssertNil(GameCopy.missionTimerLine(.missed, window: nil), "une mission du jour n'a pas de plage à rappeler")
+    }
+
+    func test_theMissionCard_hidesItsActionOncePastTheEnd() throws {
+        let here = URL(fileURLWithPath: #filePath)
+        let root = here.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let view = try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Game/GameMissionsView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("phase?.allowsAction"), "l'action disparaît passé la fin")
+        XCTAssertTrue(view.contains("missions.personal"), "la mission personnelle a sa carte")
+        XCTAssertTrue(view.contains("TimelineView"), "le minuteur vit")
+    }
+}

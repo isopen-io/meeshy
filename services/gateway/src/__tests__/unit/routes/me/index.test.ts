@@ -56,6 +56,10 @@ jest.mock('../../../../routes/me/export', () => ({
   dataExportRoutes: jest.fn(async () => {}),
 }));
 
+jest.mock('../../../../routes/me/security-events', () => ({
+  securityEventsRoutes: jest.fn(async () => {}),
+}));
+
 jest.mock('../../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn(),
 }));

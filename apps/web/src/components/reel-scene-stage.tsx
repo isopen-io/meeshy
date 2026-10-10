@@ -2,9 +2,11 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { BackgroundTrackAudio } from './background-track-audio';
 import { Glyph } from './glyph';
-import { RAIL_DISC, ReelPoster } from './reel-poster';
+import { PlaybackStallIndicator } from './playback-stall-indicator';
+import { ReelPoster } from './reel-poster';
 import type { SceneClockHandle } from './scene-clock';
 import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
+import { VIEWER_GLASS } from './viewer-chrome';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { fitScene, SCENE_RATIO } from '@/lib/canvas/fit';
@@ -108,6 +110,7 @@ export default function ReelSceneStage({
   const [knownMaxMs, setKnownMaxMs] = useState<number | null>(null);
   const [pass, setPass] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
+  const [stalled, setStalled] = useState(false);
   /** La poignée de l'horloge du moteur — reçue UNE fois (`onClock`), remise
    * aussi à la piste de fond pour qu'elle suive le temps pointé. */
   const [clock, setClock] = useState<SceneClockHandle | null>(null);
@@ -167,7 +170,7 @@ export default function ReelSceneStage({
     >
       <div
         data-reel-scene-stage
-        className="absolute overflow-hidden bg-black"
+        className="absolute overflow-hidden bg-media-backdrop"
         style={placed ? { left: box.offsetX, top: box.offsetY, width: box.width, height: box.height } : { inset: 0 }}
       >
         <Suspense fallback={<ReelPoster src={poster} />}>
@@ -186,6 +189,7 @@ export default function ReelSceneStage({
             onTime={writeProgress}
             onLoop={() => setPass((p) => p + 1)}
             onClock={setClock}
+            onPlaybackProgressing={(progressing) => setStalled(!progressing)}
           />
         </Suspense>
         {mode === 'active' && track !== null ? (
@@ -219,11 +223,11 @@ export default function ReelSceneStage({
         aria-label={translate(language, playing ? 'reels.pause' : 'reels.play')}
         onClick={() => setPaused((p) => !p)}
         className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
-        style={{ outlineColor: 'white', WebkitTapHighlightColor: 'transparent' }}
+        style={{ outlineColor: 'var(--color-on-media)', WebkitTapHighlightColor: 'transparent' }}
       >
         {!playing && !scrubbing ? (
-          <span aria-hidden="true" className="grid size-18 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
-            <Glyph name="fillPlay" size={34} className="text-white" />
+          <span aria-hidden="true" className={`${VIEWER_GLASS} grid size-18 place-items-center rounded-full`}>
+            <Glyph name="fillPlay" size={34} className="text-on-media" />
           </span>
         ) : null}
       </button>
@@ -238,6 +242,7 @@ export default function ReelSceneStage({
           même remède que `ReelPlayable`. Sa zone de frappe (44 px, #7879)
           reste SOUS l'identité et le rail, peints après elle : ils gardent
           leur geste. */}
+      <PlaybackStallIndicator stalled={stalled && playing} language={language} />
       {duration !== null ? (
         <SceneScrubBar
           durationSeconds={duration}

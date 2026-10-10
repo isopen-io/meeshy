@@ -83,7 +83,7 @@ describe('listCallHistory — filtres serveur (#8203)', () => {
     const { prisma, findMany } = historyPrisma();
     await listCallHistory(prisma, USER_ID, { limit: 30, filter: 'all', type: 'audio', viewer: VIEWER });
     const where = journalRead(findMany);
-    expect(where.AND).toEqual([{ OR: [{ isVideo: { isSet: false } }, { isVideo: null }, { isVideo: false }] }]);
+    expect(where.AND).toContainEqual({ OR: [{ isVideo: { isSet: false } }, { isVideo: null }, { isVideo: false }] });
     expect(where.NOT).toBeUndefined();
   });
 

@@ -132,6 +132,13 @@ export const notificationTypeEnum = z.enum([
   'level_up',                 // Niveau augmenté
   'badge_earned',             // Badge gagné
 
+  // ===== JEU MEESHY (#9490) =====
+  'game_duo_invited',         // Un ami t'invite à la mission en duo
+  'game_duo_accepted',        // Ton ami a accepté la mission en duo
+  'game_league_result',       // Résultat de ta semaine de ligue
+  'game_season_step',         // Étape de saison atteinte
+  'game_mission_window',      // La mission personnelle du jour commence (plage horaire)
+
   // ===== PAYMENT/SUBSCRIPTION (future) =====
   'subscription_expiring',    // Abonnement expire bientôt
   'subscription_renewed',     // Abonnement renouvelé

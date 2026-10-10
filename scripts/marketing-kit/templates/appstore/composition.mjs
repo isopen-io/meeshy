@@ -10,9 +10,7 @@ import { directionOf } from '../../lib/locales.mjs'
 import { langue } from '../../lib/langues.mjs'
 import { typo } from '../../lib/composants.mjs'
 import { icon } from '../../lib/icons.mjs'
-import { carteMeesh } from '../../screens/progression.mjs'
-import { suggestionsDecouverte } from '../../screens/social.mjs'
-import { profilDe } from '../../textes/demo.mjs'
+import { DEMO, partenaireDe, profilDe } from '../../textes/demo.mjs'
 import { kitCss } from '../../lib/styles.mjs'
 import { contexte, coupeLegende, ecran } from '../../lib/gabarits.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
@@ -30,22 +28,22 @@ const LOGO_SVG = readFileSync(resolve(REPO_ROOT, 'apps/ios/logo_master.svg'), 'u
 
 const logo = (taille) => html`<span class="as-logo" style="width:${taille}px;height:${taille}px">${raw(LOGO_SVG)}</span>`
 
-// Géométrie en points CSS : la scène iPhone fait 440 × 956, l'iPad 1376 × 1032.
+// Géométrie en points CSS : la scène iPhone fait 440 × 956, l'iPad (portrait, #8825) 1032 × 1376.
 const SCENES = {
   iphone: { echelle: 0.815, deviceTop: 252 },
-  ipad: { echelle: 0.84, deviceTop: 214 },
+  ipad: { echelle: 0.8, deviceTop: 320 },
 }
 
-const scene = (appareil) => {
-  const a = APPAREILS[appareil]
+const scene = (appareil, plan = APPAREILS) => {
+  const a = plan[appareil]
   return { width: a.width / a.scale, height: a.height / a.scale }
 }
 
 // Panorama : un ruban et des halos dessinés sur la largeur de TOUTE la séquence, chaque
 // capture en montrant sa tranche — la rangée de l'App Store se lit comme une seule fresque.
-const panorama = (appareil) => {
-  const { width, height } = scene(appareil)
-  const n = APPAREILS[appareil].captures.length
+const panorama = (appareil, plan = APPAREILS) => {
+  const { width, height } = scene(appareil, plan)
+  const n = plan[appareil].captures.length
   const total = width * n
   const onde = (phase, amplitude, milieu) =>
     Array.from({ length: Math.ceil(total / 12) + 1 }, (_, i) => {
@@ -81,53 +79,54 @@ const legende = ({ lang, cle, corps }) => {
 const pastilleDrapeau = (code) => html`<span class="as-flag">${langue(code).drapeau}</span>`
 
 const DECORS = {
-  // Surimpression du § 5 : 🇫🇷 → 🇰🇷, ancrée au vocal par la mise en page (data-ancre).
+  // Surimpression du § 5 : la langue du lecteur → celle de son partenaire, ancrée au vocal.
   fleche: (ctx) =>
-    html`<div class="as-fleche" data-ancre=".bubble.audio">${pastilleDrapeau(ctx.lang)}${icon(ctx.dir === 'rtl' ? 'arrowLeft' : 'arrowRight', { size: 18 })}${pastilleDrapeau('ko')}</div>`,
-  'drapeaux-groupe': (ctx) =>
-    html`<div class="as-rangee as-pile">${['ko', 'es', 'ja', ctx.lang === 'ja' ? 'fr' : ctx.lang].map(pastilleDrapeau)}</div>`,
-  // Les PAYS des amis suggérés à l'écran — un drapeau de langue se lirait comme un pays absent.
-  'drapeaux-monde': (ctx) =>
-    html`<div class="as-rangee as-pile">${suggestionsDecouverte(ctx.lang).map((p) => html`<span class="as-flag">${profilDe(p).drapeau}</span>`)}</div>`,
+    html`<div class="as-fleche" data-ancre=".bubble.audio">${pastilleDrapeau(ctx.lang)}${icon(ctx.dir === 'rtl' ? 'arrowLeft' : 'arrowRight', { size: 18 })}${pastilleDrapeau(partenaireDe(ctx.lang).lang)}</div>`,
+  // Les deux langues du couple, unies par un cœur (#8825).
+  'coeur-langues': (ctx) =>
+    html`<div class="as-rangee as-coeur-langues">${pastilleDrapeau(ctx.lang)}<span class="as-coeur">❤️</span>${pastilleDrapeau(partenaireDe(ctx.lang).lang)}</div>`,
+  // Les langues du groupe drôle, celle du lecteur comprise.
+  'drapeaux-drole': (ctx) =>
+    html`<div class="as-rangee as-pile">${[...new Set([...DEMO.drole.membres.map((p) => profilDe(p).lang), ctx.lang])].map(pastilleDrapeau)}</div>`,
   bonjours: (ctx, appareil) =>
-    html`<div class="as-rangee as-bonjours">${BONJOURS.filter((b) => b.lang !== ctx.lang).slice(0, appareil === 'iphone' ? 3 : 6).map(
+    html`<div class="as-rangee as-bonjours">${BONJOURS.filter((b) => b.lang !== ctx.lang).slice(0, appareil === 'iphone' ? 3 : 5).map(
       (b) => html`<span class="as-bonjour" lang="${b.lang}" dir="${directionOf(b.lang)}"><span>${langue(b.lang).drapeau}</span>${b.texte}</span>`,
     )}</div>`,
-  // La frappe MONTRÉE : la carte Meesh de l'écran Progression (solde, frappées depuis toujours,
-  // prochaine frappe) flotte sous le badge — un fragment réel de l'interface, pas une promesse.
-  'carte-meesh': (ctx) =>
-    html`<div class="as-carte-flottante light" dir="${ctx.dir}" lang="${ctx.lang}">${carteMeesh(contexte({ lang: ctx.lang, theme: 'light' }))}</div>`,
 }
 
-const rangeeDecor = (decor) => decor === 'drapeaux-groupe' || decor === 'drapeaux-monde' || decor === 'bonjours'
+const rangeeDecor = (decor) => decor === 'coeur-langues' || decor === 'drapeaux-drole' || decor === 'bonjours'
 
 const documentHtml = ({ lang, corps, largeur, hauteur }) =>
   `<!doctype html><html lang="${lang}" dir="${directionOf(lang)}"><head><meta charset="utf-8"><style>${kitCss()}\n${CSS_APPSTORE}</style></head><body style="width:${largeur}px;height:${hauteur}px">${toString(corps)}<script>${MISE_EN_PAGE}</script></body></html>`
 
-export const captureDe = ({ appareil, rang }) => {
-  const capture = APPAREILS[appareil]?.captures[rang - 1]
+export const captureDe = ({ appareil, rang, plan = APPAREILS }) => {
+  const capture = plan[appareil]?.captures[rang - 1]
   if (!capture) throw new Error(`capture inconnue : ${appareil} n°${rang}`)
   return capture
 }
 
-export const pageCapture = ({ appareil, lang, rang, corps }) => {
-  const capture = captureDe({ appareil, rang })
+// La VRAIE capture d'un écran (#8855) : un PNG natif, posé dans le cadre à la place de l'écran recomposé.
+const imageEcran = (png) => raw(`<img class="ecran-reel" src="data:image/png;base64,${png.toString('base64')}" alt="">`)
+
+export const pageCapture = ({ appareil, lang, rang, corps, plan = APPAREILS, ecranReel }) => {
+  const capture = captureDe({ appareil, rang, plan })
   const ctx = contexte({ lang, theme: capture.theme })
-  const { width, height } = scene(appareil)
+  const { width, height } = scene(appareil, plan)
   const { echelle } = SCENES[appareil]
   const deviceTop = capture.deviceTop ?? SCENES[appareil].deviceTop
   const device = tailleCadre(appareil)
   const decor = capture.decor ? DECORS[capture.decor](ctx, appareil) : ''
   const ton = capture.theme === 'dark' ? 'as-sombre' : 'as-clair'
+  const contenuEcran = ecranReel ? imageEcran(ecranReel) : capture.ecran ? ecran(capture.ecran, ctx) : ''
   const contenu = html`<div class="as-canvas as-${appareil} ${ton}" dir="${ctx.dir}" lang="${lang}" style="width:${width}px;height:${height}px;--pano-x:${-(rang - 1) * width}px;--device-top:${deviceTop}px">
-    ${panorama(appareil)}
+    ${panorama(appareil, plan)}
     <header class="as-head">
       ${rang === 1 ? html`<div class="as-brand">${logo(appareil === 'iphone' ? 30 : 36)}<span>Meeshy</span></div>` : ''}
       ${legende({ lang, cle: capture.legende, corps })}
       ${rangeeDecor(capture.decor) ? decor : ''}
     </header>
     <div class="as-device" style="width:${device.width}px;height:${device.height}px;transform:translateX(-50%) scale(${echelle})">
-      ${cadre(appareil, ecran(capture.ecran, ctx))}
+      ${cadre(appareil, contenuEcran)}
     </div>
     ${rangeeDecor(capture.decor) ? '' : decor}
   </div>`

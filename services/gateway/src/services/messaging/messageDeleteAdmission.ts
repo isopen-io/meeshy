@@ -1,3 +1,4 @@
+import { captureNoticeOf } from './captureNoticeVisibility.js';
 import { PRIVILEGED_GLOBAL_ROLES } from './messageEditAdmission.js';
 
 /**
@@ -87,6 +88,10 @@ export interface DeleteAdmissionReader {
       select: { id: true; role: true; user: { select: { role: true } } };
     }): Promise<{ id?: string | null; role?: string | null; user?: { role?: string | null } | null } | null>;
   };
+  /** Lu pour un avis de capture SEULEMENT : l'auteur du message qu'il nomme peut le retirer (#9641). */
+  message?: {
+    findUnique(args: { where: { id: string }; select: { senderId: true } }): Promise<{ senderId?: string | null } | null>;
+  };
 }
 
 export interface MessageDeleteAdmission {
@@ -116,6 +121,13 @@ export interface MessageDeleteAdmissionParams {
     /** `User.id` de l'auteur — PAS le `Participant.id` que porte `senderId`. `null` pour un expéditeur anonyme. */
     authorUserId: string | null | undefined;
     conversationId: string;
+    /**
+     * Le type et la métadonnée du message — REQUIS, comme l'état terminal de
+     * l'édition : un avis de capture se reconnaît à eux, et un transport qui
+     * les oublierait rendrait l'avis effaçable par celui qui a capturé (#9641).
+     */
+    messageType: string | null | undefined;
+    metadata: unknown;
   };
   onError?: (error: unknown) => void;
 }
@@ -142,8 +154,11 @@ export async function admitMessageDelete(
 ): Promise<MessageDeleteAdmission> {
   const { prisma, deleterUserId, message, onError } = params;
 
+  // #9641 — l'avis de capture porte la capture de SON auteur : celui-ci ne le
+  // retire pas, quel que soit son rang. Une métadonnée abîmée reste un avis.
+  const capture = captureNoticeOf({ id: '', conversationId: message.conversationId, senderId: '', ...message });
   const isAuthor = Boolean(message.authorUserId) && message.authorUserId === deleterUserId;
-  if (isAuthor) return REFUSED_OR_ADMITTED(true);
+  if (isAuthor) return REFUSED_OR_ADMITTED(capture === null);
 
   let membership: { id?: string | null; role?: string | null; user?: { role?: string | null } | null } | null;
   try {
@@ -164,7 +179,9 @@ export async function admitMessageDelete(
     }
 
     const globalRole = membership.user?.role ?? undefined;
-    const admitted = Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole);
+    const admitted =
+      (Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole)) ||
+      (capture !== null && (await authorsCapturedMessage(prisma, capture.capturedMessageId, actorParticipantId, onError)));
     return { admitted, actorParticipantId: admitted ? actorParticipantId : undefined };
   }
 
@@ -175,6 +192,27 @@ export async function admitMessageDelete(
   } catch (error) {
     onError?.(error);
     return REFUSED_OR_ADMITTED(false);
+  }
+}
+
+/**
+ * L'auteur du message qu'un avis de capture nomme — par sa ligne `Participant`
+ * dans CETTE conversation, que la décision vient de lire. Une lecture qui lève
+ * n'admet personne.
+ */
+async function authorsCapturedMessage(
+  prisma: DeleteAdmissionReader,
+  capturedMessageId: string | null,
+  actorParticipantId: string | undefined,
+  onError?: (error: unknown) => void,
+): Promise<boolean> {
+  if (!capturedMessageId || !actorParticipantId || !prisma.message) return false;
+  try {
+    const captured = await prisma.message.findUnique({ where: { id: capturedMessageId }, select: { senderId: true } });
+    return captured?.senderId === actorParticipantId;
+  } catch (error) {
+    onError?.(error);
+    return false;
   }
 }
 

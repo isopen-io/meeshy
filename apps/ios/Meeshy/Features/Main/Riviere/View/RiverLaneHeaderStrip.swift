@@ -95,7 +95,7 @@ struct RiverLaneHeaderStrip: View {
         edge: HorizontalEdge
     ) -> some View {
         if !hidden.isEmpty {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 if edge == .trailing { dots(hidden) }
                 // `backward`/`forward`, jamais `left`/`right` : ces badges disent
                 // « en amont » et « en aval » du plan, pas « à main gauche » —
@@ -106,8 +106,8 @@ struct RiverLaneHeaderStrip: View {
                     .foregroundColor(ThemeManager.shared.textMuted)
                 if edge == .leading { dots(hidden) }
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(MeeshyColors.backgroundSecondary(isDark: isDark).opacity(0.92)))
             .accessibilityLabel(
                 String(
@@ -128,7 +128,7 @@ struct RiverLaneHeaderStrip: View {
     /// dit ce que les pastilles ne diraient plus.
     @ViewBuilder
     private func dots(_ hidden: [RiverLaneResolver.RiverLaneHeader]) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(Array(hidden.prefix(3).enumerated()), id: \.offset) { _, header in
                 Circle()
                     .fill(Color(hex: DynamicColorGenerator.colorForName(header.colorSeed)))
@@ -136,7 +136,7 @@ struct RiverLaneHeaderStrip: View {
             }
             if hidden.count > 3 {
                 Text("\(hidden.count)")
-                    .font(MeeshyFont.relative(9, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
         }
@@ -155,7 +155,7 @@ struct RiverLaneHeaderStrip: View {
             ? String(localized: "riviere.header.you", defaultValue: "Toi", bundle: .main)
             : header.colorSeed
 
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             // La pastille ne se comprime JAMAIS : c'est elle qui porte la
             // couleur, donc l'appartenance à la colonne. C'est le NOM qui
             // s'élide, comme dans la bulle (§7ter A.5).

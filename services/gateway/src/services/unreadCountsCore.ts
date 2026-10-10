@@ -50,6 +50,7 @@
 import type { PrismaClient } from "@meeshy/shared/prisma/client";
 import { logger } from "../utils/logger";
 import { exclusiveFloorMsFor, type PersonalHistoryHiding } from "./personalHistoryFilter";
+import { isCaptureNoticeCandidate, uncountedCaptureNotices } from "./messaging/captureNoticeVisibility";
 
 /**
  * Le plancher de comptage résolu d'un participant, prêt pour
@@ -97,8 +98,9 @@ export function unreadFloorFor(
  * sauter entièrement) : un seul aller-retour base sert tous les appelants,
  * chacun recomptant ensuite sur son propre plancher en mémoire.
  *
- * `needsMessageIds` ne demande la colonne `id` que si au moins un floor porte
- * un masquage individuel — la grande majorité des lectures n'en a pas besoin.
+ * Un avis de capture (#9630) ne compte que pour l'auteur du message qu'il
+ * nomme : pour tout autre plancher, il rejoint les messages masqués
+ * (`uncountedCaptureNotices`), et ce plancher passe par le compte linéaire.
  *
  * Réduction (jamais `Math.min(...spread)`) : `floors` porte une entrée par
  * participant/conversation appelant, et une conversation publique à l'échelle
@@ -117,8 +119,6 @@ export async function computeUnreadCounts(
   if (floors.length === 0) return new Map();
 
   try {
-    const needsMessageIds = floors.some((f) => f.hiddenMessageIds !== null);
-
     const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
     const minFloorMs = hasUnboundedFloor
       ? null
@@ -127,17 +127,37 @@ export async function computeUnreadCounts(
           Infinity
         );
 
+    // `id`, `messageSource`, `messageType` et `expiresAt` : de quoi reconnaître
+    // un avis de capture (#9630) — il ne compte que pour l'auteur du message
+    // qu'il nomme. Quatre scalaires de plus sur la même lecture ; seule une
+    // fenêtre qui CONTIENT un avis paie les deux lectures de classement.
     const rows = (await prisma.message.findMany({
       where: {
         conversationId,
         deletedAt: null,
         ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
       },
-      select: needsMessageIds
-        ? { id: true, createdAt: true, senderId: true }
-        : { createdAt: true, senderId: true },
+      select: { id: true, createdAt: true, senderId: true, messageSource: true, messageType: true, expiresAt: true },
       orderBy: { createdAt: "asc" },
-    })) as Array<{ id?: string; createdAt: Date; senderId: string }>;
+    })) as Array<{
+      id?: string;
+      createdAt: Date;
+      senderId: string;
+      messageSource?: string | null;
+      messageType?: string | null;
+      expiresAt?: Date | null;
+    }>;
+
+    const candidateIds = rows.filter(isCaptureNoticeCandidate).map((r) => r.id as string);
+    const uncountedFor = await uncountedCaptureNotices(prisma, candidateIds);
+    const floorsToCount: ReadonlyArray<UnreadFloor> =
+      candidateIds.length === 0
+        ? floors
+        : floors.map((f) => {
+            const uncounted = uncountedFor(f.id);
+            if (uncounted.size === 0) return f;
+            return { ...f, hiddenMessageIds: new Set([...(f.hiddenMessageIds ?? []), ...uncounted]) };
+          });
 
     // Tous les horodatages candidats (ascendant) + des paquets par expéditeur,
     // pour soustraire les messages PROPRES de chaque participant. `countAbove`
@@ -173,8 +193,8 @@ export async function computeUnreadCounts(
     // Un participant qui a masqué des messages individuellement ne peut pas
     // être compté par une borne — l'appartenance à un ensemble n'est pas un
     // intervalle — donc il retombe sur un passage linéaire sur les mêmes
-    // lignes. `hiddenMessageIds !== null` implique `needsMessageIds`, donc
-    // `r.id` est présent exactement là où il est lu.
+    // lignes. `r.id` est toujours chargé (il sert aussi à reconnaître les
+    // avis de capture).
     const countExcludingHidden = (f: UnreadFloor, hidden: ReadonlySet<string>): number =>
       rows.filter(
         (r) =>
@@ -188,7 +208,7 @@ export async function computeUnreadCounts(
     // triés ascendant ci-dessus, la même recherche binaire est donc valide
     // sur l'un comme sur l'autre.
     return new Map(
-      floors.map((f) => {
+      floorsToCount.map((f) => {
         if (f.hiddenMessageIds !== null) return [f.id, countExcludingHidden(f, f.hiddenMessageIds)];
         const own = bySender.get(f.id) ?? [];
         return [f.id, countAbove(allTimestamps, f.floorMs) - countAbove(own, f.floorMs)];

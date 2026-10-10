@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 
 import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
-import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
+import { sceneAudioPresence, type CanvasDocument, type CanvasScene } from '@/lib/canvas/document';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
+import { backgroundPlaceholderHash } from '@/lib/canvas/scene-placeholder';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
-import { isDocumentAudible } from '@/lib/feed/scene-motion';
+import { documentSoundsOnStage } from '@/lib/feed/scene-motion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { letterboxFill, letterboxHashes } from '@/lib/stories/letterbox';
@@ -103,6 +104,11 @@ export type ScenePlayerProps = {
    * redessine la scène au temps pointé et recale ses médias, sans rouvrir le
    * moteur. AJOUTÉ, jamais un renommage (D-11). */
   readonly onClock?: (clock: SceneClockHandle) => void;
+  /** LE GEL EN PHASE (#9277, miroir `onPlaybackProgressing` de
+   * `MeeshyScenePlayer`) — `false` quand un média de la scène bufferise (la
+   * scène l'attend), `true` quand la lecture reprend. L'hôte y gèle SA barre
+   * (le lecteur de story) et y montre l'attente. AJOUTÉ (D-11). */
+  readonly onPlaybackProgressing?: (progressing: boolean) => void;
 };
 
 /** Le rappel le plus RÉCENT d'un hôte, sans en faire une dépendance d'effet :
@@ -164,8 +170,10 @@ function SceneCanvas({
   // ci-dessous, le second par l'hôte (`story-scene-layer.tsx`,
   // `story-compose.tsx`). Rendre une couche pour l'objet `audio` qui porte
   // `isBackground` jouait la MÊME piste deux fois, en écho (T-E12).
+  // Et le son de fond ne produit AUCUN pixel sur la scène (#9737,
+  // `sceneAudioPresence`) : il se dit par le crédit, hors scène.
   const foreground = scene.objects
-    .filter((o) => o.id !== background?.id && !(o.kind === 'audio' && o.payload.isBackground === true))
+    .filter((o) => o.id !== background?.id && sceneAudioPresence(o) !== 'offstage')
     .sort((a, b) => a.z - b.z);
   return (
     <span className="absolute inset-0 block" style={{ containerType: 'inline-size' }}>
@@ -178,6 +186,7 @@ function SceneCanvas({
           muted={muted}
           framing={framing}
           letterbox={letterbox}
+          placeholderHash={backgroundPlaceholderHash(background, scene)}
           callbacks={callbacks}
           seekClock={seekClock}
         />
@@ -236,12 +245,13 @@ export default function ScenePlayer({
   onLoop,
   servesLetterboxFill = true,
   onClock,
+  onPlaybackProgressing,
   ghostOutsideWindow,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
   const language = currentInterfaceLanguage();
-  const audible = playing && isDocumentAudible(document);
+  const audible = playing && documentSoundsOnStage(document);
   const callbacks = useLatest<SceneCallbacks>({ onContentReady, onDurationKnown, onPlaybackBlocked });
   const isMuted = hostMute({ config, requestedMute: muted });
   const timed = scene !== undefined && hasTimedObjects(scene);
@@ -252,7 +262,17 @@ export default function ScenePlayer({
   const durationSeconds =
     declaredDurationSeconds ?? (config.showsChrome && fallbackDurationSeconds !== undefined ? fallbackDurationSeconds : null);
   const enabled = timed || (config.showsChrome && durationSeconds !== null);
-  const clock = useSceneClock({ enabled, playing, loops: config.loops, durationSeconds, onTime, onEnded, onLoop });
+  const progressing = useLatest(onPlaybackProgressing);
+  const clock = useSceneClock({
+    enabled,
+    playing,
+    loops: config.loops,
+    durationSeconds,
+    onTime,
+    onEnded,
+    onLoop,
+    onStall: (stalled) => progressing.current?.(!stalled),
+  });
   const clockReceiver = useLatest(onClock);
   useEffect(() => {
     clockReceiver.current?.(clock);
@@ -298,7 +318,9 @@ export default function ScenePlayer({
           {canvas}
         </span>
       )}
-      {/* `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
+      {/* CE QUI SONNE SUR LA SCÈNE (#9737, `documentSoundsOnStage`) — un son de
+          fond seul ne pose pas cette pastille : il ne produit aucun pixel ici.
+          `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
           PROPOSE : un lecteur de story qui tient son muet viewant
           (`muted: true` sur un mode sonore) coupait bien le son et
           n'affichait AUCUNE pastille pour le dire (revue-correction #6901).
@@ -308,9 +330,9 @@ export default function ScenePlayer({
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
-          style={{ width: 26, height: 26, backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
         >
-          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'white' }} />
+          <GlyphSvg glyph={FEED_GLYPHS.speakerSlash} size={14} title={translate(language, 'feed.scene.sound.muted')} style={{ color: 'var(--color-on-media)' }} />
         </span>
       ) : null}
     </span>

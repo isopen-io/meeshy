@@ -483,7 +483,7 @@ struct LoginView: View {
                 .onSubmit { attemptAccountLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -551,7 +551,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.username.placeholder", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -586,7 +586,7 @@ struct LoginView: View {
                 .onSubmit { attemptLogin() }
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -720,7 +720,7 @@ struct LoginView: View {
                         Text(env.label)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: selectedEnv == env ? .bold : .medium))
                             .foregroundColor(selectedEnv == env ? .white : theme.textMuted)
-                        .padding(.horizontal, MeeshySpacing.sm + 2)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xs + 1)
                             .background(
                                 Capsule().fill(
@@ -852,7 +852,7 @@ struct LoginView: View {
                     .accessibilityLabel(String(localized: "auth.login.two_factor.label", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.md + MeeshySpacing.xs / 2)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)

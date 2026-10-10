@@ -58,6 +58,18 @@ describe('fetchStoryViewers — le transport RÉEL', () => {
     if (result.ok) expect(result.data.pagination).toEqual({ total: 1, offset: 0, limit: 50, hasMore: false });
   });
 
+  test('`engagement: "unavailable"` passe tel quel ; absent, il reste absent (#9727)', async () => {
+    const row = { id: 'u-1', username: 'a', displayName: 'A', avatarUrl: null, viewedAt: '2026-09-24T10:00:00Z', reaction: null };
+    const unavailable = await fetchStoryViewers({
+      source: 'gateway',
+      transport: stubTransport(() => ({ ok: true, data: { viewers: [row], engagement: 'unavailable' } })),
+      postId: 'p-1',
+    });
+    const served = await fetchStoryViewers({ source: 'gateway', transport: stubTransport(() => ({ ok: true, data: { viewers: [row] } })), postId: 'p-1' });
+    expect(unavailable.ok && unavailable.data.engagement).toBe('unavailable');
+    expect(served.ok && 'engagement' in served.data).toBe(false);
+  });
+
   test('un refus de la passerelle passe TEL QUEL', async () => {
     const transport = stubTransport(() => ({ ok: false, status: 403, error: 'Only the author can view interactions', code: 'FORBIDDEN' }));
     const result = await fetchStoryViewers({ source: 'gateway', transport, postId: 'p-1' });

@@ -10,6 +10,7 @@ import dePassword from './catalog-de-password';
 import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
 import deRowActions from './catalog-de-row-actions';
+import deEngagement from './catalog-de-engagement';
 import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
@@ -27,12 +28,16 @@ import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
+import deWriteRestriction from './catalog-de-write-restriction';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
+import deDownload from './catalog-de-download';
+import dePhonePrompt from './catalog-de-phone-prompt';
+import deUserProfile from './catalog-de-user-profile';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -46,16 +51,6 @@ const de = {
   'message.excerpt.protected': 'geschützter Inhalt',
   'a11y.message.menu.subject': 'Aktionen für die Nachricht von {author}: {excerpt}',
 
-  'selection.toolbar': 'Nachrichtenauswahl',
-  'selection.cancel': 'Abbrechen',
-  'selection.count': '{count} ausgewählt',
-  'forward.title': 'Weiterleiten an…',
-  'forward.empty': 'Keine Unterhaltung',
-  'forward.search.label': 'Unterhaltung suchen',
-  'forward.search.placeholder': 'Suchen',
-  'forward.announce.sent': 'Nachricht weitergeleitet',
-  'forward.announce.sentMany': '{count} Nachrichten weitergeleitet',
-  'forward.announce.failed': 'Weiterleiten fehlgeschlagen',
   'forward.refusal.viewOnce': 'Eine Einmal-Nachricht kann nicht weitergeleitet werden',
   'forward.refusal.unavailable': 'Die ursprüngliche Nachricht ist nicht mehr verfügbar: nichts zum Weiterleiten',
 
@@ -83,7 +78,6 @@ const de = {
   'reels.sound.off': 'Stummschalten',
   'reels.play': 'Reel abspielen',
   'reels.pause': 'Reel pausieren',
-  'reels.media.error': 'Wiedergabe nicht möglich — Erneut versuchen',
   'reels.image': 'Bild {index} von {count}',
 
   'stories.title': 'Storys',
@@ -225,6 +219,7 @@ const de = {
   ...deAccounts,
   ...deCall,
   ...deRowActions,
+  ...deEngagement,
   ...deCallShell,
   ...deCallJoin,
   ...deCallDecline,
@@ -236,7 +231,6 @@ const de = {
   ...deCallCaptions,
   ...deCallRecording,
   ...deSignup,
-  'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
   'report.body': 'Wählen Sie den Grund für Ihre Meldung. Unser Moderationsteam erhält sie.',
   'report.action': 'Melden',
@@ -256,7 +250,6 @@ const de = {
   'feed.gesture.pending': 'Aktion nicht bestätigt — offline',
   'feed.share.error': 'Fehler beim Teilen des Beitrags',
   'feed.share.copied': 'Link kopiert — einfach einfügen.',
-  'feed.share.text': 'Ein Beitrag auf Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'Meine Links',
@@ -281,6 +274,7 @@ const de = {
   'notifications.category.reactions': 'Reaktionen',
   'notifications.category.mentions': 'Erwähnungen',
   'notifications.category.social': 'Soziales',
+  'notifications.category.engagement': 'Engagement',
   'notifications.category.contacts': 'Kontakte',
   'notifications.category.groups': 'Gruppen',
   'notifications.category.calls': 'Anrufe',
@@ -485,6 +479,7 @@ const de = {
   'settings.export_data': 'Meine Daten exportieren',
   'settings.section.tools': 'Werkzeuge',
   'settings.tools.progression': 'Fortschritt',
+  'settings.tools.game': 'Spiel',
   'settings.section.about': 'Über',
   'settings.terms': 'Nutzungsbedingungen',
   'settings.privacy_policy': 'Datenschutzrichtlinie',
@@ -499,6 +494,7 @@ const de = {
   'settings.save.error': 'Die Einstellung wurde nicht gespeichert.',
   'settings.theme.sync_error': 'Design auf diesem Gerät übernommen, nicht synchronisiert.',
   'common.cancel': 'Abbrechen',
+  'common.close': 'Schließen',
 
   'media.video.play': 'Video abspielen',
   'media.video.pause': 'Pausieren',
@@ -506,6 +502,9 @@ const de = {
   'media.audio.position': 'Wiedergabeposition',
   'media.audio.speed': 'Wiedergabegeschwindigkeit',
   'media.video.position.value': '{elapsed} von {total}',
+  'media.video.duration': 'Dauer',
+  'media.video.remaining': 'Verbleibende Zeit',
+  'media.buffering': 'Wird geladen…',
   'media.video.mute': 'Stummschalten',
   'media.video.unmute': 'Ton einschalten',
   'media.video.more_options': 'Weitere Optionen',
@@ -631,7 +630,6 @@ const de = {
   'discover.blocked.empty.title': 'Keine blockierten Nutzer',
   'discover.blocked.empty.subtitle': 'Personen, die du blockierst, erscheinen hier.',
   'discover.unknown': 'Unbekannt',
-  'discover.loading': 'Wird geladen',
   'discover.allLoaded': 'Die ganze Liste ist geladen',
   'discover.error.title': 'Diese Liste konnte nicht geladen werden',
   'discover.error.body': 'Prüfe deine Verbindung und versuche es erneut.',
@@ -651,57 +649,12 @@ const de = {
   'discover.announce.unblockFailed': 'Entsperren fehlgeschlagen',
   'discover.announce.offline': 'Offline: Es wurde nichts gesendet.',
 
-  'userProfile.title': 'Profil',
-  'userProfile.loading': 'Profil wird geladen',
-  'userProfile.section.publications': 'BEITRÄGE',
-  'userProfile.section.relation': 'VERBINDUNG',
-  'userProfile.section.conversations': 'UNTERHALTUNGEN',
-  'userProfile.conversations.empty': 'Keine gemeinsame Unterhaltung',
-  'userProfile.conversations.emptyBody': 'Noch verbindet euch nichts – „Schreiben“ eröffnet die erste.',
-  'userProfile.conversations.error': 'Unterhaltungen konnten nicht geladen werden',
-  'userProfile.conversations.loading': 'Unterhaltungen werden geladen',
-  'userProfile.refused.title': 'Dieses Profil ist nicht verfügbar',
-  'userProfile.refused.body': 'Es existiert nicht, oder Sie haben keinen Zugriff darauf.',
-  'userProfile.throttled.title': 'Zu viele Anfragen',
-  'userProfile.throttled.body': 'Versuchen Sie es gleich noch einmal.',
-  'userProfile.error.title': 'Dieses Profil konnte nicht geladen werden',
-  'userProfile.error.body': 'Versuchen Sie es gleich noch einmal.',
-  'userProfile.offline.body': 'Das Profil erscheint, sobald Sie wieder online sind.',
-  'userProfile.posts.empty': 'Keine Beiträge',
-  'userProfile.posts.emptyBody': 'Noch nichts Öffentliches zu lesen.',
-  'userProfile.posts.emptyPosts': 'Hier keine Beiträge',
-  'userProfile.posts.emptyReels': 'Hier keine Reels',
-  'userProfile.posts.emptyFilter': 'Tippe erneut auf die Kachel, um alles zu sehen.',
-  'userProfile.posts.error': 'Die Beiträge konnten nicht geladen werden',
-  'userProfile.posts.loadMore': 'Mehr laden',
-  'userProfile.posts.loaded': 'Hinzugefügte Beiträge: {count}',
-  'userProfile.posts.loadedNone': 'Keine weiteren Beiträge vorhanden',
-  'userProfile.posts.loading': 'Wird geladen…',
-  'userProfile.stat.posts': 'Beiträge',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Storys',
-  'userProfile.stat.filterLabel': 'Nach {name} filtern',
-  'userProfile.stat.filterClear': 'Alle anzeigen',
-  'userProfile.context.received': '{name} möchte sich mit Ihnen verbinden. Nehmen Sie an, um Nachrichten auszutauschen.',
-  'userProfile.context.sent': 'Sie haben {name} eine Verbindungsanfrage gesendet. Warten auf Antwort.',
-  'userProfile.action.write': 'Schreiben',
-  'userProfile.action.writeLabel': '{name} schreiben',
-  'userProfile.action.block': 'Blockieren',
-  'userProfile.action.blockLabel': '{name} blockieren',
-  'userProfile.blocked.title': 'Sie haben diese Person blockiert',
-  'userProfile.blocked.body': 'Ihre Beiträge und Statistiken bleiben verborgen, solange die Blockierung besteht.',
-  'userProfile.signin.title': 'Melden Sie sich an, um sich zu verbinden',
-  'userProfile.signin.body': 'Verbindungsanfragen und Nachrichten erfordern ein Konto.',
-  'userProfile.signin.cta': 'Anmelden',
-  'userProfile.announce.blocked': 'Person blockiert',
-  'userProfile.announce.blockFailed': 'Blockieren nicht möglich',
-  'userProfile.announce.writeFailed': 'Die Unterhaltung konnte nicht geöffnet werden',
 
   'a11y.floating.rung.discover.requests.one': 'Entdecken, {count} Anfrage erhalten',
   'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
 
   'links.hub.banner.title': 'Deine Links verwalten',
-  'links.hub.banner.subtitle': 'Lade ein, wen du willst, in deine Unterhaltungen',
+  'links.hub.banner.subtitle': 'Teile, verfolge und vergrößere deine Reichweite',
   'links.hub.share.title': 'Freigabelinks',
   'links.hub.share.description': 'Lade Kontakte in deine Unterhaltungen ein',
   'links.hub.share.create': 'Freigabelink erstellen',
@@ -731,8 +684,6 @@ const de = {
   'links.detail.disable': 'Deaktivieren',
   'links.detail.activate': 'Aktivieren',
   'links.detail.stats': 'Statistiken',
-  'links.detail.stats.uses': 'Nutzungen',
-  'links.detail.stats.max': 'Maximum',
   'links.detail.info': 'Informationen',
   'links.detail.identifier': 'Kennung',
   'links.detail.createdAt': 'Erstellt am',
@@ -806,8 +757,6 @@ const de = {
   'feed.scene.mosaic.more': 'Szene {index}, und {count} weitere',
   'feed.scene.mosaic.video': 'Szene {index}, Video',
   'feed.scene.shared_by': 'Szene geteilt von {author}',
-  'feed.scene.open.fullscreen': 'Doppelt tippen für Vollbild',
-  'feed.scene.open.post': 'Doppelt tippen, um den Beitrag zu öffnen',
   'feed.scene.sound.muted': 'Ton stumm',
   'feed.scene.count': '{count} Szenen',
   'scene.fullscreen.play': 'Alles fortsetzen',
@@ -823,7 +772,6 @@ const de = {
      als CanvasV3 wie unter iOS. */
   'story.studio.title': 'Neue Story',
   'story.studio.cancel': 'Abbrechen',
-  'story.studio.publish': 'Veröffentlichen',
   'story.studio.publishing': 'Wird veröffentlicht…',
   'story.studio.publish.waiting': 'Warte auf Netzwerk…',
   'story.studio.publishing.progress': 'Veröffentliche {current}/{total}…',
@@ -854,7 +802,6 @@ const de = {
   'story.studio.text.label': 'Story-Text',
   'story.studio.text.placeholder': 'Text hinzufügen',
   'story.studio.hint.duration': 'Eine Story bleibt zwanzig Stunden sichtbar.',
-  'story.studio.error.upload': 'Die Datei konnte nicht gesendet werden.',
   'story.studio.error.publish': 'Die Story konnte nicht veröffentlicht werden.',
   'story.studio.refusal.title': 'Zum Erstellen einer Story ist ein Konto erforderlich.',
   'story.studio.refusal.login': 'Anmelden',
@@ -873,11 +820,8 @@ const de = {
   'story.studio.failure.refused': 'Veröffentlichung abgelehnt.',
   'story.studio.failure.unavailable': 'Der Server ist nicht verfügbar.',
   'story.studio.text.add': 'Text hinzufügen',
-  'story.studio.text.remove': 'Diesen Text entfernen',
   'story.studio.object.text': 'Text {index}',
   'story.studio.object.overlay': 'Ebene',
-  'story.studio.object.select': '{name} auswählen',
-  'story.studio.objects.label': 'Objekte der Szene',
   'story.studio.overlay.add': 'Ein Bild auf die Szene legen',
   'story.studio.overlay.label': 'Ebene',
   'story.studio.overlay.remove': 'Ebene entfernen',
@@ -947,8 +891,6 @@ const de = {
   'story.studio.pose.rotateLeft': 'Nach links drehen',
   'story.studio.pose.rotateRight': 'Nach rechts drehen',
   'story.studio.pose.reset': 'Zentrieren',
-  'story.studio.pose.handle': '{name} verschieben — Pfeile zum Verschieben, + und − für die Größe, [ und ] zum Drehen',
-  'story.studio.pose.grip': '{name} skalieren und drehen',
 
   /* DIE ZIELGRUPPEN-AUSWAHL DES STUDIOS (#7683) — die sechs PostVisibility,
      Spiegel von PostVisibility.swift (packages/MeeshySDK). */
@@ -1040,7 +982,6 @@ const de = {
   'comment.refused.session': 'Sitzung abgelaufen — bitte neu anmelden.',
   'comment.refused.right': 'Diese Aktion steht dir nicht offen.',
   'comment.like.limit': 'Höchstens fünf Reaktionen pro Person.',
-  'feed.action.comment': 'Kommentieren',
 
   'admin.title': 'Verwaltung',
 
@@ -1071,11 +1012,8 @@ const de = {
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
 
-  'download.title': 'Meeshy holen',
-  'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
-  'download.appStore': 'Laden im App Store',
-  'download.web': 'Meeshy im Browser öffnen',
-  'download.otherPlatforms': 'Auf Android und am Computer läuft Meeshy direkt im Browser.',
+  ...deDownload,
+  ...dePhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...deComposerAttach,
@@ -1133,6 +1071,7 @@ const de = {
   'attachment.protected.open.hint': 'zum Anzeigen im Vollbild tippen',
   'media.reactions.badge.a11y': 'Reaktionen',
   'media.reactions.badge.mine.a11y': 'darunter Ihre',
+  'message.join.noAccount': 'kein Konto',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Video',
   'attachment.kind.audio': 'Audio',
@@ -1158,14 +1097,17 @@ const de = {
   ...deMentions,
   ...deStudioChrome,
   ...deEphemeral,
+  ...deWriteRestriction,
   ...deGallery,
   ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,
+  'settings.tools.sounds': 'Meine Sounds',
   ...deContactCard,
   ...deQuote,
   ...deCommentRow,
   ...deContactDiscovery,
+  ...deUserProfile,
 } satisfies InterfaceCatalog;
 
 export default de;

@@ -223,7 +223,8 @@ extension ReaderAudioMixer {
         guard delaySeconds >= 0 else { return }
         let timer = Timer.scheduledTimer(withTimeInterval: delaySeconds, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.runBackgroundVolumeRamp(from: start, to: end, duration: duration)
+                self?.runBackgroundVolumeRamp(from: start, to: end,
+                                              duration: duration, startHost: hostTrigger)
             }
         }
         if var bg = backgroundEntry {
@@ -233,30 +234,28 @@ extension ReaderAudioMixer {
     }
 
     /// Interpolates the background node volume between `start` and `end` over
-    /// `duration`. A 60 Hz step (aligned on the render clock) is imperceptible
-    /// because `AVAudioPlayerNode.volume` is sampled per audio render slice.
+    /// `duration`, read from the REAL time elapsed since `startHost` (the
+    /// planned fade instant) — a late wake-up never stretches the ramp (#9702).
     private func runBackgroundVolumeRamp(from start: Float,
                                          to end: Float,
-                                         duration: TimeInterval) {
+                                         duration: TimeInterval,
+                                         startHost: UInt64) {
         guard let bg = backgroundEntry else { return }
         guard duration > 0 else {
             bg.player.volume = isMuted ? 0 : end
             return
         }
-        let stepInterval: TimeInterval = 1.0 / 60.0
-        let steps = max(1, Int(duration / stepInterval))
         let task = Task { @MainActor [weak self] in
             guard let self else { return }
-            for i in 1...steps {
-                try? await Task.sleep(nanoseconds: UInt64(stepInterval * 1_000_000_000))
-                if Task.isCancelled { return }
+            while !Task.isCancelled {
                 guard let live = self.backgroundEntry else { return }
-                let progress = Float(i) / Float(steps)
-                let value = start + (end - start) * progress
+                let elapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
+                                                            relativeTo: startHost)
+                let value = ReaderVolumeRamp.volume(from: start, to: end,
+                                                    duration: duration, elapsed: elapsed)
                 live.player.volume = self.isMuted ? 0 : value
-            }
-            if let live = self.backgroundEntry {
-                live.player.volume = self.isMuted ? 0 : end
+                if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
+                try? await Task.sleep(nanoseconds: UInt64(ReaderVolumeRamp.stepInterval * 1_000_000_000))
             }
         }
         if var bg = backgroundEntry {

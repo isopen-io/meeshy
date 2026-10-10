@@ -84,9 +84,9 @@ public struct TextClipBar: View, Equatable {
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 6)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             if isSelected {
-                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
+                RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: MeeshyBorder.strong)
                     .allowsHitTesting(false)
             }
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {

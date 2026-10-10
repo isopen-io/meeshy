@@ -47,7 +47,7 @@ enum MediaGalleryStage {
     /// hasard.
     static let gutter: CGFloat = 12
 
-    static let cornerRadius: CGFloat = 22
+    static let cornerRadius: CGFloat = MeeshyRadius.xlPlus
 
     /// Hauteur de ce qui se pose sur le cadre — transport, légende, auteur,
     /// actions. C'est la mesure dont le plancher descend.

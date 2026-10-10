@@ -1,0 +1,90 @@
+/* L'EN-TÊTE QUI SE RÉDUIT (#9563, amendement n° 2) — le miroir web de
+   `CollapsibleHeader` (iOS, #6480) : au repos, un GRAND titre posé dans la page
+   sur un fond transparent ; dès que le contenu défile DESSOUS, une barre compacte
+   et translucide, dont le titre apparaît à la place du grand.
+
+   La barre est `sticky` DANS le conteneur qui défile : le contenu passe sous
+   elle, c'est ce qui rend le verre visible. Deux couches seulement changent, en
+   opacité et en transform (aucune mise en page) : le VOILE de verre, et le titre
+   compact.
+
+   AUCUN RENDU À LA CADENCE DU DÉFILEMENT. Là où le navigateur sait le faire, la
+   progression suit le défilement lui-même (`animation-timeline: scroll()`).
+   Ailleurs, un écouteur passif pose `data-scrolled` sur la barre, et les deux
+   couches basculent. Les deux mènent au même état final. */
+
+.collapsing-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 10;
+}
+
+.collapsing-bar-veil {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  border-block-end: var(--stroke-hair) solid color-mix(in srgb, var(--color-ios-ink) 10%, transparent);
+}
+
+.collapsing-bar-title {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.collapsing-bar[data-scrolled] .collapsing-bar-veil {
+  opacity: 1;
+}
+
+.collapsing-bar[data-scrolled] .collapsing-bar-title {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .collapsing-bar-veil,
+  .collapsing-bar-title {
+    transition:
+      opacity 180ms linear,
+      transform 180ms ease-out;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  .collapsing-bar-veil,
+  .collapsing-bar-title {
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: scroll(nearest block);
+    animation-range: 12px 60px;
+    transition: none;
+  }
+
+  .collapsing-bar-veil {
+    animation-name: collapsingVeil;
+  }
+
+  .collapsing-bar-title {
+    animation-name: collapsingTitle;
+  }
+}
+
+@keyframes collapsingVeil {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes collapsingTitle {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

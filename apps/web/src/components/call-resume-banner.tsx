@@ -15,6 +15,7 @@ import { callStore } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
+import { reportCallResumeShown } from '@/lib/view/top-band';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
@@ -84,30 +85,35 @@ export default function CallResumeBanner() {
     void appQueryClient.invalidateQueries({ queryKey: ACTIVE_CALL_QUERY_KEY });
   }, [localPhase, localCallId]);
 
-  if (!signedIn) return null;
   const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
-  const request = resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current });
+  const request = signedIn ? resumableCall({ active: active.data ?? null, local, viewerId, identityOf: callIdentityOf, openThread, endedCallIds: endedCallIds.current }) : null;
+  /* Le bandeau du haut (#9494) lit ici que la place est prise : la bannière du joueur s'efface tant que celle-ci se montre. */
+  const shown = request !== null;
+  useEffect(() => {
+    reportCallResumeShown(shown);
+  }, [shown]);
+  useEffect(() => () => reportCallResumeShown(false), []);
   if (request === null) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+    <div className="pointer-events-none flex w-full justify-center">
       <button
         type="button"
         data-call-resume={request.callId}
         aria-label={translate(language, 'callJoin.resume.named', { name: request.title === '' ? translate(language, 'calls.unknown') : request.title })}
         onClick={() => callActions.join(request)}
-        className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-chip py-1.5 pr-1.5 pl-3.5 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-chip py-1.5 pe-1.5 ps-3.5 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           backgroundColor: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-success)',
-          boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-success) 45%, transparent), 0 8px 24px rgb(0 0 0 / 0.18)',
+          boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-success) 45%, transparent), var(--shadow-lg)',
         }}
       >
         <span aria-hidden="true" style={{ color: 'var(--color-success)' }}>
           {request.media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} /> : <Glyph name="phone" size={16} />}
         </span>
-        <span aria-hidden="true" className="grid min-w-0 text-left leading-tight">
+        <span aria-hidden="true" className="grid min-w-0 text-start leading-tight">
           <span data-call-resume-title className="truncate text-check font-semibold" style={{ color: 'var(--color-success)' }}>
             {translate(language, 'callJoin.resume.title')}
           </span>
@@ -119,7 +125,7 @@ export default function CallResumeBanner() {
         </span>
         <span
           aria-hidden="true"
-          className="ml-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-white"
+          className="ms-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-ios-on-brand"
           style={{ height: 32, backgroundColor: 'var(--ios-indigo-600)' }}
         >
           {translate(language, 'callJoin.resume.action')}

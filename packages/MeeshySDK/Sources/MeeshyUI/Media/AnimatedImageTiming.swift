@@ -102,6 +102,29 @@ nonisolated public enum AnimatedImageTiming {
         )
     }
 
+    /// **L'image d'un cycle décodé à l'instant `elapsed`** (#8610) — la même
+    /// que montrerait la `CAKeyframeAnimation` discrète de la scène.
+    ///
+    /// Les images de `AnimatedImageDecoder.Decoded.frames` sont déjà
+    /// rééchantillonnées sur une unité commune (`plan`) : une image lente y
+    /// figure plusieurs fois, donc l'index se lit en divisant le temps par
+    /// `duration / frameCount` — les durées du fichier sont respectées par
+    /// construction. Une boucle FINIE épuisée tient sa dernière image, comme
+    /// `fillMode = .forwards` ; un temps négatif ou une durée dégénérée tient
+    /// la première.
+    public static func frameIndex(elapsed: TimeInterval,
+                                  frameCount: Int,
+                                  duration: TimeInterval,
+                                  loopCount: Int) -> Int {
+        guard frameCount > 1, duration > 0, elapsed.isFinite, elapsed > 0 else { return 0 }
+        if loopCount > 0, elapsed >= duration * Double(loopCount) { return frameCount - 1 }
+        let withinCycle = elapsed.truncatingRemainder(dividingBy: duration)
+        // La tolérance absorbe l'arrondi binaire d'un reste exact (0,5 mod 0,4
+        // rend 0,0999…) : une frontière d'image ne recule jamais d'une image.
+        let index = Int((withinCycle / duration * Double(frameCount) + 1e-9).rounded(.down))
+        return min(max(index, 0), frameCount - 1)
+    }
+
     private static func greatestCommonDivisor(_ a: Int, _ b: Int) -> Int {
         var x = abs(a), y = abs(b)
         while y != 0 { (x, y) = (y, x % y) }

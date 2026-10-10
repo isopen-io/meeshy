@@ -69,6 +69,8 @@ import {
   type ConnectionHandlers,
   type InviteStatus,
 } from '@/routes/discover-parts';
+import { PhoneAddPrompt } from '@/components/phone-add-prompt';
+import { usePhoneAddPrompt } from '@/lib/view/use-phone-add-prompt';
 
 /**
  * **DÉCOUVRIR** (#6363) — quatrième barreau de l'échelle, miroir de
@@ -118,6 +120,9 @@ export default function DiscoverScreen() {
   const session = useStore(sessionStore, (state) => state.session);
   const enabled = apiDeps.source === 'fixtures' || session.status === 'authenticated';
   const viewerId = resolveViewer({ source: apiDeps.source, session }).id ?? null;
+  /* « AJOUTEZ VOTRE NUMÉRO » (#8843) — là où l'on cherche des gens, si le
+     profil n'en a pas ; miroir de la vue iOS d'avant la recherche par contacts. */
+  const phonePrompt = usePhoneAddPrompt(enabled);
 
   const received = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
   const sent = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'sent'), enabled }, appQueryClient);
@@ -303,6 +308,11 @@ export default function DiscoverScreen() {
   const panels: Readonly<Record<DiscoverTab, () => ReactNode>> = {
     discover: () => (
       <section data-discover-people className="flex flex-col gap-4 pb-8">
+        {phonePrompt.visible ? (
+          <div className="px-4 pt-2">
+            <PhoneAddPrompt language={language} deps={phonePrompt.deps} onDismiss={phonePrompt.dismiss} onVerified={phonePrompt.verified} />
+          </div>
+        ) : null}
         <InviteCard language={language} email={email} sentTo={invite.sentTo} status={invite.status} onEmailChange={setEmail} onSubmit={submitInvite} />
         <div className="grid gap-2 px-4">
           <DiscoverSearchField language={language} value={typed} onChange={setTyped} />

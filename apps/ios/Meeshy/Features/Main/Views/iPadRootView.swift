@@ -77,6 +77,10 @@ struct iPadRootView: View {
 
     @State var activeConversation: Conversation?
     @State var rightPanelRoute: Route?
+    /// La pile du JEU dans le panneau droit (#9564, amendement n° 4) : une fiche poussée depuis Progression, une
+    /// sous-page depuis sa fiche s'empilent AU-DESSUS de la page d'où elles partent — le retour y ramène, et la
+    /// première page garde sa position de défilement, comme sur iPhone.
+    @StateObject var gameTrail = GamePanelTrailStore()
     /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
     @State private var republishStatusEntry: StatusEntry?
     @State var showStoryViewerFromConv = false
@@ -94,7 +98,9 @@ struct iPadRootView: View {
 
     /// Conversation surfaced by a long-press / pull-down on a notification toast
     /// — presented as a reusable `ConversationView` preview over the columns.
-    @State var notificationPreviewConversation: Conversation?
+    /// Sur le tas (`iPadRootSheetTargets`, #8972) : en ligne, elle faisait
+    /// franchir à la vue son budget de taille.
+    @State var sheetTargets = iPadRootSheetTargets()
     /// Swallows the toast Button's release tap that can fire right after the
     /// long-press / drag opened the preview (prevents double action).
     @State var suppressToastTap = false
@@ -200,7 +206,7 @@ struct iPadRootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             showSharePicker: $showSharePicker,
             showNewConversation: $showNewConversation,
-            notificationPreviewConversation: $notificationPreviewConversation,
+            notificationPreviewConversation: $sheetTargets.notificationPreview,
             onOpenFullConversation: openConversation
         ))
         .modifier(iPadCoversAndChromeLayer(
@@ -214,13 +220,14 @@ struct iPadRootView: View {
             showStoryViewerFromConv: $showStoryViewerFromConv,
             selectedStoryUserIdFromConv: selectedStoryUserIdFromConv,
             activeConversationId: activeConversation?.id,
+            rightPanelRoute: rightPanelRoute,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
-            activeConversationIdForBanner: { activeConversation?.id ?? notificationPreviewConversation?.id },
+            activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
+                guard let target = MiniPlayerTapPolicy.target(
+                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
+                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
             }
         ))
         // C4b — la rupture, posée PAR-DESSUS les feuilles : elle les recouvre,
@@ -243,13 +250,22 @@ struct iPadRootView: View {
                 openConversation(conv)
                 return true
             }
+            if let root = rightPanelRoute, GameNavigationMap.stacks(route, over: root) {
+                gameTrail.trail.push(route, over: root)
+                return true
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                gameTrail.trail = GamePanelTrail()
                 rightPanelRoute = route
             }
             return true
         }
 
         router.onPopRequested = {
+            if let root = rightPanelRoute, !gameTrail.trail.path(over: root).isEmpty {
+                gameTrail.trail.pop()
+                return
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                 if rightPanelRoute != nil {
                     rightPanelRoute = nil
@@ -363,6 +379,7 @@ struct iPadRootView: View {
                 forcedReadingMode: router.pendingForcedReadingMode,
                 landsOnMessage: router.landsOnMessage(in: conversation.id)
             )
+            .reportsConversationViewing(conversation.id)
             .id(conversation.id)
             .navigationBarHidden(true)
             .onAppear {
@@ -376,6 +393,10 @@ struct iPadRootView: View {
             iPadRightPanel(
                 route: route,
                 rightPanelRoute: $rightPanelRoute,
+                gamePath: Binding(
+                    get: { gameTrail.trail.path(over: route) },
+                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0) }
+                ),
                 notificationManager: notifications.manager,
                 onOpenConversation: openConversation,
                 onNotificationTap: handleNotificationTap

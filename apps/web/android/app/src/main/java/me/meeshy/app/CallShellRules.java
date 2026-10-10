@@ -35,6 +35,40 @@ public final class CallShellRules {
         return null;
     }
 
+    /**
+     * #8144 — quitter l'app (Accueil, autre app) pendant un appel video la
+     * fait flotter en image dans l'image, comme Document PiP sur le web.
+     * `enterPictureInPictureMode` n'existe qu'a partir de l'API 26, et un
+     * systeme sans la fonction PiP la refuse.
+     */
+    public static boolean entersPictureInPicture(int sdk, boolean callActive, boolean video, boolean systemSupports) {
+        return sdk >= 26 && systemSupports && callActive && video;
+    }
+
+    /** #8144 — les boutons de la fenetre flottante, dans l'ordre : le micro (dans son etat), puis raccrocher. */
+    public static String[] pictureInPictureActions(boolean micMuted) {
+        return new String[] {micMuted ? "unmute" : "mute", "hangup"};
+    }
+
+    /** Le geste de la page qu'un bouton de la fenetre declenche (`shell-call.ts`), ou null. */
+    public static String pictureInPictureGesture(String action) {
+        if ("mute".equals(action) || "unmute".equals(action)) return "mic";
+        if ("hangup".equals(action)) return "hangup";
+        return null;
+    }
+
+    /**
+     * #8144 — le format de la fenetre flottante, celui de la video qui y
+     * flotte. Android refuse un format plus allonge que 2,39:1 (dans un sens
+     * ou dans l'autre) : il est ramene a cette borne. null = format systeme.
+     */
+    public static int[] pictureInPictureAspect(int width, int height) {
+        if (width <= 0 || height <= 0) return null;
+        if (width * 100L > height * 239L) return new int[] {239, 100};
+        if (height * 100L > width * 239L) return new int[] {100, 239};
+        return new int[] {width, height};
+    }
+
     /** `DELETE /api/v1/calls/:callId?reason=rejected` — le refus AVANT d'avoir rejoint (`sw-push.js` § refuserAppel). */
     public static String declineUrl(String apiBase, String callId) {
         if (apiBase == null || callId == null || callId.trim().isEmpty()) return null;

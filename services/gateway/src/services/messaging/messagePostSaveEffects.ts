@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { conversationTypeVariant, type EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
+import type { EngagementActivityOptions } from '../engagement/EngagementService';
+import { memberSignature } from '../engagement/memberSignature';
+import { sharedPlaceFromMetadata } from '../location/sharedPlace';
 import { conversationStatsService } from '../ConversationStatsService';
 import {
   conversationMessageStatsService,
@@ -53,6 +57,46 @@ export interface PostSaveMessage extends TranslatableMessage {
    * `metadata.sticker`, jamais comme pièce jointe.
    */
   readonly hasSticker: boolean;
+  /**
+   * La source d'un TRANSFERT, telle qu'`admitMessageForward` l'a admise
+   * (#8959 `tool.forward`). Optionnelle : les routes de lien de partage ne
+   * transfèrent jamais.
+   */
+  readonly forwardedFromId?: string | null;
+  /**
+   * `metadata.location` valide (`parseSharedPlace`) — un lieu FIXE partagé
+   * (#8959 `tool.location`, variante `static`). Le partage EN DIRECT n'est pas
+   * un message : il se crédite au départ de la session (`LocationHandler`).
+   */
+  readonly hasLocation?: boolean;
+  /**
+   * Le message CITÉ, tel que l'`include` de l'écriture l'a chargé — son auteur
+   * (`Participant.userId`, `null` pour un anonyme). Absent ⇒ pas de citation
+   * lisible (#8959 `tool.quote_reply` ne crédite pas).
+   */
+  readonly quoted?: { readonly authorUserId: string | null } | null;
+  /** La story citée (#9635 « répondre à une story »). */
+  readonly storyReplyToId?: string | null;
+}
+
+/**
+ * Les champs d'outil de `PostSaveMessage` lus sur le message PERSISTÉ : la
+ * source admise d'un transfert, et un lieu fixe valide sous `metadata`.
+ */
+export function postSaveToolFields(message: {
+  readonly forwardedFromId?: string | null;
+  readonly metadata?: unknown;
+  readonly replyTo?: { readonly sender?: { readonly userId?: string | null } | null } | null;
+}): {
+  readonly forwardedFromId: string | null;
+  readonly hasLocation: boolean;
+  readonly quoted: { readonly authorUserId: string | null } | null;
+} {
+  return {
+    forwardedFromId: message.forwardedFromId ?? null,
+    hasLocation: sharedPlaceFromMetadata(message.metadata) !== null,
+    quoted: message.replyTo ? { authorUserId: message.replyTo.sender?.userId ?? null } : null,
+  };
 }
 
 /**
@@ -72,7 +116,20 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement' | 'stickerEngagement';
+export type PostSaveEffect =
+  | 'lastMessageAt'
+  | 'firstMessageSentAt'
+  | 'translation'
+  | 'stats'
+  | 'messageStats'
+  | 'engagement'
+  | 'contentEngagement'
+  | 'stickerEngagement'
+  | 'attachmentEngagement'
+  | 'quoteEngagement'
+  | 'forwardEngagement'
+  | 'gameSignals'
+  | 'locationEngagement';
 
 /**
  * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
@@ -86,15 +143,36 @@ export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translati
  *   déduplication par conversation ;
  * - `recordConversationActivity` pour l'axe « conversation distincte »
  *   (#5538, #5539, #5540) — dédupliqué par conversation, cf. son doc-comment.
+ *
+ * Chaque crédit porte la conversation du message (#8906) : c'est elle qui
+ * applique le plafond journalier par conversation et fait avancer « N (M) 🔥 ».
  */
 export interface PostSaveEngagementService {
-  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
+  /** `true` quand le geste a été CRÉDITÉ ; toute autre valeur (refus, double de test muet) vaut « non ». */
+  recordActivity(userId: string, operationKey: EngagementOperationKey, options?: EngagementActivityOptions): Promise<boolean | void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
     conversationId: string,
+    options?: { readonly signature?: string },
   ): Promise<void>;
-  recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void>;
+  /**
+   * Les signaux du JEU (#9375, #9377) : réponse dans une conversation distincte,
+   * autre langue, réponse reçue. Optionnelle — un service d'engagement qui ne
+   * porte pas le jeu (double de test, ancien appelant) ne reçoit rien.
+   */
+  recordMessageSignals?(input: {
+    readonly senderUserId: string;
+    readonly conversationId: string;
+    readonly messageId: string;
+    readonly replyToId: string | null;
+    readonly quotedAuthorUserId: string | null;
+    readonly originalLanguage: string;
+    readonly content?: string;
+    readonly storyReplyToId?: string | null;
+  }): Promise<void>;
+  /** La conversation que ce message démarre (#9635) — le jeu y applique la garde d'abus d'un message. */
+  recordConversationStarted?(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void>;
 }
 
 /**
@@ -257,13 +335,21 @@ export function runMessagePostSaveEffects(params: {
   // pour TOUS les messages, pas seulement le premier. Ne concerne que les
   // DM créés vides (Prisme design doc 2026-08-04) ; `count` à 0 signifie
   // "pas le premier message" ou "conversation non concernée" — no-op.
+  //
+  // La bascule GAGNÉE est le point unique où une conversation créée vide est
+  // DÉMARRÉE (#9635 « démarrer une conversation ») : son auteur en reçoit le
+  // fait de jeu, une fois, quel que soit le transport d'envoi.
   void Promise.resolve()
-    .then(() =>
-      prisma.conversation.updateMany({
+    .then(async () => {
+      const flipped = await prisma.conversation.updateMany({
         where: { id: message.conversationId, firstMessageSentAt: null },
         data: { firstMessageSentAt: new Date() },
-      })
-    )
+      });
+      if (flipped.count !== 1 || !message.senderUserId || !engagementService?.recordConversationStarted) return;
+      // Comme les autres signaux du jeu : seulement si le crédit de ce message a eu lieu.
+      if (!(await contentCredited)) return;
+      await engagementService.recordConversationStarted({ senderUserId: message.senderUserId, conversationId: message.conversationId });
+    })
     .catch(report('firstMessageSentAt'));
 
   if (translationService) {
@@ -308,11 +394,11 @@ export function runMessagePostSaveEffects(params: {
   // de la conversation quand elle ne peut mener nulle part.
   // UNE lecture de la conversation, partagée par les deux axes qui en ont
   // besoin — mémoïsée, et jamais faite pour un expéditeur anonyme.
-  let conversationRead: Promise<{ type: string; communityId: string | null } | null> | null = null;
+  let conversationRead: Promise<{ type: string; communityId: string | null; identifier?: string | null } | null> | null = null;
   const readConversation = () => {
     conversationRead ??= prisma.conversation.findUnique({
       where: { id: message.conversationId },
-      select: { type: true, communityId: true },
+      select: { type: true, communityId: true, identifier: true },
     });
     return conversationRead;
   };
@@ -323,11 +409,23 @@ export function runMessagePostSaveEffects(params: {
       .then(async () => {
         const conversation = await readConversation();
         if (!conversation) return;
-        await engagementService.recordConversationActivity(
-          senderUserId,
-          conversationEngagementAxis(conversation),
-          message.conversationId
-        );
+        const axisKey = conversationEngagementAxis(conversation);
+        if (axisKey !== 'conversation.private') {
+          await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId);
+          return;
+        }
+        // Une conversation privée rapporte une fois par ENSEMBLE de personnes
+        // (#8906) : la même personne, ou le même groupe, ne rapporte plus.
+        const members = await prisma.conversation.findUnique({
+          where: { id: message.conversationId },
+          select: { participants: { where: { isActive: true }, select: { userId: true } } },
+        });
+        const peers = (members?.participants ?? [])
+          .map((participant) => participant.userId)
+          .filter((id): id is string => typeof id === 'string' && id !== senderUserId);
+        await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId, {
+          signature: memberSignature(peers),
+        });
       })
       .catch(report('engagement'));
   }
@@ -339,23 +437,19 @@ export function runMessagePostSaveEffects(params: {
   // crédite l'axe audio, SANS crédite l'axe texte. Même garde anonyme que
   // ci-dessus : `EngagementCounter.userId` exige un `User.id`, qu'un
   // participant anonyme n'a pas.
-  if (engagementService && message.senderUserId) {
-    const senderUserId = message.senderUserId;
-    const hasAudioAttachment = message.attachmentMimeTypes.some(
-      (mimeType) => resolveAttachmentType(mimeType) === 'audio'
-    );
-    const contentAxisKey = hasAudioAttachment ? 'content.audio_message' : 'content.text_message';
-    const normalized = normalizeRepeatableText(message.content);
-    void Promise.resolve()
-      .then(async () => {
-        if (contentAxisKey === 'content.text_message' && normalized.length > 0) {
-          const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
-          if (repeated) return;
-        }
-        await engagementService.recordActivity(senderUserId, contentAxisKey);
-      })
-      .catch(report('contentEngagement'));
-  }
+  // Le crédit de CONTENU rend son issue : c'est elle, et elle seule, qui ouvre
+  // les signaux du jeu plus bas (#9635). Un message que le crédit refuse —
+  // garde d'abus, plafond du jour par conversation, texte répété dans la
+  // conversation globale, quota — ne fait avancer aucun défi.
+  const contentCredited: Promise<boolean> =
+    engagementService && message.senderUserId
+      ? creditMessageContent({ prisma, readConversation, engagementService, message, senderUserId: message.senderUserId }).catch(
+          (error: unknown) => {
+            report('contentEngagement')(error);
+            return false;
+          },
+        )
+      : Promise.resolve(false);
 
   // Axe d'engagement « sticker » (#5541, docs/product/streaks-badges-modele.md
   // § 2, § 11) — indépendant de l'axe « conversation distincte » ci-dessus, et
@@ -366,9 +460,117 @@ export function runMessagePostSaveEffects(params: {
   if (engagementService && message.senderUserId && message.hasSticker) {
     const senderUserId = message.senderUserId;
     void Promise.resolve()
-      .then(() => engagementService.recordActivity(senderUserId, 'tool.sticker'))
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.sticker', { conversationId: message.conversationId })
+      )
       .catch(report('stickerEngagement'));
   }
+
+  // Axe « pièce jointe » (#8906) — UNE fois par message portant au moins une
+  // pièce jointe qui n'est pas un audio : le vocal a déjà son axe de contenu
+  // (`content.audio_message`), le compter deux fois paierait le même geste
+  // deux fois. Un sticker n'est jamais une pièce jointe (`metadata.sticker`),
+  // donc un message sticker seul ne crédite pas cet axe.
+  const hasNonAudioAttachment = message.attachmentMimeTypes.some(
+    (mimeType) => resolveAttachmentType(mimeType) !== 'audio'
+  );
+  if (engagementService && message.senderUserId && hasNonAudioAttachment) {
+    const senderUserId = message.senderUserId;
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.attachment', { conversationId: message.conversationId })
+      )
+      .catch(report('attachmentEngagement'));
+  }
+
+  // Les signaux du jeu (#9375, #9377) : ce qu'un message committé apprend aux
+  // missions (réponse dans une conversation distincte, autre langue, réponse
+  // reçue) et les +3 points de l'auteur répondu. Un compte anonyme n'a pas de jeu.
+  //
+  // #9635 — ils ne partent qu'APRÈS le crédit de contenu, et seulement s'il a
+  // CRÉDITÉ : le même verdict d'abus, le même plafond, dans le même ordre.
+  if (engagementService?.recordMessageSignals && message.senderUserId) {
+    const senderUserId = message.senderUserId;
+    const recordMessageSignals = engagementService.recordMessageSignals.bind(engagementService);
+    void contentCredited
+      .then((credited) => {
+        if (!credited) return undefined;
+        return recordMessageSignals({
+          senderUserId,
+          conversationId: message.conversationId,
+          messageId: message.id,
+          replyToId: message.replyToId ?? null,
+          quotedAuthorUserId: message.quoted?.authorUserId ?? null,
+          originalLanguage,
+          content: message.content,
+          storyReplyToId: message.storyReplyToId ?? null,
+        });
+      })
+      .catch(report('gameSignals'));
+  }
+
+  if (engagementService && message.senderUserId) {
+    creditMessagingTools({ engagementService, message, senderUserId: message.senderUserId, report });
+  }
+}
+
+/**
+ * Les OUTILS de messagerie qu'un envoi exerce (#8959) : citer, transférer,
+ * partager un lieu fixe. Chacun s'ajoute aux axes de contenu, jamais à leur
+ * place, et porte la conversation — c'est elle qui applique le plafond du jour.
+ *
+ * La citation nomme l'AUTEUR du message cité (`targetOwnerId`), lu dans
+ * l'`include` de l'écriture — aucune lecture de plus : se citer soi-même ne
+ * rapporte rien, et c'est le moteur qui le refuse. Un message cité illisible
+ * (disparu) ne crédite pas.
+ */
+function creditMessagingTools(params: {
+  engagementService: PostSaveEngagementService;
+  message: PostSaveMessage;
+  senderUserId: string;
+  report: (effect: PostSaveEffect) => (error: unknown) => void;
+}): void {
+  const { engagementService, message, senderUserId, report } = params;
+  const conversationId = message.conversationId;
+  const quoted = message.quoted;
+
+  if (message.replyToId && quoted) {
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.quote_reply', {
+          conversationId,
+          targetOwnerId: quoted.authorUserId,
+        })
+      )
+      .catch(report('quoteEngagement'));
+  }
+
+  if (message.forwardedFromId) {
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, 'tool.forward', { conversationId }))
+      .catch(report('forwardEngagement'));
+  }
+
+  if (message.hasLocation) {
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.location', { conversationId, variant: 'static' })
+      )
+      .catch(report('locationEngagement'));
+  }
+}
+
+/** L'identifiant que porte Meeshy Global, et elle seule (`InitService`) : un identifiant choisi reçoit le préfixe `mshy_`. */
+const MEESHY_GLOBAL_IDENTIFIER = 'meeshy';
+
+/**
+ * La variante de valeur d'un message texte (#9666), lue en base. La création de conversation accepte le
+ * type `global` : seule Meeshy Global (identifiant `meeshy`) vaut le prix de la conversation globale ; une
+ * conversation qu'un compte s'est fabriquée sous ce type vaut « autres ».
+ */
+function messageValueVariant(conversation: { readonly type: string; readonly identifier?: string | null } | null) {
+  const variant = conversationTypeVariant(conversation?.type);
+  return variant === 'global' && conversation?.identifier !== MEESHY_GLOBAL_IDENTIFIER ? 'other' : variant;
 }
 
 /**
@@ -397,3 +599,38 @@ async function isRepeatedGlobalText(params: {
   });
   return recent.some((row) => normalizeRepeatableText(row.content) === normalized);
 }
+
+/**
+ * Axe d'engagement « contenu produit » (#5531 `content.audio_message`, #5532 `content.text_message`) — un même
+ * envoi ne crédite jamais les deux : AVEC au moins une pièce jointe dont le MIME résout en `audio` (même table que
+ * le comptage de conversation, `resolveAttachmentType`) crédite l'axe audio, SANS crédite l'axe texte. Un texte
+ * répété dans la conversation globale ne crédite rien. Rend `true` seulement quand le crédit a eu lieu (#9635).
+ * Un texte vaut selon le type de sa conversation, LU ICI en base (#9666) : directe 2, groupe et autres 4,
+ * publique 6, globale 8 ; une conversation introuvable vaut « autres ». Le vocal garde sa valeur unique.
+ */
+async function creditMessageContent(params: {
+  readonly prisma: Pick<PrismaClient, 'conversation' | 'message'>;
+  readonly readConversation: () => Promise<{ readonly type: string; readonly communityId: string | null; readonly identifier?: string | null } | null>;
+  readonly engagementService: PostSaveEngagementService;
+  readonly message: PostSaveMessage;
+  readonly senderUserId: string;
+}): Promise<boolean> {
+  const { prisma, readConversation, engagementService, message, senderUserId } = params;
+  const hasAudioAttachment = message.attachmentMimeTypes.some((mimeType) => resolveAttachmentType(mimeType) === 'audio');
+  if (hasAudioAttachment) {
+    const credited = await engagementService.recordActivity(senderUserId, 'content.audio_message', { conversationId: message.conversationId });
+    return credited === true;
+  }
+  const normalized = normalizeRepeatableText(message.content);
+  if (normalized.length > 0) {
+    const repeated = await isRepeatedGlobalText({ prisma, readConversation, message, normalized });
+    if (repeated) return false;
+  }
+  const conversation = await readConversation();
+  const credited = await engagementService.recordActivity(senderUserId, 'content.text_message', {
+    conversationId: message.conversationId,
+    variant: messageValueVariant(conversation),
+  });
+  return credited === true;
+}
+

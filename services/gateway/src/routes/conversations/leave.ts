@@ -14,6 +14,7 @@ import { resoudreSuccessionDuCreateur } from '../../services/conversations/creat
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure'
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice'
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -185,6 +186,7 @@ export function registerLeaveRoutes(
         await prisma.participant.update(leaveSelf)
       }
       invalidateParticipantLookup(participant.id, id)
+      announceConversationLanguageChange({ kind: 'departure', conversationId: id })
 
       // #7593 — la ligne de liste des restants dit « X a quitté la conversation ».
       if (!conversationClosed) {

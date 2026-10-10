@@ -124,6 +124,15 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// Le filtre, typé. Une valeur inconnue (client plus récent) se lit
     /// « aucun filtre » plutôt que de faire échouer le rendu.
     public var parsedFilter: StoryFilter? { filter.flatMap(StoryFilter.init(rawValue:)) }
+
+    /// **Les réglages de CETTE image** (#9175) — exposition, contraste,
+    /// température… : ceux que l'éditeur plein écran cuisait dans un bitmap
+    /// jeté à la fermeture. Ils sont une propriété de l'objet, peinte par le
+    /// player (`StoryMediaLayer.filtered`) après le filtre, comme l'éditeur
+    /// d'avatar les enchaîne. `nil` ⇒ aucun réglage ; seules les valeurs
+    /// actives voyagent (`ImageAdjustments.encode`), et une charge illisible se
+    /// lit « aucun réglage » plutôt que de faire tomber la story.
+    public var adjustments: ImageAdjustments?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
     /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
     /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
@@ -162,6 +171,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case sourceLanguage, keyframes, thumbHash, name
         case isDuckingDisabled
         case filter
+        case adjustments
     }
 
     public init(id: String = UUID().uuidString,
@@ -263,6 +273,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         name = try c.decodeIfPresent(String.self, forKey: .name)
         isDuckingDisabled = try c.decodeIfPresent(Bool.self, forKey: .isDuckingDisabled)
         filter = try c.decodeIfPresent(String.self, forKey: .filter)
+        adjustments = (try? c.decodeIfPresent(ImageAdjustments.self, forKey: .adjustments))
+            .flatMap { $0.activeCount > 0 ? $0 : nil }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -302,6 +314,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(name, forKey: .name)
         try c.encodeIfPresent(isDuckingDisabled, forKey: .isDuckingDisabled)
         try c.encodeIfPresent(filter, forKey: .filter)
+        if let adjustments, adjustments.activeCount > 0 { try c.encode(adjustments, forKey: .adjustments) }
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }

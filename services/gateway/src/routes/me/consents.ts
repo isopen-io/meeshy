@@ -84,9 +84,14 @@ import {
   CONSENT_PURPOSES,
   CONSENT_PARENT,
   CONSENT_POLICY_VERSION_DEFAULT,
+  GAME_CONSENT_PURPOSES,
   isConsentPurpose,
+  isGameConsentPurpose,
   type ConsentPurpose,
+  type GameConsentPurpose,
 } from '@meeshy/shared/types/consents';
+import { GameRefusal } from '../../services/game/GameRefusal';
+import { LeagueService } from '../../services/game/LeagueService';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { zodIssueSchema, issuesServies } from '../../utils/zod-issue-schema';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
@@ -159,7 +164,7 @@ function ancestorsOf(purpose: ConsentPurpose): readonly ConsentPurpose[] {
 }
 
 type ConsentEntry = {
-  purpose: ConsentPurpose;
+  purpose: ConsentPurpose | GameConsentPurpose;
   granted: boolean;
   grantedAt?: string;
   revokedAt?: null;
@@ -174,7 +179,7 @@ type ConsentEntry = {
  * retiré ne porte QUE `revokedAt` (toujours `null`, voir doc-comment de
  * module) — jamais les deux à la fois sur la même entrée.
  */
-function buildConsentEntry(purpose: ConsentPurpose, grantedAt: Date | null): ConsentEntry {
+function buildConsentEntry(purpose: ConsentPurpose | GameConsentPurpose, grantedAt: Date | null): ConsentEntry {
   if (grantedAt) {
     return {
       purpose,
@@ -269,6 +274,11 @@ function consentRateLimitConfig(usage: 'read' | 'write') {
   };
 }
 
+type GameConsentColumns = { publicLeagueConsentAt?: Date | null };
+
+const gameConsentColumn = (user: GameConsentColumns, purpose: GameConsentPurpose): Date | null =>
+  purpose === 'public-league' ? (user.publicLeagueConsentAt ?? null) : null;
+
 const consentEntrySchema = {
   type: 'object',
   properties: {
@@ -279,6 +289,15 @@ const consentEntrySchema = {
     policyVersion: { type: 'string' },
     source: { type: 'string', example: 'server' },
   },
+} as const;
+
+/**
+ * Les consentements du JEU : servis à CÔTÉ de `consents` (jamais dedans — un ancien
+ * client décode `purpose` en énumération fermée), sous la même forme d'entrée.
+ */
+const gameConsentEntrySchema = {
+  ...consentEntrySchema,
+  properties: { ...consentEntrySchema.properties, purpose: { type: 'string', enum: [...GAME_CONSENT_PURPOSES] } },
 } as const;
 
 const derivedSchema = {
@@ -378,6 +397,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
                 type: 'object',
                 properties: {
                   consents: { type: 'array', items: consentEntrySchema },
+                  gameConsents: { type: 'array', items: gameConsentEntrySchema },
                   derived: derivedSchema,
                 },
               },
@@ -399,7 +419,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       try {
         const user = await fastify.prisma.user.findUnique({
           where: { id: userId },
-          select: CONSENT_SELECT,
+          select: { ...CONSENT_SELECT, publicLeagueConsentAt: true },
         });
 
         if (!user) {
@@ -409,6 +429,9 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         const consents = CONSENT_PURPOSES.map((purpose) =>
           buildConsentEntry(purpose, (user as ConsentColumns)[PURPOSE_COLUMN[purpose]])
         );
+        const gameConsents = GAME_CONSENT_PURPOSES.map((purpose) =>
+          buildConsentEntry(purpose, gameConsentColumn(user as GameConsentColumns, purpose))
+        );
 
         // Le bloc dérivé vient de `ConsentValidationService` — jamais
         // recalculé sur place (critère de #4335/#4348 repris tel quel).
@@ -416,6 +439,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
 
         return sendSuccess(reply, {
           consents,
+          gameConsents,
           derived: {
             canTranscribeAudio: status.canTranscribeAudio,
             canTranslateAudio: status.canTranslateAudio,
@@ -475,7 +499,7 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       }
 
       const { purpose } = request.params;
-      if (!isConsentPurpose(purpose)) {
+      if (!isConsentPurpose(purpose) && !isGameConsentPurpose(purpose)) {
         return sendBadRequest(reply, 'UNKNOWN_CONSENT_PURPOSE', {
           message: `purpose doit être l'un de : ${CONSENT_PURPOSES.join(', ')}`,
           details: { allowedPurposes: [...CONSENT_PURPOSES] },
@@ -527,6 +551,10 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
         });
       }
 
+      if (isGameConsentPurpose(purpose)) {
+        return writeGameConsent(fastify, reply, { userId, purpose, granted: body.granted });
+      }
+
       try {
         const existing = await fastify.prisma.user.findUnique({
           where: { id: userId },
@@ -576,4 +604,40 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
       }
     }
   );
+}
+
+/**
+ * L'écriture d'un consentement de JEU — la MÊME colonne que `POST /me/game/league/consent`,
+ * écrite par le MÊME service (`LeagueService.setConsent`) : deux portes qui écriraient
+ * chacune la leur divergeraient (conformité A-1, A-14). Daté par le serveur ; l'octroi
+ * refuse ce que la loi de la ligue refuse (niveau, majorité) ; le retrait emporte le
+ * pseudonyme et l'appartenance. Accorder le consentement de jeu pose AUSSI
+ * `data-processing` s'il manque, comme la cascade des autres consentements.
+ */
+async function writeGameConsent(
+  fastify: FastifyInstance,
+  reply: FastifyReply,
+  params: { readonly userId: string; readonly purpose: GameConsentPurpose; readonly granted: boolean },
+) {
+  try {
+    await new LeagueService(fastify.prisma).setConsent({
+      userId: params.userId,
+      consent: params.granted,
+      policyVersion: CONSENT_POLICY_VERSION,
+    });
+    if (params.granted) {
+      await fastify.prisma.user.updateMany({
+        where: { id: params.userId, OR: [{ dataProcessingConsentAt: null }, { dataProcessingConsentAt: { isSet: false } }] },
+        data: { dataProcessingConsentAt: new Date() },
+      });
+    }
+    const row = await fastify.prisma.user.findUnique({ where: { id: params.userId }, select: { publicLeagueConsentAt: true } });
+    return sendSuccess(reply, buildConsentEntry(params.purpose, row?.publicLeagueConsentAt ?? null));
+  } catch (error) {
+    if (error instanceof GameRefusal) {
+      return sendError(reply, 409, error.code, { code: error.code, ...(error.details ? { details: { ...error.details } } : {}) });
+    }
+    logError('Error updating game consent', error, { source: 'me-consents-routes' });
+    return sendInternalError(reply, 'UPDATE_ERROR', { message: 'Failed to update consent' });
+  }
 }

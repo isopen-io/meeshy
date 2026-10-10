@@ -22,6 +22,8 @@ type Mocked = jest.Mock<(...args: unknown[]) => Promise<unknown>>;
 
 const service: Record<string, Mocked> = {
   createUser: jest.fn(),
+  // La réponse sert la fiche RELUE ; `null` = repli sur la ligne créée.
+  getUserById: jest.fn(async () => null),
 };
 
 const audit: Record<string, Mocked> = {

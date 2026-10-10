@@ -38,6 +38,7 @@ struct RootRouteDestination: View {
             // pour A survit et `.task` ne se relance pas : le contenu
             // restait sur A. `.id` force le teardown (flush du
             // brouillon de A via onDisappear) + une vue neuve pour B.
+            .reportsConversationViewing(conv.id)
             .id(conv.id)
             .navigationBarHidden(true)
             .onAppear {
@@ -135,7 +136,8 @@ struct RootRouteDestination: View {
         case .userStats:
             UserStatsView()
                 .navigationBarHidden(true)
-        case .progression:
+        // L'ancien tableau de bord (#9564, amendement n° 4) ouvre la première page, une version durant.
+        case .progression, .progressionDashboard:
             ProgressionView()
                 .navigationBarHidden(true)
         case .progressionSection(let section):
@@ -144,6 +146,18 @@ struct RootRouteDestination: View {
             // le bord reste servi — c'est `NavigationStack` qui le donne, et il
             // survit à une barre masquée ; c'était la FEUILLE qui l'empêchait.
             ProgressionSectionPage(section: section)
+                .navigationBarHidden(true)
+        case .progressionRules(let rule, let section):
+            GameRulesPage(focusedRule: rule, focusedSection: section)
+                .navigationBarHidden(true)
+        case .progressionNotebook:
+            GameNotebookPage()
+                .navigationBarHidden(true)
+        case .gamePage(let page):
+            GamePageView(page: page)
+                .navigationBarHidden(true)
+        case .progressionConcept(let concept, let section):
+            ProgressionConceptPage(concept: concept, section: section)
                 .navigationBarHidden(true)
         case .links:
             LinksHubView()

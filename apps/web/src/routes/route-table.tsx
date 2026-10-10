@@ -1,7 +1,10 @@
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
+import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -29,13 +32,18 @@ const reelsScreen = () => import('@/routes/reels');
    #6834), en PARALLÈLE de son chunk d'écran — même discipline que
    `screenPrerequisite` plus bas pour le catalogue commun, mais scopée aux
    seules routes d'administration : c'est ce qui sort ces clés de la somme
-   que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`). */
+   que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`).
+
+   La langue chargée est celle de l'ADMINISTRATION (`currentAdminLanguage`,
+   fr · en · es · pt — les autres interfaces la lisent en anglais, D-162), pas
+   celle de l'interface ; et `loadAdminInterfaceCatalog` charge avec elle le
+   catalogue commun de cette langue, que le cadre lit aussi. */
 const adminScreen = () =>
-  Promise.all([import('@/routes/admin'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminUsersScreen = () =>
-  Promise.all([import('@/routes/admin-users'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-users'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminUserScreen = () =>
-  Promise.all([import('@/routes/admin-user'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-user'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* LA LECTURE SOUVERAINE DES CONVERSATIONS (#6862) — mêmes DEUX adresses, même
    `import()` unique, pour la même raison que les comptes.
 
@@ -46,26 +54,113 @@ const adminUserScreen = () =>
    écran qui plante à l'ouverture, un défaut qu'aucun gate ne voit : ni `tsc`
    (les deux formes typent pareil), ni les témoins (aucun ne monte la route). */
 const adminConversationsScreen = () =>
-  Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminConversationScreen = () =>
-  Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* LE PILOTAGE DE L'AGENT (#6733) — mêmes DEUX adresses, même `import()`
    unique, et le MÊME chargement du catalogue d'administration que ses voisins.
    `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
    route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
    jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
 const adminAnonymousScreen = () =>
-  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAnonymousOneScreen = () =>
-  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
-  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+
+/* LES ÉCRANS DE LA VUE DE DIEU (#8876) — chaque route neuve charge AUSSI le
+   catalogue d'administration (`admin-catalog-loading.test.ts`). */
+const adminInvitationsScreen = () =>
+  Promise.all([import('@/routes/admin-invitations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminInvitationScreen = () =>
+  Promise.all([import('@/routes/admin-invitation'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminCommunitiesScreen = () =>
+  Promise.all([import('@/routes/admin-communities'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminCommunityScreen = () =>
+  Promise.all([import('@/routes/admin-community'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const withLinkFamiliesCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([screen, loadLinkFamiliesCatalog(currentInterfaceLanguage())]).then(([loaded]) => loaded);
+const adminShareLinksScreen = () =>
+  Promise.all([import('@/routes/admin-share-links'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminShareLinkScreen = () =>
+  Promise.all([import('@/routes/admin-share-link'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminPostsScreen = () =>
+  Promise.all([import('@/routes/admin-posts'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminPostScreen = () =>
+  Promise.all([import('@/routes/admin-post'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminReportsScreen = () =>
+  Promise.all([import('@/routes/admin-reports'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminReportScreen = () =>
+  Promise.all([import('@/routes/admin-report'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminAuditScreen = () =>
+  Promise.all([import('@/routes/admin-audit'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminAnalyticsScreen = () =>
+  Promise.all([import('@/routes/admin-analytics'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminRankingScreen = () =>
+  Promise.all([import('@/routes/admin-ranking'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminTrackingLinksScreen = () =>
+  Promise.all([import('@/routes/admin-tracking-links'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminTrackingLinkScreen = () =>
+  Promise.all([import('@/routes/admin-tracking-link'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminBroadcastsScreen = () =>
+  Promise.all([import('@/routes/admin-broadcasts'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminBroadcastScreen = () =>
+  Promise.all([import('@/routes/admin-broadcast'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminMonitoringScreen = () =>
+  Promise.all([import('@/routes/admin-monitoring'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminLanguagesScreen = () =>
+  Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminSettingsScreen = () =>
+  Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminEngagementScaleScreen = () =>
+  Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
    `translateOnboarding` lève sur un catalogue non chargé. */
+/* LE CHARGEUR DES CATALOGUES DU JEU (#9928, première peinture) — sa table de
+   28 `import()` entrait dans le module d'entrée pour des routes que la
+   première peinture ne sert jamais : il se charge avec elles. */
+const loadGameScreenCatalog = (language: InterfaceLanguage, screen: GameScreen): Promise<void> =>
+  import('@/lib/i18n-game-catalog').then((catalogs) => catalogs.loadGameScreenCatalog(language, screen));
+
 const onboardingScreen = () =>
   Promise.all([import('@/routes/onboarding'), loadOnboardingCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
+/* LE JEU (#9379) — Progression, le carnet des règles et le carnet de
+   progression attendent leur chunk ET le catalogue `game.*` en parallèle :
+   `translateGame` lève sur un catalogue non chargé, et aucun autre écran n'en
+   paie les octets. */
+const progressionScreen = () =>
+  Promise.all([import('@/routes/progression'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionLigueScreen = () =>
+  Promise.all([import('@/routes/progression-ligue'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionSaisonScreen = () =>
+  Promise.all([import('@/routes/progression-saison'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionVitrineScreen = () =>
+  Promise.all([import('@/routes/progression-vitrine'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionAtlasScreen = () =>
+  Promise.all([import('@/routes/progression-atlas'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionPrestigeScreen = () =>
+  Promise.all([import('@/routes/progression-prestige'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+/* LA FICHE D'UN CONCEPT ET LE TABLEAU DE BORD (#9563) — un seul écran de fiche
+   pour les quinze concepts : le gabarit est le même, seule la clé change. */
+const progressionConceptScreen = () =>
+  Promise.all([import('@/routes/progression-concept'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionReglagesScreen = () =>
+  Promise.all([import('@/routes/progression-reglages'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionBadgesScreen = () =>
+  Promise.all([import('@/routes/progression-badges'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+/* Défis et Succès lisent le catalogue du jeu depuis que chaque élément y dit ses précisions (#9563). */
+const progressionDefisScreen = () =>
+  Promise.all([import('@/routes/progression-defis'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionSuccesScreen = () =>
+  Promise.all([import('@/routes/progression-succes'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
+const progressionRulesScreen = () =>
+  Promise.all([import('@/routes/progression-rules'), loadGameScreenCatalog(currentInterfaceLanguage(), 'rules')]).then(([screen]) => screen);
+const progressionCarnetScreen = () =>
+  Promise.all([import('@/routes/progression-carnet'), loadGameScreenCatalog(currentInterfaceLanguage(), 'progression')]).then(([screen]) => screen);
 
 /* LES INVITATIONS (#7796, #7797) — la page d'accueil d'un lien et la page de
    son créateur attendent leur chunk ET le catalogue `invite.*`/`linkDetail.*`
@@ -75,6 +170,15 @@ const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkScreen = () =>
   Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const shareLinkArrivalsScreen = () =>
+  Promise.all([import('@/routes/share-link-arrivals'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
+/* LA CLOCHE (#8727) — son chunk ET le catalogue de ce qu'une notification dit
+   (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
+   le charge aussi avec son propre chunk, et `translateNotificationRow` lève
+   sur un catalogue non chargé. */
+const notificationsScreen = () =>
+  Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -99,14 +203,40 @@ export const ROUTES = {
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
-  progression: { pattern: '/me/progression', screen: () => import('@/routes/progression') },
+  progression: { pattern: '/me/progression', screen: progressionScreen },
   /* Les trois PAGES DÉDIÉES du hub (#5843). Chacune a sa route parce qu'elle a
      son propre retour, son propre titre et son propre compte — un panneau qui
      se déplie dans le hub n'aurait ni l'un ni les autres, et le bouton système
      « retour » refermerait l'écran entier au lieu du panneau. */
-  progressionBadges: { pattern: '/me/progression/badges', screen: () => import('@/routes/progression-badges') },
-  progressionDefis: { pattern: '/me/progression/defis', screen: () => import('@/routes/progression-defis') },
-  progressionSucces: { pattern: '/me/progression/succes', screen: () => import('@/routes/progression-succes') },
+  /* « PROGRESSION » EN SOUS-MENUS (#9563) — la première page ne porte que des
+     cartes de concept ; chaque concept a sa FICHE (`$concept` est une clé de
+     `progressionConcepts`, `packages/shared`). Le TABLEAU DE BORD n'existe plus
+     (amendement n° 4) : son adresse sert Progression, qui la REMPLACE par
+     `/me/progression` (`redirectOf`, `lib/game/progression-nav.ts` — la carte
+     de navigation des trois niveaux). PRIVÉES (`session-guard.ts`). */
+  progressionConcept: { pattern: '/me/progression/concept/$concept', screen: progressionConceptScreen },
+  progressionTableau: { pattern: '/me/progression/tableau-de-bord', screen: progressionScreen },
+  progressionBadges: { pattern: '/me/progression/badges', screen: progressionBadgesScreen },
+  /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
+     mission en duo. PRIVÉE : `session-guard.ts`. */
+  progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
+  progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
+  progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
+  progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
+  progressionPrestige: { pattern: '/me/progression/prestige', screen: progressionPrestigeScreen },
+  /* LES RÉGLAGES DU JEU (#9481) — célébrations, « Jeu masqué », qui voit quoi, ligue publique. PRIVÉE. */
+  progressionReglages: { pattern: '/me/progression/reglages', screen: progressionReglagesScreen },
+  progressionDefis: { pattern: '/me/progression/defis', screen: progressionDefisScreen },
+  progressionSucces: { pattern: '/me/progression/succes', screen: progressionSuccesScreen },
+  /* LE CARNET DES RÈGLES (#9379) — « Comment ça marche », depuis Progression :
+     les huit règles du jeu et les sept cartes de l'intégration, en entier. Une
+     page qui n'explique que ; aucune lecture réseau. */
+  progressionRegles: { pattern: '/me/progression/regles', screen: progressionRulesScreen },
+  /* LE CARNET DE PROGRESSION (#9382) — les photos des grands moments, gardées
+     sur l'appareil, et les moments laissés en attente sept jours. */
+  progressionCarnet: { pattern: '/me/progression/carnet', screen: progressionCarnetScreen },
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — miroir `Route.bookmarks`
      (`Router.swift`), atteinte depuis Réglages › Outils comme sur iOS.
 
@@ -120,6 +250,11 @@ export const ROUTES = {
      est littéral et aucune adresse paramétrée à deux segments n'existe sous
      `/me`. */
   bookmarks: { pattern: '/me/bookmarks', screen: () => import('@/routes/bookmarks') },
+  /* « MES SONS » (#9848) — la bibliothèque de sons de l'auteur et le retrait
+     d'un son, atteinte depuis Réglages › Outils. Sous `/me` pour la raison des
+     enregistrées : `GET sounds.mine` rend 401 sans session, d'où `soundsMine`
+     dans `PRIVATE_ROUTES`. Adresse NEUVE — le legacy n'avait pas cet écran. */
+  soundsMine: { pattern: '/me/sounds', screen: () => import('@/routes/sounds-mine') },
   /* LES MESSAGES FAVORIS (#7286) — miroir `Route.starredMessages`
      (`Router.swift`), atteinte depuis Réglages › Outils, en PREMIÈRE rangée,
      comme sur iOS. Sous `/me` pour la raison des enregistrées : un corpus qui
@@ -161,6 +296,9 @@ export const ROUTES = {
      `/conversations/new`, et SANS collision avec le détail, qui est au
      SINGULIER (`/post/$post`). */
   postCompose: { pattern: '/posts/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.PostComposeRoute })) },
+  /* MODIFIER UNE PUBLICATION (#9317) — le studio rouvert sur un post, un réel
+     ou une story de l'auteur : on y modifie, ajoute et supprime des scènes. */
+  postEdit: { pattern: '/posts/$post/edit', screen: () => import('@/routes/publication-edit') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
@@ -301,7 +439,7 @@ export const ROUTES = {
      (`servirProfilPublic`, insensible à la casse sur le pseudo). */
   userProfile: { pattern: '/u/$username', screen: () => import('@/routes/user-profile') },
   hashtag: { pattern: '/hashtag/$tag', screen: () => import('@/routes/hashtag') },
-  links: { pattern: '/links', screen: () => import('@/routes/links') },
+  links: { pattern: '/links', screen: () => withLinkFamiliesCatalog(import('@/routes/links')) },
   /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
      `CreateShareLinkView` et `ShareLinkDetailView` (`Router.swift`,
      `ShareLinksView.swift`). Adresses NEUVES : le legacy sert `/links` d'un
@@ -309,8 +447,20 @@ export const ROUTES = {
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
   shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLinkArrivals: { pattern: '/links/share/$link/arrivals', screen: shareLinkArrivalsScreen },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
-  notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
+  /* LES TROIS AUTRES FAMILLES (#6408, #6409, #6410) — miroir `Route.trackingLinks`,
+     `Route.affiliate` et `Route.communityLinks` (`LinksHubView.swift`). Même
+     règle d'ordre : `new` avant le paramètre. Un lien de communauté s'ouvre
+     depuis SES communautés, jamais par une adresse qui en lirait une autre. */
+  myTrackingLinks: { pattern: '/links/tracking', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-links')) },
+  myTrackingLinkNew: { pattern: '/links/tracking/new', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-link-new')) },
+  myTrackingLink: { pattern: '/links/tracking/$token', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-link')) },
+  affiliateLinks: { pattern: '/links/affiliate', screen: () => withLinkFamiliesCatalog(import('@/routes/affiliate-links')) },
+  affiliateLinkNew: { pattern: '/links/affiliate/new', screen: () => withLinkFamiliesCatalog(import('@/routes/affiliate-link-new')) },
+  communityLinks: { pattern: '/links/communities', screen: () => withLinkFamiliesCatalog(import('@/routes/community-links')) },
+  communityLink: { pattern: '/links/communities/$community', screen: () => withLinkFamiliesCatalog(import('@/routes/community-link')) },
+  notifications: { pattern: '/notifications', screen: notificationsScreen },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   /* LE PAVÉ ET LA FICHE D'UN APPEL (lot 3 — #6454, #6383) — le pavé est
      l'onglet `.keypad` de `ContactsHubView` (iOS), servi comme un écran frère
@@ -401,6 +551,62 @@ export const ROUTES = {
   admAnonymous: { pattern: '/adm/anonymous', screen: adminAnonymousScreen },
   adminAnonymousOne: { pattern: '/admin/anonymous/$participant', screen: adminAnonymousOneScreen },
   admAnonymousOne: { pattern: '/adm/anonymous/$participant', screen: adminAnonymousOneScreen },
+  /* LA VUE DE DIEU (#8876) — treize listes et sept fiches de plus, déclarées
+     d'avance dans les deux espaces (motifs : listes à deux segments, fiches à
+     trois — aucune ambiguïté d'ordre). Déclarées AUSSI, par dérivation, dans
+     `session-guard.ts` (`ADMIN_ROUTE_KEYS`) : sans quoi elles seraient
+     PUBLIQUES. Tant qu'un lot n'a pas basculé son drapeau (`lib/admin/ready/`),
+     aucun menu ni aucune tuile n'y mène. */
+  adminInvitations: { pattern: '/admin/invitations', screen: adminInvitationsScreen },
+  admInvitations: { pattern: '/adm/invitations', screen: adminInvitationsScreen },
+  adminInvitation: { pattern: '/admin/invitations/$invitation', screen: adminInvitationScreen },
+  admInvitation: { pattern: '/adm/invitations/$invitation', screen: adminInvitationScreen },
+  adminCommunities: { pattern: '/admin/communities', screen: adminCommunitiesScreen },
+  admCommunities: { pattern: '/adm/communities', screen: adminCommunitiesScreen },
+  adminCommunity: { pattern: '/admin/communities/$community', screen: adminCommunityScreen },
+  admCommunity: { pattern: '/adm/communities/$community', screen: adminCommunityScreen },
+  adminShareLinks: { pattern: '/admin/share-links', screen: adminShareLinksScreen },
+  admShareLinks: { pattern: '/adm/share-links', screen: adminShareLinksScreen },
+  adminShareLink: { pattern: '/admin/share-links/$link', screen: adminShareLinkScreen },
+  admShareLink: { pattern: '/adm/share-links/$link', screen: adminShareLinkScreen },
+  adminPosts: { pattern: '/admin/posts', screen: adminPostsScreen },
+  admPosts: { pattern: '/adm/posts', screen: adminPostsScreen },
+  adminPost: { pattern: '/admin/posts/$post', screen: adminPostScreen },
+  admPost: { pattern: '/adm/posts/$post', screen: adminPostScreen },
+  adminReports: { pattern: '/admin/reports', screen: adminReportsScreen },
+  admReports: { pattern: '/adm/reports', screen: adminReportsScreen },
+  adminReport: { pattern: '/admin/reports/$report', screen: adminReportScreen },
+  admReport: { pattern: '/adm/reports/$report', screen: adminReportScreen },
+  adminAudit: { pattern: '/admin/audit', screen: adminAuditScreen },
+  admAudit: { pattern: '/adm/audit', screen: adminAuditScreen },
+  adminAnalytics: { pattern: '/admin/analytics', screen: adminAnalyticsScreen },
+  admAnalytics: { pattern: '/adm/analytics', screen: adminAnalyticsScreen },
+  adminRanking: { pattern: '/admin/ranking', screen: adminRankingScreen },
+  admRanking: { pattern: '/adm/ranking', screen: adminRankingScreen },
+  adminTrackingLinks: { pattern: '/admin/tracking-links', screen: adminTrackingLinksScreen },
+  admTrackingLinks: { pattern: '/adm/tracking-links', screen: adminTrackingLinksScreen },
+  adminTrackingLink: { pattern: '/admin/tracking-links/$link', screen: adminTrackingLinkScreen },
+  admTrackingLink: { pattern: '/adm/tracking-links/$link', screen: adminTrackingLinkScreen },
+  adminBroadcasts: { pattern: '/admin/broadcasts', screen: adminBroadcastsScreen },
+  admBroadcasts: { pattern: '/adm/broadcasts', screen: adminBroadcastsScreen },
+  adminBroadcast: { pattern: '/admin/broadcasts/$broadcast', screen: adminBroadcastScreen },
+  admBroadcast: { pattern: '/adm/broadcasts/$broadcast', screen: adminBroadcastScreen },
+  adminMonitoring: { pattern: '/admin/monitoring', screen: adminMonitoringScreen },
+  admMonitoring: { pattern: '/adm/monitoring', screen: adminMonitoringScreen },
+  adminLanguages: { pattern: '/admin/languages', screen: adminLanguagesScreen },
+  admLanguages: { pattern: '/adm/languages', screen: adminLanguagesScreen },
+  adminSettings: { pattern: '/admin/settings', screen: adminSettingsScreen },
+  admSettings: { pattern: '/adm/settings', screen: adminSettingsScreen },
+  /* LE BARÈME DE POINTS (#8906) — littéral à deux segments, comme l'agent.
+     Déclaré AUSSI dans `session-guard.ts`. */
+  adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
+  admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
+  /* LE PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) — l'adresse du
+     `share_target` de la PWA (`lib/share-incoming/share-target.ts`) : le worker
+     y redirige après avoir rangé le `POST` du système, la page ouvre la feuille
+     d'envoi. PUBLIQUE pour la garde, exprès : elle met elle-même le partage en
+     attente derrière la connexion (`?next=`). Adresse NEUVE, aucun legacy. */
+  share: { pattern: '/share', screen: () => import('@/routes/share-incoming') },
 } as const;
 
 /**
@@ -422,7 +628,7 @@ export function NotFound() {
         <p className="text-screen font-bold">{translate(langue, 'notFound.title')}</p>
         <a
           href="/"
-          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
           {translate(langue, 'pending.back')}

@@ -35,6 +35,7 @@ export interface TargetParticipantRow {
   readonly bannedAt: Date | null;
   readonly displayName: string | null;
   readonly shareLinkId: string | null;
+  readonly language: string;
 }
 
 const TARGET_SELECT = {
@@ -48,6 +49,9 @@ const TARGET_SELECT = {
   // Le lien d'ENTRÉE. Bannir le ferme — sortir la personne sans fermer la porte
   // par laquelle elle est passée ne protège de rien.
   shareLinkId: true,
+  // Une levée de bannissement qui RÉTABLIT l'appartenance est une arrivée :
+  // la composition linguistique de la conversation l'apprend avec sa langue.
+  language: true,
 } as const;
 
 export async function resolveTargetParticipant(

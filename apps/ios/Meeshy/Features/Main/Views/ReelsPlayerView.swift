@@ -71,6 +71,17 @@ struct ReelsPlayerView: View {
     /// Reel ids whose share request is currently in flight, so a double-tap of the
     /// share button can't fire two mints (mirrors the feed's `postShareInFlightIds`).
     @State private var shareInFlightIds: Set<String> = []
+    /// Flux « Enregistrer en local » du menu « … » de la barre haute.
+    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
+    /// La fenêtre de préchargement (#9702) : l'horloge des visites traverse
+    /// les `.task(id:)` du pager, la fenêtre courante gouverne quelles pages
+    /// ont le droit de télécharger d'elles-mêmes.
+    @State private var preloader = ReelPagerPreloader()
+    @State private var preloadWindow = ReelPreloadWindow.Window(
+        ahead: ReelPreloadWindow.minRadius, behind: ReelPreloadWindow.minRadius)
+    /// Le réel qui JOUE (#9837) : élu dès qu'il passe la moitié de l'écran,
+    /// pendant le geste — `currentId` ne bascule qu'une fois le paging posé.
+    @State private var election = ReelPlaybackElection()
 
     var body: some View {
         ZStack {
@@ -94,6 +105,14 @@ struct ReelsPlayerView: View {
         .offset(x: ReadingDirection.readingDelta(max(0, edgeDrag), layoutDirection: layoutDirection))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
+            #if DEBUG
+            // La vitrine (#9904) : le passage au réel suivant, par la même liaison que le pager — comme le pouce.
+            VitrineRendu.shared.lecteurDeReelsAffiche { [viewModel] in
+                guard let rang = viewModel.currentIndex, viewModel.reels.indices.contains(rang + 1) else { return }
+                withAnimation(.easeInOut(duration: 0.45)) { viewModel.currentId = viewModel.reels[rang + 1].id }
+            }
+            #endif
+            elect(trigger: "seed") { $0.settled(viewModel.currentId) }
             // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
             // commentaires, réactions) ne doivent plus apparaître non lues, et
             // `activePostId` fait naître consommées celles qui arrivent pendant
@@ -127,6 +146,8 @@ struct ReelsPlayerView: View {
             // Never carry immersive-hidden chrome into the next reel — the scrub
             // bar / action rail / info must reappear when you page.
             if chromeHidden { chromeHidden = false }
+            elect(trigger: "settled") { $0.settled(newId) }
+            if let newId { ReelSwitchSignpost.settled(newId) }
             if newId != nil { HapticFeedback.light() }
             // Consommation des notifications du réel affiché (voir .task) —
             // fermeture conditionnelle à l'identité puis ouverture du suivant.
@@ -167,20 +188,21 @@ struct ReelsPlayerView: View {
         .sheet(item: $shareableLink) { link in
             // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
-            ShareSheet(activityItems: [link.url])
+            ShareSheet(activityItems: link.activityItems)
         }
+        .mediaSaveFlow(mediaSaveCoordinator)
         .postEditCover(item: $editingReel) { reel in
             EditPostSheet(
                 originalContent: reel.content,
                 originalLanguage: reel.originalLanguage,
                 originalType: reel.type,
-                media: reel.media.map { EditablePostMedia($0) },
+                media: reel.media.map { EditablePostMedia($0) }, originalStoryEffects: reel.storyEffects,
                 originalLocation: reel.location,
                 originalVisibility: reel.visibility,
                 originalVisibilityUserIds: reel.visibilityUserIds ?? [],
                 isRepost: reel.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingReel = nil }
             )
@@ -204,6 +226,7 @@ struct ReelsPlayerView: View {
             // Quitte la post room du réel actif (real-time like) + finalise la session
             // d'engagement (watch-time + vue qualifiée) du réel courant.
             viewModel.leaveActivePostRoom()
+            preloader.releaseAll(reels: viewModel.reels, except: viewModel.currentId)
             finalizeReelSession(for: viewModel.currentId)
             NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
@@ -258,20 +281,35 @@ struct ReelsPlayerView: View {
             defer { Task { @MainActor in shareInFlightIds.remove(reel.id) } }
             if let shortUrl = await viewModel.shareLink(for: reel),
                let url = URL(string: shortUrl) {
-                shareableLink = ShareableLink(url: url)
-            } else if let raw = ShareableLink.fallback(forPostId: reel.id) {
+                shareableLink = ShareableLink(url: url, fileSource: .post(reel))
+            } else if let raw = ShareableLink.fallback(forPostId: reel.id, fileSource: .post(reel)) {
                 shareableLink = raw
             }
         }
     }
 
+    // MARK: Save
+
+    /// « Sauvegarder » un réel (#9681) : la règle UNIQUE `PostSaveRoute` décide —
+    /// un réel composé ou sans média se REND comme une story (scène, textes, son
+    /// de fond), un réel de médias simple garde son fichier. Distinct du favori.
+    private func requestSaveMedia(_ reel: FeedPost) {
+        PostSaveAction.perform(reel, coordinator: mediaSaveCoordinator)
+    }
+
     // MARK: Pager
 
     private var pager: some View {
-        AdaptiveVerticalPager(items: viewModel.reels, currentPageID: $viewModel.currentId) { _, reel in
+        let activeIndex = viewModel.reels.firstIndex { $0.id == viewModel.currentId }
+        let playingId = election.activeId ?? viewModel.currentId
+        return AdaptiveVerticalPager(
+            items: viewModel.reels,
+            currentPageID: $viewModel.currentId,
+            onMajorityPage: { id in elect(trigger: "majority") { $0.majority(id) } }
+        ) { index, reel in
             ReelPageView(
                 reel: reel,
-                isActive: viewModel.currentId == reel.id,
+                isActive: playingId == reel.id,
                 revealCompleted: revealCompleted,
                 viewModel: viewModel,
                 chromeHidden: $chromeHidden,
@@ -282,30 +320,44 @@ struct ReelsPlayerView: View {
                     pendingCommentParentTargetId = nil
                     commentsReel = reel
                 },
-                onShare: { shareReel(reel) },
-                onEdit: { editingReel = reel },
-                onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
                 onTapAuthorName: { openProfile(for: reel) },
-                onTapAvatar: { openAvatarDestination(for: reel) }
+                onTapAvatar: { openAvatarDestination(for: reel) },
+                isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
             )
             .onAppear {
                 Task { await viewModel.loadMoreIfNeeded(currentReel: reel) }
             }
         }
         .ignoresSafeArea()
-        // Le swipe trouve le voisin PRÊT : fichier sur disque, lecteur préparé
-        // pour le suivant (#7625, #7009). Relancé à chaque réel affiché ; un
-        // swipe rapide annule la préparation devenue inutile.
-        .task(id: viewModel.currentId) {
-            let ids = viewModel.reels.map(\.id)
-            let neighbours = ReelPagerPrewarmWindow.neighbours(of: viewModel.currentId, in: ids)
-            let next = ReelPagerPrewarmWindow.next(of: viewModel.currentId, in: ids)
-            for id in neighbours {
-                guard !Task.isCancelled,
-                      let reel = viewModel.reels.first(where: { $0.id == id }) else { continue }
-                await ReelPrewarm.prepare(reel, preroll: id == next)
-            }
+        // Le swipe trouve ses voisins PRÊTS (#7625, #7009, #9702) : la fenêtre
+        // va de N±2 à N±10 selon l'usage, chaque palier prépare ce qu'il
+        // mérite (lecteur à N±1, fichier au-delà). Relancé à chaque réel
+        // affiché ; un swipe rapide annule la préparation devenue inutile.
+        // Relancé aussi quand la SUITE change sous le même réel (relecture au
+        // démarrage, page de plus à portée) : la fenêtre raisonne sur la liste
+        // que le pager parcourt, pas sur celle du balayage précédent.
+        .task(id: ReelThreadOrder.preloadScope(ids: viewModel.reels.map(\.id), anchorId: viewModel.currentId)) {
+            let reels = viewModel.reels
+            guard let activeIndex = reels.firstIndex(where: { $0.id == viewModel.currentId }) else { return }
+            let window = preloader.enter(index: activeIndex)
+            if preloadWindow != window { preloadWindow = window }
+            await preloader.prepare(reels: reels, activeIndex: activeIndex, window: window)
         }
+    }
+
+    /// Applique une élection et ouvre la mesure du passage quand le réel qui
+    /// joue change (#9837).
+    private func elect(trigger: String, _ apply: (inout ReelPlaybackElection) -> Void) {
+        let before = election.activeId
+        apply(&election)
+        guard let id = election.activeId, id != before else { return }
+        ReelSwitchSignpost.elected(id, trigger: trigger)
+    }
+
+    /// Une page hors de la fenêtre de préchargement ne télécharge pas d'elle-même (#9702).
+    private func isWithinPreloadWindow(_ index: Int, activeIndex: Int?) -> Bool {
+        guard let activeIndex else { return false }
+        return ReelPreloadWindow.tier(offset: index - activeIndex, in: preloadWindow) != .idle
     }
 
     // MARK: Author navigation
@@ -331,7 +383,11 @@ struct ReelsPlayerView: View {
         }
     }
 
-    // MARK: Back controls (button + left-edge gesture)
+    // MARK: Top bar (close + menu) and left-edge gesture
+
+    private var currentReel: FeedPost? {
+        viewModel.reels.first { $0.id == viewModel.currentId }
+    }
 
     private var backControls: some View {
         ZStack(alignment: .topLeading) {
@@ -366,23 +422,25 @@ struct ReelsPlayerView: View {
                         }
                 )
 
-            Button(action: onClose) {
-                // Glyphe chrome dans un cadre de tap fixe 40×40 : figé (doctrine 82i) ; le bouton porte le libellé
-                Image(systemName: "chevron.backward")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
-                    .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
+            FullscreenTopBar(exit: .back, onClose: onClose) {
+                if let reel = currentReel {
+                    SceneSaveProgressButton(jobKey: reel.id)
+                    ReelMoreOptionsMenu(
+                        viewModel: viewModel,
+                        reel: reel,
+                        onShare: { shareReel(reel) },
+                        onEdit: { editingReel = reel },
+                        onOpenDetail: onOpenDetail.map { handler in { handler(reel.id) } },
+                        canSaveMedia: PostSaveAction.route(for: reel, coordinator: mediaSaveCoordinator) != .unavailable,
+                        onSaveMedia: { requestSaveMedia(reel) }
+                    )
+                }
             }
-            .padding(.leading, 12)
             // Sit clearly below the Dynamic Island. `safeArea.top` fluctuates
             // once the status bar hides, so floor it to clear the island reliably.
-            .padding(.top, max(safeArea.top, 50) + 28)
-            .accessibilityLabel(String(localized: "reels.back", defaultValue: "Retour", bundle: .main))
+            .padding(.top, max(safeArea.top, 50))
             // Part of the chrome — fades out in immersive mode (long-press).
-            .opacity(chromeHidden ? 0 : 1)
-            .allowsHitTesting(!chromeHidden)
-            .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+            .fullscreenChromeVisibility(!chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
@@ -449,17 +507,14 @@ struct ReelPageView: View {
     /// chrome; the next tap restores it (mirrors the Story viewer).
     @Binding var chromeHidden: Bool
     var onComment: () -> Void
-    var onShare: () -> Void
-    /// Menu « … » → ouvre `EditPostSheet` sur ce réel (état possédé par
-    /// `ReelsPlayerView`, le seul habilité à présenter la sheet).
-    var onEdit: () -> Void
-    /// Menu « … » → « Ouvrir » : pousse la page détail du poste. `nil` =
-    /// item masqué (parité avec les autres callbacks optionnels du rail).
-    var onOpenDetail: (() -> Void)? = nil
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
     /// Avatar tap → story (if active) else profile.
     var onTapAvatar: () -> Void
+    /// La page est dans la fenêtre de préchargement (#9702) : hors d'elle, sa
+    /// vidéo ne se télécharge pas d'elle-même (le `TabView` d'iOS 16 monte
+    /// toutes les pages d'un coup).
+    var isWithinPreloadWindow: Bool = true
 
     @State var descriptionExpanded = false
     @State private var audioFullscreen: AudioFullscreenSource?
@@ -495,8 +550,6 @@ struct ReelPageView: View {
     /// whole page at its 10 Hz `currentTime` tick — its readers observe it.
     @StateObject private var audioBox = ReelAudioEngineBox()
     var audioPlayer: AudioPlaybackManager { audioBox.player }
-    /// Flux « Enregistrer en local » du menu « … » du rail d'actions.
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     var accentColor: String { reel.authorColor }
 
@@ -504,12 +557,21 @@ struct ReelPageView: View {
     /// by default, the original when the translate toggle is on, or a specific
     /// available translation when a flag is tapped.
     var displayedDescription: String {
-        guard let sel = selectedLanguage?.lowercased() else { return reel.displayContent }
-        if sel == reel.originalLanguage?.lowercased() { return reel.content }
+        guard let sel = selectedLanguage?.lowercased() else { return servedDescription }
+        if sel == reel.originalLanguage?.lowercased() {
+            return ReelPublishedContent.content(type: .reel, text: reel.content,
+                                                captions: reel.media.map(\.caption)) ?? ""
+        }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
             return t.text
         }
-        return reel.displayContent
+        return servedDescription
+    }
+
+    /// Un réel publié sans texte montre sa légende de scène (#9179).
+    private var servedDescription: String {
+        ReelPublishedContent.content(type: .reel, text: reel.displayContent,
+                                     captions: reel.media.map(\.caption)) ?? ""
     }
 
     /// True when this active reel is a video so the scrub bar shows only where
@@ -520,10 +582,10 @@ struct ReelPageView: View {
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
     /// transcript hero + the audio control + audio-language flag strip.
-    var audioMedia: FeedMedia? {
-        guard let media = reel.primaryReelDisplayMedia, media.type == .audio else { return nil }
-        return media
-    }
+    /// `nil` pour un réel COMPOSÉ (#9737) : le son d'une scène est joué par la
+    /// scène — la commande audio posée dessus en peignait le spectre et le
+    /// faisait jouer une seconde fois par le moteur de la page.
+    var audioMedia: FeedMedia? { reel.reelPrincipalAudioMedia }
 
     /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
     /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue
@@ -596,11 +658,9 @@ struct ReelPageView: View {
                     }
                     Spacer()
                 }
-                .padding(.top, 8)
-                .padding(.trailing, 8)
-                .opacity(chromeHidden ? 0 : 1)
-                .allowsHitTesting(!chromeHidden)
-                .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.trailing, MeeshySpacing.sm)
+                .fullscreenChromeVisibility(!chromeHidden)
             }
 
             VStack {
@@ -625,37 +685,27 @@ struct ReelPageView: View {
                             )
                         }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
-                // Crédit du son EMPRUNTÉ (réel « son de bibliothèque seul ») —
-                // même doctrine que le header de story : le crédit est dû dès
-                // que `soundId` existe (AudioChipDisplay), affiché en pill
-                // discrète au-dessus de la rangée auteur.
-                if let track = borrowedSoundTrack, isActive {
-                    borrowedSoundBadge(track)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
-                }
-
-                HStack(alignment: .bottom, spacing: 12) {
+                HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                     infoOverlay
-                    Spacer(minLength: 8)
+                    Spacer(minLength: MeeshySpacing.sm)
                     actionRail
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
 
                 // Draggable scrub bar — only for the active video reel. Sits
                 // just below the description / action rail. Drag to seek.
                 if isVideoReel && isActive {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.mdPlus)
                 } else if isSceneReel && isActive {
                     ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.mdPlus)
                 }
             }
             // Sit the description / action rail / scrub lower, closer to the
@@ -668,9 +718,7 @@ struct ReelPageView: View {
             // The whole chrome stack (info + rail + scrub) fades out together in
             // immersive mode and stops taking touches so the restoring tap and
             // long-press reach the content zone underneath.
-            .opacity(chromeHidden ? 0 : 1)
-            .allowsHitTesting(!chromeHidden)
-            .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+            .fullscreenChromeVisibility(!chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
@@ -681,9 +729,20 @@ struct ReelPageView: View {
         // video engine is left alone — the incoming video reel drives its own).
         // Becoming active (re)starts this reel's audio through the SAME open-
         // autostart gate `ReelVideoView.drive()` uses for the video engine.
+        //
+        // **La page quittée n'arrête que SON moteur** (#9837). L'élection tombe
+        // désormais pendant le geste, et l'ordre des deux `onChange(isActive)`
+        // frères n'est pas garanti : `stopAllAudio()` arrêtait aussi le mixer de
+        // la scène qui ARRIVE (un lecteur externe), quand elle avait repris la
+        // première — le réel suivant restait muet. La vidéo et la scène quittées
+        // se mettent en pause par leur propre `isActive`.
         .adaptiveOnChange(of: isActive) { _, active in
             if active { startActiveAudioIfNeeded() }
-            else { PlaybackCoordinator.shared.stopAllAudio() }
+            else { audioPlayer.stop() }
+        }
+        .onReceive(audioBox.player.$isPlaying.removeDuplicates()) { playing in
+            guard playing, isActive else { return }
+            ReelSwitchSignpost.mediaStarted(reel.id, kind: "audio")
         }
         // The first reel holds on its poster (audio paused) until the liquid
         // reveal completes; start audio when the disc reaches full screen —
@@ -716,7 +775,6 @@ struct ReelPageView: View {
                 senderName: reel.author
             )
         }
-        .mediaSaveFlow(mediaSaveCoordinator)
         // Site UNIQUE de la composition (`socialMediaGallery`) : la sélection des
         // médias, l'auteur servi à chaque page et la LÉGENDE sont les mêmes que
         // sur les trois autres surfaces sociales, parce qu'elles viennent du même
@@ -812,35 +870,6 @@ struct ReelPageView: View {
         }
     }
 
-    /// Pill de crédit d'un son emprunté : « titre · @auteur » (ou le libellé
-    /// « Son original » localisé quand l'auteur n'a pas nommé son son).
-    private func borrowedSoundBadge(_ track: StoryAudioPlayerObject) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(.caption.weight(.semibold))
-                .accessibilityHidden(true)
-            Text(borrowedSoundLabel(track))
-                .font(.caption.weight(.medium))
-                .lineLimit(1)
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Capsule().fill(.ultraThinMaterial))
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(String(localized: "media.sound.used", defaultValue: "Son utilisé"))
-        .accessibilityValue(borrowedSoundLabel(track))
-    }
-
-    private func borrowedSoundLabel(_ track: StoryAudioPlayerObject) -> String {
-        let authored = track.name.flatMap { $0.isEmpty ? nil : $0 }
-        let title = authored ?? String(localized: "media.sound.original", defaultValue: "Son original")
-        if let author = track.soundAuthorUsername, !author.isEmpty {
-            return "\(title) · @\(author)"
-        }
-        return title
-    }
-
     /// Analogue de la branche `audioMedia` pour un réel « son emprunté seul » :
     /// même moteur (`AudioPlaybackManager`, cache-first + auth), même garde
     /// d'idempotence. `play(urlString:)` stocke la chaîne TELLE QUE PASSÉE dans
@@ -899,7 +928,8 @@ struct ReelPageView: View {
         } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
-                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
+                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted,
+                              mayDownload: isActive || isWithinPreloadWindow, reelId: reel.id)
             case .image:
                 ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }
             case .audio:
@@ -940,32 +970,7 @@ struct ReelPageView: View {
         ReelActionRail(
             viewModel: viewModel,
             reel: reel,
-            onComment: onComment,
-            onShare: onShare,
-            onEdit: onEdit,
-            onOpenDetail: onOpenDetail,
-            onSaveMedia: requestSaveMedia
+            onComment: onComment
         )
-    }
-
-    /// Déclenche le flux unifié « Enregistrer en local » sur le média du réel
-    /// (image/vidéo) — distinct du bouton favori dédié (bookmark) qui, lui,
-    /// enregistre le poste dans l'app. No-op si le réel n'a pas de média.
-    private func requestSaveMedia() {
-        guard let media = reel.primaryReelDisplayMedia, let url = media.url, !url.isEmpty else { return }
-        HapticFeedback.light()
-        let attachmentKind: AttachmentKind
-        switch media.type {
-        case .video: attachmentKind = .video
-        case .audio: attachmentKind = .audio
-        case .document: attachmentKind = .document
-        case .image: attachmentKind = .image
-        }
-        mediaSaveCoordinator.save(MediaSaveRequest(
-            kind: attachmentKind,
-            origin: .composed,
-            remoteURLString: url,
-            suggestedFileName: media.fileName
-        ))
     }
 }

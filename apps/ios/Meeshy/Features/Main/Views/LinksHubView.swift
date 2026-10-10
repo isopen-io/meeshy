@@ -64,6 +64,10 @@ struct LinksHubView: View {
             }
         }
         .navigationBarHidden(true)
+        #if DEBUG
+        // La vitrine (#9904) : le hub prête son routeur, la scène y ouvre l'affiliation comme le toucher de sa carte.
+        .onAppear { VitrineRendu.shared.liensAffiches { router.push($0) } }
+        #endif
         // Sheets de création rapide
         .sheet(isPresented: $showCreateShareLink) {
             CreateShareLinkView { _ in }
@@ -82,13 +86,13 @@ struct LinksHubView: View {
     // MARK: - Header Banner
 
     private var headerBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "link.badge.plus")
                     .font(.title.weight(.bold))
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
                         .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
@@ -173,7 +177,7 @@ struct LinksHubView: View {
             HapticFeedback.light()
             router.push(route)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 // Icône
                 ZStack {
                     Circle()
@@ -187,7 +191,7 @@ struct LinksHubView: View {
                 .accessibilityHidden(true)
 
                 // Texte
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -200,7 +204,7 @@ struct LinksHubView: View {
                 Spacer()
 
                 // Actions: bouton créer + chevron
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if let onCreate {
                         Button {
                             HapticFeedback.medium()
@@ -223,7 +227,7 @@ struct LinksHubView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(MeeshySpacing.md + 2)
+            .padding(MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.surfaceGradient(tint: accentHex))

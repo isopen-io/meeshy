@@ -17,6 +17,21 @@ nonisolated struct ComposerPublishChoice: Hashable, Sendable {
     let format: ComposerFormat
     /// `nil` ⇒ aucune disposition imposée : le repli du modèle s'appliquera.
     let layout: MosaicLayoutMode?
+    /// **La story part AUSSI en réel** (#9476) : le menu coche les deux
+    /// formats, et un seul geste les publie. N'a de sens que sur une story sans
+    /// disposition — `ComposerPublishMenuRule.armed` le retire partout ailleurs.
+    let alsoAsReel: Bool
+
+    init(format: ComposerFormat, layout: MosaicLayoutMode?, alsoAsReel: Bool = false) {
+        self.format = format
+        self.layout = layout
+        self.alsoAsReel = alsoAsReel
+    }
+
+    /// Les formats qui PARTENT — ce que le menu coche, ce que la capsule nomme.
+    var publishedFormats: [ComposerFormat] {
+        alsoAsReel ? [format, .reel] : [format]
+    }
 }
 
 nonisolated enum ComposerPublishMenuRule {
@@ -112,15 +127,73 @@ nonisolated enum ComposerPublishMenuRule {
     /// Le chevron ARME un choix ; la capsule le publie. Un choix que le menu
     /// n'offre plus (slide retirée, format grisé) retombe sur le format de la
     /// porte : on ne publie jamais ce que le menu ne montre pas.
+    ///
+    /// « Aussi en réel » (#9476) ne survit que là où le menu l'OFFRE
+    /// (`companionReelOffered`) : sinon la story part seule, et la capsule le
+    /// dit — jamais un réel annoncé qui ne partirait pas.
     static func armed(chosen: ComposerPublishChoice?,
                       defaultFormat: ComposerFormat,
-                      entries: [Entry]?) -> ComposerPublishChoice {
+                      entries: [Entry]?,
+                      companionReelOffered: Bool = false) -> ComposerPublishChoice {
         let porte = ComposerPublishChoice(format: defaultFormat, layout: nil)
-        guard let chosen,
-              let entree = entries?.first(where: { $0.format == chosen.format }),
+        guard let chosen else { return porte }
+        let seul = ComposerPublishChoice(format: chosen.format, layout: chosen.layout)
+        guard let entree = entries?.first(where: { $0.format == chosen.format }),
               entree.isChoosable,
-              entree.choices.contains(chosen) else { return porte }
-        return chosen
+              entree.choices.contains(seul) else { return porte }
+        let accompagne = chosen.alsoAsReel && companionReelOffered
+            && chosen.format == .story && chosen.layout == nil
+        return accompagne ? chosen : seul
+    }
+
+    /// **La story peut-elle partir AUSSI en réel ?** (#9476) — la story ET le
+    /// réel choisissables au menu (le réel l'est quand la composition qualifie,
+    /// `ComposerReelGate`), et UNE seule scène : un réel est une scène, une
+    /// story de plusieurs slides part en plusieurs publications. Jamais sur une
+    /// REPUBLICATION : elle désigne les médias de sa source, que le serveur ne
+    /// copie pas (`ALSO_AS_REEL_REQUIRES_STORY`).
+    static func companionReelOffered(entries: [Entry]?, slideCount: Int, isRepost: Bool = false) -> Bool {
+        guard slideCount == 1, !isRepost, let entries else { return false }
+        let choisissable = { (format: ComposerFormat) in
+            entries.contains { $0.format == format && $0.isChoosable }
+        }
+        return choisissable(.story) && choisissable(.reel)
+    }
+
+    /// **Ce que touche une entrée SANS disposition** (#9476). Story et Réel se
+    /// cochent ENSEMBLE quand la story peut partir aussi en réel : toucher l'un
+    /// AJOUTE ou RETIRE l'autre, jamais au point de ne plus rien cocher. Partout
+    /// ailleurs, une entrée arme son format seul, comme avant.
+    static func toggled(_ format: ComposerFormat,
+                        armed: ComposerPublishChoice,
+                        companionReelOffered: Bool) -> ComposerPublishChoice {
+        let seul = ComposerPublishChoice(format: format, layout: nil)
+        guard companionReelOffered, armed.layout == nil else { return seul }
+        let both = ComposerPublishChoice(format: .story, layout: nil, alsoAsReel: true)
+        switch (format, armed.format, armed.alsoAsReel) {
+        case (.reel, .story, false), (.story, .reel, _):
+            return both
+        case (.reel, .story, true):
+            return ComposerPublishChoice(format: .story, layout: nil)
+        case (.story, .story, true):
+            return ComposerPublishChoice(format: .reel, layout: nil)
+        default:
+            return seul
+        }
+    }
+
+    /// **Le menu COCHE ce qui partira** (#9419). Le format armé est coché ; dans
+    /// le sous-menu des dispositions, la disposition armée — ou, tant que
+    /// l'auteur n'en a choisi aucune, le REPLI que la publication appliquera.
+    /// Un menu qui ne coche rien alors que quelque chose partira ment — et un
+    /// réel qui part AVEC la story est coché aussi (#9476).
+    static func isChecked(_ entry: Entry, armed: ComposerPublishChoice) -> Bool {
+        armed.publishedFormats.contains(entry.format)
+    }
+
+    static func checkedLayout(in entry: Entry, armed: ComposerPublishChoice) -> MosaicLayoutMode? {
+        guard armed.format == entry.format, !entry.layouts.isEmpty else { return nil }
+        return armed.layout ?? ComposerMosaicChoice.fallback
     }
 
     /// **La surface est celle d'OUVERTURE ; le canal suit le GESTE.**
@@ -141,6 +214,43 @@ nonisolated enum ComposerPublishMenuRule {
             }
         }
     }
+
+    /// **Ce que la flèche PRESSE, format et réel compris** (#9476) — la route
+    /// et ce qu'elle emporte, lus d'une règle pure plutôt qu'écrits dans le
+    /// corps du meuble : c'est le témoin du chemin menu → `requestPublish` →
+    /// type publié. Un réel armé part en `.reel` par l'atelier ; une story
+    /// accompagnée de son réel part en `.story` avec `alsoAsReel`.
+    enum Dispatch: Equatable {
+        case atelier(PostType, alsoAsReel: Bool)
+        case storyScene(ComposerFormat, alsoAsReel: Bool)
+        case document(ComposerPublishChoice)
+        case unsupported
+    }
+
+    static func dispatch(surface: ComposerSurfaceKind, choice: ComposerPublishChoice) -> Dispatch {
+        switch route(surface: surface, choice: choice) {
+        case .atelier: return .atelier(choice.format.postType, alsoAsReel: choice.alsoAsReel)
+        case .storyScene: return .storyScene(choice.format, alsoAsReel: choice.alsoAsReel)
+        case .document: return .document(choice)
+        case .unsupported: return .unsupported
+        }
+    }
+
+    /// **Le texte du post que l'ATELIER doit emporter** (#8473, retour porteur
+    /// 2026-09-28).
+    ///
+    /// Le bouton du socle écrit le texte du post dans `documentText` dès que
+    /// « Post » est ARMÉ, même sur une scène ouverte en story. L'atelier, lui,
+    /// publie le contenu de la SLIDE : sans ce report, le texte tapé dans la
+    /// plaque de verre ne partait nulle part. Le canal document le porte déjà ;
+    /// un texte blanc ne remplace rien.
+    static func atelierCarriedPostText(route: Route,
+                                       choice: ComposerPublishChoice,
+                                       documentText: String) -> String? {
+        guard route == .atelier, choice.format == .post,
+              !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return documentText
+    }
 }
 
 nonisolated enum ComposerPublishMenuCopy {
@@ -156,6 +266,14 @@ nonisolated enum ComposerPublishMenuCopy {
     /// **Ce que dit la partie principale de la capsule** (#7497) — le format
     /// qui partira si l'auteur ne touche pas au chevron. `nil` pour le mood :
     /// son en-tête dit « Publier », il n'a aucun autre format à nommer.
+    /// Ce que la capsule nomme pour un CHOIX : la story et son réel quand les
+    /// deux partent (#9476), sinon le format seul.
+    static func publishTitle(for choice: ComposerPublishChoice) -> String? {
+        guard choice.alsoAsReel else { return publishTitle(choice.format) }
+        return String(localized: "composer.publish.as.storyAndReel",
+                      defaultValue: "Publier la story et le réel", bundle: .main)
+    }
+
     static func publishTitle(_ format: ComposerFormat) -> String? {
         switch format {
         case .story:
@@ -187,6 +305,9 @@ struct ComposerPublishMenu<Etiquette: View>: View {
 
     let entries: [ComposerPublishMenuRule.Entry]
     let armed: ComposerPublishChoice
+    /// La story peut-elle partir AUSSI en réel (#9476) ? Story et Réel se
+    /// cochent alors ensemble (`ComposerPublishMenuRule.toggled`).
+    var companionReelOffered = false
     let onChoose: (ComposerPublishChoice) -> Void
     @ViewBuilder let label: () -> Etiquette
 
@@ -206,33 +327,38 @@ struct ComposerPublishMenu<Etiquette: View>: View {
     @ViewBuilder
     private func entree(_ entry: ComposerPublishMenuRule.Entry) -> some View {
         if entry.layouts.isEmpty {
-            Button {
-                onChoose(ComposerPublishChoice(format: entry.format, layout: nil))
-            } label: {
-                if armed.format == entry.format {
-                    Label(ComposerPublishMenuCopy.entryTitle(entry), systemImage: "checkmark")
-                } else {
-                    Text(ComposerPublishMenuCopy.entryTitle(entry))
-                }
+            Toggle(isOn: choosing(ComposerPublishMenuRule.toggled(entry.format, armed: armed,
+                                                                  companionReelOffered: companionReelOffered),
+                                  isChecked: ComposerPublishMenuRule.isChecked(entry, armed: armed))) {
+                Text(ComposerPublishMenuCopy.entryTitle(entry))
             }
             .disabled(!entry.isChoosable)
         } else {
             Menu {
                 Section(ComposerMosaicChoice.sectionTitle) {
                     ForEach(entry.layouts, id: \.self) { mode in
-                        Button {
-                            onChoose(ComposerPublishChoice(format: entry.format, layout: mode))
-                        } label: {
-                            Label(ComposerMosaicChoice.label(mode),
-                                  systemImage: armed == ComposerPublishChoice(format: entry.format, layout: mode)
-                                      ? "checkmark" : ComposerMosaicChoice.symbol(mode))
+                        Toggle(isOn: choosing(ComposerPublishChoice(format: entry.format, layout: mode),
+                                              isChecked: ComposerPublishMenuRule.checkedLayout(
+                                                  in: entry, armed: armed) == mode)) {
+                            Label(ComposerMosaicChoice.label(mode), systemImage: ComposerMosaicChoice.symbol(mode))
                         }
                     }
                 }
             } label: {
-                Text(ComposerPublishMenuCopy.entryTitle(entry))
+                if ComposerPublishMenuRule.isChecked(entry, armed: armed) {
+                    Label(ComposerPublishMenuCopy.entryTitle(entry), systemImage: "checkmark")
+                } else {
+                    Text(ComposerPublishMenuCopy.entryTitle(entry))
+                }
             }
             .disabled(!entry.isChoosable)
         }
+    }
+
+    /// Une entrée du menu est un `Toggle` : le système pose la coche en tête,
+    /// à la place où on la cherche, et la garde à côté du glyphe de la
+    /// disposition. Toucher une entrée déjà cochée la réarme, rien d'autre.
+    private func choosing(_ choice: ComposerPublishChoice, isChecked: Bool) -> Binding<Bool> {
+        Binding(get: { isChecked }, set: { _ in onChoose(choice) })
     }
 }

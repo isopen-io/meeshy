@@ -13,6 +13,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import * as crypto from 'crypto';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
 
 // Create a child logger for encryption operations
 const logger = enhancedLogger.child({ module: 'EncryptionService' });
@@ -407,9 +408,9 @@ export class EncryptionService {
       await this.keyVault.initialize();
 
       // Setup periodic cache cleanup (every 5 minutes)
-      this.cacheCleanupInterval = setInterval(() => {
+      this.cacheCleanupInterval = guardedInterval({ name: 'encryption-key-cache-cleanup', everyMs: 5 * 60 * 1000, logger, run: () => {
         this.keyVault.cleanupCache();
-      }, 5 * 60 * 1000);
+      } });
       this.cacheCleanupInterval.unref?.();
 
       this.initialized = true;
@@ -471,9 +472,9 @@ export class EncryptionService {
         throw error;
       } finally {
         // Clean up lock after a small delay to allow late-comers to get the result
-        setTimeout(() => {
+        guardedTimeout({ name: 'encryption-key-generation-lock-release', afterMs: 100, logger, run: () => {
           this.keyGenerationLocks.delete(conversationId);
-        }, 100);
+        } });
       }
     }
 

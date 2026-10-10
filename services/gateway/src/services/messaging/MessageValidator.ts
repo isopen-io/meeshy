@@ -30,6 +30,7 @@ import { MESSAGE_LIMITS } from '../../config/message-limits';
 import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
 import { carriesNonTextBody } from './nonTextBody';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 
 const logger = enhancedLogger.child({ module: 'MessageValidator' });
 
@@ -138,7 +139,7 @@ export class MessageValidator {
       const response = await fetch(`${translatorUrl}/detect-language`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: content.slice(0, 5000) }),
+        body: JSON.stringify({ text: sliceCodePoints(content, 5000) }),
         signal: AbortSignal.timeout(3000),
       });
       if (!response.ok) return 'fr';

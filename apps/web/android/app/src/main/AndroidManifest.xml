@@ -3,11 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
+        android:hardwareAccelerated="true"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
@@ -15,9 +17,11 @@
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density|fontScale|fontWeightAdjustment|layoutDirection"
             android:name=".MainActivity"
+            android:hardwareAccelerated="true"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
+            android:supportsPictureInPicture="true"
             android:exported="true">
 
             <intent-filter>
@@ -46,6 +50,13 @@
                 <data android:pathPrefix="/story/" />
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
+                <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
+                     ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
+                <data android:pathPrefix="/signup/affiliate/" />
+                <!-- #9520 — sa forme courte /signup?ref=, réclamée par l'AASA. Le
+                     filtre ne lit pas la requête : sans code, la coque ouvre son
+                     propre écran d'inscription. -->
+                <data android:path="/signup" />
                 <data android:pathPrefix="/auth/magic-link" />
                 <data android:path="/auth/verify-email" />
                 <data android:path="/me" />
@@ -61,6 +72,28 @@
                 <data android:scheme="meeshy" />
             </intent-filter>
 
+            <!-- #8884 — Meeshy figure dans la feuille de partage d'Android : une
+                 image, une vidéo ou un lien partagé depuis une autre application
+                 arrive sur la feuille d'envoi. MeeshyShareIntentPlugin copie les
+                 contenus (`content://`, illisibles pour la WebView) en fichiers
+                 temporaires et les remet au web (src/lib/share-incoming/native-inbox.ts).
+                 Les types sont ceux que la feuille sait envoyer, et la catégorie
+                 DEFAULT est ce qui fait proposer l'app par le système (garde :
+                 scripts/check-android-manifest.mjs, auditShareIntentFilters). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
         </activity>
 
         <provider
@@ -72,6 +105,13 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- #9530 — l'app et meeshy.me partagent leurs identifiants, comme
+             webcredentials sur iOS : le Gestionnaire de mots de passe de Google
+             propose dans la coque le mot de passe enregistré sur le site. -->
+        <meta-data
+            android:name="asset_statements"
+            android:resource="@string/asset_statements" />
 
         <!-- #7307 — la bannière d'un push rendue par FCM, app fermée : sans ces
              deux entrées, Android prend l'icône de lancement (un carré blanc
@@ -110,6 +150,20 @@
             android:name=".CallForegroundService"
             android:exported="false"
             android:foregroundServiceType="microphone|camera" />
+
+        <!-- #9238 — le message vocal en cours tient le micro au premier plan :
+             sans lui, quitter l'app pendant l'enregistrement le rend muet. -->
+        <service
+            android:name=".RecordingForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!-- #9257 — le message vocal écouté tient la lecture au premier plan :
+             sans lui, Android gèle l'app mise en cache au milieu du vocal. -->
+        <service
+            android:name=".PlaybackForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
         <receiver
@@ -162,10 +216,21 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- #9257 — la lecture d'un vocal tenue écran éteint (PlaybackForegroundService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- #9617 — la capture d'écran (API 34, Activity.registerScreenCaptureCallback)
+         et l'enregistrement ou la recopie (API 35, WindowManager.addScreenRecordingCallback)
+         d'un contenu qui disparaît s'annoncent à la conversation
+         (MeeshyScreenGuardPlugin). Deux permissions « normal », accordées à
+         l’installation ; sans effet avant Android 14 et 15. La vue unique, elle,
+         est noircie par FLAG_SECURE, qui n'en demande aucune. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
+    <uses-permission android:name="android.permission.DETECT_SCREEN_RECORDING" />
 
     <!-- #8336 — la galerie (@capacitor-community/media, hors androidGalleryMode)
          écrit dans Android/media/<appId>/Meeshy : dossier propre à l'app,
@@ -178,9 +243,15 @@
          IMAGE_CAPTURE que si resolveActivity trouve une application photo.
          Depuis l'API 30, la visibilité des paquets la cache sans cette
          requête : le pont retombait sur le sélecteur de fichiers. -->
+    <!-- #9446 — les sous-titres d'un appel (MeeshySpeechPlugin) : depuis
+         l'API 30, SpeechRecognizer.isRecognitionAvailable ne voit le service
+         de reconnaissance du système que si le manifeste le demande. -->
     <queries>
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 </manifest>

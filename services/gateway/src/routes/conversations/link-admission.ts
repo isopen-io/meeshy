@@ -8,6 +8,9 @@ import { generateNickname } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
 import {
   sendSuccess,
   sendError,
@@ -19,7 +22,7 @@ import {
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
-import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
+import { endGuestSession, refreshGuestSession } from './guest-sessions';
 import {
   admitLinkEntry,
   isLinkAdmissionRefusal,
@@ -46,10 +49,10 @@ import {
 
 // ─── Types partagés par les trois portes (canonique + deux adaptateurs) ──────
 
-type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['create']>>;
+export type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['create']>>;
 type ShareLinkRow = Awaited<ReturnType<PrismaClient['conversationShareLink']['findFirst']>>;
 /** Le lien AVEC sa conversation incluse — jamais `null` passé ce point. */
-type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
+export type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
   conversation: { id: string; title: string; type: string; isActive: boolean; closedAt: Date | null };
 };
 
@@ -88,6 +91,8 @@ export interface LinkJoinParams {
   /** #7797 — coutures du pays d'arrivée ; la production prend les défauts. */
   readonly afterResponse?: AfterResponse;
   readonly lookupCountry?: ArrivalCountryLookup;
+  /** `social.conversation_link_joined` (#8959) — le moteur partagé par défaut, un double en test. */
+  readonly engagement?: LinkJoinEngagement;
 }
 
 export type LinkJoinOutcome =
@@ -224,7 +229,6 @@ async function joinAsGuest(
   prisma: PrismaClient,
   shareLink: ShareLinkWithConversation,
   profile: LinkJoinProfileInput,
-  requestIp: string,
   broadcast: LinkJoinBroadcast | undefined
 ): Promise<LinkJoinOutcome> {
   const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
@@ -283,7 +287,8 @@ async function joinAsGuest(
         shareLinkId: shareLink.id,
         session: {
           sessionTokenHash,
-          ipAddress: requestIp,
+          // Aucune IP n'est conservée (#9342) : l'adresse de la requête sert
+          // la seule recherche du pays, puis elle est oubliée.
           // Le pays d'arrivée vit sur `Participant.joinCountry` (#7797),
           // posé après la réponse par la vraie géolocalisation
           // (`services/conversations/arrivalCountry.ts`) — jamais par
@@ -302,6 +307,7 @@ async function joinAsGuest(
       },
     },
   });
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: profile.language, readerUserId: null });
 
   await postJoinSystemMessage(
     { prisma, broadcast },
@@ -362,13 +368,16 @@ async function joinAsRegistered(
 
   const joiningUserInfo = await prisma.user.findUnique({
     where: { id: userId },
-    select: { displayName: true, username: true },
+    select: { displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
   });
 
   const linkMemberFields = {
     type: 'user',
     displayName: joiningUserInfo?.displayName || joiningUserInfo?.username || 'User',
     role: 'member',
+    // #9711 — la langue du COMPTE, descendue de son prisme. Omise, la ligne
+    // prenait le défaut `"en"` du schéma, et un rejoin la gardait fausse.
+    language: recipientLanguage(joiningUserInfo, 'fr'),
     permissions: {
       canSendMessages: true,
       canSendFiles: true,
@@ -404,6 +413,7 @@ async function joinAsRegistered(
       },
     });
   }
+  announceConversationLanguageChange({ kind: 'arrival', conversationId: shareLink.conversationId, language: linkMemberFields.language, readerUserId: userId });
 
   await postJoinSystemMessage(
     { prisma, broadcast },
@@ -488,11 +498,12 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   }
 
   const outcome = identity.kind === 'guest'
-    ? await joinAsGuest(prisma, shareLink, profile, requestIp, broadcast)
+    ? await joinAsGuest(prisma, shareLink, profile, broadcast)
     : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
 
   // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
-  // l'IP après la réponse ; l'IP n'est pas écrite sur le participant.
+  // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
+  // sa session anonyme (#9342).
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
     const participantId = outcome.participant.id;
     (params.afterResponse ?? deferAfterResponse)(
@@ -504,96 +515,10 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
       }),
       'link-arrival-country',
     );
+    creditLinkJoin({ prisma, engagement: params.engagement, creatorId: shareLink.createdBy, identity, participantId });
   }
 
   return outcome;
-}
-
-// ─── Sessions invitées : PATCH|DELETE /guest-sessions/me ─────────────────────
-
-export interface GuestSessionParams {
-  readonly prisma: PrismaClient;
-  readonly sessionToken: string;
-}
-
-export type RefreshGuestSessionOutcome =
-  | { readonly kind: 'invalid' }
-  | { readonly kind: 'link-gone' }
-  | { readonly kind: 'link-expired' }
-  | { readonly kind: 'conversation-closed' }
-  | { readonly kind: 'refreshed'; readonly participant: ParticipantRow; readonly shareLink: ShareLinkWithConversation };
-
-/**
- * Cœur de `PATCH /guest-sessions/me`, partagé avec l'adaptateur `POST
- * /anonymous/refresh`. Gagne la garde `isConversationClosed` que la porte
- * historique n'avait jamais eue — critère de fin #4 de #4167.
- */
-export async function refreshGuestSession(params: GuestSessionParams): Promise<RefreshGuestSessionOutcome> {
-  const { prisma, sessionToken } = params;
-  const tokenHash = hashSessionToken(sessionToken);
-
-  const participant = await prisma.participant.findFirst({
-    where: { sessionTokenHash: tokenHash, type: 'anonymous' },
-  });
-  if (!participant || !participant.isActive) return { kind: 'invalid' };
-
-  const shareLinkId = participant.anonymousSession?.shareLinkId;
-  const shareLink = shareLinkId
-    ? ((await prisma.conversationShareLink.findUnique({
-        where: { id: shareLinkId },
-        include: {
-          conversation: { select: { id: true, title: true, type: true, isActive: true, closedAt: true } },
-        },
-      })) as ShareLinkWithConversation | null)
-    : null;
-
-  if (!shareLink || !shareLink.isActive) return { kind: 'link-gone' };
-  if (shareLink.expiresAt && shareLink.expiresAt < new Date()) return { kind: 'link-expired' };
-  if (isConversationClosed(shareLink.conversation)) return { kind: 'conversation-closed' };
-
-  await prisma.participant.update({
-    where: { id: participant.id },
-    data: { lastActiveAt: new Date(), isOnline: true },
-  });
-
-  return { kind: 'refreshed', participant, shareLink };
-}
-
-export type EndGuestSessionOutcome = { readonly kind: 'not-found' } | { readonly kind: 'ended' };
-
-/**
- * Cœur de `DELETE /guest-sessions/me`, partagé avec l'adaptateur `POST
- * /anonymous/leave`. IDEMPOTENT — critère de fin #4 de #4167 : `wasActive`
- * gèle l'état LU avant toute écriture, donc un second appel sur la MÊME
- * session ne marque rien inactif une seconde fois et ne décrémente jamais
- * deux fois `currentConcurrentUsers` (qui pouvait passer sous zéro).
- */
-export async function endGuestSession(params: GuestSessionParams): Promise<EndGuestSessionOutcome> {
-  const { prisma, sessionToken } = params;
-  const tokenHash = hashSessionToken(sessionToken);
-
-  const participant = await prisma.participant.findFirst({
-    where: { sessionTokenHash: tokenHash, type: 'anonymous' },
-  });
-  if (!participant) return { kind: 'not-found' };
-
-  const wasActive = participant.isActive;
-  if (!wasActive) return { kind: 'ended' };
-
-  await prisma.participant.update({
-    where: { id: participant.id },
-    data: { isActive: false, isOnline: false, leftAt: new Date() },
-  });
-
-  const shareLinkId = participant.anonymousSession?.shareLinkId;
-  if (shareLinkId) {
-    await prisma.conversationShareLink.update({
-      where: { id: shareLinkId },
-      data: { currentConcurrentUsers: { decrement: 1 } },
-    });
-  }
-
-  return { kind: 'ended' };
 }
 
 /**

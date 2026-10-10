@@ -3,9 +3,12 @@ import { useRef } from 'react';
 import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
-import type { CanvasObject } from '@/lib/canvas/document';
+import { sceneAudioChipForm, type CanvasObject } from '@/lib/canvas/document';
 import { objectMediaTimeline } from '@/lib/canvas/media-seek';
+import { cqw } from '@/lib/canvas/units';
 
+import { GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import type { SceneClockHandle } from './scene-clock';
 import { useSceneMediaSync } from './scene-media-seek';
 import { SceneObjectFrame } from './scene-object-frame';
@@ -18,7 +21,8 @@ const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error &&
 export const defaultAudioMediaDeps = protectedMediaDeps;
 
 /**
- * Un AUDIO **non-fond**. Le son de FOND (`payload.isBackground === true`) est
+ * Un AUDIO **non-fond** : sa piste, et sa PASTILLE sur la scène (#9737).
+ * Le son de FOND (`payload.isBackground === true`) est
  * servi par l'hôte, qui l'élit avec `electBackgroundTrack`
  * (`lib/canvas/background-sound.ts`, consommé par `story-scene-layer.tsx` et
  * `story-compose.tsx`) : ce composant ne le double JAMAIS, et c'est
@@ -100,6 +104,55 @@ export function SceneObjectAudio({
   return (
     <SceneObjectFrame object={object} kind="audio" clock={clock}>
       <audio ref={ref} src={src} muted={muted} loop={loop} preload="none" />
+      <SceneAudioChip object={object} />
     </SceneObjectFrame>
+  );
+}
+
+/** L'onde d'un enregistrement dont les échantillons manquent : jamais une pastille vide. */
+const RESTING_WAVE = [0.35, 0.7, 1, 0.5, 0.85, 0.4, 0.65] as const;
+
+/**
+ * LA PASTILLE D'UN SON DE PREMIER PLAN (#9737, miroir `AudioForegroundChip`) —
+ * sur la scène, à la place, l'échelle et la rotation de l'objet (le cadre les
+ * pose), dans la forme de sa provenance (`sceneAudioChipForm`) : la note et
+ * l'onde d'un enregistrement, la note et « titre · @auteur » d'un emprunt.
+ * Cotes au référentiel 1080 (`cqw`). Immobile : aucune image n'est recalculée
+ * pendant la lecture. Un son de FOND n'arrive jamais ici (`SceneCanvas`
+ * l'écarte, `sceneAudioPresence`).
+ */
+function SceneAudioChip({ object }: { readonly object: CanvasObject }) {
+  const form = sceneAudioChipForm(object);
+  const recording = form.kind === 'recording';
+  return (
+    <span
+      data-scene-audio-chip={form.kind}
+      aria-hidden={recording ? true : undefined}
+      className="flex items-center whitespace-nowrap rounded-full font-semibold leading-none"
+      style={{
+        height: cqw(84 / 1080),
+        gap: cqw(14 / 1080),
+        padding: `0 ${cqw(28 / 1080)}`,
+        fontSize: cqw(34 / 1080),
+        backgroundColor: 'var(--color-scrim)',
+        color: 'var(--color-on-media)',
+      }}
+    >
+      <GlyphSvg glyph={FEED_GLYPHS.musicNote} style={{ width: '1.1em', height: '1.1em' }} />
+      {recording ? (
+        <span className="flex items-center" style={{ gap: '.15em', width: '4em', height: '55%' }}>
+          {(form.samples.length > 0 ? form.samples : RESTING_WAVE).map((level, i) => (
+            <span
+              key={i}
+              {...(form.samples.length > 0 ? { 'data-scene-audio-bar': '' } : {})}
+              className="flex-1 rounded-full bg-current"
+              style={{ height: `${Math.round(Math.min(1, Math.max(0.12, level)) * 100)}%` }}
+            />
+          ))}
+        </span>
+      ) : (
+        form.label
+      )}
+    </span>
   );
 }

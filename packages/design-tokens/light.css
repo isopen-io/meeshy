@@ -21,10 +21,10 @@
   color-scheme: light;
 
   --color-bg: #f1f3f9;
-  --color-bg-sunken: #e6e9f2;
+  --color-bg-sunken: var(--ios-indigo-50);
   --color-surface: #f9fafd;
-  --color-surface-raised: #ffffff;
-  --color-text: #12131d;
+  --color-surface-raised: var(--ios-surface);
+  --color-text: var(--ios-ink);
 
   --color-neutral-400: #3a3d52;
   --color-neutral-500: #575b73;
@@ -33,22 +33,26 @@
   --color-neutral-800: #d7d9e4;
   --color-neutral-900: #edeef6;
 
+  /* GARDÉ HORS SDK (#8879) : `textSecondary`/`textMuted` clairs
+     (indigo700 à 80 %) tombent à 4,26–4,42:1 sur les quatre voiles d'état,
+     sous les 4,5:1 dus au texte d'un bandeau. Le rôle garde la valeur qui
+     tient sa loi — suivi : #8879 (followup de la charte). */
   --color-text-muted: var(--color-neutral-500);
   /* HORS de la rampe, symétriquement au sombre : `--color-neutral-600`
      (#666a80) rend 4,39:1 sur `--color-bg-sunken`, sous les 4,5:1 du texte. */
   --color-text-subtle: #5f6379;
-  --color-border: var(--color-neutral-800);
-  --color-border-strong: var(--color-neutral-700);
+  --color-border: var(--ios-edge);
+  --color-border-strong: var(--ios-neutral-400);
   /* 3:1 sur les quatre plans clairs — voir le doc-comment de dark.css. */
-  --color-border-interactive: #767b94;
+  --color-border-interactive: var(--ios-neutral-500);
 
-  --color-accent-200: #3730a3;
-  --color-accent-300: #4338ca;
-  --color-accent-400: #4f46e5;
+  --color-accent-200: var(--ios-indigo-800);
+  --color-accent-300: var(--ios-indigo-700);
+  --color-accent-400: var(--ios-indigo-600);
   --color-primary: var(--color-accent-400);
   --color-primary-strong: var(--color-accent-300);
-  --color-primary-soft: #6366f1;
-  --color-primary-softer: #818cf8;
+  --color-primary-soft: var(--ios-indigo-500);
+  --color-primary-softer: var(--ios-indigo-400);
   --color-on-primary: #ffffff;
 
   /* Voir dark.css : l'anneau prend l'encre du schéma, le contre-anneau le plan
@@ -57,12 +61,12 @@
   --color-focus-contra: var(--color-surface-raised);
 
   --color-success: #047857;
-  --color-success-soft: #10b981;
+  --color-success-soft: var(--ios-success-deep);
   /* #b45309 rendait 4,14:1 sur `--color-bg-sunken` : assombri d'un cran. */
   --color-warning: #a84e08;
   /* #dc2626 rendait 3,98:1 sur `--color-bg-sunken` : assombri d'un cran. */
   --color-danger: #c81e1e;
-  --color-danger-soft: #ef4444;
+  --color-danger-soft: var(--ios-error-strong);
   --color-on-status: #ffffff;
 
   /* La présence est une famille DE SCHÉMA, pas une famille hors schéma. Les
@@ -89,7 +93,7 @@
   --color-tint-warning: color-mix(in srgb, var(--color-warning) 10%, var(--color-surface));
   --color-tint-danger: color-mix(in srgb, var(--color-danger) 10%, var(--color-surface));
 
-  --color-overlay: rgb(13 14 22 / 0.45);
+  --color-overlay: var(--ios-scrim);
 
   --shadow-sm: 0 6px 20px rgb(19 21 34 / 0.1);
   --shadow-lg: 0 20px 60px rgb(19 21 34 / 0.16);

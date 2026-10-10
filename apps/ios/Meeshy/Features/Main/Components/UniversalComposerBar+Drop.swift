@@ -60,10 +60,10 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// remplacé, et l'overlay ne capte aucun événement.
     private var dropAffordance: some View {
         let accent = Color(hex: accentColor)
-        return RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(accent, style: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+        return RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+            .strokeBorder(accent, style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: [7, 5]))
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                     .fill(accent.opacity(0.08))
             )
             .overlay(
@@ -75,8 +75,8 @@ struct ComposerDropTargetModifier: ViewModifier {
                         .font(.footnote.weight(.semibold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(accent))
             )
             .allowsHitTesting(false)

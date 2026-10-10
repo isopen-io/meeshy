@@ -26,16 +26,19 @@
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  --text-2xs: 11px;
-  --text-xs: 13px;
+  /* L'échelle de MeeshyFont là où elle a le pas (#8879) : footnote 11,
+     subhead 13, body 15, headline 17, title 22, largeTitle 34. Les autres
+     pas (14, 19, 26, 30) n'ont pas de jumeau iOS et restent des valeurs. */
+  --text-2xs: var(--ios-font-footnote);
+  --text-xs: var(--ios-font-subhead);
   --text-sm: 14px;
-  --text-base: 15px;
-  --text-md: 17px;
+  --text-base: var(--ios-font-body);
+  --text-md: var(--ios-font-headline);
   --text-lg: 19px;
-  --text-xl: 22px;
+  --text-xl: var(--ios-font-title);
   --text-2xl: 26px;
   --text-3xl: 30px;
-  --text-4xl: 34px;
+  --text-4xl: var(--ios-font-largeTitle);
 
   --leading-tight: 1.2;
   --leading-normal: 1.45;
@@ -45,12 +48,12 @@
      en pixels dans une feuille est la SECONDE table du corollaire 2 sous un
      autre nom : elle ne se voit pas au grep des couleurs, et elle dérive
      écran par écran. Neuf pas, et rien entre deux. */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
+  --space-1: var(--ios-space-xs);
+  --space-2: var(--ios-space-sm);
+  --space-3: var(--ios-space-md);
+  --space-4: var(--ios-space-lg);
+  --space-5: var(--ios-space-xxl);
+  --space-6: var(--ios-space-xxxl);
   --space-7: 48px;
   --space-8: 64px;
   --space-9: 96px;
@@ -90,10 +93,12 @@
   --radius-xs: 6px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-2xl: 26px;
-  --radius-pill: 9999px;
+  /* MeeshyRadius là où il a le pas (#8879) — `2xl` (la feuille) suit le
+     `xxl` d'iOS : 24, et non plus 26. */
+  --radius-lg: var(--ios-radius-lg);
+  --radius-xl: var(--ios-radius-xl);
+  --radius-2xl: var(--ios-radius-xxl);
+  --radius-pill: var(--ios-radius-full);
 
   /* La planche écrit #6366f1 : l'encre `--color-on-avatar` n'y rend que
      4,37:1, sous les 4,5:1 dus à des initiales — qui sont du TEXTE. Éclairci

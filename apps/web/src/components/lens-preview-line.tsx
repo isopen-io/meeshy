@@ -56,7 +56,7 @@ const TONE_INK: Readonly<Record<PreviewTone, string>> = {
   danger: 'var(--color-danger)',
 };
 
-const ICON_STYLE = 'mr-1 inline-block align-[-2px]';
+const ICON_STYLE = 'me-1 inline-block align-[-2px]';
 
 function PreviewGlyph({ icon, style }: { readonly icon: PreviewIcon; readonly style?: CSSProperties }) {
   const glyph = ICONS[icon];
@@ -144,7 +144,7 @@ export function LensPreviewLine({
             {plainTextOf(segment.text)}
           </span>
         ))}
-        {preview.kind === 'typing' ? <TypingDots color={accent} className="ml-1" /> : null}
+        {preview.kind === 'typing' ? <TypingDots color={accent} className="ms-1" /> : null}
       </span>
     </>
   );

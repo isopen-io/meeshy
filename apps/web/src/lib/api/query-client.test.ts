@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
+import { forgetAccountCaches } from './account-caches';
 import { ApiError } from './client';
 import { isMediaAbsent, noteMediaAbsent, resetAbsentMedia } from './media-absent';
-import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
+import { CACHE_SCHEMA, createAppQueryClient, persistableQuery, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
 /* La CONSTANTE, jamais son littéral : un `'admin-souverain'` recopié ici
@@ -61,6 +62,65 @@ describe('shouldRetry — les deux moitiés', () => {
       expect(threw).toBe(true);
       expect(calls).toBe(3);
     }
+  });
+});
+
+/**
+ * **RIEN D'ADMINISTRATIF SUR LE DISQUE** (#8876) — sauf la matrice de permissions
+ * du lecteur, qui rend le menu flottant instantané au démarrage à froid.
+ *
+ * Les trois témoins écrivent dans un faux stockage puis RELISENT ce qui a été
+ * écrit, et chacun porte son contraste : sans lui, un filtre qui n'écrirait plus
+ * rien passerait aussi.
+ */
+describe('persistence — les données d’administration restent en mémoire', () => {
+  const COMPTE = 'compte-prive-que-rien-ne-doit-ecrire-sur-le-disque';
+
+  test('une liste de comptes d’administration n’est PAS persistée, la matrice du lecteur l’est', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.setQueryData(['admin', 'users', 'offset=0'], { users: [{ displayName: COMPTE }] });
+    client.setQueryData(['admin', 'permissions'], { role: 'BIGBOSS', permissions: { canAccessAdmin: true } });
+    client.persist();
+
+    const ecrit = [...storage.raw.values()].join('');
+    expect(ecrit).not.toContain(COMPTE);
+    expect(ecrit).toContain('BIGBOSS');
+    expect(ecrit).toContain('c-1');
+  });
+
+  test('la mémoire les garde : écran à écran, rien n’est redemandé pour rien', () => {
+    const client = createAppQueryClient({ storage: fakeStorage(), buster: '0.0.0-test:u1' });
+    client.setQueryData(['admin', 'dash', 'kpis'], { total: 3 });
+    client.persist();
+    expect(client.getQueryData(['admin', 'dash', 'kpis'])).toEqual({ total: 3 });
+  });
+
+  test('l’exception est EXACTE : une clé voisine de la matrice n’en hérite pas', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+    client.setQueryData(['admin', 'permissions', 'autre'], { secret: COMPTE });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.persist();
+
+    expect([...storage.raw.values()].join('')).not.toContain(COMPTE);
+  });
+
+  test('une lecture souveraine reste exclue — l’ancienne garde tient toujours', () => {
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: [ADMIN_SOUVERAIN_PREFIXE, 'messages'] })).toBe(false);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['admin', 'permissions'] })).toBe(true);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['admin', 'users', 'x'] })).toBe(false);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations'] })).toBe(true);
+    expect(persistableQuery({ state: { status: 'error' }, queryKey: ['conversations'] })).toBe(false);
+  });
+
+  /* #7420 — la fenêtre autour d'un message est un moment de navigation : elle
+     ne survit pas au rechargement, le présent du fil, si. */
+  test('la fenêtre ancrée d’un fil reste en mémoire ; le présent du fil se persiste', () => {
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations', 'c-1', 'messages'] })).toBe(true);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations', 'c-1', 'messages', 'around', 'm-1'] })).toBe(false);
   });
 });
 
@@ -312,19 +372,10 @@ describe('la session purge AUSSI les seaux du service worker (D-6)', () => {
     };
   }
 
-  test('changement d’identité ⇒ les seaux `api` et `medias` sont supprimés, le précache SURVIT', async () => {
-    const storage = fakeStorage();
-    const session = createSessionStore({ storage: fakeStorage() });
-    session.getState().establish({
-      user: { id: 'u-1', username: 'ada' },
-      token: 'jwt',
-      sessionToken: 'sess',
-      expiresIn: 86_400,
-    });
+  test('la FIN d’un compte ⇒ les seaux `api` et `medias` sont supprimés, le précache SURVIT (#8674 : plus au simple changement)', async () => {
     const cacheStorage = fakeCaches(['api', 'medias', 'workbox-precache-v2-https://x/']);
 
-    createAppQueryClient({ storage, buster: '0.0.0-test:u-1', session, cacheStorage });
-    session.getState().clearSession();
+    forgetAccountCaches({ userId: 'u-1', storage: fakeStorage(), cacheStorage });
     await Promise.resolve();
     await Promise.resolve();
 

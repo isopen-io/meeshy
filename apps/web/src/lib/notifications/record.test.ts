@@ -117,3 +117,42 @@ describe('notificationTitle — le titre servi d’abord, jamais un titre invent
     expect(n === null ? null : notificationTitle(n)).toBe('kwame');
   });
 });
+
+describe('decodeNotification — le CONTEXTE que la ligne dit (#8724)', () => {
+  test('les extraits du commentaire et du post, le palier et le sous-titre voyagent', () => {
+    const n = decodeNotification(
+      servie({
+        type: 'comment_reaction',
+        subtitle: 'Votre publication',
+        context: { postId: 'p1', postCreatedAt: '2026-09-12T10:00:00.000Z' },
+        metadata: {
+          commentPreview: 'Superbe',
+          postPreview: 'Le lac au matin',
+          mediaType: 'image',
+          axisKey: 'social.invite_joined',
+          threshold: 10,
+          level: 'deux',
+        },
+      }),
+    );
+    expect(n?.subtitle).toBe('Votre publication');
+    expect(n?.context.postCreatedAt).toBe('2026-09-12T10:00:00.000Z');
+    expect(n?.metadata).toEqual({
+      commentPreview: 'Superbe',
+      postPreview: 'Le lac au matin',
+      mediaType: 'image',
+      axisKey: 'social.invite_joined',
+      threshold: 10,
+    });
+  });
+
+  test('la section du jeu (#9490) voyage, les champs voisins du jeu — identifiants, semaine — ne sont pas lus', () => {
+    const n = decodeNotification(servie({ type: 'game_duo_invited', metadata: { gameSection: 'duo', duoId: 'd1', weekKey: '2026-11-02', route: 'progression' } }));
+    expect(n?.metadata).toEqual({ gameSection: 'duo' });
+  });
+
+  test('un sous-titre vide ou nul n’existe pas', () => {
+    expect(decodeNotification(servie({ subtitle: '  ' }))?.subtitle).toBeUndefined();
+    expect(decodeNotification(servie())?.subtitle).toBeUndefined();
+  });
+});

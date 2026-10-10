@@ -2,6 +2,16 @@
  * Types and utilities for communities module
  */
 import { z } from 'zod';
+import type { EngagementService } from '../../services/engagement/EngagementService';
+
+/**
+ * Les coutures des routes de communauté (#8959). Un OBJET d'options, jamais un
+ * paramètre positionnel : ces fonctions s'enregistrent aussi comme greffons
+ * Fastify (`app.register(registerCoreRoutes)`), qui leur passent `{}`.
+ */
+export type CommunityEngagementOptions = {
+  readonly engagement?: Pick<EngagementService, 'recordActivity'>;
+};
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
 export enum CommunityRole {

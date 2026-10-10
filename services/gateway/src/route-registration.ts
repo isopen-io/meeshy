@@ -93,6 +93,7 @@ import { getAudioTranslateService } from './services/AudioTranslateService';
 import * as TranslationNonBlocking from './routes/translation-non-blocking';
 import * as TranslationBlocking from './routes/translation';
 import { translationJobsRoutes } from './routes/translation-jobs';
+import { geoIpDatabaseStatus } from './services/GeoIPService';
 
 // API versioning
 // #4324 — la version d'API vient de la CONFIGURATION, jamais d'une constante :
@@ -141,7 +142,11 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
           services: {
             database: { status: 'up', userCount },
             translation: { status: translationHealthy ? 'up' : 'down' },
-            websocket: { status: 'up' }
+            websocket: { status: 'up' },
+            // #9609 — la base de géolocalisation LOCALE : `loaded`, `missing`,
+            // `unreadable` ou `unchecked`. Absente, le service reste sain mais le
+            // lieu des sessions est inconnu — cela se lit ici, pas après coup.
+            geoip: { status: geoIpDatabaseStatus() }
           },
           uptime: process.uptime()
         };

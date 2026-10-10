@@ -1,4 +1,5 @@
 import XCTest
+import CoreImage
 import CoreVideo
 @testable import Meeshy
 
@@ -81,7 +82,7 @@ final class VideoFilterPresetTests: XCTestCase {
         let config = VideoFilterPreset.warm.config
         XCTAssertEqual(config.temperature, 7500)
         XCTAssertEqual(config.tint, 5)
-        XCTAssertEqual(config.brightness, 0.02, accuracy: 0.001)
+        XCTAssertEqual(config.brightness, 0)
         XCTAssertEqual(config.contrast, 1.05, accuracy: 0.001)
         XCTAssertEqual(config.saturation, 1.1, accuracy: 0.001)
         XCTAssertTrue(config.isEnabled)
@@ -161,8 +162,20 @@ final class VideoFilterPresetTests: XCTestCase {
         // colorimetry that (generically) matches no preset — a legitimate
         // "no preset selected" state, not a bug.
         var config = VideoFilterPreset.warm.config
-        config.brightness = 0.4123
+        config.saturation = 0.4123
         XCTAssertNil(VideoFilterPreset.matching(config))
+    }
+
+    /// #9289 — la luminosité est le décalage de l'utilisateur, pas une part de la teinte :
+    /// la régler après avoir choisi « Chaud » laisse « Chaud » choisi.
+    func test_matching_brightnessOffset_keepsTheLook() {
+        let config = VideoFilterPreset.warm.config.withBrightness(0.2)
+        XCTAssertEqual(VideoFilterPreset.matching(config), .warm)
+        XCTAssertEqual(config.activePreset, .warm)
+    }
+
+    func test_presets_carryNoBrightnessOfTheirOwn() {
+        XCTAssertTrue(VideoFilterPreset.allCases.allSatisfy { $0.config.brightness == 0 })
     }
 
     func test_matching_untouchedDefaultConfig_returnsNatural() {
@@ -171,6 +184,28 @@ final class VideoFilterPresetTests: XCTestCase {
         // panel that never touched a preset still highlights "Natural",
         // matching the pre-Vague-108 default chip selection.
         XCTAssertEqual(VideoFilterPreset.matching(.default), .natural)
+    }
+}
+
+// MARK: - CallVideoLowLight Tests
+
+final class CallVideoLowLightTests: XCTestCase {
+
+    func test_boost_darkFrame_returnsStrengthBetweenZeroAndOne() throws {
+        let boost = try XCTUnwrap(CallVideoLowLight.boost(averageBrightness: 38.25, isConstrained: false))
+        XCTAssertEqual(boost, 0.5, accuracy: 0.001)
+    }
+
+    func test_boost_brightFrame_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 120, isConstrained: false))
+    }
+
+    func test_boost_unknownBrightness_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: nil, isConstrained: false))
+    }
+
+    func test_boost_constrainedDevice_returnsNil() {
+        XCTAssertNil(CallVideoLowLight.boost(averageBrightness: 10, isConstrained: true))
     }
 }
 
@@ -256,6 +291,46 @@ final class VideoFilterPipelineTests: XCTestCase {
         _ = sut.process(makePixelBuffer())
 
         XCTAssertNil(sut.lastFrameProcessingTime, "with no filters active at all, process() must still early-return")
+    }
+
+    // MARK: - #8695 — amélioration légère du flux d'appel : la scène sombre
+
+    func test_process_darkSceneWithoutFilters_liftsTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNotNil(sut.lastFrameProcessingTime, "une scène sombre s'éclaire sans qu'aucun filtre soit choisi")
+    }
+
+    func test_process_darkSceneInLowPowerMode_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { true })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 20)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "en économie d'énergie, aucune passe GPU n'est ajoutée")
+    }
+
+    func test_process_brightSceneWithoutFilters_leavesTheFrame() {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+
+        _ = sut.process(makePixelBuffer(), averageBrightness: 180)
+
+        XCTAssertNil(sut.lastFrameProcessingTime, "une scène déjà claire ne coûte rien")
+    }
+
+    func test_process_overBudgetThenFiltersCleared_restoresDarkSceneLift() {
+        let sut = VideoFilterPipeline(faceEffects: SlowFaceEffectsRenderer(delay: 0.03), isPowerConstrained: { false })
+        var stylized = VideoFilterConfig.default
+        stylized.faceEffect = .toad
+        sut.config = stylized
+        (0..<10).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+        XCTAssertTrue(sut.isAutoDegraded)
+
+        sut.config = .default
+        (0..<30).forEach { _ in _ = sut.process(makePixelBuffer(), averageBrightness: 20) }
+
+        XCTAssertFalse(sut.isAutoDegraded, "une surcharge passée ne doit pas couper l'éclaircissement pour tout l'appel")
     }
 
     // Regression test for a data race: `config` used to be a plain
@@ -387,3 +462,25 @@ final class VideoFilterCapturerDelegateTests: XCTestCase {
 }
 
 #endif
+
+private final class SlowFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
+    private let delay: TimeInterval
+
+    init(delay: TimeInterval) {
+        self.delay = delay
+    }
+
+    nonisolated func render(
+        _ effect: CallFaceEffect,
+        on image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        intensity: Float,
+        isDegraded: Bool
+    ) -> CIImage {
+        Thread.sleep(forTimeInterval: delay)
+        return image
+    }
+
+    nonisolated func reset() {}
+}

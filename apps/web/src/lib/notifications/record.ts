@@ -1,5 +1,7 @@
 import type { NotificationActor, NotificationContext } from '@meeshy/shared/types/notification';
 
+import { decodeContentDetail } from './content-detail';
+
 /**
  * **UNE NOTIFICATION TELLE QUE LA CLOCHE LA LIT** (#6288) — une PROJECTION du
  * type partagé `Notification` (`packages/shared/types/notification.ts`), jamais
@@ -36,6 +38,7 @@ type ContextStringField =
   | 'parentCommentId'
   | 'friendRequestId'
   | 'callSessionId'
+  | 'postCreatedAt'
   | 'postExpiresAt';
 
 const CONTEXT_STRING_FIELDS: readonly ContextStringField[] = [
@@ -47,6 +50,7 @@ const CONTEXT_STRING_FIELDS: readonly ContextStringField[] = [
   'parentCommentId',
   'friendRequestId',
   'callSessionId',
+  'postCreatedAt',
   'postExpiresAt',
 ];
 
@@ -54,13 +58,58 @@ type ConversationType = NonNullable<NotificationContext['conversationType']>;
 
 const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'public', 'global', 'broadcast'];
 
-type MetadataField = 'postType' | 'contentType' | 'postThumbnailUrl' | 'callType';
+/**
+ * Les champs STRUCTURÉS de `metadata` que la ligne lit (#8724) : les extraits
+ * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
+ * sans texte, la clé du palier d'engagement et la section du jeu (`gameSection`,
+ * #9490) — jamais la prose du corps.
+ */
+type MetadataField =
+  | 'postType'
+  | 'contentType'
+  | 'postThumbnailUrl'
+  | 'callType'
+  | 'commentPreview'
+  | 'parentCommentPreview'
+  | 'postPreview'
+  | 'messagePreview'
+  | 'excerpt'
+  | 'mediaType'
+  | 'axisKey'
+  | 'achievementKey'
+  | 'gameSection';
 
-const METADATA_FIELDS: readonly MetadataField[] = ['postType', 'contentType', 'postThumbnailUrl', 'callType'];
+const METADATA_FIELDS: readonly MetadataField[] = [
+  'postType',
+  'contentType',
+  'postThumbnailUrl',
+  'callType',
+  'commentPreview',
+  'parentCommentPreview',
+  'postPreview',
+  'messagePreview',
+  'excerpt',
+  'mediaType',
+  'axisKey',
+  'achievementKey',
+  'gameSection',
+];
 
-export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType'>;
+type MetadataNumberField = 'threshold' | 'level';
 
-export type NotificationRecordMetadata = Partial<Readonly<Record<MetadataField, string>>>;
+const METADATA_NUMBER_FIELDS: readonly MetadataNumberField[] = ['threshold', 'level'];
+
+/**
+ * #8860 — le DÉTAIL du contenu (#8857) et le média inline du vocal, que la
+ * bannière in-app montre. `firstAttachmentFileSize` n'est pas lu : la
+ * bannière ne dit pas le poids d'un fichier.
+ */
+type MediaField = 'contentDetail' | 'firstAttachmentUrl' | 'firstAttachmentMimeType' | 'firstAttachmentDurationMs';
+
+export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType' | MediaField>;
+
+export type NotificationRecordMetadata = Partial<Readonly<Record<MetadataField, string>>> &
+  Partial<Readonly<Record<MetadataNumberField, number>>>;
 
 export type NotificationRecordActor = Pick<NotificationActor, 'id' | 'username'> & {
   readonly displayName: string | null;
@@ -71,6 +120,8 @@ export type NotificationRecord = {
   readonly id: string;
   readonly type: string;
   readonly title: string | null;
+  /** La ligne de contexte serveur (nom du groupe, cible d'un commentaire) — absente quand vide. */
+  readonly subtitle?: string;
   readonly content: string;
   readonly actor: NotificationRecordActor | null;
   readonly context: NotificationRecordContext;
@@ -97,6 +148,17 @@ function pickStrings<K extends string>(source: Json | null, keys: readonly K[]):
   ) as Partial<Readonly<Record<K, string>>>;
 }
 
+/** Les champs NUMÉRIQUES finis d'un objet — un palier servi en chaîne ou en `NaN` est retiré. */
+function pickNumbers<K extends string>(source: Json | null, keys: readonly K[]): Partial<Readonly<Record<K, number>>> {
+  if (source === null) return {};
+  return Object.fromEntries(
+    keys.flatMap((key) => {
+      const value = source[key];
+      return typeof value === 'number' && Number.isFinite(value) ? [[key, value] as const] : [];
+    }),
+  ) as Partial<Readonly<Record<K, number>>>;
+}
+
 function isoDate(value: unknown): string | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
   const text = filledString(value);
@@ -111,12 +173,35 @@ function decodeActor(value: unknown): NotificationRecordActor | null {
   return { id, username, displayName: filledString(actor.displayName), avatar: filledString(actor.avatar) };
 }
 
+/**
+ * Le média et le détail d'un message — RIEN sous `notificationLocKey`, la
+ * DÉCLARATION d'un contenu protégé (éphémère, vue unique, flouté, chiffré).
+ * La passerelle les retient déjà (`mediaMayTravel`) ; ce second verrou ne
+ * dépend pas de sa fidélité : une garde de confidentialité échoue en montrant
+ * MOINS (cycle 125).
+ */
+function decodeMedia(context: Json | null): Pick<NotificationRecordContext, MediaField> {
+  if (context === null || filledString(context.notificationLocKey) !== null) return {};
+  const detail = decodeContentDetail(context.contentDetail);
+  const url = filledString(context.firstAttachmentUrl);
+  const mimeType = filledString(context.firstAttachmentMimeType);
+  const durationMs = context.firstAttachmentDurationMs;
+  return {
+    ...(detail === null ? {} : { contentDetail: detail }),
+    ...(url === null || mimeType === null ? {} : { firstAttachmentUrl: url, firstAttachmentMimeType: mimeType }),
+    ...(url !== null && typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+      ? { firstAttachmentDurationMs: durationMs }
+      : {}),
+  };
+}
+
 function decodeContext(value: unknown): NotificationRecordContext {
   const context = objectOf(value);
   const conversationType = CONVERSATION_TYPES.find((type) => type === context?.conversationType);
   return {
     ...pickStrings(context, CONTEXT_STRING_FIELDS),
     ...(conversationType === undefined ? {} : { conversationType }),
+    ...decodeMedia(context),
   };
 }
 
@@ -129,14 +214,17 @@ export function decodeNotification(raw: unknown): NotificationRecord | null {
   const createdAt = isoDate(state?.createdAt);
   if (id === null || type === null || state === null || createdAt === null) return null;
 
+  const subtitle = filledString(notification.subtitle);
+  const metadata = objectOf(notification.metadata);
   return {
     id,
     type,
     title: filledString(notification.title),
+    ...(subtitle === null ? {} : { subtitle }),
     content: typeof notification.content === 'string' ? notification.content : '',
     actor: decodeActor(notification.actor),
     context: decodeContext(notification.context),
-    metadata: pickStrings(objectOf(notification.metadata), METADATA_FIELDS),
+    metadata: { ...pickStrings(metadata, METADATA_FIELDS), ...pickNumbers(metadata, METADATA_NUMBER_FIELDS) },
     state: { isRead: state.isRead === true, createdAt },
   };
 }
@@ -158,4 +246,42 @@ export function decodeNotifications(raw: unknown): readonly NotificationRecord[]
  */
 export function notificationTitle(notification: NotificationRecord): string {
   return notification.title ?? notification.actor?.displayName ?? notification.actor?.username ?? 'Meeshy';
+}
+
+/**
+ * Les notifications d'un MESSAGE (#9992) — celles dont le contexte est une
+ * conversation : elles disent son groupe, ou qu'elle est privée.
+ */
+export const MESSAGE_NOTIFICATION_TYPES: ReadonlySet<string> = new Set([
+  'new_message',
+  'message_reply',
+  'reply',
+  'user_mentioned',
+  'mention',
+  'message_reaction',
+  'reaction',
+]);
+
+const actorNameOf = (notification: NotificationRecord): string | null =>
+  notification.actor?.displayName ?? notification.actor?.username ?? null;
+
+/**
+ * **LE TEMPS RÉEL PARLE COMME LA CLOCHE** (#9992). `notification:new` porte le
+ * cadrage TOAST de la passerelle (`buildPushHeader`, forme que le SDK iOS
+ * compose déjà) : `title` = l'acteur seul, `subtitle` = la phrase d'action
+ * (« a réagi 🔥 à votre story ») ou, pour un message, le nom du groupe. La
+ * cloche REST porte la phrase entière en `title`. Relu tel quel, le temps réel
+ * disait « Awa » sans dire ce qu'Awa avait fait. La règle est celle d'iOS
+ * (`bannerHeadline`) : un titre qui EST l'acteur reçoit l'action, sauf s'il la
+ * porte déjà ; un message laisse son groupe au contexte, qui le porte.
+ */
+export function decodeRealtimeNotification(raw: unknown): NotificationRecord | null {
+  const decoded = decodeNotification(raw);
+  if (decoded === null || decoded.subtitle === undefined) return decoded;
+  const { subtitle, ...rest } = decoded;
+  if (MESSAGE_NOTIFICATION_TYPES.has(decoded.type)) return rest;
+  const actor = actorNameOf(decoded);
+  const head = decoded.title ?? actor;
+  if (head === null || head !== actor) return decoded;
+  return { ...rest, title: head.endsWith(subtitle) ? head : `${head} ${subtitle}` };
 }

@@ -59,6 +59,7 @@ jest.mock('../../../services/attachments/MetadataManager', () => ({
     extractMetadata: (...a: any[]) => mockExtractMetadata(...a),
     generateThumbnail: jest.fn().mockResolvedValue(null),
     generateVideoThumbnail: jest.fn().mockResolvedValue(null),
+    probeMediaStreams: jest.fn().mockResolvedValue(null),
   })),
 }));
 

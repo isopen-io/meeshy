@@ -1,0 +1,340 @@
+import { act } from 'react';
+import { describe, expect, test } from 'bun:test';
+
+import { interpretRole, interpretReportStatus } from '@/lib/admin/interpret/enums';
+import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
+import { setupAdminKitTests } from '@/test-support/admin-harness';
+
+import { AdminGlyph } from './admin-glyph';
+import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge, AdminRoleBadge, AdminVerifiedBadge } from './badges';
+import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from './meta';
+import { AdminPageHeader } from './page-header';
+import { AdminAnnouncement } from './announcement';
+import { AdminDeniedInline, AdminDeniedScreen, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice, AdminSkeleton } from './states';
+
+const { mount } = setupAdminKitTests({ languages: ['fr', 'en'] });
+
+const ID = '64f1c2a9e8b7d6c5b4a39281';
+const NOW = new Date('2026-09-30T14:03:00Z');
+
+describe('AdminGlyph', () => {
+  test('décoratif par défaut (aria-hidden), nommé quand on lui donne un titre', async () => {
+    const host = await mount(
+      <div>
+        <AdminGlyph name="gear" />
+        <AdminGlyph name="flag" title="Signalement" />
+      </div>,
+    );
+    const [decoratif, nomme] = [...host.querySelectorAll('svg')];
+    expect(decoratif?.getAttribute('aria-hidden')).toBe('true');
+    expect(nomme?.getAttribute('role')).toBe('img');
+    expect(nomme?.getAttribute('aria-label')).toBe('Signalement');
+  });
+});
+
+describe('les badges — le mot d’abord, jamais la couleur seule', () => {
+  test('AdminBadge porte son mot et son glyphe, teinté par le ton en jetons', async () => {
+    const host = await mount(
+      <AdminBadge tone="danger" glyph="prohibit" anchor="etat">
+        Banni
+      </AdminBadge>,
+    );
+    const badge = host.querySelector('[data-admin-badge="etat"]');
+    expect(badge?.textContent).toBe('Banni');
+    expect(badge?.querySelector('svg')).not.toBeNull();
+    const style = badge?.getAttribute('style') ?? '';
+    expect(style).toContain('var(--color-admin-danger-ink)');
+    expect(style).not.toMatch(/#[0-9a-f]{3,6}/i);
+  });
+
+  test('AdminInterpretedBadge : title = explication, data-admin-raw = code brut, jamais lu à l’œil', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretRole('BIGBOSS', 'fr')} />);
+    const enveloppe = host.querySelector('[data-admin-raw]');
+    expect(enveloppe?.getAttribute('data-admin-raw')).toBe('BIGBOSS');
+    expect(enveloppe?.getAttribute('title')).toBe('Tous les droits, y compris les gestes souverains.');
+    expect(enveloppe?.textContent).toBe('Créateur');
+    expectNoRawIdentifiers(host);
+  });
+
+  test('un état sans explication ne pose pas de title', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretReportStatus('pending', 'fr')} />);
+    expect(host.querySelector('[data-admin-raw]')?.hasAttribute('title')).toBe(false);
+  });
+
+  test('AdminRoleBadge dit le rôle en mots, dans la langue d’interface', async () => {
+    const host = await mount(
+      <div>
+        <AdminRoleBadge language="fr" role="MODERATOR" />
+        <AdminRoleBadge language="en" role="MODERATOR" />
+      </div>,
+    );
+    expect([...host.querySelectorAll('[data-admin-raw]')].map((badge) => badge.textContent)).toEqual(['Modérateur', 'Moderator']);
+  });
+
+  test('l’EXPLICATION d’un badge est dans le texte accessible, pas seulement dans `title` (tactile, clavier, lecteur d’écran)', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretRole('BIGBOSS', 'fr')} />);
+    const hidden = host.querySelector('.sr-only');
+
+    expect(hidden?.textContent).toContain('Tous les droits, y compris les gestes souverains.');
+    expect(hidden?.closest('[data-admin-raw]')).toBeNull();
+    expect(hidden?.previousElementSibling?.getAttribute('data-admin-raw')).toBe('BIGBOSS');
+  });
+
+  test('un état sans explication ne pose aucun texte caché', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretReportStatus('pending', 'fr')} />);
+    expect(host.querySelector('.sr-only')).toBeNull();
+  });
+
+  test('AdminLanguageBadge : le NOM de la langue, jamais « ES »', async () => {
+    const host = await mount(
+      <div>
+        <AdminLanguageBadge language="fr" code="es" />
+        <AdminLanguageBadge language="fr" code={null} />
+      </div>,
+    );
+    expect(host.textContent).toBe('EspagnolAucune');
+  });
+});
+
+describe('le panneau de métadonnées', () => {
+  test('une liste de définitions titrée : libellé, valeur qui revient à la ligne, explication dessous', async () => {
+    const host = await mount(
+      <AdminMetaPanel title="Métadonnées">
+        <AdminMetaRow label="Chiffrement" value="Chiffrée de bout en bout" explain="Le serveur ne lit pas les messages." anchor="encryption" />
+        <AdminMetaRow label="Créée" value="il y a 3 minutes" />
+      </AdminMetaPanel>,
+    );
+    expect(host.querySelector('h2')?.textContent).toBe('Métadonnées');
+    expect(host.querySelectorAll('dl')).toHaveLength(1);
+    const ligne = host.querySelector('[data-admin-meta="encryption"]');
+    expect(ligne?.querySelector('dt')?.textContent).toBe('Chiffrement');
+    expect(ligne?.querySelectorAll('dd')[1]?.textContent).toBe('Le serveur ne lit pas les messages.');
+    expect(ligne?.querySelector('dd')?.className).toContain('break-words');
+  });
+
+  test('AdminMomentText : relatif, absolu en infobulle, ou les deux — « — » quand l’instant manque', async () => {
+    const moment = adminMomentOf('2026-09-30T14:00:00Z', NOW, 'fr', { timeZone: 'UTC' });
+    const host = await mount(
+      <div>
+        <p data-a>
+          <AdminMomentText moment={moment} />
+        </p>
+        <p data-b>
+          <AdminMomentText moment={moment} variant="both" />
+        </p>
+        <p data-c>
+          <AdminMomentText moment={null} />
+        </p>
+      </div>,
+    );
+    /* Le relatif se lit ; l'ABSOLU suit en texte caché (un `title` n'atteint ni le tactile ni le clavier). */
+    expect(host.querySelector('[data-a] time')?.textContent).toBe('il y a 3 minutes (30 sept. 2026, 14:00)');
+    expect(host.querySelector('[data-a] time > .sr-only')?.textContent).toBe(' (30 sept. 2026, 14:00)');
+    expect(host.querySelector('[data-b] time > .sr-only')).toBeNull();
+    expect(host.querySelector('[data-a] time')?.getAttribute('title')).toBe('30 sept. 2026, 14:00');
+    expect(host.querySelector('[data-a] time')?.getAttribute('datetime')).toBe('2026-09-30T14:00:00Z');
+    expect(host.querySelector('[data-b] time')?.textContent).toBe('30 sept. 2026, 14:00 · il y a 3 minutes');
+    expect(host.querySelector('[data-c] [aria-hidden="true"]')?.textContent).toBe('—');
+    expect(host.querySelector('[data-c] .sr-only')?.textContent).toBe('Non renseigné');
+    expect(host.querySelector('[data-c] [aria-label]')).toBeNull();
+  });
+
+  test('AdminTechnicalId : l’identifiant en police mono dans son ancre, copiable, la copie s’ANNONCE', async () => {
+    const annonces: string[] = [];
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => void copied.push(text) } });
+
+    const host = await mount(<AdminTechnicalId language="fr" id={ID} onAnnounce={(message) => annonces.push(message)} />);
+    expect(host.querySelector('[data-admin-technical-id]')?.textContent).toBe(ID);
+    expect(host.querySelector('dt')?.textContent).toBe('Identifiant technique');
+    expectNoRawIdentifiers(host);
+
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-admin-action="copy-technical-id"]')?.click();
+    });
+    expect(copied).toEqual([ID]);
+    expect(annonces).toEqual(['Identifiant copié']);
+  });
+
+  test('une copie impossible s’annonce aussi', async () => {
+    const annonces: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => Promise.reject(new Error('refusé')) } });
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: () => false });
+
+    const host = await mount(<AdminTechnicalId language="fr" id={ID} onAnnounce={(message) => annonces.push(message)} />);
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-admin-action="copy-technical-id"]')?.click();
+    });
+    expect(annonces).toEqual(['Copie impossible']);
+  });
+});
+
+describe('l’en-tête de page', () => {
+  test('le SEUL h1, sa phrase d’aide, ses badges et ses gestes', async () => {
+    const host = await mount(
+      <AdminPageHeader
+        language="fr"
+        title="Awa Diop"
+        subtitle="Membre depuis trois mois"
+        badges={<AdminBadge tone="success">Actif</AdminBadge>}
+        actions={<button type="button">Éditer</button>}
+      />,
+    );
+    expect(host.querySelectorAll('h1')).toHaveLength(1);
+    expect(host.querySelector('h1')?.textContent).toBe('Awa Diop');
+    expect(host.querySelector('[data-admin-page-title]')).not.toBeNull();
+    expect(host.querySelector('p')?.textContent).toBe('Membre depuis trois mois');
+    expect(host.querySelector('[data-admin-page-actions] button')?.textContent).toBe('Éditer');
+  });
+
+  test('le fil d’Ariane : navigation nommée, liste ordonnée, dernier élément = page courante, sans lien', async () => {
+    const host = await mount(
+      <AdminPageHeader
+        language="fr"
+        title="Awa Diop"
+        crumbs={[{ label: 'Personnes' }, { label: 'Comptes', target: { kind: 'section', section: 'users' } }, { label: 'Awa Diop' }]}
+      />,
+      adminIdentityFixture({ role: 'BIGBOSS' }),
+    );
+    const nav = host.querySelector('nav');
+    expect(nav?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+    const items = [...(nav?.querySelectorAll('li') ?? [])];
+    expect(items.map((item) => item.textContent)).toEqual(['Personnes', 'Comptes', 'Awa Diop']);
+    expect(items[1]?.querySelector('a')?.getAttribute('href')).toBe('/admin/users');
+    expect(items[2]?.querySelector('[aria-current="page"]')).not.toBeNull();
+    expect(items[2]?.querySelector('a')).toBeNull();
+  });
+
+  test('un maillon dont la section n’est pas ouverte au lecteur est un texte, pas un lien', async () => {
+    const host = await mount(
+      <AdminPageHeader language="fr" title="x" crumbs={[{ label: 'Comptes', target: { kind: 'section', section: 'users' } }, { label: 'Nom' }]} />,
+      adminIdentityFixture({ role: 'MODERATOR' }),
+    );
+    expect(host.querySelector('nav a')).toBeNull();
+  });
+});
+
+describe('les états', () => {
+  test('vide : titre, indication, glyphe, geste', async () => {
+    const host = await mount(<AdminEmptyState title="Aucun signalement" hint="Tout est traité." glyph="flag" action={<button type="button">Actualiser</button>} />);
+    expect(host.querySelector('[data-admin-empty]')?.textContent).toContain('Aucun signalement');
+    expect(host.querySelector('[data-admin-empty]')?.textContent).toContain('Tout est traité.');
+    expect(host.querySelector('svg')).not.toBeNull();
+    expect(host.querySelector('button')?.textContent).toBe('Actualiser');
+  });
+
+  test('erreur : alerte, message par défaut, « Réessayer » de 44 px qui rappelle', async () => {
+    let appels = 0;
+    const host = await mount(<AdminErrorState language="fr" onRetry={() => (appels += 1)} />);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Impossible de charger ces données pour le moment.');
+    const bouton = host.querySelector<HTMLButtonElement>('[data-admin-retry]');
+    expect(bouton?.textContent).toBe('Réessayer');
+    expect(bouton?.style.minHeight).toBe('44px');
+    await act(async () => bouton?.click());
+    expect(appels).toBe(1);
+  });
+
+  test('erreur : un message propre remplace le message par défaut', async () => {
+    const host = await mount(<AdminErrorState language="fr" message="Le journal est indisponible." onRetry={() => undefined} />);
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Le journal est indisponible.');
+  });
+
+  test('bloc refusé en ligne : dit que le rôle n’y donne pas accès', async () => {
+    const host = await mount(<AdminDeniedInline language="fr" />);
+    expect(host.textContent).toContain('votre rôle n’y donne pas accès');
+  });
+
+  test('avis en ligne : alerte pour un danger, statut sinon — toujours avec son glyphe et son texte', async () => {
+    const host = await mount(
+      <div>
+        <AdminInlineNotice tone="danger" text="Échec" />
+        <AdminInlineNotice tone="warning" text="Attention" action={<button type="button">Voir</button>} />
+      </div>,
+    );
+    const [danger, avertissement] = [...host.querySelectorAll('[data-admin-notice]')];
+    expect(danger?.getAttribute('role')).toBe('alert');
+    expect(avertissement?.getAttribute('role')).toBe('status');
+    expect(danger?.querySelector('svg')).not.toBeNull();
+    expect(avertissement?.querySelector('button')?.textContent).toBe('Voir');
+  });
+
+  test('hors ligne : l’avis n’apparaît que sans réseau', async () => {
+    const enLigne = await mount(<AdminOfflineNotice language="fr" />);
+    expect(enLigne.querySelector('[data-admin-notice]')).toBeNull();
+
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    const horsLigne = await mount(<AdminOfflineNotice language="fr" />);
+    expect(horsLigne.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('hors ligne');
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+});
+
+/**
+ * **CE QUE `routes/admin-parts` PORTAIT, REPRIS PAR LE KIT** (#9463) — le squelette, le refus
+ * plein écran et l'annonce vivent désormais dans `components/admin` ; leur DOM est un contrat
+ * (`data-admin-announcement`, `main#contenu p.text-screen`, `data-admin-<anchor>`) que les
+ * témoins des écrans lisent.
+ */
+describe('les pièces reprises de routes/admin-parts', () => {
+  test('le squelette : une région de chargement annoncée, ses barres masquées, son ancre posée', async () => {
+    const host = await mount(<AdminSkeleton rows={3} language="fr" anchor="bans-loading" />);
+    const region = host.querySelector('[role="status"]');
+    expect(region?.getAttribute('aria-busy')).toBe('true');
+    expect(region?.hasAttribute('data-admin-bans-loading')).toBe(true);
+    expect(region?.querySelectorAll('[aria-hidden="true"] > div')).toHaveLength(3);
+    expect(region?.textContent).toBe('Chargement…');
+  });
+
+  test('le refus plein écran : le titre en text-screen, le message, et un retour de 44 px', async () => {
+    const host = await mount(<AdminDeniedScreen language="fr" />);
+    const titre = host.querySelector('p.text-screen');
+    expect(titre?.textContent?.length).toBeGreaterThan(0);
+    expect(host.querySelector('[data-admin-denied-screen]')).not.toBeNull();
+    expect(host.querySelector<HTMLAnchorElement>('a')?.style.minHeight).toBe('44px');
+  });
+
+  test('l’annonce : montée vide en sr-only, puis dite en role=status', async () => {
+    const vide = await mount(<AdminAnnouncement text="" />);
+    const region = vide.querySelector('[data-admin-announcement]');
+    expect(region?.getAttribute('role')).toBe('status');
+    expect(region?.className).toBe('sr-only');
+    const dite = await mount(<AdminAnnouncement text="Compte créé" />);
+    expect(dite.querySelector('[data-admin-announcement]')?.textContent).toBe('Compte créé');
+  });
+
+  test('l’état vide porte l’ancre de l’écran qui le monte', async () => {
+    const host = await mount(<AdminEmptyState title="Aucune image publique" data={{ 'data-admin-image-candidates-empty': '' }} />);
+    expect(host.querySelector('[data-admin-image-candidates-empty]')?.textContent).toBe('Aucune image publique');
+    expect(host.querySelector('[data-admin-empty]')).not.toBeNull();
+  });
+});
+
+describe('les pièces reprises de la fiche d’un membre (LOT-PANELS)', () => {
+  test('le refus d’un bloc dit son propre motif, sous l’ancre de l’écran qui le monte', async () => {
+    const host = await mount(<AdminDeniedInline language="fr" message="Réservé au pilotage de l’agent" data={{ 'data-admin-agent-denied': '' }} />);
+    const bloc = host.querySelector('[data-admin-agent-denied]');
+    expect(bloc?.hasAttribute('data-admin-denied-inline')).toBe(true);
+    expect(bloc?.textContent).toBe('Réservé au pilotage de l’agent');
+  });
+
+  test('un avis porte l’ancre de l’écran, et le danger reste une alerte', async () => {
+    const host = await mount(<AdminInlineNotice tone="danger" text="Le rôle change ses droits" data={{ 'data-admin-edit-warning': 'role' }} />);
+    const avis = host.querySelector('[data-admin-edit-warning="role"]');
+    expect(avis?.getAttribute('role')).toBe('alert');
+    expect(avis?.getAttribute('data-admin-notice')).toBe('danger');
+    expect(avis?.textContent).toBe('Le rôle change ses droits');
+  });
+
+  test('vérifié ou non : le MOT porte l’état, le glyphe ✓ n’appuie que le vérifié', async () => {
+    const host = await mount(
+      <div>
+        <AdminVerifiedBadge verified language="fr" />
+        <AdminVerifiedBadge verified={false} language="fr" />
+      </div>,
+    );
+    const [oui, non] = [...host.querySelectorAll('[data-admin-verified]')];
+    expect([oui?.getAttribute('data-admin-verified'), oui?.textContent]).toEqual(['true', '✓Vérifié']);
+    expect([non?.getAttribute('data-admin-verified'), non?.textContent]).toEqual(['false', 'Non vérifié']);
+  });
+});

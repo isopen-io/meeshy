@@ -42,7 +42,7 @@ struct FeedPostCardCarousel: View {
     @State private var index: Int = 0
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             ZStack(alignment: .topTrailing) {
                 pager
                 counter
@@ -76,7 +76,7 @@ struct FeedPostCardCarousel: View {
             // > la mesure de ce qu'il contient : il faut lui DONNER sa forme.
             .aspectRatio(FeedCarouselLayout.aspectRatio(for: media), contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
 
             pageDots
         }
@@ -161,7 +161,7 @@ struct FeedPostCardCarousel: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
         .frame(maxHeight: .infinity, alignment: .center)
     }
 
@@ -173,11 +173,11 @@ struct FeedPostCardCarousel: View {
             // Glyphe dans un cercle de dimension FIXE 34 pt : il déborderait
             // s'il scalait (doctrine 86i). La cible tactile reste à 44.
             Image(systemName: systemName)
-                .font(.system(size: 14, weight: .bold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 34, height: 34)
                 .background(Circle().fill(.black.opacity(0.45)))
-                .frame(minWidth: 44, minHeight: 44)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -186,12 +186,12 @@ struct FeedPostCardCarousel: View {
 
     private var counter: some View {
         Text("\(index + 1) / \(media.count)")
-            .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
             .foregroundColor(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(.black.opacity(0.5)))
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .contentTransition(.numericText())
             .animation(.spring(response: 0.3), value: index)
             .accessibilityHidden(true)
@@ -201,7 +201,7 @@ struct FeedPostCardCarousel: View {
     /// cible. Posées à l'intérieur, elles se disputeraient le bas avec la
     /// légende, qui est le contenu que `3f` met en avant.
     private var pageDots: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(media.indices, id: \.self) { position in
                 Capsule()
                     .fill(position == index
@@ -290,7 +290,7 @@ struct FeedMediaTile: View {
             // Surcouches DÉCORATIVES : la cellule parente porte le libellé
             // VoiceOver, et les dupliquer ferait lire deux fois le même média.
             if media.type == .video {
-                VStack(spacing: 6) {
+                VStack(spacing: MeeshySpacing.xsPlus) {
                     ZStack {
                         Circle()
                             .fill(.ultraThinMaterial)
@@ -309,9 +309,9 @@ struct FeedMediaTile: View {
                 }
                 .accessibilityHidden(true)
             } else if media.type == .audio {
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "waveform")
-                        .font(MeeshyFont.relative(20))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xl))
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         durationPill(duration)
@@ -325,10 +325,10 @@ struct FeedMediaTile: View {
 
     private func durationPill(_ duration: String) -> some View {
         Text(duration)
-            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
             .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(Color.black.opacity(0.6)))
     }
 }

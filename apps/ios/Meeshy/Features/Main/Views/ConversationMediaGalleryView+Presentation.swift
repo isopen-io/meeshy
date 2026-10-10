@@ -38,6 +38,15 @@ extension ConversationMediaGalleryView {
     ///   posée plus haut, elle installerait une transaction animée sur tout
     ///   l'arbre, pager compris.
     func onEnterStage(_ door: StageEntry) {
+        // **Le toucher qui RAMÈNE le bouton pause garde AUSSI sa porte** (#9577,
+        // décision porteur 2026-10-08, alignée sur le web) : il réarme la
+        // seconde du bouton central PUIS bascule le plein cadre, en un seul
+        // geste. Aucun retour anticipé ici — le toucher ne s'arrête jamais au
+        // bouton.
+        if door == .tap {
+            withAnimation(playPauseFadeAnimation) { playPauseFade = playPauseFade.tappingMedia() }
+        }
+
         let next = stagePresentation.after(door)
 
         /*
@@ -170,7 +179,7 @@ extension ConversationMediaGalleryView {
 /// exactement cette raison.
 struct MediaStagePausedBadge: View {
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // Le glyphe SUIT le texte, il ne se fige pas — et la doctrine 82i
             // ne le couvre pas : elle autorise une taille figée quand un CADRE
             // FIXE déborderait en scalant. Ici la capsule est dimensionnée par
@@ -180,16 +189,16 @@ struct MediaStagePausedBadge: View {
             // Type. Les deux montent ensemble. Il dit l'état, le texte le nomme,
             // et VoiceOver lit le second.
             Image(systemName: "pause.fill")
-                .font(MeeshyFont.relative(15, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .accessibilityHidden(true)
             Text(String(localized: "media.stage.paused",
                         defaultValue: "En pause",
                         bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
         }
-        .foregroundColor(.white)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .foregroundColor(MeeshyColors.mediaChromeForeground)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .adaptiveGlass(in: Capsule())
         .accessibilityElement(children: .combine)
     }

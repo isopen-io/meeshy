@@ -97,10 +97,10 @@ public struct MeeshyVideoPlayer: View {
         // Bubble/card respectent intégralement le format de la vidéo, jusqu'à
         // un 9:16 portrait qui occupera ~60% d'un écran iPhone. C'est voulu.
         public static let bubble = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
-        public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 12, border: nil)
+        public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: MeeshyRadius.smPlus, border: nil)
         // Mini reste plafonné à 1:1 + 120pt (preview chip, pas de raison de
         // déborder en hauteur pour un thumbnail).
-        public static let mini   = Frame(maxAspectRatio: 1.0, maxHeight: 120,  cornerRadius: 8,  border: nil)
+        public static let mini   = Frame(maxAspectRatio: 1.0, maxHeight: 120,  cornerRadius: MeeshyRadius.xs,  border: nil)
         public static let flat   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
     }
 
@@ -163,7 +163,7 @@ public struct MeeshyVideoPlayer: View {
 
     public let attachment: MeeshyMessageAttachment
     public let style: Style
-    public let controls: ControlSet
+    public private(set) var controls: ControlSet
     public let accentColor: String
     public let frame: Frame
     public let availability: VideoAvailability
@@ -270,13 +270,25 @@ public struct MeeshyVideoPlayer: View {
         }
     }
 
+    /// Sous un bouclier de capture (#9574), la vidéo protégée n'offre ni PiP
+    /// ni AirPlay : les renderers reçoivent les contrôles PERMIS, et la surface
+    /// ne configure donc aucune fenêtre PiP (`surfaceEnablesPip`).
+    @Environment(\.isCaptureShielded) private var isCaptureShielded
+
+    private var permitted: MeeshyVideoPlayer {
+        var player = self
+        player.controls = ProtectedPlaybackPolicy.of(isCaptureShielded: isCaptureShielded).permitted(controls)
+        return player
+    }
+
     public var body: some View {
+        let player = permitted
         Group {
             switch style {
-            case .flat:       _FlatRenderer(player: self)
-            case .inline:     _InlineRenderer(player: self)
-            case .mini:       _MiniRenderer(player: self)
-            case .fullscreen: _FullscreenRenderer(player: self)
+            case .flat:       _FlatRenderer(player: player)
+            case .inline:     _InlineRenderer(player: player)
+            case .mini:       _MiniRenderer(player: player)
+            case .fullscreen: _FullscreenRenderer(player: player)
             }
         }
     }

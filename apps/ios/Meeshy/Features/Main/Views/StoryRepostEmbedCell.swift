@@ -46,7 +46,7 @@ struct StoryRepostEmbedCell: View {
             // a giant vertical column when the feed sits in a wide pane.
             .frame(maxWidth: 420)
             .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .reportReelFrame(id: post.id, kind: .scene)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(String(localized: "story.repost.by", defaultValue: "Story de", bundle: .main)) \(repost.author)")

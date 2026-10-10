@@ -13,8 +13,10 @@ import {
   invalidateSession,
   invalidateAllSessions,
   logout as logoutSession,
+  endCurrentSession,
   initSessionService,
-  SessionData
+  SessionData,
+  type CurrentSessionRef
 } from './SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
@@ -25,7 +27,7 @@ import {
   clearFailedLoginAttempts,
   lockIsVisibleTo
 } from './LoginAttemptService';
-import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
 import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
@@ -280,21 +282,6 @@ export class AuthService {
         };
       }
 
-      // No 2FA - proceed with normal login
-      // Mettre à jour la dernière connexion avec contexte
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          isOnline: true,
-          lastActiveAt: new Date(),
-          // Login tracking (updated on each login)
-          lastLoginIp: requestContext?.ip || user.lastLoginIp,
-          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
-          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
-          // Update timezone if detected and user hasn't set one
-          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
-        }
-      });
 
       // Plus aucun code renvoyé à la connexion (#8238) : pendant le délai de
       // grâce rien n'est demandé (`quiet`), puis les clients invitent
@@ -312,10 +299,32 @@ export class AuthService {
         deviceInfo: null
       };
 
+      // #9927 — la session NAÎT avant la trace de connexion : `createSession`
+      // porte le refus de l'âge minimal (403 AGE_BELOW_MINIMUM), posé ainsi
+      // APRÈS toute preuve d'identité (mot de passe, verrou, délai de grâce,
+      // second facteur), et un compte refusé ne passe jamais « en ligne ».
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'password'
+      });
+
+      // No 2FA - proceed with normal login
+      // Mettre à jour la dernière connexion avec contexte
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isOnline: true,
+          lastActiveAt: new Date(),
+          // Login tracking (updated on each login)
+          lastLoginAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          // Update timezone if detected and user hasn't set one
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session créée pour: ${user.username} - ID session.id=${session.id}`);
@@ -337,6 +346,11 @@ export class AuthService {
       // Un compte SANS mot de passe non plus (#6424) : même raison, autre
       // décision — la porte existe, elle est ailleurs.
       if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
+        throw error;
+      }
+      // #9927 — le refus de l'âge minimal (levé par `createSession`, porte de
+      // toutes les connexions) est une décision, pas une panne.
+      if (error instanceof AgeBelowMinimumError) {
         throw error;
       }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
@@ -467,19 +481,6 @@ export class AuthService {
 
       logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);
 
-      // Clear the temporary token and complete login
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          ...clearPendingTwoFactor(),
-          isOnline: true,
-          lastActiveAt: new Date(),
-          lastLoginIp: requestContext?.ip || user.lastLoginIp,
-          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
-          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
-          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
-        }
-      });
 
       // Create full session
       const socketIOUser = this.userToSocketIOUser(user);
@@ -491,10 +492,28 @@ export class AuthService {
         deviceInfo: null
       };
 
+      // #9927 — même ordre que le mot de passe : la session (et son refus de
+      // l'âge minimal) vient APRÈS un second facteur valide, la trace de
+      // connexion après la session.
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
-        requestContext: requestContext || defaultContext
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'two_factor'
+      });
+      // Clear the temporary token and complete login
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          ...clearPendingTwoFactor(),
+          isOnline: true,
+          lastActiveAt: new Date(),
+          lastLoginAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour: ${user.username} - ID: ${session.id}`);
@@ -508,6 +527,7 @@ export class AuthService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH_SERVICE] ❌ Erreur dans completeAuthWith2FA', error);
       return { success: false, error: 'Erreur lors de la vérification 2FA' };
     }
@@ -895,10 +915,10 @@ export class AuthService {
   /**
    * Get all active sessions for a user
    * @param userId - User ID
-   * @param currentToken - Current session token (to mark as current)
+   * @param current - The current session, by JWT `sid` or by raw session token (#9606)
    */
-  async getUserActiveSessions(userId: string, currentToken?: string): Promise<SessionData[]> {
-    return getUserSessions(userId, currentToken);
+  async getUserActiveSessions(userId: string, current?: string | CurrentSessionRef): Promise<SessionData[]> {
+    return getUserSessions(userId, current);
   }
 
   /**
@@ -913,10 +933,10 @@ export class AuthService {
   /**
    * Revoke all sessions for a user except the current one
    * @param userId - User ID
-   * @param currentToken - Current session token to keep active
+   * @param current - The current session to keep active, by JWT `sid` or raw token (#9606)
    */
-  async revokeAllSessionsExceptCurrent(userId: string, currentToken?: string): Promise<number> {
-    return invalidateAllSessions(userId, currentToken, 'user_revoked_all');
+  async revokeAllSessionsExceptCurrent(userId: string, current?: string | CurrentSessionRef): Promise<number> {
+    return invalidateAllSessions(userId, current, 'user_revoked_all');
   }
 
   /**
@@ -929,5 +949,17 @@ export class AuthService {
       logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
     }
     return result;
+  }
+
+  /**
+   * Logout - close the session(s) named by the request: JWT `sid` and/or the
+   * `x-session-token` header (#9606). Returns how many were closed.
+   */
+  async logoutCurrent(userId: string, current: CurrentSessionRef): Promise<number> {
+    const closed = await endCurrentSession(userId, current, 'logout');
+    if (closed > 0) {
+      logger.info('[AUTH_SERVICE] ✅ Session invalidée (logout)');
+    }
+    return closed;
   }
 }

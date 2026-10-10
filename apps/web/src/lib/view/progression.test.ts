@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -33,6 +33,11 @@ describe('les tables couvrent le catalogue partagé, sans trou ni vide', () => {
     }
   });
 
+  test('un logo par type (#9639) : deux axes ne partagent jamais la même icône', () => {
+    const glyphs = ENGAGEMENT_AXES.map((key) => AXIS_GLYPHS[key]);
+    expect(new Set(glyphs).size).toBe(ENGAGEMENT_AXES.length);
+  });
+
   test('chaque famille a son titre de section', () => {
     for (const family of ENGAGEMENT_AXIS_FAMILIES) expect(FAMILY_LABELS[family].length).toBeGreaterThan(0);
   });
@@ -63,9 +68,12 @@ describe('les phrases de palier', () => {
   });
 
   test('une échelle complète le dit, sans palier inventé', () => {
+    // Le plus haut palier, jamais un nombre en dur (#9392 a étendu
+    // BADGE_THRESHOLDS à 1 000 et 5 000 sans que ce témoin ne suive).
+    const dernierPalier = Math.max(...BADGE_THRESHOLDS);
     const complete = resolveEngagementProgress({
       ...ENGAGEMENT_PROGRESS_FIXTURE,
-      counters: [{ axisKey: 'tool.sticker', count: 500 }],
+      counters: [{ axisKey: 'tool.sticker', count: dernierPalier }],
     });
     const stickers = complete.axes.find((a) => a.axisKey === 'tool.sticker');
     expect(stickers && nextStepLabel(stickers, BADGE_UNIT)).toBe('Échelle complète');

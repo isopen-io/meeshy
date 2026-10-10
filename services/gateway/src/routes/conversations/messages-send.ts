@@ -34,8 +34,10 @@ import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
 import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
@@ -330,6 +332,8 @@ export function registerSendMessageRoute(
         const attachmentAdmission = await admitMessageAttachments(prisma, {
           attachmentIds,
           ownerId: userId ?? participantId,
+          conversationId,
+          clientMessageId,
         });
         if (!attachmentAdmission.ok) {
           return sendNotFound(reply, 'Attachment not found', {
@@ -436,6 +440,11 @@ export function registerSendMessageRoute(
             details: { retryAfter }
           });
         }
+        // #9927 — un mineur déclaré dans Meeshy Global : définitif, donc 403,
+        // avec le code que les clients récents lisent.
+        if (result.code === GLOBAL_ADULTS_ONLY_CODE) {
+          return sendForbidden(reply, result.error || MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+        }
         if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
           return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages');
         }
@@ -464,7 +473,8 @@ export function registerSendMessageRoute(
         messageId: result.data?.id
       });
 
-      return sendSuccess(reply, result.data);
+      // #8562 — la citation, telle que CET expéditeur a le droit de la lire.
+      return sendSuccess(reply, await withQuoteServedToReader(prisma, result.data, result.data?.senderId ?? undefined));
 
     } catch (error) {
       logger.error('Error in REST send message:', error);

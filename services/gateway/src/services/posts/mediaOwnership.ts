@@ -97,11 +97,21 @@ export function postMediaUploaderOrNull(
  * réapparaît, c'est que le handler d'upload a laissé passer un envoi sans
  * uploadeur identifiable — il le journalise déjà, et l'écart est signalé par
  * `describeClaimShortfall` au lieu d'être avalé.
+ *
+ * **Un propriétaire absent LÈVE (#9745).** Prisma ignore une clé à `undefined` :
+ * `{ uploaderId: undefined }` n'est pas « personne », c'est AUCUN filtre de
+ * propriété — tout média libre devenait réclamable. Un appelant sans identité
+ * de compte exploitable (absente, repli `'anonymous'`, jeton de session, objet)
+ * n'obtient donc pas de clause du tout.
  */
+export const MEDIA_OWNER_REQUIRED = 'MEDIA_OWNER_REQUIRED';
+
 export function claimableMediaWhere(ownerId: string) {
+  const owner = uploaderIdOrNull(ownerId);
+  if (owner === null) throw new Error(MEDIA_OWNER_REQUIRED);
   return {
     ...unclaimedMediaWhere(),
-    uploaderId: ownerId,
+    uploaderId: owner,
   };
 }
 

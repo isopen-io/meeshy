@@ -143,7 +143,8 @@ final class ComposerTrailingRailTests: XCTestCase {
         let source = compact(try railSource())
         XCTAssertTrue(source.contains("ifpushesToThumb{Spacer(minLength:0)}ifletonAddSlide{"),
                       "Le ressort doit PRÉCÉDER tout ce qui se peint, `[+]` comprise.")
-        XCTAssertTrue(source.contains("ForEach(actions,id:\\.self)"),
+        // Entrées construites dans `body`, relues par le `ForEach` (#9135, #9456).
+        XCTAssertTrue(source.contains("ForEach(actions.map{AsyncRenderRow(id:$0,content:actionButton($0))}"),
                       "Les contrôleurs de l'objet suivent la frame, jamais l'inverse.")
     }
 

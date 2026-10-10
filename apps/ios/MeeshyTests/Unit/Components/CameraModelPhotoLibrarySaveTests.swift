@@ -27,7 +27,7 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/CameraView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraModel.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -47,7 +47,7 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             in: source
         )
         XCTAssertTrue(
-            fn.contains("PhotoLibraryManager.shared.saveImage(data)"),
+            fn.contains("PhotoLibraryManager.shared.saveImageFile(data"),
             "A successfully captured photo must be saved to the photo library via " +
             "the non-@MainActor PhotoLibraryManager (passing the ORIGINAL encoded " +
             "bytes), so it appears in RecentMediaStripModel's grid via the " +
@@ -86,13 +86,13 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
         let source = try cameraViewSource()
         XCTAssertFalse(
             source.contains(".performChanges("),
-            "CameraView (a @MainActor type) must not invoke PHPhotoLibrary." +
+            "CameraModel (a @MainActor type) must not invoke PHPhotoLibrary." +
             "performChanges inline — the change-block runs off-main and traps. " +
             "Delegate to the non-@MainActor PhotoLibraryManager instead."
         )
         XCTAssertFalse(
             source.contains("PHAssetChangeRequest"),
-            "CameraView must not construct PHAssetChangeRequest inline — Photos " +
+            "CameraModel must not construct PHAssetChangeRequest inline — Photos " +
             "library writes belong to PhotoLibraryManager."
         )
     }

@@ -182,8 +182,9 @@ export async function directoryAvailabilityRoutes(fastify: FastifyInstance) {
       }
 
       if (phoneNumber) {
-        const contexte = await getRequestContext(request);
-        const paysParDefaut = country || contexte?.geoData?.country || 'FR';
+        // Le pays FOURNI dispense de la géolocalisation : l'attendre retardait la
+        // réponse sur un tiers lent pour un résultat qu'on ne lit pas.
+        const paysParDefaut = country || (await getRequestContext(request))?.geoData?.country || 'FR';
         const { normalizePhoneWithCountry } = await import('../../utils/normalize');
         const normalise = normalizePhoneWithCountry(phoneNumber, paysParDefaut);
 

@@ -158,6 +158,18 @@ public struct APIPostComment: Decodable, Sendable {
     /// n'existe plus ou qu'il a quitté le post commenté — la citation reste,
     /// portée par `quotedPostMedia`.
     public var quotedMedia: APIPostMedia? = nil
+    /// La carte des liens suivis du commentaire — son contenu ET la légende de
+    /// son média (#9075). Hissée en tête par l'écho socket (`comment:added`,
+    /// `comment:updated`), rangée sous `metadata` par le REST : les deux sont
+    /// lues, la hissée d'abord.
+    public var trackingLinks: [TrackedLink]? = nil
+    var metadata: TrackingLinksMetadata? = nil
+
+    /// `[rawURL: token]`, la forme que lit `MessageTextRenderer`.
+    public var trackedLinkMap: [String: String] {
+        let hoisted = trackingLinks ?? []
+        return (hoisted.isEmpty ? (metadata?.trackingLinks ?? []) : hoisted).trackedLinkMap
+    }
 
     /// **Le recollement des deux moitiés, site UNIQUE.**
     ///
@@ -174,6 +186,20 @@ public struct APIPostComment: Decodable, Sendable {
             kind: CommentQuotedMedia.Kind(rawValue: ancre.kind) ?? .file,
             media: quotedMedia?.toFeedMedia()
         )
+    }
+}
+
+/// Le `metadata` d'un contenu social réduit à ce que le client en lit : la
+/// carte des liens suivis. Décodage TOLÉRANT — un `metadata` illisible ne doit
+/// pas emporter le contenu qui le porte.
+struct TrackingLinksMetadata: Decodable, Sendable {
+    let trackingLinks: [TrackedLink]?
+
+    private enum CodingKeys: String, CodingKey { case trackingLinks }
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        trackingLinks = (try? c?.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks)) ?? nil
     }
 }
 
@@ -276,6 +302,10 @@ public struct APIPost: Sendable {
     /// `comment:added`) OR from `metadata.trackingLinks` (REST / feed). `nil`
     /// when the payload predates the feature — renderer falls back to raw URLs.
     public var trackingLinks: [TrackedLink]? = nil
+    /// Les points que CE post a rapportés au lecteur connecté (#9569, #9571).
+    /// Absent (`nil`) : réponse d'écriture, lecteur sans compte, ancien
+    /// serveur — « garde ce que tu sais », jamais zéro (`PostViewerPoints.kept`).
+    public var viewerPoints: Int? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
@@ -291,7 +321,7 @@ extension APIPost: Decodable {
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
         case currentUserReactions, mentions, referenceAccess, viaUsername
-        case trackingLinks, metadata
+        case trackingLinks, metadata, viewerPoints
     }
 
     /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
@@ -365,6 +395,7 @@ extension APIPost: Decodable {
         }
         referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
+        viewerPoints = (try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)).flatMap { $0 >= 0 ? $0 : nil }
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
         if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
@@ -533,7 +564,8 @@ extension APIPost {
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
                         location: c.location,
-                        quotedMedia: c.quotedCitation)
+                        quotedMedia: c.quotedCitation,
+                        trackedLinkMap: c.trackedLinkMap)
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()
@@ -588,6 +620,7 @@ extension APIPost {
         // sur « Public » et un post en ONLY perdrait ses destinataires.
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
+        feedPost.viewerPoints = viewerPoints
         return feedPost
     }
 

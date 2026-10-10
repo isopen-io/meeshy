@@ -45,12 +45,16 @@ public struct APIMessageReplyTo: Decodable, Sendable {
     /// #7927 — le message cité est SUPPRIMÉ : la passerelle vide son texte et
     /// le dit ici ; la citation composée ne porte alors plus rien de lui.
     public let deletedAt: Date?
+    /// #9915 — le nombre TOTAL de photos et vidéos du message cité : la
+    /// passerelle n'en sert que quatre dans `attachments`. `nil` chez une
+    /// passerelle antérieure, et pour un message protégé.
+    public let visualAttachmentCount: Int?
 
     private enum CodingKeys: String, CodingKey {
         case id, content, senderId, sender, attachments
         case originalLanguage, translations
         case isViewOnce, isBlurred, expiresAt, effectFlags, isEncrypted, encryptionMode
-        case attachmentReplyTo, deletedAt
+        case attachmentReplyTo, deletedAt, visualAttachmentCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,6 +86,7 @@ public struct APIMessageReplyTo: Decodable, Sendable {
                                                     forKey: .attachmentReplyTo)) ?? nil
         // `try?` : une date illisible ne fait pas tomber la citation entière.
         deletedAt = (try? c.decodeIfPresent(Date.self, forKey: .deletedAt)) ?? nil
+        visualAttachmentCount = (try? c.decodeIfPresent(Int.self, forKey: .visualAttachmentCount)) ?? nil
     }
 
     /// Le message cité ne doit pas republier son texte : vue unique, flouté ou
@@ -202,12 +207,36 @@ public extension APIMessageReplyTo {
             // Retenue par l'init dès que la citation est déclarée protégée.
             attachmentFileUrl: representative?.fileUrl,
             attachmentIsProtected: isProtected ? true : representative?.declaredProtection,
-            attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) }
+            attachmentFacts: representative.map { ReplyReference.QuotedAttachmentFacts($0) },
+            // #9371 — la PERSONNE citée, pour que `user:updated` la repeigne.
+            authorUserId: sender?.resolvedUserId
         )
         // #8320 — la zone lecture : l'échéance d'un éphémère, et les pistes
         // traduites d'un audio cité pour élire hors fenêtre la piste du
         // vocal d'origine. Jamais les pistes d'un média protégé.
         reference.quotedExpiresAt = expiresAt
+        // #9573 — la nature de disparition du cité, lue par la loi de sortie
+        // sur ce que le fil déclare. Sans `effectFlags`, rien n'est déclaré :
+        // la citation reste illisible, et son contenu ne sortira pas.
+        reference.quotedExitNature = effectFlags.map { flags in
+            ContentExitLaw.of(ContentExitLaw.Subject(
+                isViewOnce: isViewOnce, isBlurred: isBlurred, effectFlags: flags, expiresAt: expiresAt,
+                attachments: (attachments ?? []).map {
+                    ContentExitLaw.Piece(isViewOnce: $0.isViewOnce, isBlurred: $0.isBlurred, effectFlags: $0.effectFlags)
+                }
+            )).nature
+        }
+        // #9911 — le compte des tuiles d'une citation du message ENTIER. La
+        // passerelle sert au plus quatre pièces du cité, et leur compte TOTAL
+        // à côté (#9915) ; sans lui, les pièces servies sont un plancher.
+        if attachmentReplyTo == nil, !isProtected {
+            let tiles = (attachments ?? []).filter { piece in
+                let kind = AttachmentKind(mimeType: piece.mimeType ?? "")
+                return kind == .image || kind == .video
+            }
+            let count = tiles.isEmpty ? 0 : max(tiles.count, visualAttachmentCount ?? 0)
+            reference.quotedPieceCount = count == 0 ? nil : count
+        }
         if let representative, !reference.quotedMediaIsProtected, reference.attachmentFileUrl != nil,
            AttachmentKind(mimeType: representative.mimeType ?? "") == .audio {
             reference.quotedAudioTracks = ReplyReference.QuotedAudioTracks(

@@ -55,7 +55,7 @@ const expect = (ok, what) => {
 const GERMAN = {
   lang: 'de',
   title: 'Meine Links',
-  subtitle: 'Lade ein, wen du willst, in deine Unterhaltungen',
+  subtitle: 'Teile, verfolge und vergrößere deine Reichweite',
   banner: 'Deine Links verwalten',
   back: 'Zurück zu den Unterhaltungen',
   /* Le bouton DIT le compte de la cloche (#6288) : les fixtures en servent
@@ -70,7 +70,7 @@ const GERMAN = {
 const ARABIC = {
   lang: 'ar',
   title: 'روابطي',
-  subtitle: 'ادعُ من تشاء إلى محادثاتك',
+  subtitle: 'شارك وتابع ووسّع جمهورك',
   banner: 'إدارة روابطك',
   back: 'العودة إلى المحادثات',
   menu: 'القائمة، 3 إشعارات غير مقروءة',
@@ -81,7 +81,7 @@ const ARABIC = {
 const FRENCH = {
   lang: 'fr',
   title: 'Mes liens',
-  subtitle: 'Invitez qui vous voulez dans vos conversations',
+  subtitle: 'Partagez, suivez et développez votre audience',
   banner: 'Gérez vos liens',
   back: 'Revenir aux conversations',
   menu: 'Menu, 3 notifications non lues',

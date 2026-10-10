@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { AgeBelowMinimumError } from '../errors/custom-errors';
 import { z } from 'zod';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
@@ -330,6 +331,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('MagicLink validation error', error as Error);
       return sendInternalError(reply, 'An error occurred. Please try again.');
     }

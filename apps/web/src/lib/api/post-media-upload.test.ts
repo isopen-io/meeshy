@@ -225,6 +225,25 @@ describe('uploadPostMedia — tranches (§1.5, TusUploadManager.swift:288-520)',
     expect(progress).toEqual([0.4, 0.8, 1]);
   });
 
+  test('SÉCURITÉ (#9743) — l’identité disparaît en cours de montée : plus AUCUNE tranche ne part', async () => {
+    let connecté = true;
+    const sent: string[] = [];
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(`${init?.method} ${headersOf(init).Authorization ?? 'sans jeton'}`);
+      if (init?.method === 'POST') return new Response(null, { status: 201, headers: { Location: '/api/v1/uploads/up-1' } });
+      connecté = false;
+      return new Response(null, { status: 204, headers: { 'Upload-Offset': '4' } });
+    }) as typeof fetch;
+
+    const result = await uploadPostMedia(
+      baseParams({ fetchImpl, file: file('clip.mp4', 'video/mp4', Array.from({ length: 10 }, (_, i) => i)), chunkSize: 4, credential: () => (connecté ? REGISTERED : null) }),
+    );
+
+    expect(result).toMatchObject({ ok: false, status: 401 });
+    expect(sent).toHaveLength(2);
+    expect(sent.every((line) => !line.endsWith('sans jeton'))).toBe(true);
+  });
+
   test('409 (décalage divergent) ⇒ un HEAD relit Upload-Offset, la tranche REPRISE de là avec les octets de là', async () => {
     const bytes = [1, 2, 3, 4, 5, 6];
     const patches: Array<{ offset: number; body: number[] }> = [];

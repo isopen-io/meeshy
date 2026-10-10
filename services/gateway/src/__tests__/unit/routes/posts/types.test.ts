@@ -294,13 +294,13 @@ describe('CreatePostSchema', () => {
   });
 
   it('accepts exactly MAX_POST_MEDIA media ids — the bound is read from @meeshy/shared, not a literal', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
     expect(result.success).toBe(true);
   });
 
   it('rejects MAX_POST_MEDIA + 1 media ids', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = CreatePostSchema.safeParse({ type: 'POST', mediaIds });
     expect(result.success).toBe(false);
   });
@@ -359,19 +359,19 @@ describe('UpdatePostSchema', () => {
   });
 
   it('rejects mediaIds beyond 10 entries', () => {
-    const mediaIds = Array.from({ length: 11 }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: 11 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
 
   it('accepts exactly MAX_POST_MEDIA media ids — same shared bound as CreatePostSchema', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(true);
   });
 
   it('rejects MAX_POST_MEDIA + 1 media ids', () => {
-    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    const mediaIds = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     const result = UpdatePostSchema.safeParse({ mediaIds });
     expect(result.success).toBe(false);
   });
@@ -468,7 +468,7 @@ describe('CreateCommentSchema', () => {
   });
 
   it('parses a valid comment with attachment only (no text)', () => {
-    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001'] });
+    const result = CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001'] });
     expect(result.success).toBe(true);
   });
 
@@ -483,7 +483,7 @@ describe('CreateCommentSchema', () => {
   });
 
   it('accepts a comment with both content and attachment', () => {
-    const result = CreateCommentSchema.safeParse({ content: 'Great!', attachmentIds: ['media-001'] });
+    const result = CreateCommentSchema.safeParse({ content: 'Great!', attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001'] });
     expect(result.success).toBe(true);
   });
 
@@ -491,14 +491,30 @@ describe('CreateCommentSchema', () => {
   // du composer affichait déjà un TABLEAU de vignettes pour n'en envoyer qu'une
   // — un contrôle qui ment.
   it('accepte PLUSIEURS médias joints à un commentaire', () => {
-    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001', 'media-002', 'media-003'] });
+    const result = CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaa001', 'aaaaaaaaaaaaaaaaaaaaa002', 'aaaaaaaaaaaaaaaaaaaaa003'] });
     expect(result.success).toBe(true);
   });
 
   it('borne au plafond des médias d’un post — pas un nombre neuf', () => {
-    const onze = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    const onze = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => i.toString(16).padStart(24, '0'));
     expect(CreateCommentSchema.safeParse({ attachmentIds: onze }).success).toBe(false);
     expect(CreateCommentSchema.safeParse({ attachmentIds: onze.slice(0, MAX_POST_MEDIA) }).success).toBe(true);
+  });
+});
+
+describe('CreateCommentSchema — un attachmentId est un ObjectId (#9745)', () => {
+  it.each([
+    ['un identifiant lisible', 'media-001'],
+    ['une chaîne vide', ''],
+    ['un ObjectId tronqué', 'aaaaaaaaaaaaaaaaaaaaaaa'],
+    ['un nombre', 42],
+    ['un objet de filtre', { $ne: null }],
+  ])('refuse %s à la validation — jamais une requête Prisma qui lève', (_label, id) => {
+    expect(CreateCommentSchema.safeParse({ content: 'x', attachmentIds: [id] }).success).toBe(false);
+  });
+
+  it('refuse le lot dès qu’UN id est mal formé', () => {
+    expect(CreateCommentSchema.safeParse({ attachmentIds: ['aaaaaaaaaaaaaaaaaaaaaaaa', 'pas-un-id'] }).success).toBe(false);
   });
 });
 

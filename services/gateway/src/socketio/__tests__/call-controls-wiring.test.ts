@@ -4,8 +4,8 @@ import { join } from 'path';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { registerCallControlEvents } from '../call-controls';
 
-describe('les contrôles d’un appel sont écoutés (#8433, #8438, #8439, #8480)', () => {
-  it('inviter, couper un micro, réagir et l’aperçu avant décroché sont enregistrés sur le socket', () => {
+describe('les contrôles d’un appel sont écoutés (#8433, #8438, #8439, #8480, #9214)', () => {
+  it('inviter, couper un micro, réagir, le cadre en direct et l’aperçu avant décroché sont enregistrés sur le socket', () => {
     const registered: string[] = [];
     registerCallControlEvents(
       {
@@ -23,6 +23,7 @@ describe('les contrôles d’un appel sont écoutés (#8433, #8438, #8439, #8480
       CLIENT_EVENTS.CALL_INVITE_PARTICIPANT,
       CLIENT_EVENTS.CALL_MUTE_PARTICIPANT,
       CLIENT_EVENTS.CALL_REACTION,
+      CLIENT_EVENTS.CALL_FRAME_SELECT,
       CLIENT_EVENTS.CALL_PREVIEW_REQUEST,
       CLIENT_EVENTS.CALL_PREVIEW_SIGNAL,
     ]);

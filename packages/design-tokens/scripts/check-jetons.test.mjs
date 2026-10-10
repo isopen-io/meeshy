@@ -163,6 +163,41 @@ describe('contrastesInsuffisants', () => {
   });
 });
 
+describe('la table lit les rôles du SDK (#8879)', () => {
+  const IOS_CSS = `:root,
+:root.dark {
+  --ios-danger-sdk: #f87171;
+  --ios-ink-2: #a5b4fc;
+}
+
+:root.light {
+  --ios-ink-2: color-mix(in srgb, #4338ca 80%, transparent);
+}
+`;
+
+  const avecIos = (jetons) => {
+    const dossier = tableJetable(jetons);
+    writeFileSync(join(dossier, 'ios.css'), IOS_CSS);
+    return dossier;
+  };
+
+  test('un rôle qui pointe vers `var(--ios-…)` se résout depuis ios.css', () => {
+    const dossier = avecIos({ sombre: dark({ '--color-danger': 'var(--ios-danger-sdk)' }) });
+    expect(contrastesInsuffisants(dossier)).toEqual([]);
+  });
+
+  test('le schéma clair lit le bloc `:root.light` du SDK, encre translucide composée sur chaque fond', () => {
+    const dossier = avecIos({ clair: light({ '--color-text-muted': 'var(--ios-ink-2)' }) });
+    const defauts = contrastesInsuffisants(dossier).filter((d) => d.encre === '--color-text-muted');
+    expect(defauts.every((d) => d.rapport !== null)).toBe(true);
+  });
+
+  test('sans ios.css, le même alias reste NON RÉSOLU — la lecture ne devine rien', () => {
+    const dossier = tableJetable({ sombre: dark({ '--color-danger': 'var(--ios-danger-sdk)' }) });
+    expect(contrastesInsuffisants(dossier).some((d) => d.encre === '--color-danger' && d.rapport === null)).toBe(true);
+  });
+});
+
 describe('plansDesordonnes', () => {
   test('les quatre plans strictement croissants en luminance ne rendent rien', () => {
     expect(plansDesordonnes(tableJetable())).toEqual([]);

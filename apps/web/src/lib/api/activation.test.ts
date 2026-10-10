@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { pathOf, routedTransport } from '@/test-support/routed-transport';
 
-import { decodeActivation, loadMyActivation, requestPhoneCode, verifyPhoneCode } from './activation';
+import { decodeActivation, loadMyActivation, loadMyPhonePresence, requestPhoneCode, verifyPhoneCode } from './activation';
 
 /**
  * **L'ÉTAT D'ACTIVATION SERVI** (#8239, contrat #8238) — `activation: { phase,
@@ -58,6 +58,26 @@ describe('lire l’activation de soi', () => {
     const t = routedTransport(() => ({ ok: true, data: { user: { id: 'u1', email: 'a@b.test' } } }));
     const result = await loadMyActivation({ source: 'gateway', transport: t.transport });
     expect(result).toEqual({ ok: true, data: { activation: null, email: 'a@b.test' } });
+  });
+});
+
+describe('le profil a-t-il un numéro ? (#8843)', () => {
+  test('GET me.root ⇒ un numéro servi, non vide ⇒ vrai', async () => {
+    const t = routedTransport((req) => (pathOf(req) === '/api/v1/me' ? { ok: true, data: { user: { id: 'u1', phoneNumber: '+33612345678' } } } : undefined));
+    expect(await loadMyPhonePresence({ source: 'gateway', transport: t.transport })).toEqual({ ok: true, data: true });
+  });
+
+  test('aucun numéro, ou un numéro vide ⇒ faux', async () => {
+    for (const phoneNumber of [undefined, null, '', '   ']) {
+      const t = routedTransport(() => ({ ok: true, data: { user: { id: 'u1', phoneNumber } } }));
+      expect(await loadMyPhonePresence({ source: 'gateway', transport: t.transport })).toEqual({ ok: true, data: false });
+    }
+  });
+
+  test('un échec réseau remonte tel quel — l’hôte ne propose rien sur un doute', async () => {
+    const t = routedTransport(() => ({ ok: false, status: 503, error: 'down' }));
+    const result = await loadMyPhonePresence({ source: 'gateway', transport: t.transport });
+    expect(result.ok).toBe(false);
   });
 });
 

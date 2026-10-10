@@ -252,6 +252,25 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         XCTAssertEqual(elements(vidView).first?.accessibilityLabel, expectedVideo)
     }
 
+    /// **En composition aussi, le fond se NOMME fond** (#9521). Il s'annonçait
+    /// « Image », comme une image posée : l'auteur qui cherche à régler son
+    /// fond ne pouvait pas le distinguer à l'oreille. Son « Modifier » ouvre
+    /// les outils du fond — Réglages compris.
+    func test_accessibilityElements_inEditMode_namesBackgroundMediaAsBackground() {
+        let bg = StoryMediaObject(id: "bg", mediaType: "image", aspectRatio: 0.5625, isBackground: true)
+        let videoBg = StoryMediaObject(id: "vbg", mediaType: "video", aspectRatio: 0.5625, isBackground: true)
+        let posee = StoryMediaObject(id: "fg", mediaType: "image", aspectRatio: 1.0)
+
+        let imgLabels = elements(makeView(slide: makeSlide(media: [bg, posee]), mode: .edit)).map(\.accessibilityLabel)
+        let vidLabels = elements(makeView(slide: makeSlide(media: [videoBg]), mode: .edit)).map(\.accessibilityLabel)
+
+        let expectedPhoto = String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
+        let expectedVideo = String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+        XCTAssertTrue(imgLabels.contains(expectedPhoto), "Le fond image doit s'annoncer « \(expectedPhoto) », reçu \(imgLabels).")
+        XCTAssertTrue(imgLabels.contains(imageLabel), "L'image POSÉE reste « \(imageLabel) ».")
+        XCTAssertTrue(vidLabels.contains(expectedVideo), "Le fond vidéo doit s'annoncer « \(expectedVideo) », reçu \(vidLabels).")
+    }
+
     func test_accessibilityElements_textInPreferredLanguage() {
         // User systemLanguage = "es", regionalLanguage = "en".
         // Story text was authored in French, with translations to both.

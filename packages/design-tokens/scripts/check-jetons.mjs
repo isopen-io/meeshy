@@ -40,7 +40,7 @@
 //      `prefers-color-scheme` ni un `color-scheme` à deux schémas qui arme
 //      `light-dark()` en silence.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -81,7 +81,23 @@ const jetonsDeBloc = (source, selecteur) =>
       .map((bloc) => bloc.jetons),
   );
 
+// LES RÔLES DU SDK (#8879) : la table héritée pointe vers `var(--ios-…)` là où
+// le SDK donne à un rôle une autre valeur — le rôle du SDK gagne. `ios.css`
+// (généré depuis Swift) est donc lu SOUS la table : son bloc `:root` dans les
+// deux schémas, son bloc `:root.light` en clair seulement. Absent, rien n'est
+// deviné — l'alias reste non résolu et le contrôle le dit.
+const jetonsDuSdk = (racineJetons, schema) => {
+  const chemin = join(racineJetons, 'ios.css');
+  if (!existsSync(chemin)) return {};
+  const source = readFileSync(chemin, 'utf8');
+  return {
+    ...jetonsDeBloc(source, ':root'),
+    ...(schema.selecteur === ':root.light' ? jetonsDeBloc(source, ':root.light') : {}),
+  };
+};
+
 const tableDe = (racineJetons, schema) => ({
+  ...jetonsDuSdk(racineJetons, schema),
   ...jetonsDeBloc(readFileSync(join(racineJetons, 'tokens.css'), 'utf8'), ':root'),
   ...jetonsDeBloc(readFileSync(join(racineJetons, schema.fichier), 'utf8'), schema.selecteur),
 });

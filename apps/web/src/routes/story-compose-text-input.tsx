@@ -5,7 +5,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
-import type { SceneTextBox } from '@/routes/story-compose-text-box';
+import type { StudioWritingStyle } from '@/lib/stories/studio-writing';
 
 const DIRECTORY = { directory: true } as const;
 
@@ -17,7 +17,11 @@ const DIRECTORY = { directory: true } as const;
  * l'objet SÉLECTIONNÉ (défaut 1, revue-correction #6900) : sa boîte est celle
  * MESURÉE, jamais une largeur/hauteur fixes qui coupaient les lignes ou
  * décalaient le curseur d'une ligne entière. Sans texte peint (objet vide),
- * elle retombe sur le centre par défaut, à la même ancre que l'objet.
+ * l'invite s'écrit à l'ancre de CET objet.
+ *
+ * À L'ÉCHELLE DE LA SCÈNE (#8681) : pose, police, typographie et boîte
+ * viennent de `studioWritingStyle` — le curseur et l'invite ont la taille,
+ * l'angle et la famille du texte publié, rapportés à la scène visible.
  *
  * LA MENTION — la passerelle lit les `@pseudo` du texte d'une scène
  * (`collectMentionableText`, `storyEffects.textObjects[].text`) comme ceux
@@ -31,8 +35,7 @@ export function StudioTextInput({
   targetId,
   layer,
   fallbackLanguage,
-  textBox,
-  fontSize,
+  geometry,
   onText,
   onPublish,
   locked = false,
@@ -42,8 +45,8 @@ export function StudioTextInput({
   readonly targetId: string | null;
   readonly layer: { readonly text: string; readonly language: string } | null;
   readonly fallbackLanguage: string;
-  readonly textBox: SceneTextBox | null;
-  readonly fontSize: string | null;
+  /** `null` sans objet sélectionné : le champ, désactivé, reste au centre. */
+  readonly geometry: StudioWritingStyle | null;
   readonly onText: (value: string) => void;
   readonly onPublish: () => void;
   /** VERROUILLÉE pendant l'envoi (#7707, revue-correction) — le plan publié
@@ -101,12 +104,9 @@ export function StudioTextInput({
         }}
         placeholder={translate(lang, 'story.studio.text.placeholder')}
         rows={1}
-        className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white outline-none placeholder:text-white placeholder:opacity-60"
+        className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 font-semibold text-transparent caret-white outline-none placeholder:text-white placeholder:opacity-60"
         style={{
-          ...(textBox !== null
-            ? { top: textBox.top, left: textBox.left, width: textBox.width, height: textBox.height }
-            : { top: '50%', left: '50%', width: '85%', transform: 'translate(-50%, -50%)' }),
-          ...(fontSize !== null ? { fontSize } : {}),
+          ...(geometry ?? { top: '50%', left: '50%', width: '85%', transform: 'translate(-50%, -50%)', textAlign: 'center' }),
           lineHeight: 1.2,
           zIndex: editing ? 5 : 2,
           // En édition, le doigt DÉPLACE le texte (#8535) : aucun défilement ne le vole.

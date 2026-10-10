@@ -93,3 +93,25 @@ export function isPresenceActive(status: UserPresenceStatus): boolean {
 export function isPresencePulsing(status: UserPresenceStatus): boolean {
   return status === 'online';
 }
+
+/**
+ * Couleur primaire Meeshy (indigo-500) — le point d'un pair qui a la
+ * conversation OUVERTE (#8892). Miroir iOS : `MeeshyColors.brandPrimaryHex`.
+ */
+export const PRESENCE_HERE_HEX = '#6366F1';
+
+/**
+ * Couleur du point d'avatar dans le contexte d'une conversation.
+ *
+ * Être dans la conversation prime sur la présence globale, et se rend même
+ * quand celle-ci est masquée : c'est un signal d'ACTIVITÉ servi par la room,
+ * comme la frappe. `null` = aucun point.
+ */
+export function presenceDotHex(
+  status: UserPresenceStatus,
+  context: { readonly here: boolean },
+): string | null {
+  if (context.here) return PRESENCE_HERE_HEX;
+  if (!isPresenceActive(status)) return null;
+  return PRESENCE_HEX[presenceTone(status)];
+}

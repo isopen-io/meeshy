@@ -100,16 +100,18 @@ export async function authorizeCallInvitation(
   return { ok: true, session, inviter, invitee, activeCount };
 }
 
+/** `true` quand l'invitation est NOUVELLE — ré-inviter la même personne n'écrit rien. */
 export async function recordCallInvitation(
   prisma: Pick<PrismaClient, 'callSession'>,
   session: { readonly id: string; readonly invitedUserIds?: readonly string[] | null },
   inviteeUserId: string
-): Promise<void> {
-  if (session.invitedUserIds?.includes(inviteeUserId)) return;
+): Promise<boolean> {
+  if (session.invitedUserIds?.includes(inviteeUserId)) return false;
   await prisma.callSession.update({
     where: { id: session.id },
     data: { invitedUserIds: { push: inviteeUserId } },
   });
+  return true;
 }
 
 /**

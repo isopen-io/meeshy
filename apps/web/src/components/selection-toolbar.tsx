@@ -31,8 +31,10 @@ export function SelectionToolbar({
 }: {
   readonly count: number;
   readonly onEnd: () => void;
-  readonly onCopy: () => void;
-  readonly onForward: () => void;
+  /** `null` : rien de coché ne se copie — le bouton n'est pas rendu (#9573). */
+  readonly onCopy: (() => void) | null;
+  /** `null` : un message coché ne se transfère pas — le bouton n'est pas rendu (#9573). */
+  readonly onForward: (() => void) | null;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const language = currentInterfaceLanguage();
@@ -85,26 +87,30 @@ export function SelectionToolbar({
           ? translate(language, 'message.selection.count', { count: new Intl.NumberFormat(language).format(count) })
           : ''}
       </span>
-      <button
-        type="button"
-        onClick={onForward}
-        data-selection-forward
-        disabled={count === 0}
-        className="grid place-items-center rounded-chip px-3 text-body font-semibold disabled:opacity-40"
-        style={{ minHeight: 44, color: 'var(--accent)' }}
-      >
-        {translate(language, 'message.menu.forward')}
-      </button>
-      <button
-        type="button"
-        onClick={onCopy}
-        data-selection-copy
-        disabled={count === 0}
-        className="grid place-items-center rounded-chip px-3 text-body font-semibold disabled:opacity-40"
-        style={{ minHeight: 44, color: 'var(--accent)' }}
-      >
-        {translate(language, 'message.menu.copy')}
-      </button>
+      {onForward === null ? null : (
+        <button
+          type="button"
+          onClick={onForward}
+          data-selection-forward
+          disabled={count === 0}
+          className="grid place-items-center rounded-chip px-3 text-body font-semibold disabled:opacity-40"
+          style={{ minHeight: 44, color: 'var(--accent)' }}
+        >
+          {translate(language, 'message.menu.forward')}
+        </button>
+      )}
+      {onCopy === null ? null : (
+        <button
+          type="button"
+          onClick={onCopy}
+          data-selection-copy
+          disabled={count === 0}
+          className="grid place-items-center rounded-chip px-3 text-body font-semibold disabled:opacity-40"
+          style={{ minHeight: 44, color: 'var(--accent)' }}
+        >
+          {translate(language, 'message.menu.copy')}
+        </button>
+      )}
     </div>
   );
 }

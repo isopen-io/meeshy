@@ -23,11 +23,6 @@ struct iPadEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Un lien Meeshy touché dans un message s'ouvre dans l'app, comme
-            // sur iPhone — sans cette action, iOS le rendait à Safari (#7808).
-            // Posée ici plutôt que sur la racine : un modificateur de plus
-            // sur `iPadRootView.body` franchit le plafond de profondeur (24).
-            .inAppLinks(router: router)
             .environmentObject(router)
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
@@ -222,6 +217,8 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     @Binding var showStoryViewerFromConv: Bool
     let selectedStoryUserIdFromConv: String?
     let activeConversationId: String?
+    /// La route ouverte dans le panneau de droite : un écran profond y cache la bannière du joueur (#9494).
+    var rightPanelRoute: Route? = nil
     let onStoryReply: (ReplyContext) -> Void
     let onSyncPillTap: (OutboxUIItem.Source) -> Void
     let activeConversationIdForBanner: () -> String?
@@ -328,11 +325,18 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     onItemTap: onSyncPillTap,
                     activeConversationId: activeConversationIdForBanner
                 )
-                .padding(.top, activeConversationId != nil ? 0 : MeeshySpacing.sm)
+                // Au centre de la barre d'état, libre sur iPad (#9680).
+                .inSyncPillBand()
             }
             .modifier(CallPresentationLayer(
                 miniPlayerOnTapBody: onMiniPlayerTap,
-                miniPlayerCurrentConversationId: { activeConversationId }
+                miniPlayerCurrentConversationId: { activeConversationId },
+                // La BANNIÈRE DU JOUEUR (#9494), comme sur iPhone : la colonne des conversations reste là, mais un fil
+                // ouvert a besoin de toute sa hauteur, et le lecteur de réels est plein cadre.
+                playerBannerHosted: PlayerBannerPlacement.hostsOnTablet(
+                    conversationIsOpen: activeConversationId != nil, panelRoute: rightPanelRoute,
+                    reelsAreOpen: reelsPresenter.launch != nil),
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
             ))
             // L'onboarding post-inscription (#7729) — le même hôte que sur
             // iPhone, au même rang : APRÈS la pastille et la présentation
@@ -342,5 +346,12 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
             // l'onboarding (`OnboardingPresenceSignal`).
             .activationInviteHost()
+            // Un lien Meeshy touché dans l'app s'ouvre dans l'app (#7808) — posé
+            // sur la couche la plus EXTÉRIEURE : une couverture présentée par un
+            // modificateur hérite de l'environnement de SON point d'attache, et
+            // le lecteur de story (couverture plein écran) rendait sinon à Safari
+            // les liens de sa légende et de ses commentaires (#9075). Ici plutôt
+            // que sur `iPadRootView.body` : plafond de profondeur (24).
+            .inAppLinks(router: router)
     }
 }

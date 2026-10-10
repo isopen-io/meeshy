@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadViewerEngagementCatalog } from '@/lib/i18n-viewer-engagement-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -20,6 +21,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadViewerEngagementCatalog('fr');
 });
 
 afterAll(async () => {
@@ -33,7 +35,7 @@ afterEach(() => {
   appQueryClient.clear();
 });
 
-async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null }): Promise<HTMLElement> {
+async function mountSheet(props: { readonly postId: string; readonly viewCount: number | null; readonly subject?: 'story' | 'publication' }): Promise<HTMLElement> {
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <ul>
@@ -81,10 +83,64 @@ describe('PublicationViewersSheet — la liste des lecteurs de MA story', () => 
     expect(errorsAfter).toBeGreaterThan(errorsBefore);
   });
 
-  test('chaque lecteur est un LIEN vers son profil (iOS : `onOpenProfile(viewer)`)', async () => {
-    const host = await mountSheet({ postId: 'st-mienne', viewCount: 8 });
-    const links = [...host.querySelectorAll<HTMLAnchorElement>('[data-story-viewer] a')];
-    expect(links.map((link) => link.getAttribute('href'))).toEqual(['/u/noor.haddad', '/u/elan.roy', '/u/mika.sorel']);
+  test('sous chaque nom, ce que la personne a fait — et rien pour qui n’a rien fait (#9727)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    const noor = host.querySelector('[data-story-viewer="u-viewer-noor"]');
+    expect(noor?.querySelector('[data-story-viewer-reaction]')?.textContent).toBe('🔥 ❤️');
+    expect([...(noor?.querySelectorAll('[data-story-viewer-mark]') ?? [])].map((mark) => [mark.getAttribute('data-story-viewer-mark'), mark.textContent])).toEqual([
+      ['comments', '1'],
+      ['replies', '2'],
+    ]);
+    expect(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-marks]')).toBeNull();
+  });
+
+  test('toucher une ligne ouvre SON détail, en toutes lettres, avec le lien vers son profil', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    const row = host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-noor"] [data-story-viewer-open]');
+    expect(row?.getAttribute('aria-label')).toBe('Voir ce que Noor Haddad a fait');
+    row?.click();
+    await mounter.settle();
+
+    const detail = host.querySelector('[data-viewer-detail="u-viewer-noor"]');
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(0);
+    expect([...(detail?.querySelectorAll('[data-viewer-detail-mark]') ?? [])].map((mark) => mark.textContent)).toEqual([
+      'Réactions : 🔥 ❤️',
+      '1 commentaire',
+      '2 réponses',
+    ]);
+    expect(detail?.querySelector<HTMLAnchorElement>('[data-viewer-detail-profile]')?.getAttribute('href')).toBe('/u/noor.haddad');
+    expect(document.activeElement).toBe(detail?.querySelector('[data-viewer-detail-back]') ?? null);
+  });
+
+  test('« Retour aux vues » rend la liste et le focus à la ligne d’où l’on venait', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    host.querySelector<HTMLButtonElement>('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('[data-viewer-detail-only-viewed]')?.textContent).toBe('A vu, sans autre interaction');
+    host.querySelector<HTMLButtonElement>('[data-viewer-detail-back]')?.click();
+    await mounter.settle();
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(3);
+    expect(document.activeElement).toBe(host.querySelector('[data-story-viewer="u-viewer-elan"] [data-story-viewer-open]'));
+  });
+
+  test('détail de l’activité INDISPONIBLE ⇒ la liste le dit, discrètement, et le détail d’une personne ne prétend pas qu’elle n’a rien fait (#9727)', async () => {
+    const host = await mountSheet({ postId: 'st-mienne-detail-indisponible', viewCount: 2 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+    expect(host.querySelectorAll('[data-story-viewer]')).toHaveLength(2);
+    host.querySelector<HTMLButtonElement>('[data-story-viewer-open]')?.click();
+    await mounter.settle();
+    expect(host.querySelector('[data-viewer-detail-only-viewed]')).toBeNull();
+    expect(host.querySelector('[data-viewer-detail-unavailable]')?.textContent).toBe('Le détail de l’activité est momentanément indisponible.');
+  });
+
+  test('détail servi ⇒ aucune mention d’indisponibilité', async () => {
+    const host = await mountSheet({ postId: 'st-mienne', viewCount: 3 });
+    expect(host.querySelector('[data-viewers-engagement-unavailable]')).toBeNull();
+  });
+
+  test('sur un post, le refus parle de la publication, pas d’une story', async () => {
+    const host = await mountSheet({ postId: 'st-amie-1', viewCount: 5, subject: 'publication' });
+    expect(host.querySelector('[data-viewers-forbidden]')?.textContent).toBe('Vous n’avez pas accès à la liste de qui a vu cette publication.');
   });
 
   test('compte AUTORITATIF absent ⇒ l’en-tête retombe sur la liste servie, jamais « 0 vue » au-dessus de trois lecteurs', async () => {

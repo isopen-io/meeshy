@@ -46,6 +46,12 @@ struct CommentRowView: View, Equatable {
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState? = nil
+    /// La racine d'une réponse — « Imager » l'emporte en citation (#8709).
+    var threadRoot: FeedComment? = nil
+    /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
+    var threadReplies: [FeedComment] = []
+    /// Le post commenté — « Imager » le met en tête de la carte (#9686).
+    var post: FeedPost? = nil
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
@@ -60,17 +66,24 @@ struct CommentRowView: View, Equatable {
         lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
+        lhs.comment.trackedLinkMap == rhs.comment.trackedLinkMap &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         // Re-render quand le média (ou son enrichissement audio : transcription /
         // variantes TTS via comment:media-updated) change.
-        lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
+        lhs.comment.media.map(\.id) == rhs.comment.media.map(\.id) &&
         lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
         lhs.comment.media.first?.translatedAudios.count == rhs.comment.media.first?.translatedAudios.count &&
         // #6578 — sans cette ligne, une citation dont le média vient d'être
         // relu (vignette recadrée, légende corrigée) ne repeint JAMAIS : la
         // ligne se déclare égale à elle-même. `Equatable` sur une vue de liste
         // est une DÉCLARATION de ce qui la fait changer, pas une optimisation.
-        lhs.comment.quotedMedia == rhs.comment.quotedMedia
+        lhs.comment.quotedMedia == rhs.comment.quotedMedia &&
+        // #8709 — l'arbre qu'« Imager » emporte : sans ces lignes, une racine
+        // éditée ou une réponse arrivée laisserait le menu sur l'ancien fil.
+        lhs.threadRoot?.id == rhs.threadRoot?.id &&
+        lhs.threadRoot?.displayContent == rhs.threadRoot?.displayContent &&
+        lhs.threadReplies.map(\.id) == rhs.threadReplies.map(\.id) &&
+        lhs.post?.id == rhs.post?.id && lhs.post?.displayContent == rhs.post?.displayContent
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -98,19 +111,6 @@ struct CommentRowView: View, Equatable {
         return comment.displayContent
     }
 
-    /// « Copier » n'a de sens que pour un commentaire qui porte du texte
-    /// (un commentaire média-seul n'a rien à copier).
-    private var canCopyContent: Bool {
-        !effectiveCommentContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    /// Le menu « … » n'est affiché que s'il contient au moins une action —
-    /// évite un bouton mort (le bug d'origine) sur un commentaire média-seul
-    /// dont l'utilisateur n'est pas l'auteur.
-    private var hasMoreOptions: Bool {
-        canCopyContent || onDeleteComment != nil || onEditComment != nil
-    }
-
     var body: some View {
         HStack(alignment: .top, spacing: isReply ? 10 : 12) {
             MeeshyAvatar(
@@ -131,7 +131,7 @@ struct CommentRowView: View, Equatable {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(comment.author)
                         .font(MeeshyFont.relative(authorFont, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
@@ -144,7 +144,7 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
-                        MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
 
                         LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -176,17 +176,17 @@ struct CommentRowView: View, Equatable {
                             HapticFeedback.light()
                         } label: {
                             Image(systemName: translationRequested ? "hourglass" : "translate")
-                                .font(MeeshyFont.relative(10, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
                                 .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
                         }
                         .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
-                        .meeshyTapTarget(44)
+                        .meeshyTapTarget(MeeshyControlSize.tapTarget)
                     }
 
-                    MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                    MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
@@ -207,7 +207,8 @@ struct CommentRowView: View, Equatable {
                         mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
                         hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
                         accentColor: Color(hex: accentColor),
-                        usesRelativeFont: true
+                        usesRelativeFont: true,
+                        trackedLinks: comment.trackedLinkMap
                     )
                         .tint(Color(hex: accentColor))
                         .fixedSize(horizontal: false, vertical: true)
@@ -223,10 +224,12 @@ struct CommentRowView: View, Equatable {
                     // la suite. L'inverse ferait lire la réponse avant la question.
                     if let citation = comment.quotedMedia {
                         CommentQuotedMediaBanner(citation: citation, accentColor: accentColor)
-                            .padding(.bottom, 6)
+                            .padding(.bottom, MeeshySpacing.xsPlus)
                     }
 
-                    if let media = comment.media.first {
+                    // Un commentaire porte jusqu'à `MAX_POST_MEDIA` pièces
+                    // (#9736) : toutes se rendent, plus la seule première.
+                    ForEach(comment.media) { media in
                         CommentMediaView(
                             media: media,
                             accentColor: accentColor,
@@ -236,9 +239,10 @@ struct CommentRowView: View, Equatable {
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
+                            sentAt: comment.timestamp,
+                            trackedLinks: comment.trackedLinkMap
                         )
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                     }
                 }
                 .commentBody(effects: comment.effects)
@@ -250,17 +254,23 @@ struct CommentRowView: View, Equatable {
                     FeedPostLocationSticker(place: place) {
                         rowFullscreenPlace = BubbleFullscreenPlace(place: place)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
                 }
 
-                HStack(spacing: 20) {
+                // #9743 — un commentaire que la file a abandonné reste à
+                // l'écran, relançable. Monté sur les seules lignes locales.
+                if CommentUnsent.isLocal(comment.id) {
+                    CommentUnsentBadge(commentId: comment.id, accentColor: accentColor)
+                }
+
+                HStack(spacing: MeeshySpacing.xl) {
                     Button {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                             onLikeComment?()
                         }
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
                             // Le contour d'accent — « c'est MOI qui ai liké » —
                             // manquait ici alors que le fil des posts le porte
@@ -283,7 +293,7 @@ struct CommentRowView: View, Equatable {
                             .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
-                                .font(MeeshyFont.relative(12, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .foregroundColor(heartColor)
                         }
                     }
@@ -302,20 +312,20 @@ struct CommentRowView: View, Equatable {
                     // au niveau 2 (rattachée au même parent racine, cf. submitComment).
                     // Répondre à une réponse @mentionne son auteur → il est notifié.
                     // Le compteur `↰ N` et « Voir » ne concernent que la racine.
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                             Button {
                                 onReply()
                                 HapticFeedback.light()
                             } label: {
-                                HStack(spacing: 4) {
+                                HStack(spacing: MeeshySpacing.xs) {
                                     Image(systemName: "arrowshape.turn.up.left")
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                                     if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
-                                            .font(MeeshyFont.relative(12, weight: .semibold))
+                                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                     }
                                     Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                        .font(MeeshyFont.relative(12, weight: .medium))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 }
                                 .foregroundColor(theme.textMuted)
                             }
@@ -326,7 +336,7 @@ struct CommentRowView: View, Equatable {
 
                             if showSeeReplies {
                                 MetaSeparator()
-                                    .font(MeeshyFont.relative(12))
+                                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                                     .foregroundColor(theme.textMuted)
 
                                 Button {
@@ -334,7 +344,7 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.light()
                                 } label: {
                                     Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
-                                        .font(MeeshyFont.relative(12, weight: .semibold))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                         .foregroundColor(Color(hex: accentColor))
                                 }
                                 .frame(minHeight: 44)
@@ -348,40 +358,22 @@ struct CommentRowView: View, Equatable {
 
                     Spacer()
 
-                    if hasMoreOptions {
-                        Menu {
-                            if canCopyContent {
-                                Button {
-                                    UIPasteboard.general.string = effectiveCommentContent
-                                    HapticFeedback.success()
-                                } label: {
-                                    Label(String(localized: "comment.action.copy", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-                                }
-                            }
-                            if let onEditComment {
-                                Button {
-                                    HapticFeedback.light()
-                                    onEditComment()
-                                } label: {
-                                    Label(String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                                }
-                            }
-                            if let onDeleteComment {
-                                Button(role: .destructive) {
-                                    HapticFeedback.medium()
-                                    onDeleteComment()
-                                } label: {
-                                    Label(String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(MeeshyFont.relative(isReply ? 12 : 14))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .accessibilityLabel(String(localized: "a11y.comment.more_options", defaultValue: "Plus d'options", bundle: .main))
-                        .meeshyTapTarget(44)
-                    }
+                    // Le menu « … » — le MÊME que celui d'un commentaire de story
+                    // (#8709) : Copier, Imager (l'arbre de réponses compris),
+                    // Modifier, Signaler, Supprimer, selon `CommentMenuPolicy`.
+                    CommentMoreMenu(
+                        comment: comment,
+                        servedText: effectiveCommentContent,
+                        showOriginal: showOriginal,
+                        accentColor: accentColor,
+                        root: threadRoot,
+                        loadedReplies: threadReplies,
+                        post: post,
+                        onEdit: onEditComment,
+                        onDelete: onDeleteComment,
+                        glyphSize: isReply ? 12 : 14,
+                        glyphColor: theme.textMuted
+                    )
                 }
                 .padding(.top, isReply ? 2 : 4)
             }
@@ -395,7 +387,7 @@ struct CommentRowView: View, Equatable {
             Group {
                 if !isReply {
                     Rectangle()
-                        .fill(theme.inputBorder.opacity(0.3))
+                        .fill(theme.inputBorder.opacity(MeeshyOpacity.medium))
                         .frame(height: 1)
                 }
             },

@@ -181,6 +181,8 @@ struct CommentMediaGallerySnapshot {
     /// porte qu'un seul média, donc la clause « si visuel UNIQUE » y est toujours
     /// vraie.
     let captions: [String: String]
+    /// `attachment.id → carte des liens suivis du commentaire porteur` (#9075).
+    var links: [String: [String: String]] = [:]
     let senders: [String: ConversationViewModel.MediaSenderInfo]
 
     static let empty = CommentMediaGallerySnapshot(attachments: [], captions: [:], senders: [:])
@@ -218,6 +220,7 @@ enum CommentMediaGallery {
     static func snapshot(from comments: [FeedComment]) -> CommentMediaGallerySnapshot {
         var attachments: [MessageAttachment] = []
         var captions: [String: String] = [:]
+        var links: [String: [String: String]] = [:]
         var senders: [String: ConversationViewModel.MediaSenderInfo] = [:]
         var seen = Set<String>()
 
@@ -229,6 +232,7 @@ enum CommentMediaGallery {
                 if let caption = Self.caption(of: media, in: comment, preferredLanguages: preferred) {
                     captions[media.id] = caption
                 }
+                if !comment.trackedLinkMap.isEmpty { links[media.id] = comment.trackedLinkMap }
                 senders[media.id] = ConversationViewModel.MediaSenderInfo(
                     senderName: comment.author,
                     senderAvatarURL: comment.authorAvatarURL,
@@ -239,7 +243,7 @@ enum CommentMediaGallery {
         }
 
         return CommentMediaGallerySnapshot(
-            attachments: attachments, captions: captions, senders: senders
+            attachments: attachments, captions: captions, links: links, senders: senders
         )
     }
 

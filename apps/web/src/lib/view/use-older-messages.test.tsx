@@ -3,15 +3,17 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { useOlderMessages } from './use-older-messages';
+import { headAnchorOf, useHeadAnchor, useOlderMessages } from './use-older-messages';
 
 /**
  * `useOlderMessages` (#6972) — L'ANCRAGE, mesuré SANS navigateur.
  *
- * Ce que ces témoins peuvent prouver : que la distance au BAS du contenu est
- * CAPTURÉE au déclenchement, RESPOSÉE quand la tête du fil change, consommée
- * UNE fois, et jamais appliquée sur un changement de QUEUE. C'est
- * l'arithmétique du repère, et elle tient dans une fonction.
+ * Ce que ces témoins peuvent prouver : que la sentinelle demande la page, que
+ * le virtualiseur reçoit `anchorTo: 'end'` au SEUL rendu où la tête est
+ * remplacée (`headAnchorOf`, `useHeadAnchor`), que l'arrivée d'une page
+ * demandée est annoncée comme un défilement programmé UNE fois, jamais sur un
+ * changement de QUEUE — et que ce hook n'écrit plus `scrollTop` (#9216, #9219 :
+ * son écriture absolue effaçait les compensations du virtualiseur).
  *
  * Ce qu'ils ne peuvent PAS prouver : que le lecteur ne voit rien bouger.
  * happy-dom ne fait aucune mise en page — `scrollHeight` y est ce qu'on lui
@@ -215,54 +217,100 @@ describe('useOlderMessages — le déclencheur', () => {
   });
 });
 
-describe('useOlderMessages — l’ancrage', () => {
-  test('une page INSÉRÉE EN TÊTE conserve la distance au BAS du contenu', () => {
+describe('useOlderMessages — l’ancre appartient au virtualiseur (#9216, #9219)', () => {
+  test('la page demandée qui change la tête est ANNONCÉE comme un défilement programmé', () => {
     const h = mount({ firstMessageId: 'm10' });
-    /* 5 000 px de contenu, le lecteur est à 200 : 4 800 px le séparent du bas. */
-    h.scroller.setScrollHeight(5000);
-    h.scroller.scrollTop = 200;
     h.reach();
-
-    /* La page arrive : cinquante rangées estimées s'ajoutent EN TÊTE. */
-    h.scroller.setScrollHeight(9400);
     h.render({ firstMessageId: 'm-plus-ancien' });
-
-    expect(h.scroller.scrollTop).toBe(9400 - 4800);
     expect(h.programmatic()).toBe(1);
   });
 
-  test('le repère est consommé UNE fois — un second changement de tête ne le rejoue pas', () => {
+  /* L'écriture ABSOLUE de `scrollTop` effaçait les compensations relatives
+     que le virtualiseur venait d'écrire dans le même commit : le fil glissait
+     de la croissance des rangées préfixées. Plus aucune écriture ici. */
+  test('le hook n’écrit plus `scrollTop` — c’est le virtualiseur qui repose la rangée lue', () => {
     const h = mount({ firstMessageId: 'm10' });
     h.scroller.setScrollHeight(5000);
     h.scroller.scrollTop = 200;
     h.reach();
-
     h.scroller.setScrollHeight(9400);
     h.render({ firstMessageId: 'm-plus-ancien' });
-    const settled = h.scroller.scrollTop;
+    expect(h.scroller.scrollTop).toBe(200);
+  });
 
-    /* Une tête qui change SANS déclenchement (une purge, un remplacement de
-       page) ne doit pas reposer un repère périmé. */
-    h.scroller.setScrollHeight(12_000);
+  test('l’annonce est consommée UNE fois — une tête qui change ensuite sans demande n’annonce rien', () => {
+    const h = mount({ firstMessageId: 'm10' });
+    h.reach();
+    h.render({ firstMessageId: 'm-plus-ancien' });
     h.render({ firstMessageId: 'm-autre' });
-    expect(h.scroller.scrollTop).toBe(settled);
+    expect(h.programmatic()).toBe(1);
   });
 
-  test('la tête qui APPARAÎT au premier chargement ne repose aucun repère', () => {
+  test('le rejeu d’un refus annonce aussi l’arrivée de sa page', () => {
+    const h = mount({ firstMessageId: 'm10' });
+    h.render({ state: 'error', firstMessageId: 'm10' });
+    h.retry();
+    h.render({ state: 'idle', firstMessageId: 'm-plus-ancien' });
+    expect(h.programmatic()).toBe(1);
+  });
+
+  test('la tête qui APPARAÎT au premier chargement n’annonce rien', () => {
     const h = mount({ firstMessageId: undefined, rowCount: 0 });
-    h.scroller.setScrollHeight(5000);
-    h.scroller.scrollTop = 4200;
     h.render({ firstMessageId: 'm1', rowCount: 50 });
-    expect(h.scroller.scrollTop).toBe(4200);
     expect(h.programmatic()).toBe(0);
   });
 
-  test('un message qui ARRIVE EN QUEUE ne repose aucun repère (la tête ne bouge pas)', () => {
+  test('un message qui ARRIVE EN QUEUE n’annonce rien (la tête ne bouge pas)', () => {
     const h = mount({ firstMessageId: 'm1', rowCount: 50 });
-    h.scroller.setScrollHeight(5000);
-    h.scroller.scrollTop = 4200;
+    h.reach();
     h.render({ firstMessageId: 'm1', rowCount: 51 });
-    expect(h.scroller.scrollTop).toBe(4200);
     expect(h.programmatic()).toBe(0);
+  });
+});
+
+describe('headAnchorOf — le virtualiseur tient la rangée lue au seul rendu où la tête est REMPLACÉE', () => {
+  test('une page préfixée remplace la tête : ancre', () => {
+    expect(headAnchorOf('m10', 'm-plus-ancien')).toBe('end');
+  });
+
+  test('la tête qui apparaît au premier chargement : rien à tenir', () => {
+    expect(headAnchorOf(undefined, 'm1')).toBe('start');
+  });
+
+  test('le fil qui se vide : rien à tenir', () => {
+    expect(headAnchorOf('m1', undefined)).toBe('start');
+  });
+
+  test('la même tête (un message arrivé en queue) : rien à tenir', () => {
+    expect(headAnchorOf('m1', 'm1')).toBe('start');
+  });
+});
+
+describe('useHeadAnchor — la tête de référence est la dernière COMMISE', () => {
+  function mountAnchor(first: string | undefined) {
+    const seen: string[] = [];
+    function Host(props: { readonly first: string | undefined }) {
+      seen.push(useHeadAnchor(props.first));
+      return null;
+    }
+    const c = document.createElement('div');
+    document.body.appendChild(c);
+    const r = createRoot(c);
+    container = c;
+    root = r;
+    const render = (next: string | undefined) => {
+      act(() => {
+        r.render(<Host first={next} />);
+      });
+    };
+    render(first);
+    return { seen, render };
+  }
+
+  test('ancre au rendu qui remplace la tête, et à lui seul', () => {
+    const h = mountAnchor('m10');
+    h.render('m-plus-ancien');
+    h.render('m-plus-ancien');
+    expect(h.seen).toEqual(['start', 'end', 'start']);
   });
 });

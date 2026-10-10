@@ -46,7 +46,9 @@ export function StudioPageRail({
   readonly pages: readonly StudioPage[];
   readonly currentPageId: string;
   readonly onSelect: (id: string) => void;
-  readonly onDelete: (id: string) => void;
+  /** Absente en retouche (#9126) : une scène y EST une pièce du message, elle
+   * ne se jette pas depuis le studio. */
+  readonly onDelete?: (id: string) => void;
   /**
    * **VERROUILLÉ PENDANT L'ENVOI** (#7707, revue-correction) — le plan publié
    * a déjà groupé les pages par `studioPublishPlan`, AVANT la première
@@ -85,7 +87,7 @@ export function StudioPageRail({
             onSelect={onSelect}
           />
         );
-        return current && !locked
+        return current && !locked && onDelete !== undefined
           ? [tile, <StudioPageDelete key={`${page.id}:delete`} lang={lang} id={page.id} index={index} onDelete={onDelete} />]
           : [tile];
       })}

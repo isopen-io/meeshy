@@ -13,10 +13,13 @@ import MeeshySDK
 ///   `>` quotes and ```` ``` ```` code blocks — see `MessageBlockParser`
 ///   (`MessageTextRenderer+Blocks.swift`), mirror of `packages/shared/utils/text-blocks.ts`
 /// - **Addresses without scheme**: `www.…` → `https://www.…`, `a@b.fr` → `mailto:`
-/// - **Meeshy links**: `m+TOKEN` → tappable link to `https://meeshy.me/l/TOKEN`
+/// - **Meeshy links**: `m+TOKEN` → tappable link to `<web origin>/l/TOKEN`
 /// - **Mentions**: `@username` → tappable link to the profile
 /// - **Hashtags**: `#tag` → tappable link to `https://meeshy.me/hashtag/<tag>`
-/// - **URLs**: Auto-detected via `NSDataDetector` and made tappable
+/// - **URLs**: detected by `urlRegex`; `[[https://…]]` opens directly
+///
+/// What a link SHOWS and where it LEADS is `LinkDisplayLaw` (#9093), read
+/// against the tracked-link map: a mapped raw URL shows `m+<token>`.
 ///
 /// The pipeline is extensible: add new `NSRegularExpression` entries to `rules`.
 /// Nested markdown is supported via recursive parsing (e.g. `***bold italic***`).
@@ -40,10 +43,11 @@ public enum MessageTextRenderer {
     /// Callers migrating a `Text(...).font(MeeshyFont.relative(...))` MUST pass
     /// `true` so the migration doesn't silently freeze their type size.
     /// Pass `mentionDisplayNames` to resolve `@username` → display name (e.g. `["atabeth": "Ata Beth"]`).
-    /// Pass `trackedLinks` (`[rawURL: token]`) to route raw URLs through the
-    /// gateway tracking redirect: a `.urlLink` whose raw string is a key (with a
-    /// trailing-punctuation-trimmed fallback) links to `https://meeshy.me/l/<token>`
-    /// instead of the raw URL — the DISPLAYED text stays the raw URL.
+    /// Pass `trackedLinks` (`[rawURL: token]`) — the map the gateway serves next
+    /// to the text. Every link is read by `LinkDisplayLaw` (#9093): `[[url]]`
+    /// shows the address and opens it DIRECTLY; `[label](url)` shows the label
+    /// and opens `<web origin>/l/<token>` when the map has `url`; a raw mapped
+    /// URL shows `m+<token>` and opens `/l/<token>`; `m+<token>` stays literal.
     /// Pass `validUsernames` when the caller KNOWS who really exists (posts,
     /// stories, réels — anywhere `PostReference` is available): only pseudos in
     /// this set become tappable links, the rest stay plain text. `nil` (the
@@ -66,6 +70,32 @@ public enum MessageTextRenderer {
         validUsernames: Set<String>? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
+        return Text(attributed(text, fontSize: fontSize, color: color, mentionColor: mentionColor,
+                               hashtagColor: hashtagColor, accentColor: accentColor,
+                               usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames,
+                               highlightTerm: highlightTerm, trackedLinks: trackedLinks,
+                               validUsernames: validUsernames))
+    }
+
+    /// The `AttributedString` behind `render` — same parameters, plus the web
+    /// origin a mapped URL's `/l/<token>` redirect is built on (the ACTIVE
+    /// environment by default, #9075). Public so a host can read where each
+    /// link leads without mounting a view.
+    public static func attributed(
+        _ text: String,
+        fontSize: CGFloat = 15,
+        color: Color,
+        mentionColor: Color? = nil,
+        hashtagColor: Color? = nil,
+        accentColor: Color? = nil,
+        usesRelativeFont: Bool = false,
+        mentionDisplayNames: [String: String]? = nil,
+        highlightTerm: String? = nil,
+        trackedLinks: [String: String]? = nil,
+        validUsernames: Set<String>? = nil,
+        webOrigin: String = MeeshyConfig.shared.webOrigin
+    ) -> AttributedString {
+        guard !text.isEmpty else { return AttributedString() }
         let context = RenderContext(
             mentionColor: mentionColor,
             hashtagColor: hashtagColor,
@@ -73,14 +103,15 @@ public enum MessageTextRenderer {
             usesRelativeFont: usesRelativeFont,
             mentionDisplayNames: mentionDisplayNames,
             trackedLinks: trackedLinks,
-            validUsernames: validUsernames
+            validUsernames: validUsernames,
+            webOrigin: webOrigin
         )
         if MessageBlockParser.hasBlockSyntax(text) {
-            return Text(renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context))
+            return renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context)
         }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames, validUsernames: validUsernames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return Text(buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges))
+        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges)
     }
 
     /// Everything `render` receives besides the text, its size and its color —
@@ -93,6 +124,7 @@ public enum MessageTextRenderer {
         let mentionDisplayNames: [String: String]?
         let trackedLinks: [String: String]?
         let validUsernames: Set<String>?
+        var webOrigin: String = MeeshyConfig.shared.webOrigin
     }
 
     /// **What one reads, without the notation** (#7849) — `**gras**` → `gras`,
@@ -113,29 +145,12 @@ public enum MessageTextRenderer {
         parse(text).map { segment -> String in
             switch segment {
             case .text(let string, _), .code(let string, _): return string
-            case .mentionLink(let display, _, _), .meeshyTokenLink(let display, _, _),
-                 .urlLink(let display, _), .hashtagLink(let display, _, _):
+            case .mentionLink(let display, _, _), .hashtagLink(let display, _, _):
                 return display
+            case .link(let written):
+                return LinkDisplayLaw.resolve(written, trackedLinks: nil).map { $0.text + $0.remainder } ?? ""
             }
         }.joined()
-    }
-
-    // MARK: - Tracked-link resolution
-
-    /// Resolves the tappable destination for a raw URL string. Returns the
-    /// `https://meeshy.me/l/<token>` tracking URL when the raw string (or its
-    /// trailing-punctuation-trimmed form) is a key in `trackedLinks`; otherwise
-    /// the original `url`. Pure + side-effect-free so it's unit-testable.
-    static func resolvedLinkURL(raw: String, original: URL, trackedLinks: [String: String]?) -> URL {
-        guard let trackedLinks, !trackedLinks.isEmpty else { return original }
-        if let token = trackedLinks[raw] {
-            return URL(string: "https://meeshy.me/l/\(token)") ?? original
-        }
-        let trimmed = raw.trimmingTrailingLinkPunctuation
-        if trimmed != raw, let token = trackedLinks[trimmed] {
-            return URL(string: "https://meeshy.me/l/\(token)") ?? original
-        }
-        return original
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -149,7 +164,7 @@ public enum MessageTextRenderer {
 
         for match in meeshyLinkRegex.matches(in: text, range: fullRange) {
             let token = ns.substring(with: match.range(at: 1))
-            if let url = URL(string: "https://meeshy.me/l/\(token)") {
+            if let url = TrackedLink.redirectURL(token: token) {
                 urls.append(url)
             }
         }
@@ -204,8 +219,9 @@ public enum MessageTextRenderer {
         /// Inline code (#7849) — literal: no emphasis, mention or link inside.
         case code(String, Styles)
         case mentionLink(display: String, url: URL, username: String)
-        case meeshyTokenLink(display: String, url: URL, token: String)
-        case urlLink(display: String, url: URL)
+        /// A link AS WRITTEN (#9093) — what it shows and where it leads is
+        /// decided at build time by `LinkDisplayLaw`, from the tracked-link map.
+        case link(WrittenLink)
         case hashtagLink(display: String, url: URL, tag: String)
     }
 
@@ -213,7 +229,7 @@ public enum MessageTextRenderer {
 
     private enum RuleKind {
         case bold, italic, strikethrough, underline, meeshyLink, mention, url, hashtag
-        case boldItalic, code, markdownLink, www, email
+        case boldItalic, code, markdownLink, verbatimLink, www, email
         case displayNameMention(username: String)
     }
 
@@ -246,6 +262,7 @@ public enum MessageTextRenderer {
         // Code and markdown links first: at the same position they win, and
         // their content is never re-read as emphasis (#7849).
         (try! NSRegularExpression(pattern: #"`([^`\n]+)`"#), .code),
+        (verbatimLinkRegex, .verbatimLink),
         (markdownLinkRegex, .markdownLink),
         // `***mot***` — bold whose content is exactly an italic. Without it the
         // bold rule stops at the second closing star and leaves one orphan.
@@ -260,6 +277,12 @@ public enum MessageTextRenderer {
         (wwwRegex, .www),
         (emailRegex, .email),
     ]
+
+    /// `[[url]]` (#9093) — an address the author wants shown AS IS and opened
+    /// directly, never tracked. Anchored on `https?://` like `urlRegex`.
+    private static let verbatimLinkRegex = try! NSRegularExpression(
+        pattern: #"\[\[(https?://[^\s\[\]]+)\]\]"#
+    )
 
     /// `[label](url)` — the address is ANCHORED on `https?://` or `mailto:`,
     /// like `urlRegex`: `[x](javascript:…)` never matches and stays text. One
@@ -377,7 +400,7 @@ public enum MessageTextRenderer {
         return text.contains("http") || text.contains("m+") || text.contains("www.")
     }
 
-    // `internal` (pas `private`) — même précédent que `resolvedLinkURL` : accès
+    // `internal` (pas `private`) — accès
     // direct depuis les tests via `@testable import`, sans exposer publiquement
     // un détail d'implémentation hors du module.
     static func parse(
@@ -456,11 +479,19 @@ public enum MessageTextRenderer {
             case .code:
                 segments.append(.code(ns.substring(with: match.range(at: 1)), inherited))
 
+            case .verbatimLink:
+                let target = ns.substring(with: match.range(at: 1))
+                if let url = URL(string: target) {
+                    segments.append(.link(.verbatim(text: target, url: url)))
+                } else {
+                    segments.append(.text(ns.substring(with: match.range), inherited))
+                }
+
             case .markdownLink:
                 let label = ns.substring(with: match.range(at: 1))
                 let target = ns.substring(with: match.range(at: 2))
                 if let url = URL(string: target) {
-                    segments.append(.urlLink(display: label, url: url))
+                    segments.append(.link(.labelled(label: label, url: url)))
                 } else {
                     segments.append(.text(ns.substring(with: match.range), inherited))
                 }
@@ -469,7 +500,7 @@ public enum MessageTextRenderer {
                 let shown = ns.substring(with: match.range).trimmingTrailingLinkPunctuation
                 consumed = (shown as NSString).length
                 if let url = URL(string: "https://\(shown)") {
-                    segments.append(.urlLink(display: shown, url: url))
+                    segments.append(.link(.bare(text: shown, url: url)))
                 } else {
                     segments.append(.text(shown, inherited))
                 }
@@ -477,7 +508,7 @@ public enum MessageTextRenderer {
             case .email:
                 let address = ns.substring(with: match.range)
                 if let url = URL(string: "mailto:\(address)") {
-                    segments.append(.urlLink(display: address, url: url))
+                    segments.append(.link(.verbatim(text: address, url: url)))
                 } else {
                     segments.append(.text(address, inherited))
                 }
@@ -501,10 +532,7 @@ public enum MessageTextRenderer {
 
             case .meeshyLink:
                 let token = ns.substring(with: match.range(at: 1))
-                let display = ns.substring(with: match.range)
-                if let url = URL(string: "https://meeshy.me/l/\(token)") {
-                    segments.append(.meeshyTokenLink(display: display, url: url, token: token))
-                }
+                segments.append(.link(.shortCode(token: token)))
 
             case .mention:
                 let username = ns.substring(with: match.range(at: 1))
@@ -540,7 +568,7 @@ public enum MessageTextRenderer {
                 // substring instead.
                 let raw = ns.substring(with: match.range)
                 if let url = URL(string: raw) {
-                    segments.append(.urlLink(display: raw, url: url))
+                    segments.append(.link(.bare(text: raw, url: url)))
                 } else {
                     segments.append(.text(raw, inherited))
                 }
@@ -631,29 +659,27 @@ public enum MessageTextRenderer {
                 charOffset += display.count
                 result.append(attr)
 
-            case .meeshyTokenLink(let display, let url, _):
-                var attr = AttributedString(display)
-                attr.link = url
+            case .link(let written):
+                charOffset += written.sourceCount
+                guard let display = LinkDisplayLaw.resolve(written, trackedLinks: trackedLinks,
+                                                            webOrigin: context.webOrigin) else {
+                    result.append(AttributedString(written.sourceText))
+                    continue
+                }
+                var attr = AttributedString(display.text)
+                attr.link = display.url
                 attr.font = Self.font(fontSize, .medium, relative: usesRelativeFont)
                 attr.underlineStyle = .single
                 if let accentColor {
                     attr.foregroundColor = accentColor
                 }
-                charOffset += display.count
                 result.append(attr)
-
-            case .urlLink(let display, let url):
-                var attr = AttributedString(display)
-                // DISPLAY stays the raw URL; the tappable destination becomes
-                // the gateway tracking redirect when a token is mapped.
-                attr.link = Self.resolvedLinkURL(raw: display, original: url, trackedLinks: trackedLinks)
-                attr.font = Self.font(fontSize, .medium, relative: usesRelativeFont)
-                attr.underlineStyle = .single
-                if let accentColor {
-                    attr.foregroundColor = accentColor
+                if !display.remainder.isEmpty {
+                    var tail = AttributedString(display.remainder)
+                    tail.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
+                    tail.foregroundColor = color
+                    result.append(tail)
                 }
-                charOffset += display.count
-                result.append(attr)
             }
         }
 
@@ -682,11 +708,23 @@ public enum MessageTextRenderer {
     }
 }
 
+private extension WrittenLink {
+    /// What the author typed, minus the notation — the highlight offsets are
+    /// counted on it, as they were before the law.
+    var sourceText: String {
+        switch self {
+        case .verbatim(let text, _), .bare(let text, _): return text
+        case .labelled(let label, _): return label
+        case .shortCode(let token): return "m+\(token)"
+        }
+    }
+
+    var sourceCount: Int { sourceText.count }
+}
+
 private extension String {
-    /// Trailing-punctuation set used for tracked-link key matching. The URL
-    /// regex may capture a trailing `.,;:!?)]` that the gateway excluded when
-    /// it minted the token (it tracks the bare URL). Trim them so a sentence
-    /// like "see https://x.com." still maps to the `https://x.com` token.
+    /// A `www.` address the regex captured with the sentence's closing
+    /// punctuation — the punctuation goes back to the prose.
     private static let trailingLinkPunctuation: Set<Character> = [".", ",", ";", ":", "!", "?", ")", "]"]
 
     var trimmingTrailingLinkPunctuation: String {

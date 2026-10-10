@@ -238,7 +238,7 @@ public extension StoryComposerViewModel {
     /// PUBLIE pas la scène — la retouche d'une image du fil : `runStoryUpload`
     /// n'envoie un fond que depuis `slideImages`, et une story publiée perdrait
     /// le sien.
-    public func detachSeededBackgroundImage() {
+    func detachSeededBackgroundImage() {
         setImage(nil, for: currentSlide.id)
         hasBackgroundImage = false
     }

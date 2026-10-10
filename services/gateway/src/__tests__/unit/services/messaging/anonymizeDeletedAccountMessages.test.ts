@@ -102,7 +102,10 @@ function buildPrisma(params: {
   let pageIndex = 0;
 
   const message = {
-    findMany: jest.fn<(args: unknown) => Promise<MessageRow[]>>().mockImplementation(async () => {
+    findMany: jest.fn<(args: unknown) => Promise<MessageRow[]>>().mockImplementation(async (args) => {
+      // #9629 — la cascade des avis de capture lit les avis de la conversation
+      // (`messageSource: 'system'`) : ce n'est pas une fournée du balayage.
+      if (JSON.stringify(args).includes('"messageSource":"system"')) return [];
       const page = messagePages[pageIndex] ?? [];
       pageIndex += 1;
       return page;
@@ -258,7 +261,10 @@ describe('anonymizeMessagesOfDeletedAccount', () => {
       batchSize: 1,
     });
 
-    expect((prisma as any).message.findMany).toHaveBeenCalledTimes(3);
+    const batches = (prisma as any).message.findMany.mock.calls.filter(
+      ([args]: [unknown]) => !JSON.stringify(args).includes('"messageSource":"system"')
+    );
+    expect(batches).toHaveLength(3);
     expect(result.anonymized).toBe(2);
   });
 

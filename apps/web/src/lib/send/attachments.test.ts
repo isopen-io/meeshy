@@ -44,6 +44,25 @@ describe('pendingAttachmentOf — le GENRE dérivé du MIME, la MÊME règle que
     expect(pendingAttachmentOf(file('clip.mp4', 'video/mp4')).kind).toBe('video');
   });
 
+  test('#9693 — un WAV nommé audio/x-wav (Firefox, WebView Android) ⇒ audio, et part sous audio/wav', () => {
+    const p = pendingAttachmentOf(file('note.wav', 'audio/x-wav'));
+    expect(p.kind).toBe('audio');
+    expect(p.file.type).toBe('audio/wav');
+    expect(p.file.name).toBe('note.wav');
+  });
+
+  test('#9693 — un MP3 que le système ne type pas ⇒ audio, et part sous audio/mpeg', () => {
+    const p = pendingAttachmentOf(file('chanson.mp3', ''));
+    expect(p.kind).toBe('audio');
+    expect(p.file.type).toBe('audio/mpeg');
+    expect(p.size).toBe(3);
+  });
+
+  test('#9693 — un fichier déjà bien typé garde son `File` d’origine', () => {
+    const original = file('son.mp3', 'audio/mpeg');
+    expect(pendingAttachmentOf(original).file).toBe(original);
+  });
+
   test('application/pdf (ou tout MIME hors image/audio/vidéo) ⇒ file', () => {
     expect(pendingAttachmentOf(file('doc.pdf', 'application/pdf')).kind).toBe('file');
   });

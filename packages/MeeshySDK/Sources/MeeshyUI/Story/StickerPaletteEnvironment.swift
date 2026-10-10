@@ -65,7 +65,47 @@ public struct StickerPaletteClockKey: EnvironmentKey {
     public static let defaultValue: @Sendable () -> Date = { Date() }
 }
 
+/// **Les gabarits de la feuille portent-ils le contour blanc ?** (#9060) Vrai
+/// là où le sticker part contourné — la conversation ; faux dans le composer
+/// de story, dont la scène pose le gabarit nu.
+public struct StickerSheetDieCutKey: EnvironmentKey {
+    public static let defaultValue = false
+}
+
+/// **La feuille de stickers de l'atelier est celle de l'APP** (#9189).
+///
+/// L'atelier montait sa propre `StickerPickerView`, sans aucun des injecteurs
+/// de la conversation : une troisième feuille, aux onglets amputés. Il n'en
+/// monte plus : sa porte « Stickers » DEMANDE la feuille à son hôte, qui
+/// présente la seule feuille du produit (`MeeshyStickerSheet`). Sans hôte, la
+/// porte n'est pas rendue (loi 4).
+public struct StoryStickerSheetRequestKey: EnvironmentKey {
+    public static let defaultValue: (() -> Void)? = nil
+}
+
 extension EnvironmentValues {
+    public var storyStickerSheetRequest: (() -> Void)? {
+        get { self[StoryStickerSheetRequestKey.self] }
+        set { self[StoryStickerSheetRequestKey.self] = newValue }
+    }
+}
+
+extension View {
+    public func storyStickerSheetRequestProvided(_ request: @escaping () -> Void) -> some View {
+        environment(\.storyStickerSheetRequest, request)
+    }
+
+    public func stickerSheetDieCut(_ enabled: Bool = true) -> some View {
+        environment(\.stickerSheetDieCut, enabled)
+    }
+}
+
+extension EnvironmentValues {
+    public var stickerSheetDieCut: Bool {
+        get { self[StickerSheetDieCutKey.self] }
+        set { self[StickerSheetDieCutKey.self] = newValue }
+    }
+
     public var stickerNearbyPlaces: StickerNearbyPlacesProvider? {
         get { self[StickerNearbyPlacesKey.self] }
         set { self[StickerNearbyPlacesKey.self] = newValue }

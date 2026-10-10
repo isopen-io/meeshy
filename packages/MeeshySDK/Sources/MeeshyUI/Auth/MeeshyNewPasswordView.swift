@@ -37,14 +37,14 @@ public struct MeeshyNewPasswordView: View {
             ZStack {
                 theme.backgroundPrimary.ignoresSafeArea()
 
-                VStack(spacing: 20) {
+                VStack(spacing: MeeshySpacing.xl) {
                     if isSaved {
                         savedContent
                     } else {
                         formContent
                     }
                 }
-                .padding(.top, 20)
+                .padding(.top, MeeshySpacing.xl)
                 .iPadFormWidth()
             }
             .navigationTitle(String(localized: "auth.forgotPassword.newPasswordTitle", defaultValue: "Nouveau mot de passe", bundle: .module))
@@ -58,13 +58,13 @@ public struct MeeshyNewPasswordView: View {
     @ViewBuilder
     private var formContent: some View {
         AuthTextField(title: String(localized: "auth.forgotPassword.newPassword", defaultValue: "Nouveau mot de passe", bundle: .module), icon: "lock.fill", text: $newPassword, isSecure: true, textContentType: .newPassword)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
         PasswordStrengthIndicator(password: newPassword)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
         AuthTextField(title: String(localized: "auth.forgotPassword.confirmPassword", defaultValue: "Confirmer le mot de passe", bundle: .module), icon: "lock.fill", text: $confirmPassword, isSecure: true, textContentType: .newPassword)
-            .padding(.horizontal, 24)
+            .padding(.horizontal, MeeshySpacing.xxl)
 
         if newPassword != confirmPassword && !confirmPassword.isEmpty {
             Text(String(localized: "auth.forgotPassword.passwordMismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .module))
@@ -76,7 +76,7 @@ public struct MeeshyNewPasswordView: View {
             Text(errorMessage)
                 .font(.caption)
                 .foregroundStyle(.red)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
 
         AuthActionButton(
@@ -93,7 +93,7 @@ public struct MeeshyNewPasswordView: View {
     @ViewBuilder
     private var savedContent: some View {
         Image(systemName: "checkmark.circle.fill")
-            .font(.system(size: 48))
+            .font(.system(size: MeeshyIconSize.hero))
             .foregroundStyle(.green)
             .accessibilityHidden(true)
 
@@ -105,12 +105,12 @@ public struct MeeshyNewPasswordView: View {
         Button(String(localized: "auth.forgotPassword.login", defaultValue: "Se connecter", bundle: .module)) {
             onSignIn()
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity)
         .background(MeeshyColors.brandPrimary)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .foregroundStyle(.white)
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 
     // MARK: - Envoi

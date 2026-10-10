@@ -98,6 +98,7 @@ import { linksRoutes } from './links';
 import { syncRoutes } from './sync';
 import { trackingLinksRoutes } from './tracking-links';
 import { anonymousRoutes } from './anonymous';
+import { worldRoutes } from './world';
 import { communityRoutes } from './communities';
 import { adminMePermissionsRoutes } from './admin/me-permissions';
 import { dashboardRoutes } from './admin/dashboard';
@@ -108,6 +109,7 @@ import { reportCreationRoutes } from './reports';
 import * as AdminInvitations from './admin/invitations';
 import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
+import { engagementScaleAdminRoutes } from './admin/engagement-scale';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
 import { registerAdminShareLinkRoutes } from './admin/share-links';
@@ -118,6 +120,7 @@ import { adminPostRoutes } from './admin/posts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { routeUsageAdminRoutes } from './admin/route-usage';
+import { adminOversightRoutes } from './admin/oversight';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
@@ -126,9 +129,13 @@ import { meConsentsRoutes } from './me/consents';
 import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { meMeeshRoutes } from './me/meesh';
+import { meGameRoutes } from './me/game';
+import { userGameShowcaseRoutes } from './users/game-showcase';
 import { meOnboardingRoutes } from './me/onboarding';
+import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
+import { stickerPacksRoutes } from './sticker-packs';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -243,6 +250,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'sync', prefix: API_PREFIX, module: syncRoutes },
   { name: 'tracking-links', prefix: API_PREFIX, module: trackingLinksRoutes },
   { name: 'anonymous-participation', prefix: API_PREFIX, module: anonymousRoutes },
+  // L'entrée PUBLIQUE de World Wide (#10000) — ce que la landing lit pour
+  // faire entrer un visiteur sans compte par le lien `mshy_world`.
+  { name: 'world', prefix: API_PREFIX, module: worldRoutes },
   { name: 'communities', prefix: API_PREFIX, module: communityRoutes },
 
   // ── Administration ────────────────────────────────────────────────────
@@ -269,6 +279,13 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
+  // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
+  // communauté et supervision, sous le MÊME préfixe que `admin-content` /
+  // `admin-rankings`. Une seule entrée : le module enregistre ses quatre
+  // fichiers lui-même, pour que la table dise « une surface », pas quatre.
+  { name: 'admin-oversight', prefix: `${API_PREFIX}/admin`, module: adminOversightRoutes },
+  // Le barème d'engagement (#8906) — ADMIN/BIGBOSS, lecture et réglage.
+  { name: 'admin-engagement-scale', prefix: `${API_PREFIX}/admin`, module: engagementScaleAdminRoutes },
 
   // ── Utilisateur, annuaire ────────────────────────────────────────────
   { name: 'users', prefix: API_PREFIX, module: userRoutes },
@@ -293,9 +310,19 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // au-dessus.
   { name: 'me-engagement', prefix: `${API_PREFIX}/me`, module: meEngagementRoutes },
   { name: 'me-meesh', prefix: `${API_PREFIX}/me`, module: meMeeshRoutes },
+  // Les écritures du jeu (#9375, #9376, #9378) — changer une mission, ouvrir le
+  // coffre, acheter un gel, rallumer la Flamme, mémoriser les clés de guide.
+  // Montage AUTONOME, même patron que `me-meesh` juste au-dessus.
+  { name: 'me-game', prefix: `${API_PREFIX}/me`, module: meGameRoutes },
+  // La vitrine de trophées d'UN AUTRE membre (#9387) — `GET /users/:userId/game/showcase`,
+  // selon SON réglage (amis par défaut), sous le préfixe `users` (le contrat l'y met).
+  // Montage AUTONOME, authentification propre (la loi de présence a besoin du RÔLE
+  // du lecteur) ; aucune route des `users` existants n'est touchée.
+  { name: 'users-game-showcase', prefix: `${API_PREFIX}/users`, module: userGameShowcaseRoutes },
   // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
   // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
   { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },
+  { name: 'me-birth-date', prefix: `${API_PREFIX}/me`, module: meBirthDateRoutes },
   // Le favori de message (#7377) — l'étoile PERSONNELLE d'un lecteur, sa
   // liste et sa pose/son retrait. Montage AUTONOME, même patron que
   // `me-engagement` juste au-dessus.
@@ -304,6 +331,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // image ou un collage. Montage AUTONOME, même patron que
   // `me-starred-messages` juste au-dessus.
   { name: 'me-stickers', prefix: `${API_PREFIX}/me`, module: meStickersRoutes },
+  // Les packs de stickers (#9141) — boutique, installation, proposition par
+  // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
+  { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

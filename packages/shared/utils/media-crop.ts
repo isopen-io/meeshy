@@ -152,3 +152,43 @@ export const mediaCropStyle = (crop: MediaCropRect): MediaCropStyle => {
     top: pct(-bounded.y / bounded.height),
   };
 };
+
+/**
+ * **Les proportions qu'on offre à une image — UNE liste** (#9499).
+ *
+ * L'ancien éditeur d'image offrait 1:1 · 4:3 · 16:9 · 9:16, la retouche du
+ * fond (#9136) 1:1 · 4:5 · 9:16 (16:9 sur le web) : deux moitiés d'une même
+ * liste, qui divergeaient d'un client à l'autre. Celle-ci est leur union,
+ * ordonnée — le cadre d'origine, les portraits, puis les paysages — et iOS la
+ * reprend cas pour cas (`MediaCropRatio.allCases`).
+ *
+ * `value` est le rapport largeur/hauteur VISÉ ; `null` : le cadre d'origine,
+ * qui ne calcule rien et défait un recadrage.
+ */
+export type MediaCropRatioOption = {
+  readonly notation: string | null;
+  readonly value: number | null;
+};
+
+export const MEDIA_CROP_RATIOS: readonly MediaCropRatioOption[] = [
+  { notation: null, value: null },
+  { notation: '1:1', value: 1 },
+  { notation: '4:5', value: 4 / 5 },
+  { notation: '3:4', value: 3 / 4 },
+  { notation: '9:16', value: 9 / 16 },
+  { notation: '4:3', value: 4 / 3 },
+  { notation: '16:9', value: 16 / 9 },
+];
+
+/**
+ * **Le plus grand cadre CENTRÉ de rapport `target`** dans une source de rapport
+ * `source` — miroir de `MediaCropRule.centered` (Swift). L'auteur choisit une
+ * forme, pas un cadrage. `null`, ou une source non mesurée, rend le cadre
+ * entier : un calcul exact sur un ratio inconnu poserait une borne fausse.
+ */
+export const centeredMediaCrop = (target: number | null, source: number): MediaCropRect => {
+  if (target === null || !Number.isFinite(source) || source <= 0) return FULL_MEDIA_CROP;
+  const width = target >= source ? 1 : Math.min(1, target / source);
+  const height = target >= source ? Math.min(1, source / target) : 1;
+  return clampMediaCrop({ x: (1 - width) / 2, y: (1 - height) / 2, width, height });
+};

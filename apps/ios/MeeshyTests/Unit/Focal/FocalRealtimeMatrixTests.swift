@@ -387,9 +387,12 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// deux via le MÊME mécanisme UIKit natif `.centeredVertically`, jamais
     /// deux implémentations divergentes.
     func test_F12_searchAndQuoteJump_shareTheSameLandingMechanism() throws {
-        let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Views/MessageListViewController.swift")
-        let code = try source(root)
+        let views = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Views")
+        // La fin de passe (re-visée) vit dans l'extension `+ScrollSettle`
+        // depuis #9907 : le témoin lit l'hôte ET son extension.
+        let code = try source(views.appendingPathComponent("MessageListViewController.swift"))
+            + source(views.appendingPathComponent("MessageListViewController+ScrollSettle.swift"))
         XCTAssertFalse(
             code.contains("landOnFocusBand"),
             "F12 : `landOnFocusBand` appartient au pass retiré — il ne doit pas réapparaître dans l'hôte."

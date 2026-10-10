@@ -84,6 +84,10 @@ enum GroupPeerLinkEvent: Equatable, Sendable {
     case failed
     /// Une piste vidéo distante est arrivée (ou a changé).
     case remoteVideo
+    /// Le canal de contrôle du lien est ouvert (aperçu avant décroché, #8795).
+    case controlOpened
+    /// Un message reçu sur le canal de contrôle.
+    case control(Data)
 }
 
 struct GroupPeerLinkConfiguration: Sendable {
@@ -97,6 +101,9 @@ struct GroupPeerLinkConfiguration: Sendable {
     let sendsVideo: Bool
     /// L'aperçu avant décroché de l'appelé (#8480) : il reçoit, n'envoie rien.
     var receiveOnly = false
+    /// L'aperçu de l'appelant (#8795) ouvre un canal de contrôle : l'appelé y
+    /// dit qu'il a activé le son. Le répondant accepte celui qu'on lui ouvre.
+    var opensControlChannel = false
 }
 
 extension IceServer {
@@ -120,6 +127,8 @@ protocol GroupPeerLinkProviding: AnyObject, Sendable {
     /// Niveau audio reçu (0…1), `nil` tant qu'aucun paquet n'est arrivé.
     func audioLevel() async -> Double?
     func close()
+    /// Envoie un message sur le canal de contrôle, s'il est ouvert (#8795).
+    func sendControl(_ data: Data)
 }
 
 @MainActor
@@ -151,8 +160,16 @@ protocol GroupCallHostProviding: AnyObject {
     /// L'appel est engagé : offre envoyée, connexion en cours, établie ou en reprise.
     var isGroupCallEngaged: Bool { get }
     var isGroupPrimaryConnected: Bool { get }
+    /// #9111 — la liaison du principal est perdue (reprise ICE en cours) : un
+    /// `participant-joined` de ce principal est un RETOUR, pas un doublon.
+    var isGroupPrimaryReconnecting: Bool { get }
     var isLocalMicMuted: Bool { get }
     var isLocalVideoEnabled: Bool { get }
     var primaryRemoteVideoTrack: Any? { get }
     func primaryAudioLevel() async -> Double?
+    /// #9085 — le principal a quitté un groupe qui continue : sa liaison n'est
+    /// plus reprise, et l'appel reste établi par le maillage.
+    func groupPrimaryDidVacate()
+    /// #9091 — sans son principal, l'appel se nomme par le groupe qui continue.
+    func groupCallTitleDidChange(_ title: String)
 }

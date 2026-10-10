@@ -1,5 +1,754 @@
 # @meeshy/shared
 
+## 1.33.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un lien universel ouvert sans session montre le contenu public, l'invitation à se connecter et qui l'a partagé (#9171)
+  - la résolution d'un lien suivi porte qui l'a partagé, et une forme illisible ne la casse pas (#9171)
+  - le gate de perf des effets d'appel ne promet 30 images par seconde que là où il les a exigées (#9099)
+  - un texte de scène se coupe à 88 % de la scène, comme iOS, au rendu, à la saisie et à la retouche (#9140)
+  - les trois clés du sélecteur de type de l'ancienne feuille d'édition quittent le catalogue (#9178)
+  - les trois clés du sélecteur de type que #9178 a remplacé quittent le catalogue
+  - Teint naturel permanent + Peau lissée par séparation de fréquences en appel (#9196)
+  - sans GPU, le gate de perf des effets d'appel rapporte la cadence et le coût au lieu d'échouer — les tâches longues, le relevé du worker et le flou restent exigés (#9099)
+  - la feuille de stickers montre un onglet par pack installé et une Boutique qui installe ou retire un pack d'un geste (#9190)
+  - une seule feuille de stickers sert la conversation et la scène d'un post, d'un réel ou d'une story (#9189)
+  - la carte d'un réel dans le fil et sa langue d'origine montrent aussi la légende de scène d'un réel sans texte (#9179)
+  - le gate de perf des effets d'appel lit l'horloge de la page au lieu de délais fixes, et rejoint le composite (#9099)
+  - l'écran vidéo d'appel dit la caméra et le micro coupés du correspondant, tient en hauteur compacte et n'est plus recalculé chaque seconde (#8788, #8787, #8410, #8989)
+  - MediaPipe rejoint son seul importeur — ni le socle ni un chunk nommé que la première peinture chargeait (#8471)
+  - le passage au worker des effets d'appel ne prend plus de réglage inutilisé (#9099)
+  - la voie document d'un réel recopie aussi la légende par média dans son texte (#9179)
+  - un réel sans texte montre et publie la légende de sa scène, suivie de ses hashtags (#9179)
+  - éditer un réel le garde réel — le type d'origine est restauré, le sélecteur toujours offert sous ses contraintes, et un post change d'agencement (#9178)
+  - CallManager.swift repasse sous le budget — ses responsabilités partent dans des extensions CallManager+\*.swift, sans changer le comportement
+  - les effets vidéo d'appel tournent dans un worker, le flou se fait par segmentation sans flou de caméra, et le zoom numérique recadre l'image envoyée (#9099, #8471, #8441)
+  - la gigue se calcule comme sur iOS — moyenne des flux audio, niveaux 30/50 ms (#8209)
+  - le glissé vers le bas dit à l'écran d'appel s'il existe — le champ que l'écran lit pour réserver le doigt (#9096)
+  - un .env hérité du legacy ne fait plus d'un vite build un build de développement (#9176)
+  - glisser l'écran d'appel vers le bas le réduit ; en groupe toute tuile passe à la une, la mienne aussi, et un écran partagé se zoome (#9096, #9098)
+  - la règle du glissé vers le bas de l'écran d'appel et son arbitrage avec le toucher (#9096)
+  - un commentaire montre ses photos et ses vidéos sous son texte (#9167)
+  - les effets de visage d'appel coûtent peu par image et respectent le mouvement réduit (#9100)
+  - les effets vidéo d'appel n'analysent plus l'image sur la file de capture — segmentation à 15 i/s et repères du visage sur leur propre file, flou au quart, dégradation par paliers (#9101, #9102)
+  - un commentaire joint une photo ou une vidéo, et « Éditer » l'ouvre dans la retouche du composeur (#9167)
+  - la garde du développement photo reconnaît le relais developShots, l'instant admin joint date et heure sans dépendre d'ICU (#9133)
+  - le carrousel d'un mode ne choisit que sous un geste — un réaccrochage du navigateur n'applique plus « Naturel » (#8969)
+  - une image de composition s'édite dans la scène — l'éditeur d'image plein écran ne sert plus que l'avatar (#9170)
+  - « Terminé » sur la scène d'une vidéo choisie pour une citation n'abat plus l'app (#9166)
+  - dans la barre de composition, Sticker, Photos et Caméra prennent le trait des icônes de gauche, et le (+) ne les répète plus (#9173)
+  - le viseur en scène et le viseur plein écran partagent une seule machine de capture (#9134)
+  - l'ancien éditeur vidéo et le composer unifié quittent le dépôt — la citation et la vidéo de premier plan s'éditent dans la scène (#9166)
+  - un visiteur sans compte voit le réel, la publication ou la story partagée, avec par-dessus l'invitation à se connecter et le nom de qui la lui a partagée (#9149)
+  - les commentaires éditent leurs médias dans la scène du composeur — « Éditer » sur une pièce ouvre ses scènes, et « Terminé » la remplace à sa place, sans les anciens éditeurs d'image et de vidéo (#9127)
+  - pincer un texte agrandit son cadre entier, la taille et la coupe des lignes restent celles de l'édition (#9139)
+  - une pièce retouchée s'ouvre sur ses éditions — une image du fil se recadre (Original, 1:1, 4:5, 9:16), et annuler rend son cadre entier (#9136)
+  - « Éditer » un audio en attente le coupe (début, fin), et « Terminé » rend la pièce coupée à sa place (#9136)
+  - une vidéo coupée s'enregistre depuis le début de sa fenêtre, et un fond recadré s'affiche à son cadre entier dans la scène (#9136)
+  - les libellés des packs de stickers chargent avec la feuille, et la validation partagée passe à zod/mini (#9141)
+  - une pièce retouchée se coupe et se tait (vidéo) ou se recadre (image) dans la scène, et « Terminé » la rend coupée, sans piste audio ou au cadre de son recadrage (#9136)
+  - un onglet par pack installé, une boutique pour installer ou retirer, et un éditeur pour proposer un pack (#9141)
+  - texte, images de premier plan, stickers et fond s'éditent dans la scène, leurs options s'ouvrent à droite depuis le haut (#9138)
+  - les options du texte savent se ranger dans une colonne étroite, autant de vignettes par rangée que la largeur en tient (#9138)
+  - une pièce vidéo retouchée repart à la durée de sa fenêtre coupée, et une image recadrée repart au cadre de son recadrage (#9136)
+  - recadrer une image écrit sa borne sur l'objet, et le bitmap affiché se recoupe depuis le fichier d'origine (#9136)
+  - la vidéo de fond se rend coupée à sa fenêtre de source, et sans piste audio quand elle est muette (#9136)
+  - la note des sous-titres d'appel dit « sur cet appareil » plutôt que « Ce navigateur » (#9142)
+  - l'ouverture d'un objet et les feuilles d'ingestion quittent +Intake, qui frôlait 1200 lignes (#9138)
+  - éditer une pièce en attente ouvre toutes les pièces du message en scènes, et « Terminé » rend chaque retouchée à sa place, sans ré-encoder les autres (#9126, #9131)
+  - un post sans média crée sa scène d'un toucher sur l'outil Texte (#9137)
+  - une tuile du rail des scènes se touche là où elle se voit — la voisine ne recouvre plus la première (#9126)
+  - le statut, la page blanche et la citation ouvrent le viseur du composeur, seul en plein écran ; l'ancienne CameraView quitte le dépôt (#9125)
+  - CameraModel, CameraPreviewLayer et CameraResult quittent CameraView.swift pour leurs propres fichiers, sans changement de comportement (#9125)
+  - CallLaunchResume et CallResumeLedger déclarent leur deinit non isolé, comme toute classe MainActor (#9132)
+  - une vidéo jointe s'édite dans la scène et repart dans le message, rendue en vidéo (#9124)
+  - une vidéo prise ou jointe s'édite dans la scène et repart dans le message, sans l'ancien éditeur vidéo (#9124)
+  - la caméra de la barre de composition ouvre le studio viseur armé, et la prise rejoint le message après édition dans la scène (#9123)
+  - la caméra et la retouche du fil ne reprennent ni n'écrasent le brouillon de création (#9123)
+  - la caméra de la barre de composition ouvre le composeur viseur armé, et la prise rejoint le message après édition dans la scène (#9123)
+  - dans l'espace commentaire, le ⌄ est visible d'emblée et replie la barre en une icône de commentaire (#9122)
+  - dans tout espace commentaire, le ⌄ est visible d'emblée et replie la barre en une icône de commentaire (#9122)
+  - le micro du champ suit aussi la teinte d'icône de l'effet armé (#9121)
+  - les icônes de la barre de composition prennent la couleur de l'effet armé, sinon la couleur commune des icônes (#9121)
+  - la barre de composition ouvre la photothèque (images et vidéos) d'un geste, à côté de la caméra (#9120)
+  - chaque pièce en attente porte « Éditer » en son centre, et le toucher l'édite (#9119)
+  - un appel coupé faute de micro offre « Réglages » dans la coque Android (#9033)
+  - la bulle d'appel ne fait plus reparaître la barre d'état par-dessus une visionneuse qui la cache (#8739)
+  - un appel réduit reste atteignable par-dessus un plein écran — la bulle vit dans une fenêtre passe-plat (#8739)
+  - un appel en cours se reprend au lieu de s'arrêter — jamais call:end pour un appel décroché, « Appeler » rejoint, reprise au lancement (#9111)
+  - un pair revenu est accepté sur un lien neuf, et une reconnexion du socket ne coupe plus un média sain (#9111)
+  - la carte des liens suivis d'un message survit au cache GRDB
+  - le journal d'appels garde hors ligne les pages parcourues, et cherche par nom et par type côté serveur (#8204, #8203)
+  - on rejoint un appel en cours — plus de call:end à la fermeture de page ni au lien perdu, liens neufs à la reconnexion, « Appeler » rejoint l'appel actif (#9111)
+  - les actions caméra de l'appel suivent iOS — on choisit sa webcam, la dernière intention gagne, l'échec se dit, Effets montre son état, PiP rejoint la rangée de l'appel (#9094, #9095, #8735)
+  - la puce « Sonne… » d'une invitation se résout en « Léa a refusé » ou « Léa n'a pas répondu » (#8470)
+  - la section Instants de Personnalisés montre toutes ses familles — des lignes directes, plus une pile imbriquée
+  - les 55 Instants filmés s'offrent dans Personnalisés — l'index ne liste que les Instants filmés
+  - la feuille de stickers a ses favoris, comme iOS — appui long ou clic droit pour épingler
+  - la bulle d'appel change de taille, un écran partagé y flotte entier, et la sortie audio s'y choisit (#8145, #8164, #9097)
+  - ma vignette se glisse vers quatre coins avec ses commandes, et le micro coupé du pair se voit en vidéo (#8747, #8787)
+  - un invité qui n'a encore vu aucun autre membre ne perd pas l'appel quand l'initiateur raccroche (#9092)
+  - quand l'initiateur quitte un appel de groupe qui continue, l'en-tête nomme le groupe et non le partant (#9091)
+  - un lien se rend selon sa forme écrite — [[url]] direct, [libellé](url) suivi, URL brute en m+token (#9093)
+  - le départ de l'initiateur d'un appel de groupe ne dégrade plus les invités qui restent (#9090)
+  - une rafale de changements pendant la négociation ne resynchronise le maillage qu'une fois (#9089)
+  - quand un membre quitte un appel de groupe, l'appel continue pour ceux qui restent (#9085)
+  - l'invité d'un appel en cours se relie à tout le groupe, pas seulement à l'invitant (#9084)
+  - un raccroché en bande dans un appel de groupe ne coupe plus l'appel des autres (#9085)
+  - les Instants de Mee et Meo dans Personnalisés — film sans texte, texte redessiné en natif
+  - la caméra se pose à l'angle droit du verre du composeur, le sticker prend la place de l'indicateur d'humeur (#9082)
+  - un lien touché dans le lecteur de story s'ouvre dans l'app — la politique des liens enveloppe la couche qui le présente (#9075)
+  - la rangée de commentaire peint son sticker par le rendu de la bulle, et le port d'envoi emporte un sticker (#9080)
+  - la réaction qui monte pendant un appel porte le nom de son auteur, comme sur le web (#9083)
+  - la légende de story, les légendes de média, les commentaires et les réels ouvrent leurs adresses par /l/ (#9075)
+  - le lien suivi /l/<token> se construit sur l'origine web de l'environnement actif, plus sur meeshy.me en dur (#9075)
+  - la feuille de stickers n'a plus que deux onglets, comme iOS — Mee & Meo par intention, Personnalisés avec les Instants
+  - la planche Mee & Meo défile jusqu'au bout — des rangées dans la pile, plus une grille par intention
+  - un commentaire ouvre ses adresses par /l/ — le type décode la carte (REST et socket), la rangée rend par RichText (#9074)
+  - la légende du pied de la visionneuse ouvre ses adresses par /l/ — la carte voyage dans le porteur, du message comme du post (#9074)
+  - les légendes de média du fil ouvrent leurs adresses par /l/ — carrousel et mosaïque, la carte du post voyage avec chaque légende (#9074)
+  - la story ouvre ses adresses par /l/ — ses deux légendes et le texte d'une story de texte, la carte décodée une fois par le lecteur (#9074)
+  - une légende posée sur un média rend ses adresses par RichText — /l/ pour la carte, le lien garde le geste, le texte le rend au lecteur (#9074)
+  - Mee, Meo et leurs duos dans UN onglet rangé par intention ; un Mee s'épingle aux favoris
+  - la légende d'une story se pose au ras du bas sans composeur ou interface masquée (#9072)
+  - la présence d'un pair se lit sur son compte, son mood s'affiche dans la liste et le fil, et l'activité ne respire qu'à peine plus fort (#9065)
+  - à l'activité, le point « ici » et le mood respirent à peine plus fort qu'au repos — seule l'arrivée pulse franchement (#9065)
+  - même échelle de pulse pour le point « ici » et le mood, et le mood vit l'arrivée et le départ du point (#9065)
+  - une échelle de pulse pour le point « ici » et le mood — imperceptible en plein écran, petit au repos, ample à l'activité, gros pulse à l'arrivée, rétraction au départ (#9065)
+  - la liste garde la présence sous un mood (contour) et le mood pulse à peine en plein écran, aussi dans la liste et l'en-tête (#9065)
+  - en plein écran, le mood pulse à peine au lieu de s'immobiliser (#9065)
+  - « ici » garde un petit pulse au repos, pulse bien plus fort à l'activité et en plein écran, et se fait plus discret dans l'en-tête (#9065)
+  - la visionneuse garde « ici » et le fait pulser, l'appel fait quitter, le mood se cerne de la présence (#9065)
+  - le reporter dit « en plein écran » et l'écran d'appel fait quitter (#9065)
+  - le plein écran garde « ici » et le fait pulser, l'appel fait quitter, le mood se cerne de la présence (#9065)
+  - Mee, Meo et Mee & Meo — trois onglets rangés par intention, et les 164 films
+  - un Mee ou un GIF animé laisse partir l'appui long de sa bulle
+  - les ondes du point de présence quittent MeeshyAvatar — aucune animation infinie dans l'avatar (#9061)
+  - le profil d'un ami montre s'il est en ligne et depuis quand il ne l'est plus
+  - le point indigo « ici » est deux fois plus gros, posé sur le cercle, et pulse quand le pair regarde, écoute ou agit (#9061)
+  - le point indigo « ici » est deux fois plus gros et pulse quand le pair regarde, écoute ou agit (#9061)
+  - les gabarits portent le contour blanc découpé ; la feuille anime Mee et Meo
+  - soixante stickers Mee, Meo et Mee & Meo comblent les intentions creuses
+  - viewing:activity relaie qu'un lecteur ICI regarde, écoute ou agit (#9061)
+  - les stickers Mee et Meo se rangent par intention, et les duos ont leur onglet « Mee & Meo »
+  - les gates du fil et de l'harmonie suivent les emojis ×4 et les illustrations de Mee
+  - la garde de la Lentille lit les tailles d'emoji seul « base × multiple »
+  - un emoji seul est peint à sa taille — relative() le plafonnait à 34 pt
+  - Mee et Meo partent et s'animent sur iOS ; un message d'emojis seuls grossit ×4 / ×3 / ×2
+  - un plein écran ouvert depuis la conversation retire « est dans la conversation » (#9052)
+  - ouvrir une image ou quitter l'écran retire « est dans la conversation » (#9052)
+  - main redevient vert — deinit de la mémoire d'en-tête, clé morte, gardes à jour
+  - une réaction ne dit son émoji et son auteur qu'une fois (#9049)
+  - le mini-lecteur et la barre d'appel remontent hors de l'écran en partant, la bande et le contenu avec eux (Closes #9048, Closes #8983)
+  - sous l'avatar, la série précède les points du jour ; le total reste à l'en-tête déplié (#9044)
+  - l'en-tête déplié montre la flamme et « série · total » comme sous l'avatar, sans capsule (#9044)
+  - le menu d'actions du bas garde son Liquid Glass, seule la bande d'emojis perd son cadre
+  - le compte du jour sous l'avatar est cerclé de 1 pt blanc (#9044)
+  - le point « ici » ne s'efface plus derrière un écran rouvert, pulse en arrivant et cède au vert en rebondissant (#9047)
+  - le compte du jour sous l'avatar est rouge, cerclé de 2 pt gris anthracite, dans les deux thèmes (#9044)
+  - le ×1,4 allonge la bande d'emojis, le menu garde sa hauteur et les emojis leur taille
+  - la flamme pend sous le cercle, s'allume en brûlant, et rien ne s'affiche sans série (#9044)
+  - le menu d'appui long d'un message s'ouvre sans cadre, 1,4 fois plus long, et glisser vers le haut réduit l'aperçu (coque Android comprise)
+  - le menu d'appui long d'un message s'ouvre sans cadre, 1,4 fois plus long, et glisser vers le haut réduit l'aperçu pour dégager le menu coupé
+  - la flamme du jour se pose sous l'avatar, la lueur la rejoint et la fait grandir (#9044)
+  - la caméra refusée du studio offre « Réglages » dans la coque Android (#9032)
+  - l'âge du cache du numéro de build se lit aussi sous GNU stat
+  - vues de Mee servies en SVG précachés, clés de catalogue resserrées, gates de poids verts (#9034)
+  - un build local porte le numéro de la dernière livraison App Store Connect, sans réécrire le dépôt
+  - « Transférer » propose « Imager la discussion »
+  - partager une carte « Imager » partage l'image, plus le chemin du fichier
+  - coller une image, un son, une vidéo ou un document en fait une pièce jointe, et un texte trop long un .txt
+  - Mee et Meo accueillent le lecteur sur les sept pages institutionnelles (#9034)
+  - le collage mesure la limite que les frontends déclarent, MAX_MESSAGE_LENGTH partagé (2000)
+  - onglets Mee, Meo et Instants dans la feuille de stickers, redessinés animés dans la bulle (#9034)
+  - Transférer propose « Imager la discussion » dans le menu d'appui long
+  - banderoles et cœurs géants lisibles dans l'image fixe (#9034)
+  - les 204 stickers de Mee et Meo et leurs ratios mesurés (#9034)
+  - partager une carte imagée remet le fichier image à la feuille, jamais un chemin
+  - coller un fichier ou un texte trop long crée une pièce jointe dans le composer
+  - l'aperçu s'agrandit depuis son en-tête, la flamme du jour s'anime — run test (#9031)
+  - moteur des stickers Mee et Meo (#9034)
+  - l'aperçu s'agrandit depuis son en-tête, la flamme du jour s'anime sous l'avatar (#9031)
+  - le contour « déjà fait » du lecteur de story lit l'accent de l'auteur sous son nom, la garde des couleurs repasse au vert (#9029)
+  - StoryViewerParticipation et StoryRailContourTests inscrits au projet (#9029)
+  - le rail retrouve son contour, son rebond et son cœur
+  - le rail rend ses effets — halo du son, cœur, anneau de participation
+  - la révocation retire aussi les bannières rendues par FCM (#9028)
+  - le service worker ferme la bannière de la réaction remplacée (#9028)
+  - la nouvelle réaction retire la bannière de la réaction d'avant (#9028)
+  - le push d'une réaction remplace la bannière du même acteur sur le même sujet (#9028)
+  - une notification réécrite par une édition reprend sa place dans la cloche (#9028)
+  - la NSE retire la bannière qu'un push d'édition remplace AVANT de l'afficher (#9028)
+  - la liste trie par le rang servi `listRankAt` (#9026)
+  - la série « 🔥4 · 120 » en rouge à côté de l'heure de la rangée, masquée en focus (#9025)
+  - la feuille d'envoi partage par le pont Android et copie avec le repli (#9023)
+  - le cadre téléphone connaît les paramètres des fiches de diffusion, de demande et de signalement (#8876)
+  - la gate des effets d'appel attend que ma caméra rende sa première image — port de #9013 (#9015)
+  - le bandeau du micro suit la langue d'interface et dit « sur cet appareil » (#9016)
+  - la gate des effets d'appel attend que ma caméra rende sa première image (#9013)
+  - le témoin « qui est déjà là » quitte AuthHandler.test.ts, le cliquet de taille des suites repasse au vert (#8876)
+  - l'aperçu d'un vocal à l'appui long affiche sa vraie durée — la pièce jointe parle en millisecondes (Closes #9008)
+  - les gates lisent enfin les requêtes de conteneur, et le cliquet du catalogue TS descend d'un cran (#8876)
+  - la revue de la vue de dieu — accessibilité, kit commun, dossier membre, noms réels (#8876)
+  - la revue de la vue de dieu — fuites de clés, rang d'inventaire, communautés désactivées (#8876)
+  - sur un format fixe, la transcription cède d'abord et l'échelle des médias s'arrête où le texte garde sa place ; l'avis dit quand ce sont les médias (Refs #8979)
+  - un son en échec se relit et retient la vidéo, et la vidéo fait entendre le son PEINT (Refs #8979)
+  - le vocal CITÉ part dans la piste que la bulle fait entendre, et une piste servie ne montre jamais le texte ni la durée de l'original (Refs #8979)
+  - le plateau prend sa hauteur et ne déborde plus sur les boutons ; la consigne tient sur une ligne (Refs #8979)
+  - les deux gardes de la suite repassent au vert — le témoin « qui est déjà là » quitte AuthHandler.test.ts, la suite hide-read lit les vrais schémas de réponse (#8892, #8958) — run test
+  - la suite iOS de dev repasse au vert — l'aperçu de notification de l'iPad vit sur le tas, et le témoin de la date se borne à sa ligne (Closes #8972)
+  - l'onglet Médias d'un vocal règle sa transcription, son minuteur, sa police, la durée et le passage de la vidéo ; chaque partie de la carte se pince (Refs #8979)
+  - le karaoké garde la ligne dite au-dessus, le spectre se pose et respire, et la carte se vérifie en pixels (Refs #8979)
+  - les commandes d'un appel vidéo ne disparaissent plus seules — un toucher les range, le suivant les rend (Closes #8988)
+  - un vocal imagé montre sa transcription qui défile et son minuteur, sur l'extrait choisi ; l'onde et le spectre se distinguent (Refs #8979)
+  - les contrôles de l'appel vidéo ne disparaissent plus seuls et répondent sans délai — un toucher les cache ou les remet, un appui n'écrit plus d'état de la racine, la bascule caméra n'attend plus la session audio, la qualité ne se republie que si elle change (Refs #8978)
+  - la croix du mini-lecteur le ferme sur le champ — la grâce de 5 s n'est plus que celle d'une file épuisée, et tout son cadre se touche (Refs #8983)
+  - la fiche de contact copie avec le repli, et le repli copie depuis la fenêtre modale (#8986)
+  - une image partagée depuis une autre app ouvre la feuille Envoyer, sur le web et la coque Android (#8884)
+  - partager un post ou un réel ouvre la feuille Envoyer, l'invitation prend le même cadre (#8884)
+  - chaque visionneuse plein écran partage par la feuille Envoyer, la story se transfère (#8884)
+  - le transfert de messages passe par la feuille Envoyer (#8884)
+  - la feuille Envoyer en verre liquide, Annuler clair, multi-destinataires et publication (#8884)
+  - un moteur d'envoi unique porte transfert, partage et publication, légende comprise (#8884)
+  - les témoins des catégories de la cloche recompilent — NotificationCategory vit sur le MainActor de MeeshyUI (Refs #8958)
+  - la suite des catégories de notification est @MainActor — SDK Tests compile à nouveau (#8958)
+  - trois vues arrivées après la charte reviennent aux jetons — run test (#8877)
+  - chaque opération du barème crédite, sous ses plafonds et ses garde-fous (#8959)
+  - l'écran du barème règle chaque opération, les liens, la constance et les garde-fous (#8959)
+  - le titre par défaut nomme par le nom réel, et la recherche le charge enfin
+  - les extensions de notification parlent la langue choisie dans l'app (#8951)
+  - un média resynthétisé remplace l'ancien dans le cache de l'app — seed seul gardait la piste périmée (Refs #8855, #8921)
+  - la piste jouée tient jusqu'à la photo — vocal reçu en trois phrases (9,4 à 17,7 s), capture refusée sous 7 s ; le nom d'un vocal suit sa voix et son débit (Refs #8855, #8921)
+  - l'administration parle français, anglais, espagnol et portugais — les autres interfaces la lisent en anglais (#8876)
+  - la cloche web se vide comme iOS — lignes consommées retirées, glissement pour supprimer, catégorie Engagements (#8960)
+  - catalogue des opérations et moteur de quotas du barème (#8959)
+  - la cloche se vide — lignes consommées retirées, glissement pour supprimer, catégories filtrées par la passerelle, puce Engagements (#8958)
+  - l'extension de notification déployée et le partage d'écran sont signés pour la distribution (#8953)
+  - le pied de la bannière se charge à la demande, le lecteur n'importe plus la barre de la visionneuse (#8860)
+  - l'habillage retire les captures d'un plan précédent — le dossier final ne porte que le jeu courant (Refs #8855)
+  - « prêt » s'attend 120 s — un lancement à froid sous charge a pris 69 s, une série de captures ne s'arrête plus sur lui (Refs #8855)
+  - web et coque Android portent le détail du contenu comme iOS (#8860)
+  - la capture refuse un fil coupé par minuit — l'app date tout depuis son horloge, une scène de conversation se prend dans la journée (Refs #8855)
+  - le message que « groupe » rouvre sur son original est une réplique que l'écran de l'iPhone montre (Refs #8855)
+  - la capture synthétise et dépose les médias ; six scènes dans l'ordre du storyboard (Refs #8855)
+  - trois scènes — le vocal joué dans la langue du lecteur, un message rouvert sur son original, Imagine (Refs #8855)
+  - intégration de la vue de dieu, écran d'attente et drapeaux retirés, poids et cliquet remesurés (#8876)
+  - la demande d'un message a un site unique, que la vitrine emprunte (Refs #8855)
+  - « prêt » ne tombe que sur un écran rendu — conversation affichée, progression chargée, aperçu du lien servi, fil peint (Refs #8855, #8921)
+  - les gestes de membre passent par leurs adresses du catalogue (#8876)
+  - membres pleine largeur, listes lisibles à 375 px, sept langues traduites (#8876)
+  - anonymes sur le kit, invités nommés, langue nommée, permissions en phrases (#8876)
+  - conversations et agent alignés sur le kit, fiche complète et membres nommés (#8876)
+  - dossier du membre en mots, décodeur des anonymes sans libellé fabriqué (#8876, #8005, #8004, #7920)
+  - comptes sur le kit, fiche membre interprétée, gestes de sécurité, préférences étiquetées (#8876, #8005, #8004, #7920)
+  - le fil et les médias rangés avant le montage des racines, la liste sans cadenas (Refs #8855, #8922)
+  - fixtures v2 — le couple et son vocal traduit, Pizza Night, le fil, les médias, sans cadenas (Refs #8855, #8922)
+  - journal d'audit nommé et réglages d'administration sur le kit (#8876, #6727, #6732)
+  - médias de la vitrine — photos mesurées, vocaux synthétisés, karaoké (Refs #8855)
+  - le vocal que reçoit le lecteur et la légende d'Imagine (Refs #8855)
+  - supervision de la plateforme, santé relue et usage des routes (#8876, #6730, #6734)
+  - diffusions — composer, préparer, envoyer et suivre sur le kit (#8876, #6731)
+  - classement nommé, podium et filtres dans l'adresse (#8876, #6730)
+  - liens de suivi sur le kit, campagnes lisibles et clics interprétés (#8876, #6729)
+  - demandes de contact et liens de partage sur le kit (#8876, #6729)
+  - publications et communautés sur le kit, avec leurs gestes (#8876)
+  - signalements — file de modération, fiche et gestes sur le kit (#8876, #6726, #6843)
+  - statistiques — chaînes en sept langues, panneau en tabpanel, témoins d'erreur par graphique et d'espace /adm (#8876, #6728)
+  - Statistiques (activité, messages, appels) et Langues et traductions sur le kit (#8876, #6728)
+  - le tableau de bord « vue de dieu », sept zones gardées bloc par bloc (#8876)
+  - la vignette de « Mes stories » passe par la route de flux et ne pose plus une vidéo dans une image (Refs #8820)
+  - kit d'administration, graphiques SVG, hooks de liste et de geste (#8876)
+  - publier les six adresses de supervision aux catalogues clients (#8876)
+  - durcir le classement et tracer les gestes exposés (#8876)
+  - les métadonnées de compte, les noms des acteurs, les diffusions suivies (#8876)
+  - la fiche d'une conversation et celle d'un lien de partage (#8876)
+  - fondation de la vue de dieu — interprétation, glyphes, registre, routes, catalogues (#8876)
+  - superviser les communautés et rendre la désactivation effective (#8876)
+  - nommer le signalant, le modérateur et l'entité signalée (#8876)
+  - servir les liens de suivi et la supervision de la plateforme (#8876)
+  - servir le journal d'audit nommé et interprété (#8876)
+  - monter la surface de supervision `admin-oversight` (#8876)
+  - les deux promesses détachées de l'arrêt et de l'échéance d'invitation portent leur .catch au site (#8297, #8470)
+  - l'appel manqué d'une invitée non membre mène à sa conversation directe avec l'inviteur (#9115)
+  - les invités par lien comptent dans les audiences « les autres participants » (#9106)
+  - la porte optionnelle de GET /posts/:postId porte le type du middleware, plus un any (#9149)
+  - la résolution d'un lien de partage nomme qui l'a partagé — nom affiché, pseudo, avatar (#9149)
+  - un visiteur sans compte lit par son lien une publication publique et vivante, et rien d'autre (#9149)
+  - les packs de stickers — boutique, installation par utilisateur, proposition par des tiers et modération (#9141)
+  - un appel en cours se rejoint au lieu de s'arrêter, et un groupe réduit à un seul finit après la grâce (#9111, #9109)
+  - un message anonyme par lien de partage garde ses adresses telles qu'écrites
+  - une seule détection de langue, qui ne prend plus « légende » pour du portugais
+  - une invitation d'appel se résout toujours — refus et absence de réponse annoncés à l'appel, sonnerie annulée et appel manqué pour l'invité (#8470, #8467)
+  - l'historique des appels montre aussi les appels où l'on était invité sans être membre (#8468)
+  - aucun filtre NOT n'écarte plus en silence les documents où le champ est absent (#8309)
+  - à l'arrêt, la passerelle ferme ses sockets pour que les clients rejoignent aussitôt la nouvelle instance (#8297)
+  - [[url]] n'est plus suivi ni réécrit, [libellé](url) entre dans la carte (#9093)
+  - raccrocher un appel ne relit plus la session et la conversation (#9088)
+  - un call:join ne liste les sockets de la room d'appel qu'une fois (#9087)
+  - un commentaire porte un sticker dans la forme d'un message — descripteur validé dans metadata.sticker, image en média joint, servi hissé en REST et socket (#9080)
+  - une publication suit chaque adresse qu'elle affiche — corps, textes de scène, légendes de média — et recalcule sa carte à l'édition (#9073)
+  - viewing:activity relaie « regarde en plein écran » sans dire quoi (#9065)
+  - la file des gestes viewing ne détache plus sa promesse de nettoyage (#9052)
+  - l'attente des ouvertures avant authentification est bornée à 3 par socket (#9047)
+  - une ouverture de conversation reçue avant l'authentification n'est plus perdue (#9047)
+  - le push d'une édition porte lui-même l'annulation de la bannière d'avant (#9028)
+  - toute activité remonte la conversation pour tous les participants (#9026)
+  - GET /notifications?hideReadTypes= retire les lignes lues des types consommés (#8958)
+  - une traduction garde ses adresses, mentions et hashtags (#9086)
+  - le format d'un pack de stickers — trois genres, zones de texte d'Instant dont la validation prouve qu'aucun texte ne déborde (#9141)
+  - le plafond quotidien du barème d'engagement se garde par prédicat — le tsc du gateway (strictNullChecks off) ne rougit plus l'image Docker
+
+## 1.32.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le lecteur de la notification déployée tient sur un seul axe (#8859)
+  - le fetch du magasin de série est @concurrent — plus de métadonnée de type étendue qui plante iOS 16/17 (#8182)
+  - l'extension de contenu lie UserNotificationsUI dans son exécutable, la notification déployée n'est plus vide (#8859)
+  - le barème lit le blanc de la charte, le plumage du colibri est déclaré illustration — le gate d'harmonie repasse au vert (#8879)
+  - TypingIndicatorBubble n'est plus déclaré deux fois — la fusion de #8920 avait gardé la copie de MessageListViewController à côté de son extraction ; les jetons de #8877 passent dans le fichier extrait — run test
+  - catalogue de la notification déployée en pt-BR, libellés avec valeur par défaut (#8859)
+  - un seul crédit par personne ou par ensemble de membres
+  - le (x) de la colonne se choisit par table ; les gates navigateur suivent les outils du fond (#8849)
+  - la création rouverte reprend son format, l'édition d'une publication se sauvegarde seule (#8849)
+  - la notification déployée fait écouter un vocal, explorer une position et lire une carte de visite (#8859)
+  - éditer le fond ouvre les outils de droite en focus, plus l'ancien panneau Cadre (#8849)
+  - le viseur armé, tenu, filme — toucher photo, tenir vidéo, glisser cadenas et zoom (#8849)
+  - la ligne d'un éphémère échu peint le minuteur, plus une vignette vide — timer.badge.xmark n'existe pas (#8924) — run test
+  - l'expéditeur attend la réception, puis suit l'échéance servie (#8905)
+  - dev recompile sous Xcode 26.1.1 — les médias chargés d'une carte sont une donnée sans acteur
+  - le cliquet d'accent reprend la référence de dev, qui a soldé son rouge (#8879)
+  - le fil relit « N (M) 🔥 » à l'ouverture ; la pastille iOS nomme sa couleur accentColor
+  - copier un lien de partage ou d'invitation retombe sur execCommand quand le presse-papier refuse (#8937)
+  - les gardes de parité suivent l'alias du voile média, et le cliquet d'accent reprend le rouge hérité de dev (#8879)
+  - la pastille relit l'état serveur à l'ouverture d'une conversation
+  - le gate de design laisse story-compose.tsx au chantier du composer (#8879)
+  - les visionneuses plein écran partagent un chrome commun — fermer, réagir, répondre, gestes (#8879)
+  - la palette du SDK devient la seule source des couleurs du web, gardée par check-design-harmony (#8879)
+  - Mee devient un colibri, en aquarelle, glyphe et réaliste (#8908)
+  - rend à dev ce que la fusion de #8903 a perdu — la case de bannière conditionnelle (le SDK recompile) et le verre bord à bord de l'aperçu — run test (#8897, #8898)
+  - pastille « 🔥 série · N (M) » dans l'en-tête et la rangée magnifiée, écran admin « Barème de points »
+  - la vitrine ne remplace jamais une vraie session, n'accepte que l'hôte mort du port 9, et ses témoins gardent les champs optionnels affichés (Refs #8855)
+  - le point indigo passe sur les auteurs, et une reconnexion repart d'un état vide (#8892)
+  - une adresse relative se résout contre la base du document, jamais contre location.origin (#8901) — run test
+  - pastille « 🔥 série · N (M) » dans l'en-tête et la rangée focale, mise à jour live
+  - un éphémère échu disparaît vraiment — ni cache persisté, ni rangée morte, ni décompte qui repart au rechargement (#8900)
+  - rend leur libellé accentHex aux deux appels voisins que le renommage avait touchés — run test (#8898)
+  - qui est déjà là se voit à l'arrivée, et le point indigo passe sur les auteurs (#8892)
+  - l'identité ne voyage que vers la passerelle — une pièce d'un autre hôte se charge sans jeton ni pré-vol refusé (#8901) — run test
+  - Mee, la mascotte, ouvre l'écran Progression — elle compte, invite à frapper et célèbre (#8907)
+  - la galerie remonte le voile de la story, et deux gardes suivent la cible 44 pt dans sa forme jeton (#8878, #8877)
+  - le verre de l'en-tête reçoit l'accent sous son nom admis — cliquet des couleurs conforme — run test (#8898)
+  - le plafond d'une page institutionnelle passe de 10 à 10,5 Ko, à confirmer par le porteur (#8877)
+  - la citation apporte son média ; un média qui ne se charge pas le dit et se réessaie (#8901) — run test
+  - un média qui ne se charge pas le dit et se réessaie ; la citation apporte son média ; une pièce chiffrée n'est jamais peinte (#8901)
+  - le cliquet est inscrit au pbxproj et les gardes de parité web lisent les jetons MeeshyUI (#8877)
+  - glisser → répondre, ← transférer, et l'icône Répondre au pointeur fin (#7559, #8899)
+  - un éphémère mort ne renaît plus en message ordinaire depuis le cache (#7552) — run test
+  - l'en-tête de l'aperçu est une bande de verre bord à bord, arête basse droite — run test (#8898)
+  - la bannière in-app ne pose une case que pour une vraie vignette ou un contenu social — le type n'est dit qu'une fois, par la pastille (#8897)
+  - « Plus tard » porte arrow.forward — la garde RTL de dev repasse au vert — run test
+  - la relecture du lot — compteur lu par VoiceOver, cible sans trou, accent neutre et clé de carte (#8877, #8878)
+  - un seul chrome pour tous les visualiseurs — fermer, menu, réagir, répondre (#8878)
+  - toutes les vues suivent la charte visuelle (#8877)
+  - l'élan suit la règle partagée, les Meesh frappées portent leurs dates, et le lien montre l'adresse publique (Refs #8855)
+  - inscrire les fichiers de « est dans la conversation » au projet (#8892)
+  - le pair qui a la conversation ouverte porte le point couleur primaire (#8892)
+  - la scène se prépare, se remplit, s'ouvre après le voile et signale qu'elle est prête — lien servi sans passerelle, bandeau réseau hors champ (Refs #8855)
+  - les fixtures remplissent les vraies bases — liste par le point réconcilié, messages et traductions, progression, mode de lecture (Refs #8855)
+  - contrat « est dans la conversation » — viewing:start/stop/snapshot et couleur primaire du point (#8892)
+  - session fictive posée ou retirée, et refus de tout vrai serveur (Refs #8855)
+  - l'app lit la scène demandée et décode les fixtures du kit avec son décodeur de production (Refs #8855)
+  - la fiche de contact se présente sur la fenêtre que résout DeviceLayout, pas sur une marche de scènes maison (#8858) — run test
+  - ma nouvelle photo se montre partout où l'on me voit — conversations, membres, comptes de l'appareil
+  - les littéraux de valeur identique deviennent des jetons MeeshyUI (#8877)
+  - le kit habille les vraies captures — fond, titre, cadre — et dresse la planche contact (Refs #8855)
+  - le script capture chaque scène sur les simulateurs dédiés, serveur injoignable, après le signal « prêt » (Refs #8855)
+  - le kit exporte le contenu de la vitrine au format exact de la passerelle (Refs #8855)
+  - deux simulateurs dédiés et des lanceurs de tests iOS ciblés (Refs #8855)
+  - le vocabulaire de la charte visuelle — échelles et couleurs MeeshyUI complétées, charte § 2–5 (#8877)
+  - micro ou position refusés dans la coque Android mènent aux réglages de l'app (#8882)
+  - la photo et la bannière téléversées sont posées, et ma fiche publique les montre aussitôt
+  - une carte de visite sans nom garde la catégorie Contacts que la passerelle déclare (#8858) — run test
+  - la bannière in-app lit le détail là où la passerelle le pose — context.contentDetail imbriqué (#8858) — run test
+  - PhoneChangeFlowModel déclare une deinit non isolée — pas de double libération sur iOS 26.1
+  - le panneau (+) s'ouvre à la hauteur du clavier, bornée, et sa grille montre les 40 médias récents
+  - les catégories du détail s'enregistrent dans le Set attendu ; banc de capture de la bannière in-app (#8858)
+  - la NSE attache la carte d'une position et la vignette d'une vidéo, compose le corps du détail ; Plans, Contacts et Rejoindre deviennent des actions (#8858)
+  - la bannière d'un message dit son contenu — position, contact, invitation, lien, sticker, vignette, réponse à une story
+  - la création en cours se sauvegarde seule et revient après un kill — run test (#8848)
+  - un lecteur unique du détail notifié — position, contact, invitation, lien — et la bannière in-app qui le rend (#8858)
+  - viseur armé, l'appui long filme ; le fond s'édite par les outils de droite en focus — run test
+  - le voile de l'aperçu de bannière est inventorié au verre, et la garde d'encoche ne scanne plus les fichiers de test — dev redevient vert (Refs #8821)
+  - chercher ses contacts propose d'abord d'ajouter son numéro, en disant pourquoi
+  - le numéro dit à quoi il sert sous le champ, et « Plus tard → » le laisse de côté depuis la ligne du libellé
+  - témoin inscrit au pbxproj, clé morte retirée, glyphe après HeaderCallButtonsView — la suite iOS repasse (#8822) run test
+  - « Ajoutez votre numéro » là où l'on cherche des gens, par le parcours SMS existant
+  - « Plus tard → » sur la ligne du libellé, et ce que le numéro ouvre se lit d'emblée
+  - la porte de l'aperçu ne teinte qu'à l'accent de la conversation — le cliquet des couleurs en dur revient à 441 (#8822)
+  - le retour au premier plan rebranche le temps réel sans attendre le backoff (#8839)
+  - le plafond de story_reader suit le menu (…) du lecteur — dev redevient vert
+  - l'aperçu tiré de la bannière défile sous l'en-tête complet en verre, sans chevron (#8822)
+  - la vitrine App Store raconte l'amour, le rire et le débat entre langues, avec de vraies photos et des vocaux traduits (Refs #8825)
+  - l'aperçu s'ouvre à la souris, ses états n'ont aucun chevron, l'identité tient à 390 px (#8821)
+  - l'extrait du post d'une notification sociale descend le Prisme du destinataire
+  - « Enregistrer » dans le menu (…) du lecteur, pour tout lecteur
+  - modernise concurrency sleep in InviteGroupCard and update quality review
+  - un compte connecté rejoint un lien en « Anonyme » sans perdre sa session (#8816)
+  - tirer la bannière vers le bas ouvre l'aperçu de la conversation — le fil défile sous son en-tête complet en verre, sans chevron (#8821)
+  - les captures Android existent dans les sept langues
+  - l'app se lit de droite à gauche en arabe
+  - la couche d'appel et la bannière vivent hors de #root — une visionneuse ouverte ne les rend plus inertes (#8727)
+  - voie du clavier vers le menu du fond, garde des encodeurs, budgets remesurés, gate du studio à la nouvelle géographie (#8715, #8794)
+  - la porte de mise à jour mène à la vraie fiche App Store — apps.apple.com/app/meeshy rendait 404
+  - la carte propose « Rejoindre ? » Anonyme / le compte nommé, et cite le message d'invitation ; catalogue des notifications à part (#8727)
+  - colonne droite (effets du fond ou options de l'objet touché, historique en bas), carrousel d'effets à la place du socle avec miniatures et répétition, (+) de scène en barre haute, éclair puis Cadre après les portes, menus d'appui long du fond et du calque, bascule post → réel (#8715, #8794)
+  - l'appel s'affiche par-dessus tout plein écran, interrompt la lecture et gèle la story (#8727)
+  - la bannière in-app descend en relief et ne dit son aperçu qu'une fois (#8727)
+  - la ligne dit le post, nomme le badge et propose Écrire / Se connecter à l'ami parrainé (#8727)
+  - transitions d'ouverture/fermeture au document, mise en fond, bascule en réel, miniatures bornées et menus de scène — règles pures (#8715, #8794)
+  - la ligne de la cloche ne répète rien et dit son contexte — règle pure (#8727)
+  - la photo en deux temps — le premier toucher arme le viseur, le second n'importe où sur lui prend (#8715)
+  - règles pures des rails de la scène et des transitions d'ouverture/fermeture (#8715, #8794)
+  - copier un message n'annonce « copié » qu'une fois le texte dans le presse-papier, avec repli, web et coque Android (#8809)
+  - la bascule automatique va vers le RÉEL (correction porteur) et le choix au chevron la verrouille ; garde deinit des vignettes — run test (#8793, #8792)
+  - les glyphes Micro et Caméra de l'aperçu suivent Dynamic Type, bornés à leur cercle — aucune taille de police figée neuve (Refs #8795) run test
+  - la page montre l'app sur iOS et Android — badges App Store et Google Play, captures des deux plateformes, liens institutionnels
+  - la répétition part au premier tick et un tour après le choix — le premier effet visuel rejoue aussi (#8792) — run test
+  - l'appelant choisit, contact par contact, ce que l'appelé voit et entend avant de décrocher — micro coupé et caméra activée par défaut (Refs #8795) run test
+  - effets de scène en deux familles, vignettes réelles et répétition des transitions ; bascule post → story — run test (#8792, #8793)
+  - une mention validée pose le curseur en fin de texte, jamais au milieu du pseudo (Closes #8791) run test
+  - un brouillon tapé en milieu de mot s'écrit quand la page est masquée ou fermée, coque Android et web comme iOS (#8790)
+  - l'écran d'appel suit enfin l'appel — plus de cycle SwiftUI, pilule vraiment masquée, réponse en double sans raccrocher, aperçu plein écran (Refs #8772) run test
+  - ouvrir une conversation retire ses bannières de la barre de notifications, web et coque Android comme iOS (#8781)
+  - le déclenchement manuel construit la ref demandée — plus de 409 « branch dev »
+  - l'appel vidéo ne fait plus déborder la pile de l'iPhone, et la rangée de statistiques ne trappe plus au rendu asynchrone (Refs #8772)
+  - le gate des utilitaires protège les apostrophes comme Tailwind — dev redevient vert
+  - la pilule d'appel perd la classe before:content-[''] qu'aucune feuille ne sert — dev repasse au vert
+  - le barème réglé par l'administration gouverne chaque crédit, par conversation et en temps réel
+  - « est dans la conversation » — registre par socket, annonce et retrait temps réel (#8892)
+  - un aperçu se coupe par point de code, jamais au milieu d'un emoji
+  - barème d'engagement réglable et état « N (M) 🔥 » par conversation
+  - la loi de la mascotte — événement et moment (#8907)
+
+## 1.31.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - « Et maintenant ? » ne saute plus — il attend la liste au démarrage et le pied de pagination garde une hauteur (Closes #8759) — run test
+  - quote le path de CallManager+Speaker.swift dans project.pbxproj
+  - expandMotif fusionne base+variant avec un typage complet de FrameLook (#8757)
+  - le projet se relit dans Xcode et la géométrie « orbite » se type-vérifie à temps (Refs #8741, #8743)
+  - la fenêtre d'appel résout sa scène par DeviceLayout et se montre au retour de l'app — run test
+  - expandMotif fusionne base+variant avec un typage complet de FrameLook
+  - les cadres entrent dans le mode Montage — puces d'ambiance, carrousel filtré par le nombre de personnes, capture au cadre (Refs #8742, #8743)
+  - une bannière web se ferme quand sa notification est supprimée, comme dans la coque Android (#8752)
+  - le rendu des cadres de capture — catalogue généré depuis le JSON partagé, géométrie à parité web, peintres CoreGraphics (Refs #8741, #8743)
+  - les sorties du menu « … » se posent au commit qui l'ouvre — un Échap précoce ne ferme plus la feuille de story
+  - en mode Effets, les autres restent à l'écran — un bloc en haut, hors de la capture (Refs #8737)
+  - le moteur de rendu des cadres de capture — géométrie, textes, peintres, calques en cache (Refs #8741, #8743)
+  - chaque bouton répond au premier toucher, les rangées défilent sans rebond, et les commandes de ma caméra encadrent ma vignette (Refs #8735, #8736, #8747)
+  - les commandes de ma caméra encadrent ma vignette — Effets · Écran au-dessus, Retourner · Caméra en dessous, en verre interactif (Refs #8747)
+  - chaque bouton de l'écran d'appel répond au premier toucher (Refs #8735, #8736)
+  - le carrousel des modes suit le doigt — il ne choisit qu'une fois posé, n'est plus ramené sous le doigt, se lance sans butée et se saisit sur 88 pt (Refs #8736)
+  - « Imager » cite la racine d'après le fil COURANT — les gestes suivent la liste et le prisme
+  - 146 cadres en douze ambiances — chaque ambiance sert chaque nombre de 2 à 6, la signature Meeshy partout (Refs #8741)
+  - en mode Effets, les autres participants restent à l'écran — vignette du duo, bande du groupe, glissée d'un coin du haut à l'autre (Refs #8737)
+  - ambiances Fantastique, Futuriste, Glauque dessinées (Refs #8741)
+  - le menu « … » des commentaires — copier, imager avec les réponses, modifier, supprimer, signaler — sur la publication, la story et le réel
+  - menu « … » des commentaires de story — modifier, signaler, copier, Imager avec l'arbre (run test)
+  - le projet committé redevient lisible par Xcode — meeshy.sh device compile de nouveau
+  - six ambiances dessinées — Signature, Distingué, Élégant, Jovial, Déconnecté, Corporate (Refs #8741)
+  - la carte « Imagine » porte les réponses d'un commentaire, et le presse-papiers a son repli
+  - le contrat des cadres de capture — vocabulaire, schéma, règle de filtrage par nombre, témoins rouges du catalogue (Refs #8741, #8742, #8743)
+  - l'appel se pose par-dessus tout plein écran et gèle la story — run test
+  - la loi du menu « … » d'un commentaire — copier, imager, modifier, supprimer, signaler
+  - boutons arrondis d'origine, le compte nommé, le message d'invitation en citation (run test)
+  - notifications en relief, sans répétition, qui disent de quoi il s'agit — run test
+  - bannière in-app en verre avec relief, page Notifications sans répétition (#8723, #8724)
+  - « Rejoindre ? Anonyme / Mon compte » en capsules compactes pour un lecteur non membre
+  - la vue d'appel vit dans sa propre fenêtre, au-dessus de tout plein écran (#8725)
+  - le pbxproj committé enregistre les témoins et les sources du lot #8721 (xcodegen generate) — run test
+  - la forme d'onde et l'export animé recompilent sous Swift 6 — accès exclusif au tampon PCM, générateur d'images envoyé une seule fois
+  - l'image de la vidéo se lit sans envoyer le générateur, l'onde sans accès chevauchant — run test
+  - l'accès au magasin audio ou vidéo du cache attend l'acteur — la cible de test recompile
+  - l'appui long sur un média propose de le mettre en fond ou de remplacer le fond, et sur un fond de reprendre une photo
+  - le menu d'appui long des objets et du fond de la scène est peint en verre (adaptiveGlass : Liquid Glass sur iOS 26, matériau avant)
+  - CacheAccountBinder déclare sa deinit non isolée — la garde du core rougissait sur dev — run test
+  - mon image zoomée en plein écran reste dans son cadre
+  - une photo prise au composeur part originale si le développement ne se charge pas
+  - développer une photo ne coûte plus que deux tableaux d’octets
+  - un fond média offre ses effets à droite, leur carrousel remplace l'audience et Publier, et la scène remonte au-dessus d'un panneau du bas
+  - le (+) nouvelle scène prend la place de l'éclair, l'éclair et le Cadre suivent le lieu à gauche, le rail droit porte les options du moment au-dessus d'annuler/rétablir ; toucher un objet ouvre ses options à droite, terminées par (x)
+  - le journal réseau relu du stockage n'est cru qu'une fois reconnu
+  - un refus de la préférence de dégradation n'empêche plus le plafond vidéo
+  - le réglage Opus ne touche que la section audio qui porte Opus
+  - la suite des fils revient sous sa dette de taille — le compteur de lectures de collecte part dans son propre module (Refs #8630)
+  - un échec de bascule de caméra entre au journal de l'appel
+  - la fiche d'un appel manqué ne montre plus une section « Qualité et réseau » vide de sens
+  - le munging Opus remplace un paramètre fmtp espacé au lieu de le doubler
+  - le profil d'appel lit le chemin réseau de la source unique du SDK, connu avant la première offre
+  - le profil de données plafonne les émetteurs dès que l'offre ou la réponse les crée
+  - la photo de scène se prend en deux temps — un toucher arme le viseur, un second n'importe où déclenche
+  - le bouton de zoom de la vignette ne se pose que s'il reste une rangée libre au-dessus des commandes
+  - une trame sans travail compte dans le budget — l'éclaircissement revient après une surcharge
+  - le magasin du cache se lit en await hors de son acteur — run test
+  - dev recompile sous Xcode 26.1.1 — await du magasin audio/vidéo, copie PCM sans accès chevauchant, générateur séquentiel non envoyé
+  - la fiche d'un appel montre « Qualité et réseau »
+  - le zoom de ma vignette se charge avec celui du plein écran, et les gates d'appel le mesurent
+  - le journal réseau et qualité de chaque appel persiste par compte
+  - la feuille qualité dit le profil de données et ses plafonds
+  - un profil de données borne la vidéo, la voix Opus et la capture
+  - le seau api cite l'entrée du catalogue, pas l'adresse en dur
+  - zoomer ma caméra avant comme arrière, du bout des doigts ou d'un cran dans ma vignette
+  - « Imager rapide » attend les pixels des médias avant d'enregistrer
+  - la caméra arrière qui zoome le plus loin, et les lois du zoom sur les deux caméras
+  - l'export rapide attend les pixels des médias — run test
+  - la fiche d'un appel montre « Qualité et réseau » et sa transcription
+  - la vidéo joue sans son bouton dans un export animé ; budget des catalogues d'« Imagine » remesuré
+  - toutes les prises de vue passent par le développement unique, à l'endroit
+  - un seul développement pour toute photo prise dans Meeshy
+  - le commentaire du seau api cite l'entrée du catalogue, pas l'adresse en dur
+  - « Imager » partout, l'atelier « Imagine » porte médias, format, Frame et GIF/vidéo — run test
+  - l'appel en cours écrit son journal réseau et qualité
+  - « Imager » partout, atelier « Imagine » avec Frame, Médias et GIF/vidéo ; messages et commentaires
+  - l'écran reste allumé pendant un appel, comme dans la coque Android (#8701)
+  - la feuille de qualité d'appel montre le profil de données et le chemin réseau
+  - une seule loi du miroir de caméra pour l'aperçu, l'envoi et la capture
+  - le doc-comment du seau api cite l'entrée du catalogue, plus l'adresse en dur — run test
+  - profils d'économie de données en appel (Wi-Fi, cellulaire, économie, dégradé)
+  - zoom d'un doigt dans les commandes caméra — pastilles 0,5×·1×·2×·3×, bouton replié de 44 pt
+  - la symétrie caméra se décide en un seul endroit, sur la caméra qui livre les trames
+  - la carte porte les médias, son format, l'onglet Frame et l'animation — un seul moteur, vignette comprise
+  - journal réseau et qualité d'un appel, persistant et rangé par compte
+  - le flux vidéo envoyé s'éclaire seul dans une scène sombre
+  - caméra de conversation, composer, story et captures d'appel passent par le traitement unique
+  - formats, pseudo, heures, médias d'un message ou d'un commentaire, GIF et vidéo
+  - une section repliée affiche ses non-lus à côté du chevron — run test
+  - un seul traitement de la prise photo — redressée, bornée, améliorée, métadonnées gardées
+  - la carte porte ses médias, son format et son cadre ; la miniature garde son séparateur
+  - une section repliée affiche le nombre de non-lus qu'elle cache
+  - la disposition et les médias d'une carte Imagine deviennent des lois du SDK
+  - texte à l'échelle de la scène réduite, double-toucher = édition sur scène, porte image = photothèque directe ; fusion de dev — run test
+  - le texte saisi garde la part de la scène qu'il aura publiée — loi SceneCardProjection, taille peinte unique calque/champ, témoins
+  - le catalogue perd les sept clés que la refonte au toucher n'emploie plus, et chaque zone de la carte déclare sa cible (Refs #8667) — run test
+  - la saisie s'écrit à la pose et à l'échelle de la scène visible
+  - les gestes de la scène vide, un par ligne, chacun sous son icône
+  - scène vide sans appareil photo au-dessus du titre, un geste par ligne avec son icône — run test
+  - la porte image ouvre directement la photothèque, le double-toucher d'un texte ouvre l'édition sur scène (WIP)
+  - la sortie de session remet toujours les horloges de synchronisation à zéro après la liaison du cache (Refs #8674)
+  - une réponse part avec le message éphémère qu'elle cite, chez son auteur aussi (#8630)
+  - changer de compte garde la base de messages du compte quitté ouverte jusqu'à son retour ; seuls la déconnexion, la révocation et le retrait l'effacent (Refs #8674)
+  - « Son » coupé, la coque Android ne sonne plus, comme le web et iOS (#8678)
+  - le cache de chaque compte gardé est mis de côté au changement de compte et rendu à son retour avec son point de reprise (Refs #8674)
+  - retirer un compte de l'appareil efface aussi son cache rangé et ses données locales
+  - la scène vide tient sur petit écran, le zoom reste dans le viseur, l'état du film descend au-dessus du déclencheur
+  - le seau api du service worker range chaque réponse sous son identité ; outbox, épingles et frappe d'un compte ne passent pas au suivant
+  - cadenas dès l'appui, zoom au glisser vertical, curseur d'intensité du flash, scène vide commerciale — run test
+  - chaque compte garde son cache, une requête en vol ne se résout pas sous le compte suivant
+  - une scène vide qui donne envie, verrou et zoom au glisser pour la vidéo, curseur de verre pour l'intensité du flash
+  - scène vide qui donne envie, cadenas et zoom au glisser pour la vidéo, curseur de verre pour l'intensité du flash (WIP)
+  - le composer iOS se règle au toucher, en Liquid Glass adaptatif (#8667)
+  - le composer d'export se règle au toucher — plateau à onglets, galerie cherchable, Liquid Glass (#8667)
+  - la coque Android se construit signée pour le Play Store et un workflow la publie (Refs #8669)
+  - la base d'un compte quitté quitte le disque une fois purgée — une écriture tardive ne la re-remplit plus (#8656)
+  - la carte d'export nomme ses zones touchables et se cherche parmi ses templates (#8667)
+  - le Cadre ouvert reçoit le focus par son (X) — la tuile qui l'a ouvert vient de devenir inerte
+  - le sol blanc s'allume d'un coup, un appui relâché pendant que la lumière monte ne laisse aucun enregistreur tourner
+  - une base locale des messages par compte et par environnement, basculée en synchrone au changement de compte (#8656)
+  - un outil ouvert prend toute la place, la scène vide se capture d'un geste, le flash éclaire vraiment
+  - VoiceOver annonce les réglages de l'outil quand ils occupent le rail — run test
+  - la scène vide se capture d'un geste — toucher = photo, appui long = vidéo, (x) toujours là, vrai flash et sol blanc en caméra avant
+  - un outil ouvert prend toute la place — ses réglages remplacent les portes, le reste du chrome s'efface
+  - le préchargement des messages de la liste ne demande rien pour un autre compte que celui qui l'a lancé, ni pour un identifiant vide (#8651)
+  - l'enveloppe de la scène qui cède ne prend plus le nom du calque de scène (Refs #8643)
+  - la synchronisation de la liste appartient au compte qui la lance, et aucune URL ne part avec un segment vide (#8651)
+  - répondre dans la feuille garde la cible lisible, et le fil repris ne peint plus d'anneau (Refs #8643, #8644)
+  - lire les commentaires floute la scène, écrire la réduit au-dessus de la barre, le repli ⌄ vit dans la plaque (Refs #8643)
+  - la scène d'une story se floute sous les commentaires, se réduit au-dessus du composeur, et le repli vit dans le verre (Refs #8642, #8644)
+  - la loi de la scène qui cède — flou à la lecture, réduction à l'écriture (Refs #8643)
+  - « Coller » une image en sticker fonctionne dans la coque Android (#8640)
+  - l'horloge du film d'appel lit les chiffres du lecteur, et le témoin du fil d'aperçu ne compte plus la boucle d'enregistrement
+  - VoiceOver annonce qu'une bulle flamme-œil disparaît après lecture (#8635)
+  - la citation d'un éphémère échu dit « Message éphémère expiré », plus « Message supprimé » (#8631)
+  - une flamme-œil reçue ne se lit plus en clair dans la ligne de liste ni dans la recherche (#8634)
+  - une ligne complétée servie isEdited:false met à jour le contenu sans se graver « modifiée » (#8633)
+  - le lecteur d'écran dit la protection d'un message — flamme-œil, éphémère, flou, vue unique (#8635)
+  - un glissé du carrousel des montages n'est plus perdu (Closes #8619)
+  - la citation d'un éphémère échu se lit « Message éphémère expiré », plus « Message supprimé » (#8631)
+  - une flamme-œil ne se lit jamais dans la ligne de liste — placeholder servi par la passerelle et composé par le client (#8634)
+  - une conversation découverte entre par la route riche, avec son aperçu
+  - une ligne d'arrivées complétée met à jour l'aperçu iOS (#8565)
+  - l'export ressemble au lecteur — pastille de son en verre animée, GIF animés, gabarits en cache (Refs #8609, #8610, #8611)
+  - une édition du message cité ne ressuscite pas une citation scellée (#8562)
+  - la réponse HTTP d'un envoi sert la citation par la garde unique (#8562)
+  - message:new et message:edited scellent la citation d'un éphémère échu pour un lecteur (#8562)
+  - une petite vignette porte aussi les commandes de ma caméra, repliées en un bouton qui déploie leur grille (Refs #8626)
+  - filmer le montage ne redessine plus l'écran d'appel à chaque trame (Refs #8625)
+  - le style choisi se déclenche — deux tapes pour la photo, appui long pour filmer le montage (Refs #8625)
+  - une vue unique floutée garde son flou à l'ouverture d'un texte, une pièce s'ouvre en clair (#8567)
+  - le lien de partage scelle la citation d'un éphémère échu pour son lecteur (#8562)
+  - ouvrir la vue unique d'un texte flouté ne lève pas le flou (#8567)
+  - une réponse floutée par contagion peut aussi être à vue unique (#8567)
+  - le fil de réponses scelle la citation d'un éphémère échu pour son lecteur (#8562)
+  - une ligne d'arrivées complétée met à jour l'aperçu, sans « modifié » (#8565)
+  - GET …/messages scelle la citation d'un éphémère échu pour son lecteur (#8562)
+  - les commandes de ma caméra vivent dans ma vignette, et en haut au centre quand mon image est en plein écran (Refs #8626)
+  - la citation d'un éphémère échu pour son lecteur se scelle au site unique (#8562)
+  - l'aperçu avant décroché se montre aussi sous CallKit au premier plan, tient jusqu'à la connexion, et propose le son d'emblée (Refs #8627)
+  - message:edited d'une ligne complétée porte son systemEvent (#8565)
+  - une notification révoquée quitte le tiroir de la coque Android (#8624)
+  - la nomination de l'auteur devient un site unique
+  - l'agent reçoit le nom du COMPTE, jamais un nom vide
+  - Échap ferme le panneau ouvert sans réduire l'appel, le focus change de place au commit (Closes #8618)
+  - changer la taille du texte d'Android ne redémarre plus la coque (#8616)
+  - le modal réel se charge à la demande, le chunk story_studio remesuré à 25,31 Ko (Refs #8603)
+  - la suite complète repasse au vert — chevron d'appel, trois gardes repointées, mesure Foundation (run test)
+  - publier un post à une seule vidéo demande « Publier en réel ? », « C'est un Réel » par défaut (Refs #8603)
+  - le ⋯ du composer remet au moteur la scène entière — stickers, retouches, sons (Refs #8599)
+  - un glissé sans clic synthétique ne mange plus le tap suivant (Refs #8583)
+  - écrire un commentaire de story fait le silence autour du champ (Refs #8601)
+  - une scène minutée s'ouvre avec son curseur et grandit depuis le fil (Refs #8598)
+  - quand on commente une story ou un réel, le chrome cède la place (Refs #8601)
+  - glisser un commentaire à droite y répond, ses réponses se déplient et ses effets s'appliquent (Refs #8583)
+  - une scène à timeline s'ouvre depuis sa carte, avec son curseur (Refs #8598)
+  - le moteur reçoit ce que la scène tient en mémoire et peint les puces de son
+  - la loi pure du glissé « répondre » d'un commentaire (Refs #8583)
+  - le substrat synthétique quitte StoryExporter.swift (1335 → 1066 lignes) avant d'y ajouter (Refs #8599)
+  - le fond vidéo et le fond image sortent à l'endroit — preferredTransform conjuguée au repère Core Image, orientation EXIF honorée (Refs #8600)
+  - la carte d'une scène confie son cadre et son temps à la visionneuse (Refs #8598)
+  - la cible de réponse de la feuille rend les deux lignes qu'elle prenait à la dette (run test)
+  - la feuille de commentaires reçoit la cible de réponse par son init explicite
+  - le plein écran s'ouvre vraiment dans la coque Android, comme sur le web (#8594)
+  - l'option pressée d'un mode se peint par ses classes, sans verre repeint (Refs #8578)
+  - les plans de l'écran d'appel — la pilule et ses panneaux au-dessus de ma vignette (Refs #8577, Refs #8579)
+  - les gates d'appel mesurent la couche, les modes, le doigt, le pincement et le journal (Refs #8575, Refs #8576, Refs #8577, Refs #8578, Refs #8579, Refs #8580)
+  - toucher un montage le garde — le carrousel vise le centre en position absolue (Refs #8580)
+  - ma vignette reçoit le doigt — au-dessus de la colonne, et le toucher d'après un pincement (Refs #8577)
+  - la contagion de réponse tient les gardes de warm-up, de taille figée et d'état armé
+  - le Journal de l'appel, entier, et sa transcription dans la fiche (Refs #8579)
+  - mon image — le zoom et le rail en plein écran, la vignette qui se pince en x1 · x2 · x3 (Refs #8576, Refs #8577)
+  - six montages glamour rejoignent le carrousel Montage (Refs #8580)
+  - glisser un commentaire à droite y répond, et ses effets s'appliquent partout (run test)
+  - la carte d'export compile sur appareil — wrap ne capture plus measure dans une closure
+  - la ligne de story, le fil de commentaires et l'aperçu du fil quittent leurs hôtes hors budget
+  - pincer ma vignette la fait passer de x1 à x3 (Refs #8577)
+  - la coupe en lignes de la carte d'export compile — fonction locale au lieu d'une closure qui capture une mesure non-escaping (Refs #8555)
+  - mon image en plein écran se zoome et porte ses options caméra (Refs #8576)
+  - une chose à la fois — panneaux à la place des rangées, modes Effets et Montage qui libèrent l'écran (Refs #8578)
+  - le journal garde tout l'appel et se relit sans sauter (Refs #8579)
+  - le contrôleur des captures d'appel déclare sa deinit nonisolated — MainActorDeinitSourceGuardTests repasse au vert (Refs #8555)
+  - la découpe en lignes de la carte d'export compile (#8570)
+  - une seule chose à la fois, les modes Effets et Montage libèrent l'écran (Refs #8578)
+  - six montages glamour — couverture, doré, tapis rouge, pellicule, néon, noir et blanc (Refs #8580)
+  - seul un téléchargement manuel vibre, jamais un auto-téléchargement
+  - les rangées défilent au doigt et à la molette, sans accroche qui ramène à zéro (Refs #8575)
+  - les rangées d'actions défilent au doigt (Refs #8575)
+  - l'extension de transcription porte son Logger.calls ; le fichier rejoint le projet (Refs #8475)
+  - micro coupé, ma voix n'est plus transcrite ni envoyée en sous-titres — iOS et web (Closes #8475)
+  - la feuille d'export reçoit l'accentColor de la conversation (#8570)
+  - exporter un message en image depuis son menu (#8570)
+  - la réponse hérite du flou et de l'éphémère du message cité, verrouillés au composeur
+  - moteur de la carte d'export d'un message en image (SDK)
+  - ReplyProtectionContagion, miroir de la contagion des protections par la réponse
+  - la réponse hérite du flou et de l'éphémère du message cité
+  - la coque Android recharge l'app quand le moteur de rendu meurt, comme un onglet (#8564)
+  - la ligne de liste dit les arrivées de Meeshy Global et le texte d'un avis non typé
+  - un avis système que le serveur ne sait pas typer se lit par son texte, comme dans le fil
+  - options d'outil en colonne à droite de leur porte, boutons flottants plus petits et plus hauts — run test
+  - une flamme-œil consommée ne réapparaît pas au retour du lecteur
+  - options du (…) en rangées horizontales, effets de visage et captures en montage — web et iOS (#8555)
+  - Sauvegarder et Partager, langue d'export, métadonnées Meeshy dans le PNG
+  - templates de carte d'export, filigrane « Meeshy @pseudo », anonymat des auteurs
+  - la feuille d'export devient un composer simplifié, avec format par défaut (#8553)
+  - un message et sa réponse s'exportent en image signée Meeshy (#8553)
+  - porte le correctif de loupe de #8545 (gate « mode de lecture » rouge sur dev)
+  - la coque Android montre le fond d'une vidéo sans aperçu, comme le web (#8547)
+  - le texte se déplace, se zoome et se tourne au doigt dans son éditeur (#8540)
+  - importer plusieurs médias d'un coup, une scène chacun, et une adoption de pré-montée imperceptible (#8540)
+  - l'espace qui pend en fin de ligne ne compte plus comme encre de l'élu
+  - run test — Focal, seul le contenu de l'élu grandit et ses contrôles répondent au premier toucher
+  - en Focal, seul le contenu de l'élu grandit ; ses contrôles restent à l'échelle 1 et répondent au premier toucher (Refs #8536)
+  - en Focal la loupe ne porte que le contenu de l'élu, son cadre débordant reçoit le toucher, la date ouvre les détails, un flou se lève d'un toucher (Refs #8537)
+  - le doigt qui déplace le texte en édition reste à la saisie — capturé par la scène, il n'y arrivait plus (Refs #8535)
+  - le texte en cours d'écriture se déplace, se pince et se tourne au doigt sans quitter l'édition (Refs #8535)
+  - la teinte du Cadre passe aussitôt sur le sol, et le décodage tient sans `Image.decode` (Refs #8534)
+  - le sol du studio ne scintille plus — une image ne cède sa place qu'à une image décodée, en fondu (Refs #8534)
+  - la porte du fond importe plusieurs médias d'un geste — une scène par image ou vidéo, le surplus refusé et compté (Refs #8533)
+  - sur grand écran, la bande (Cadre, fond) flotte en carte à côté du rail droit (#8532)
+  - sur iPad et Mac, le composer de story suit la maquette grand écran (#8532)
+  - le texte alternatif d'un média de post est lu par VoiceOver — run test
+  - retoucher une image de conversation ne la dégrade plus et ne perd plus l'original
+  - le corps du Cadre défile sans écraser ses champs, le titre « Filtre » suit ceux du Cadre ; D-151 (Refs #8517, #8518)
+  - une vidéo éditée remplace la pièce jointe en attente — message et citation de post
+  - une republication mise en file hors ligne garde son lien d'origine et ses stickers animés
+  - le son de fond et le sticker de bibliothèque d'un post voyagent avec le brouillon durable
+  - un post ou un réel de M scènes remis par l'atelier part en UNE publication
+  - un média du studio porte son texte alternatif, et le fond choisit son filtre dans le Cadre
+  - éteindre Animé rend la scène statique, et la frise se range par la tuile Temps, comme iOS
+  - l'unité des secondes de la frise se traduit (Refs #8516)
+  - les plaques du studio restent bornées au bureau, et le retour comme Échap ne ferment que la couche du dessus
+  - on écrit un texte sur la scène au doigt et à la souris
+  - le cliquet des couleurs iOS enregistre le filet retiré du verre Focal — 443 → 442 (Refs #8506)
+  - le retour Android referme le menu de modération et l'alerte « Retirer de l'appel » (Refs #8504)
+  - le filtre de slide va au fond, celui d'un média posé reste sur lui, à l'aller comme au retour de CanvasV3 (#8502)
+  - un objet média porte son propre filtre, l'éditeur n'offre que ses outils, la barre haute redescend (#8474)
+  - la scène respire et reste dans l'écran, la frise se règle à la main, le post se rédige dans un cadre de verre (#8474)
+  - un commentaire se signale — atteint par sa publication, jamais le sien
+  - un commentaire se signale — cible atteignable par sa publication
+  - une notification sur un commentaire porte le post qui le porte, le badge « Invités venus » nomme l'invité (#8724)
+  - la suite des fils de conversation revient sous sa dette de taille héritée après #8630
+  - la réponse morte pour un lecteur ne garde pas son texte d'origine (originalContent), et les gardes comptent la chaîne citée (#8630)
+  - une réponse meurt, pour son lecteur, avec le message éphémère qu'elle cite (#8630)
+  - la contagion de réponse tient les gardes de taille et de lecture de Message
+  - les gardes de vérification d'adresse quittent auth.ts, revenu à 959 lignes sous le budget de 1000
+  - la destruction d'un message cité fixe l'échéance de ses réponses (#8630)
+  - une règle unique dit quand un post à une seule vidéo propose le réel (Refs #8603)
+
+## 1.30.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le tampon de l'élu ne borne plus sa loupe ; le gate mesure le cadre
+  - le bloc de verre de Focal est la matière du panneau du composer, vrai verre d'iOS 26 — run test (Refs #8506)
+  - en Focal, identité, bande et tampon vivent dans le cadre de l'élu, agrandis de x1,2 encore
+  - en Focal, l'identité, la bande et l'heure de l'élu vivent dans son cadre, agrandi de 20 % (Refs #8506)
+  - voir et entendre l'appelant avant de décrocher (#8480) (#8498)
+  - la scène garde 10 px de chaque côté et rien ne déborde, ✕ et ⋯ redescendent, plafonds remesurés, captures du lot 7 (Refs #8474, #8482)
+  - plafond du chunk story_studio porté à 25 Ko, remesuré à 23,1 Ko après le lot 7 (Refs #8474)
+  - frise réglable à la main, post rédigé dans un cadre de verre, filtre propre à chaque média posé (Refs #8474)
+  - on voit et, si on le choisit, on entend l'appelant avant de décrocher — passerelle et web (#8494)
+  - la fenêtre d'une piste se déplace et s'étire, écart minimal 0,05 s comme iOS (Refs #8474)
+  - les requêtes ne dépendent plus de AbortSignal.any, absent avant Chromium 116 (#8481)
+  - la coque ne plante plus à la connexion quand FCM n'est pas configuré (#8477)
+  - publier suit le délai de grâce de l'adresse — passerelle, iOS et web alignés
+  - le retour Android referme les feuilles de l'écran d'appel (Refs #8466)
+  - le gate des contrôles d'appel, et l'écran d'appel sous son plafond
+  - la frise et le sol du composer passent par les couleurs du thème (#8457)
+  - le retour Android referme le studio de retouche au lieu de quitter le fil (Refs #8460)
+  - les actions du duo tombent dans les colonnes de la pilule (#8459)
+  - lot 6 du composer plein écran — disques sans libellé, sélection silencieuse, plaques en bas, sol teinté, frise de la maquette
+  - frise de la maquette — 6 s, Entre ici / Sort ici, pose à la tête, fantôme hors fenêtre
+  - le composer plein écran suit la directive du 2026-09-27 — petits boutons, sélection silencieuse, frise de la maquette (#8457)
+  - Ajouter, Réagir, modérer et choisir l'enregistrement à l'écran
+  - la fiche d'un appel compte ses réactions ; les actions d'un groupe se coupent en rangées de quatre (Refs #8433, #8438, #8439)
+  - la pilule est un vrai bloc Liquid Glass et le (…) s'y déploie (#8459)
+  - ajouter une personne, modérer et réagir pendant l'appel — contrôleur, verbes socket et vues (Refs #8433, #8438, #8439)
+  - l'enregistrement choisit audio ou vidéo ; la fiche compte les réactions
+  - le moteur invite, coupe un micro, se laisse couper et réagit
+  - on choisit d'enregistrer l'appel en audio seul ou en vidéo, capté par ReplayKit (Refs #8437)
+  - les gardes de vérification d'adresse quittent auth.ts, revenu à 959 lignes sous le budget de 1000
+  - la loupe de l'élu grossit de 26 % et ne s'écrête plus sur la hauteur
+
 ## 1.29.0
 
 ### Minor Changes

@@ -222,6 +222,29 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
       expect(served.replyTo.isViewOnce).toBe(true);
     });
 
+    // #8562 — un éphémère échu POUR CE LECTEUR (flamme-œil consommée) sort
+    // scellé dans la citation, même s'il vit encore pour les autres.
+    it('scelle la citation d’une flamme-œil consommée par ce lecteur', async () => {
+      const consumed = new Date(Date.now() - 60_000);
+      const raw = makeRawMessage(anonymousParticipant);
+      raw.replyTo = {
+        ...raw.replyTo,
+        content: 'Le secret brûlé après lecture',
+        effectFlags: 8,
+        senderId: 'p_user_1',
+      } as typeof raw.replyTo;
+      const readers = {
+        deadlines: new Map([['m0', { isSender: false, readerDeadline: consumed, latestRecipientDeadline: consumed }]]),
+        now: new Date(),
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(raw, readers)]);
+
+      expect(served.replyTo.content).toBe('');
+      expect(served.replyTo.deletedAt).toBe(consumed.toISOString());
+      expect(JSON.stringify(served)).not.toContain('Le secret brûlé après lecture');
+    });
+
     it('masque le texte du message cité quand il est flouté', async () => {
       const raw = makeRawMessage(anonymousParticipant);
       raw.replyTo = {

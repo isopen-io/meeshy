@@ -126,6 +126,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// sortante est quittée, l'entrante pas encore reprise. La racine y montre
     /// un écran neutre plutôt que la connexion.
     @Published public internal(set) var isSwitchingAccount = false
+    /// #9612 — la fermeture que le serveur vient de prononcer, à EXPLIQUER
+    /// avant la reconnexion (« fermée par l'équipe Meeshy », « depuis un autre
+    /// appareil »…). `nil` dès que l'utilisateur l'a lue.
+    @Published public private(set) var sessionRevocationNotice: SessionRevocationNotice?
     /// #8286 — le choix « Rester connecté sur cet appareil » d'une connexion
     /// en cours, consommé par la session qu'elle ouvre (second facteur compris).
     var pendingKeepSignedIn: Bool?
@@ -510,15 +514,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
-
-        if activeUserId == userId {
-            activeUserId = nil
-            currentUser = nil
-            isAuthenticated = false
-            pendingOptimisticProfile = nil
-            APIClient.shared.authToken = nil
-        APIClient.shared.registeredSessionToken = nil
+        // #8674 — retiré de l'appareil : son cache part, qu'il soit vivant ou
+        // mis de côté.
+        guard activeUserId == userId else {
+            if let key = accountKey(for: userId) { CacheAccountBinder.shared.forget(key) }
+            return
         }
+        CacheAccountBinder.shared.bind(nil)
+        activeUserId = nil
+        currentUser = nil
+        isAuthenticated = false
+        pendingOptimisticProfile = nil
+        APIClient.shared.authToken = nil
+        APIClient.shared.registeredSessionToken = nil
     }
 
     // MARK: - Check Existing Session
@@ -616,10 +624,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// existe déjà, aucune UI neuve n'est requise).
     ///
     /// Sans session active, rien à révoquer : on sort.
-    public func handleSessionRevoked() {
+    ///
+    /// Le motif (#9612) est gardé pour l'avis que la racine montre avant la
+    /// reconnexion ; il ne change rien au chemin de fermeture.
+    public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
         guard let userId = activeUserId else { return }
-        Logger.auth.warning("Session revoked by server — requiring re-authentication")
+        Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
+        sessionRevocationNotice = SessionRevocationNotice(reason: reason)
         requireReauthentication(userId: userId)
+    }
+
+    /// L'utilisateur a lu l'avis de fermeture.
+    public func acknowledgeSessionRevocationNotice() {
+        sessionRevocationNotice = nil
     }
 
     // MARK: - Internal session helpers
@@ -706,6 +723,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // deux dans la même passe, et la lire après ferait décider le bascule
         // sur l'origine de la session PRÉCÉDENTE.
         sessionOrigin = origin
+        // #8674 — le cache devient celui de ce compte (rendu s'il en avait un
+        // de côté). Sans effet sur une rotation de jeton.
+        if !isTokenRotation { CacheAccountBinder.shared.bind(accountKey(for: userId)) }
         isAuthenticated = true
         // Hydrate session-scoped caches not carried by the auth payload (block
         // list). Skip on token rotation — already warm.
@@ -741,6 +761,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
+        // #8674 — session révoquée : le cache du compte part, rien n'en est
+        // mis de côté (ses jetons viennent d'être effacés).
+        CacheAccountBinder.shared.bind(nil)
         activeUserId = nil
         currentUser = nil
         // sync-04 — ce chemin ne passe PAS par logout() mais son flip
@@ -864,7 +887,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
+                // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
+                // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {
+                    self.requireReauthentication(userId: userId)
+                } else if AgeGateSignal.isAgeRefusal(error) {
                     self.requireReauthentication(userId: userId)
                 }
                 throw error

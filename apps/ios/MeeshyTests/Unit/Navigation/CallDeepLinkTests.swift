@@ -6,12 +6,14 @@ final class CallDeepLinkTests: XCTestCase {
 
     private func makeRouter(
         authenticated: Bool = true,
+        sessionResolved: Bool = true,
         dialed: @escaping @MainActor (String, Bool) -> Void
     ) -> DeepLinkRouter {
         let defaults = UserDefaults(suiteName: "CallDeepLinkTests.\(UUID().uuidString)")!
         return DeepLinkRouter(
             drafts: DraftStore(userDefaults: defaults, userIdProvider: { "call" }),
             isAuthenticated: { authenticated },
+            hasResolvedSession: { sessionResolved },
             dialConversationCall: dialed
         )
     }
@@ -61,5 +63,16 @@ final class CallDeepLinkTests: XCTestCase {
         XCTAssertFalse(router.handle(url: URL(string: "meeshy://call?contactId=conv1&type=audio")!))
 
         XCTAssertEqual(dialed, 0)
+    }
+
+    func test_handle_siriCallShortcut_beforeTheSessionIsRead_keepsTheCall() {
+        var dialed: [String] = []
+        let router = makeRouter(authenticated: false, sessionResolved: false) { conversationId, _ in
+            dialed.append(conversationId)
+        }
+
+        XCTAssertTrue(router.handle(url: URL(string: "meeshy://call?contactId=conv1&type=audio")!))
+
+        XCTAssertEqual(dialed, ["conv1"], "au démarrage à froid, le composeur attend la session au lieu de perdre l'appel")
     }
 }

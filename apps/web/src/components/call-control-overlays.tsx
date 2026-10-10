@@ -39,7 +39,7 @@ export function CallReactionBursts({ language, nameOf }: { readonly language: In
       {bursts.map((burst) => (
         <div key={burst.id} aria-hidden className="absolute bottom-[28%] flex flex-col items-center gap-1" style={{ left: `${burst.lane * 100}%` }} data-call-reaction={burst.emoji}>
           <span className="text-[3.5rem] leading-none drop-shadow-lg">{burst.emoji}</span>
-          <span className="glass-call max-w-[8rem] truncate rounded-full px-2 py-0.5 text-mini font-semibold text-white">
+          <span className="glass-call max-w-[8rem] truncate rounded-full px-2 py-0.5 text-mini font-semibold text-on-media">
             {burst.userId === null ? t(language, 'callControls.people.you') : (nameOf(burst.userId) ?? t(language, 'callControls.someone'))}
           </span>
         </div>
@@ -61,7 +61,7 @@ export function CallControlToast({ language, nameOf }: { readonly language: Inte
   if (notice === null) return null;
   return (
     <div className="pointer-events-none absolute inset-x-4 z-30 flex justify-center" style={{ top: 'calc(env(safe-area-inset-top) + 4.5rem)' }}>
-      <p role={noticeRole(notice)} className="glass-call-prominent max-w-sm rounded-full px-4 py-2 text-center text-mini font-semibold text-white" data-call-control-notice={notice.kind}>
+      <p role={noticeRole(notice)} className="glass-call-prominent max-w-sm rounded-full px-4 py-2 text-center text-mini font-semibold text-on-media" data-call-control-notice={notice.kind}>
         {controlNoticeText(language, notice, nameOf)}
       </p>
     </div>

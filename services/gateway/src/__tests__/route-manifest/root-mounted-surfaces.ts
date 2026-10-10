@@ -180,8 +180,9 @@ export function rootMountedSurfaces(serverSource: string): RootMountedSurface[] 
 }
 
 /**
- * Les treize surfaces qui reçoivent l'instance racine dans `server.ts`, au
- * 2026-08-30 — chacune avec ce qu'elle FAIT de cette instance.
+ * Les surfaces qui reçoivent l'instance racine dans `server.ts` — treize au
+ * 2026-08-30, quatorze depuis l'extraction du chronométrage (#9600, 2026-10-08)
+ * — chacune avec ce qu'elle FAIT de cette instance.
  *
  * Deux seulement déclarent des routes de l'API Meeshy, et c'est le fait
  * central : `registerAllRoutes` — que le collecteur montait déjà — et
@@ -251,6 +252,15 @@ export const ROOT_MOUNTED_SURFACES: readonly DeclaredRootSurface[] = [
     via: 'call',
     kind: 'no-routes',
     reason: "middleware/clientMutationId.ts — hook d'idempotence, aucune route.",
+  },
+  {
+    callee: 'registerRequestTimingHooks',
+    via: 'call',
+    kind: 'no-routes',
+    reason:
+      "plugins/request-timing.plugin.ts — hooks onRequest/onResponse du chronométrage des requêtes lentes, " +
+      "extraits de server.ts par #9600 ; posés sur l'instance racine (un hook encapsulé ne verrait aucune route " +
+      'sœur), aucune route déclarée (vérifié : deux addHook, aucun verbe HTTP dans le module).',
   },
   {
     callee: 'registerRouteUsageHook',

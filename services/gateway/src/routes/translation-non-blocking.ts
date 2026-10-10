@@ -5,6 +5,7 @@ import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -174,6 +175,8 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
     throw new Error('MessagingService not provided to translation routes');
   }
 
+  const engagement = lazyTranslationRequestEngagement(() => fastify.prisma);
+
 
   // ===== ROUTE PRINCIPALE NON-BLOQUANTE =====
   fastify.post<{ Body: TranslateRequest }>('/translate', {
@@ -247,6 +250,15 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         translationService.handleNewMessage(messageData).catch((error: any) => {
           logger.error(`[Translation] Async retranslation error: ${error.message}`);
+        });
+
+        // La RETRADUCTION est la seule demande de traduction de cette route :
+        // le cas 2 est un ENVOI, déjà crédité comme message (#8959).
+        creditTranslationRequest({
+          engagement,
+          requester: authContext,
+          conversationId: existingMessage.conversationId,
+          onError: (error) => logger.warn('[Translation] tool.translation_request engagement credit failed', { error })
         });
 
         // REPONSE IMMEDIATE - pas d'attente

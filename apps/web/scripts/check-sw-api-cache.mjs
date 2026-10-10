@@ -341,6 +341,27 @@ export function auditSeauApi(source) {
 }
 
 /**
+ * LE SEAU `api` NE REND SA COPIE QUE SUR UN ÉCHEC DU RÉSEAU (#9637).
+ *
+ * `networkTimeoutSeconds` faisait servir la réponse RANGÉE à un lecteur EN
+ * LIGNE dès que la passerelle tardait : une liste relue sur un réseau lent
+ * était celle d'une lecture précédente, et TanStack l'écrivait par-dessus
+ * l'aperçu que le temps réel venait de poser — « les derniers messages reçus
+ * disparaissent ». L'affichage instantané est l'affaire du cache persisté de
+ * TanStack ; le seau sert le hors ligne. Un artefact sans seau `api` relève
+ * de `auditSeauApi`, pas de cette phase.
+ */
+export function auditDelaiDuSeauApi(source) {
+  const strategie = appelDuSeau(source, 'api')?.strategie ?? '';
+  return strategie.includes('networkTimeoutSeconds')
+    ? [
+        'le seau `api` porte `networkTimeoutSeconds` : un lecteur EN LIGNE sur un réseau lent reçoit une ' +
+          'réponse rangée, qui écrase ce que le temps réel vient de poser (#9637)',
+      ]
+    : [];
+}
+
+/**
  * LE SEAU DES MÉDIAS, ET SA MOITIÉ INDISSOCIABLE (#6973).
  *
  * Sortir les médias du seau du JSON ne change RIEN sans
@@ -457,6 +478,115 @@ export function auditRoutage(source) {
   }
 
   return violations;
+}
+
+/**
+ * LE SEAU `api` RANGE CHAQUE RÉPONSE SOUS L'IDENTITÉ QUI L'A DEMANDÉE (#8674).
+ *
+ * Sans le greffon `cacheKeyWillBeUsed` (`src/lib/net/api-cache-identity.ts`),
+ * deux comptes du même appareil partagent l'entrée d'une URL : un réseau lent
+ * sert à B la liste d'A. Le gate l'EXTRAIT de l'artefact et le FAIT DÉCIDER
+ * dans un contexte nu — une fonction non autonome, ou qui rendrait la même
+ * clé pour deux comptes, rougit ici.
+ */
+export async function auditIdentiteDuSeauApi(source) {
+  const appel = appelDuSeau(source, 'api');
+  if (appel === null) return ['aucun seau `api` dans le service worker construit'];
+
+  const marqueur = 'cacheKeyWillBeUsed:';
+  const debut = appel.strategie.indexOf(marqueur);
+  if (debut === -1) {
+    return [
+      'le seau `api` ne porte aucun `cacheKeyWillBeUsed` : deux comptes du même appareil ' +
+        'partagent l’entrée d’une URL, et un réseau lent sert à B la réponse d’A (#8674)',
+    ];
+  }
+  const texte = decoupePremierArgument(appel.strategie, debut + marqueur.length);
+
+  let cle;
+  try {
+    cle = new Function(`"use strict"; return (${texte});`)();
+  } catch (err) {
+    return [`le greffon d’identité du seau \`api\` ne s’évalue pas : ${err.message}`];
+  }
+
+  const url = `${PASSERELLE}/api/v1/conversations?limit=30`;
+  const demande = (entetes) => cle({ request: new Request(url, { headers: entetes }) });
+
+  try {
+    const a = await demande({ Authorization: 'Bearer jeton-de-a' });
+    const b = await demande({ Authorization: 'Bearer jeton-de-b' });
+    const encoreA = await demande({ Authorization: 'Bearer jeton-de-a' });
+    const personne = await demande({});
+    const violations = [];
+    if (a === b) violations.push('A et B reçoivent la MÊME clé de cache pour la même URL — B lirait la réponse d’A');
+    if (a !== encoreA) violations.push('un même compte ne relit pas sa propre clé — le seau ne sert plus hors ligne');
+    if (a.includes('jeton-de-a')) violations.push('la clé porte le jeton EN CLAIR — elle est écrite sur le disque');
+    if (personne !== url) violations.push(`une requête sans identité ne garde pas son URL nue : ${personne}`);
+    return violations;
+  } catch (err) {
+    return [
+      `greffon d’identité NON AUTONOME : ${err.message}. ` +
+        'Workbox le stringifie — il ne peut dépendre d’aucun identifiant importé.',
+    ];
+  }
+}
+
+/**
+ * LE SEAU `medias` RESPECTE LA FRAÎCHEUR QUE LA PASSERELLE DÉCLARE (#9478).
+ *
+ * Une vue unique part en `private, no-store`, un éphémère en
+ * `private, no-cache` (#9315). Sans le greffon
+ * (`src/lib/net/media-cache-freshness.ts`), `CacheFirst` les écrit trente jours
+ * et les resert sans réseau. Le gate EXTRAIT ses deux crochets de l'artefact
+ * et les FAIT DÉCIDER : protégé refusé, ORDINAIRE gardé — le Cache-First
+ * nominal compte autant que la garde.
+ */
+export async function auditFraicheurDuSeauMedias(source) {
+  const appel = appelDuSeau(source, 'medias');
+  if (appel === null) return ['aucun seau `medias` dans le service worker construit'];
+
+  const crochet = (nom) => {
+    const debut = appel.strategie.indexOf(`${nom}:`);
+    return debut === -1 ? null : decoupePremierArgument(appel.strategie, debut + nom.length + 1);
+  };
+  const reponse = (cacheControl) => new Response('octets', { headers: { 'Cache-Control': cacheControl } });
+  const PROTEGES = ['private, no-store', 'private, no-cache'];
+  const ORDINAIRE = 'private, max-age=31536000';
+
+  const juge = async (nom, appelle) => {
+    const texte = crochet(nom);
+    if (texte === null) {
+      return [
+        `le seau \`medias\` ne porte aucun \`${nom}\` : une vue unique (\`no-store\`) ou un éphémère ` +
+          '(`no-cache`) y reste trente jours et se relit sans réseau après sa fin de vie (#9478)',
+      ];
+    }
+    try {
+      const fonction = new Function(`"use strict"; return (${texte});`)();
+      const violations = [];
+      for (const directive of PROTEGES) {
+        if ((await appelle(fonction, reponse(directive))) !== null) {
+          violations.push(`\`${nom}\` laisse passer une réponse \`${directive}\` — un média protégé resterait relisible depuis le seau`);
+        }
+      }
+      const ordinaire = reponse(ORDINAIRE);
+      if ((await appelle(fonction, ordinaire)) !== ordinaire) {
+        violations.push(`\`${nom}\` refuse un média ordinaire (\`${ORDINAIRE}\`) — le Cache-First nominal serait perdu`);
+      }
+      return violations;
+    } catch (err) {
+      return [
+        `greffon de fraîcheur \`${nom}\` NON AUTONOME : ${err.message}. ` +
+          'Workbox le stringifie — il ne peut dépendre d’aucun identifiant importé.',
+      ];
+    }
+  };
+
+  return [
+    ...(await juge('cacheWillUpdate', (f, r) => f({ response: r }))),
+    ...(await juge('cachedResponseWillBeUsed', (f, r) => f({ cachedResponse: r }))),
+  ];
 }
 
 function applique(matcher, href, destination = '') {
@@ -720,8 +850,11 @@ async function main() {
 
   const phases = [
     ['le seau `api`', auditSeauApi(source)],
+    ['le délai du seau `api`', auditDelaiDuSeauApi(source)],
     ['le seau `medias`', auditSeauMedias(source)],
     ['le routage', auditRoutage(source)],
+    ['l’identité du seau `api`', await auditIdentiteDuSeauApi(source)],
+    ['la fraîcheur du seau `medias`', await auditFraicheurDuSeauMedias(source)],
   ];
 
   if (process.argv.includes(DRAPEAU_NAVIGATEUR)) {
@@ -739,9 +872,11 @@ async function main() {
 
   console.log(
     '  sw.js : le seau `api` décide tout seul, garde le JSON hors ligne, et laisse ' +
-      'hors du disque TOUTE réponse /api/v1/admin/**.\n' +
+      'hors du disque TOUTE réponse /api/v1/admin/**, et range chaque réponse sous ' +
+      'l’identité qui l’a demandée (#8674).\n' +
       '  sw.js : le seau `medias` prend les images de la passerelle AVANT le seau `api` ' +
-      '(`statuses: [0, 200]`) ; audio et vidéo restent hors cache, par décision.',
+      '(`statuses: [0, 200]`), n’y écrit ni n’y resert aucun média `no-store` / `no-cache` ' +
+      '(#9478) ; audio et vidéo restent hors cache, par décision.',
   );
 
   if (!process.argv.includes(DRAPEAU_NAVIGATEUR)) {

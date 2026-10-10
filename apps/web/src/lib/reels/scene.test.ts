@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FeedCardMedia, FeedCardScene } from '@/lib/feed/card-model';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 
-import { reelSceneDuration, reelScenePlays, reelSceneProgress, reelStageOf } from './scene';
+import { reelPrimeSourceOf, reelSceneDuration, reelScenePlays, reelSceneProgress, reelStageOf } from './scene';
 
 /**
  * T2 (#6903) — la loi d'un réel composé, miroir `ReelSceneRouting` /
@@ -72,5 +72,16 @@ describe('reelSceneDuration — déclarée > repli > aucune', () => {
   });
   test('aucune durée connue ⇒ null (pas de barre, loi 4)', () => {
     expect(reelSceneDuration({ declared: null, knownMs: [] })).toBeNull();
+  });
+});
+
+describe('reelPrimeSourceOf — l’amorce suit l’élection du lecteur (#9702)', () => {
+  test('la vidéo élue, puis l’audio ; rien pour une scène ou des images', () => {
+    const audio: FeedCardMedia = { id: 'a1', kind: 'audio', src: 'voice.m4a', ratio: 1 };
+    const image: FeedCardMedia = { id: 'i1', kind: 'image', src: 'pic.jpg', ratio: 1 };
+    expect(reelPrimeSourceOf({ media: [image, video] })).toBe('clip.mp4');
+    expect(reelPrimeSourceOf({ media: [audio] })).toBe('voice.m4a');
+    expect(reelPrimeSourceOf({ media: [image] })).toBeUndefined();
+    expect(reelPrimeSourceOf({ scene: sceneOf(), media: [video] })).toBeUndefined();
   });
 });

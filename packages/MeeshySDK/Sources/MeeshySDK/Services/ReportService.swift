@@ -7,6 +7,7 @@ public protocol ReportServiceProviding: Sendable {
     func reportUser(userId: String, reportType: String, reason: String?) async throws
     func reportPost(postId: String, reportType: String, reason: String?) async throws
     func reportStory(storyId: String, reportType: String, reason: String?) async throws
+    func reportComment(commentId: String, reportType: String, reason: String?) async throws
     func reportConversation(conversationId: String, reportType: String, reason: String?) async throws
 }
 
@@ -63,6 +64,18 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
         let body = CreateReportBody(
             reportedType: "story",
             reportedEntityId: storyId,
+            reportType: reportType,
+            reason: reason
+        )
+        let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+    }
+
+    /// Un commentaire de post, de réel ou de story (#8709) — la passerelle le
+    /// tient atteignable quand sa publication l'est.
+    public func reportComment(commentId: String, reportType: String, reason: String? = nil) async throws {
+        let body = CreateReportBody(
+            reportedType: "comment",
+            reportedEntityId: commentId,
             reportType: reportType,
             reason: reason
         )

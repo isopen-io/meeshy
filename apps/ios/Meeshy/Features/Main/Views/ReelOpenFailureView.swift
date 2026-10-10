@@ -19,18 +19,18 @@ struct ReelOpenFailureView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 Image(systemName: failure.symbolName)
                     .font(MeeshyFont.relative(40))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .accessibilityHidden(true)
                 Text(failure.title)
-                    .font(MeeshyFont.relative(17, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
                     .multilineTextAlignment(.center)
                 Text(failure.message)
-                    .font(MeeshyFont.relative(14))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .multilineTextAlignment(.center)
                 if failure.offersRetry {
                     retryButton
@@ -40,14 +40,14 @@ struct ReelOpenFailureView: View {
                     onClose()
                 } label: {
                     Text(String(localized: "feed.post.detail.unavailable.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15))
-                        .frame(minHeight: 44)
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, MeeshySpacing.xxxl)
             .accessibilityElement(children: .contain)
         }
     }
@@ -63,7 +63,7 @@ struct ReelOpenFailureView: View {
         } label: {
             ZStack {
                 Text(String(localized: "feed.post.detail.loadFailed.retry", defaultValue: "Réessayer", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .opacity(isRetrying ? 0 : 1)
                 if isRetrying {
                     ProgressView()
@@ -72,6 +72,6 @@ struct ReelOpenFailureView: View {
         }
         .buttonStyle(.borderedProminent)
         .disabled(isRetrying)
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
     }
 }

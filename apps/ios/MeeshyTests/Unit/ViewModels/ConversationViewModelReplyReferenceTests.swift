@@ -224,6 +224,28 @@ final class ConversationViewModelReplyReferenceTests: XCTestCase {
         }
     }
 
+    /// #9573 — le cité est en mémoire : la citation optimiste porte SA nature
+    /// de disparition, sans attendre l'écho. Sans elle, toute réponse qu'on
+    /// vient d'envoyer serait « illisible » et perdrait « Imager » jusqu'à
+    /// l'accusé du serveur (décision porteur du 2026-10-08).
+    func test_optimisticReplyReference_carriesTheQuotedExitNature() {
+        let sut = makeSUT()
+        let ordinary = makeQuoted(id: "q-ord", content: "Salut")
+        let flame = makeQuoted(id: "q-flame", content: "Bientôt parti",
+                               effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 30))
+        sut.messages = [ordinary, flame]
+
+        let toOrdinary = sut.optimisticReplyReference(quoting: ordinary)
+        XCTAssertEqual(toOrdinary.quotedExitNature, .ordinary)
+        XCTAssertFalse(toOrdinary.quotesProtectedContent(quotedMessage: nil),
+                       "répondre à un message ordinaire garde « Imager »")
+
+        let toFlame = sut.optimisticReplyReference(quoting: flame)
+        XCTAssertEqual(toFlame.quotedExitNature, .timedFlame)
+        XCTAssertTrue(toFlame.quotesProtectedContent(quotedMessage: nil),
+                      "répondre à une flamme retire « Imager » dès la bulle optimiste")
+    }
+
     func test_optimisticReplyReference_contactCard_saysTheContactNameNeverTheFile() {
         let sut = makeSUT()
         let card = MessageAttachment(

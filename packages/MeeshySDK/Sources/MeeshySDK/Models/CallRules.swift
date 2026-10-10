@@ -24,6 +24,10 @@ public enum CallRules {
     public static let heartbeatTimeout: TimeInterval = 120
     /// Même chose pour un pair en arrière-plan (CallKit garde le RTP).
     public static let backgroundHeartbeatTimeout: TimeInterval = 300
+    /// Grâce de reprise : un participant coupé revient avant que le serveur ne
+    /// le sorte ; un groupe réduit à un seul attend un retour avant de finir.
+    /// Le client ne raccroche jamais un appel avant elle (#9111, #9109).
+    public static let rejoinGrace: TimeInterval = 60
     /// Durée de vie d'une poussée d'appel — jamais plus que la sonnerie.
     public static let pushTimeToLive: TimeInterval = 45
     /// Participants simultanés tant que l'appel est un maillage sans SFU.

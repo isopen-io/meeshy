@@ -41,4 +41,32 @@ final class InAppLinksTests: XCTestCase {
             XCTAssertTrue(source.contains(".inAppLinks(router: router)"), "\(file) doit poser .inAppLinks(router:)")
         }
     }
+
+    /// **La politique couvre ce que les racines PRÉSENTENT** (#9075).
+    ///
+    /// Une couverture plein écran hérite de l'environnement de SON point
+    /// d'attache. Posée avant les couches qui présentent le lecteur de story,
+    /// l'action laissait ce lecteur à l'action système : un lien `/l/` touché
+    /// dans une légende partait dans Safari (mesuré au simulateur le
+    /// 2026-10-02). Elle doit donc envelopper la DERNIÈRE couche.
+    func test_laPolitiqueEnveloppeLesCouchesQuiPresententLeLecteur() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let iphone = try String(contentsOf: views.appendingPathComponent("RootView.swift"), encoding: .utf8)
+        let politique = try XCTUnwrap(iphone.range(of: ".inAppLinks(router: router)"))
+        let derniereCouche = try XCTUnwrap(iphone.range(of: ".modifier(RootSheetsLayer(", options: .backwards))
+        let portes = try XCTUnwrap(iphone.range(of: ".modifier(RootStoryDoorsLayer("))
+        XCTAssertGreaterThan(politique.lowerBound, derniereCouche.lowerBound,
+                             "iPhone : `.inAppLinks` doit suivre la dernière couche de `RootView.body`")
+        XCTAssertGreaterThan(politique.lowerBound, portes.lowerBound)
+
+        let ipad = try String(contentsOf: views.appendingPathComponent("RootLayers/iPadRootViewLayers.swift"),
+                              encoding: .utf8)
+        let politiqueIPad = try XCTUnwrap(ipad.range(of: ".inAppLinks(router: router)"))
+        let lecteurIPad = try XCTUnwrap(ipad.range(of: ".fullScreenCover(isPresented: $showStoryViewerFromConv)"))
+        XCTAssertGreaterThan(politiqueIPad.lowerBound, lecteurIPad.lowerBound,
+                             "iPad : `.inAppLinks` doit envelopper la couche qui présente le lecteur de story")
+    }
 }

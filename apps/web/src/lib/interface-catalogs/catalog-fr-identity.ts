@@ -16,7 +16,6 @@ const frIdentity = {
   'avatar.menu.view_story': 'Voir la story',
   'avatar.menu.conversation_details': 'Détails de la conversation',
   'conversation.details.title': 'Détails de la conversation',
-  'conversation.details.open': 'Voir les détails de {name}',
   'conversation.details.type.direct': 'Discussion privée',
   'conversation.details.type.group': 'Groupe',
   'conversation.details.type.public': 'Conversation publique',

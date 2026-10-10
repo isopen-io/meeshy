@@ -123,6 +123,8 @@ public final class StoryCanvasUIView: UIView {
     /// Transport timeline en lecture pendant la preview : bascule la
     /// stratégie vidéo entre seek-en-pause (scrub) et lecture muette calée.
     var timelinePreviewPlaying: Bool = false
+    /// La répétition des transitions en composition (#8792) — `nil` au repos.
+    var transitionRehearsal: StoryCanvasTransitionRehearsalRun?
 
     /// Corner radius (in this view's own coordinate space) applied to the
     /// backing layer so the rounded « card » clips the actual CALayer story
@@ -307,6 +309,15 @@ public final class StoryCanvasUIView: UIView {
     /// apparaître les actions possibles au long press ») ; non câblée,
     /// l'action n'est pas offerte.
     public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
+    /// **L'hôte PEINT lui-même le menu d'appui long** (#8717). Câblée, elle
+    /// reçoit l'objet, sa famille et le point du doigt — NORMALISÉ (0…1) sur
+    /// la carte, car le canvas peut être projeté à une autre échelle que
+    /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
+    /// garde son `UIMenu` : les autres hôtes ne changent pas.
+    public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
+    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
+    public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state
@@ -724,6 +735,8 @@ public final class StoryCanvasUIView: UIView {
     // willMove/didMove ne couvrent pas ce chemin). Le link cible un
     // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
     nonisolated(unsafe) var displayLink: CADisplayLink?
+    /// Temps réel écoulé entre deux ticks + cadence du contrôle de dérive (#9702).
+    var playheadTickClock = PlayheadTickClock()
 
     /// Runs while in `.edit` and the view is in a window — preferred 120 Hz on
     /// ProMotion devices for buttery gesture transforms (active rendering happens
@@ -878,7 +891,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Init
 
-    public init(slide: StorySlide, mode: RenderMode = .edit) {
+    public init(slide: StorySlide, mode: RenderMode = .edit, startsPaused: Bool = false) {
         self.slide = slide
         self.mode = mode
         self.backgroundMediaObjectId = slide.effects.mediaObjects?
@@ -955,7 +968,12 @@ public final class StoryCanvasUIView: UIView {
         // « quand je reviens à une story arrière avec vidéo de fond puis
         // repars à la story suivante, j'ai les deux médias qui jouent en
         // même temps ».
-        if mode == .play {
+        //
+        // **Un canvas né EN PAUSE ne réclame rien** (#9827) : la page voisine
+        // du lecteur de réels naît en `.play` puis en pause, et coupait le
+        // mixer du réel affiché sans jamais jouer. Il réclame en REPRENANT.
+        let claimsPlaybackAtBirth = mode == .play && !startsPaused
+        if claimsPlaybackAtBirth {
             registerAsActiveAndPreemptOthers()
         }
         observeAudioSessionEvents()
@@ -994,8 +1012,11 @@ public final class StoryCanvasUIView: UIView {
             // jouent dans les autres slide ». Le `willStartPlaying(external:)`
             // itère tous les externals enregistrés et les stop sauf
             // celui passé en argument.
-            PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+            if claimsPlaybackAtBirth {
+                PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+            }
             startPlayback()
+            if startsPaused { setStoryPlaybackPaused(true) }
         }
     }
 
@@ -1031,6 +1052,13 @@ public final class StoryCanvasUIView: UIView {
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
     var isPlaybackPaused: Bool = false
+    /// Les deux causes dont `isPlaybackPaused` est la somme : la pause du
+    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`,
+    /// #8725). Séparées pour que la fin d'un appel ne relance jamais une story
+    /// que l'utilisateur avait mise en pause.
+    var isPlaybackRequestedPaused: Bool = false
+    var isPlaybackInterrupted: Bool = false
+    nonisolated(unsafe) var playbackInterruptionCancellable: AnyCancellable?
 
     // MARK: - Playback health (unified timeline)
 

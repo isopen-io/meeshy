@@ -149,7 +149,7 @@ extension StoryViewerView {
             if let filter = currentStory?.storyEffects?.filter {
                 switch filter {
                 case "vintage":
-                    Color(hex: "F8B500").opacity(0.15)
+                    MeeshyColors.tileSaffron.opacity(0.15)
                         .blendMode(.multiply)
                 case "bw":
                     Color.gray.opacity(0.4)
@@ -236,6 +236,9 @@ extension StoryViewerView {
                 // reprise redevient automatique dès que l'axe retombe à 0.
                 if gestureAxis == 0 {
                     if abs(dx) > abs(dy) + 8 {
+                        guard !StoryReactionStripGesture.yieldsHorizontalAxis(
+                            stripFrame: reactionStripFrame, dragStart: value.startLocation
+                        ) else { return }
                         gestureAxis = 1 // horizontal
                     } else if abs(dy) > abs(dx) + 8 {
                         gestureAxis = 2 // vertical
@@ -316,7 +319,7 @@ extension StoryViewerView {
                         groupTransition(forward: true) {
                             currentGroupIndex += 1
                             currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
@@ -324,7 +327,7 @@ extension StoryViewerView {
                         groupTransition(forward: false) {
                             currentGroupIndex -= 1
                             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                            progress = 0
+                            progressClock.reset()
                         }
                     } else {
                         // Snap back — animate groupSlide to 0. La face du cube
@@ -466,7 +469,7 @@ extension StoryViewerView {
         if currentStoryIndex < group.stories.count - 1 {
             crossFadeStory {
                 currentStoryIndex += 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex < groups.count - 1 {
             if isPreviewMode {
@@ -476,7 +479,7 @@ extension StoryViewerView {
             groupTransition(forward: true) {
                 currentGroupIndex += 1
                 currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progress = 0
+                progressClock.reset()
             }
         } else {
             if isPreviewMode {
@@ -493,13 +496,13 @@ extension StoryViewerView {
         if currentStoryIndex > 0 {
             crossFadeStory {
                 currentStoryIndex -= 1
-                progress = 0
+                progressClock.reset()
             }
         } else if currentGroupIndex > 0 {
             groupTransition(forward: false) {
                 currentGroupIndex -= 1
                 currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progress = 0
+                progressClock.reset()
             }
         }
     }
@@ -656,73 +659,10 @@ extension StoryViewerView {
 
     // MARK: - Timer
 
-    /// State-driven pause: the timer checks ALL active UI states each tick
-    /// instead of relying on paired pauseTimer/resumeTimer event calls.
-    ///
-    /// - `isPaused` : pauses du timer pour sheets, drag-to-dismiss, etc.
-    ///   (timer-only — le canvas continue à jouer).
-    /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
-    ///   gelés ensemble via `.storyPlayerPause`).
-    /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
-    /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
-    /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
-    /// Composers + pickers + transitions pause the slide timer. Comments
-    /// overlay does NOT (the user wants to read comments while the story
-    /// keeps playing/looping behind). Focus on the comment composer engages
-    /// `isComposerEngaged` which DOES pause — that's the intended trigger,
-    /// not the overlay visibility alone (user spec 2026-05-28).
-    var shouldPauseTimer: Bool {
-        // Un peek Notification Center / Control Center (aperçu app-switcher,
-        // scenePhase devenant transitoirement inactif) n'apparaît DÉLIBÉRÉMENT
-        // PAS dans cet agrégat : la lecture doit continuer sans coupure pendant
-        // ce genre de peek, comme une vidéo en PIP ou une app de musique en
-        // arrière-plan (directive user 2026-07-14, qui annule une tentative
-        // précédente de gate sur la phase de scène — celle-ci coupait l'audio
-        // de fond et le faisait recommencer à 0 au retour). Le vrai
-        // `.background` (dismiss complet du viewer) reste géré séparément via
-        // `.adaptiveOnChange(of: scenePhase)` plus haut dans ce fichier.
-        isPaused
-        || isLongPressPaused
-        || isComposerEngaged
-        || hasComposerContent
-        || showEmojiStrip
-        || showFullEmojiPicker
-        || showTextEmojiPicker
-        || showLanguageOptions
-        || showFullLanguagePicker
-        // Scrub du rail + vol de réaction : la lecture attend la fin du geste et
-        // de l'animation (spec scrub 2026-08-11).
-        || isScrubbingRail
-        || reactionFlight != nil
-        // L'overlay commentaires ouvert met la story en pause : lire / répondre à
-        // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
-        // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
-        // à la slide suivante). Parité Instagram : ouvrir les commentaires gèle
-        // la lecture (timer + médias via `isCanvasPlaybackPaused`).
-        || showCommentsOverlay
-        || isTransitioning
-        || isDismissing
-        // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
-        // audio) attend la fin des ~2,2 s (ou le tap skip) — reprise sans saut.
-        || showGroupIntro
-        // Drag du lecteur en cours (axe décidé). ÉTAT-DIRIGÉ et non
-        // événementiel : le drag ne pose plus de `pauseTimer()` à la décision
-        // d'axe, car son `resumeTimer()` symétrique n'arrive jamais quand un
-        // recognizer concurrent (un `UIScrollView` de surface, typiquement)
-        // emporte la séquence et que SwiftUI saute le `onEnded` — la story
-        // restait alors gelée pour de bon. Adossée à `gestureAxis`, la reprise
-        // est automatique dès que l'axe retombe à 0 : le cas dégénéré se
-        // rattrape tout seul au geste suivant.
-        || gestureAxis != 0
-        // Légende dépliée : lire un texte plein écran pendant que la slide
-        // avance dessous n'a aucun sens. Cause PROPRE dans l'agrégat, jamais un
-        // `isPaused = true` — ce drapeau appartient déjà à d'autres causes, et
-        // le relâcher au repli relâcherait la leur (#4474).
-        || isCaptionExpanded
-    }
-
+    /// L'agrégat de pause (`shouldPauseTimer`) et la boucle vivent dans
+    /// `StoryViewerView+PlaybackHold.swift` (#9821).
     func startTimer() {
-        progress = 0
+        progressClock.reset()
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
@@ -832,11 +772,9 @@ extension StoryViewerView {
         computedStoryDuration = renderable.computedTotalDuration()
     }
 
-    /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.
-    /// **Timer-only** : le canvas (vidéo BG, audios, effets) continue à
-    /// jouer. Cela évite un blip audible au cycle pause/resume rapide
-    /// d'un drag de transition. Le toggle long-press passe par
-    /// `isLongPressPaused` (qui, lui, freeze le canvas via notification).
+    /// Un écran PLEIN recouvre la story (composeur, citer ou republier en post,
+    /// lieu plein écran) : elle se fige, rien ne joue derrière (#9821). Les
+    /// feuilles posées SUR la story ne l'appellent pas — elles la font boucler.
     func pauseTimer() { isPaused = true }
 
     /// Manual resume — symétrique de `pauseTimer()`. N'inverse pas le
@@ -865,13 +803,11 @@ extension StoryViewerView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCommentsOverlay = true
                 }
-                pauseTimer()
                 if storyComments.isEmpty {
                     loadStoryComments()
                 }
             case .showViewersSheet:
                 showViewersSheet = true
-                pauseTimer()
             }
         }
     }
@@ -901,7 +837,7 @@ extension StoryViewerView {
         // to the backend so the comment graph stays correct, but rendering
         // does not yet visually indent replies. See SOTA audit Pilier 19.
         let currentUser = AuthManager.shared.currentUser
-        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let authorName: String = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let authorId: String = currentUser?.id ?? ""
         // La ligne optimiste est keyée par le cmid : envoyé au REST ET réutilisé
         // par le repli outbox, il fait dédoublonner le serveur (MutationLog) et
@@ -954,22 +890,20 @@ extension StoryViewerView {
         let language = composerLanguage
         let tempCommentId = optimisticComment.id
         Task {
+            let medias = [pendingMedia].compactMap { $0 }
+            // La charge est bâtie UNE fois, avec son auteur relevé avant toute
+            // attente : l'envoi direct et la file portent la même (#9743).
+            let payload = CreateCommentPayload(
+                clientMutationId: tempCommentId, postId: story.id,
+                parentCommentId: parentId, content: text,
+                originalLanguage: language, authorId: authorId,
+                location: location, effectFlags: effectFlags,
+                mobileTranscription: pendingMedia?.mobileTranscription
+            )
+            StoryInteractionService().noteComment(storyId: story.id)
             do {
-                var attachmentIds: [String]? = nil
-                if let pendingMedia {
-                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
-                }
-                try await StoryInteractionService().postComment(
-                    storyId: story.id,
-                    content: text,
-                    originalLanguage: language,
-                    effectFlags: effectFlags,
-                    parentId: parentId,
-                    attachmentIds: attachmentIds,
-                    mobileTranscription: pendingMedia?.mobileTranscription,
-                    location: location,
-                    clientMutationId: tempCommentId
-                )
+                try await CommentPublisher.live.publish(payload, pieces: CommentPublisher.pieces(medias))
+                CommentMediaUploader.discardLocalFiles(medias)
             } catch {
                 // Le POST direct a échoué — le plus souvent parce qu'on est
                 // hors-ligne. Perdre un commentaire que l'utilisateur vient de
@@ -978,25 +912,13 @@ extension StoryViewerView {
                 // (`FeedCommentsSheet`), même kind `.createComment` : la ligne
                 // optimiste `temp_` est réconciliée par le handler socket
                 // `comment:added` déjà câblé quand le rejeu aboutit.
-                //
-                // LIMITE ASSUMÉE, identique au feed : `CreateCommentPayload` ne
-                // porte pas `attachmentIds` (lacune du schéma SDK). Un média
-                // joint à un commentaire envoyé hors-ligne est perdu au rejeu ;
-                // le TEXTE, sa LANGUE déclarée (#6587) et ses effets survivent.
+                // #9743 — le MÉDIA part avec lui : la file garde son fichier.
                 do {
                     // MÊME cmid que la tentative REST : un POST abouti dont la
                     // réponse s'est perdue est dédoublonné au rejeu (MutationLog).
                     let cmid = tempCommentId
-                    try await OfflineQueue.shared.enqueue(
-                        .createComment,
-                        payload: CreateCommentPayload(
-                            clientMutationId: cmid, postId: story.id,
-                            parentCommentId: parentId, content: text,
-                            originalLanguage: language,
-                            location: location, effectFlags: effectFlags
-                        ),
-                        conversationId: story.id
-                    )
+                    try await CommentMediaDelivery.entrust(payload, medias: medias,
+                                                           acquired: CommentMediaDelivery.acquired(from: error))
                     observeStoryCommentOutcome(cmid: cmid,
                                                tempId: tempCommentId,
                                                parentId: parentId)
@@ -1004,7 +926,7 @@ extension StoryViewerView {
                     // L'outbox elle-même a refusé la ligne : là, il n'y a plus
                     // de recours, on annule l'insert optimiste.
                     rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
-                    HapticFeedback.error()
+                    returnRefusedStoryComment(storyId: story.id, text: text, medias: medias)
                 }
             }
         }
@@ -1191,6 +1113,7 @@ extension StoryViewerView {
             for await event in stream {
                 if case .exhausted = event {
                     rollbackOptimisticComment(id: tempId, parentId: parentId)
+                    await OfflineQueue.shared.cancelCreateComment(clientMutationId: cmid, ownerId: CommentPublisher.currentAccountId())
                     FeedbackToastManager.shared.showError(
                         // Clé du feed réutilisée : message identique, et le
                         // catalogue est verrouillé à 100 % de couverture — une
@@ -1329,209 +1252,7 @@ extension StoryViewerView {
     }
 }
 
-// MARK: - Story Viewers Sheet
-
-struct StoryViewerItem: Identifiable {
-    let id: String
-    let username: String
-    let displayName: String
-    let avatarUrl: String?
-    let viewedAt: Date
-    let reactionEmoji: String?
-    let replyContent: String?
-    let hasReshared: Bool
-}
-
-struct StoryViewersSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var colorScheme
-    let story: StoryItem
-    let accentColor: Color
-    /// Mood resolution (local-first). Passed explicitly rather than via
-    /// `@EnvironmentObject` so it survives the sheet boundary.
-    @ObservedObject var statusViewModel: StatusViewModel
-    /// Opens the tapped viewer's profile. Owned by the presenter
-    /// (`StoryViewerView` holds the `Router`) so the sheet never reaches a
-    /// `Router` `@EnvironmentObject` across its boundary.
-    let onOpenProfile: (StoryViewerItem) -> Void
-
-    private var isDark: Bool { colorScheme == .dark }
-
-    @State private var viewers: [StoryViewerItem] = []
-    @State private var isLoading = true
-    // Coalescing anti-course pour le re-fetch temps réel : une rafale de
-    // `story:viewed` ne doit pas lancer N fetches `/interactions` concurrents
-    // (ils peuvent se terminer dans le désordre → liste momentanément périmée).
-    // `isRefreshing` = un seul fetch en vol ; `refreshQueued` = un événement est
-    // arrivé pendant le fetch → on relance EXACTEMENT une fois à la fin.
-    @State private var isRefreshing = false
-    @State private var refreshQueued = false
-
-    var body: some View {
-        NavigationStack {
-            ZStack {
-                isDark ? Color.black.ignoresSafeArea() : Color(UIColor.systemGroupedBackground).ignoresSafeArea()
-
-                if isLoading {
-                    ProgressView("Chargement des vues...")
-                        .tint(accentColor)
-                } else if viewers.isEmpty {
-                    EmptyStateView(
-                        icon: "eye.slash",
-                        title: "Aucune vue pour le moment",
-                        subtitle: "Les personnes qui regardent votre story apparaîtront ici."
-                    )
-                } else {
-                    List {
-                        // C4 + C1 : en-tête = viewCount AUTORITATIF (dénormalisé, la même
-                        // valeur que le bouton « Vues » ; élimine le « bouton dit 3 / sheet
-                        // dit 2 » où la sheet montrait la longueur de /interactions) + les
-                        // impressions (author-only), pour la parité avec le détail/réel.
-                        // Nouvelle clé de localisation (pas de traduction existante à casser).
-                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(story.viewCount ?? viewers.count) Vues · \(story.impressionCount ?? 0) impressions", bundle: .main))
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                            .textCase(nil)
-                        ) {
-                            ForEach(viewers) { viewer in
-                                viewerRow(viewer)
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                    .scrollContentBackground(.hidden)
-                }
-            }
-            .navigationTitle(String(localized: "story.viewer.views.title", defaultValue: "Vues", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
-                        dismiss()
-                    }
-                    .font(MeeshyFont.relative(16, weight: .bold))
-                    .foregroundColor(accentColor)
-                }
-            }
-            .task {
-                await loadViewers()
-            }
-            // Temps réel : chaque `story:viewed` de CETTE story (émis par le
-            // gateway vers la feed room de l'auteur) re-fetch la liste enrichie
-            // via `/posts/:id/interactions`. Sans ça, la feuille chargeait une
-            // seule fois (`.task`) et un nouveau viewer n'apparaissait jamais tant
-            // qu'elle restait ouverte — le cœur du « la remontée des vues ne se
-            // fait pas en temps réel ». Le re-fetch est silencieux (pas de spinner :
-            // `loadViewers` ne repasse pas `isLoading` à true).
-            .onReceive(SocialSocketManager.shared.storyViewed) { viewedData in
-                guard viewedData.storyId == story.id else { return }
-                Task { await loadViewers() }
-            }
-        }
-    }
-
-    private func viewerRow(_ viewer: StoryViewerItem) -> some View {
-        HStack(spacing: 12) {
-            // Local-first mood (StatusViewModel) + presence (PresenceManager
-            // live store). `onViewProfile` + row tap open the viewer's profile.
-            MeeshyAvatar(
-                name: viewer.displayName,
-                context: .storyViewerRow,
-                avatarURL: viewer.avatarUrl,
-                moodEmoji: statusViewModel.statusForUser(userId: viewer.id)?.moodEmoji,
-                presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil),
-                onViewProfile: { onOpenProfile(viewer) },
-                onMoodTap: statusViewModel.moodTapHandler(for: viewer.id)
-            )
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(viewer.displayName)
-                        .font(MeeshyFont.relative(16, weight: .semibold))
-                        .foregroundColor(.primary)
-
-                    if viewer.hasReshared {
-                        Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(12, weight: .bold))
-                            .foregroundColor(accentColor)
-                    }
-
-                    Spacer()
-
-                    Text(viewer.viewedAt, style: .time)
-                        .font(MeeshyFont.relative(12))
-                        .foregroundColor(.secondary)
-                }
-
-                if let reply = viewer.replyContent {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(MeeshyFont.relative(10))
-                        Text(reply)
-                            .font(MeeshyFont.relative(14))
-                            .lineLimit(1)
-                    }
-                    .foregroundColor(.secondary)
-                } else if let reaction = viewer.reactionEmoji {
-                    HStack(spacing: 6) {
-                        Image(systemName: "heart.fill")
-                            .font(MeeshyFont.relative(10))
-                            .foregroundColor(MeeshyColors.error)
-                        Text(reaction)
-                            .font(MeeshyFont.relative(14))
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture { onOpenProfile(viewer) }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
-    }
-
-    private func loadViewers() async {
-        // Un seul fetch en vol : si un autre tourne déjà, on note qu'un refresh
-        // est dû (`refreshQueued`) et on sort — le fetch courant le rejouera.
-        let shouldStart = await MainActor.run { () -> Bool in
-            if isRefreshing { refreshQueued = true; return false }
-            isRefreshing = true
-            return true
-        }
-        guard shouldStart else { return }
-
-        // Boucle jusqu'à ce qu'aucun événement n'ait été mis en file pendant le
-        // dernier fetch — au plus un refresh de rattrapage, jamais N concurrents.
-        repeat {
-            await MainActor.run { refreshQueued = false }
-            // M1 follow-up: the wire-shape decoding + nullable-field
-            // defaulting now lives in StoryInteractionService.loadViewers.
-            // A nil result here means "couldn't load" (logged at fault level
-            // in the service) — we leave the previous list alone, matching
-            // the prior swallow-and-show-empty behaviour.
-            let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
-            await MainActor.run {
-                if let snapshots {
-                    self.viewers = snapshots.map { s in
-                        StoryViewerItem(
-                            id: s.id,
-                            username: s.username,
-                            displayName: s.displayName,
-                            avatarUrl: s.avatarUrl,
-                            viewedAt: s.viewedAt,
-                            reactionEmoji: s.reactionEmoji,
-                            replyContent: nil,
-                            hasReshared: false
-                        )
-                    }
-                }
-                self.isLoading = false
-            }
-        } while await MainActor.run(body: { refreshQueued })
-
-        await MainActor.run { isRefreshing = false }
-    }
-}
+// `StoryViewersSheet` et `StoryViewerItem` vivent dans `PublicationViewersSheet.swift` (#9727).
 
 // MARK: - Story Comments Overlay (live-chat style with replies)
 
@@ -1570,7 +1291,7 @@ struct StoryCommentThread: View {
         if !autoPreview.isEmpty && !isExpanded {
             ForEach(autoPreview) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
         }
@@ -1580,18 +1301,18 @@ struct StoryCommentThread: View {
                 HapticFeedback.light()
                 onToggleThread()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(MeeshyFont.relative(9, weight: .bold))
                     let remaining = max(0, comment.replies - 2)
                     Text(isExpanded
                          ? "Masquer"
                          : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                 .padding(.leading, 40)
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
                 .storyOverlayLegible()
             }
         }
@@ -1603,13 +1324,13 @@ struct StoryCommentThread: View {
                     ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
                     Spacer()
                 }
-                .padding(.leading, 32)
-                .padding(.vertical, 4)
+                .padding(.leading, MeeshySpacing.xxxl)
+                .padding(.vertical, MeeshySpacing.xs)
             }
 
             ForEach(replies) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
 
@@ -1618,15 +1339,15 @@ struct StoryCommentThread: View {
                     HapticFeedback.light()
                     Task { await onLoadMoreReplies() }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "chevron.down")
                             .font(MeeshyFont.relative(9, weight: .bold))
                         Text(String(localized: "story.viewer.comments.loadMoreReplies", defaultValue: "Voir plus de réponses", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     }
                     .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                     .padding(.leading, 40)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .storyOverlayLegible()
                 }
                 .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
@@ -1672,27 +1393,15 @@ struct StoryCommentsOverlayView: View {
     @State private var hasRequestedTargetHunt = false
 
     @Binding var showCommentsOverlay: Bool
-    /// Réservation visuelle. Quand non-nil, le composer principal (un
-    /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
-    /// sa reply banner. L'overlay s'en sert seulement pour étirer sa
-    /// `composerSpaceReservation` afin que la liste ne passe pas sous la
-    /// banner.
+    /// Quand non-nil, le composer principal affiche sa reply banner ; la liste
+    /// défile jusqu'au commentaire visé (la plaque mesurée, banner comprise,
+    /// déplace `zone`).
     @Binding var replyingToStoryComment: FeedComment?
 
-    /// Drives the dynamic max-height of the comment list — with keyboard the
-    /// list expands toward the top, without it the list caps at ~50 % of the
-    /// screen so the underlying story stays manipulable above the list.
-    @ObservedObject var keyboard: KeyboardObserver
-
-    /// Vrai safe area bas lu sur la keyWindow par le parent
-    /// (`StoryViewerView.windowBottomInset`). Necessaire parce que cet
-    /// overlay est rendu dans le ZStack canvas qui herite du
-    /// `.ignoresSafeArea()` root — `geometry.safeAreaInsets.bottom` y vaut 0.
-    /// Sans cette valeur, `composerSpaceReservation` retombait sur une
-    /// constante hardcodee (54pt pour iPhone Pro) qui derivait sur iPhone
-    /// SE / iPad / pliables (bug 2026-05-28 : « le commentaire sort du
-    /// viewport EXACTEMENT comme la zone de composition »).
-    let safeBottom: CGFloat
+    /// Où la liste se pose et jusqu'où elle monte : la carte la place sur son
+    /// composeur (`StoryCommentsZone`, #9893). Elle suit le clavier dans SA
+    /// transaction — même courbe, même durée que le composeur.
+    let zone: StoryCommentsZone.Frame
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
@@ -1717,19 +1426,6 @@ struct StoryCommentsOverlayView: View {
         )
     }
 
-    /// Cap the comment list to ~half the screen when the keyboard is hidden
-    /// so the rest of the story (head, mid-frame) stays visible and tappable.
-    /// When the keyboard rises the list can grow into the space the keyboard
-    /// uncovered.
-    private var listMaxHeight: CGFloat {
-        // `DeviceLayout.windowSize`, pas `UIScreen.main.bounds` : en Split View
-        // la fraction était prise sur le DISPLAY, donc plus haute que la fenêtre
-        // entière — le plafond ne plafonnait plus rien et la liste recouvrait la
-        // story qu'elle est censée laisser visible.
-        let window = DeviceLayout.windowSize.height
-        return keyboard.isVisible ? window * 0.62 : window * 0.42
-    }
-
     /// Instagram-style overlay: comments float above the composer with a top
     /// fade, the story behind stays visible AND interactable (no opaque
     /// background catching taps). Composer alone wears a subtle glass strip so
@@ -1745,17 +1441,17 @@ struct StoryCommentsOverlayView: View {
     private var expiredStoryBanner: some View {
         Label {
             Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .lineLimit(1)
         } icon: {
             Image(systemName: "clock.badge.xmark")
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
         }
-        .foregroundColor(.white.opacity(0.85))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
-        .padding(.bottom, 6)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .transition(.opacity)
     }
 
@@ -1770,7 +1466,7 @@ struct StoryCommentsOverlayView: View {
                 // Les médias de TOUS les commentaires de la story (racines +
                 // réponses dépliées) se feuillettent ensemble en plein écran.
                 .commentMediaGallery(topLevel: topLevel, replies: storyCommentRepliesMap)
-                .frame(maxHeight: listMaxHeight)
+                .frame(maxHeight: zone.maxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
                 // « geste né dans la story encore visible au-dessus » (au drag
@@ -1800,7 +1496,7 @@ struct StoryCommentsOverlayView: View {
                 // apparaît et fait disparaître l'autre »). On unifie sur
                 // UN SEUL composer (le principal) et on laisse la liste
                 // s'arrêter juste au-dessus.
-                .padding(.bottom, composerSpaceReservation)
+                .padding(.bottom, zone.bottomInset)
         }
         // **CRITIQUE** : forcer la VStack à remplir toute la hauteur du
         // canvas. Sans `.frame(maxHeight: .infinity)`, le `Spacer(minLength:
@@ -1812,35 +1508,7 @@ struct StoryCommentsOverlayView: View {
         // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
         // implicitement la VStack ; maintenant il faut le déclarer.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
         .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
-    }
-
-    /// Hauteur réservée pour le composer principal (StoryComposerBarView)
-    /// + son safe area / sa montée clavier. La liste s'arrête au MILIEU du
-    /// composer (et non au-dessus) pour que les nouveaux commentaires
-    /// paraissent « émerger » de la zone de composition au scroll — le
-    /// composer recouvre visuellement la moitié inférieure de la liste,
-    /// et la masque-gradient `listFadeMask` cache déjà les rows arrivant
-    /// par le haut. User spec 2026-05-28 : « le composant pour remonter
-    /// les commentaires doit débuter en milieu de la zone de composition
-    /// […] on verra les commentaires sortir de cette zone ».
-    /// - clavier visible : `keyboard.height` + composer ~ 92pt (sans banner)
-    ///   ou ~140pt (avec reply banner)
-    /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
-    private var composerSpaceReservation: CGFloat {
-        let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
-        // Mirror `composerBottomPadding(geometry:)` cote canvas : safe area
-        // reel + 20pt breathing room quand clavier cache, sinon hauteur clavier.
-        // `safeBottom` arrive du parent via `windowBottomInset` (keyWindow),
-        // pas via `geometry.safeAreaInsets.bottom` qui vaut 0 sous
-        // `.ignoresSafeArea()` (bug 2026-05-28).
-        let bottomPadding: CGFloat = keyboard.isVisible
-            ? keyboard.height
-            : safeBottom + 20
-        // Half-composer overlap — list ends at composer.middle, the lower
-        // half is the « emerge » zone where new rows transition into view.
-        return composerHeight / 2 + bottomPadding
     }
 
     // MARK: - Comments List
@@ -1848,7 +1516,7 @@ struct StoryCommentsOverlayView: View {
     private func commentsList(_ topLevel: [FeedComment]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     ForEach(Array(topLevel.enumerated()), id: \.element.id) { idx, comment in
                         // Separator between top-level comments — `Divider()`
                         // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
@@ -1858,7 +1526,7 @@ struct StoryCommentsOverlayView: View {
                             Divider()
                                 .overlay(Color.white.opacity(0.28))
                                 .shadow(color: .black.opacity(0.3), radius: 1)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, MeeshySpacing.xs)
                         }
 
                         StoryCommentThread(
@@ -1883,7 +1551,7 @@ struct StoryCommentsOverlayView: View {
                             ProgressView().tint(.white.opacity(0.6))
                             Spacer()
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, MeeshySpacing.sm)
                     }
 
                     if topLevel.isEmpty && !isLoadingComments {
@@ -1899,8 +1567,8 @@ struct StoryCommentsOverlayView: View {
                 // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
                 .padding(.leading, 28)
                 .padding(.trailing, 80)
-                .padding(.top, 24)
-                .padding(.bottom, 12)
+                .padding(.top, MeeshySpacing.xxl)
+                .padding(.bottom, MeeshySpacing.md)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
                 // Notification → RÉPONSE précise : le parent est chargé
@@ -1967,23 +1635,23 @@ struct StoryCommentsOverlayView: View {
     // MARK: - Empty State
 
     private var emptyPlaceholder: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "bubble.left.and.bubble.right")
                 // Doctrine 84i/86i : glyphe héros décoratif de l'état vide → taille
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
-                .font(.system(size: 28))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.system(size: MeeshyIconSize.xxxl))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
-                .font(MeeshyFont.relative(11))
-                .foregroundColor(.white.opacity(0.65))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .storyOverlayLegible()
     }
 
@@ -2078,64 +1746,7 @@ extension StoryViewerView {
 
     private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorUsername: c.author.username,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: parentId,
-                effectFlags: c.effectFlags ?? 0,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() },
-                location: c.location
-            )
-        }
-    }
-
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
-        StoryCommentRowView(
-            comment: comment,
-            userLang: userLang,
-            isLiked: storyCommentLikedIds.contains(comment.id),
-            likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
-            isInFlight: heartInFlightIds.contains(comment.id),
-            onReply: {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    replyingToStoryComment = comment
-                }
-                // Répondre à une réponse (niveau 2) : la réponse reste plate au niveau 2
-                // (parent racine, cf. submitStoryComment) — on injecte une @mention de
-                // l'auteur ciblé dans le composer pour qu'il soit notifié (`user_mentioned`).
-                if comment.parentId != nil, let username = comment.authorUsername, !username.isEmpty {
-                    emojiToInject = "@\(username) "
-                }
-                // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
-                // pour ouvrir le clavier immédiatement (spec 2026-06-23) — l'auteur
-                // (et tout viewer) peut répondre sans tap supplémentaire.
-                //
-                // Pour l'auteur de sa propre story, le composer n'existe PAS avant
-                // ce tap (cf. condition de rendu `!isOwnStory || replyingToStoryComment`
-                // dans +Canvas) : il est monté dans la même passe que `replyingToStoryComment`.
-                // Or `focusTrigger` est consommé via `onChange`, qui ne fire pas au
-                // montage initial — poser `true` synchroniquement serait ignoré et le
-                // drapeau resterait coincé. On force donc un front false→true sur le
-                // runloop suivant, une fois le composer monté et son `onChange` actif.
-                composerFocusTrigger = false
-                DispatchQueue.main.async { composerFocusTrigger = true }
-                HapticFeedback.light()
-            },
-            onToggleLike: {
-                HapticFeedback.light()
-                Task { await toggleStoryCommentLike(comment) }
-            }
-        )
+        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Story Comment Reactions
@@ -2172,29 +1783,7 @@ extension StoryViewerView {
     func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
         guard data.postId == currentStory?.id else { return }
 
-        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let comment = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translatedContent,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
+        let comment = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
 
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
@@ -2213,39 +1802,10 @@ extension StoryViewerView {
     /// à toucher. Miroir de `PostDetailViewModel.applyCommentUpdated`.
     func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let translated = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let updated = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translated,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
-        if let parentId = updated.parentId,
-           var replies = storyCommentRepliesMap[parentId],
-           let idx = replies.firstIndex(where: { $0.id == updated.id }) {
-            replies[idx] = updated
-            storyCommentRepliesMap[parentId] = replies
-            return
-        }
-        if let idx = storyComments.firstIndex(where: { $0.id == updated.id }) {
-            storyComments[idx] = updated
-        }
+        let updated = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
+        let applied = StoryCommentEditing.replacing(updated, comments: storyComments, replies: storyCommentRepliesMap)
+        storyComments = applied.comments
+        storyCommentRepliesMap = applied.replies
     }
 
     /// Traduction de commentaire arrivée pendant la lecture : pose
@@ -2485,24 +2045,7 @@ extension StoryViewerView {
     /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
     /// seulement le résolveur.
     static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
-        FeedComment(
-            id: c.id, author: c.author.name, authorId: c.author.id,
-            authorUsername: c.author.username,
-            authorAvatarURL: c.author.avatar,
-            content: c.content, timestamp: c.createdAt,
-            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-            parentId: c.parentId,
-            effectFlags: c.effectFlags ?? 0,
-            originalLanguage: c.originalLanguage,
-            translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations,
-                originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            ),
-            currentUserReactions: c.currentUserReactions,
-            media: (c.media ?? []).map { $0.toFeedMedia() },
-            location: c.location
-        )
+        FeedComment(api: c, preferredLanguages: langs)
     }
 
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
@@ -2547,23 +2090,7 @@ extension StoryViewerView {
                 postId: story.id, cursor: storyCommentsNextCursor, limit: 50
             )
             if let now = currentStory?.id, now != story.id { return }
-            let fetched = response.data.map { c -> FeedComment in
-                FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    originalLanguage: c.originalLanguage,
-                    translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                    ),
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location
-                )
-            }
+            let fetched = response.data.map { FeedComment(api: $0, preferredLanguages: langs) }
             let existing = Set(storyComments.map(\.id))
             storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             storyCommentsNextCursor = response.pagination?.nextCursor

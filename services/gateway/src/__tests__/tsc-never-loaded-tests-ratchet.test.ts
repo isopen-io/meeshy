@@ -66,7 +66,22 @@ const typecheckDesTests = (): string => {
     return execFileSync(
       join(GATEWAY_ROOT, 'node_modules', '.bin', 'tsc'),
       ['-p', 'tsconfig.test.json', '--noEmit', '--pretty', 'false'],
-      { cwd: GATEWAY_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }
+      {
+        cwd: GATEWAY_ROOT,
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        // `tsc -p tsconfig.test.json` charge tout `src/**/*` et les types
+        // Prisma : mesuré à ≈ 4,4 Go (`--extendedDiagnostics`, 4218 fichiers,
+        // 2026-10-05), au-delà du tas par défaut de Node (≈ 4 Go). Sans tas
+        // élargi, `tsc` meurt en « heap out of memory », son stderr hérité
+        // fait croire à jest-worker que le WORKER a manqué de mémoire, et la
+        // suite tombe sans jamais mesurer. Le tas est donné au seul enfant.
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=8192`.trim(),
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
     );
   } catch (erreur) {
     // `tsc` sort en erreur (code 2) dès qu'il trouve au moins un diagnostic —

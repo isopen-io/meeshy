@@ -3,7 +3,7 @@ import { Suspense, useRef } from 'react';
 import { fitScene } from '@/lib/canvas/fit';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
-import { SCENE_ASPECT, backgroundMedia, cardFocus, pageAspect } from '@/lib/feed/scene-framing';
+import { SCENE_ASPECT, cardFocus, pageAspect } from '@/lib/feed/scene-framing';
 import { isSceneCinematic, isVideoObject } from '@/lib/feed/scene-motion';
 import { resolveSceneCaption } from '@/lib/feed/scene-caption';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
@@ -17,6 +17,7 @@ import { Glyph } from './glyph';
 import type { SceneClockHandle } from './scene-clock';
 import { preloadSceneViewer } from './scene-fullscreen-gallery';
 import { lazyScenePlayer } from './scene-player-lazy';
+import { SceneWaitingSurface } from './scene-waiting-surface';
 
 /**
  * `FeedSceneSurface` — LA VIGNETTE D'UNE SCÈNE, `page` ou `tile` (#6898, §
@@ -32,8 +33,9 @@ import { lazyScenePlayer } from './scene-player-lazy';
  *
  * Le moteur (`ScenePlayer`) est chargé À LA DEMANDE (`lazy`, motif D-54) —
  * la première peinture du fil ne grossit pas tant qu'aucune carte à scène
- * n'est visible ; en attendant, la boîte se peint de la couleur du FOND de la
- * scène, jamais d'un aplat neutre qui clignerait vers elle (§ 6).
+ * n'est visible ; en attendant, la boîte se peint de l'EMPREINTE de la scène
+ * sur la couleur de son FOND (`SceneWaitingSurface`, #5047), jamais d'un aplat
+ * neutre qui clignerait vers elle (§ 6).
  *
  * **LE TAP CONFIE L'OUVERTURE** (#8598) — avant `onOpen`, la carte remet à la
  * visionneuse son CADRE visible (d'où la scène plein écran grandira), le rayon
@@ -89,11 +91,6 @@ export type FeedSceneSurfaceProps = {
   /** Le report « +N » que la mosaïque pose sur SA dernière tuile — la tuile
    * l'ANNONCE dans son nom (`vignette`, `PostSceneMosaic.swift:392-478`). */
   readonly overflow?: number;
-};
-
-const sceneBackgroundColor = (scene: CanvasScene): string => {
-  const color = backgroundMedia(scene)?.payload.background;
-  return typeof color === 'string' && color !== '' ? color : 'var(--color-ios-card)';
 };
 
 /** « Scène N », « Scène N, et M de plus », « Scène N, vidéo » pour une
@@ -157,7 +154,7 @@ export function FeedSceneSurface({
         className="relative block"
         style={content.width > 0 && content.height > 0 ? { width: content.width, height: content.height } : { width: '100%', height: '100%' }}
       >
-        <Suspense fallback={<span className="absolute inset-0 block" style={{ backgroundColor: sceneBackgroundColor(scene) }} />}>
+        <Suspense fallback={<SceneWaitingSurface scene={scene} />}>
           <ScenePlayer
             document={document}
             sceneIndex={sceneIndex}
@@ -177,16 +174,16 @@ export function FeedSceneSurface({
           <span
             data-feed-scene-paused-glyph=""
             className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
-            style={{ width: 26, height: 26, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
           >
-            <Glyph name="fillPlay" size={13} style={{ color: 'white' }} />
+            <Glyph name="fillPlay" size={13} style={{ color: 'var(--color-on-media)' }} />
           </span>
         ) : null}
         {caption !== undefined ? (
           <span
             data-feed-scene-caption
-            className="pointer-events-none absolute inset-x-0 bottom-0 block px-2 py-1.5 text-start text-check text-white"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 block px-2 py-1.5 text-start text-check text-on-media"
+            style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
             {...(caption.language !== undefined ? { lang: caption.language } : {})}
           >
             {truncateWords(caption.text, captionWordLimit).text}
@@ -214,7 +211,7 @@ export function FeedSceneSurface({
           }}
           aria-label={label}
           className="relative block size-full focus-visible:outline-2 focus-visible:-outline-offset-4"
-          style={{ outlineColor: 'white' }}
+          style={{ outlineColor: 'var(--color-on-media)' }}
         >
           {body}
         </button>

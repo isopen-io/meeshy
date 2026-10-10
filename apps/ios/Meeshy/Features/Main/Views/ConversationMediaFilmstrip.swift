@@ -279,7 +279,7 @@ private struct FilmstripThumbnail: View, Equatable {
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
     }
 
     /// Une vignette n'affiche JAMAIS le fichier plein format : la vignette
@@ -297,7 +297,7 @@ private struct FilmstripThumbnail: View, Equatable {
                 targetSize: CGSize(width: side, height: side),
                 onFullImageFailure: { isUnavailable = true }
             ) {
-                Color(hex: attachment.thumbnailColor).opacity(0.5)
+                Color(hex: attachment.thumbnailColor).opacity(MeeshyOpacity.strong)
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: side, height: side)
@@ -306,7 +306,7 @@ private struct FilmstripThumbnail: View, Equatable {
             .overlay(alignment: .bottomTrailing) { videoGlyph }
             .overlay(
                 shape.strokeBorder(
-                    isCurrent ? Color(hex: accentColor) : Color.white.opacity(0.18),
+                    isCurrent ? Color(hex: accentColor) : Color.white.opacity(MeeshyOpacity.light),
                     lineWidth: isCurrent ? 2 : 1
                 )
             )
@@ -327,11 +327,11 @@ private struct FilmstripThumbnail: View, Equatable {
     private var unavailableMark: some View {
         if isUnavailable {
             ZStack {
-                Color.black.opacity(0.6)
+                MeeshyColors.mediaScrim
                 Image(systemName: "photo.badge.exclamationmark")
-                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityHidden(true)
         }
@@ -345,9 +345,9 @@ private struct FilmstripThumbnail: View, Equatable {
             Image(systemName: "play.fill")
                 .font(.system(size: 8, weight: .black))
                 .foregroundColor(.white)
-                .padding(3)
-                .background(Circle().fill(Color.black.opacity(0.55)))
-                .padding(3)
+                .padding(MeeshySpacing.xxs)
+                .background(Circle().fill(MeeshyColors.mediaScrim))
+                .padding(MeeshySpacing.xxs)
                 .accessibilityHidden(true)
         }
     }

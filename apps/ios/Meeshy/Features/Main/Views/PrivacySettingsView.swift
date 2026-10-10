@@ -68,7 +68,7 @@ struct PrivacySettingsView: View {
         section(
             title: String(localized: "settings.privacy.visibility", defaultValue: "Visibilité", bundle: .main),
             icon: "eye.fill",
-            color: "9B59B6",
+            color: MeeshyColors.tileAmethystHex,
             specs: [
                 ToggleSpec(
                     id: "online", icon: "circle.fill",
@@ -87,7 +87,7 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "notifyOnReturn", icon: "person.crop.circle.badge.clock",
                     title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
-                    color: "4ECDC4", keyPath: \.notifyContactsOnReturn,
+                    color: MeeshyColors.tileTealHex, keyPath: \.notifyContactsOnReturn,
                     info: SettingsInfo(
                         id: "privacy.notify_contacts_on_return",
                         title: String(localized: "settings.privacy.notify_contacts_on_return", defaultValue: "Prévenir mes contacts quand je reviens sur Meeshy", bundle: .main),
@@ -106,7 +106,7 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "readReceipts", icon: "checkmark.message.fill",
                     title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main),
-                    color: "3498DB", keyPath: \.showReadReceipts,
+                    color: MeeshyColors.tileBlueHex, keyPath: \.showReadReceipts,
                     info: SettingsInfo(
                         id: "privacy.read_receipts",
                         title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main),
@@ -120,12 +120,12 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "typing", icon: "ellipsis.bubble.fill",
                     title: String(localized: "settings.privacy.typing_indicator", defaultValue: "Indicateur de frappe", bundle: .main),
-                    color: "F8B500", keyPath: \.showTypingIndicator
+                    color: MeeshyColors.tileSaffronHex, keyPath: \.showTypingIndicator
                 ),
                 ToggleSpec(
                     id: "hideSearch", icon: "magnifyingglass",
                     title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
-                    color: "FF6B6B", keyPath: \.hideProfileFromSearch,
+                    color: MeeshyColors.tileCoralHex, keyPath: \.hideProfileFromSearch,
                     info: SettingsInfo(
                         id: "privacy.hide_from_contact_search",
                         title: String(localized: "settings.privacy.hide_from_contact_search", defaultValue: "Ne pas me proposer à ceux qui ont mon numéro ou mon e-mail", bundle: .main),
@@ -159,7 +159,7 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "callsNonContacts", icon: "phone.arrow.down.left",
                     title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
-                    color: "FF6B6B", keyPath: \.acceptCallsFromNonContacts,
+                    color: MeeshyColors.tileCoralHex, keyPath: \.acceptCallsFromNonContacts,
                     info: SettingsInfo(
                         id: "privacy.calls_non_contacts",
                         title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main),
@@ -188,7 +188,7 @@ struct PrivacySettingsView: View {
         section(
             title: String(localized: "settings.privacy.media_data", defaultValue: "Média & Données", bundle: .main),
             icon: "photo.fill",
-            color: "F8B500",
+            color: MeeshyColors.tileSaffronHex,
             specs: [
                 ToggleSpec(
                     id: "saveMedia", icon: "square.and.arrow.down.fill",
@@ -212,12 +212,12 @@ struct PrivacySettingsView: View {
                 ToggleSpec(
                     id: "shareData", icon: "arrow.triangle.branch",
                     title: String(localized: "settings.privacy.share_data", defaultValue: "Partage données", bundle: .main),
-                    color: "9B59B6", keyPath: \.shareUsageData
+                    color: MeeshyColors.tileAmethystHex, keyPath: \.shareUsageData
                 ),
                 ToggleSpec(
                     id: "blockScreenshots", icon: "camera.fill",
                     title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer les captures", bundle: .main),
-                    color: "FF6B6B", keyPath: \.blockScreenshots
+                    color: MeeshyColors.tileCoralHex, keyPath: \.blockScreenshots
                 ),
             ]
         )
@@ -237,14 +237,14 @@ struct PrivacySettingsView: View {
                 icon: "lock.shield.fill",
                 color: "3498DB"
             )
-            SettingsCard(tint: "3498DB") {
+            SettingsCard(tint: MeeshyColors.tileBlueHex) {
                 SettingsRow(
                     icon: "hourglass",
                     title: String(localized: "settings.privacy.encryption.coming_soon", defaultValue: "Bientôt disponible", bundle: .main),
                     color: "3498DB"
                 ) {
                     Text(String(localized: "settings.privacy.encryption.status_disabled", defaultValue: "Désactivé", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
             }
@@ -274,7 +274,7 @@ struct PrivacySettingsView: View {
         if Self.isComingSoon(spec.keyPath) {
             SettingsRow(icon: spec.icon, title: spec.title, color: spec.color) {
                 Text(String(localized: "settings.privacy.coming_soon", defaultValue: "Bientôt disponible", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
             }
             .opacity(0.55)

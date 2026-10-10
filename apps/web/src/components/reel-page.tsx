@@ -1,13 +1,20 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Avatar } from './avatar';
-import { PersonName } from './person-name';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
-import { RAIL_DISC, ReelPoster } from './reel-poster';
+import { MediaUnavailable } from './media-unavailable';
+import { PlaybackStallIndicator } from './playback-stall-indicator';
+import { ReelPoster } from './reel-poster';
+import { GLYPH_SIZE } from './ui-chrome';
+import { usePublicationParticipation } from '@/lib/view/publication-participation';
+
+import { VIEWER_GLASS, ViewerActionRail, ViewerBottomBar, ViewerIdentity, type ViewerAction } from './viewer-chrome';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { watchMediaStall } from '@/lib/media/media-stall';
+import { sceneWaitingImage } from '@/lib/canvas/scene-placeholder';
 import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import { documentAnnouncesSound } from '@/lib/canvas/document';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -15,8 +22,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
-import { yieldingChrome } from '@/lib/view/chrome-yields';
-import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { useFrameProgress } from '@/lib/view/frame-progress';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -34,10 +40,13 @@ const ReelImages = lazy(() => import('./reel-images'));
  * l'auteur et la légende (Prisme, `resolveFeedCardModel`) en bas à gauche, le
  * rail d'actions à droite.
  *
- * - **Le mode décide du lecteur** (`pageModeOf`, `lib/reels/thread.ts`) : le
- *   réel visible monte et JOUE son `<video>`, ses deux voisins le montent en
- *   attente (le balayage suivant n'attend pas le réseau), les autres ne portent
- *   que leur affiche — aucun élément de lecture hors de la fenêtre.
+ * - **Le mode décide du lecteur** (`pageModeOf`, `lib/reels/thread.ts`,
+ *   #9702) : le réel visible monte et JOUE son `<video>` ; ses voisins N±1 le
+ *   montent en `preload="auto"` — leur première image est décodée par le
+ *   navigateur avant le balayage, qui n'attend donc pas le réseau ; N±2 le
+ *   montent en attente de métadonnées (un retour en arrière ne recrée rien) ;
+ *   les autres ne portent que leur affiche, leurs octets de tête étant amorcés
+ *   à part tant qu'ils restent dans la fenêtre (`lib/reels/media-primer.ts`).
  * - **La vidéo n'est pas recadrée** : `.resizeAspect` côté iOS
  *   (`ReelsPlayerView+Video.swift`), `object-contain` ici.
  * - **Le rail n'offre que ce qui a un effet** (loi 4), dans l'ordre d'iOS
@@ -82,26 +91,38 @@ export type ReelPageProps = {
   readonly chromeHidden?: boolean;
 };
 
-const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.7)';
-
 function ReelPlayable({
   media,
   tag,
-  active,
+  mode,
   soundOn,
   accent,
   language,
 }: {
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
-  readonly active: boolean;
+  readonly mode: Exclude<ReelPageMode, 'far'>;
   readonly soundOn: boolean;
   readonly accent: string;
   readonly language: InterfaceLanguage;
 }) {
-  const { status, progress, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
+  const active = mode === 'active';
+  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
   const poster = media.thumbnailSrc ?? media.placeholder;
-  const preload = active ? 'auto' : 'metadata';
+  const preload = mode === 'warm' ? 'metadata' : 'auto';
+  /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
+  const [element, setElement] = useState<HTMLMediaElement | null>(null);
+  const [stalled, setStalled] = useState(false);
+  const attach = useCallback(
+    (el: HTMLMediaElement | null) => {
+      bind(el);
+      setElement(el);
+    },
+    [bind],
+  );
+  useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
+  const bar = useRef<HTMLSpanElement | null>(null);
+  useFrameProgress({ media: element, playing: status === 'playing', bar });
 
   return (
     <>
@@ -109,7 +130,7 @@ function ReelPlayable({
         /* `key` — une source qui change REMONTE l'élément (motif `VideoTile`). */
         <video
           key={media.src}
-          ref={bind}
+          ref={attach}
           src={media.src}
           {...(poster !== undefined ? { poster } : {})}
           preload={preload}
@@ -121,10 +142,10 @@ function ReelPlayable({
         />
       ) : (
         <>
-          <div aria-hidden="true" className="absolute inset-0 grid place-items-center" style={{ background: `radial-gradient(circle at 50% 42%, ${accent}, black 72%)` }}>
-            <GlyphSvg glyph={FEED_GLYPHS.waveform} size={112} style={{ color: 'rgba(255,255,255,0.72)' }} />
+          <div aria-hidden="true" className="absolute inset-0 grid place-items-center" style={{ background: `radial-gradient(circle at 50% 42%, ${accent}, var(--color-media-backdrop) 72%)` }}>
+            <GlyphSvg glyph={FEED_GLYPHS.waveform} size={112} style={{ color: 'var(--color-on-media-3)' }} />
           </div>
-          <audio key={media.src} ref={bind} src={media.src} preload={preload} loop muted={!soundOn} data-reel-media="audio" />
+          <audio key={media.src} ref={attach} src={media.src} preload={preload} loop muted={!soundOn} data-reel-media="audio" />
         </>
       )}
       <button
@@ -133,16 +154,20 @@ function ReelPlayable({
         aria-label={translate(language, status === 'playing' ? 'reels.pause' : 'reels.play')}
         onClick={toggle}
         className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
-        style={{ outlineColor: 'white', WebkitTapHighlightColor: 'transparent' }}
+        style={{ outlineColor: 'var(--color-on-media)', WebkitTapHighlightColor: 'transparent' }}
       >
         {status === 'paused' ? (
-          <span aria-hidden="true" className="grid size-18 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
-            <Glyph name="fillPlay" size={34} className="text-white" />
+          <span aria-hidden="true" className={`${VIEWER_GLASS} grid size-18 place-items-center rounded-full`}>
+            <Glyph name="fillPlay" size={34} className="text-on-media" />
           </span>
         ) : null}
       </button>
+      <PlaybackStallIndicator stalled={stalled && active && status !== 'paused'} language={language} />
       {/* La progression est ÉCRITE, jamais animée : une transition sur la
-          transformation amortirait le suivi de la lecture.
+          transformation amortirait le suivi de la lecture. Elle s'écrit À
+          CHAQUE IMAGE sur l'horloge du média (`useFrameProgress`, #9702), plus
+          sur `timeupdate` (≈ 4 Hz, une seconde par saut sur un réel d'une
+          minute) : `scaleX(0)` n'est que sa valeur de départ.
 
           `z-10` (revue-correction #6903) — LE VOILE BAS EST PEINT APRÈS CETTE
           BARRE, et il l'effaçait : mesuré au pixel sur la capture,
@@ -154,20 +179,18 @@ function ReelPlayable({
           où il sert la lisibilité du blanc ; la barre passe au-dessus. */}
       <span
         aria-hidden="true"
+        ref={bar}
         data-reel-progress
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
-        style={{ backgroundColor: 'rgba(255,255,255,0.85)', transform: `scaleX(${progress})` }}
+        style={{ backgroundColor: 'var(--color-on-media-2)', transform: 'scaleX(0)' }}
       />
       {status === 'error' ? (
+        /* L'ÉTAT D'UN MÉDIA QUI NE SE LIT PAS est CELUI des trois autres surfaces
+           (story, post, message — `MediaUnavailable`, #7022) : un bouton local
+           de plus était le quatrième dessin d'un même manque. Le réessai est un
+           échec TRANSITOIRE, donc offert ici (`onRetry`, #8141). */
         <div data-reel-media-error className="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-center px-6">
-          <button
-            type="button"
-            onClick={toggle}
-            className="rounded-chip px-4 text-check font-semibold text-white"
-            style={{ minHeight: 44, backgroundColor: 'rgba(0,0,0,0.72)' }}
-          >
-            {translate(language, 'reels.media.error')}
-          </button>
+          <MediaUnavailable language={language} onRetry={toggle} />
         </div>
       ) : null}
     </>
@@ -181,7 +204,8 @@ function scenePosterOf(scene: FeedCardScene): string | undefined {
   const first = scene.document.scenes[0];
   if (first === undefined) return undefined;
   const identity = carrierMediaIdentity(first);
-  return identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  const poster = identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  return poster ?? sceneWaitingImage(first);
 }
 
 function ReelStage({
@@ -202,9 +226,9 @@ function ReelStage({
   // un réel composé la joue même si `media` porte aussi une vidéo.
   if (stage.kind === 'scene') {
     const poster = scenePosterOf(stage.scene);
-    // `far` ne charge JAMAIS le chunk du moteur — la même discipline que
-    // vidéo/audio ci-dessous.
-    if (mode === 'far') return <ReelPoster src={poster} />;
+    // `far` et `warm` ne chargent JAMAIS le chunk du moteur — la scène est
+    // un lecteur complet, réservé au réel visible et à ses voisins immédiats.
+    if (mode === 'far' || mode === 'warm') return <ReelPoster src={poster} />;
     return (
       <Suspense fallback={<ReelPoster src={poster} />}>
         <ReelSceneStage
@@ -226,13 +250,13 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} active={mode === 'active'} soundOn={soundOn} accent={accent} language={language} />
+      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} />
     );
   }
   if (stage.kind === 'images') {
     const first = stage.images[0];
     const poster = <ReelPoster src={first?.thumbnailSrc ?? first?.src} />;
-    return mode === 'far' ? (
+    return mode === 'far' || mode === 'warm' ? (
       poster
     ) : (
       <Suspense fallback={poster}>
@@ -240,50 +264,27 @@ function ReelStage({
       </Suspense>
     );
   }
-  return <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${accent}, black 75%)` }} />;
+  return <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${accent}, var(--color-media-backdrop) 75%)` }} />;
 }
 
-function RailButton({
-  gesture,
-  pressed,
-  label,
-  glyph,
-  count,
-  ink,
-  onPress,
-}: {
-  readonly gesture: string;
-  readonly pressed?: boolean;
-  readonly label: string;
-  readonly glyph: keyof typeof FEED_GLYPHS | keyof typeof MEDIA_TRANSPORT_GLYPHS;
-  readonly count?: number;
-  readonly ink: string;
-  readonly onPress: () => void;
-}) {
-  const shape = glyph in FEED_GLYPHS ? FEED_GLYPHS[glyph as keyof typeof FEED_GLYPHS] : MEDIA_TRANSPORT_GLYPHS[glyph as keyof typeof MEDIA_TRANSPORT_GLYPHS];
-  return (
-    <button
-      type="button"
-      data-reel-gesture={gesture}
-      {...(pressed !== undefined ? { 'aria-pressed': pressed } : {})}
-      {...(count === undefined ? { 'aria-label': label } : {})}
-      onClick={onPress}
-      className="flex min-w-11 flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ color: ink, outlineColor: 'white' }}
-    >
-      <span className="grid size-11 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
-        <GlyphSvg glyph={shape} size={24} {...(count !== undefined ? { title: label } : {})} />
-      </span>
-      {count !== undefined ? (
-        <span className="text-check font-semibold text-white tabular-nums" style={{ textShadow: TEXT_SHADOW }}>
-          {count}
-        </span>
-      ) : null}
-    </button>
-  );
-}
+type RailGlyph = keyof typeof FEED_GLYPHS | keyof typeof MEDIA_TRANSPORT_GLYPHS;
 
-function ReelRail({
+const railGlyph = (name: RailGlyph) => (
+  <GlyphSvg glyph={name in FEED_GLYPHS ? FEED_GLYPHS[name as keyof typeof FEED_GLYPHS] : MEDIA_TRANSPORT_GLYPHS[name as keyof typeof MEDIA_TRANSPORT_GLYPHS]} size={GLYPH_SIZE.lg} />
+);
+
+/**
+ * **LE RAIL DU RÉEL** — les actions, dans l'ordre d'iOS (`ReelActionRail` :
+ * aimer · commenter · enregistrer · repartager · partager · son), rendues par
+ * `ViewerActionRail` : le MÊME disque, le même compteur, le même pas que le
+ * rail des stories et celui de la visionneuse de médias (#8879). Ce qui reste
+ * ici est ce que le réel SAIT FAIRE : un rappel absent ⇒ l'action n'existe pas
+ * (loi 4, même garde que `CommentThread.canWrite`).
+ *
+ * « Commenter » ouvre la feuille PARTAGÉE (D-89) ; « Répondre… » — la capsule
+ * de la barre basse — ouvre la MÊME, par le MÊME rappel.
+ */
+function reelActions({
   model,
   playable,
   soundOn,
@@ -293,81 +294,89 @@ function ReelRail({
   onShare,
   onComment,
   onRepost,
+  commented,
 }: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare' | 'onComment' | 'onRepost'> & {
   readonly playable: boolean;
-}) {
+  /** Le lecteur a commenté ce réel pendant la session (`usePublicationParticipation`). */
+  readonly commented: boolean;
+}): readonly ViewerAction[] {
   const { liked, bookmarked, reposted } = model.viewer;
-  return (
-    <div data-reel-rail className="pointer-events-auto flex shrink-0 flex-col items-center gap-3">
-      <RailButton
-        gesture="like"
-        pressed={liked}
-        label={translate(language, 'reels.action.like')}
-        glyph={liked ? 'heartFill' : 'heart'}
-        count={model.stats.likeCount}
-        ink={liked ? 'var(--color-error)' : 'white'}
-        onPress={() => onGesture(model.id, 'like')}
-      />
-      {/* COMMENTER — ordre iOS (`ReelActionRail`, aimer · commenter · …),
-          rang DEUX. Sans teinte au repos : c'est la luminance du réel qui
-          commande (#6693/#6704), comme sur iOS. N'existe que pour un
-          lecteur qui PEUT écrire (loi 4, même garde que `CommentThread`). */}
-      {onComment !== undefined ? (
-        <RailButton
-          gesture="comment"
-          label={translate(language, 'feed.post.action.comment')}
-          glyph="chatCircle"
-          count={model.stats.commentCount}
-          ink="white"
-          onPress={() => onComment(model.id)}
-        />
-      ) : null}
-      <RailButton
-        gesture="bookmark"
-        pressed={bookmarked}
-        label={translate(language, 'reels.action.bookmark')}
-        glyph={bookmarked ? 'bookmarkFill' : 'bookmark'}
-        count={model.stats.bookmarkCount}
-        ink="white"
-        onPress={() => onGesture(model.id, 'bookmark')}
-      />
-      {/* REPARTAGER — rang QUATRE (ordre iOS : aimer · commenter · enregistrer
-          · repartager). `var(--color-ok)` une fois posé (append-only, miroir
-          `MeeshyColors.success` de `ReelActionRail.swift:92`) — jamais défait
-          par un second tap, iOS ne l'offre pas non plus. */}
-      {onRepost !== undefined ? (
-        <RailButton
-          gesture="repost"
-          pressed={reposted}
-          label={translate(language, 'feed.post.action.repost')}
-          glyph="arrowsClockwise"
-          count={model.stats.repostCount}
-          ink={reposted ? 'var(--color-ok)' : 'white'}
-          onPress={() => onRepost(model.id)}
-        />
-      ) : null}
-      <RailButton
-        gesture="share"
-        label={translate(language, 'reels.action.share')}
-        glyph="shareNetwork"
-        count={model.stats.shareCount}
-        ink="white"
-        onPress={() => onShare(model.id)}
-      />
-      {playable ? (
-        <RailButton
-          gesture="sound"
-          label={translate(language, soundOn ? 'reels.sound.off' : 'reels.sound.on')}
-          glyph={soundOn ? 'speakerHigh' : 'speakerSlash'}
-          ink="white"
-          onPress={onToggleSound}
-        />
-      ) : null}
-    </div>
-  );
+  /* L'ANNEAU DU GESTE FAIT, dans la couleur de l'auteur — `ReelActionRail.swift`
+     (`outline`, `accentHex: reel.authorColor`) ; directive porteur 2026-10-01. */
+  const ringed = (done: boolean): string | undefined => (done ? model.author.accentColor : undefined);
+  return [
+    {
+      action: 'like',
+      label: translate(language, 'reels.action.like'),
+      glyph: railGlyph(liked ? 'heartFill' : 'heart'),
+      pressed: liked,
+      count: model.stats.likeCount,
+      ink: liked ? 'var(--ios-error)' : undefined,
+      glow: liked ? 'var(--ios-error)' : undefined,
+      contour: ringed(liked),
+      onPress: () => onGesture(model.id, 'like'),
+      probe: { 'data-reel-gesture': 'like' },
+    },
+    {
+      action: 'comment',
+      label: translate(language, 'feed.post.action.comment'),
+      glyph: railGlyph('chatCircle'),
+      count: model.stats.commentCount,
+      contour: ringed(commented),
+      onPress: onComment === undefined ? undefined : () => onComment(model.id),
+      probe: { 'data-reel-gesture': 'comment' },
+    },
+    {
+      action: 'bookmark',
+      label: translate(language, 'reels.action.bookmark'),
+      glyph: railGlyph(bookmarked ? 'bookmarkFill' : 'bookmark'),
+      pressed: bookmarked,
+      count: model.stats.bookmarkCount,
+      contour: ringed(bookmarked),
+      onPress: () => onGesture(model.id, 'bookmark'),
+      probe: { 'data-reel-gesture': 'bookmark' },
+    },
+    /* REPARTAGER — `var(--color-ok)` une fois posé (append-only, miroir
+       `MeeshyColors.success` de `ReelActionRail.swift:92`) ; jamais défait par
+       un second tap, iOS ne l'offre pas non plus. */
+    {
+      action: 'repost',
+      label: translate(language, 'feed.post.action.repost'),
+      glyph: railGlyph('arrowsClockwise'),
+      pressed: reposted,
+      count: model.stats.repostCount,
+      ink: reposted ? 'var(--color-ok)' : undefined,
+      contour: ringed(reposted),
+      onPress: onRepost === undefined ? undefined : () => onRepost(model.id),
+      probe: { 'data-reel-gesture': 'repost' },
+    },
+    {
+      action: 'share',
+      label: translate(language, 'reels.action.share'),
+      glyph: railGlyph('shareNetwork'),
+      count: model.stats.shareCount,
+      onPress: () => onShare(model.id),
+      probe: { 'data-reel-gesture': 'share' },
+    },
+    {
+      action: 'sound',
+      label: translate(language, soundOn ? 'reels.sound.off' : 'reels.sound.on'),
+      glyph: railGlyph(soundOn ? 'speakerHigh' : 'speakerSlash'),
+      glow: soundOn ? 'var(--ios-indigo-400)' : undefined,
+      onPress: playable ? onToggleSound : undefined,
+      probe: { 'data-reel-gesture': 'sound' },
+    },
+  ];
 }
 
-export function ReelPage(props: ReelPageProps) {
+/**
+ * MÉMOÏSÉE (#9277) : changer de réel ne change le `mode` que de trois pages au
+ * plus ; les autres gardent leurs props (rappels stables chez l'hôte, modèle
+ * mis en cache par publication) et ne se re-rendent plus pendant le geste —
+ * un coût qui croissait avec chaque page de réels chargée, sur le fil
+ * principal d'un Android lent.
+ */
+export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
   const { model, index, count, mode, language } = props;
   const stage = reelStageOf(model);
   // Une scène JOUE toujours (elle est le fond) ; le bouton son n'existe que
@@ -385,13 +394,23 @@ export function ReelPage(props: ReelPageProps) {
    * seconde règle (`sceneHasAudibleBackgroundVideo`).
    */
   const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
+  const participation = usePublicationParticipation(model.id);
   const sceneSound =
     stage.kind === 'scene' &&
     (soundUnavailable === null
       ? sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier })
       : sceneHasAudibleBackgroundVideo({ document: stage.scene.document, sceneIndex: 0 }));
   const playable = stage.kind === 'video' || stage.kind === 'audio' || sceneSound;
-  const chrome = yieldingChrome({ hidden: props.chromeHidden === true, reducedMotion: prefersReducedMotion() });
+  /* LA NOTE DU CRÉDIT EST LE MUET (#9698) dès que la scène annonce un son de
+     fond qu'on peut couper ; le bouton son du rail ne reste que sans crédit —
+     la piste propre d'une vidéo, d'un son, ou d'une vidéo de fond. */
+  const noteMutes = sceneSound && documentAnnouncesSound(model.scene?.document);
+  const { soundOn, onToggleSound } = props;
+  const soundControl = useMemo(
+    () => (noteMutes ? { muted: !soundOn, onToggle: onToggleSound, probe: { 'data-reel-gesture': 'sound' } as const } : undefined),
+    [noteMutes, soundOn, onToggleSound],
+  );
+  const chromeHidden = props.chromeHidden === true;
 
   return (
     <article
@@ -400,8 +419,11 @@ export function ReelPage(props: ReelPageProps) {
       data-reel-mode={mode}
       tabIndex={-1}
       aria-label={translate(language, 'reels.item', { author: model.author.name, index: String(index + 1), count: String(count) })}
-      className="relative w-full snap-start snap-always overflow-hidden bg-black outline-none"
-      style={{ height: '100%' }}
+      className="relative w-full snap-start snap-always overflow-hidden bg-media-backdrop outline-none"
+      /* `contain` (#9702) : chaque page est un îlot de mise en page et de
+         peinture — un rail qui bascule ou une légende qui s'étire ne relaie
+         jamais le pager ni ses voisins pendant le balayage. */
+      style={{ height: '100%', contain: 'layout paint' }}
     >
       <ReelStage
         model={model}
@@ -413,70 +435,82 @@ export function ReelPage(props: ReelPageProps) {
         onSoundUnavailable={setSoundUnavailable}
         {...(props.mediaDeps !== undefined ? { mediaDeps: props.mediaDeps } : {})}
       />
-      {/* LE CHROME CÈDE À LA FEUILLE (#8601, `lib/view/chrome-yields.ts`) —
-          voile, identité, légende et rail s'effacent ENSEMBLE, inertes, quand
-          on commente ; le média reste. */}
-      <div data-reel-chrome="" className="pointer-events-none absolute inset-0" {...chrome}>
-        {/* LE VOILE BAS tient le blanc de l'auteur, de la légende et des compteurs
-            au-dessus de AA sur la PIRE image (une mire blanche) : mesuré au pixel
-            par `scripts/check-reels.mjs`, jamais déduit d'une couleur calculée. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0"
-          style={{ height: '65%', background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.66) 40%, rgba(0,0,0,0) 100%)' }}
+      {/* LE CHROME CÈDE À LA FEUILLE (#8601, `lib/view/chrome-yields.ts`) — voile,
+          identité, légende et rail s'effacent ENSEMBLE, inertes, quand on
+          commente ; le média reste. C'est `ViewerBottomBar` qui cède (`hidden`),
+          et `data-reel-chrome` est SA prise : le gate l'interroge.
+
+          **LA COUCHE PORTE `z-[9]`, sous la barre de progression (`z-10`)** :
+          le voile bas de la barre effaçait sinon le trait de lecture
+          (#6903 — mesuré au pixel : ~15 % de la couleur voulue). Un
+          contexte d'empilement PROPRE à la couche garde le voile en dessous,
+          et la barre franche au-dessus — le pouce, lui, atteint toujours
+          l'identité, le rail et la capsule, posés sur la couche. */}
+      <div className="pointer-events-none absolute inset-0 z-[9]">
+        <ViewerBottomBar
+          probe={{ 'data-reel-chrome': '' }}
+          placement="overlay"
+          scrim="strong"
+          hidden={chromeHidden}
+          caption={
+            <>
+              {/* L'IDENTITÉ REPREND LE POINTEUR (#7241) — et reste en BAS avec la
+                  légende (divergence admise : dans un pager vertical elle
+                  appartient au contenu de la page, `ReelPageView` d'iOS ; la
+                  barre haute fixe ne porte que la sortie). */}
+              <div className="flex min-w-0">
+                {/* LE CRÉDIT DU SON (#9678, `ReelPageView+Info.swift`) — sa propre ligne sous le nom. */}
+                <ViewerIdentity
+                  nameProbe={{ 'data-reel-author': '' }}
+                  soundDocument={model.scene?.document}
+                  soundControl={soundControl}
+                  identity={{
+                    name: model.author.name,
+                    initials: model.author.initials,
+                    avatarColor: model.author.accentColor,
+                    ...(model.author.avatarSrc !== undefined ? { avatarSrc: model.author.avatarSrc } : {}),
+                    ...(model.author.username !== undefined ? { profileUsername: model.author.username } : {}),
+                    time: { iso: model.createdAt, label: model.relativeTime },
+                  }}
+                />
+              </div>
+              {model.text !== undefined ? (
+                <p
+                  data-reel-caption
+                  {...(model.text.language !== '' ? { lang: model.text.language } : {})}
+                  className="text-body"
+                  style={{ color: 'var(--color-on-media)', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+                >
+                  {model.text.full}
+                </p>
+              ) : null}
+            </>
+          }
+          rail={
+            <ViewerActionRail
+              probe={{ 'data-reel-rail': '' }}
+              label={translate(language, 'reels.title')}
+              hidden={chromeHidden}
+              actions={reelActions({
+                model,
+                playable: playable && !noteMutes,
+                soundOn: props.soundOn,
+                language,
+                onToggleSound: props.onToggleSound,
+                onGesture: props.onGesture,
+                onShare: props.onShare,
+                ...(props.onComment !== undefined ? { onComment: props.onComment } : {}),
+                ...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {}),
+                commented: participation.has('commented'),
+              })}
+            />
+          }
+          reply={{
+            label: translate(language, 'comments.placeholder'),
+            onReply: props.onComment === undefined ? undefined : () => props.onComment?.(model.id),
+          }}
         />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 ps-4 pe-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
-          <div className="flex min-w-0 flex-1 flex-col gap-2 pb-1">
-            {/* L'IDENTITÉ REPREND LE POINTEUR (#7241). Le scrim est
-                `pointer-events-none` pour que le pager garde ses gestes —
-                défilement vertical, tap pour le son ; seuls l'avatar et le nom le
-                REPRENNENT, sur leur propre surface. Le reste du bandeau continue
-                de laisser passer, donc aucun geste du lecteur n'est volé. */}
-            <div className="pointer-events-auto flex min-w-0 items-center gap-2">
-              <Avatar
-                initials={model.author.initials}
-                color={model.author.accentColor}
-                size={36}
-                name={model.author.name}
-                {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
-                {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
-              />
-              <PersonName
-                name={model.author.name}
-                username={model.author.username}
-                className="truncate text-body font-semibold text-white"
-                style={{ textShadow: TEXT_SHADOW }}
-              >
-                <span data-reel-author>{model.author.name}</span>
-              </PersonName>
-              <span className="shrink-0 text-check text-white" style={{ textShadow: TEXT_SHADOW }}>
-                {model.relativeTime}
-              </span>
-            </div>
-            {model.text !== undefined ? (
-              <p
-                data-reel-caption
-                {...(model.text.language !== '' ? { lang: model.text.language } : {})}
-                className="text-check text-white"
-                style={{ textShadow: TEXT_SHADOW, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
-              >
-                {model.text.full}
-              </p>
-            ) : null}
-          </div>
-          <ReelRail
-            model={model}
-            playable={playable}
-            soundOn={props.soundOn}
-            language={language}
-            onToggleSound={props.onToggleSound}
-            onGesture={props.onGesture}
-            onShare={props.onShare}
-            {...(props.onComment !== undefined ? { onComment: props.onComment } : {})}
-            {...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {})}
-          />
-        </div>
       </div>
     </article>
   );
-}
+});

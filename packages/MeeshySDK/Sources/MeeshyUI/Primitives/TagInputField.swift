@@ -55,7 +55,7 @@ public struct TagInputField: View {
             ForEach(selectedTags, id: \.self) { tag in
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(tag)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(accentColor)
                     Button {
                         selectedTags.removeAll { $0 == tag }
@@ -81,7 +81,7 @@ public struct TagInputField: View {
             TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onSubmit { submit() }
@@ -98,11 +98,11 @@ public struct TagInputField: View {
         .padding(MeeshySpacing.md)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.black.opacity(MeeshyOpacity.faint))
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .strokeBorder(focused ? accentColor.opacity(0.6) : Color.gray.opacity(0.15), lineWidth: 1)
+                .strokeBorder(focused ? accentColor.opacity(0.6) : MeeshyColors.hairline(isDark: isDark), lineWidth: 1)
         )
     }
 
@@ -113,10 +113,10 @@ public struct TagInputField: View {
                     addTag(tag)
                 } label: {
                     HStack {
-                        Image(systemName: "tag.fill").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
-                        Text(tag).font(MeeshyFont.relative(14, weight: .medium))
+                        Image(systemName: "tag.fill").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
+                        Text(tag).font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         Spacer()
-                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
+                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
                     }
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
@@ -125,14 +125,14 @@ public struct TagInputField: View {
             }
 
             if canCreate {
-                if !suggestions.isEmpty { Divider().opacity(0.3) }
+                if !suggestions.isEmpty { Divider().opacity(MeeshyOpacity.medium) }
                 Button {
                     addTag(trimmedQuery)
                 } label: {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }
@@ -142,8 +142,8 @@ public struct TagInputField: View {
                 .accessibilityLabel(Text(String(localized: "tag.create", defaultValue: "Créer le tag \(trimmedQuery)", bundle: .module)))
             }
         }
-        .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(0.06) : Color.white))
-        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(Color.gray.opacity(0.12), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.white))
+        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(MeeshyColors.hairline(isDark: isDark), lineWidth: 1))
     }
 
     private func submit() {

@@ -1,40 +1,31 @@
 import { useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import {
-  PLAYBACK_SPEEDS,
-  attachmentDurationLabel,
-  formatMediaTime,
-  keyboardSeekTarget,
-  seekFraction,
-  speedLabel,
-} from '@/lib/view/media-transport';
+import { PLAYBACK_SPEEDS, formatMediaTime, keyboardSeekTarget, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import type { MediaPlayback } from '@/lib/view/use-media-playback';
 
 import '@/styles/media-transport.css';
 
 import { GlyphSvg } from './glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
+import { VIEWER_GLASS } from './viewer-chrome';
 
 export type MediaTransportProps = {
   readonly playback: MediaPlayback;
-  /** La durée de la PIÈCE JOINTE (ms) — la seule lisible avant que l'élément ait chargé ses métadonnées. */
-  readonly durationMs: number | undefined;
   readonly language: InterfaceLanguage;
 };
 
 /**
- * LA BARRE DE LECTURE DU COULOIR BAS (#6359) — miroir de
- * `VideoTransportControls(controls: [.scrubber, .mute, .speed, .pip],
- * placement: .corridor)` (`ConversationMediaGalleryView+Transport.swift`) :
- * la piste qu'on parcourt, le temps, le muet, et un menu « ⋯ » qui porte la
- * vitesse et l'image dans l'image.
+ * LA BARRE DE LECTURE DU COULOIR BAS (#6359, #9577) — la PISTE qu'on parcourt,
+ * seule, sur toute la largeur de l'écran. Le muet et « ⋯ » ont rejoint la
+ * colonne d'actions (`VideoRailControls`) ; le temps est dit par la ligne
+ * d'informations de la visionneuse, qui décompte pendant la lecture. Le
+ * curseur garde les deux bouts pour un lecteur d'écran (`aria-valuetext`).
  *
  * TANT QUE L'ÉLÉMENT N'A PAS DE DURÉE, AUCUNE PISTE : une ligne qu'on ne peut
- * pas parcourir serait un contrôle sans effet (loi 4). Seule la durée de la
- * pièce jointe s'affiche, et elle ne ment jamais (`currentDurationLabel`).
+ * pas parcourir serait un contrôle sans effet (loi 4).
  *
  * LA VIDÉO SUIT LE DOIGT : chaque `pointermove` d'un geste en cours déplace
  * RÉELLEMENT la lecture (`seek`), le relâcher ne fait que conclure. C'est la
@@ -42,23 +33,13 @@ export type MediaTransportProps = {
  * 2026-09-13 (« on voit le recul sur les frames ») et que la directive « les
  * gestes de glissement sont progressifs et annulables » exige.
  */
-export function MediaTransport({ playback, durationMs, language }: MediaTransportProps) {
+export function MediaTransport({ playback, language }: MediaTransportProps) {
   const [scrubFraction, setScrubFraction] = useState<number | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const draggingRef = useRef(false);
-  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const { duration, position, muted, rate, pictureInPicture } = playback;
+  const { duration, position } = playback;
 
-  if (duration <= 0) {
-    const pieceLabel = attachmentDurationLabel(durationMs);
-    if (pieceLabel === null) return null;
-    return (
-      <div data-media-transport="duration" className="media-transport">
-        <span className="media-transport-time media-transport-time-alone">{pieceLabel}</span>
-      </div>
-    );
-  }
+  if (duration <= 0) return null;
 
   const shownSeconds = scrubFraction !== null ? scrubFraction * duration : position;
   const fraction = Math.min(1, Math.max(0, shownSeconds / duration));
@@ -110,8 +91,6 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
     playback.seek(target);
   };
 
-  const pipOffered = pictureInPicture !== 'unsupported';
-
   return (
     <div data-media-transport="bar" className="media-transport">
       <div
@@ -132,32 +111,62 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
       >
         <span className="media-transport-rail" aria-hidden />
         <span className="media-transport-fill" style={{ transform: `scaleX(${fraction})` }} aria-hidden />
-        <span className="media-transport-thumb" style={{ left: `${fraction * 100}%` }} aria-hidden />
+        <span
+          className="media-transport-thumb"
+          style={{ left: `${fraction * 100}%`, ...({ '--media-transport-progress': fraction } as CSSProperties) }}
+          aria-hidden
+        />
       </div>
+    </div>
+  );
+}
 
-      <span className="media-transport-time">{`${elapsedLabel} / ${totalLabel}`}</span>
+const RAIL_BUTTON = 'pointer-events-auto grid size-11 place-items-center rounded-full';
+const RAIL_DISC = `${VIEWER_GLASS} viewer-disc grid place-items-center rounded-full`;
 
+/**
+ * LE MUET ET « ⋯ » DE LA VIDÉO, DANS LA COLONNE D'ACTIONS (#9577) — sous
+ * « Composer », au même verre et à la même cible que le reste du rail
+ * (`ViewerActionButton`). Le muet est une bascule : `aria-pressed`, jamais un
+ * libellé qui change (contrat du chrome commun). « ⋯ » porte la vitesse et
+ * l'image dans l'image ; son menu s'ouvre du côté de la scène, jamais sur les
+ * actions voisines.
+ */
+export function VideoRailControls({ playback, language }: MediaTransportProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const { muted, rate, pictureInPicture } = playback;
+  const pipOffered = pictureInPicture !== 'unsupported';
+
+  return (
+    <>
       <button
         type="button"
-        aria-label={translate(language, muted ? 'media.video.unmute' : 'media.video.mute')}
+        data-viewer-action="mute"
+        aria-label={translate(language, 'media.video.mute')}
         aria-pressed={muted}
-        className="media-transport-button"
+        className={RAIL_BUTTON}
         onClick={() => playback.setMuted(!muted)}
       >
-        <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={18} />
+        <span className={RAIL_DISC}>
+          <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={18} />
+        </span>
       </button>
 
       <div className="media-transport-more">
         <button
           ref={moreButtonRef}
           type="button"
+          data-viewer-action="more"
           aria-label={translate(language, 'media.video.more_options')}
           aria-haspopup="menu"
           aria-expanded={menuOpen}
-          className="media-transport-button"
+          className={RAIL_BUTTON}
           onClick={() => setMenuOpen((open) => !open)}
         >
-          <GlyphSvg glyph={MEDIA_TRANSPORT_GLYPHS.dotsThree} size={18} />
+          <span className={RAIL_DISC}>
+            <GlyphSvg glyph={MEDIA_TRANSPORT_GLYPHS.dotsThree} size={18} />
+          </span>
         </button>
         {menuOpen ? (
           <div
@@ -207,6 +216,6 @@ export function MediaTransport({ playback, durationMs, language }: MediaTranspor
           </div>
         ) : null}
       </div>
-    </div>
+    </>
   );
 }

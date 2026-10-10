@@ -48,8 +48,8 @@ export type CurseurDeListe =
   /** Curseur irrecevable — inexistant OU hors du scope du lecteur. Les deux rendent la MÊME chose, sans quoi ils se distinguent. */
   | { readonly genre: 'refus' }
   /**
-   * Curseur résolu : borne stricte sur le RANG du lecteur (#7592) —
-   * max(`lastMessageAt`, dernière réaction à un message du lecteur), la clé du
+   * Curseur résolu : borne stricte sur le RANG de la ligne (#9026) —
+   * max(`lastMessageAt`, `lastActivityAt`), la clé du
    * tri de la liste.
    */
   | { readonly genre: 'borne'; readonly rang: Date }
@@ -72,10 +72,10 @@ export async function resolveListCursor({
   // pas continuer à paginer la conversation qu'il a quittée.
   const conversation = await prisma.conversation.findFirst({
     where: { id: beforeCursor, participants: { some: { userId, isActive: true } } },
-    select: { lastMessageAt: true, lastReactionAt: true, lastReactionTargetKey: true }
+    select: { lastMessageAt: true, lastActivityAt: true }
   });
 
   if (conversation === null) return { genre: 'refus' };
-  const rang = listRankFromColumns(conversation, userId);
+  const rang = listRankFromColumns(conversation);
   return rang === null ? { genre: 'queue' } : { genre: 'borne', rang };
 }

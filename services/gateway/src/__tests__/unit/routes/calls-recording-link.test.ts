@@ -191,6 +191,28 @@ describe('le type d’enregistrement gouverne le fichier accepté (#8437)', () =
     expect(audio.statusCode).toBe(415);
   });
 
+  it('la notification annonce un enregistrement vidéo, dans la langue du destinataire (#8469)', async () => {
+    const h = harness(world({ recording: { kind: 'video' }, attachment: { mimeType: 'video/mp4' } }));
+    await h.call(ALICE);
+
+    expect(h.createNotification.mock.calls[0]?.[0]).toMatchObject({
+      userId: BOB,
+      type: 'call_recording_ready',
+      content: '🎬 The call video recording is ready to watch',
+      metadata: { action: 'view_conversation', callType: 'video', recordingKind: 'video' },
+    });
+  });
+
+  it('un enregistrement vidéo rabattu sur un fichier audio est annoncé comme audio (#8469)', async () => {
+    const h = harness(world({ recording: { kind: 'video' }, attachment: { mimeType: 'audio/webm' } }));
+    await h.call(ALICE);
+
+    expect(h.createNotification.mock.calls[0]?.[0]).toMatchObject({
+      content: '🎙️ The call recording is ready to play',
+      metadata: { callType: 'audio', recordingKind: 'audio' },
+    });
+  });
+
   it('un enregistrement vidéo refuse ce qui n’est ni vidéo ni audio', async () => {
     const reply = await harness(world({ recording: { kind: 'video' }, attachment: { mimeType: 'image/png' } })).call(ALICE);
     expect(reply.statusCode).toBe(415);

@@ -244,3 +244,28 @@ export function resolveAudioTrack(params: {
     ...(track.durationMs !== undefined ? { durationMs: track.durationMs } : {}),
   };
 }
+
+/**
+ * L'ÉLECTION D'UN VOCAL, EN UN SEUL SITE (#9687) — le texte servi
+ * (`servedTranscript`), PUIS la piste dans la langue de ce texte
+ * (`resolveAudioTrack`) : une seule descente du Prisme (CLAUDE.md § Prisme,
+ * cycle 128). Consommée par la bulle (`view/media.ts#electAudio`, qui y insère
+ * la langue explorée) et par les cartes d'« Imagine »
+ * (`export/message-card-subject.ts#servedCardMediaOf`) — ici, et pas dans
+ * `view/media.ts`, pour que les cartes ne tirent pas le morceau des bulles.
+ */
+export function electServedAudio(params: {
+  readonly preferredLanguages: readonly string[];
+  readonly attachment: Pick<Attachment, 'transcription' | 'translations' | 'alt' | 'originalName' | 'fileUrl'>;
+  readonly fallbackLanguage: string;
+}): { readonly described: Served; readonly track: ServedTrack } {
+  const described = servedTranscript(params);
+  const track = resolveAudioTrack({
+    servedLanguage: described.language,
+    originalLanguage: params.attachment.transcription?.language ?? params.fallbackLanguage,
+    originalUrl: params.attachment.fileUrl,
+    translations: params.attachment.translations,
+  });
+  return { described, track };
+}
+

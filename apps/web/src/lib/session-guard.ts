@@ -1,3 +1,4 @@
+import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
 import type { SessionState } from './api/session';
 import { safeReturnPath } from './view/magic-link';
 
@@ -40,6 +41,27 @@ export type RouteKey =
   | 'conversationsNew'
   | 'progression'
   /**
+   * LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — PRIVÉES, comme
+   * `progression` : chacune lit un corpus qui n'existe que pour le lecteur
+   * connecté (`GET /me/engagement`, `/me/game/*`) et rend 401 sans session. Non
+   * déclarées ici, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin devant un visiteur.
+   */
+  | 'progressionLigue'
+  | 'progressionSaison'
+  | 'progressionVitrine'
+  | 'progressionAtlas'
+  | 'progressionPrestige'
+  | 'progressionReglages'
+  /**
+   * LA FICHE D'UN CONCEPT (#9563) — PRIVÉE, même raison. Et l'ancienne adresse
+   * du Tableau de bord, qui redirige vers Progression (amendement n° 4) : privée
+   * elle aussi, sans quoi un favori ouvert sans session peindrait Progression en
+   * squelette au lieu de mener à la connexion.
+   */
+  | 'progressionConcept'
+  | 'progressionTableau'
+  /**
    * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
    * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
    * DU LECTEUR et rend 401 sans session, bien que `optionalAuth` garde la
@@ -55,6 +77,12 @@ export type RouteKey =
    * elle peindrait un écran qui reçoit un 401 en silence.
    */
   | 'starredMessages'
+  /**
+   * « MES SONS » (#9848) — PRIVÉE : `GET sounds.mine` et `DELETE sounds.byId`
+   * exigent un compte inscrit. Publique par défaut, elle peindrait un écran
+   * qui reçoit un 401 en silence.
+   */
+  | 'soundsMine'
   /**
    * L'ACCUEIL POST-INSCRIPTION (#7729) — PRIVÉE : `GET`/`PATCH
    * /me/onboarding` exigent une session, et un parcours dont chaque carte
@@ -89,6 +117,8 @@ export type RouteKey =
    * refuser à l'envoi. Le travail perdu est le coût exact de l'oubli.
    */
   | 'postCompose'
+  /** MODIFIER UNE PUBLICATION (#9317) — seul son auteur la modifie. */
+  | 'postEdit'
   /**
    * CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — PRIVÉES, les deux
    * dernières portes `/…/new` : `POST links.root` exige un compte
@@ -101,6 +131,21 @@ export type RouteKey =
    */
   | 'shareLinkNew'
   | 'communityNew'
+  /**
+   * LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) —
+   * PRIVÉES : chacune ne lit que des ports authentifiés
+   * (`GET /tracking-links/user/me`, `GET /affiliate/tokens`,
+   * `GET /communities/mine`) et n'a rien à montrer à un visiteur sans compte.
+   * Non déclarées, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin, ou une création se remplirait avant le refus.
+   */
+  | 'myTrackingLinks'
+  | 'myTrackingLinkNew'
+  | 'myTrackingLink'
+  | 'affiliateLinks'
+  | 'affiliateLinkNew'
+  | 'communityLinks'
+  | 'communityLink'
   /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
@@ -184,6 +229,15 @@ export type RouteKey =
   | 'admAnonymous'
   | 'adminAnonymousOne'
   | 'admAnonymousOne'
+  /**
+   * LA VUE DE DIEU (#8876) — TOUTES les clés d'administration, dans les deux
+   * espaces, DÉRIVÉES de `admin-routes.ts` : une section ou une fiche ajoutée à
+   * la table est PRIVÉE sans qu'on ait à y penser. Écrites à la main, vingt
+   * clés de plus auraient laissé l'oubli d'une seule ouvrir une adresse
+   * d'administration à un visiteur sans session.
+   */
+  | AdminListRouteKey
+  | AdminFicheRouteKey
   | 'login'
   | 'signup'
   | 'welcome'
@@ -268,27 +322,52 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'thread',
   'conversationsNew',
   'progression',
+  /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
+  'progressionLigue',
+  'progressionSaison',
+  'progressionVitrine',
+  'progressionAtlas',
+  'progressionPrestige',
+  'progressionReglages',
+  'progressionConcept',
+  'progressionTableau',
   /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
      `RouteKey` plus haut. */
   'bookmarks',
   /* LES MESSAGES FAVORIS (#7286) — voir la raison écrite sur `RouteKey`. */
   'starredMessages',
+  /* « MES SONS » (#9848) — voir la raison écrite sur `RouteKey`. */
+  'soundsMine',
   /* L'ACCUEIL POST-INSCRIPTION (#7729) — voir la raison écrite sur `RouteKey`. */
   'onboarding',
   'stories',
   /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
   'storiesMine',
   'storyCompose',
-  'story',
+  /* `story` N'EST PLUS PRIVÉE (#9149) — `/story/:id` est l'adresse d'un lien
+     PARTAGÉ : le lecteur sert la story publique à un visiteur sans compte
+     (`GET /posts/:id`, `optionalAuth` + `anonymousPostGate`) et pose
+     l'invitation par-dessus (`components/visitor-invitation.tsx`). */
   'feed',
   /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
   'statusCompose',
   /* PUBLIER DANS LE FIL (#7449) — voir la raison écrite sur `RouteKey` plus haut. */
   'postCompose',
+  /* MODIFIER UNE PUBLICATION (#9317) — voir la raison écrite sur `RouteKey`. */
+  'postEdit',
   /* CRÉER UN LIEN, CRÉER UNE COMMUNAUTÉ (#7462, revue) — voir la raison
      écrite sur `RouteKey` plus haut. */
   'shareLinkNew',
   'communityNew',
+  /* LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) — voir la
+     raison écrite sur `RouteKey` plus haut. */
+  'myTrackingLinks',
+  'myTrackingLinkNew',
+  'myTrackingLink',
+  'affiliateLinks',
+  'affiliateLinkNew',
+  'communityLinks',
+  'communityLink',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',
@@ -316,6 +395,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'admAnonymous',
   'adminAnonymousOne',
   'admAnonymousOne',
+  /* LA VUE DE DIEU (#8876) — le reste, dérivé de la table des sections : voir
+     la raison écrite sur `RouteKey` plus haut. */
+  ...ADMIN_ROUTE_KEYS,
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

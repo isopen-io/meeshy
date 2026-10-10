@@ -200,6 +200,15 @@ button.view-once-chip {
   background-color: color-mix(in srgb, white 14%, transparent);
 }
 
+/* LA VUE UNIQUE SE MASQUE QUAND LA FENÊTRE PERD LE FOCUS (#9574, spec § 4) —
+   un navigateur ne noircit pas une capture : l'attribut n'est posé que hors
+   coque, tant qu'une vue unique est affichée (`use-capture-shield.ts`). */
+:root[data-view-once-away] [data-view-once-open],
+:root[data-view-once-away] .view-once-stage-content,
+:root[data-view-once-away] [data-media-viewer] {
+  visibility: hidden;
+}
+
 /**
  * **LA COMBUSTION D'UN ÉPHÉMÈRE** (#7468) — précision du porteur : « sa
  * destruction doit avoir un effet visuel si on est dans la conversation au

@@ -111,16 +111,60 @@ describe('withEmailGate — le refus mène à la validation et la requête repar
   });
 });
 
+describe('withEmailGate — au-delà de 5 liens actifs, la vue dit pourquoi (#9715)', () => {
+  const CAP_REFUSAL: ApiResult<never> = {
+    ok: false,
+    status: 403,
+    error: 'Email verification required to create more share links',
+    code: 'EMAIL_NOT_VERIFIED',
+  };
+
+  test('refus au plafond ⇒ la validation s’ouvre en disant « au-delà de 5 liens », puis le lien est créé', async () => {
+    const { transport, sent } = fakeTransport([CAP_REFUSAL, CREATED]);
+    const gate = fakeGate(true);
+    const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
+    const request: HttpRequest = { method: 'POST', path: linksEndpoints.root, body: { name: 'Mon 6e lien' } };
+
+    const result = await gated.request(request);
+
+    expect(result).toEqual(CREATED);
+    expect(gate.asked).toEqual(['moreLinks']);
+    expect(sent).toEqual([request, request]);
+  });
+
+  test('délai échu, ou passerelle d’avant #9713 qui refuse toujours ⇒ la validation s’ouvre pour « créer un lien »', async () => {
+    const { transport, sent } = fakeTransport([REFUSED, CREATED]);
+    const gate = fakeGate(true);
+    const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
+
+    const result = await gated.request({ method: 'POST', path: conversationsEndpoints.byIdNewLink('c-1'), body: {} });
+
+    expect(result).toEqual(CREATED);
+    expect(gate.asked).toEqual(['link']);
+    expect(sent).toHaveLength(2);
+  });
+
+  test('le texte du plafond ne change la raison que d’un lien', async () => {
+    const { transport } = fakeTransport([{ ...CAP_REFUSAL }]);
+    const gate = fakeGate(false);
+    const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => false });
+
+    await gated.request({ method: 'POST', path: postsEndpoints.root, body: { type: 'POST' } });
+
+    expect(gate.asked).toEqual(['publish']);
+  });
+});
+
 describe('withEmailGate — prévenir plutôt que guérir', () => {
-  test('adresse connue non prouvée ⇒ la validation s’ouvre AVANT tout envoi, puis la requête part', async () => {
+  test('inviter, adresse connue non prouvée ⇒ la validation s’ouvre AVANT tout envoi, puis la requête part', async () => {
     const { transport, sent } = fakeTransport([CREATED]);
     const gate = fakeGate(true);
     const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
 
-    const result = await gated.request({ method: 'POST', path: linksEndpoints.root, body: { name: 'Mon lien' } });
+    const result = await gated.request({ method: 'POST', path: invitationsEndpoints.email, body: { email: 'b@x.io' } });
 
     expect(result).toEqual(CREATED);
-    expect(gate.asked).toEqual(['link']);
+    expect(gate.asked).toEqual(['invite']);
     expect(sent).toHaveLength(1);
   });
 
@@ -151,6 +195,23 @@ describe('withEmailGate — prévenir plutôt que guérir', () => {
       expect(result).toEqual(CREATED);
       expect(gate.asked).toEqual([]);
       expect(sent).toHaveLength(1);
+    });
+  }
+
+  for (const request of [
+    { method: 'POST', path: linksEndpoints.root, body: { name: 'Mon lien' } } satisfies HttpRequest,
+    { method: 'POST', path: conversationsEndpoints.byIdNewLink('c-1'), body: {} } satisfies HttpRequest,
+  ]) {
+    test(`créer un lien n’est jamais retenu d’avance : la passerelle en permet 5 actifs pendant le délai de grâce (#9713) — ${request.path}`, async () => {
+      const { transport, sent } = fakeTransport([CREATED]);
+      const gate = fakeGate(false);
+      const gated = withEmailGate(transport, { ask: gate.ask, emailUnproven: () => true });
+
+      const result = await gated.request(request);
+
+      expect(result).toEqual(CREATED);
+      expect(gate.asked).toEqual([]);
+      expect(sent).toEqual([request]);
     });
   }
 

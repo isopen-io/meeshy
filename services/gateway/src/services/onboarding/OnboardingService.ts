@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { calculateAge } from '@meeshy/shared/utils/age';
-import { ELAN_WINDOW_DAYS } from '@meeshy/shared/utils/engagement-elan';
+import { isDeclaredMinor, judgeDeclaredBirthDate } from '@meeshy/shared/utils/age';
+import { GLOBAL_CONVERSATION_TYPE, viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
   ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_MAX_SUGGESTIONS,
@@ -16,7 +16,9 @@ import {
   type OnboardingSuggestion,
 } from '@meeshy/shared/types/onboarding';
 import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth/account-activation';
-import { elanInputOf, onboardingStepRewards } from './onboardingRewards';
+import { onboardingStepRewards } from './onboardingRewards';
+import { writeBirthDateOnce } from '../auth/birth-date-write';
+import { engagementScaleServiceFor } from '../engagement/EngagementScaleService';
 
 /**
  * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
@@ -56,8 +58,20 @@ export type AgeClass = 'adult' | 'minor' | 'unknown';
 
 export function ageClassOf(birthDate: Date | null | undefined, now: Date): AgeClass {
   if (!birthDate) return 'unknown';
-  return calculateAge(birthDate, now) >= 18 ? 'adult' : 'minor';
+  return isDeclaredMinor(birthDate, now) ? 'minor' : 'adult';
 }
+
+/**
+ * L'issue d'une déclaration de date de naissance (#9927). `declared` porte ce
+ * que la route rend ; les trois refus ne touchent à rien.
+ */
+export type BirthDateDeclarationOutcome =
+  | { readonly kind: 'declared'; readonly ageClass: 'adult' | 'minor'; readonly viewerWriteRestrictionGlobal: boolean }
+  | { readonly kind: 'already-set' }
+  /** La date est ÉCRITE (un refus est définitif) ; l'appelant révoque les sessions. */
+  | { readonly kind: 'below-minimum' }
+  | { readonly kind: 'invalid' }
+  | { readonly kind: 'user-not-found' };
 
 export type SuggestionViewer = {
   readonly id: string;
@@ -122,6 +136,7 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
+  engagementScore: true,
   ...ACTIVATION_SELECT,
 } as const;
 
@@ -140,6 +155,7 @@ const CANDIDATE_SELECT = {
 
 type UserStateRow = {
   id: string;
+  engagementScore: number | null;
   createdAt: Date;
   birthDate: Date | null;
   systemLanguage: string;
@@ -163,6 +179,7 @@ type OnboardingPrisma = Pick<
   | 'engagementCounter'
   | 'engagementConversationCredit'
   | 'engagementMilestone'
+  | 'engagementScaleConfig'
 >;
 
 const languagesOf = (row: { systemLanguage: string; regionalLanguage: string | null }): string[] =>
@@ -174,19 +191,58 @@ const knownSteps = (steps: readonly string[] | null): OnboardingStepId[] =>
 export class OnboardingService {
   constructor(private readonly prisma: OnboardingPrisma) {}
 
-  async getState(userId: string, now: Date = new Date()): Promise<OnboardingState | null> {
+  async getState(
+    userId: string,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
     if (!user) return null;
-    return this.stateOf(user, now);
+    return servedToClient(await this.stateOf(user, now), client);
   }
 
-  async recordStep(userId: string, body: OnboardingPatchBody, now: Date = new Date()): Promise<OnboardingState | null> {
+  async recordStep(
+    userId: string,
+    body: OnboardingPatchBody,
+    now: Date = new Date(),
+    client: OnboardingClient = LEGACY_ONBOARDING_CLIENT,
+  ): Promise<OnboardingState | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
     if (!user) return null;
     const data = nextOnboardingWrite(user, body, now);
-    if (!data) return this.stateOf(user, now);
+    if (!data) return servedToClient(await this.stateOf(user, now), client);
     await this.prisma.user.update({ where: { id: userId }, data });
-    return this.stateOf({ ...user, ...data }, now);
+    return servedToClient(await this.stateOf({ ...user, ...data }, now), client);
+  }
+
+  /**
+   * `PUT /me/birth-date` (#9927) — la date s'écrit UNE fois, y compris quand
+   * elle donne moins de 13 ans : le refus est DÉFINITIF (une redéclaration ne
+   * le contourne pas), et c'est la date écrite qui ferme ensuite les sessions
+   * (`minimum-age-gate`) jusqu'aux 13 ans. L'écriture est
+   * conditionnée en base à l'absence de date (`birthDate` nul OU absent du
+   * document, les deux formes du connecteur Mongo) : deux déclarations
+   * simultanées n'en écrivent qu'une, et la relecture préalable ne sert qu'à
+   * répondre vite. L'étape `age` de l'onboarding est marquée faite dans la
+   * même écriture.
+   */
+  async declareBirthDate(userId: string, birthDate: Date, now: Date = new Date()): Promise<BirthDateDeclarationOutcome> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: USER_STATE_SELECT });
+    if (!user) return { kind: 'user-not-found' };
+    if (user.birthDate) return { kind: 'already-set' };
+    const verdict = judgeDeclaredBirthDate(birthDate, now);
+    if (verdict === 'in-future' || verdict === 'implausible') return { kind: 'invalid' };
+
+    const steps = nextOnboardingWrite(user, { step: 'age', outcome: 'done' }, now);
+    const written = await writeBirthDateOnce(this.prisma, userId, { birthDate, ...(steps ?? {}) });
+    if (!written) return { kind: 'already-set' };
+    if (verdict === 'below-minimum') return { kind: 'below-minimum' };
+    const restriction = viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now });
+    return {
+      kind: 'declared',
+      ageClass: restriction === null ? 'adult' : 'minor',
+      viewerWriteRestrictionGlobal: restriction !== null,
+    };
   }
 
   private async stateOf(user: UserStateRow, now: Date): Promise<OnboardingState> {
@@ -196,13 +252,14 @@ export class OnboardingService {
     const protectedRegime = ageClass !== 'adult';
     const emailVerified = user.emailVerifiedAt !== null;
     const globalConversationId = await this.globalConversationId();
+    const storyDefaultVisibility = protectedRegime ? 'friends' : 'public';
     const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
       this.prefilledSteps(user.id, globalConversationId, emailVerified),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
-      this.stepRewards(user.id, now),
+      this.stepRewards(user.id, user.engagementScore ?? 0, storyDefaultVisibility, now),
     ]);
     return {
       eligible: window === 'open',
@@ -211,12 +268,13 @@ export class OnboardingService {
       prefilledSteps,
       globalConversationId,
       protectedRegime,
-      storyDefaultVisibility: protectedRegime ? 'friends' : 'public',
+      storyDefaultVisibility,
       suggestions,
       emailVerified,
       canPublishStory: mayPublish(resolveAccountActivation(user, now)),
       pendingFriendRequests,
       stepRewards,
+      ...minorGlobalRestriction(user.birthDate, now),
     };
   }
 
@@ -225,10 +283,16 @@ export class OnboardingService {
    * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
    * lectures indexées (`[userId]`, `[userId, milestoneType]`).
    */
-  private async stepRewards(userId: string, now: Date): Promise<OnboardingStepRewards> {
+  private async stepRewards(
+    userId: string,
+    engagementScore: number,
+    storyVisibility: 'public' | 'friends',
+    now: Date,
+  ): Promise<OnboardingStepRewards> {
+    const scale = await engagementScaleServiceFor(this.prisma).current();
     const [counters, milestones] = await Promise.all([
       this.prisma.engagementCounter.findMany({
-        where: { userId, updatedAt: { gte: new Date(now.getTime() - ELAN_WINDOW_DAYS * DAY_MS) } },
+        where: { userId, updatedAt: { gte: new Date(now.getTime() - scale.multiplier.windowDays * DAY_MS) } },
         select: { axisKey: true, updatedAt: true },
       }),
       this.prisma.engagementMilestone.findMany({
@@ -236,7 +300,7 @@ export class OnboardingService {
         select: { milestoneType: true, milestoneKey: true },
       }),
     ]);
-    return onboardingStepRewards(elanInputOf({ counters, milestones, now }));
+    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now, storyVisibility });
   }
 
   private async closeExpired(userId: string, now: Date): Promise<Date> {
@@ -360,6 +424,43 @@ export class OnboardingService {
       excludedIds,
     });
   }
+}
+
+/**
+ * Ce que le client sait lire de l'état (#9927, rétrocompatibilité #9223).
+ * `ageStepAware` : il a annoncé la capacité `onboarding-age` — il connaît
+ * l'étape `age` et `viewerWriteRestriction`. Un client antérieur décode l'état
+ * en objet STRICT (web `z.strictObject`, énumération d'étapes fermée) : une
+ * étape ou une clé qu'il ne connaît pas lui rendrait l'état illisible.
+ */
+export type OnboardingClient = { readonly ageStepAware: boolean };
+
+export const LEGACY_ONBOARDING_CLIENT: OnboardingClient = { ageStepAware: false };
+
+/**
+ * Sans la capacité, l'état servi est EXACTEMENT celui d'avant #9927 : ni
+ * l'étape `age` dans les listes d'étapes, ni `viewerWriteRestriction`. La
+ * règle elle-même ne dépend pas du client — un mineur reste refusé en écriture
+ * dans Global (403 `GLOBAL_ADULTS_ONLY`, message lisible par tout client).
+ */
+export function servedToClient(state: OnboardingState, client: OnboardingClient): OnboardingState {
+  if (client.ageStepAware) return state;
+  const { viewerWriteRestriction: _restriction, ...legacy } = state;
+  return {
+    ...legacy,
+    seenSteps: state.seenSteps.filter((step) => step !== 'age'),
+    prefilledSteps: state.prefilledSteps.filter((step) => step !== 'age'),
+  };
+}
+
+/**
+ * #9927 — `viewerWriteRestriction` est TOUJOURS servi au client qui annonce
+ * `onboarding-age` : `'minor-global'` pour un mineur déclaré, `null` sinon. Sa
+ * présence dit au client que la passerelle connaît l'étape `age` (le web n'en
+ * propose la carte qu'à cette condition).
+ */
+function minorGlobalRestriction(birthDate: Date | null, now: Date): Pick<OnboardingState, 'viewerWriteRestriction'> {
+  return { viewerWriteRestriction: viewerWriteRestrictionOf({ conversationType: GLOBAL_CONVERSATION_TYPE, birthDate, now }) };
 }
 
 /**

@@ -6,10 +6,13 @@ name: SDK Tests
 # triggered on both apps/ios/** and packages/MeeshySDK/** (the app depends on the
 # SDK), giving app-level coverage of SDK changes without coupling the two suites.
 #
-# Toolchain rationale (same as ios-tests.yml): COMPILE with Xcode 26.1.1
-# (Swift 6.2, required by the package) but RUN on an iOS 18.2 simulator — iOS 18.5+
-# and 26.x hit a Swift runtime isolated-deinit crash at xctest teardown, and the
-# Timeline snapshot baselines were recorded on 18.2.
+# Toolchain (same as ios.yml): COMPILE with Xcode 26.1.1 (Swift 6.2, required
+# by the package), RUN on the runner's PRE-INSTALLED iOS 26.1 simulator since
+# #9701. Until then the suite downloaded iOS 18.2 on every run: 18.4+/26.x
+# crashed at xctest teardown (isolated deinits, Swift #85663 — fixed at the root
+# by #9694, guarded on the binaries by sdk-build) and the snapshot baselines
+# had been recorded on 18.2. They are now re-recorded FROM THE CI'S OWN
+# IMAGES on 26.1 (input `record_snapshots`), never on a developer machine.
 on:
   push:
     branches:
@@ -27,6 +30,23 @@ on:
   # app-only PR that merely touches CI config must not be gated by the SDK suite.
   # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.
   workflow_dispatch:
+    # Suites ciblées (noms de classes séparés par des virgules, « Cible/Classe »
+    # ou « Classe » nu, rattaché à la cible qui la déclare) — vide = tout.
+    inputs:
+      only_testing:
+        description: 'Suites à exécuter seules (ex. ExportEquivalenceTests,MeeshySDKTests/AccountServiceTests) — vide = tout'
+        required: false
+        default: ''
+      # Ré-enregistre les références de capture qui ÉCHOUENT (ou manquent) sur
+      # le runtime qui juge, et publie les PNG produits en artefact
+      # `sdk-snapshots-<tranche>` : on les relit, puis on les commit. Jamais
+      # d'enregistrement local — la machine qui enregistre doit être celle qui
+      # juge (#9701).
+      record_snapshots:
+        description: 'Ré-enregistrer les références de capture en échec et les publier en artefact'
+        type: boolean
+        required: false
+        default: false
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
@@ -34,94 +54,235 @@ concurrency:
   group: sdk-tests-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Tranches parallèles (#9692) et bascule du runtime (même script qu'ios.yml) :
+  # 26.1 PRÉINSTALLÉ depuis #9701, plus aucun téléchargement.
+  SDK_TEST_SHARDS: 6
+  IOS_TEST_RUNTIME: '26.1'
+  IOS_TEST_RUNTIME_DOWNLOAD: 'false'
+
+# BÂTIR UNE FOIS, EXÉCUTER EN TRANCHES (#9692, 2026-10-08). Le job unique
+# historique (provisionnement + `xcodebuild test`) a atteint son plafond de
+# 60 min : 41m43, 54m20 puis 57m04 sur les runs verts ou rouges du 2026-10-08
+# (37760884617, 37760720705, 37771300719), et 37772766998 coupé à 60 min.
+# Désormais : `sdk-plan` répartit les classes XCTest des deux cibles sur
+# ubuntu (scripts/ci/ios-test-shards.mjs --suite sdk), `sdk-build` compile une
+# fois pour `generic/platform=iOS Simulator` + ARCHS=arm64 et publie
+# `Build/Products`, les tranches `sdk-test-shard` exécutent leur part par
+# `test-without-building -xctestrun`, et le job `sdk-tests` — le nom de check
+# historique — rend le verdict. Les tests Swift Testing (`@Test`) ne sont pas
+# des classes XCTest : ils tournent dans la DERNIÈRE tranche, le reste de
+# chaque cible, comme toute classe que l'énumération ne verrait pas.
 jobs:
-  sdk-tests:
+  sdk-plan:
+    name: Répartir les suites du SDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      shards: ${{ steps.shards.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: shards
+        name: Répartir MeeshySDKTests et MeeshyUITests en tranches
+        env:
+          ONLY_TESTING: ${{ inputs.only_testing }}
+        run: |
+          set -euo pipefail
+          node scripts/ci/ios-test-shards.mjs --suite sdk --plan --shards "$SDK_TEST_SHARDS" --only "$ONLY_TESTING"
+          echo "matrix=$(node scripts/ci/ios-test-shards.mjs --suite sdk --matrix --shards "$SDK_TEST_SHARDS" --only "$ONLY_TESTING")" >> "$GITHUB_OUTPUT"
+
+  sdk-build:
+    name: Build SDK (produits de test)
     runs-on: macos-15
-    # Hard cap, re-measured 2026-07-30. The old 25-min cap was calibrated on a
-    # suite that no longer exists: the last green run (#30161575001, 2026-07-25)
-    # took 12m32 total — 4m07 runtime provisioning + 8m09 build+test. Since then
-    # the package gained ~9.5k lines of tests over 77 new files (timeline pass)
-    # plus five video-export suites (StoryExportSinglePass, VideoFramePixel,
-    # FrameRate, Watermark, Branding) that do real AVFoundation encoding.
-    #
-    # Measured on run #30546762282: 5m14 provisioning + 4m20 compile + >15m30 of
-    # test execution, killed mid-suite by the cap. Run #30549812265 then went the
-    # full distance at 42m25 — WITH two export tests killed early by the per-test
-    # allowance, so the honest budget is higher still (see that allowance below).
-    # Locally the same 6132 tests run in 6m43 on Apple Silicon; the 3-vCPU runner
-    # is far slower on the encode-bound suites, which dominate the wall clock.
-    #
-    # 60 covers ~45 min of measured work plus the tail. It is NOT a healthy
-    # target: this suite now burns the better part of an hour of macOS runner per
-    # push. The structural fix is to move the AVFoundation export suites to their
-    # own nightly workflow so per-push feedback stays minutes, not an hour —
-    # until then this cap only exists so a hung job never sits for GitHub's 6h.
-    timeout-minutes: 60
+    # Compilation seule, mesurée à 4m20 dans l'ancien job (run #30546762282) ;
+    # 30 couvre une résolution SPM froide et un runner lent.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
-      - name: Provision iOS 18.2 simulator
-        id: sim
-        run: |
-          set -e
-          # iOS 18.5/18.6 (the runner's pre-installed 18.x) AND iOS 26.x all hit a
-          # Swift runtime isolated-deinit crash at xctest teardown
-          # (swift_task_deinitOnExecutorMainActorBackDeploy → double-free). Only
-          # iOS 18.0–18.2 are crash-free, and the Timeline snapshot baselines were
-          # recorded on 18.2. Download 18.2 on demand if the runner lacks it
-          # (≈5 min, first run only per runner).
-          if ! xcrun simctl list runtimes | grep -q "iOS 18.2"; then
-            echo "Downloading iOS 18.2 simulator runtime…"
-            xcodebuild -downloadPlatform iOS -buildVersion 18.2
-          fi
-          SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
-          echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Run SDK tests
-        shell: bash
+      # `generic/platform=iOS Simulator` needs no runtime installed; it has no
+      # active architecture, so ARCHS=arm64 keeps xcodebuild from compiling
+      # x86_64 too (macos-15 runners are Apple Silicon). Its `.xctestrun` runs
+      # on any arm64 simulator — the shards below do exactly that.
+      - name: Build for testing
+        working-directory: packages/MeeshySDK
         run: |
           set -o pipefail
+          xcodebuild build-for-testing \
+            -scheme MeeshySDK-Package \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            ARCHS=arm64 \
+            -quiet 2>&1 | tee "$RUNNER_TEMP/xcodebuild-build.log"
+
+      # #9694 / #9701 — garde BINAIRE des deinit isolées, sur les binaires du
+      # SDK : MeeshyUI compile en `.defaultIsolation(MainActor.self)`, donc une
+      # classe non `nonisolated` y reçoit une deinit isolée qui tue xctest au
+      # démontage sur 18.4+/26. Les cibles du paquet sont liées statiquement
+      # dans les deux bundles de test : les lire, c'est lire le SDK entier.
+      - name: Aucune deinit isolée dans les binaires du SDK (#9694)
+        run: |
+          set -euo pipefail
+          PRODUCTS="$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator"
+          BINS=()
+          for t in MeeshySDKTests MeeshyUITests; do
+            BIN=$(find "$PRODUCTS" -path "*${t}.xctest/${t}" -type f | head -n 1)
+            [ -n "$BIN" ] || { echo "::error::${t}.xctest introuvable sous $PRODUCTS"; exit 1; }
+            BINS+=("$BIN")
+          done
+          while IFS= read -r fw; do BINS+=("$fw"); done < <(find "$PRODUCTS" -path '*.framework/*' -type f -perm -u+x -not -name '*.plist' 2>/dev/null)
+          scripts/ci/check-ios-isolated-deinits.sh --self-test
+          scripts/ci/check-ios-isolated-deinits.sh --binary "${BINS[@]}"
+
+      # tar first: upload-artifact keeps neither permissions nor symlinks.
+      - name: Archive test products
+        run: |
+          set -euo pipefail
+          ls "$RUNNER_TEMP/DerivedData/Build/Products"/*.xctestrun
+          tar -cf "$RUNNER_TEMP/sdk-test-products.tar" -C "$RUNNER_TEMP/DerivedData/Build" Products
+          du -h "$RUNNER_TEMP/sdk-test-products.tar"
+
+      - name: Upload test products
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-test-products
+          path: ${{ runner.temp }}/sdk-test-products.tar
+          compression-level: 1
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  sdk-test-shard:
+    needs: [sdk-plan, sdk-build]
+    name: Tests SDK — tranche ${{ matrix.shard }}
+    runs-on: macos-15
+    # Une tranche vise moins de 20 min. Sur 18.2 téléchargé, chaque tranche
+    # payait le téléchargement puis le PREMIER démarrage du runtime : mesuré en
+    # cinq tranches (run 37817254961), 8 min 20 de provisionnement + 17 min 42
+    # de tests = 29 min 23, au ras du plafond. Le 26.1 préinstallé (#9701)
+    # supprime les deux. 30 est le plafond ; le délai PAR TEST (600 s
+    # ci-dessous) reste le garde-fou d'un test bloqué.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.sdk-plan.outputs.shards || '[1]') }}
+    steps:
+      # Checkout COMPLET au même chemin que le build : les références de
+      # capture (`__Snapshots__`) se retrouvent par `#filePath`.
+      - uses: actions/checkout@v7
+
+      - name: Select Xcode 26.1.1 (Swift 6.2)
+        run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+
+      - name: Download test products
+        uses: actions/download-artifact@v8
+        with:
+          name: sdk-test-products
+          path: ${{ runner.temp }}
+
+      - name: Unpack test products
+        id: products
+        run: |
+          set -euo pipefail
+          tar -xf "$RUNNER_TEMP/sdk-test-products.tar" -C "$RUNNER_TEMP"
+          rm -f "$RUNNER_TEMP/sdk-test-products.tar"
+          COUNT=$(find "$RUNNER_TEMP/Products" -maxdepth 1 -name '*.xctestrun' | wc -l | tr -d ' ')
+          [ "$COUNT" = "1" ] || { echo "::error::${COUNT} fichier(s) .xctestrun, 1 attendu"; exit 1; }
+          echo "xctestrun=$(find "$RUNNER_TEMP/Products" -maxdepth 1 -name '*.xctestrun')" >> "$GITHUB_OUTPUT"
+
+      # Pre-installed runtime (IOS_TEST_RUNTIME, no download — #9701). The
+      # isolated-deinit crash at xctest teardown that kept this suite on a
+      # downloaded 18.2 is fixed at the root (#9694) and guarded on the SDK's
+      # own binaries by the sdk-build job.
+      - name: Provision iOS simulator
+        id: sim
+        run: scripts/ci/provision-ios-simulator.sh
+
+      - name: Run SDK tests
+        id: tests
+        shell: bash
+        working-directory: packages/MeeshySDK
+        env:
+          ONLY_TESTING: ${{ inputs.only_testing }}
+          SHARD: ${{ matrix.shard }}
+          XCTESTRUN: ${{ steps.products.outputs.xctestrun }}
+          SIM_ID: ${{ steps.sim.outputs.sim_id }}
+          # swift-snapshot-testing lit SNAPSHOT_TESTING_RECORD dans le
+          # processus de test ; xcodebuild y transmet toute variable préfixée
+          # TEST_RUNNER_. « failed » réécrit seulement les références en échec
+          # ou absentes, et le test reste rouge.
+          TEST_RUNNER_SNAPSHOT_TESTING_RECORD: ${{ inputs.record_snapshots && 'failed' || '' }}
+        run: |
+          set -o pipefail
+          START=$(date +%s)
           rm -rf TestResults.xcresult
+          node ../../scripts/ci/ios-test-shards.mjs --suite sdk --args --shard "$SHARD" \
+            --shards "$SDK_TEST_SHARDS" --only "$ONLY_TESTING" > "$RUNNER_TEMP/selection.txt" || exit 1
+          SELECTION=()
+          while IFS= read -r arg; do SELECTION+=("$arg"); done < "$RUNNER_TEMP/selection.txt"
+          echo "tranche ${SHARD} : $(grep -c '^-only-testing' "$RUNNER_TEMP/selection.txt") -only-testing, $(grep -c '^-skip-testing' "$RUNNER_TEMP/selection.txt") -skip-testing"
           # Per-test allowance is 600, raised from 180 on 2026-07-30. Two export
           # tests were killed by the 180 s allowance on run #30549812265 —
           # ExportEquivalenceTests.test_export_frame_visually_resembles_live_render_at_t5s
           # and StoryExportSinglePassTests.test_singlePass_withIdentity_matchesWrappedOutput
           # — which take 20 s and 32 s locally. They are not hung: they encode real
           # video, and the runner has no usable hardware encoder, so the gap is ~9x
-          # rather than the ~2.5x the rest of the suite shows. 180 s sat below the
-          # floor for that work and turned slow into red. This allowance is still
-          # the deadlock guard — it must stay well under timeout-minutes.
+          # rather than the ~2.5x the rest of the suite shows. This allowance is
+          # still the deadlock guard — it must stay well under timeout-minutes.
           #
           # SANS `-quiet` (#5466) : cinq runs sont morts en `rc=65` sans accuser
           # un seul test — ni la console (`-quiet` l'assourdit), ni le xcresult
           # (absent ou vide sur un crash précoce) ne portaient la moindre trace
           # de CE QUI tournait à l'instant du crash. `xcodebuild` verbeux écrit
           # une ligne « Test Case '-[Suite test]' started » par test ; on la
-          # garde ENTIÈRE dans un fichier, envoyé à `/dev/null` en console pour
-          # ne pas noyer un run VERT sous des dizaines de milliers de lignes —
+          # garde ENTIÈRE dans un fichier, envoyé à `/dev/null` en console —
           # l'étape suivante en imprime la QUEUE si le bundle manque, et
           # l'artefact ci-dessous en garde la totalité pour l'autopsie.
           # `arch=arm64` pinned (#5909): `id=<udid>` alone resolves to two
-          # destinations, one per architecture, and xcodebuild's unspecified
-          # tie-break can pick the x86_64 one on this Apple Silicon runner,
-          # which then hangs for minutes before failing with zero test named.
-          xcodebuild test \
-            -scheme MeeshySDK-Package \
-            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }},arch=arm64" \
-            -resultBundlePath TestResults.xcresult \
+          # destinations, one per architecture.
+          #
+          # Lancé HORS de packages/MeeshySDK (#9692, mesuré sur le run
+          # 37782329016) : depuis le dossier qui porte `Package.swift`,
+          # `xcodebuild` ouvre le paquet et résout ses dépendances avant de
+          # lire le `.xctestrun` — 7 min 18 s de silence avant le premier test.
+          HERE="$PWD"
+          # `set +e` : le shell du runner est `bash -e`, qui sortirait sur un
+          # rouge de test AVANT d'écrire la durée de l'étape.
+          set +e
+          ( cd "$RUNNER_TEMP" && xcodebuild test-without-building \
+            -xctestrun "$XCTESTRUN" \
+            -destination "platform=iOS Simulator,id=${SIM_ID},arch=arm64" \
+            "${SELECTION[@]}" \
+            -resultBundlePath "$HERE/TestResults.xcresult" \
             -test-timeouts-enabled YES \
-            -maximum-test-execution-time-allowance 600 \
+            -maximum-test-execution-time-allowance 600 ) \
             2>&1 | tee xcodebuild-raw.log >/dev/null
-        working-directory: packages/MeeshySDK
+          rc=$?
+          echo "seconds=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+          exit "$rc"
 
       - name: Surface test failures
         if: always()
         working-directory: packages/MeeshySDK
+        env:
+          SHARD: ${{ matrix.shard }}
+          PROVISION_S: ${{ steps.sim.outputs.seconds || 0 }}
+          TESTS_S: ${{ steps.tests.outputs.seconds || 0 }}
         run: |
           BUNDLE=TestResults.xcresult
+          mkdir -p shard-summary
+          # Durées par classe tirées du journal verbeux — complet même quand
+          # un délai coupe la tranche. Elles alimentent
+          # scripts/ci/test-timings/sdk.json (le verdict en publie l'union).
+          if [ -f xcodebuild-raw.log ]; then
+            node ../../scripts/ci/ios-test-shards.mjs --suite sdk --timings-log xcodebuild-raw.log \
+              > "shard-summary/timings-${SHARD}.json" || echo '{}' > "shard-summary/timings-${SHARD}.json"
+          fi
           if [ ! -d "$BUNDLE" ]; then
             echo "::error::Aucun bundle de résultat produit — signature du crash d'infrastructure #5466 (rc=65 sans test nommé)."
             if [ -f xcodebuild-raw.log ]; then
@@ -129,31 +290,114 @@ jobs:
               tail -n 200 xcodebuild-raw.log
               echo "::endgroup::"
             fi
+            jq -n --argjson shard "$SHARD" --argjson provision "$PROVISION_S" --argjson tests "$TESTS_S" \
+              '{shard: $shard, provision_s: $provision, tests_s: $tests, result: "absent", total: 0, passed: 0, failed: 0, skipped: 0}' \
+              > "shard-summary/shard-${SHARD}.json"
             exit 0
           fi
+          xcrun xcresulttool get test-results summary --path "$BUNDLE" > /tmp/xcresult-summary.json 2>/dev/null \
+            || echo '{}' > /tmp/xcresult-summary.json
+          jq --argjson shard "$SHARD" --argjson provision "$PROVISION_S" --argjson tests "$TESTS_S" \
+            '{shard: $shard, provision_s: $provision, tests_s: $tests, result: (.result // "?"),
+              total: (.totalTestCount // 0), passed: (.passedTests // 0), failed: (.failedTests // 0),
+              skipped: (.skippedTests // 0)}' /tmp/xcresult-summary.json > "shard-summary/shard-${SHARD}.json"
+          cat "shard-summary/shard-${SHARD}.json"
           echo "::group::Test failure summary"
-          SUMMARY=$(xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null)
-          if [ -z "$SUMMARY" ]; then
-            xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
-              || echo "xcresulttool could not read the bundle."
-          else
-            echo "$SUMMARY"
-            TOTAL=$(echo "$SUMMARY" | grep -o '"totalTestCount" *: *[0-9]*' | grep -o '[0-9]*$')
-            if [ -z "$TOTAL" ] || [ "$TOTAL" -eq 0 ]; then
-              echo "::error::Bundle présent mais 0 test comptabilisé — signature du crash d'infrastructure #5466. Voir le journal brut en artefact ci-dessous."
-            fi
-          fi
+          head -c 60000 /tmp/xcresult-summary.json
           echo "::endgroup::"
+          if [ "$(jq '.totalTestCount // 0' /tmp/xcresult-summary.json)" -eq 0 ]; then
+            echo "::error::Bundle présent mais 0 test comptabilisé — signature du crash d'infrastructure #5466. Voir le journal brut en artefact ci-dessous."
+          fi
+          jq -r '(.testFailures // [])[] | "\(.targetName // "?")/\(.testName // .testIdentifier // "?") — \((.failureText // "?") | .[0:180] | gsub("\n"; " "))"' \
+            /tmp/xcresult-summary.json > /tmp/xctest-failures.txt || true
+          echo "::notice title=Échecs XCTest (tranche ${SHARD})::$(wc -l < /tmp/xctest-failures.txt | tr -d ' ') test(s) en échec"
+          head -n 9 /tmp/xctest-failures.txt | while IFS= read -r line; do
+            echo "::error title=XCTest échec::${line}"
+          done
+
+      - name: Collect re-recorded snapshots
+        if: always() && inputs.record_snapshots
+        run: |
+          mkdir -p "$RUNNER_TEMP/snapshots"
+          git status --porcelain --untracked-files=all -- 'packages/MeeshySDK/Tests/**/__Snapshots__/**' \
+            | cut -c4- | tee "$RUNNER_TEMP/snapshots/LIST.txt" \
+            | while IFS= read -r f; do mkdir -p "$RUNNER_TEMP/snapshots/$(dirname "$f")"; cp "$f" "$RUNNER_TEMP/snapshots/$f"; done
+          echo "::notice title=Captures ré-enregistrées (tranche ${{ matrix.shard }})::$(grep -c . "$RUNNER_TEMP/snapshots/LIST.txt" || true) fichier(s)"
+
+      - name: Publish re-recorded snapshots
+        if: always() && inputs.record_snapshots
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-snapshots-${{ matrix.shard }}
+          path: ${{ runner.temp }}/snapshots/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
+
+      - name: Publish shard summary
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-shard-summary-${{ matrix.shard }}
+          path: packages/MeeshySDK/shard-summary/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
 
       - name: Upload diagnostic artifacts on failure
         # #5466 : un rc=65 sans test nommé ne laisse aucune piste — le journal
         # brut et le bundle (quand il existe) sont la seule autopsie possible.
-        if: failure()
+        # Aussi sur ANNULATION : une tranche coupée par son délai garde ainsi
+        # le journal qui dit où le temps est passé (#9692).
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: sdk-tests-failure-diagnostics
+          name: sdk-tests-failure-diagnostics-${{ matrix.shard }}
           path: |
             packages/MeeshySDK/xcodebuild-raw.log
             packages/MeeshySDK/TestResults.xcresult
           retention-days: 7
+          if-no-files-found: warn
+
+  # Le VERDICT, sous le nom de check historique `sdk-tests` : vert seulement
+  # si la compilation ET chaque tranche le sont, et si chaque tranche a
+  # exécuté au moins un test.
+  sdk-tests:
+    needs: [sdk-plan, sdk-build, sdk-test-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/ci
+
+      - name: Download shard summaries
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: sdk-shard-summary-*
+          path: summaries
+          merge-multiple: true
+
+      - name: Verdict
+        env:
+          PLAN_RESULT: ${{ needs.sdk-plan.result }}
+          BUILD_RESULT: ${{ needs.sdk-build.result }}
+          SHARDS_RESULT: ${{ needs.sdk-test-shard.result }}
+          EXPECTED_SHARDS: ${{ needs.sdk-plan.outputs.shards }}
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/ci/test-shards-verdict.sh "SDK en tranches"
+
+      - name: Publish measured timings
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdk-test-timings
+          path: timings.json
+          retention-days: 7
+          overwrite: true
           if-no-files-found: warn

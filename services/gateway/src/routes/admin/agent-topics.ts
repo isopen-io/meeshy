@@ -1,3 +1,4 @@
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
@@ -293,6 +294,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       });
       await broadcastTopicsInvalidation(fastify);
       notifyAdminDashboards(fastify);
+      await auditAgentGesture(request, { action: 'AGENT_TOPIC_CREATED', entity: 'Agent', entityId: created.id });
       sendSuccess(reply, created);
     } catch (err: unknown) {
       const e = err as { code?: string };
@@ -338,6 +340,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       });
       await broadcastTopicsInvalidation(fastify);
       notifyAdminDashboards(fastify);
+      await auditAgentGesture(request, { action: 'AGENT_TOPIC_UPDATED', entity: 'Agent', entityId: id, changes: submittedKeysOnly(parsed.data as Record<string, unknown>, request.body) });
       sendSuccess(reply, updated);
     } catch (err: unknown) {
       const e = err as { code?: string };
@@ -371,6 +374,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       }
       await broadcastTopicsInvalidation(fastify);
       notifyAdminDashboards(fastify);
+      await auditAgentGesture(request, { action: 'AGENT_TOPIC_DELETED', entity: 'Agent', entityId: id, changes: { deleted: hard ? 'hard' : 'soft' } });
       sendSuccess(reply, { id, deleted: hard ? 'hard' : 'soft' });
     } catch (err: unknown) {
       const e = err as { code?: string };

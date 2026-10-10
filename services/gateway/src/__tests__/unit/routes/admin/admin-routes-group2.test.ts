@@ -705,7 +705,7 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const updatedReport = { id: '507f1f77bcf86cd799439020', moderatorId: '507f1f77bcf86cd799439011' };
-      mockReportService.assignModerator.mockResolvedValueOnce(updatedReport);
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020' }); mockReportService.assignModerator.mockResolvedValueOnce(updatedReport); // #8876 : l'affectation lit l'état d'avant
 
       const res = await app.inject({ method: 'POST', url: '/507f1f77bcf86cd799439020/assign' });
       expect(res.statusCode).toBe(200);
@@ -719,7 +719,7 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
-      mockReportService.assignModerator.mockRejectedValueOnce(new Error('DB error'));
+      mockReportService.getReportById.mockResolvedValueOnce({ id: '507f1f77bcf86cd799439020' }); mockReportService.assignModerator.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({ method: 'POST', url: '/507f1f77bcf86cd799439020/assign' });
       expect(res.statusCode).toBe(500);
@@ -1186,7 +1186,7 @@ describe('Admin analytics routes', () => {
   describe('GET /kpis', () => {
     it('returns 403 when USER role', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(0) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(0) },
         user: { count: jest.fn<any>().mockResolvedValue(0) },
       };
       app = buildAnalyticsApp(prisma, makeAuthContext('USER'));
@@ -1198,7 +1198,7 @@ describe('Admin analytics routes', () => {
 
     it('returns 200 for period=7d', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(200) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(200) },
         user: { count: jest.fn<any>().mockResolvedValueOnce(50).mockResolvedValueOnce(30).mockResolvedValueOnce(10) },
       };
       app = buildAnalyticsApp(prisma);
@@ -1214,7 +1214,7 @@ describe('Admin analytics routes', () => {
 
     it('returns 200 for period=30d (default)', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(1000) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(1000) },
         user: { count: jest.fn<any>().mockResolvedValueOnce(100).mockResolvedValueOnce(60).mockResolvedValueOnce(20) },
       };
       app = buildAnalyticsApp(prisma);
@@ -1226,7 +1226,7 @@ describe('Admin analytics routes', () => {
 
     it('returns 200 for period=90d', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(5000) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(5000) },
         user: { count: jest.fn<any>().mockResolvedValueOnce(200).mockResolvedValueOnce(150).mockResolvedValueOnce(30) },
       };
       app = buildAnalyticsApp(prisma);
@@ -1238,7 +1238,7 @@ describe('Admin analytics routes', () => {
 
     it('returns 0 rates when totalUsers=0', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(0) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(0) },
         user: { count: jest.fn<any>().mockResolvedValue(0) },
       };
       app = buildAnalyticsApp(prisma);
@@ -1257,7 +1257,7 @@ describe('Admin analytics routes', () => {
       mockCacheGet.mockResolvedValueOnce(JSON.stringify({ success: true, data: cached }));
 
       const prisma = {
-        message: { count: jest.fn<any>() },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>() },
         user: { count: jest.fn<any>() },
       };
       app = buildAnalyticsApp(prisma);
@@ -1270,7 +1270,7 @@ describe('Admin analytics routes', () => {
 
     it('returns 500 on DB error', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
         user: { count: jest.fn<any>().mockResolvedValue(0) },
       };
       app = buildAnalyticsApp(prisma);
@@ -1420,7 +1420,7 @@ describe('Admin analytics routes', () => {
 
     it('GET /kpis with period=30d (default) covers the 30d switch branch', async () => {
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(100) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(100) },
         user: { count: jest.fn<any>().mockResolvedValueOnce(50).mockResolvedValueOnce(30).mockResolvedValueOnce(5) },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1523,7 +1523,7 @@ describe('Admin analytics routes', () => {
       mockCacheSet.mockRejectedValueOnce(new Error('Redis write failed'));
 
       const prisma = {
-        message: { count: jest.fn<any>().mockResolvedValue(100) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(100) },
         user: { count: jest.fn<any>().mockResolvedValueOnce(50).mockResolvedValueOnce(30).mockResolvedValueOnce(10) },
       };
       const localApp = buildAnalyticsApp(prisma);

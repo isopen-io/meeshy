@@ -116,6 +116,16 @@ async function runScheme({ colorScheme, locale, dir }) {
     viewport: { width: 390, height: 844 },
     serviceWorkers: 'block',
   });
+  /* « Jeu masqué » sur cet appareil : le bandeau du jeu (#9536) arrive APRÈS le chargement et descend
+     l'en-tête de sa hauteur — trois boîtes lues l'une après l'autre tombaient de part et d'autre de son
+     entrée (run 37511366943 : 70 px d'écart sur la seule pastille d'humeur). Ce gate mesure le rail, pas le jeu. */
+  await context.addInitScript(() => {
+    try {
+      localStorage.setItem('meeshy.game.prefs', JSON.stringify({ hidden: true, celebrations: false }));
+    } catch {
+      /* stockage refusé : le gate mesure alors avec le bandeau, comme avant */
+    }
+  });
   await context.addInitScript((session) => {
     localStorage.setItem('meeshy.session', session);
   }, SEEDED_SESSION);

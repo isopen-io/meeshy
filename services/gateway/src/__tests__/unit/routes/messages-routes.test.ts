@@ -71,6 +71,13 @@ const mockShouldShowReadReceipts = jest.fn<any>().mockResolvedValue(false);
 
 const mockHandleMessage = jest.fn<any>().mockResolvedValue({ success: true, data: { id: 'msg-1', conversationId: 'resolved-conv-id' } });
 
+// #9629 — la loi d'audience des avis de capture a ses témoins de câblage
+// (`capture-notice-served-surfaces.test.ts`) ; ces témoins-ci ne servent aucun avis.
+jest.mock('../../../services/messaging/captureNoticeVisibility', () => ({
+  ...(jest.requireActual('../../../services/messaging/captureNoticeVisibility') as object),
+  hidingServedTo: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+  hidingServedToReader: async (_prisma: unknown, params: { hiding: unknown }) => params.hiding,
+}));
 jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));

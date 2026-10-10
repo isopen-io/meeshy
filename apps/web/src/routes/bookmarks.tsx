@@ -86,7 +86,7 @@ export function BookmarksHeader() {
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        <Glyph name="caretLeft" size={20} />
+        <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'bookmarks.title')}
@@ -124,7 +124,7 @@ export function BookmarksEmpty() {
       </p>
       <Link
         to="feed"
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         {translate(language, 'bookmarks.empty.cta')}
@@ -153,7 +153,7 @@ export function BookmarksError({ online, onRetry }: { readonly online: boolean; 
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         {translate(language, 'feed.retry')}

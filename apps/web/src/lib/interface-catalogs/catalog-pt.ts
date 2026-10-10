@@ -10,6 +10,7 @@ import ptPassword from './catalog-pt-password';
 import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
+import ptEngagement from './catalog-pt-engagement';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
@@ -27,12 +28,16 @@ import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
 import ptEphemeral from './catalog-pt-ephemeral';
+import ptWriteRestriction from './catalog-pt-write-restriction';
 import ptConversationCard from './catalog-pt-conversation-card';
 import ptStoriesMine from './catalog-pt-stories-mine';
 import ptContactCard from './catalog-pt-contact-card';
 import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
+import ptDownload from './catalog-pt-download';
+import ptPhonePrompt from './catalog-pt-phone-prompt';
+import ptUserProfile from './catalog-pt-user-profile';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -50,16 +55,6 @@ const pt = {
   'message.excerpt.protected': 'conteúdo protegido',
   'a11y.message.menu.subject': 'Ações da mensagem de {author}: {excerpt}',
 
-  'selection.toolbar': 'Seleção de mensagens',
-  'selection.cancel': 'Cancelar',
-  'selection.count': '{count} selecionadas',
-  'forward.title': 'Encaminhar para…',
-  'forward.empty': 'Nenhuma conversa',
-  'forward.search.label': 'Procurar uma conversa',
-  'forward.search.placeholder': 'Procurar',
-  'forward.announce.sent': 'Mensagem encaminhada',
-  'forward.announce.sentMany': '{count} mensagens encaminhadas',
-  'forward.announce.failed': 'Falha ao encaminhar',
   'forward.refusal.viewOnce': 'Uma mensagem de visualização única não pode ser encaminhada',
   'forward.refusal.unavailable': 'A mensagem original já não está disponível: nada para encaminhar',
 
@@ -87,7 +82,6 @@ const pt = {
   'reels.sound.off': 'Silenciar',
   'reels.play': 'Reproduzir o reel',
   'reels.pause': 'Pausar o reel',
-  'reels.media.error': 'Não foi possível reproduzir — Tentar novamente',
   'reels.image': 'Imagem {index} de {count}',
 
   'stories.title': 'Stories',
@@ -229,6 +223,7 @@ const pt = {
   ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
+  ...ptEngagement,
   ...ptCallShell,
   ...ptCallJoin,
   ...ptCallDecline,
@@ -240,7 +235,6 @@ const pt = {
   ...ptCallCaptions,
   ...ptCallRecording,
   ...ptSignup,
-  'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
   'report.body': 'Escolha o motivo da sua denúncia. A nossa equipa de moderação irá recebê-la.',
   'report.action': 'Denunciar',
@@ -260,7 +254,6 @@ const pt = {
   'feed.gesture.pending': 'Ação não confirmada — offline',
   'feed.share.error': 'Erro ao compartilhar a publicação',
   'feed.share.copied': 'Link copiado — é só colar.',
-  'feed.share.text': 'Uma publicação no Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'Meus links',
@@ -285,6 +278,7 @@ const pt = {
   'notifications.category.reactions': 'Reações',
   'notifications.category.mentions': 'Menções',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engajamento',
   'notifications.category.contacts': 'Contatos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Chamadas',
@@ -489,6 +483,7 @@ const pt = {
   'settings.export_data': 'Exportar meus dados',
   'settings.section.tools': 'Ferramentas',
   'settings.tools.progression': 'Progresso',
+  'settings.tools.game': 'Jogo',
   'settings.section.about': 'Sobre',
   'settings.terms': 'Termos de uso',
   'settings.privacy_policy': 'Política de privacidade',
@@ -503,6 +498,7 @@ const pt = {
   'settings.save.error': 'O ajuste não foi salvo.',
   'settings.theme.sync_error': 'Tema aplicado neste dispositivo, sem sincronização.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Fechar',
 
   'media.video.play': 'Reproduzir vídeo',
   'media.video.pause': 'Pausar',
@@ -510,6 +506,9 @@ const pt = {
   'media.audio.position': 'Posição de reprodução',
   'media.audio.speed': 'Velocidade de reprodução',
   'media.video.position.value': '{elapsed} de {total}',
+  'media.video.duration': 'Duração',
+  'media.video.remaining': 'Tempo restante',
+  'media.buffering': 'Carregando…',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Ativar som',
   'media.video.more_options': 'Mais opções',
@@ -635,7 +634,6 @@ const pt = {
   'discover.blocked.empty.title': 'Nenhum usuário bloqueado',
   'discover.blocked.empty.subtitle': 'As pessoas que você bloquear aparecerão aqui.',
   'discover.unknown': 'Desconhecido',
-  'discover.loading': 'Carregando',
   'discover.allLoaded': 'A lista inteira foi carregada',
   'discover.error.title': 'Não foi possível carregar esta lista',
   'discover.error.body': 'Verifique sua conexão e tente novamente.',
@@ -655,57 +653,12 @@ const pt = {
   'discover.announce.unblockFailed': 'Não foi possível desbloquear',
   'discover.announce.offline': 'Sem conexão: nada foi enviado.',
 
-  'userProfile.title': 'Perfil',
-  'userProfile.loading': 'A carregar o perfil',
-  'userProfile.section.publications': 'PUBLICAÇÕES',
-  'userProfile.section.relation': 'LIGAÇÃO',
-  'userProfile.section.conversations': 'CONVERSAS',
-  'userProfile.conversations.empty': 'Nenhuma conversa em comum',
-  'userProfile.conversations.emptyBody': 'Ainda nada vos liga — «Escrever» abre a primeira.',
-  'userProfile.conversations.error': 'Não foi possível carregar as conversas',
-  'userProfile.conversations.loading': 'A carregar as conversas',
-  'userProfile.refused.title': 'Este perfil não está disponível',
-  'userProfile.refused.body': 'Não existe, ou não tem acesso.',
-  'userProfile.throttled.title': 'Demasiados pedidos',
-  'userProfile.throttled.body': 'Tente novamente dentro de instantes.',
-  'userProfile.error.title': 'Não foi possível carregar este perfil',
-  'userProfile.error.body': 'Tente novamente dentro de instantes.',
-  'userProfile.offline.body': 'O perfil aparecerá quando voltar a ligar-se.',
-  'userProfile.posts.empty': 'Sem publicações',
-  'userProfile.posts.emptyBody': 'Ainda não há nada público para ler.',
-  'userProfile.posts.emptyPosts': 'Nenhuma publicação aqui',
-  'userProfile.posts.emptyReels': 'Nenhum reel aqui',
-  'userProfile.posts.emptyFilter': 'Toque novamente no bloco para ver tudo.',
-  'userProfile.posts.error': 'Não foi possível carregar as publicações',
-  'userProfile.posts.loadMore': 'Carregar mais',
-  'userProfile.posts.loaded': 'Publicações adicionadas: {count}',
-  'userProfile.posts.loadedNone': 'Não há mais publicações a mostrar',
-  'userProfile.posts.loading': 'A carregar…',
-  'userProfile.stat.posts': 'Publicações',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filtrar por {name}',
-  'userProfile.stat.filterClear': 'Mostrar tudo',
-  'userProfile.context.received': '{name} quer ligar-se a si. Aceite para trocar mensagens.',
-  'userProfile.context.sent': 'Enviou um pedido de ligação a {name}. A aguardar resposta.',
-  'userProfile.action.write': 'Escrever',
-  'userProfile.action.writeLabel': 'Escrever a {name}',
-  'userProfile.action.block': 'Bloquear',
-  'userProfile.action.blockLabel': 'Bloquear {name}',
-  'userProfile.blocked.title': 'Bloqueou esta pessoa',
-  'userProfile.blocked.body': 'As publicações e estatísticas ficam ocultas enquanto o bloqueio durar.',
-  'userProfile.signin.title': 'Inicie sessão para se ligar',
-  'userProfile.signin.body': 'Pedidos de ligação e mensagens exigem uma conta.',
-  'userProfile.signin.cta': 'Iniciar sessão',
-  'userProfile.announce.blocked': 'Pessoa bloqueada',
-  'userProfile.announce.blockFailed': 'Não foi possível bloquear',
-  'userProfile.announce.writeFailed': 'Não foi possível abrir a conversa',
 
   'a11y.floating.rung.discover.requests.one': 'Descobrir, {count} pedido recebido',
   'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
 
   'links.hub.banner.title': 'Gerencie seus links',
-  'links.hub.banner.subtitle': 'Convide quem quiser para suas conversas',
+  'links.hub.banner.subtitle': 'Compartilhe, acompanhe e aumente seu público',
   'links.hub.share.title': 'Links de compartilhamento',
   'links.hub.share.description': 'Convide contatos para entrar nas suas conversas',
   'links.hub.share.create': 'Criar um link de compartilhamento',
@@ -735,8 +688,6 @@ const pt = {
   'links.detail.disable': 'Desativar',
   'links.detail.activate': 'Ativar',
   'links.detail.stats': 'Estatísticas',
-  'links.detail.stats.uses': 'Usos',
-  'links.detail.stats.max': 'Máximo',
   'links.detail.info': 'Informações',
   'links.detail.identifier': 'Identificador',
   'links.detail.createdAt': 'Criado em',
@@ -810,8 +761,6 @@ const pt = {
   'feed.scene.mosaic.more': 'Cena {index} e mais {count}',
   'feed.scene.mosaic.video': 'Cena {index}, vídeo',
   'feed.scene.shared_by': 'Cena compartilhada por {author}',
-  'feed.scene.open.fullscreen': 'Toque duas vezes para ver em tela cheia',
-  'feed.scene.open.post': 'Toque duas vezes para abrir a publicação',
   'feed.scene.sound.muted': 'Som mudo',
   'feed.scene.count': '{count} cenas',
   'scene.fullscreen.play': 'Retomar tudo',
@@ -827,7 +776,6 @@ const pt = {
      CanvasV3 como no iOS. */
   'story.studio.title': 'Nova story',
   'story.studio.cancel': 'Cancelar',
-  'story.studio.publish': 'Publicar',
   'story.studio.publishing': 'A publicar…',
   'story.studio.publish.waiting': 'À espera da rede…',
   'story.studio.publishing.progress': 'Publicando {current}/{total}…',
@@ -858,7 +806,6 @@ const pt = {
   'story.studio.text.label': 'Texto da story',
   'story.studio.text.placeholder': 'Adicionar texto',
   'story.studio.hint.duration': 'Uma story permanece visível durante vinte horas.',
-  'story.studio.error.upload': 'O ficheiro não pôde ser enviado.',
   'story.studio.error.publish': 'A story não pôde ser publicada.',
   'story.studio.refusal.title': 'É necessária uma conta para criar uma story.',
   'story.studio.refusal.login': 'Iniciar sessão',
@@ -877,11 +824,8 @@ const pt = {
   'story.studio.failure.refused': 'Publicação recusada.',
   'story.studio.failure.unavailable': 'O servidor está indisponível.',
   'story.studio.text.add': 'Adicionar texto',
-  'story.studio.text.remove': 'Remover este texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Camada',
-  'story.studio.object.select': 'Selecionar {name}',
-  'story.studio.objects.label': 'Objetos da cena',
   'story.studio.overlay.add': 'Colocar uma imagem na cena',
   'story.studio.overlay.label': 'Camada',
   'story.studio.overlay.remove': 'Remover a camada',
@@ -951,8 +895,6 @@ const pt = {
   'story.studio.pose.rotateLeft': 'Girar à esquerda',
   'story.studio.pose.rotateRight': 'Girar à direita',
   'story.studio.pose.reset': 'Recentrar',
-  'story.studio.pose.handle': 'Mover {name} — setas para mover, + e − para o tamanho, [ e ] para girar',
-  'story.studio.pose.grip': 'Redimensionar e girar {name}',
 
   /* A FOLHA DE AUDIÊNCIA DO ESTÚDIO (#7683) — os seis PostVisibility,
      espelho de PostVisibility.swift (packages/MeeshySDK). */
@@ -1044,7 +986,6 @@ const pt = {
   'comment.refused.session': 'Sessão expirada — inicie sessão novamente.',
   'comment.refused.right': 'Esta ação não lhe está aberta.',
   'comment.like.limit': 'No máximo cinco reações por pessoa.',
-  'feed.action.comment': 'Comentar',
 
   'admin.title': 'Administração',
 
@@ -1075,11 +1016,8 @@ const pt = {
   'message-detail.load-error': 'Não foi possível carregar estas informações',
   'message-detail.retry': 'Tentar novamente',
 
-  'download.title': 'Baixe o Meeshy',
-  'download.body': 'Escreva no seu idioma e leia no seu: o Meeshy traduz cada mensagem no caminho.',
-  'download.appStore': 'Baixar na App Store',
-  'download.web': 'Abrir o Meeshy no navegador',
-  'download.otherPlatforms': 'No Android e no computador, o Meeshy funciona direto no navegador.',
+  ...ptDownload,
+  ...ptPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...ptComposerAttach,
@@ -1137,6 +1075,7 @@ const pt = {
   'attachment.protected.open.hint': 'toque para ver em tela cheia',
   'media.reactions.badge.a11y': 'Reações',
   'media.reactions.badge.mine.a11y': 'incluindo a sua',
+  'message.join.noAccount': 'sem conta',
   'attachment.kind.image': 'Foto',
   'attachment.kind.video': 'Vídeo',
   'attachment.kind.audio': 'Áudio',
@@ -1162,14 +1101,17 @@ const pt = {
   ...ptMentions,
   ...ptStudioChrome,
   ...ptEphemeral,
+  ...ptWriteRestriction,
   ...ptGallery,
   ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,
+  'settings.tools.sounds': 'Meus sons',
   ...ptContactCard,
   ...ptQuote,
   ...ptCommentRow,
   ...ptContactDiscovery,
+  ...ptUserProfile,
 } satisfies InterfaceCatalog;
 
 export default pt;

@@ -152,6 +152,8 @@ export const updateStatusValidationSchema = z.object({
  */
 export const resetPasswordValidationSchema = z.object({
   newPassword: strongPasswordSchema,
+  // Case « Prévenir le membre » : `false` ou absent, aucune notification.
+  sendEmail: z.boolean().optional(),
   reason: z.string().min(10, 'Raison requise (minimum 10 caracteres)').max(500).optional()
 }).strict();
 

@@ -104,6 +104,50 @@ nonisolated enum ComposerHashtags {
         return regex.stringByReplacingMatches(in: text, range: plage, withTemplate: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+    /// **Le texte SANS ses balises** (#9179) — ce qui reste quand on retire
+    /// tout ce que l'outil hashtag a écrit. Vide ⇒ l'auteur n'a écrit que des
+    /// balises, donc aucune phrase.
+    static func prose(of text: String) -> String {
+        tags(in: text).reduce(text) { reste, balise in removing(balise, from: reste) }
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+
+/// **Le texte d'un RÉEL est sa légende quand l'auteur n'en a pas écrit**
+/// (#9179, directive porteur 2026-10-02).
+///
+/// Le lecteur de réels ne montre que `Post.content` ; la légende de scène
+/// (`PostMedia.caption`) n'y paraît nulle part. Un réel composé avec une
+/// légende et sans texte partait donc MUET, et l'analytique — qui lit le
+/// contenu — n'y trouvait rien. À la soumission, la légende est donc COPIÉE
+/// dans le contenu ; elle reste aussi sur son média : deux contenus, l'un
+/// recopié dans l'autre, jamais fusionnés.
+///
+/// Les balises de l'outil hashtag sont déjà DANS le texte
+/// (`ComposerHashtags.inserting`) : un texte qui n'en porte que des balises
+/// n'est pas une phrase — la légende passe devant, les balises suivent.
+///
+/// Le POST et la STORY ne sont pas concernés : un post montre sa légende SUR
+/// son média et son texte au-dessus de la carte, la recopier l'afficherait
+/// deux fois ; une story n'a pas de légende de publication.
+nonisolated enum ReelPublishedContent {
+
+    /// Le plafond de `Post.content` côté gateway (`UpdatePostSchema`).
+    static let maxLength = 5000
+
+    static func content(type: PostType, text: String?, captions: [String?]) -> String? {
+        guard type == .reel else { return text }
+        let corps = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard ComposerHashtags.prose(of: corps).isEmpty else { return text }
+        var vues: Set<String> = []
+        let legendes = captions
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !ComposerHashtags.prose(of: $0).isEmpty && vues.insert($0).inserted }
+        guard !legendes.isEmpty else { return text }
+        let compose = (legendes + (corps.isEmpty ? [] : [corps])).joined(separator: "\n")
+        return String(compose.prefix(maxLength))
+    }
 }
 
 /// Les mots de la feuille d'audience et de sa section hashtag (#4636).

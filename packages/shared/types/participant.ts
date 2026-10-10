@@ -27,7 +27,6 @@ export type ParticipantPermissions = z.infer<typeof ParticipantPermissionsSchema
 
 export const AnonymousSessionDetailsSchema = z.object({
   sessionTokenHash: z.string(),
-  ipAddress: z.string().optional(),
   country: z.string().optional(),
   deviceFingerprint: z.string().optional(),
   connectedAt: z.coerce.date(),

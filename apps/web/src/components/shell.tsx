@@ -1,16 +1,26 @@
-import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
+import { apiDeps } from '@/lib/api/deps';
+import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
+import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { skipLinkLabel } from '@/lib/skip-link';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
 import { CallLayer } from './call-layer';
+import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
+import { SendSheetHost } from './send-sheet-host';
+import { TopBand } from './top-band';
 
 /**
  * LA COQUILLE — deliberement mince.
@@ -144,7 +154,37 @@ const chargerGardeEmail = () =>
   }));
 const EmailGateHost = lazy(chargerGardeEmail);
 
+/**
+ * ...ET LA BANNIÈRE IN-APP (#8727), septième exception : une notification
+ * réseau descend sur toutes les routes. `inAppBannerStore` seul est statique
+ * (la connexion l'alimente) ; sa première bannière va chercher la peinture et
+ * les libellés.
+ */
+const chargerBanniereNotification = () =>
+  Promise.all([
+    import('./notification-toast'),
+    loadInterfaceCatalog(currentInterfaceLanguage()),
+    loadNotificationRowCatalog(currentInterfaceLanguage()),
+  ]).then(([m]) => ({
+    default: m.NotificationToastHost,
+  }));
+const NotificationToastHost = lazy(chargerBanniereNotification);
+
+/**
+ * ...ET L'APERÇU DE CONVERSATION TIRÉ DE LA BANNIÈRE (#8821) : il survit à la
+ * bannière qui l'a ouvert, d'où son propre magasin et son propre hôte.
+ */
+const ConversationPreviewHost = lazy(() =>
+  Promise.all([loadConversationPreviewHost(), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationPreviewHost,
+  })),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
+  const connecte = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
+  const [bandeau, setBandeau] = useState(0);
+  const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
+  const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
@@ -162,12 +202,12 @@ export default function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh" {...(bandeau > 0 ? { 'data-top-band-host': '', style: { '--top-band': `${bandeau}px` } as CSSProperties } : {})}>
       <a
         href="#contenu"
         className="skip-link"
       >
-        Aller au contenu
+        {skipLinkLabel(currentInterfaceLanguage())}
       </a>
       {/* `fallback={null}` : une pastille qui n'est pas encore là ne doit rien
           peindre — surtout pas un squelette, qui annoncerait un état qu'on ne
@@ -196,7 +236,18 @@ export default function Shell({ children }: { children: ReactNode }) {
       {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
+      {banniereNotification ? (
+        <Suspense fallback={null}>
+          <NotificationToastHost />
+        </Suspense>
+      ) : null}
       <CallLayer />
+      {/* LA PILE DU HAUT (#9279, #9494) — « Reprendre l'appel », le
+          mini-lecteur, puis la bannière du joueur quand rien ne joue : l'appel
+          prime, puis l'audio (`top-band.tsx`). Sur les hubs, elle réserve sa
+          hauteur dans `--top-band`, que l'arbre des écrans ajoute à son
+          `--safe-top`. */}
+      <TopBand routeKey={routeKey} signedIn={connecte} onInset={setBandeau} />
       {invitationArmee ? (
         <Suspense fallback={null}>
           <ActivationInviteHost />
@@ -215,6 +266,15 @@ export default function Shell({ children }: { children: ReactNode }) {
           <FloatingMenus routeKey={routeKey} />
         </Suspense>
       ) : null}
+      {apercuOuvert ? (
+        <Suspense fallback={null}>
+          <ConversationPreviewHost />
+        </Suspense>
+      ) : null}
+      {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute
+          entrée l'ouvre par `openSendSheet`. L'hôte ne porte que l'abonnement ;
+          la feuille est chargée au premier appel. */}
+      <SendSheetHost />
     </div>
   );
 }

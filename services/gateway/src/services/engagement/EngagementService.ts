@@ -10,16 +10,17 @@
  * @see docs/product/streaks-badges-modele.md § 3, § 4
  */
 
+import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   BADGE_THRESHOLDS,
   STREAK_THRESHOLDS,
   LEVEL_THRESHOLDS,
-  ENGAGEMENT_AXIS_WEIGHTS,
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
   badgeMilestoneKey,
   engagementAxisFamily,
+  isEngagementAxisKey,
   levelMilestoneKey,
   streakMilestoneKey,
   type EngagementAxisFamily,
@@ -27,22 +28,42 @@ import {
   type EngagementAchievementKey,
 } from '@meeshy/shared/types/engagement';
 import {
-  computeEngagementElan,
-  creditedPoints,
-  ELAN_HIGH_BADGE_THRESHOLD,
-  ELAN_WINDOW_DAYS,
-  type EngagementElan,
-} from '@meeshy/shared/utils/engagement-elan';
+  basePointsForOperation,
+  elanUnderScale,
+  linkVisitPoints,
+  pointsForOperation,
+  streakBonusPoints,
+  type EngagementScale,
+  type EngagementScaleElan,
+} from '@meeshy/shared/types/engagement-scale';
+import {
+  ENGAGEMENT_OPERATION_CATALOG,
+  type EngagementOperationKey,
+} from '@meeshy/shared/types/engagement-operations';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import type { ServerEmitIO } from '../../socketio/serverEmit';
+import { ONE_DAY_MS, civilDayInTimezone, civilDayKey } from './civilDay';
+import { ConversationEngagementRecorder, dayCountsFor, isDailyCapReached } from './ConversationEngagementRecorder';
+import { PostPointsRecorder } from './PostPointsRecorder';
+import { EngagementReceipts, receiptBucket } from './EngagementReceipts';
+import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
+import { getEngagementEmitIO } from './engagement-emit-registry';
+import { memberSignature } from './memberSignature';
+import { EngagementQuotas, dayBucket } from './EngagementQuotas';
+import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
+import { writeStreak } from '../game/FlameService';
+import type { MessageSignalInput } from '../game/MessageGameSignals';
+import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { withRetry } from '../MessageMediaConsumptionService';
+
+import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Durée de validité du cache d'entrées d'élan (#5749).
@@ -63,49 +84,27 @@ const ELAN_CACHE_TTL_MS = 60 * 1000;
 /** Au-delà, le cache est purgé de ses entrées périmées — borne la mémoire d'un processus long. */
 const ELAN_CACHE_MAX_ENTRIES = 10_000;
 
+/**
+ * Les entrées de l'élan, BRUTES : les seuils de badge et non leur décompte, pour
+ * que le seuil « badge élevé » du barème s'applique à la lecture — un barème
+ * réglé entre deux gestes ne sert pas un décompte calculé sous l'ancien.
+ * `engagementScore` fixe le NIVEAU, donc le plafond de facteur (`levelCaps`) ;
+ * `timezone` fixe le jour civil de l'état par conversation.
+ */
 type ElanInputs = {
   readonly recentFamilies: readonly EngagementAxisFamily[];
   readonly achievementCount: number;
-  readonly highBadgeCount: number;
+  readonly badgeThresholds: readonly number[];
+  readonly engagementScore: number;
+  /** Le plus haut niveau atteint (#9377) — règle le Vent arrière ; `null` pour un compte antérieur au jeu. */
+  readonly levelRecord: number | null;
+  readonly timezone: string | null;
+  /** Un e-mail ou un téléphone vérifié — ce qui ouvre les gros poids en entier. */
+  readonly verified: boolean;
+  /** Le crédité est un COMPTE — la clé de participant d'un invité de lien n'en est pas un (#9569). */
+  readonly isAccount: boolean;
   readonly expiresAt: number;
 };
-
-/** Jour civil UTC (minuit) — la comparaison de série ne dépend jamais de l'heure de l'appel. */
-function startOfUtcDay(date: Date): Date {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
-/**
- * Jour civil de `date` dans `timezone` (repli UTC si absent ou invalide, #5734) —
- * rendu comme un marqueur `Date.UTC(y, m, d)`, jamais comme le début RÉEL du jour
- * dans ce fuseau. La série ne compare que des ÉTIQUETTES de jour civil, jamais des
- * instants : deux jours civils consécutifs valent toujours exactement `ONE_DAY_MS`
- * sous ce marqueur, y compris à cheval sur une transition d'heure d'été — ce que
- * l'instant réel de minuit local ne garantit pas.
- */
-function civilDayInTimezone(date: Date, timezone: string | null | undefined): Date {
-  if (!timezone) return startOfUtcDay(date);
-
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(date);
-    const year = Number(parts.find((p) => p.type === 'year')?.value);
-    const month = Number(parts.find((p) => p.type === 'month')?.value);
-    const day = Number(parts.find((p) => p.type === 'day')?.value);
-    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-      return startOfUtcDay(date);
-    }
-    return new Date(Date.UTC(year, month - 1, day));
-  } catch {
-    // `timezone` porte une valeur qu'`Intl` refuse (IANA invalide, corrompue) —
-    // repli UTC, jamais une levée qui casserait `recordActivity`.
-    return startOfUtcDay(date);
-  }
-}
 
 /** Prisma signale une violation d'index unique par le code `P2002`. */
 function isP2002(err: unknown): boolean {
@@ -127,29 +126,64 @@ export function levelIndexOf(threshold: number): number {
   return index === -1 ? 0 : index + 1;
 }
 
+export type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
+
+/** Ce que le service reçoit en plus du client Prisma — des doubles en test, les instances partagées sinon. */
+export type EngagementServiceDeps = {
+  readonly scale?: EngagementScaleSource;
+  readonly emitIO?: () => ServerEmitIO | undefined;
+  readonly game?: EngagementGameHooks;
+};
+
 export class EngagementService {
   /** Cache par compte des ENTRÉES de l'élan — voir `ELAN_CACHE_TTL_MS`. */
   private readonly elanCache = new Map<string, ElanInputs>();
 
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly scale: EngagementScaleSource;
+
+  private readonly conversationRecorder: ConversationEngagementRecorder;
+
+  private readonly postRecorder: PostPointsRecorder;
+
+  private readonly receipts: EngagementReceipts;
+
+  private readonly quotas: EngagementQuotas;
+
+  /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
+  private readonly game: EngagementGameHooks;
+
+  constructor(
+    private readonly prisma: PrismaClient,
+    deps: EngagementServiceDeps = {},
+  ) {
+    this.scale = deps.scale ?? engagementScaleServiceFor(prisma);
+    this.conversationRecorder = new ConversationEngagementRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
+    this.postRecorder = new PostPointsRecorder(prisma, deps.emitIO ?? getEngagementEmitIO);
+    this.quotas = new EngagementQuotas(prisma);
+    this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
+    this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
+  }
 
   /**
    * Les entrées de l'élan pour `userId` : les familles actives sur la fenêtre
-   * glissante, et l'assise permanente. Deux lectures indexées, mises en cache
-   * une minute (`ELAN_CACHE_TTL_MS`).
+   * glissante de `windowDays` (réglée par le barème), l'assise permanente, et
+   * le score et le fuseau du compte. Trois lectures indexées, mises en cache
+   * une minute (`ELAN_CACHE_TTL_MS`) par (compte, fenêtre) : le score servant
+   * au plafond de niveau peut donc retarder d'une minute sur un palier franchi.
    *
    * `EngagementCounter.updatedAt` suffit à dire qu'une famille est active :
    * la SEULE écriture sur ce modèle est l'incrément d'activité, donc la date
    * de modification EST la date du dernier geste sur cet axe. Aucun stockage
    * neuf n'est nécessaire.
    */
-  private async loadElanInputs(userId: string): Promise<ElanInputs> {
+  private async loadElanInputs(userId: string, windowDays: number): Promise<ElanInputs> {
     const maintenant = Date.now();
-    const enCache = this.elanCache.get(userId);
+    const cleCache = `${userId}:${windowDays}`;
+    const enCache = this.elanCache.get(cleCache);
     if (enCache && enCache.expiresAt > maintenant) return enCache;
 
-    const depuis = new Date(maintenant - ELAN_WINDOW_DAYS * ONE_DAY_MS);
-    const [compteursRecents, paliers] = await Promise.all([
+    const depuis = new Date(maintenant - windowDays * ONE_DAY_MS);
+    const [compteursRecents, paliers, compte] = await Promise.all([
       this.prisma.engagementCounter.findMany({
         where: { userId, updatedAt: { gte: depuis } },
         select: { axisKey: true },
@@ -157,6 +191,10 @@ export class EngagementService {
       this.prisma.engagementMilestone.findMany({
         where: { userId, milestoneType: { in: ['achievement', 'badge'] } },
         select: { milestoneType: true, milestoneKey: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { engagementScore: true, levelRecord: true, timezone: true, emailVerifiedAt: true, phoneVerifiedAt: true },
       }),
     ]);
 
@@ -171,22 +209,22 @@ export class EngagementService {
       }
     }
 
-    let achievementCount = 0;
-    let highBadgeCount = 0;
-    for (const palier of paliers) {
-      if (palier.milestoneType === 'achievement') {
-        achievementCount += 1;
-        continue;
-      }
-      // Clé de badge : `<axisKey>:<seuil>` — le seuil est le dernier segment.
-      const seuil = Number.parseInt(palier.milestoneKey.split(':').at(-1) ?? '', 10);
-      if (Number.isFinite(seuil) && seuil >= ELAN_HIGH_BADGE_THRESHOLD) highBadgeCount += 1;
-    }
+    const achievementCount = paliers.filter((palier) => palier.milestoneType === 'achievement').length;
+    // Clé de badge : `<axisKey>:<seuil>` — le seuil est le dernier segment.
+    const badgeThresholds = paliers
+      .filter((palier) => palier.milestoneType === 'badge')
+      .map((palier) => Number.parseInt(palier.milestoneKey.split(':').at(-1) ?? '', 10))
+      .filter((seuil) => Number.isFinite(seuil));
 
     const entree: ElanInputs = {
       recentFamilies: [...familles],
       achievementCount,
-      highBadgeCount,
+      badgeThresholds,
+      engagementScore: typeof compte?.engagementScore === 'number' ? compte.engagementScore : 0,
+      levelRecord: typeof compte?.levelRecord === 'number' ? compte.levelRecord : null,
+      timezone: typeof compte?.timezone === 'string' ? compte.timezone : null,
+      verified: Boolean(compte?.emailVerifiedAt ?? compte?.phoneVerifiedAt),
+      isAccount: Boolean(compte),
       expiresAt: maintenant + ELAN_CACHE_TTL_MS,
     };
 
@@ -195,7 +233,7 @@ export class EngagementService {
         if (valeur.expiresAt <= maintenant) this.elanCache.delete(cle);
       }
     }
-    this.elanCache.set(userId, entree);
+    this.elanCache.set(cleCache, entree);
     return entree;
   }
 
@@ -208,12 +246,14 @@ export class EngagementService {
    * geste suivant ferait mentir la règle « plusieurs sprints en même temps »
    * au moment précis où elle devient vraie.
    */
-  private async elanFor(userId: string, axisKey: EngagementAxisKey): Promise<EngagementElan> {
-    const inputs = await this.loadElanInputs(userId);
-    return computeEngagementElan({
-      activeFamilies: [...inputs.recentFamilies, engagementAxisFamily(axisKey)],
+  private elanFor(scale: EngagementScale, inputs: ElanInputs, family: EngagementAxisFamily | null): EngagementScaleElan {
+    const rules = scale.multiplier;
+    const familles = new Set([...inputs.recentFamilies, ...(family ? [family] : [])]);
+    return elanUnderScale(rules, {
+      activeFamilyCount: familles.size,
       achievementCount: inputs.achievementCount,
-      highBadgeCount: inputs.highBadgeCount,
+      highBadgeCount: inputs.badgeThresholds.filter((seuil) => seuil >= rules.highBadgeThreshold).length,
+      engagementScore: inputs.engagementScore,
     });
   }
 
@@ -222,36 +262,245 @@ export class EngagementService {
    * palier `BADGE_THRESHOLDS` franchi par CET incrément précis (jamais un
    * recalcul complet) — un compteur qui passe de N à N+1 ne peut rendre
    * neuf qu'un palier dans `]N, N+1]`.
+   *
+   * Rend `true` quand le geste a été CRÉDITÉ, `false` quand une garde l'a refusé (son propre contenu, plafond
+   * du jour, garde d'abus, reçu déjà pris, quota) : les signaux de jeu d'un message (#9635) ne partent que sur
+   * un `true`, pour ne jamais faire avancer un défi que le crédit a refusé.
    */
-  async recordActivity(userId: string, axisKey: EngagementAxisKey): Promise<void> {
+  async recordActivity(
+    userId: string,
+    operationKey: EngagementOperationKey,
+    options: EngagementActivityOptions = {},
+  ): Promise<boolean> {
+    // Interagir avec ce qu'on a soi-même produit ne rapporte rien.
+    if (options.targetOwnerId && options.targetOwnerId === userId) return false;
+
     // UN SEUL élan pour ce geste, résolu avant toute écriture et partagé par le
     // compteur et le score : deux résolutions indépendantes pourraient tomber
     // de part et d'autre de la péremption du cache et créditer deux montants
     // différents pour un même geste, ce qui romprait l'invariant
     // `engagementScore == Σ(points)` de façon indétectable.
-    const elan = await this.elanFor(userId, axisKey);
-    const points = creditedPoints(ENGAGEMENT_AXIS_WEIGHTS[axisKey], elan);
+    //
+    // Les points viennent du BARÈME (#8906) : ceux de l'opération (ou de sa
+    // variante), multipliés par l'élan si l'opération l'est, l'élan lui-même
+    // borné par le plafond du niveau du compte.
+    const scale = await this.scale.current();
+    const inputs = await this.loadElanInputs(userId, scale.multiplier.windowDays);
+    const operation = ENGAGEMENT_OPERATION_CATALOG[operationKey];
+    const rule = scale.operations[operationKey];
+    const factor = this.elanFor(scale, inputs, operation.family).factor;
+    const heavy = basePointsForOperation(scale, operationKey, options.variant) >= scale.abuse.heavyPoints;
+    const earned = pointsForOperation(scale, operationKey, factor, options.variant);
+    // Un compte sans contact vérifié ne publie pas au prix fort (#8959).
+    const capped = heavy && !inputs.verified ? Math.min(earned, scale.abuse.unverifiedMaxPoints) : earned;
+    // Le Vent arrière (#9377) : +25 % tant que le niveau est sous le niveau
+    // record — le MÊME montant au compteur et au score, l'invariant tient.
+    const boosted = applyTailwind(capped, inputs);
 
+    // Le plafond journalier par conversation se lit AVANT toute écriture :
+    // atteint, le geste ne crédite RIEN — ni compteur, ni score, ni série.
+    const conversationId = options.conversationId;
+    const today = civilDayInTimezone(new Date(), inputs.timezone);
+    const conversationRow = conversationId ? await this.conversationRecorder.load(userId, conversationId) : null;
+    if (
+      conversationId &&
+      operation.capScope === 'conversation-day' &&
+      isDailyCapReached(conversationRow, today, operationKey, rule.cap)
+    ) {
+      return false;
+    }
+    // Les garde-fous de l'entre-soi (#9377), AVANT de consommer un seau de quota :
+    // rien pour un message à soi, à un compte neuf ou bloqué ; ÷4 au-delà de 50
+    // messages par jour entre deux comptes seuls.
+    const dailyCounts = dayCountsFor(conversationRow, today);
+    const verdict = await this.game.messageVerdict({
+      userId,
+      conversationId,
+      operationKey,
+      dailyMessages: (dailyCounts['content.text_message'] ?? 0) + (dailyCounts['content.audio_message'] ?? 0),
+    });
+    if (verdict === 'none') return false;
+    const points = verdict === 'quarter' ? quarterPoints(boosted) : boosted;
+    const receipt = options.receipt === undefined ? undefined : receiptBucket(options.receipt, options.postId);
+    if (receipt !== undefined && !(await this.receipts.claim(userId, operationKey, receipt))) return false;
+    const admitted = await this.quotas.admit({
+      userId,
+      operationKey,
+      rule,
+      today,
+      heavy,
+      ...(options.targetId !== undefined ? { targetId: options.targetId } : {}),
+    });
+    if (!admitted) return false;
+
+    await this.credit(scale, userId, operationKey, points, options.actorId);
+    const rememberedTargetId = heavy ? options.targetId : undefined;
+    if (rememberedTargetId !== undefined) {
+      await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
+    }
+    if (options.postId !== undefined && inputs.isAccount) {
+      await this.postRecorder.record({ userId, postId: options.postId, operationKey, points, rememberedTargetId });
+    }
+    if (receipt !== undefined) await this.receipts.keep(userId, operationKey, receipt, rememberedTargetId === undefined ? points : 0);
+
+    if (conversationId) {
+      await this.conversationRecorder.record({
+        userId,
+        conversationId,
+        axisKey: operationKey,
+        points,
+        today,
+        previous: conversationRow,
+      });
+    }
+
+    await this.game.onCredited({
+      userId,
+      operationKey,
+      dayKey: civilDayKey(today),
+      timezone: inputs.timezone,
+      record: Math.max(levelForUnlocks({ score: inputs.engagementScore, levelRecord: inputs.levelRecord ?? null }), inputs.levelRecord ?? 0),
+    });
+    return true;
+  }
+
+  /**
+   * Les points du JEU (missions, coffre, réponse reçue) : ils montent le score
+   * et les points d'un axe — débitables comme ceux de cet axe — sans compter une
+   * action de plus ni passer par l'élan, le Vent arrière ou les plafonds : ils
+   * sont DÉJÀ le résultat d'un geste admis. Même invariant que `credit` :
+   * `engagementScore == Σ(EngagementCounter.points)`.
+   *
+   * **Atomique et rejouable.** Le compteur et le score s'écrivent dans UNE
+   * transaction : l'appelant (une mission, un coffre) rend sa réclamation quand
+   * ce crédit échoue, et le prochain geste le rejoue — deux écritures séparées
+   * auraient laissé le compteur crédité une fois par essai. Un conflit
+   * d'écriture (P2034) se rejoue en bloc, depuis la lecture. Le score se lit
+   * puis s'écrit en valeur DANS la transaction : un champ absent se lit zéro
+   * (#6428), et un écrivain concurrent fait annuler la tentative au lieu d'être
+   * écrasé. Les paliers et la Gloire qui suivent ne font jamais échouer un
+   * crédit déjà écrit — ce qui ferait rendre, puis repayer, la mission.
+   */
+  async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
+    if (!Number.isInteger(points) || points <= 0) return;
+    const written = await withRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const account = await tx.user.findUnique({
+          where: { id: userId },
+          select: { engagementScore: true, levelRecord: true },
+        });
+        if (!account) return null;
+        await tx.engagementCounter.upsert({
+          where: { userId_axisKey: { userId, axisKey } },
+          create: { userId, axisKey, count: 0, points },
+          update: { points: { increment: points } },
+        });
+        const score = (account.engagementScore ?? 0) + points;
+        await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
+        return { score, levelRecord: account.levelRecord ?? null };
+      }),
+    );
+    if (written === null) return;
+    await this.afterScore(userId, points, written.score, written.levelRecord).catch((error: unknown) =>
+      log.warn('game points credited, level follow-up failed', {
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+
+  /** Un message committé (#9375, #9377) : signaux de mission et réponse reçue. */
+  recordMessageSignals(input: MessageSignalInput): Promise<void> {
+    return this.game.recordMessage(input);
+  }
+
+  /** Une conversation créée vide vient d'être démarrée par ce message (#9635) — sous la garde d'abus d'un message. */
+  recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
+    return this.game.recordConversationStarted(input);
+  }
+
+  /** Un fait que la passerelle pose au point unique de son geste (#9635) : la mission et le duo qui l'attendent. */
+  recordGameSignal(userId: string, signal: MissionFactSignal, options: { readonly key?: string } = {}): Promise<void> {
+    return this.game.onSignal(userId, signal, options);
+  }
+
+  /**
+   * Écrit un crédit DÉJÀ admis : compteur de l'opération, badges et succès si
+   * l'opération est un axe de « Progression », série, score.
+   */
+  private async credit(
+    scale: EngagementScale,
+    userId: string,
+    operationKey: EngagementOperationKey,
+    points: number,
+    actorId?: string,
+  ): Promise<void> {
     const counter = await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey } },
-      create: { userId, axisKey, count: 1, points },
+      where: { userId_axisKey: { userId, axisKey: operationKey } },
+      create: { userId, axisKey: operationKey, count: 1, points },
       update: { count: { increment: 1 }, points: { increment: points } },
       select: { count: true },
     });
 
     const newCount = counter.count;
     const previousCount = newCount - 1;
-    const crossedThresholds = BADGE_THRESHOLDS.filter(
-      (threshold) => threshold > previousCount && threshold <= newCount,
-    );
-
-    for (const threshold of crossedThresholds) {
-      await this.tryAwardBadge(userId, axisKey, threshold);
+    if (isEngagementAxisKey(operationKey)) {
+      const crossedThresholds = BADGE_THRESHOLDS.filter(
+        (threshold) => threshold > previousCount && threshold <= newCount,
+      );
+      for (const threshold of crossedThresholds) {
+        await this.tryAwardBadge(userId, operationKey, threshold, actorId);
+      }
+      await this.tryAwardAchievements(userId, operationKey, previousCount);
     }
-
-    await this.tryAwardAchievements(userId, axisKey, previousCount);
-    await this.updateStreak(userId);
+    await this.updateStreak(scale, userId);
     await this.updateEngagementScore(userId, points);
+  }
+
+  /**
+   * Une visite sur un lien de `creatorId` (#8959) — la règle progressive :
+   * la n-ième visite UNIQUE vaut `linkVisitPoints(n)`, jamais multipliée.
+   * Une visite compte une fois par visiteur, par lien et par `dedupHours`
+   * (fenêtre glissante), jamais celle du créateur, et au plus
+   * `dailyCapPerCreator` visites créditées par jour.
+   */
+  async recordLinkVisit(visit: EngagementLinkVisit): Promise<number> {
+    const { creatorId, linkKey, visitorKey } = visit;
+    if (visit.visitorUserId && visit.visitorUserId === creatorId) return 0;
+    const operationKey: EngagementOperationKey = 'social.link_visit';
+    const scale = await this.scale.current();
+    const rules = scale.linkVisits;
+    const now = new Date();
+    const unique = await this.quotas.claimOncePer(
+      creatorId,
+      operationKey,
+      `visit:${linkKey}:${visitorKey}`,
+      rules.dedupHours * 3_600_000,
+      now,
+    );
+    if (!unique) return 0;
+    const inputs = await this.loadElanInputs(creatorId, scale.multiplier.windowDays);
+    const today = civilDayInTimezone(now, inputs.timezone);
+    if (
+      rules.dailyCapPerCreator !== null &&
+      !(await this.quotas.claim(creatorId, operationKey, dayBucket(today), rules.dailyCapPerCreator))
+    ) {
+      return 0;
+    }
+    const visitNumber = await this.quotas.increment(creatorId, operationKey, `link:${linkKey}`);
+    const points = linkVisitPoints(rules, visitNumber);
+    await this.credit(scale, creatorId, operationKey, points);
+    return points;
+  }
+
+  /** Un contenu lourd SUPPRIMÉ dans la fenêtre du barème (#8959) : ses points de publication sont repris. */
+  reclaimContent(userId: string, operationKey: EngagementOperationKey, targetId: string): Promise<number> {
+    return this.receipts.reclaimPublication(userId, operationKey, targetId);
+  }
+
+  /** Un CONTENU retiré (#9584) : chaque crédit qu'il a produit est repris, une fois (`EngagementReceipts`). */
+  reclaimSource(userId: string, source: string, options: { readonly withinClawback?: boolean } = {}): Promise<number> {
+    return this.receipts.reclaim(userId, source, options);
   }
 
   /**
@@ -271,6 +520,7 @@ export class EngagementService {
     userId: string,
     axisKey: EngagementAxisKey,
     conversationId: string,
+    options: { readonly signature?: string } = {},
   ): Promise<void> {
     try {
       await this.prisma.engagementConversationCredit.create({
@@ -281,7 +531,44 @@ export class EngagementService {
       throw err;
     }
 
-    await this.recordActivity(userId, axisKey);
+    if (options.signature !== undefined && !(await this.claimSignature(userId, axisKey, options.signature, conversationId))) {
+      return;
+    }
+
+    await this.recordActivity(userId, axisKey, { conversationId });
+  }
+
+  /**
+   * Créer un groupe (#8906) : un point, une fois par ENSEMBLE de membres —
+   * un second groupe avec les mêmes personnes ne rapporte rien, un groupe
+   * avec une personne de plus rapporte.
+   */
+  async recordGroupCreation(userId: string, conversationId: string, memberIds: readonly string[]): Promise<void> {
+    const axisKey: EngagementAxisKey = 'conversation.group_created';
+    const signature = memberSignature([userId, ...memberIds]);
+    if (!(await this.claimSignature(userId, axisKey, signature, conversationId))) return;
+    await this.recordActivity(userId, axisKey, { conversationId });
+  }
+
+  /**
+   * Réserve l'ensemble de personnes pour cet axe. `false` quand il a déjà
+   * crédité — la contrainte unique tranche, jamais une relecture.
+   */
+  private async claimSignature(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    signature: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    try {
+      await this.prisma.engagementSignatureCredit.create({
+        data: { userId, axisKey, signature, conversationId },
+      });
+      return true;
+    } catch (err) {
+      if (isP2002(err)) return false;
+      throw err;
+    }
   }
 
   /**
@@ -294,6 +581,7 @@ export class EngagementService {
     userId: string,
     axisKey: EngagementAxisKey,
     threshold: number,
+    actorId?: string,
   ): Promise<void> {
     try {
       await this.prisma.engagementMilestone.create({
@@ -311,6 +599,7 @@ export class EngagementService {
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
+      const actor = await this.loadBadgeActor(actorId);
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
       // Le MOT, jamais la clé : « Badge débloqué : conversation.private ·
       // palier 10 » a été servi en production (2026-09-08) parce que la clé
@@ -327,6 +616,7 @@ export class EngagementService {
           count: threshold,
         }),
         context: {},
+        ...(actor ? { actor } : {}),
         metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
       });
     } catch (err) {
@@ -337,6 +627,21 @@ export class EngagementService {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+
+  /**
+   * La personne dont le geste a fait franchir le palier — pour
+   * `social.invite_joined`, l'invité qui vient de s'inscrire (#8724). La ligne
+   * de notification la NOMME et propose de lui écrire. Introuvable ⇒ le
+   * badge part sans acteur, comme avant.
+   */
+  private async loadBadgeActor(actorId: string | undefined) {
+    if (!actorId) return null;
+    const actor = await this.prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, username: true, displayName: true, avatar: true },
+    });
+    return actor ?? null;
   }
 
   /**
@@ -407,6 +712,7 @@ export class EngagementService {
       if (isP2002(err)) return;
       throw err;
     }
+    await this.game.onAchievement(userId, achievementKey);
 
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
@@ -438,54 +744,60 @@ export class EngagementService {
    * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
    * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
    *
-   * Lecture puis écriture, pas une transaction : la fenêtre de course (deux
-   * activités du même utilisateur dans le même instant, à cheval sur minuit)
-   * est acceptée — cette mécanique de réengagement n'a pas la même exigence
-   * de justesse que le compteur d'axe (upsert atomique) ou l'anti-rejeu de
-   * palier (contrainte unique), qui la restent.
+   * Lecture puis écriture CONDITIONNELLE (`writeStreak`, #9376) : la série
+   * s'écrit seulement si la Flamme vaut encore ce qu'on a lu. Un gel acheté,
+   * offert par le coffre ou une Flamme rallumée entre les deux fait reprendre
+   * le calcul au lieu d'être écrasé — une Meesh dépensée n'est jamais perdue.
    *
    * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
    * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
    * migration a ces champs ABSENTS, pas à zéro (même piège que
    * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
-   * D'où les replis `?? 0` : une série pour un compte pré-existant démarre
-   * à 1, jamais `NaN`.
+   * D'où les replis : une série pour un compte pré-existant démarre à 1,
+   * jamais `NaN`.
    */
-  private async updateStreak(userId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { currentStreakDays: true, longestStreakDays: true, lastStreakDate: true, timezone: true },
-    });
-    if (!user) return;
-
-    const today = civilDayInTimezone(new Date(), user.timezone);
-    // `lastStreakDate` already stores a CIVIL-DAY MARKER (`Date.UTC(y, m, d)`,
-    // written below) — re-running it through `civilDayInTimezone` would
-    // reinterpret that midnight-UTC instant AS IF it were a fresh moment in the
-    // user's timezone, shifting it a day off for any non-UTC offset. Only
-    // `startOfUtcDay` (idempotent on an already-normalized marker) belongs here.
-    const lastDay = user.lastStreakDate ? startOfUtcDay(user.lastStreakDate) : null;
-
-    if (lastDay && lastDay.getTime() === today.getTime()) {
-      return;
-    }
-
-    const previousStreak = user.currentStreakDays ?? 0;
-    const isConsecutiveDay = lastDay !== null && today.getTime() - lastDay.getTime() === ONE_DAY_MS;
-    const newStreak = isConsecutiveDay ? previousStreak + 1 : 1;
-    const newLongest = Math.max(user.longestStreakDays ?? 0, newStreak);
-
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { currentStreakDays: newStreak, longestStreakDays: newLongest, lastStreakDate: today },
-    });
+  private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
+    // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
+    // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
+    // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
+    // le comportement d'avant est exact : un jour sauté remet la série à 1.
+    const written = await writeStreak(this.prisma, userId, new Date());
+    if (written === null) return;
+    const { plan, previousStreak } = written;
 
     const crossedThresholds = STREAK_THRESHOLDS.filter(
-      (threshold) => threshold > previousStreak && threshold <= newStreak,
+      (threshold) => threshold > previousStreak && threshold <= plan.streak,
     );
 
     for (const threshold of crossedThresholds) {
       await this.tryAwardStreakMilestone(userId, threshold);
+    }
+    await this.creditStreakBonus(scale, userId, previousStreak, plan.streak);
+    await this.game.onStreak(userId, plan);
+  }
+
+  /**
+   * La CONSTANCE paie (#8959) : franchir 7, 30 ou 100 jours actifs crédite le
+   * bonus du barème, une fois par palier (`EngagementMilestone` porte déjà
+   * l'anti-rejeu du palier, le seau `streak:<jours>` celui du bonus), jamais
+   * multiplié.
+   */
+  private async creditStreakBonus(
+    scale: EngagementScale,
+    userId: string,
+    previousStreak: number,
+    newStreak: number,
+  ): Promise<void> {
+    const operationKey: EngagementOperationKey = 'streak.bonus';
+    for (const bonus of scale.streakBonuses) {
+      if (bonus.points <= 0 || streakBonusPoints([bonus], previousStreak, newStreak) === 0) continue;
+      if (!(await this.quotas.claim(userId, operationKey, `streak:${bonus.days}`, 1))) continue;
+      await this.prisma.engagementCounter.upsert({
+        where: { userId_axisKey: { userId, axisKey: operationKey } },
+        create: { userId, axisKey: operationKey, count: 1, points: bonus.points },
+        update: { count: { increment: 1 }, points: { increment: bonus.points } },
+      });
+      await this.updateEngagementScore(userId, bonus.points);
     }
   }
 
@@ -577,13 +889,18 @@ export class EngagementService {
       query: { _id: { $oid: userId } },
       update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
       new: true,
-      fields: { engagementScore: 1 },
-    } as never)) as unknown as { value?: { engagementScore?: number } | null };
+      fields: { engagementScore: 1, levelRecord: 1 },
+    } as never)) as unknown as { value?: { engagementScore?: number; levelRecord?: number | null } | null };
 
     const newScore = result?.value?.engagementScore;
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
     if (typeof newScore !== 'number') return;
+    await this.afterScore(userId, points, newScore, result?.value?.levelRecord ?? null);
+  }
+
+  /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */
+  private async afterScore(userId: string, points: number, newScore: number, levelRecord: number | null): Promise<void> {
     const previousScore = newScore - points;
     const crossedThresholds = LEVEL_THRESHOLDS.filter(
       (threshold) => threshold > previousScore && threshold <= newScore,
@@ -592,6 +909,11 @@ export class EngagementService {
     for (const threshold of crossedThresholds) {
       await this.tryAwardLevelUp(userId, threshold);
     }
+    // La Gloire du premier passage de chaque niveau (#9374) : le record rendu
+    // par la MÊME commande que le score — aucune lecture de plus sur la voie chaude.
+    await this.game.onScore(userId, newScore, levelRecord);
+    // Les points de la SEMAINE (#9384) : le total que les ligues classent.
+    await this.game.onPointsGained(userId, points);
   }
 
   /**

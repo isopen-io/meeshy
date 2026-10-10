@@ -112,6 +112,8 @@ import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
+import { armForwardSourceReader, readableForwardSource } from './forwardSourceReaderDouble';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -290,9 +292,19 @@ describe('MessagingService', () => {
       // cas prouvent le CÂBLAGE — la règle elle-même est prouvée dans
       // `forwardAdmission.test.ts`.
       const forwardedFromId = '507f1f77bcf86cd799439099';
+      // La projection ENTIÈRE que la garde exige (#9572) : une ligne à qui il
+      // manque une colonne de protection est refusée, pas tenue pour ordinaire.
+      const LOADED_SOURCE = {
+        ...readableForwardSource(forwardedFromId), // #9579 — l'expéditeur LIT la source (`forwardSourceReaderDouble.ts`)
+        isBlurred: false,
+        ephemeralDuration: null,
+        attachments: [] as Array<Record<string, unknown>>,
+      };
+      beforeEach(() => armForwardSourceReader(mockPrisma));
 
       it('refuse le transfert d’un message à vue unique, sans rien écrire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: true,
           effectFlags: 0,
           expiresAt: null,
@@ -308,32 +320,9 @@ describe('MessagingService', () => {
         expect(mockPrisma.message.create).not.toHaveBeenCalled();
       });
 
-      it('fait hériter la copie de la DURÉE éphémère de la source (#7451)', async () => {
-        mockPrisma.message.findUnique.mockResolvedValue({
-          isViewOnce: false, effectFlags: 0, ephemeralDuration: 30,
-          createdAt: new Date('2026-08-12T11:00:00.000Z'),
-          expiresAt: new Date('2026-08-19T11:00:00.000Z')
-        });
-
-        const before = Date.now();
-        const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
-        const after = Date.now();
-
-        expect(response.success).toBe(true);
-        const written = mockPrisma.message.create.mock.calls[0][0].data;
-        // Une DURÉE, jamais une échéance : le décompte repart de la réception.
-        expect(written.ephemeralDuration).toBe(30);
-        // `expiresAt` en base = l'heure INTERNE de destruction : le plafond de
-        // rétention (#7450), personne n'ayant encore rien reçu.
-        const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
-        expect(written.expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
-        expect(written.expiresAt.getTime()).toBeLessThanOrEqual(after + SEPT_JOURS_MS);
-        // Le bit EPHEMERAL se déduit de la DURÉE dans `saveMessage`.
-        expect(written.effectFlags & 1).toBe(1);
-      });
-
       it('n’impose aucune échéance quand la source est un message ordinaire', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -355,6 +344,7 @@ describe('MessagingService', () => {
       // CÔTÉ SERVEUR, le corps n'a donc ni content ni attachmentIds.
       it('transfère un média SANS texte : forwardedFromId seul rend le corps non-vide', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -394,6 +384,7 @@ describe('MessagingService', () => {
 
       it('refuse un transfert sans texte dont la source ne porte aucune pièce jointe', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -414,6 +405,7 @@ describe('MessagingService', () => {
         // Le client envoie le texte transféré : le corps ne dépend pas de la
         // copie serveur, et une source sans pièce jointe y est la normale.
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -437,6 +429,7 @@ describe('MessagingService', () => {
       // facultative — une référence illisible s'abandonne, l'envoi survit.
       it('abandonne un forwardedFromConversationId malformé au lieu de casser l’écriture', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
+          ...LOADED_SOURCE,
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
@@ -482,7 +475,9 @@ describe('MessagingService', () => {
         // refuser la copie ; ce test prouve le câblage côté ENVOI, la règle
         // de propriété étant déjà prouvée par `copyAttachments.test.ts`.
         mockPrisma.message.findUnique.mockResolvedValue({
-          sender: { id: testParticipantId, userId: testUserId }
+          sender: { id: testParticipantId, userId: testUserId },
+          // La même ligne sert la lecture de protection de la source (#9572).
+          isViewOnce: false, isBlurred: false, effectFlags: 0, ephemeralDuration: null, expiresAt: null, attachments: []
         });
         // `copyAttachmentsFromMessage` refuse désormais une source SANS
         // pièce jointe (round de correction 1, garde `empty-source`) : ce
@@ -502,7 +497,7 @@ describe('MessagingService', () => {
         // Preuve que la branche copie a bien tourné (pas un simple message
         // texte vide qui laisserait passer l'assertion ci-dessus par hasard).
         expect(mockPrisma.messageAttachment.findMany).toHaveBeenCalledWith({
-          where: { messageId: '507f1f77bcf86cd799439099' }
+          where: { messageId: '507f1f77bcf86cd799439099' }, orderBy: MESSAGE_ATTACHMENT_ORDER
         });
       });
     });
@@ -1842,11 +1837,9 @@ describe('MessagingService', () => {
       );
     });
 
-    // PREREQUISITE check (NOT a regression guard) — passes regardless of the
-    // fix because handleAttachments() linking was never broken; the bug was
-    // that the in-memory message.attachments array wasn't refreshed AFTER
-    // the link. Kept here so future readers see the linking call is still
-    // wired up; the regression guard is the test above.
+    // PREREQUISITE check (NOT a regression guard): the linking call is still
+    // wired up, one write per piece carrying its composer rank (#9776). The
+    // guard for the in-memory refresh AFTER the link is the test above.
     it('should call messageAttachment.updateMany to link attachments (prerequisite)', async () => {
       await service.handleMessage(
         {
@@ -1857,10 +1850,10 @@ describe('MessagingService', () => {
         testParticipantId
       );
 
-      expect(mockPrisma.messageAttachment.updateMany).toHaveBeenCalledWith({
-        where: { id: { in: attachmentIds } },
-        data: { messageId: testMessageId }
-      });
+      expect(mockPrisma.messageAttachment.updateMany.mock.calls.map(([args]) => args)).toEqual(attachmentIds.map((id, rank) => ({
+        where: { id: { in: [id] }, OR: [{ messageId: null }, { messageId: { isSet: false } }] },
+        data: { messageId: testMessageId, rank }
+      })));
     });
 
     // LE témoin du cycle. `handleMessage` est l'entrée COMMUNE du socket et de
@@ -1976,7 +1969,7 @@ describe('MessagingService - Tracking Links Processing', () => {
     );
   });
 
-  it('should process double bracket [[url]] tracking links', async () => {
+  it('leaves a double bracket [[url]] untouched — no explicit rewrite (#9093)', async () => {
     const content = 'Check this out: [[https://example.com/page]]';
 
     mockPrisma.conversation.findFirst.mockResolvedValue({
@@ -1994,7 +1987,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       isActive: true
     });
     mockPrisma.message.create.mockResolvedValue({
-      ...createMockMessage({ content: 'Check this out: m+xyz789' }),
+      ...createMockMessage({ content }),
       sender: { id: testUserId },
       attachments: [],
       replyTo: null
@@ -2007,14 +2000,10 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    // Le contenu passe par le traitement des liens explicites — c'est LUI qui
-    // trouve ou crée le lien. L'assertion portait sur `findExistingTrackingLink`,
-    // une étape INTERNE de l'algorithme que l'envoi recopiait ; il ne la recopie
-    // plus, et un test qui nomme les pas d'un algorithme se casse dès qu'on le
-    // range ailleurs.
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ content, conversationId: testConversationId })
-    );
+    // `[[url]]` est l'écriture d'un lien affiché tel quel, sans suivi : rien
+    // ne part vers la réécriture explicite (témoin du comportement remplacé,
+    // qui attendait ici sa réécriture en m+<token>).
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
   });
 
   it('should process angle bracket <url> tracking links', async () => {

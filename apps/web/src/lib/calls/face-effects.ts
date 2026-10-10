@@ -14,7 +14,9 @@ import type { FaceEffect } from './video-effects';
  *
  * Chaque image a un budget (`FACE_FRAME_BUDGET_MS`) : quand la moyenne
  * glissante le dépasse, l'effet renonce à ses ornements (particules,
- * plumes) et garde sa couleur, jusqu'à repasser sous le seuil.
+ * plumes) et garde sa couleur, jusqu'à repasser sous le seuil. Sous
+ * `prefers-reduced-motion`, le temps est figé (`FROZEN_T`) et les ornements
+ * partent (#9100).
  */
 
 export type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
@@ -114,18 +116,39 @@ export type Particle = { readonly x: number; readonly y: number; readonly r: num
 
 type ParticleInput = { readonly seed: number; readonly t: number; readonly count: number; readonly area: Box; readonly size?: number; readonly period?: number };
 
-/** Des particules qui MONTENT à travers `area`, chacune sur son propre cycle. */
-export function risingParticles({ seed, t, count, area, size = Math.max(2, area.width * 0.006), period = 2600 }: ParticleInput): readonly Particle[] {
-  return Array.from({ length: count }, (_, index) => {
+export type ParticleSeed = { readonly cycle: number; readonly lane: number; readonly offset: number; readonly sway: number; readonly scale: number };
+
+const SEEDS = new Map<string, readonly ParticleSeed[]>();
+
+const SEEDS_KEPT = 16;
+
+/** Ce qui ne bouge pas d'une particule (son cycle, son couloir, sa taille) : calculé UNE fois par graine (#9100). */
+export function particleSeeds(seed: number, count: number): readonly ParticleSeed[] {
+  const key = `${seed}:${count}`;
+  const known = SEEDS.get(key);
+  if (known !== undefined) return known;
+  const seeds = Array.from({ length: count }, (_, index): ParticleSeed => {
     const random = seeded(seed * 1000 + index);
     const [start, lane, offset, sway, scale] = [random(), random(), random(), random(), random()];
-    const cycle = period * (0.7 + start * 0.8);
-    const phase = (t / cycle + offset) % 1;
-    const drift = Math.sin(phase * Math.PI * 2 + sway * 6) * area.width * 0.02;
-    const x = Math.min(area.x + area.width, Math.max(area.x, area.x + lane * area.width + drift));
-    return { x, y: area.y + area.height * (1 - phase), r: size * (0.5 + scale), alpha: Math.sin(phase * Math.PI) };
+    return { cycle: 0.7 + start * 0.8, lane, offset, sway: sway * 6, scale: 0.5 + scale };
+  });
+  if (SEEDS.size >= SEEDS_KEPT) SEEDS.delete(SEEDS.keys().next().value ?? key);
+  SEEDS.set(key, seeds);
+  return seeds;
+}
+
+/** Des particules qui MONTENT à travers `area`, chacune sur son propre cycle : seule la phase change d'une image à l'autre. */
+export function risingParticles({ seed, t, count, area, size = Math.max(2, area.width * 0.006), period = 2600 }: ParticleInput): readonly Particle[] {
+  return particleSeeds(seed, count).map((particle) => {
+    const phase = (t / (period * particle.cycle) + particle.offset) % 1;
+    const drift = Math.sin(phase * Math.PI * 2 + particle.sway) * area.width * 0.02;
+    const x = Math.min(area.x + area.width, Math.max(area.x, area.x + particle.lane * area.width + drift));
+    return { x, y: area.y + area.height * (1 - phase), r: size * particle.scale, alpha: Math.sin(phase * Math.PI) };
   });
 }
+
+/** La taille d'un sprite de lueur, par paliers d'un quart d'octave : des tailles voisines partagent leur sprite (#9100). */
+export const glowBucket = (size: number): number => Math.max(4, Math.round(2 ** (Math.round(Math.log2(Math.max(size, 1)) * 4) / 4)));
 
 export function sparklesOf(face: Box, t: number): readonly Particle[] {
   const cx = centerOf(face);
@@ -152,6 +175,9 @@ const GRADE: Readonly<Record<FaceEffect, string>> = {
 export const faceGrade = (effect: FaceEffect): string => GRADE[effect];
 
 export const FACE_FRAME_BUDGET_MS = 8;
+
+/** L'instant où le mouvement réduit fige les effets (#9100). */
+export const FROZEN_T = 0;
 
 export type EffectLoad = { readonly ema: number; readonly degraded: boolean };
 

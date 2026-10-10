@@ -458,6 +458,46 @@ export const MESSAGES_SERVIS = [
 
 export const AGENT_STATS = { totalConfigs: 4, activeConfigs: 3, totalControlledUsers: 12, totalMessagesSent: 486 };
 
+/**
+ * LES COMPTEURS DU TABLEAU DE BORD (#8876) — la forme que `decodeAdminDashboard`
+ * lit : `statistics` et `recentActivity`, jamais une charge à plat. Une charge
+ * sans `statistics` est illisible : le bloc dessine son erreur, et un hub par
+ * ailleurs juste avec une erreur de plus est la signature d'un corpus mal formé.
+ */
+export const DASHBOARD_SERVI = {
+  statistics: {
+    totalUsers: 128,
+    activeUsers: 64,
+    inactiveUsers: 64,
+    adminUsers: 2,
+    totalAnonymousUsers: 12,
+    activeAnonymousUsers: 5,
+    totalMessages: 9421,
+    totalCommunities: 7,
+    totalTranslations: 6000,
+    totalShareLinks: 9,
+    activeShareLinks: 6,
+    totalReports: 2,
+  },
+  recentActivity: { newUsers: 3, newConversations: 2, newMessages: 51, newAnonymousUsers: 1 },
+};
+
+/** LES DERNIERS INSCRITS du tableau de bord (#8876) — `GET /admin/users` trié par date d'inscription, cinq lignes. */
+export const MEMBRES_RECENTS = {
+  users: [
+    {
+      id: '64b000000000000000000002',
+      username: 'kaethe',
+      displayName: 'Käthe Vogel',
+      firstName: 'Käthe',
+      lastName: 'Vogel',
+      avatar: '',
+      createdAt: '2026-09-16T08:00:00.000Z',
+    },
+  ],
+  pagination: { total: 128, offset: 0, limit: 5, hasMore: true },
+};
+
 export const AGENT_CONFIGS = [
   {
     conversationId: CONVERSATION_ID,

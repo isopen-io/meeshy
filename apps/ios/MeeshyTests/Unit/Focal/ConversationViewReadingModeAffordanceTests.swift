@@ -48,14 +48,17 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
-        let end = code.index(range.lowerBound, offsetBy: 300, limitedBy: code.endIndex) ?? code.endIndex
+        // 450 : la fente de recherche porte depuis #9031 l'alternative de
+        // l'aperçu (`previewMode ? openFullConversationButton : …`), qui a
+        // poussé la troisième fente au-delà des 300 caractères d'origine.
+        let end = code.index(range.lowerBound, offsetBy: 450, limitedBy: code.endIndex) ?? code.endIndex
         let body = code[range.lowerBound..<end]
         // L'HÔTE remet les trois fentes ; il ne les ORDONNE plus lui-même.
         guard body.range(of: "headerCallButtons") != nil,
               body.range(of: "expandedHeaderSearchButton") != nil,
               body.range(of: "readingModeAffordanceCluster") != nil
         else {
-            XCTFail("Un des trois éléments de la grappe (appel, recherche, mode) est introuvable dans les 300 premiers caractères de headerButtonsCluster.")
+            XCTFail("Un des trois éléments de la grappe (appel, recherche, mode) est introuvable dans les 450 premiers caractères de headerButtonsCluster.")
             return
         }
 

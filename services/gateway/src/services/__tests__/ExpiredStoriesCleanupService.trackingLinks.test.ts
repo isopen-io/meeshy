@@ -59,6 +59,11 @@ function buildPrisma(overrides: Record<string, unknown> = {}) {
     trackingLink: {
       updateMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
     },
+    // Ce que les posts détruits ont rapporté à leurs lecteurs (#9569) : le
+    // retrait gouverne la passe comme ses voisins — sans ce double elle rejette.
+    engagementPostPoints: {
+      deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),
+    },
     soundUsage: {
       findMany: jest.fn<(args: unknown) => Promise<unknown[]>>().mockResolvedValue([]),
       deleteMany: jest.fn<(args: unknown) => Promise<unknown>>().mockResolvedValue({ count: 0 }),

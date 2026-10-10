@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from 'react';
 
+import { BUTTON } from '@/components/ui-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -44,13 +45,6 @@ export function ReelOfferDialog({
     };
   }, []);
 
-  const secondary = {
-    minHeight: 48,
-    color: 'var(--color-ios-ink)',
-    border: '1.5px solid color-mix(in srgb, var(--color-ios-ink-3) 45%, transparent)',
-    outlineColor: 'var(--color-ios-brand)',
-  } as const;
-
   return (
     <dialog
       ref={ref}
@@ -58,7 +52,7 @@ export function ReelOfferDialog({
       aria-labelledby={titleId}
       aria-describedby={bodyId}
       onClose={onCancel}
-      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-black/40"
+      className="m-auto w-[min(26rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
       style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid gap-3 p-5">
@@ -74,8 +68,7 @@ export function ReelOfferDialog({
             type="button"
             data-reel-offer-choice="reel"
             onClick={onReel}
-            className="grid place-items-center rounded-chip px-3 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ minHeight: 48, backgroundColor: 'var(--color-ios-brand)', color: '#fff', outlineColor: 'var(--color-ios-brand)' }}
+            className={BUTTON.primary}
           >
             {translate(lang, 'composer.reelOffer.reel')}
           </button>
@@ -83,8 +76,7 @@ export function ReelOfferDialog({
             type="button"
             data-reel-offer-choice="post"
             onClick={onPost}
-            className="grid place-items-center rounded-chip px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={secondary}
+            className={BUTTON.secondary}
           >
             {translate(lang, 'composer.reelOffer.post')}
           </button>
@@ -92,8 +84,8 @@ export function ReelOfferDialog({
             type="button"
             data-reel-offer-choice="cancel"
             onClick={onCancel}
-            className="grid place-items-center rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+            className={`${BUTTON.icon} px-3 text-body`}
+            style={{ color: 'var(--color-ios-ink-2)' }}
           >
             {translate(lang, 'common.cancel')}
           </button>

@@ -27,7 +27,7 @@
  *     `PUSH_ROUTE_PATTERNS` doit être, au caractère, celui que
  *     `route-table.tsx` déclare pour la même clé. Une route renommée ou
  *     déplacée dans l'application rougit ici.
- *  2. **Le jumeau contre le RÉSOLVEUR.** Les sept tables de types de
+ *  2. **Le jumeau contre le RÉSOLVEUR.** Les neuf tables de types de
  *     `target.ts` (et les deux paramètres de recherche de `discover/view.ts`)
  *     doivent être identiques dans le worker. Un type ajouté d'un seul côté
  *     rougit ici.
@@ -54,13 +54,15 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les sept tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les neuf tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
   'REQUEST_TYPES',
   'PROFILE_TYPES',
   'PROGRESSION_TYPES',
+  'GAME_LEAGUE_TYPES',
+  'GAME_SEASON_TYPES',
   'SECURITY_TYPES',
   'HINTED_ROUTES',
 ];
@@ -94,6 +96,11 @@ export function litterauxDuResolveur(
     if (ligne === null) throw new Error(`paramètre introuvable dans discover/view.ts : ${nom}`);
     lu[nom] = ligne[1];
   }
+  /* La fiche que chaque notification d'un concept ouvre (#9563) : une table
+     clé → valeur, lue paire par paire dans l'ordre d'écriture. */
+  const sections = source.match(/const PROGRESSION_TYPE_SECTIONS\b[^=]*=\s*\{([^}]*)\}/);
+  if (sections === null) throw new Error('table introuvable dans target.ts : PROGRESSION_TYPE_SECTIONS');
+  lu.PROGRESSION_TYPE_SECTIONS = Object.fromEntries([...sections[1].matchAll(/'?(\w+)'?\s*:\s*'([^']*)'/g)].map((m) => [m[1], m[2]]));
   /* Les clés de route que le résolveur peut RENDRE — un `route: 'x'` littéral.
      Une clé ajoutée là et absente du jumeau ouvrirait une destination que le
      worker ne sait pas composer. */
@@ -130,7 +137,11 @@ const ADRESSES = [
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],
   [{ type: 'login_new_device' }, '/settings'],
-  [{ type: 'badge_earned' }, '/me/progression'],
+  [{ type: 'badge_earned' }, '/me/progression?section=badges'],
+  [{ type: 'level_up', route: 'progression' }, '/me/progression?section=level'],
+  [{ type: 'game_duo_invited', route: 'progression' }, '/me/progression/ligue'],
+  [{ type: 'game_league_result', route: 'progression' }, '/me/progression/ligue'],
+  [{ type: 'game_season_step', route: 'progression' }, '/me/progression/saison'],
   [{ type: 'un_type_sans_ecran' }, '/notifications'],
 ];
 
@@ -173,6 +184,12 @@ export function auditParite({ table, resolveur, jumeau }) {
         .join(' ; ');
       violations.push(`${nom} a divergé entre target.ts et sw-push.js — ${detail}.`);
     }
+  }
+
+  if (JSON.stringify(resolveur.PROGRESSION_TYPE_SECTIONS) !== JSON.stringify(jumeau.PROGRESSION_TYPE_SECTIONS)) {
+    violations.push(
+      `PROGRESSION_TYPE_SECTIONS a divergé : sw-push.js ${JSON.stringify(jumeau.PROGRESSION_TYPE_SECTIONS)}, target.ts ${JSON.stringify(resolveur.PROGRESSION_TYPE_SECTIONS)}.`,
+    );
   }
 
   for (const nom of [...PARAMS, 'NOTIFICATION_CLICKED_MESSAGE']) {

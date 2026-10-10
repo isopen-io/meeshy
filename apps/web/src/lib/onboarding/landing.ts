@@ -1,9 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { OnboardingState } from '@meeshy/shared/types/onboarding';
-
 import type { DataSource } from '@/lib/api/config';
-import { ONBOARDING_QUERY_KEY, ONBOARDING_STALE_TIME } from '@/lib/api/onboarding';
+import { ONBOARDING_QUERY_KEY, ONBOARDING_STALE_TIME, type OnboardingState } from '@/lib/api/onboarding';
 import type { SessionState } from '@/lib/api/session';
 
 import { takeOnboardingWaiver } from './landing-waiver';

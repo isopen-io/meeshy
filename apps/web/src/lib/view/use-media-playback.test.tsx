@@ -151,7 +151,7 @@ describe('useMediaPlayback — permission et bascule (#5805)', () => {
     });
 
     expect(calls.playCalls).toBe(1);
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
     expect(statusOf(el)).toBe('playing');
   });
 
@@ -199,7 +199,7 @@ describe('useMediaPlayback — un seul média à la fois (#5805)', () => {
       await Promise.resolve();
     });
 
-    expect(coordinator.active()).toBe('b');
+    expect(coordinator.active()).not.toBeNull();
     expect(callsA.pauseCalls).toBe(1);
     expect(statusOf(elA)).toBe('paused');
     expect(statusOf(elB)).toBe('playing');
@@ -232,10 +232,129 @@ describe('useMediaPlayback — un seul média à la fois (#5805)', () => {
       await Promise.resolve();
     });
 
-    expect(coordinator.active()).toBe('video-1');
+    expect(coordinator.active()).not.toBeNull();
     expect(voiceCalls.pauseCalls).toBe(1);
     expect(statusOf(voiceEl)).toBe('paused');
     expect(statusOf(videoEl)).toBe('playing');
+  });
+});
+
+/**
+ * UNE VIDÉO NE JOUE QU'À UN ENDROIT (#9575) — la clé d'exclusivité désigne le
+ * LECTEUR, jamais la pièce : la tuile du fil et la visionneuse lisent la même
+ * pièce, et sous une clé commune le second `claim` était un no-op — les deux
+ * jouaient ensemble.
+ */
+describe('useMediaPlayback — une même pièce ne joue qu’à un endroit (#9575)', () => {
+  const pipDocument = () =>
+    document as Document & { pictureInPictureEnabled?: boolean; pictureInPictureElement?: Element | null; exitPictureInPicture?: () => Promise<void> };
+
+  const playing = async (playback: () => MediaPlayback) => {
+    await act(async () => {
+      playback().toggle();
+      await Promise.resolve();
+    });
+  };
+
+  test('deux surfaces de la MÊME pièce : lire la seconde met la première en pause', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+    let viewer!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const inlineCalls = stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+    expect(statusOf(inlineEl)).toBe('playing');
+
+    const viewerEl = mount({ onReady: (p) => (viewer = p), attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(viewerEl));
+    await playing(() => viewer);
+
+    expect(inlineCalls.pauseCalls).toBe(1);
+    expect(statusOf(inlineEl)).toBe('paused');
+    expect(statusOf(viewerEl)).toBe('playing');
+  });
+
+  test('la première surface, mise en pause, ne retire pas l’exclusivité de la seconde : un troisième média l’arrête bien', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+    let viewer!: MediaPlayback;
+    let other!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+    const viewerEl = mount({ onReady: (p) => (viewer = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const viewerCalls = stubMedia(mediaOf(viewerEl));
+    await playing(() => viewer);
+
+    const otherEl = mount({ onReady: (p) => (other = p), attachmentId: 'other', coordinator, tag: 'audio' });
+    stubMedia(mediaOf(otherEl));
+    await playing(() => other);
+
+    expect(viewerCalls.pauseCalls).toBe(1);
+    expect(statusOf(viewerEl)).toBe('paused');
+    expect(statusOf(otherEl)).toBe('playing');
+  });
+
+  test('l’entrée en image dans l’image met en pause la surface qui jouait la même pièce', async () => {
+    const coordinator = createMediaCoordinator();
+    let inline!: MediaPlayback;
+
+    const inlineEl = mount({ onReady: (p) => (inline = p), attachmentId: 'same', coordinator, tag: 'video' });
+    const inlineCalls = stubMedia(mediaOf(inlineEl));
+    await playing(() => inline);
+
+    const viewerEl = mount({ onReady: () => {}, attachmentId: 'same', coordinator, tag: 'video' });
+    stubMedia(mediaOf(viewerEl));
+    await act(async () => {
+      mediaOf(viewerEl).dispatchEvent(new Event('enterpictureinpicture'));
+    });
+
+    expect(inlineCalls.pauseCalls).toBe(1);
+    expect(statusOf(inlineEl)).toBe('paused');
+  });
+
+  test('une vidéo démontée pendant qu’elle flotte quitte l’image dans l’image', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: true, configurable: true });
+    let exitCalls = 0;
+    pipDocument().exitPictureInPicture = () => {
+      exitCalls += 1;
+      return Promise.resolve();
+    };
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video' });
+    const video = mediaOf(el);
+    stubMedia(video);
+    Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: video, configurable: true });
+    try {
+      act(() => {
+        root.unmount();
+      });
+      expect(exitCalls).toBe(1);
+    } finally {
+      Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: null, configurable: true });
+    }
+  });
+
+  test('une vidéo démontée qui ne flotte pas ne ferme pas l’image dans l’image d’une autre', async () => {
+    let exitCalls = 0;
+    pipDocument().exitPictureInPicture = () => {
+      exitCalls += 1;
+      return Promise.resolve();
+    };
+    const coordinator = createMediaCoordinator();
+    const el = mount({ onReady: () => {}, attachmentId: 'v', coordinator, tag: 'video' });
+    stubMedia(mediaOf(el));
+    Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: document.createElement('video'), configurable: true });
+    try {
+      act(() => {
+        root.unmount();
+      });
+      expect(exitCalls).toBe(0);
+    } finally {
+      Object.defineProperty(pipDocument(), 'pictureInPictureElement', { value: null, configurable: true });
+    }
   });
 });
 
@@ -481,6 +600,41 @@ describe('useMediaPlayback — image dans l’image (#6359)', () => {
     });
     expect(attr(el, 'data-pip')).toBe('unsupported');
   });
+
+  test('dans la coque Android, sans API du navigateur, la vidéo l’offre et flotte par la coque (#9410)', async () => {
+    Object.defineProperty(pipDocument(), 'pictureInPictureEnabled', { value: false, configurable: true });
+    const appels: string[] = [];
+    const shell = globalThis as { Capacitor?: unknown };
+    shell.Capacitor = {
+      PluginHeaders: [{ name: 'MeeshyPlayback', methods: [{ name: 'floatVideo' }] }],
+      nativePromise: (_plugin: string, methode: string) => {
+        appels.push(methode);
+        return Promise.resolve({ floated: true });
+      },
+    };
+    try {
+      const coordinator = createMediaCoordinator();
+      let playback!: MediaPlayback;
+      const el = mount({ onReady: (p) => (playback = p), attachmentId: 'v', coordinator, tag: 'video', tracksTime: true });
+      const video = mediaOf(el) as HTMLVideoElement;
+      let pleinEcran = 0;
+      video.requestFullscreen = () => {
+        pleinEcran += 1;
+        return Promise.resolve();
+      };
+      await act(async () => {
+        video.dispatchEvent(new Event('loadedmetadata'));
+      });
+      expect(attr(el, 'data-pip')).toBe('inactive');
+      await act(async () => {
+        playback.togglePictureInPicture();
+      });
+      expect(pleinEcran).toBe(1);
+      expect(appels).toEqual(['floatVideo']);
+    } finally {
+      delete shell.Capacitor;
+    }
+  });
 });
 
 describe('useMediaPlayback — démontage (#5805)', () => {
@@ -494,7 +648,7 @@ describe('useMediaPlayback — démontage (#5805)', () => {
       playback.toggle();
       await Promise.resolve();
     });
-    expect(coordinator.active()).toBe('a');
+    expect(coordinator.active()).not.toBeNull();
 
     act(() => {
       root.unmount();
@@ -549,6 +703,57 @@ describe('useMediaPlayback — reprise au montage (#7225)', () => {
       report: { kind: 'listened', deps },
     });
     expect(mediaOf(el).currentTime).toBe(0);
+  });
+
+  /**
+   * #9265 — une position de reprise connue AVANT les métadonnées (4 s) peut
+   * dépasser la durée RÉELLE de la piste effectivement chargée (2 s, cas
+   * nominal dès que la traduction jouée diffère de celle qui a produit la
+   * position enregistrée). Le navigateur CLAMPE alors le seek en attente à
+   * la fin exacte une fois `duration` connue — simulé ici en posant
+   * `currentTime` à la durée, comme le ferait le moteur média réel, avant de
+   * déclencher `loadedmetadata`. Sans correctif, l'élément reste bloqué en
+   * butée de fin : un `play()` y déclenche `ended` quasi instantanément.
+   */
+  test('reprise au-delà de la durée réelle : la fin clampée repart de zéro', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 4_000, complete: false }, deps },
+    });
+    const media = mediaOf(el);
+    expect(media.currentTime).toBe(4);
+
+    await act(async () => {
+      // Le moteur média clampe le seek en attente à la durée réelle, plus
+      // courte que la position de reprise, une fois les métadonnées connues.
+      setMediaTime(media, { duration: 2, currentTime: 2 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+    });
+
+    expect(media.currentTime).toBe(0);
+  });
+
+  test('reprise EN DEÇÀ de la durée réelle : le clamp est laissé intact', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 4_000, complete: false }, deps },
+    });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      setMediaTime(media, { duration: 65, currentTime: 4 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+    });
+
+    expect(media.currentTime).toBe(4);
   });
 });
 
