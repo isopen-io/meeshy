@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { auth } from '@/lib/api/auth';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
-import { safeReturnPath } from '@/lib/view/magic-link';
+import { landingAfterSession } from '@/lib/session-guard';
 import { href, Link, navigate } from '@/routes/route-table';
 
 import { AgeBlocked, AuthColumn, isAgeBelowMinimum } from './auth-column';
@@ -50,7 +50,7 @@ export function MagicLinkValidation({
           return;
         }
         setState('done');
-        go(safeReturnPath(returnUrl), true);
+        go(landingAfterSession(returnUrl, href('list')), true);
         return;
       }
       if (isAgeBelowMinimum(result)) {
