@@ -248,6 +248,15 @@ describe('la feuille de l’aperçu', () => {
     expect(dialog?.querySelector('a[href="/c/c1"]')).toBeNull();
   });
 
+  test('sur ordinateur, l’aperçu ne prend plus toute la hauteur : 85 % de l’écran, centré (#10070)', async () => {
+    await sheet(() => undefined);
+    const panel = document.querySelector('[data-preview-scrim]')?.nextElementSibling;
+    const classes = panel?.className.split(' ') ?? [];
+    expect(classes).toContain('top-[calc(var(--safe-top)+6px)]');
+    expect(classes).toContain('md:top-[7.5dvh]');
+    expect(classes).toContain('md:bottom-[7.5dvh]');
+  });
+
   test('toucher HORS de l’aperçu le ferme', async () => {
     const closed: string[] = [];
     await sheet(() => closed.push('x'));
