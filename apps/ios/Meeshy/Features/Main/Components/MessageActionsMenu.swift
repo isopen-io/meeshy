@@ -101,6 +101,7 @@ struct MessageActionsMenu: View {
         case .select: return "checkmark.circle"
         case .exportImage: return MessageCardExportMenu.imageSymbol
         case .exportQuick: return MessageCardExportMenu.quickSymbol
+        case .wholeMessage: return "text.bubble"
         }
     }
 
@@ -116,6 +117,7 @@ struct MessageActionsMenu: View {
         case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         case .exportImage: return MessageCardExportMenu.imageLabel
         case .exportQuick: return MessageCardExportMenu.quickLabel
+        case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
         }
     }
 }

@@ -64,4 +64,90 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertNil(MessagePieceTarget.deletableMedia(in: lotOfFive, targeted: "ailleurs"),
                      "une visée qui n'appartient pas au message n'atteint rien")
     }
+
+    // MARK: - #9907 — l'aperçu d'UNE pièce
+
+    func test_pieces_areTheTilesOfTheMessage_inOrder_withoutPlaces() {
+        let mixed = message([photo("p1"), place("l1"), video("v2"), photo("p3")])
+        XCTAssertEqual(MessagePieceTarget.pieces(of: mixed).map(\.id), ["p1", "v2", "p3"])
+    }
+
+    func test_piece_targetedTileOfTheMessage_isFound() {
+        XCTAssertEqual(MessagePieceTarget.piece("p3", in: lotOfFive)?.id, "p3")
+    }
+
+    func test_piece_withoutTargetOrFromElsewhere_isNil_soThePreviewStaysTheWholeMessage() {
+        XCTAssertNil(MessagePieceTarget.piece(nil, in: lotOfFive))
+        XCTAssertNil(MessagePieceTarget.piece("ailleurs", in: lotOfFive))
+    }
+
+    func test_position_thirdOfSeven_readsThreeSlashSeven() {
+        XCTAssertEqual(MessagePieceTarget.position(index: 2, count: 7), "3/7")
+    }
+
+    func test_index_thirdPiece_isTwo() {
+        XCTAssertEqual(MessagePieceTarget.index(of: "p3", in: lotOfFive), 2)
+    }
+
+    func test_neighbour_movesWithinTheMessage_andStopsAtItsEdges() {
+        XCTAssertEqual(MessagePieceTarget.neighbour(of: "p3", step: 1, in: lotOfFive), "v4")
+        XCTAssertEqual(MessagePieceTarget.neighbour(of: "p3", step: -1, in: lotOfFive), "p2")
+        XCTAssertNil(MessagePieceTarget.neighbour(of: "p5", step: 1, in: lotOfFive))
+        XCTAssertNil(MessagePieceTarget.neighbour(of: "p1", step: -1, in: lotOfFive))
+    }
+
+    func test_fittedSize_portraitPieceInALandscapeStage_keepsItsRatio() {
+        let size = MessagePieceTarget.fittedSize(ratio: 9.0 / 16.0, in: CGSize(width: 360, height: 400))
+        XCTAssertEqual(size.height, 400, accuracy: 0.001)
+        XCTAssertEqual(size.width / size.height, 9.0 / 16.0, accuracy: 0.001, "jamais étirée")
+    }
+
+    func test_fittedSize_landscapePiece_fillsTheWidth_andKeepsItsRatio() {
+        let size = MessagePieceTarget.fittedSize(ratio: 3.0 / 2.0, in: CGSize(width: 360, height: 400))
+        XCTAssertEqual(size.width, 360, accuracy: 0.001)
+        XCTAssertEqual(size.height, 240, accuracy: 0.001)
+    }
+
+    func test_fittedSize_unknownRatio_isASquare_neverAStretch() {
+        let size = MessagePieceTarget.fittedSize(ratio: 0, in: CGSize(width: 360, height: 400))
+        XCTAssertEqual(size.width, size.height, accuracy: 0.001)
+    }
+
+    func test_isProtected_blurredOrViewOncePiece_orViewOnceMessage() {
+        XCTAssertTrue(MessagePieceTarget.isProtected(photo("p1", isBlurred: true), in: lotOfFive))
+        XCTAssertTrue(MessagePieceTarget.isProtected(photo("p1", isViewOnce: true), in: lotOfFive))
+        var sealed = lotOfFive
+        sealed.isViewOnce = true
+        XCTAssertTrue(MessagePieceTarget.isProtected(photo("p1"), in: sealed))
+        XCTAssertFalse(MessagePieceTarget.isProtected(photo("p1"), in: lotOfFive))
+    }
+
+    func test_pieceMenu_alwaysEndsWithTheWholeMessage() {
+        let ctx = MessagePieceMenu.Context(isProtected: true, exits: .unrestricted, canDelete: false)
+        XCTAssertEqual(MessagePieceMenu.actions(ctx).last, .wholeMessage,
+                       "l'aperçu d'une pièce ne retire jamais l'accès au message entier")
+    }
+
+    // MARK: - #9907 — le même geste dans tous les modes de lecture
+
+    private func source(_ relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    func test_everyTileSurface_longPressOpensThePiecePreview() throws {
+        let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        XCTAssertEqual(bulles.components(separatedBy: "MessagePieceLongPress(attachmentId: attachment.id").count - 1, 2,
+                       "la photo ET la vidéo de grille ouvrent l'aperçu de leur pièce")
+        let focal = try source("Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift")
+        XCTAssertTrue(focal.contains("MessagePieceLongPress(attachmentId: attachment.id"),
+                      "Focal et Script ouvrent l'aperçu de la pièce par le MÊME geste")
+    }
+
+    func test_threadCell_injectsThePieceLongPress_exceptInSelectionMode() throws {
+        let controller = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains(".environment(\\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)"))
+    }
 }

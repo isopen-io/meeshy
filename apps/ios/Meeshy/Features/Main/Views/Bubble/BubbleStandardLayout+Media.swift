@@ -264,23 +264,6 @@ extension BubbleStandardLayout {
 /// the runtime can resolve in O(1) recursion depth. This also lets SwiftUI
 /// preserve the cell's structural identity across `ThemedMessageBubble.body`
 /// re-evaluations and skip rebuild when the bindings haven't actually changed.
-/// BUG2 A' — attache un long-press HAUTE PRIORITÉ (gagne sur le long-press parent
-/// = context menu) uniquement quand `enabled`. Pour image solo/protégée, aucun
-/// geste n'est attaché → le parent gère son propre long-press normalement.
-private struct AttachmentReactionLongPress: ViewModifier {
-    let enabled: Bool
-    let action: () -> Void
-    func body(content: Content) -> some View {
-        if enabled {
-            content.highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.4).onEnded { _ in action() }
-            )
-        } else {
-            content
-        }
-    }
-}
-
 fileprivate struct BubbleGridCell: View {
     let attachment: MessageAttachment
     let overflowCount: Int
@@ -370,10 +353,9 @@ fileprivate struct BubbleGridCell: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce,
-        // exactement ce que l'appui long ouvre douze lignes plus bas. Même
-        // garde (`canReactPerImage`), même acte : un second chemin qui
-        // ouvrirait autre chose serait deux gestes pour une seule intention.
+        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce.
+        // Depuis #9907, c'est le SEUL geste de la tuile qui y mène directement :
+        // l'appui long ouvre l'aperçu de la pièce, dont le menu réagit aussi.
         //
         // **Déclaré AVANT le simple tap**, ce qui est la seule façon pour
         // SwiftUI d'arbitrer les deux. Le coût est mesuré et assumé : le
@@ -390,11 +372,22 @@ fileprivate struct BubbleGridCell: View {
         .onTapGesture(perform: handleTap)
         .overlay { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
-        .modifier(AttachmentReactionLongPress(enabled: canReactPerImage) {
-            HapticFeedback.medium()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
-        })
-        .overlay { reactionPickerOverlay }
+        // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
+        // de CETTE pièce, dont le menu porte la réaction. Le double tap
+        // ci-dessus reste le chemin court vers le sélecteur.
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
+    }
+
+    /// **L'appui long ouvre l'aperçu de la pièce** (#9907) — dans un LOT
+    /// seulement, et jamais sur une pièce protégée : la pression d'une pièce
+    /// seule ou cachée reste à la bulle, qui montre le message entier.
+    private var offersPiecePreview: Bool {
+        !solo && !ComposableAttachment.isProtected(attachment)
     }
 
     /// BUG2 A' — pastille des réactions par-image (emojis + total) en coin bas-gauche
@@ -411,41 +404,6 @@ fileprivate struct BubbleGridCell: View {
             currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
                 .padding(MeeshySpacing.xs)
-        }
-    }
-
-    /// BUG2 A' — picker emoji présenté centré DANS les bounds de la cellule (évite
-    /// le clip de `.clipped()`), fond assombri tap-to-dismiss.
-    @ViewBuilder private var reactionPickerOverlay: some View {
-        if showReactionPicker {
-            ZStack {
-                Color.black.opacity(0.4)
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation { showReactionPicker = false } }
-                // **Aucune échelle écrite ici** (#6117) : la taille de la
-                // rangée est celle du composant, une seule pour toutes les
-                // surfaces où l'on réagit. Elle valait 0,78 — la plus petite
-                // des trois échelles du dépôt, quand le plein écran montait la
-                // même rangée à 2. `scrollable` reste : à 1,5 la rangée dépasse
-                // la largeur d'une tuile, donc elle DÉFILE plutôt que d'être
-                // rognée par le `.clipped()` de la grille.
-                EmojiReactionPicker(
-                    scrollable: true,
-                    onReact: { emoji in
-                        onReactToAttachment?(attachment.id, emoji)
-                        withAnimation { showReactionPicker = false }
-                    },
-                    onDismiss: { withAnimation { showReactionPicker = false } }
-                )
-                .padding(MeeshySpacing.sm)
-                // `adaptiveGlass` et non `.ultraThinMaterial` en dur : sous
-                // iOS 26 ce site rendait une matière PLATE là où le reste du
-                // chrome rend du verre système (#4997 — le site unique
-                // retombe de lui-même sur `.ultraThinMaterial` avant iOS 26).
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                .padding(.horizontal, MeeshySpacing.xs + 2)
-            }
-            .transition(.opacity)
         }
     }
 
@@ -488,6 +446,13 @@ fileprivate struct BubbleGridCell: View {
             viewCountBadge
         }
         .clipped()
+        // #9910 — la vidéo de grille montre ce qu'elle a récolté, comme la
+        // photo voisine ; en HAUT à gauche, le bas portant la barre de lecture
+        // et les contrôles du lecteur.
+        .overlay(alignment: .topLeading) { reactionsBadge }
+        // #9907/#9910 — la réaction d'une vidéo passe par l'aperçu de la pièce :
+        // un double tap y ferait partir la lecture ou le plein écran.
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id, enabled: offersPiecePreview))
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)

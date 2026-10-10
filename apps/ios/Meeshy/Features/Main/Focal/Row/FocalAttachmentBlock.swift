@@ -236,10 +236,11 @@ nonisolated enum FocalMediaProtection {
 /// pas une seconde écriture : la tuile de bulle et le plein écran montent
 /// exactement la même, et une garde d'inventaire tient les trois ensemble.
 ///
-/// **Le GESTE, lui, reste hors périmètre** (`AttachmentReactionLongPress`,
-/// `reactionPickerOverlay`) : la directive demande que la réaction se VOIE
-/// dans la conversation, et le plein écran — atteignable d'un tap depuis cette
-/// tuile — offre déjà de la poser. Suivi : #6793.
+/// **Le GESTE est entré à son tour le 2026-10-10** (#9910, suivi de #6793) :
+/// le double tap ouvre le MÊME sélecteur que la tuile de bulle
+/// (`AttachmentReactionPickerOverlay`), sous la MÊME garde
+/// (`AttachmentReactionOffer`), et l'appui long ouvre l'aperçu de CETTE pièce
+/// (#9907) — un geste, un effet, quel que soit le mode de lecture.
 struct FocalGridCell: View {
     let attachment: MessageAttachment
     let slot: FocalMediaSlot
@@ -250,9 +251,23 @@ struct FocalGridCell: View {
     /// de `BubbleGridCell.onConsumeViewOnce` (même signature, même contrat
     /// d'appel : succès → révélation).
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// Réagir à CETTE pièce (`attachmentId`, `emoji`) — #9910. `nil` ⇒ aucun
+    /// geste de réaction (loi 4 : un contrôle existe s'il a un effet).
+    var onReactToAttachment: ((String, String) -> Void)? = nil
+    /// La pièce est-elle seule dans son message ? Une pièce seule laisse la
+    /// réaction et l'appui long au MESSAGE, comme la tuile de bulle.
+    var isSolo: Bool = true
 
     @State private var isRevealed = false
+    @State private var showReactionPicker = false
     @Environment(\.focalMessageRevealed) private var messageRevealed
+
+    /// La MÊME garde que la tuile de bulle (`AttachmentReactionOffer`).
+    private var canReact: Bool {
+        AttachmentReactionOffer.offersReaction(surface: .bubbleGrid(isSolo: isSolo),
+                                               attachment: attachment,
+                                               hasHandler: onReactToAttachment != nil)
+    }
 
     private var protectionState: FocalMediaProtectionState {
         FocalMediaProtection.state(for: attachment, isRevealed: isRevealed, messageRevealed: messageRevealed)
@@ -270,6 +285,13 @@ struct FocalGridCell: View {
         .clipShape(RoundedRectangle(cornerRadius: FocalMetrics.Media.radius))
         .clipped()
         .contentShape(Rectangle())
+        // Déclaré AVANT le simple tap (seul arbitrage que SwiftUI connaisse),
+        // et seulement quand la pièce offre la réaction : une case seule ou
+        // protégée garde un toucher immédiat.
+        .modifier(FocalPieceDoubleTap(enabled: canReact) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
         .onTapGesture(perform: handleTap)
         .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
@@ -284,6 +306,13 @@ struct FocalGridCell: View {
         }
         .overlay(alignment: .topTrailing) { viewOnceBadge }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
+        .modifier(MessagePieceLongPress(attachmentId: attachment.id,
+                                        enabled: !isSolo && !ComposableAttachment.isProtected(attachment)))
+        .overlay {
+            AttachmentReactionPickerOverlay(isPresented: $showReactionPicker) { emoji in
+                onReactToAttachment?(attachment.id, emoji)
+            }
+        }
     }
 
     /// Une pièce floutée se révèle SUR PLACE (#8389) ; révélée, à vue unique
@@ -449,6 +478,8 @@ struct FocalAttachmentBlock: View, Equatable {
     let messageDeliveryStatus: Message.DeliveryStatus
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
+    /// Réagir à une pièce (#9910) — la tuile Focal reçoit le geste de la bulle.
+    var onReactToAttachment: ((String, String) -> Void)? = nil
     /// Largeur de la grille (`FocalMediaGridLayout.gridWidth(rowWidth:)`).
     var maxWidth: CGFloat = FocalMediaGridLayout.gridMaxWidth
 
@@ -462,6 +493,10 @@ struct FocalAttachmentBlock: View, Equatable {
             && lhs.items.map(\.isBlurred) == rhs.items.map(\.isBlurred)
             && lhs.items.map(\.isViewOnce) == rhs.items.map(\.isViewOnce)
             && lhs.items.map(\.viewOnceCount) == rhs.items.map(\.viewOnceCount)
+            // #9910 — la pastille de réaction se repeint : sans ces deux
+            // champs, une réaction posée laissait la grille à l'identique.
+            && lhs.items.map(\.reactionSummary) == rhs.items.map(\.reactionSummary)
+            && lhs.items.map(\.currentUserReactions) == rhs.items.map(\.currentUserReactions)
             && lhs.accentHex == rhs.accentHex
             && lhs.messageDeliveryStatus == rhs.messageDeliveryStatus
             && lhs.maxWidth == rhs.maxWidth
@@ -522,7 +557,26 @@ struct FocalAttachmentBlock: View, Equatable {
             accentHex: accentHex,
             messageDeliveryStatus: messageDeliveryStatus,
             onTap: onMediaTap,
-            onConsumeViewOnce: onConsumeViewOnce
+            onConsumeViewOnce: onConsumeViewOnce,
+            onReactToAttachment: onReactToAttachment,
+            isSolo: items.count == 1
         )
+    }
+}
+
+/// Le double tap d'une case Focal — posé SEULEMENT quand la pièce offre la
+/// réaction : un `onTapGesture(count: 2)` présent fait attendre au simple tap
+/// la fenêtre de désambiguïsation d'iOS (~250 ms), un coût qu'une case seule
+/// ou protégée n'a pas à payer.
+private struct FocalPieceDoubleTap: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.onTapGesture(count: 2, perform: action)
+        } else {
+            content
+        }
     }
 }

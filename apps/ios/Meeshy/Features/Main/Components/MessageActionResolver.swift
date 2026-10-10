@@ -31,6 +31,9 @@ enum PrimaryAction: String, Equatable {
     /// **Export rapide** — la carte part dans le format par défaut enregistré
     /// sur l'appareil, sans passer par les options. N'existe qu'avec ce défaut.
     case exportQuick
+    /// **Tout le message** (#9907) — le menu d'une PIÈCE visée rend l'aperçu
+    /// et le menu du message entier. N'apparaît que dans `MessagePieceMenu`.
+    case wholeMessage
 }
 
 /// Item d'une section de la feuille « Plus… ».

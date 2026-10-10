@@ -196,6 +196,8 @@ final class MessageListViewController: UIViewController {
     /// menu longpress ferme le clavier et remonte le message vers le centre
     /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
     var onLongPress: ((String, CGRect?) -> Void)?
+    /// L'appui long d'une TUILE (#9907) : message, pièce, frame de la cellule.
+    var onLongPressPiece: ((String, String, CGRect?) -> Void)?
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
     /// correspondante passe à `opacity 0` (masquée) le temps de l'overlay —
     /// seule la copie élevée reste visible (anti double-bulle fantôme). Ne
@@ -1398,6 +1400,10 @@ final class MessageListViewController: UIViewController {
                 guard let self else { return }
                 self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
+            let pieceLongPressHandler: ((String) -> Void) = { [weak self] pieceId in
+                guard let self else { return }
+                self.onLongPressPiece?(messageId, pieceId, self.cellFrameInWindow(messageId: messageId))
+            }
             let toggleReactionHandler = self.onToggleReaction
             let attachmentReactionHandler = self.onReactToAttachment
             let selectionModeActive = self.isSelectionModeActive
@@ -1848,6 +1854,8 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
+                // #9907 — l'appui long d'une tuile vise CETTE pièce ; aucun en sélection.
+                .environment(\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)
                 .conversationListObject(convList).announcesCaptures() // #9617 — le fil déclare ce qu'il montre
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
@@ -2258,7 +2266,7 @@ final class MessageListViewController: UIViewController {
     /// et re-vise tant que l'écart dépasse la tolérance, budget borné.
     /// Annulée dès que le doigt reprend la main (`scrollViewWillBeginDragging`)
     /// ou qu'un autre scroll voulu part (`scrollToBottom`, slow-scroll).
-    private var scrollSettleTarget: ScrollToMessageSettleLaw.PendingTarget?
+    var scrollSettleTarget: ScrollToMessageSettleLaw.PendingTarget?
 
     /// Démarre une visée vérifiée vers `localId` (déjà résolu, présent dans le
     /// snapshot à `indexPath`). Le flash n'est plus émis à l'AVEUGLE sur un
@@ -2281,53 +2289,13 @@ final class MessageListViewController: UIViewController {
     /// n'a pas bougé d'ici là (aucune animation n'a démarré), la vérification
     /// se joue ici ; s'il a bougé, l'animation vit encore et son épilogue
     /// (`scrollViewDidEndScrollingAnimation`) s'en charge.
-    private func scheduleScrollSettleFallback() {
+    func scheduleScrollSettleFallback() {
         let capturedOffsetY = collectionView.contentOffset.y
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
             guard let self, self.scrollSettleTarget != nil else { return }
             guard !self.collectionView.isDragging, !self.collectionView.isDecelerating else { return }
             guard abs(self.collectionView.contentOffset.y - capturedOffsetY) < 0.5 else { return }
             self.verifyScrollSettleTarget()
-        }
-    }
-
-    /// Fin d'une passe : la loi tranche — posé (flash), re-visée (nouvelle
-    /// animation, budget décrémenté), ou abandon (flash sur place, la cible
-    /// est de toute façon à l'écran ou presque).
-    private func verifyScrollSettleTarget() {
-        guard var target = scrollSettleTarget else { return }
-        guard let dataSource,
-              let indexPath = dataSource.indexPath(for: .message(localId: target.localId)),
-              let attrs = collectionView.layoutAttributesForItem(at: indexPath)
-        else {
-            // Cible sortie du snapshot (changement de fenêtre) — le chemin
-            // parent (jumpToQuotedMessage) reprendra avec son propre trigger.
-            scrollSettleTarget = nil
-            return
-        }
-        let desired = ScrollToMessageSettleLaw.centeredOffsetY(
-            itemFrame: attrs.frame,
-            boundsHeight: collectionView.bounds.height,
-            contentHeight: collectionView.contentSize.height,
-            topContentInset: collectionView.contentInset.top,
-            bottomContentInset: collectionView.contentInset.bottom
-        )
-        switch ScrollToMessageSettleLaw.verdict(
-            currentOffsetY: collectionView.contentOffset.y,
-            desiredOffsetY: desired,
-            passesRemaining: target.passesRemaining
-        ) {
-        case .settled, .giveUp:
-            scrollSettleTarget = nil
-            isIntentionalProgrammaticScroll = false
-            captureSceneLockAnchor()
-            flashCell(at: indexPath, strong: target.strong)
-        case .correct:
-            target.passesRemaining -= 1
-            scrollSettleTarget = target
-            isIntentionalProgrammaticScroll = true
-            collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
-            scheduleScrollSettleFallback()
         }
     }
 
@@ -2829,7 +2797,7 @@ final class MessageListViewController: UIViewController {
     /// RETRAIT FOCAL iOS (2026-08-18) : le flash CALayer de la décoration
     /// est parti avec le pass — l'historique (transform + alpha de cellule)
     /// sert TOUS les modes, il n'y a plus de perspective à préserver.
-    private func flashCell(at indexPath: IndexPath, strong: Bool = false) {
+    func flashCell(at indexPath: IndexPath, strong: Bool = false) {
         legacyFlashCell(at: indexPath, strong: strong)
     }
 

@@ -51,8 +51,9 @@ extension ConversationView {
     /// `overlayState.restoreAfterLongPress` et restitué par
     /// `restoreStateAfterLongPressIfNeeded()`, appelée quand le menu se
     /// referme.
-    func presentLongPressMenu(for message: Message, cellFrame: CGRect?) {
+    func presentLongPressMenu(for message: Message, cellFrame: CGRect?, pieceId: String? = nil) {
         overlayState.overlayMessage = message
+        overlayState.overlayPieceId = pieceId
         overlayState.restoreAfterLongPress = (isTyping: isTyping, showOptions: composerState.showOptions)
         isTyping = false
         composerState.showOptions = false
@@ -62,7 +63,9 @@ extension ConversationView {
         // View ou Slide Over, la seconde est bien plus haute que la première —
         // une cellule au bas de la fenêtre restait alors sous le seuil, et le
         // menu paraissait sans le recentrage qu'il exige.
-        guard let frame = cellFrame,
+        // #9907 — l'aperçu d'une PIÈCE se présente au centre de l'écran,
+        // indépendamment de la cellule : aucun recentrage à attendre.
+        guard pieceId == nil, let frame = cellFrame,
               frame.midY > DeviceLayout.windowSize.height * Self.longPressRepositionThreshold
         else {
             overlayState.showOverlayMenu = true
@@ -130,5 +133,36 @@ extension ConversationView {
     func deleteMedia(targeted attachmentId: String?, of message: Message) {
         guard let target = MessagePieceTarget.deletableMedia(in: message, targeted: attachmentId) else { return }
         Task { await viewModel.deleteAttachment(messageId: message.id, attachmentId: target) }
+    }
+}
+
+// MARK: - L'aperçu d'UNE pièce (#9907)
+
+extension ConversationView {
+
+    /// L'aperçu de la pièce visée, ou `nil` quand l'appui long vise le message
+    /// entier — l'hôte monte alors `MessageOverlayMenu`. « Tout le message »
+    /// remet `overlayPieceId` à `nil` : la même surcouche bascule sur l'aperçu
+    /// du message, sans se refermer.
+    ///
+    /// `AnyView`, comme `overlayMenuContent` : le type de l'aperçu n'entre pas
+    /// dans celui de `ConversationView.body`.
+    func pieceOverlayContent(for message: Message) -> AnyView? {
+        guard MessagePieceTarget.piece(overlayState.overlayPieceId, in: message) != nil else { return nil }
+        let messageId = message.id
+        return AnyView(
+            MessagePieceOverlay(
+                message: message,
+                accentHex: accentColor,
+                focusedPieceId: $overlayState.overlayPieceId,
+                isPresented: $overlayState.showOverlayMenu,
+                canDelete: message.isMe || isCurrentUserAdminOrMod,
+                onReact: { piece, emoji in
+                    viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
+                }
+            )
+            .transition(.opacity)
+            .zIndex(999)
+        )
     }
 }

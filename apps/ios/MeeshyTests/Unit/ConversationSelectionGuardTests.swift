@@ -38,7 +38,8 @@ final class ConversationSelectionGuardTests: XCTestCase {
     // MARK: - Le plafond est bien 100 (retour porteur 2026-08-27)
 
     func test_selectionCap_is100() throws {
-        let code = try source("Features/Main/Views/ConversationView.swift")
+        // L'état des surcouches vit dans son propre fichier depuis #9907.
+        let code = try source("Features/Main/Views/ConversationOverlayState.swift")
         XCTAssertTrue(
             code.contains("static let selectionCap = 100"),
             "Le plafond de sélection doit être EXACTEMENT 100 — retour porteur explicite."
