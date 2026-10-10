@@ -217,7 +217,7 @@ function journeyPositions(context: JourneyContext, current: JourneyStep): { read
   const offered = ONBOARDING_STEPS.filter(
     (step) => step === current || (!context.state.prefilledSteps.includes(step) && isOffered(step, context)),
   );
-  const index = current === 'recap' ? offered.length : offered.indexOf(current) + 1;
+  const index = current === 'recap' ? offered.length : (offered as readonly JourneyStep[]).indexOf(current) + 1;
   return { position: Math.max(1, index), count: Math.max(1, offered.length) };
 }
 

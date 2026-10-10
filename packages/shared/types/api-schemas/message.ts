@@ -255,6 +255,14 @@ export const messageSchema = {
         // Sans cette déclaration, fast-json-stringify strippe le champ EN
         // SILENCE — c'est arrivé à `replyTo.translations` (#4945) : sélectionner
         // juste et mapper juste ne suffit pas, le fil reste vide sans erreur.
+        // #9915 — le nombre TOTAL de tuiles (photos et vidéos) du message
+        // cité : `attachments` n'en sert que quatre. Optionnel : absent, le
+        // client compte les pièces servies. Jamais pour un message protégé.
+        visualAttachmentCount: {
+          type: 'integer',
+          nullable: true,
+          description: 'Nombre total de photos et vidéos du message cité (les pièces servies sont plafonnées à quatre)'
+        },
         attachmentReplyTo: {
           type: 'object',
           nullable: true,

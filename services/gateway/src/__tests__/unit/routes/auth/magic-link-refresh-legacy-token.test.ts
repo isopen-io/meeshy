@@ -172,6 +172,7 @@ function makeFindFirst(sessionsValides: Set<string>) {
 function makePrisma(overrides: Record<string, any> = {}) {
   const { sessionsValides = new Set([SID_COURANTE]), ...rest } = overrides as any;
   return {
+    user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: null }) },
     userSession: {
       findFirst: makeFindFirst(sessionsValides as Set<string>),
       update: jest.fn<any>().mockResolvedValue({}),
@@ -442,6 +443,57 @@ describe('GET /sessions — la liste sert version, plateforme, appareil, moyen d
     expect(body.data.geolocation).toEqual({
       provider: 'DB-IP', text: 'IP Geolocation by DB-IP', url: 'https://db-ip.com', license: 'CC-BY-4.0', approximate: true,
     });
+    await app.close();
+  });
+});
+
+// #9927 — un compte de moins de 13 ans déclarés ne prolonge aucune session : le
+// refus dit pourquoi (403 AGE_BELOW_MINIMUM), mais seulement APRÈS les preuves
+// d'origine (signature, session) — jamais à leur place.
+describe('POST /refresh — la porte de l’âge minimal (#9927)', () => {
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  const yearsAgo = (years: number): Date => {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear() - years, now.getUTCMonth(), now.getUTCDate()));
+  };
+
+  it('12 ans : 403 AGE_BELOW_MINIMUM, aucun jeton émis', async () => {
+    const authService = makeAuthService();
+    const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: yearsAgo(12) }) } });
+    const app = await buildApp({ authService, prisma });
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'AGE_BELOW_MINIMUM' });
+    expect(authService.generateToken).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('12 ans, session RÉVOQUÉE : la réponse d’origine (401 SESSION_REVOKED), l’âge n’est pas dit', async () => {
+    const authService = makeAuthService();
+    const prisma = makePrisma({
+      sessionsValides: new Set<string>(),
+      user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: yearsAgo(12) }) },
+    });
+    const app = await buildApp({ authService, prisma });
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'SESSION_REVOKED' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('13 ans : le rafraîchissement passe', async () => {
+    const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue({ birthDate: yearsAgo(13) }) } });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

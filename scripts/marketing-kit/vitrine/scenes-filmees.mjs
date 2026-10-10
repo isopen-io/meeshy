@@ -174,4 +174,35 @@ export const SCENES_FILMEES = {
     mouvement: [],
     imagesCles: [{ nom: 'original', etape: 'original', instantMs: 1800 }, { nom: 'traduction', etape: 'traduction', instantMs: 1800 }],
   }),
+  // Le LIEN (#9904). Un inconnu ouvre le lien SANS compte : l'invitation se lit (étape « invitation »), il choisit « sans
+  // compte » (étape « sans-compte », le formulaire glisse en 0,4 s), puis son nom et sa langue s'y posent (étape
+  // « formulaire »), tenu 1,8 s.
+  'interaction-invite': interaction('interaction-invite', {
+    montreUnFil: false,
+    dureeMs: 5000,
+    mouvement: [],
+    imagesCles: [{ nom: 'invitation', etape: 'invitation', instantMs: 800 }, { nom: 'formulaire', etape: 'formulaire', instantMs: 1200 }],
+  }),
+  // « Dis-moi tout » : la conversation d'un lien anonyme, remplie des messages d'invités sans compte (étape « ecran »).
+  'interaction-sonde': interaction('interaction-sonde', {
+    montreUnFil: true,
+    dureeMs: 3000,
+    mouvement: [],
+    imagesCles: [{ nom: 'conversation', etape: 'ecran', instantMs: 1500 }],
+  }),
+  // « Mes liens » : le hub (étape « hub »), puis l'affiliation, ses clics et ses inscrits (étape « affiliation »).
+  'interaction-liens': interaction('interaction-liens', {
+    montreUnFil: false,
+    dureeMs: 4500,
+    mouvement: [],
+    imagesCles: [{ nom: 'hub', etape: 'hub', instantMs: 800 }, { nom: 'affiliation', etape: 'affiliation', instantMs: 1500 }],
+  }),
+  // La liste des conversations de SAV, une par produit (étape « ecran »).
+  'interaction-sav': interaction('interaction-sav', {
+    montreUnFil: true,
+    dureeMs: 3000,
+    mouvement: [],
+    imagesCles: [{ nom: 'liste', etape: 'ecran', instantMs: 1500 }],
+  }),
+
 }

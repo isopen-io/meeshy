@@ -98,7 +98,7 @@ import {
 import {
   admitMessageEdit,
   isEditRefused,
-  CONVERSATION_CLOSED_EDIT_MESSAGE,
+  describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
@@ -745,7 +745,7 @@ export class MessageHandler {
               conversationId: true,
               // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
               // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-              conversation: { select: { isActive: true, closedAt: true } },
+              conversation: { select: { isActive: true, closedAt: true, type: true } },
               senderId: true,
               content: true,
               originalLanguage: true,
@@ -804,15 +804,7 @@ export class MessageHandler {
         // `else` et s'annoncerait « vous n'êtes pas autorisé » — un refus
         // d'autorisation pour un état qui n'en est pas un, et que l'éditeur
         // corrigerait indéfiniment sans comprendre.
-        this._sendGenericError(
-          callback,
-          admission.reason === 'conversation-closed'
-            ? CONVERSATION_CLOSED_EDIT_MESSAGE
-            : admission.reason === 'edit-window-expired'
-              ? 'You can no longer edit this message (24-hour limit exceeded)'
-              : 'Message not found or you are not authorized to edit it',
-          socket
-        );
+        this._sendGenericError(callback, describeEditRefusalForSocket(admission.reason), socket);
         return;
       }
 

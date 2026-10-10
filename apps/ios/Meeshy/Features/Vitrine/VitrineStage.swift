@@ -33,16 +33,17 @@ enum VitrineStage {
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
             VitrineTournage.effacerLesMarqueurs()
-            servir(f.lienInvitation)
+            servir(scene == .interactionInvite ? (f.lienSav ?? f.lienInvitation) : f.lienInvitation)
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
             } else {
                 VitrineSession.retirer()
-                JoinFlowViewModel.debugOnPreviewShown = { VitrineRendu.shared.signaler(.lien) }
-                DeepLinkRouter.shared.pendingDeepLink = .joinLink(identifier: f.lienInvitation.linkId)
+                JoinFlowViewModel.debugOnPreviewServed = { VitrineRendu.shared.invitationServie($0) }
+                DeepLinkRouter.shared.pendingDeepLink = .joinLink(identifier: (scene == .interactionInvite ? (f.lienSav ?? f.lienInvitation) : f.lienInvitation).linkId)
                 Task {
                     await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: nil, appareil: appareil))
                     await annoncer(scene)
+                    await VitrineInteractions.jouer(scene, f)
                 }
             }
         } catch {
@@ -83,7 +84,7 @@ enum VitrineStage {
         do {
             // Une scène du jeu (ou l'interaction qui en déclenche une) range la charge d'AVANT : la fiche s'ouvre au repos.
             let progression = scene.jeuServi.map { VitrineJeu.preparer($0, base: f.progression) }
-            try await VitrineSeeder.remplir(f, progression: progression, dans: VitrineSeedTargetsReels())
+            try await VitrineSeeder.remplir(f, progression: progression, scene: scene, dans: VitrineSeedTargetsReels())
             try await VitrineInteractions.remplir(scene, f)
         } catch {
             fatalError("Vitrine « \(scene.rawValue) » : remplissage impossible — \(error)")
@@ -120,8 +121,8 @@ enum VitrineStage {
 
     private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
-        case .global, .amour, .groupe, .imagine, .interactionEmoji, .interactionVocal:
-            guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
+        case .global, .amour, .groupe, .imagine, .interactionEmoji, .interactionVocal, .interactionSonde:
+            guard let conversation = f.conversationsServies(pour: scene).first(where: { $0.id == destination?.conversationId }) else {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
             NotificationCenter.default.post(name: .navigateToConversation, object: conversation)
@@ -135,7 +136,9 @@ enum VitrineStage {
             VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
         case .interactionDefilement:
             VitrineInteractions.ouvrirLesReels(f)
-        case .lien, .interactionStory:
+        case .interactionLiens:
+            DeepLinkRouter.shared.pendingDeepLink = .userLinks
+        case .lien, .interactionStory, .interactionInvite, .interactionSav:
             break
         }
     }
@@ -157,7 +160,7 @@ enum VitrineStage {
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
         case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel,
-             .interactionDefilement, .interactionStory, .interactionVocal: break
+             .interactionDefilement, .interactionStory, .interactionVocal, .interactionInvite, .interactionSonde, .interactionSav, .interactionLiens: break
         }
     }
 

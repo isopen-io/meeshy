@@ -178,15 +178,23 @@ export type QuotedRepresentative =
   | { readonly attachment: Attachment; readonly single: boolean; readonly more: number }
   | { readonly vanished: QuotedMediaKind };
 
-/** `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité. */
-export const representativeOf = (quoted: Pick<Message, 'attachments'>): QuotedRepresentative | undefined => {
+/**
+ * `single` — la citation vise UNE pièce : la pièce nommée, ou la seule du message cité.
+ *
+ * `more` (#9915) — la passerelle ne sert que QUATRE pièces du message cité et
+ * dit à côté combien de tuiles il porte (`visualAttachmentCount`) ; absent
+ * (ancienne passerelle, citation optimiste), les pièces servies font foi.
+ */
+export const representativeOf = (
+  quoted: Pick<Message, 'attachments'> & Partial<Pick<Message, 'visualAttachmentCount'>>,
+): QuotedRepresentative | undefined => {
   const namedId = namedPieceIdOf(quoted);
   if (namedId !== undefined) {
     const named = quoted.attachments?.find((a) => a.id === namedId);
     return named === undefined ? { vanished: vanishedKindOf(quoted) } : { attachment: named, single: true, more: 0 };
   }
   const first = quoted.attachments?.[0];
-  const count = quoted.attachments?.length ?? 0;
+  const count = Math.max(quoted.attachments?.length ?? 0, quoted.visualAttachmentCount ?? 0);
   return first === undefined ? undefined : { attachment: first, single: count === 1, more: Math.max(0, count - 1) };
 };
 
@@ -301,7 +309,7 @@ export function quotedPreviewOf(params: {
     Message,
     'content' | 'originalLanguage' | 'translations' | 'attachments' | 'isViewOnce' | 'isBlurred' | 'isEncrypted' | 'effectFlags'
   > &
-    Partial<Pick<Message, 'deletedAt' | 'expiresAt'>>;
+    Partial<Pick<Message, 'deletedAt' | 'expiresAt' | 'visualAttachmentCount'>>;
   readonly readerLanguages: readonly string[];
   readonly interfaceLanguage: InterfaceLanguage;
 }): QuotedPreview {

@@ -32,7 +32,6 @@ const frVerifyEmail = {
   'verifyEmail.proven': 'Adresse confirmée ✓ — saisissez le code reçu pour vous connecter ici.',
   'verifyEmail.handoff.opened': 'Le lien a été ouvert dans l’app Meeshy.',
   'verifyEmail.handoff.stay': 'Continuer dans le navigateur',
-  'verifyEmail.signingIn': 'Connexion…',
   'verifyEmail.arrival.title': 'Adresse confirmée !',
   'verifyEmail.arrival.lead': 'Nous préparons vos conversations…',
   'verifyEmail.arrival.status': 'Adresse confirmée — connexion…',

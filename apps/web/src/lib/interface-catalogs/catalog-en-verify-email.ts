@@ -32,7 +32,6 @@ const enVerifyEmail = {
   'verifyEmail.proven': 'Address confirmed ✓ — enter the code you received to sign in here.',
   'verifyEmail.handoff.opened': 'The link was opened in the Meeshy app.',
   'verifyEmail.handoff.stay': 'Continue in the browser',
-  'verifyEmail.signingIn': 'Signing in…',
   'verifyEmail.arrival.title': 'Address confirmed!',
   'verifyEmail.arrival.lead': 'Getting your conversations ready…',
   'verifyEmail.arrival.status': 'Address confirmed — signing in…',

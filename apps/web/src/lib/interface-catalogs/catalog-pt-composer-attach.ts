@@ -3,7 +3,6 @@ import type { ComposerAttachCatalogSlice } from './catalog-fr-composer-attach';
 /** The composer's attachment drawer and « Mes stickers » (#7938) — see `catalog-fr-composer-attach.ts`. */
 const ptComposerAttach = {
   'composer.attach.group': 'Tipos de anexo',
-  'composer.attach.handle': 'Alça do painel',
   'composer.attach.photo': 'Fotos',
   'composer.attach.photo.action': 'Escolher fotos',
   'composer.attach.camera': 'Câmera',
@@ -28,7 +27,6 @@ const ptComposerAttach = {
   'composer.mic.unavailable': 'Microfone indisponível neste dispositivo',
   'composer.openSettings': 'Ajustes',
   'composer.location.chip': 'LOCAL',
-  'composer.location.unknown': 'Local desconhecido',
   'composer.location.remove': 'Remover a localização',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Enviar um sticker',

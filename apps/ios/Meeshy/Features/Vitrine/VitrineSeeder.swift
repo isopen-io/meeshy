@@ -98,9 +98,10 @@ enum VitrineSeeder {
     }
 
     /// `progression` remplace celle du kit : une scène du jeu y range l'état d'avant sa célébration (#9805).
-    static func remplir(_ fixtures: VitrineFixtures, progression: APIEngagementProgress? = nil, dans cibles: some VitrineSeedTargets) async throws {
+    /// `scene` ajoute à la liste les conversations que seule cette scène montre (#9904).
+    static func remplir(_ fixtures: VitrineFixtures, progression: APIEngagementProgress? = nil, scene: VitrineScene? = nil, dans cibles: some VitrineSeedTargets) async throws {
         let userId = fixtures.lecteur.id
-        try await cibles.enregistrerConversations(fixtures.conversationsServies())
+        try await cibles.enregistrerConversations(fixtures.conversationsServies(pour: scene))
         for conversationId in fixtures.messages.keys.sorted() {
             try await cibles.enregistrerMessages(fixtures.messages[conversationId] ?? [], langues: [fixtures.lang])
         }

@@ -265,6 +265,21 @@ final class MessagePieceTargetTests: XCTestCase {
                       "la vidéo de grille montre ce qu'elle a récolté")
     }
 
+    /// Recette du 2026-10-10 : un double tap sur une VIDÉO de grille ouvrait le
+    /// menu d'édition du message (Select / Picture it / Reply), le double tap de
+    /// la cellule n'étant précédé d'aucun geste de la tuile. Il ouvre désormais
+    /// le sélecteur de réaction de CETTE pièce, comme la photo voisine.
+    func test_gridVideo_doubleTapOpensItsReactionPicker_likeTheImage() throws {
+        let bulles = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        guard let start = bulles.range(of: "private var videoBody: some View {"),
+              let end = bulles.range(of: "// MARK: - Sub-Views", range: start.upperBound..<bulles.endIndex) else {
+            return XCTFail("`videoBody` introuvable — le témoin ne mesure plus rien")
+        }
+        let video = bulles[start.upperBound..<end.lowerBound]
+        XCTAssertTrue(video.contains("QuickReactionDoubleTap(isEnabled: canReactPerImage)"))
+        XCTAssertTrue(video.contains("AttachmentReactionPickerOverlay(isPresented: $showReactionPicker)"))
+    }
+
     func test_fullscreenReaction_reachesAPieceOutsideTheLoadedWindow() throws {
         let gallery = try source("Meeshy/Features/Main/Views/ConversationView+MediaGallery.swift")
         XCTAssertTrue(gallery.contains("viewModel.toggleAttachmentReaction(outOfWindow: piece"))
