@@ -21,6 +21,7 @@ import { ensureWorldConversation, loadWorldEntry } from '../../../services/world
 import type { WorldReservedIdentities } from '../../../services/world/worldReservedMembers';
 import { inspectWorldSeed, removeWorldSeed } from '../../../services/world/worldSeedOperations';
 import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict } from '../../../services/attachments/ContentSignature';
+import { PLAIN_TEXT, JPEG_PHOTO, PDF_DOCUMENT, m4aVoice, webmVoice } from '../../../services/attachments/__tests__/guest-attachment-fixtures';
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -178,6 +179,7 @@ function guestDoorOf(prisma: ReturnType<typeof makeDb>) {
   return {
     allowAnonymousFiles: link.allowAnonymousFiles as boolean,
     allowAnonymousImages: link.allowAnonymousImages as boolean,
+    allowedAttachmentKinds: link.allowedAttachmentKinds as string[] | undefined,
     conversation: { identifier: conversation?.identifier as string },
   };
 }
@@ -424,6 +426,61 @@ describe('ensureWorldConversation — le lien de partage stable', () => {
   });
 });
 
+describe('ensureWorldConversation — le lien semé dit ce qu’un invité peut joindre (#10001)', () => {
+  it('le lien créé liste texte et audio, et rien d’autre', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['text', 'audio']);
+  });
+
+  it('un invité du lien semé joint un .txt et un vocal ; un PDF et une photo sont refusés', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const door = guestDoorOf(prisma);
+
+    expect(classifyAnonymousAttachment('text/plain', PLAIN_TEXT, door, { fileName: 'notes.txt' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/webm', webmVoice(), door, { fileName: 'voice.webm' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/mp4', m4aVoice(), door, { fileName: 'voice.m4a' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('application/pdf', PDF_DOCUMENT, door, { fileName: 'doc.pdf' })).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('image/jpeg', JPEG_PHOTO, door, { fileName: 'photo.jpg' })).toMatchObject({ allowed: false });
+  });
+
+  it('un lien semé AVANT la colonne la reçoit au démarrage suivant, sans que rien d’autre ne change', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const legacy = prisma.conversationShareLink.rows[0];
+    delete legacy.allowedAttachmentKinds;
+    legacy.isActive = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0]).toMatchObject({ allowedAttachmentKinds: ['text', 'audio'], isActive: false });
+  });
+
+  it('un lien dont un administrateur a choisi les familles n’est pas réécrit', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    prisma.conversationShareLink.rows[0].allowedAttachmentKinds = ['audio'];
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['audio']);
+  });
+
+  it('une fois posées, un démarrage suivant n’écrit plus rien sur le lien', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const before = prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length;
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length).toBe(before);
+  });
+});
+
 describe('ensureWorldConversation — idempotence', () => {
   it('un double appel ne duplique rien : une conversation, un lien, une participation par compte', async () => {
     const prisma = makeDb();
@@ -502,10 +559,11 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
 });
 
 describe('inspectWorldSeed — le pré-vol en lecture seule avant la production (audit #10000)', () => {
+  const RESIDUAL_RISKS = ['id3v2-arbitrary-payload', 'mpeg-frame-pdf-header', 'mp4-free-box-payload', 'mp4-without-samples'];
   it('rend « prêt » sur une base sans World Wide dont les trois désignés sont légitimes, sans rien écrire', async () => {
     const prisma = makeDb();
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight).toMatchObject({ ready: true, conversation: 'absent', shareLink: 'absent', blockers: [] });
     expect(preflight.members).toEqual([
@@ -532,8 +590,8 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const unverified = makeDb({ users: [MEESHY, { ...ADMIN, role: 'USER' }, { ...JCNM, emailVerifiedAt: null }] });
     const unconfigured = makeDb();
 
-    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES);
-    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] });
+    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] }, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(flawed.ready).toBe(false);
     expect(flawed.blockers).toEqual(['admin:platform-role', 'world-admin-1:email-unverified']);
@@ -545,11 +603,35 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const audioOpenGuard = (mimeType: string): AnonymousAttachmentVerdict =>
       mimeType.startsWith('audio/') ? { allowed: true } : { allowed: false, reason: 'closed' };
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard });
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard, acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight.ready).toBe(false);
-    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio']);
+    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio,mp3-frames-then-zip']);
     expect(writes(prisma)).toBe(0);
+  });
+
+  it('bloque tant que le porteur n’a pas accepté, un par un, les risques résiduels que la garde laisse passer (audit #10001, #10057)', async () => {
+    const prisma = makeDb();
+
+    const unaccepted = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const partly = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: ['mp4-without-samples'] });
+    const accepted = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+
+    expect(unaccepted.ready).toBe(false);
+    expect(unaccepted.residualRisks).toEqual(RESIDUAL_RISKS);
+    expect(unaccepted.blockers).toEqual([`guest-attachments-residual-unaccepted:${RESIDUAL_RISKS.join(',')}`]);
+    expect(partly.blockers).toEqual(['guest-attachments-residual-unaccepted:id3v2-arbitrary-payload,mpeg-frame-pdf-header,mp4-free-box-payload']);
+    expect(accepted).toMatchObject({ ready: true, residualRisks: RESIDUAL_RISKS, blockers: [] });
+    expect(writes(prisma)).toBe(0);
+  });
+
+  it('ne demande plus rien au porteur quand la garde resserrée refuse les risques résiduels', async () => {
+    const prisma = makeDb();
+    const closedGuard = (): AnonymousAttachmentVerdict => ({ allowed: false, reason: 'closed' });
+
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: closedGuard });
+
+    expect(preflight).toMatchObject({ ready: true, residualRisks: [], blockers: [] });
   });
 });
 

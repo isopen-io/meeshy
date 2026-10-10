@@ -21,6 +21,7 @@ export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITransl
  * @see user.ts UserRole type
  */
 import type { UserRole } from './user.js';
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
 
 /**
  * Import du type MemberRoleType depuis role-types.ts (type unifie pour conversations et communautes)
@@ -620,6 +621,8 @@ export interface ConversationShareLink {
   readonly allowAnonymousMessages?: boolean;
   readonly allowAnonymousFiles?: boolean;
   readonly allowAnonymousImages?: boolean;
+  /** Familles ouvertes aux invités (#10001) — `null`/absent : aucune restriction par famille. @see guest-attachment-kinds.ts */
+  readonly allowedAttachmentKinds?: readonly GuestAttachmentKind[] | null;
   readonly allowViewHistory?: boolean;
   readonly requireAccount?: boolean;
   readonly requireNickname?: boolean;

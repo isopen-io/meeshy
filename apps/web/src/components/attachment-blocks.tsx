@@ -11,6 +11,8 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { coqueCourante } from '@/lib/native-shell';
 import { attachmentOpenReport } from '@/lib/view/attachment-open-report';
+import { fileBadgeOf } from '@/lib/view/file-badge';
+import '@/styles/conversation-look.css';
 import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
@@ -246,7 +248,8 @@ function VoiceAttachment({
   const lang = transcript.language !== '' ? transcript.language : undefined;
 
   return (
-    <div className="flex flex-col gap-1 py-1" data-attachment={attachment.id}>
+    /* LE VOCAL EN CARTE TEINTÉE PAR L'ACCENT (#10004, `styles/conversation-look.css`). */
+    <div className="voice-card flex flex-col gap-1" data-voice-card data-attachment={attachment.id}>
       {/* L'ÉLÉMENT N'EST JAMAIS AFFICHÉ (pas de `controls`) : le chrome est le
           bouton + l'onde ci-dessous, exactement comme iOS.
 
@@ -467,13 +470,16 @@ function FileAttachmentRow({
   const lang = currentInterfaceLanguage();
   const name = attachment.originalName;
   const opensInPlace = inShell() && attachment.fileUrl.startsWith('blob:');
+  const badge = fileBadgeOf({ originalName: name, mimeType: attachment.mimeType });
 
   return (
     <a
       {...(opensInPlace ? {} : { href: attachmentSrc(attachment.fileUrl), target: '_blank', rel: 'noopener noreferrer' })}
       aria-label={translate(lang, 'message-detail.attachment.open', { name })}
       data-attachment-file={attachment.id}
-      className="flex items-center gap-2 py-1"
+      /* LE FICHIER EN CARTE, SON FORMAT EN BADGE (#10004) — « TXT » pour le
+         texte que World Wide accepte de ses invités (#10001). */
+      className="file-card flex items-center gap-2.5"
       style={{ minHeight: 44 }}
       onClick={() => {
         const report = attachmentOpenReport({ isMine });
@@ -481,8 +487,10 @@ function FileAttachmentRow({
         void reportAttachmentStatus({ ...(deps ?? apiDeps), attachmentId: attachment.id, report });
       }}
     >
-      <Glyph name="file" size={24} />
-      <span className="min-w-0 flex-1 truncate text-title">{name}</span>
+      <span aria-hidden data-file-badge={badge} className="file-card-badge">
+        {badge}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-title font-semibold">{name}</span>
       <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
     </a>
   );
