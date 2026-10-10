@@ -67,7 +67,8 @@ extension ConversationView {
         // menu paraissait sans le recentrage qu'il exige.
         // #9907 — l'aperçu d'une PIÈCE se présente au centre de l'écran,
         // indépendamment de la cellule : aucun recentrage à attendre.
-        guard pieceId == nil, let frame = cellFrame,
+        let cellFrame = pieceId == nil ? cellFrame : nil
+        guard let frame = cellFrame,
               frame.midY > DeviceLayout.windowSize.height * Self.longPressRepositionThreshold
         else {
             overlayState.showOverlayMenu = true
