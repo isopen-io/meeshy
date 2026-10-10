@@ -9,6 +9,7 @@ const ptComposerAttach = {
   'composer.attach.camera.action': 'Tirar uma foto',
   'composer.attach.file': 'Arquivo',
   'composer.attach.file.action': 'Escolher um arquivo',
+  'composer.drop.veil': 'Solte para anexar',
   'composer.attach.contact': 'Contato',
   'composer.attach.contact.action': 'Compartilhar um contato',
   'composer.contact.failed': 'Este contato não pode ser compartilhado',

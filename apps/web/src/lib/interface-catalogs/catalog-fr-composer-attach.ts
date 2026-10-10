@@ -12,6 +12,7 @@ const frComposerAttach = {
   'composer.attach.camera.action': 'Prendre une photo',
   'composer.attach.file': 'Fichier',
   'composer.attach.file.action': 'Choisir un fichier',
+  'composer.drop.veil': 'Déposer pour joindre',
   'composer.attach.contact': 'Contact',
   'composer.attach.contact.action': 'Partager un contact',
   'composer.contact.failed': 'Ce contact ne peut pas être partagé',
