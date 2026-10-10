@@ -34,6 +34,11 @@ enum PrimaryAction: String, Equatable {
     /// **Tout le message** (#9907) — le menu d'une PIÈCE visée rend l'aperçu
     /// et le menu du message entier. N'apparaît que dans `MessagePieceMenu`.
     case wholeMessage
+    /// **Répondre à CETTE pièce** (#9908) — la citation nomme la pièce visée
+    /// (`QuotedAttachmentSend`), comme la réponse du plein écran.
+    case replyToPiece
+    /// **Supprimer CETTE pièce** (#9908) — après confirmation, jamais une voisine.
+    case deletePiece
 }
 
 /// Item d'une section de la feuille « Plus… ».

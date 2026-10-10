@@ -230,7 +230,7 @@ struct MessageOverlayMenu: View {
             onShowCallDetail?()
         case .exportImage, .exportQuick:
             onExportImage?(action == .exportQuick)
-        case .wholeMessage:
+        case .wholeMessage, .replyToPiece, .deletePiece:
             return
         }
         dismiss()

@@ -77,6 +77,16 @@ nonisolated enum MessagePieceTarget {
         return CGSize(width: bounds.height * safeRatio, height: bounds.height)
     }
 
+    /// **L'ancre d'une réponse à UNE pièce** (#9908) — ce que l'envoi transmet
+    /// sous `attachmentReplyTo`. Elle n'existe que si la citation en attente
+    /// NOMME encore la pièce choisie : un autre geste de réponse (glisser,
+    /// « Répondre » du message) remplace la citation, et l'ancre tombe d'elle-même.
+    static func replyAnchor(pending: ReplyReference?, pieceId: String?) -> QuotedAttachmentSend? {
+        guard let pieceId, let pending, !pending.isStoryReply,
+              pending.attachmentId == pieceId else { return nil }
+        return QuotedAttachmentSend(attachmentId: pieceId)
+    }
+
     /// La pièce suivante (`step = 1`) ou précédente (`-1`), bornée aux tuiles du
     /// message — le geste d'accessibilité « balayer vers le haut / le bas ».
     static func neighbour(of attachmentId: String, step: Int, in message: Message) -> String? {
@@ -105,9 +115,25 @@ enum MessagePieceMenu {
         let canDelete: Bool
     }
 
-    /// « Tout le message » ferme toujours la liste : l'aperçu d'une pièce ne
-    /// retire jamais l'accès au message entier.
+    /// Répondre, enregistrer, supprimer : chacun atteint la pièce AFFICHÉE.
+    ///
+    /// - une pièce protégée ne se cite ni ne s'enregistre : sa forme se montre,
+    ///   jamais son contenu ;
+    /// - l'enregistrement suit la loi de sortie du message (#9573) ;
+    /// - la suppression suit le droit de l'utilisateur, protégée ou non ;
+    /// - « Tout le message » ferme toujours la liste : l'aperçu d'une pièce ne
+    ///   retire jamais l'accès au message entier.
+    ///
+    /// **Transférer une seule pièce n'est pas offert** : la passerelle copie
+    /// TOUTES les pièces du message transféré (`copyForwardedAttachments`), et
+    /// une entrée « Transférer » enverrait le lot entier sous le nom d'une
+    /// pièce. Elle entrera ici quand la passerelle saura copier une pièce.
     static func actions(_ ctx: Context) -> [PrimaryAction] {
-        [.wholeMessage]
+        var out: [PrimaryAction] = []
+        if !ctx.isProtected { out.append(.replyToPiece) }
+        if !ctx.isProtected && ctx.exits.offers(.save) { out.append(.saveMedia) }
+        if ctx.canDelete { out.append(.deletePiece) }
+        out.append(.wholeMessage)
+        return out
     }
 }

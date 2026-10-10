@@ -159,10 +159,28 @@ extension ConversationView {
                 canDelete: message.isMe || isCurrentUserAdminOrMod,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
-                }
+                },
+                onAction: { action, piece in performPieceAction(action, on: piece, of: message) }
             )
             .transition(.opacity)
             .zIndex(999)
         )
+    }
+
+    /// **Le menu d'une pièce agit sur CETTE pièce** (#9908) — chaque entrée
+    /// emprunte le chemin que le fil connaît déjà : la citation nommée (le
+    /// chemin du plein écran), l'enregistrement par la loi de sortie, la
+    /// suppression de la pièce désignée.
+    func performPieceAction(_ action: PrimaryAction, on piece: MessageAttachment, of message: Message) {
+        switch action {
+        case .replyToPiece:
+            triggerReply(for: message, citing: piece)
+        case .saveMedia:
+            if MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator) { HapticFeedback.light() }
+        case .deletePiece:
+            deleteMedia(targeted: piece.id, of: message)
+        default:
+            break
+        }
     }
 }

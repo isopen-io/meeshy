@@ -34,6 +34,9 @@ struct MessagePieceOverlay: View {
     @State private var selection: String
     @State private var isVisible = false
     @State private var topEmojis: [String]
+    /// La pièce dont la suppression attend sa confirmation — action
+    /// destructive, jamais directe (feedback device 2026-07-14).
+    @State private var pendingDeletion: MessageAttachment?
 
     private static let sidePadding: CGFloat = MeeshySpacing.lg
     private static let emojiBarHeight: CGFloat = 52
@@ -110,6 +113,18 @@ struct MessagePieceOverlay: View {
         .accessibilityAction(.escape) { dismiss() }
         .adaptiveOnChange(of: selection) { _, newValue in
             focusedPieceId = newValue
+        }
+        .confirmationDialog(
+            String(localized: "message-more.media.title", defaultValue: "Ce média", bundle: .main),
+            isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }),
+            titleVisibility: .visible,
+            presenting: pendingDeletion
+        ) { piece in
+            Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
+                onAction?(.deletePiece, piece)
+                dismiss()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
         .onAppear {
             HapticFeedback.medium()
@@ -211,6 +226,10 @@ struct MessagePieceOverlay: View {
         guard action != .wholeMessage else {
             // Le message entier : l'hôte remonte l'aperçu du message.
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) { focusedPieceId = nil }
+            return
+        }
+        guard action != .deletePiece else {
+            pendingDeletion = piece
             return
         }
         onAction?(action, piece)

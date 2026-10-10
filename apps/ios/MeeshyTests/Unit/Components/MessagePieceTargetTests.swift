@@ -150,4 +150,72 @@ final class MessagePieceTargetTests: XCTestCase {
         let controller = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains(".environment(\\.messagePieceLongPress, selectionModeActive ? nil : pieceLongPressHandler)"))
     }
+
+    // MARK: - #9908 — le menu agit sur la pièce visée
+
+    private let blurredExits = MessageExitOffer(law: .ordinary, holdsBlur: true, isEncrypted: false)
+
+    func test_pieceMenu_clearPiece_offersReplySaveDeleteThenTheWholeMessage() {
+        let ctx = MessagePieceMenu.Context(isProtected: false, exits: .unrestricted, canDelete: true)
+        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.replyToPiece, .saveMedia, .deletePiece, .wholeMessage])
+    }
+
+    func test_pieceMenu_withoutTheRightToDelete_offersNoDeletion() {
+        let ctx = MessagePieceMenu.Context(isProtected: false, exits: .unrestricted, canDelete: false)
+        XCTAssertFalse(MessagePieceMenu.actions(ctx).contains(.deletePiece))
+    }
+
+    func test_pieceMenu_protectedPiece_neitherQuotesNorSaves_butStaysDeletable() {
+        let ctx = MessagePieceMenu.Context(isProtected: true, exits: .unrestricted, canDelete: true)
+        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.deletePiece, .wholeMessage])
+    }
+
+    func test_pieceMenu_exitLawRefusingSave_offersNoSave() {
+        let ctx = MessagePieceMenu.Context(isProtected: false, exits: blurredExits, canDelete: false)
+        XCTAssertFalse(MessagePieceMenu.actions(ctx).contains(.saveMedia))
+    }
+
+    func test_save_targetedThirdPiece_requestsThatPiece() {
+        let request = MessageExitTransport.saveRequest(for: lotOfFive, piece: "p3")
+        XCTAssertEqual(request?.attachmentId, "p3", "jamais la première pièce du lot")
+    }
+
+    func test_save_targetedProtectedPiece_requestsNothing() {
+        let lot = message([photo("p1"), photo("p2", isBlurred: true)])
+        XCTAssertNil(MessageExitTransport.saveRequest(for: lot, piece: "p2"))
+    }
+
+    func test_save_withoutTarget_keepsTheFirstPieceRule() {
+        XCTAssertEqual(MessageExitTransport.saveRequest(for: lotOfFive)?.attachmentId, "p1")
+    }
+
+    private func citation(of messageId: String, naming attachmentId: String?, story: Bool = false) -> ReplyReference {
+        ReplyReference(messageId: messageId, authorName: "Demo", previewText: "photo",
+                       attachmentId: attachmentId, isStoryReply: story)
+    }
+
+    func test_replyAnchor_citationNamingThePiece_anchorsIt() {
+        let anchor = MessagePieceTarget.replyAnchor(pending: citation(of: "m1", naming: "p3"), pieceId: "p3")
+        XCTAssertEqual(anchor, QuotedAttachmentSend(attachmentId: "p3"))
+    }
+
+    func test_replyAnchor_citationReplacedByAnotherReply_dropsTheAnchor() {
+        XCTAssertNil(MessagePieceTarget.replyAnchor(pending: citation(of: "m2", naming: "p9"), pieceId: "p3"))
+        XCTAssertNil(MessagePieceTarget.replyAnchor(pending: nil, pieceId: "p3"))
+        XCTAssertNil(MessagePieceTarget.replyAnchor(pending: citation(of: "m1", naming: "p3"), pieceId: nil))
+    }
+
+    func test_replyAnchor_storyCitation_neverAnchorsAPiece() {
+        XCTAssertNil(MessagePieceTarget.replyAnchor(pending: citation(of: "s1", naming: "p3", story: true), pieceId: "p3"))
+    }
+
+    func test_pieceActions_reachThePieceThroughTheThreadPaths() throws {
+        let host = try source("Meeshy/Features/Main/Views/ConversationView+LongPressMenu.swift")
+        XCTAssertTrue(host.contains("triggerReply(for: message, citing: piece)"), "répondre cite la pièce")
+        XCTAssertTrue(host.contains("MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator)"))
+        XCTAssertTrue(host.contains("deleteMedia(targeted: piece.id, of: message)"), "supprimer vise la pièce")
+        let send = try source("Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift")
+        XCTAssertEqual(send.components(separatedBy: "replyAnchor").count - 1, 4,
+                       "l'ancre est lue une fois et transmise aux trois envois en ligne qui portent la citation")
+    }
 }
