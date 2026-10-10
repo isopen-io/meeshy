@@ -200,10 +200,19 @@ test('lastMessage reste media-7 malgré les cinq messages neufs (#6221)', () => 
   expect(MEDIA_CONVERSATION.lastMessage?.id).toBe(MEDIA_NULL_METADATA_WITNESS_ID);
 });
 
+/**
+ * Les bornes sont lues sur media-5 et media-7 EUX-MÊMES, pas sur un second
+ * `dayAt` : le corpus date ses messages au CHARGEMENT du module, et un minuit
+ * passé entre ce chargement et le test décalait les bornes d'un jour entier.
+ */
 test('les cinq messages neufs sont datés ENTRE media-5 (09:20) et media-7 (09:30)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  const lower = dayAt(0, 9, 20);
-  const upper = dayAt(0, 9, 30);
+  const createdAtOf = (id: string) => new Date(messages.find((m) => m.id === id)!.createdAt);
+  const lower = createdAtOf(MEDIA_BROKEN_IMAGE_WITNESS_ID);
+  const upper = createdAtOf(MEDIA_NULL_METADATA_WITNESS_ID);
+  expect([lower.getHours(), lower.getMinutes()]).toEqual([9, 20]);
+  expect([upper.getHours(), upper.getMinutes()]).toEqual([9, 30]);
+  expect(upper.getTime() - lower.getTime()).toBe(10 * 60_000);
   for (const id of [
     MEDIA_SOLO_VIDEO_WITNESS_ID,
     MEDIA_GRID_PAIR_WITNESS_ID,
