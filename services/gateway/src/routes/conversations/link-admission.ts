@@ -23,6 +23,8 @@ import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 import { endGuestSession, refreshGuestSession } from './guest-sessions';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../../services/attachments/ContentSignature';
 import {
   admitLinkEntry,
   isLinkAdmissionRefusal,
@@ -53,7 +55,7 @@ export type ParticipantRow = Awaited<ReturnType<PrismaClient['participant']['cre
 type ShareLinkRow = Awaited<ReturnType<PrismaClient['conversationShareLink']['findFirst']>>;
 /** Le lien AVEC sa conversation incluse — jamais `null` passé ce point. */
 export type ShareLinkWithConversation = NonNullable<ShareLinkRow> & {
-  conversation: { id: string; title: string; type: string; isActive: boolean; closedAt: Date | null };
+  conversation: { id: string; identifier?: string | null; title: string; type: string; isActive: boolean; closedAt: Date | null };
 };
 
 export type GuestRights = Record<ParticipantRightName, boolean>;
@@ -177,7 +179,7 @@ async function findShareLinkByKey(prisma: PrismaClient, key: string): Promise<Sh
     },
     include: {
       conversation: {
-        select: { id: true, title: true, type: true, isActive: true, closedAt: true },
+        select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true },
       },
     },
   });
@@ -568,6 +570,7 @@ export function participantConversationPayload(participant: ParticipantRow, shar
       title: shareLink.conversation.title,
       type: shareLink.conversation.type,
       allowViewHistory: shareLink.allowViewHistory,
+      allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
     },
   };
 }
@@ -609,6 +612,7 @@ const linkMembersResponseSchema = {
             outcome: { type: 'string', enum: ['new', 'rejoin', 'already-member'] },
             canViewHistory: { type: 'boolean' },
             rights: { type: 'object', properties: PARTICIPANT_RIGHTS_SCHEMA_PROPERTIES },
+            allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
           },
         },
       },
@@ -657,7 +661,8 @@ function respondToJoinOutcome(reply: FastifyReply, result: LinkJoinOutcome): voi
             // droits, cf. `docs/product/api-simplification/conversations.md`
             // § « POST /links/:key/members ». Un inscrit a déjà les siens
             // par `GET /conversations/:key/participants/:participantKey`.
-            ...(result.sessionToken ? { rights: result.rights } : {}),
+            // #10001 — et, au même titre, les familles qu'un invité peut joindre.
+            ...(result.sessionToken ? { rights: result.rights, allowedAttachmentKinds: guestAttachmentKindsOf(result.shareLink) } : {}),
           },
         },
         { statusCode }
@@ -823,6 +828,7 @@ export function registerLinkAdmissionRoutes(
                     properties: {
                       id: { type: 'string' }, title: { type: 'string' },
                       type: { type: 'string', enum: ['direct', 'group'] }, allowViewHistory: { type: 'boolean' },
+                      allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                     },
                   },
                 },

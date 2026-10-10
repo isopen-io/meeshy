@@ -53,9 +53,9 @@ export async function loadGuestAttachmentKinds(
     where: { id: params.shareLinkId },
     select: { allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
   });
-  if (link) return guestAttachmentKindsOf({ allowAnonymousFiles: false, allowAnonymousImages: false, ...link });
+  if (link) return guestAttachmentKindsOf(link);
   const conversation = await prisma.conversation.findUnique({ where: { id: params.conversationId }, select: { identifier: true } });
-  return guestAttachmentKindsOf({ allowAnonymousFiles: false, allowAnonymousImages: false, conversation });
+  return guestAttachmentKindsOf({ conversation });
 }
 
 /** Le refus, ou `null` quand chaque pièce peut être rattachée. */

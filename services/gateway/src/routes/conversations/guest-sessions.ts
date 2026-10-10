@@ -41,7 +41,7 @@ export async function refreshGuestSession(params: GuestSessionParams): Promise<R
     ? ((await prisma.conversationShareLink.findUnique({
         where: { id: shareLinkId },
         include: {
-          conversation: { select: { id: true, title: true, type: true, isActive: true, closedAt: true } },
+          conversation: { select: { id: true, identifier: true, title: true, type: true, isActive: true, closedAt: true } },
         },
       })) as ShareLinkWithConversation | null)
     : null;
