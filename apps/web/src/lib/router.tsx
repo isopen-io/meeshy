@@ -226,6 +226,13 @@ export type RouterOptions = {
    * les deux.
    */
   readonly screenPrerequisite?: () => Promise<unknown>;
+  readonly frame?: ComponentType<FrameProps>;
+};
+
+export type FrameProps = {
+  readonly routeKey: string;
+  readonly screen: ReactNode;
+  readonly screenOf: (key: string) => ComponentType | undefined;
 };
 
 export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
