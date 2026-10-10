@@ -65,6 +65,36 @@ final class VitrineLiensTests: XCTestCase {
         XCTAssertEqual(f.conversationsServies().count, f.conversations.count)
     }
 
+    /// « Mes liens » : le hub, puis l'affiliation et ses chiffres, rangée fraîche sous la clé que l'écran lit d'abord.
+    func test_liens_opensTheHub_thenTheAffiliationFromTheCache() async throws {
+        let f = try fixtures()
+        XCTAssertEqual(VitrineLaunch.scene(in: ["Meeshy", "-MeeshyVitrine", "interaction-liens"]), .interactionLiens)
+        XCTAssertEqual(VitrineScene.interactionLiens.interaction, .liens)
+        XCTAssertTrue(VitrineScene.interactionLiens.ouvreUneSession)
+        XCTAssertEqual(VitrineScene.interactionLiens.rendusAttendus(conversationId: nil, appareil: .iphone), [.liens])
+        let jetons = try XCTUnwrap(f.liensDAffiliation)
+        XCTAssertGreaterThanOrEqual(jetons.count, 3)
+        XCTAssertTrue(jetons.allSatisfy { $0.clickCount > $0.referralCount && $0.referralCount > 0 })
+        try await VitrineInteractions.rangerLAffiliation(f)
+        guard case .fresh(let ranges, _) = await CacheCoordinator.shared.affiliateTokens.load(for: "list") else {
+            return XCTFail("L'affiliation n'est pas rangée fraîche : l'écran irait la chercher sur la passerelle.")
+        }
+        XCTAssertEqual(ranges.map(\.id), jetons.map(\.id))
+    }
+
+    /// Le hub prête son routeur à la vitrine — et à elle seule.
+    func test_rendu_relaysTheHubRouter_onlyInsideTheVitrine() {
+        var routes: [Route] = []
+        let actif = VitrineRendu(actif: true)
+        actif.liensAffiches { routes.append($0) }
+        actif.ouvrirDepuisLesLiens?(.affiliate)
+        XCTAssertEqual(routes, [.affiliate])
+        XCTAssertTrue(actif.observes.contains(.liens))
+        let inactif = VitrineRendu(actif: false)
+        inactif.liensAffiches { routes.append($0) }
+        XCTAssertNil(inactif.ouvrirDepuisLesLiens)
+    }
+
     /// Le parcours servi est remis à la vitrine — et à elle seule.
     func test_rendu_keepsTheServedInvitation_onlyInsideTheVitrine() {
         let parcours = JoinFlowViewModel(identifier: "sav-lampe")

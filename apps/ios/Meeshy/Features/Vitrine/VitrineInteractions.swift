@@ -35,12 +35,14 @@ nonisolated enum VitrineInteraction: String, CaseIterable, Sendable {
     case sonde
     /// La liste des conversations de SAV, une par produit, chacune ouverte aux clients par son lien (#9904).
     case sav
+    /// « Mes liens » : le hub, puis l'affiliation, ses clics et ses inscrits (#9904).
+    case liens
 
     /// La célébration du jeu que l'interaction déclenche : la passerelle fictive la prépare.
     var celebration: VitrineCelebration? {
         switch self {
         case .frappe: .frappe
-        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel, .defilement, .story, .vocal, .invite, .sonde, .sav: nil
+        case .emoji, .emojiPost, .commentaireAudio, .sticker, .reel, .defilement, .story, .vocal, .invite, .sonde, .sav, .liens: nil
         }
     }
 }
@@ -60,6 +62,7 @@ extension VitrineScene {
         case .interactionInvite: .invite
         case .interactionSonde: .sonde
         case .interactionSav: .sav
+        case .interactionLiens: .liens
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge: nil
         }
     }
@@ -72,7 +75,7 @@ extension VitrineScene {
         case .interactionInvite: .lien
         case .amour, .groupe, .global, .lien, .progression, .imagine, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge,
              .interactionFrappe, .interactionEmojiPost, .interactionCommentaireAudio, .interactionSticker, .interactionReel,
-             .interactionDefilement, .interactionStory, .interactionSonde, .interactionSav: self
+             .interactionDefilement, .interactionStory, .interactionSonde, .interactionSav, .interactionLiens: self
         }
     }
 
@@ -106,6 +109,7 @@ enum VitrineInteractions {
             case .vocal: await faireEntendreLaTraduction(scene, f)
             case .invite: await rejoindreSansCompte(scene, f)
             case .sonde, .sav: await tenirLEcran(scene)
+            case .liens: await montrerMesLiens(scene)
             }
         }
     }

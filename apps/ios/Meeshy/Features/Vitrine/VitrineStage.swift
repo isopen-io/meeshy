@@ -136,6 +136,8 @@ enum VitrineStage {
             VitrineInteractions.ouvrirLeFilPuisLeComposeur(f)
         case .interactionDefilement:
             VitrineInteractions.ouvrirLesReels(f)
+        case .interactionLiens:
+            DeepLinkRouter.shared.pendingDeepLink = .userLinks
         case .lien, .interactionStory, .interactionInvite, .interactionSav:
             break
         }
@@ -158,7 +160,7 @@ enum VitrineStage {
         case .groupe: rouvrirSurLOriginal(destination)
         case .imagine: await imaginer(destination, f)
         case .global, .progression, .lien, .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge, .interactionFrappe, .interactionEmoji, .interactionCommentaireAudio, .interactionEmojiPost, .interactionSticker, .interactionReel,
-             .interactionDefilement, .interactionStory, .interactionVocal, .interactionInvite, .interactionSonde, .interactionSav: break
+             .interactionDefilement, .interactionStory, .interactionVocal, .interactionInvite, .interactionSonde, .interactionSav, .interactionLiens: break
         }
     }
 

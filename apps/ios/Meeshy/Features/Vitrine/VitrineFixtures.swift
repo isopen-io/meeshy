@@ -59,6 +59,8 @@ nonisolated struct VitrineFixtures: Decodable, Sendable {
     let conversationsDeScene: [String: [APIConversation]]?
     /// Le lien de SAV par lequel un client arrive sans compte (#9904).
     let lienSav: ShareLinkInfo?
+    /// Les liens d'affiliation du lecteur, leurs clics et leurs inscrits, que « Mes liens » montre (#9904).
+    let liensDAffiliation: [AffiliateToken]?
     let scenes: [String: Destination]
 
     func destination(_ scene: VitrineScene) -> Destination? {

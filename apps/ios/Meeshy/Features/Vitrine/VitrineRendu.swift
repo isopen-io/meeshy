@@ -34,6 +34,8 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case lecteurDeReels
     /// Une story, révélée dans son lecteur après l'intermède de l'auteur (#9904).
     case story
+    /// Le hub « Mes liens », monté (#9904).
+    case liens
 }
 
 /// Le média que le composeur reçoit à l'ouverture, comme le choix de la photothèque (#9810, #9820).
@@ -65,6 +67,7 @@ extension VitrineScene {
         case .interactionInvite: return [.lien]
         case .interactionSonde: return [.conversation(conversationId ?? "")]
         case .interactionSav: return appareil == .ipad ? [.fil] : [.racine]
+        case .interactionLiens: return [.liens]
         case .interactionEmojiPost: return appareil == .ipad ? [.paletteDeReactionsPrete, .fil] : [.paletteDeReactionsPrete]
         case .jeuRang, .jeuCoffre, .jeuFrappe, .jeuNiveau, .jeuBadge:
             let fiche = VitrineEvenement.fiche(celebration?.concept ?? .level)
@@ -226,6 +229,15 @@ final class VitrineRendu {
         guard actif else { return }
         invitation = parcours
         signaler(.lien)
+    }
+
+    /// Le routeur du hub « Mes liens » (#9904) : la scène y ouvre l'affiliation, comme le toucher de sa carte.
+    private(set) var ouvrirDepuisLesLiens: ((Route) -> Void)?
+
+    func liensAffiches(ouvrir: @escaping (Route) -> Void) {
+        guard actif else { return }
+        ouvrirDepuisLesLiens = ouvrir
+        signaler(.liens)
     }
 
     func attendre(_ attendus: Set<VitrineEvenement>) async {

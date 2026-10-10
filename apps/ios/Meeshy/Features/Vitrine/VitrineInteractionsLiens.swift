@@ -4,6 +4,10 @@ import MeeshySDK
 import MeeshyUI
 import SwiftUI
 
+nonisolated enum VitrineLiensErreur: Error {
+    case aucunLienDAffiliation
+}
+
 /// Le LIEN dans l'en-tête de la fiche (#9904) : « Dis-moi tout », la conversation d'un lien anonyme partagé aux proches,
 /// où chacun écrit sans compte dans sa langue ; la liste des conversations de SAV d'une activité, une par produit ; et le
 /// client qui arrive par le lien d'un SAV, sans compte. Aucun sondage : l'app n'en a pas, la vitrine n'en montre pas.
@@ -16,6 +20,28 @@ extension VitrineInteractions {
     static let tenueDuFormulaire: Duration = .milliseconds(1800)
     /// La conversation ou la liste se laisse lire.
     static let tenueDeLEcran: Duration = .milliseconds(3000)
+    /// Le hub se lit avant que le doigt n'ouvre l'affiliation, puis ses chiffres.
+    static let tenueDuHub: Duration = .milliseconds(1300)
+    static let tenueDeLAffiliation: Duration = .milliseconds(2800)
+
+    /// Les liens d'affiliation du kit, rangés FRAIS sous la clé que `AffiliateViewModel.load` lit d'abord : l'écran les montre
+    /// sans passerelle, chiffres compris (liens, inscrits, clics se calculent des liens eux-mêmes).
+    static func rangerLAffiliation(_ f: VitrineFixtures) async throws {
+        guard let jetons = f.liensDAffiliation, !jetons.isEmpty else { throw VitrineLiensErreur.aucunLienDAffiliation }
+        try await CacheCoordinator.shared.affiliateTokens.save(jetons, for: "list")
+    }
+
+    /// Le hub « Mes liens », puis l'affiliation, ouverte comme le toucher de sa carte.
+    static func montrerMesLiens(_ scene: VitrineScene) async {
+        guard let ouvrir = VitrineRendu.shared.ouvrirDepuisLesLiens else {
+            fatalError("Vitrine « \(scene.rawValue) » : le hub « Mes liens » n'a pas prêté son routeur")
+        }
+        VitrineTournage.etape("hub")
+        try? await Task.sleep(for: tenueDuHub)
+        ouvrir(.affiliate)
+        VitrineTournage.etape("affiliation")
+        try? await Task.sleep(for: tenueDeLAffiliation)
+    }
 
     /// Le nom que tape le client du SAV : celui du lecteur du kit, qui découvre le SAV par son lien.
     static func nomDeLInvite(_ f: VitrineFixtures) -> (prenom: String, nom: String) {
