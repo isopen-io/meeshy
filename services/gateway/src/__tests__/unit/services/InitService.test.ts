@@ -231,7 +231,36 @@ describe('InitService.ensurePostGeoIndex', () => {
 // passerelle : la messagerie entière ne tombe pas parce que la porte publique
 // n'a pas pu être posée — l'erreur est journalisée, le boot suivant réessaie.
 describe('InitService.ensureWorldConversation', () => {
+  // Audit #10000 — promouvoir le CODE ne doit pas écrire en production : le seed
+  // ne s'exécute que sur un `WORLD_SEED_ENABLED=true` explicite.
+  it.each([undefined, '', 'false', '1', 'TRUE '])('n’écrit RIEN tant que WORLD_SEED_ENABLED vaut %p', async (flag) => {
+    if (flag === undefined) delete process.env.WORLD_SEED_ENABLED;
+    else process.env.WORLD_SEED_ENABLED = flag;
+    const prisma = makePrisma();
+    const sut = new InitService(prisma as any);
+
+    await sut.ensureWorldConversation();
+
+    expect(prisma.conversation.findFirst).not.toHaveBeenCalled();
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('sème World Wide quand WORLD_SEED_ENABLED=true', async () => {
+    process.env.WORLD_SEED_ENABLED = 'true';
+    const prisma = makePrisma({ globalConv: null });
+    (prisma.conversation.create as jest.Mock<any>).mockResolvedValue({ id: 'conv-world' });
+    const sut = new InitService(prisma as any);
+
+    await sut.ensureWorldConversation();
+
+    expect(prisma.conversation.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ identifier: 'world' }) }),
+    );
+  });
+
   it('ne rejette pas quand la base refuse le seed — le démarrage continue', async () => {
+    process.env.WORLD_SEED_ENABLED = 'true';
     const prisma = makePrisma();
     (prisma.conversation.findFirst as jest.Mock<any>).mockRejectedValue(new Error('not authorized on meeshy'));
     const sut = new InitService(prisma as any);
