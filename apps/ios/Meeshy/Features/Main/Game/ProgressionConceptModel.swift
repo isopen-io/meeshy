@@ -201,7 +201,11 @@ enum ProgressionConceptModel {
             guard let current = GameLeagueDetail.current(of: league) else { return GameText.doorLeagueOpen }
             return GameText.leagueName(current.league)
         case .season:
-            guard let season = game?.season else { return GameText.doorSeasonNone }
+            guard let season = game?.season else {
+                // Avant la saison 1 (#10014) : la date d'ouverture, jamais un vide.
+                guard let upcoming = game?.seasonUpcoming else { return GameText.doorSeasonNone }
+                return GameText.doorSeasonUpcoming(date: GameWave2Format.day(upcoming.startDay))
+            }
             return GameText.doorSeasonSteps(steps: count(season.steps), total: count(season.stepsTotal))
         case .prestige:
             // La valeur est « étoiles / max » ; « tu peux passer » est la pastille d'action.
