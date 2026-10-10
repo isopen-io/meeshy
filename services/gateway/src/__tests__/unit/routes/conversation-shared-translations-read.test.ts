@@ -270,8 +270,10 @@ describe('GET /conversations/:id/shared-translations', () => {
         OR: [{ messageId: MSG_1, sourceVersion: 'original' }],
         targetLanguage: { in: ['fr'] },
       });
-      expect(inventory.select).toBeDefined();
-      expect(inventory.select?.payload).not.toBe(true);
+      // Trois colonnes, et pas une de plus : l'ordre de partage est rendu par la
+      // base (`orderBy`), la ligne n'a donc pas à porter sa date ; l'enveloppe
+      // n'est lue qu'à la seconde requête, pour les seules lignes servies.
+      expect(inventory.select).toEqual({ id: true, messageId: true, targetLanguage: true });
     });
 
     it('ne lit ensuite que les enveloppes qu’elle SERT — jamais celles d’une langue que le prisme écarte', async () => {

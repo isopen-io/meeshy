@@ -402,15 +402,18 @@ const SHARED_TRANSLATION_WIRE_SELECT = {
   createdAt: true,
 } as const;
 
-/** Ce que la lecture regarde avant de choisir : qui a partagé quoi, sans l'enveloppe. */
+/**
+ * Ce que la lecture regarde avant de choisir : qui a partagé quoi, sans l'enveloppe.
+ * Ni la date : l'ordre de partage est rendu par la base (`orderBy`), la ligne n'a
+ * pas à le porter.
+ */
 const SHARED_TRANSLATION_INVENTORY_SELECT = {
   id: true,
   messageId: true,
   targetLanguage: true,
-  createdAt: true,
 } as const;
 
-type SharedTranslationInventoryRow = Pick<SharedTranslationRow, 'id' | 'messageId' | 'targetLanguage' | 'createdAt'>;
+type SharedTranslationInventoryRow = Pick<SharedTranslationRow, 'id' | 'messageId' | 'targetLanguage'>;
 
 /**
  * Le SEUL sérialiseur : le REST (`POST`, `GET`) et l'événement temps réel servent
