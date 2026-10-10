@@ -15,6 +15,9 @@
 /** GET · POST /api/v1/me/account/deletion */
 export const accountDeletion = '/api/v1/me/account/deletion';
 
+/** PUT /api/v1/me/birth-date */
+export const birthDate = '/api/v1/me/birth-date';
+
 /** GET · POST /api/v1/me/categories */
 export const categories = '/api/v1/me/categories';
 

@@ -8,6 +8,7 @@
  * - Trusted devices: Extended duration (configurable via SESSION_EXPIRY_TRUSTED_DAYS)
  */
 
+import { assertAccountMeetsMinimumAge } from './auth/minimum-age-gate';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
@@ -143,6 +144,11 @@ function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number 
 export async function createSession(input: CreateSessionInput): Promise<SessionData> {
   const db = getPrisma();
   const { userId, token, requestContext } = input;
+
+  // #9927 — toute connexion passe ici : un compte de moins de 13 ans déclarés
+  // n'ouvre aucune session, quelle que soit la porte (mot de passe, lien
+  // magique, second facteur, vérification d'adresse).
+  await assertAccountMeetsMinimumAge(db, userId, new Date());
   const { ip, geoData, deviceInfo, client } = requestContext;
 
   // Hash the token for storage

@@ -87,4 +87,28 @@ describe('POST /conversations/:id/messages — mode lent des nouveaux comptes (#
     });
     expect(res.json().error).toContain('20 s');
   });
+
+  // #9927 — un mineur déclaré dans Global : refus DÉFINITIF, donc 403 (jamais
+  // le 400 « requête invalide » des refus génériques), avec le code et une
+  // phrase lisible pour un client antérieur qui ignore le code.
+  it('rend 403 GLOBAL_ADULTS_ONLY au mineur déclaré qui écrit dans Global', async () => {
+    const handleMessage = jest.fn().mockResolvedValue({
+      success: false,
+      error: 'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.',
+      code: 'GLOBAL_ADULTS_ONLY',
+      data: null,
+    });
+    app = await buildApp(handleMessage);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { content: 'Salut tout le monde' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ success: false, code: 'GLOBAL_ADULTS_ONLY' });
+    expect(res.json().error).toMatch(/18 ans/);
+    expect(res.headers['retry-after']).toBeUndefined();
+  });
 });

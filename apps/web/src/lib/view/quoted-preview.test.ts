@@ -345,6 +345,22 @@ describe('quotedPreviewOf — « +N » sur la citation d’un message à plusieu
   test('un message protégé ne dit pas combien de pièces il cache', () => {
     expect(preview(quoted({ content: '👁️ 🖼️', isViewOnce: true, attachments: pieces(7) })).media?.more).toBe(0);
   });
+
+  /* #9915 — la passerelle ne sert que QUATRE pièces du message cité, et dit à
+     côté combien de tuiles il porte en tout (`visualAttachmentCount`). */
+  test('six photos servies par la passerelle (quatre pièces + le compte) : « +5 », pas « +3 »', () => {
+    const served = Object.assign(quoted({ attachments: pieces(4) }), { visualAttachmentCount: 6 });
+    expect(preview(served).media?.more).toBe(5);
+  });
+
+  test('sans compte servi (ancienne passerelle), les pièces servies font foi', () => {
+    expect(preview(quoted({ attachments: pieces(4) })).media?.more).toBe(3);
+  });
+
+  test('un compte servi plus petit que les pièces ne les retranche pas', () => {
+    const served = Object.assign(quoted({ attachments: pieces(4) }), { visualAttachmentCount: 2 });
+    expect(preview(served).media?.more).toBe(3);
+  });
 });
 
 /**

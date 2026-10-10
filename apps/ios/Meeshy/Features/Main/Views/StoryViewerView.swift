@@ -159,7 +159,7 @@ struct StoryViewerView: View {
     @State var storyLoopPass = 0 // tours de boucle de la story courante (#9821)
     @State var isCallInterrupting = false // un appel sonne ou se tient (#9821)
     @State var isGameMomentShown = false // un événement du jeu passe devant (#9821)
-    @State var isOptionsMenuOpen = false // le menu « … » est ouvert : la story boucle (#9821)
+    @State var optionsMenuWatch = StoryOptionsMenuWatch() // le menu « … » ouvert fait boucler la story (#9821, #9949)
     /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
     /// de contenu porte la vue, le lecteur porte l'horloge.
     @State var isCaptionExpanded = false // internal for cross-file extension access
@@ -644,7 +644,7 @@ struct StoryViewerView: View {
         }
         // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
         .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
-        .storyOptionsMenuPresence($isOptionsMenuOpen)
+        .storyOptionsMenuPresence(optionsMenuWatch)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }

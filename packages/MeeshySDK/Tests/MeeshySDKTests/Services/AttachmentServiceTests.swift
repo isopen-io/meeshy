@@ -17,6 +17,30 @@ final class AttachmentServiceTests: XCTestCase {
         super.tearDown()
     }
 
+    // MARK: - delete (#9948)
+
+    func test_attachmentDeleteResponse_decodesTheServedShape() throws {
+        let served = #"{"success":true,"data":{"message":"Attachment deleted successfully"}}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AttachmentDeleteResponse.self, from: served)
+        XCTAssertTrue(decoded.success)
+    }
+
+    func test_attachmentDeleteResponse_decodesTheFormerBooleanShape() throws {
+        let former = #"{"success":true,"data":{"deleted":true}}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(AttachmentDeleteResponse.self, from: former)
+        XCTAssertTrue(decoded.success)
+    }
+
+    func test_delete_sendsDeleteOnTheAttachment_andDecodesTheServedEnvelope() async throws {
+        mock.stub("/attachments/att_9", result: AttachmentDeleteResponse(success: true))
+
+        try await service.delete(attachmentId: "att_9")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/attachments/att_9")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+    }
+
     // MARK: - requestTranscription
 
     func test_requestTranscription_callsCorrectEndpoint() async throws {
