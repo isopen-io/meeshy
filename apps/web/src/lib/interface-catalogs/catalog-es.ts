@@ -24,6 +24,7 @@ import esCallRecording from './catalog-es-call-recording';
 import esSignup from './catalog-es-signup';
 
 import esGallery from './catalog-es-gallery';
+import esDeviceTranslation from './catalog-es-device-translation';
 import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
 import esStudioChrome from './catalog-es-studio-chrome';
@@ -1099,6 +1100,7 @@ const es = {
   ...esEphemeral,
   ...esWriteRestriction,
   ...esGallery,
+  ...esDeviceTranslation,
   ...esMessageCard,
   ...esConversationCard,
   ...esStoriesMine,

@@ -6,7 +6,7 @@ import {
   type CallRecordingKind,
   type CallRecordingStopReason,
 } from '@meeshy/shared/types/call-recording';
-import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/call-recording-event-names';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { CallStoreApi } from './call-store';
@@ -70,11 +70,7 @@ export type CallRecordingDeps = {
   readonly loadRecorder: () => Promise<CallRecorderStart>;
 };
 
-export const CALL_RECORDING_SERVER_EVENTS: readonly string[] = [
-  SERVER_EVENTS.CALL_RECORDING_REQUESTED,
-  SERVER_EVENTS.CALL_RECORDING_STARTED,
-  SERVER_EVENTS.CALL_RECORDING_STOPPED,
-];
+export const CALL_RECORDING_SERVER_EVENT_NAMES: readonly string[] = Object.values(CALL_RECORDING_SERVER_EVENTS);
 
 const ACK_TIMEOUT_MS = 8_000;
 
@@ -154,9 +150,9 @@ export function createCallRecording(deps: CallRecordingDeps) {
   const receive = (event: string, raw: unknown): void => {
     const payload = recordOf(raw);
     if (payload === null || text(payload, 'callId') === null || payload.callId !== liveCallId()) return;
-    if (event === SERVER_EVENTS.CALL_RECORDING_REQUESTED) onRequested(payload);
-    else if (event === SERVER_EVENTS.CALL_RECORDING_STARTED) onStarted(payload);
-    else if (event === SERVER_EVENTS.CALL_RECORDING_STOPPED) onStopped(payload);
+    if (event === CALL_RECORDING_SERVER_EVENTS.CALL_RECORDING_REQUESTED) onRequested(payload);
+    else if (event === CALL_RECORDING_SERVER_EVENTS.CALL_RECORDING_STARTED) onStarted(payload);
+    else if (event === CALL_RECORDING_SERVER_EVENTS.CALL_RECORDING_STOPPED) onStopped(payload);
   };
 
   const request = async (recordingKind: CallRecordingKind = 'audio'): Promise<void> => {
@@ -164,7 +160,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
     const transport = deps.transport();
     if (callId === null || transport === null || store.getState().view.kind !== 'idle') return;
     set({ view: { kind: 'asking', callId, recordingKind }, notice: null });
-    const ack = ackOf(await transport.request(CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId, kind: recordingKind }, ACK_TIMEOUT_MS).catch(() => null));
+    const ack = ackOf(await transport.request(CALL_RECORDING_CLIENT_EVENTS.CALL_RECORDING_REQUEST, { callId, kind: recordingKind }, ACK_TIMEOUT_MS).catch(() => null));
     const view = store.getState().view;
     if (ack.ok) {
       if (view.kind === 'asking') {
@@ -181,7 +177,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
     if (view.kind !== 'pending' || !view.mustAnswer || transport === null) return;
     set({ view: { ...view, mustAnswer: false } });
     await transport
-      .request(CLIENT_EVENTS.CALL_RECORDING_CONSENT, { callId: view.callId, recordingId: view.recordingId, accepted }, ACK_TIMEOUT_MS)
+      .request(CALL_RECORDING_CLIENT_EVENTS.CALL_RECORDING_CONSENT, { callId: view.callId, recordingId: view.recordingId, accepted }, ACK_TIMEOUT_MS)
       .catch(() => null);
   };
 
@@ -191,7 +187,7 @@ export function createCallRecording(deps: CallRecordingDeps) {
     set({ view: { kind: 'idle' }, notice: { kind: 'stopped', reason: 'stopped', wasRecording: view.kind === 'recording' } });
     await deps
       .transport()
-      ?.request(CLIENT_EVENTS.CALL_RECORDING_STOP, { callId: view.callId, recordingId: view.recordingId }, ACK_TIMEOUT_MS)
+      ?.request(CALL_RECORDING_CLIENT_EVENTS.CALL_RECORDING_STOP, { callId: view.callId, recordingId: view.recordingId }, ACK_TIMEOUT_MS)
       .catch(() => null);
   };
 

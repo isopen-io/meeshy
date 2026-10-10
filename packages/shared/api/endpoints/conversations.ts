@@ -129,6 +129,9 @@ export const byIdPinnedMessages = (id: string): string => `/api/v1/conversations
 /** GET /api/v1/conversations/:id/reactions */
 export const byIdReactions = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/reactions`;
 
+/** GET · POST /api/v1/conversations/:id/shared-translations */
+export const byIdSharedTranslations = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/shared-translations`;
+
 /** GET /api/v1/conversations/:id/stats */
 export const byIdStats = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/stats`;
 

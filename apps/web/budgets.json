@@ -608,6 +608,42 @@
         "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 7,55 Ko -- les cadres de capture d appel (#8743) lisent leur catalogue au schema `zod/mini` (`lib/calls/frames/frame-spec.ts` : `discriminatedUnion`, `partialRecord`, `partial`, `tuple`, `regex`), des constructeurs qu aucun autre site n appelait : +1,60 Ko sur 5,95. Le chunk `zod` est nomme par `vite.config.ts § manualChunks` : il ne peut pas etre tranche par importeur, et le socle ne bouge pas (69,80 Ko). Plafond releve de 6 a 9 : arrondi au Ko SUPERIEUR (8) + 1 Ko de marge, la regle de la premiere mesure. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-13 : 4,59 Ko gzip -9 -- `zod/mini`, la validation de frontiere du profil (`lib/api/profile.ts`), NOMME dans `vite.config.ts § manualChunks`. SANS ce nom la regle par defaut (« node_modules => core ») le rangeait dans le SOCLE : mesure, la premiere peinture passait de 41,12 a 45,43 Ko pour un validateur qu'aucun ecran du socle ne lit. Ce plafond ne suffit pas a garder la porte (le socle n'a pas de motif par dependance) : c'est `first_paint.kb` qui la garde, et ce nom qui DESIGNE le coupable le jour ou un import statique le ferait revenir. Arrondi au Ko SUPERIEUR (5) + 1 Ko de marge."
       }
     },
+    "shared_translation_seal_worker": {
+      "pattern": "^assets/shared-translation-seal-worker-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 19,
+        "status": "CIBLE -- MESUREE PAR #9899, NON ARBITREE",
+        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 17,26 Ko -- le WORKER du scellement partage (#9899, `lib/device-translation/shared-translation-seal-worker.ts` : le contrat `@meeshy/shared/utils/shared-translation-seal` et son validateur `zod` CLASSIQUE, ~10 Ko de plus que `zod/mini`). Construit par Vite en worker MODULE (`new Worker(new URL(...))` dans `seal-port.ts`) : son graphe de modules n'est PAS celui de la page, donc le noyau du chunk `zod` (partage par plus de soixante ecrans, 7,95 Ko) n'en porte rien. Mesure qui le fonde : importe par `import()` dans la page, ranges dans le chunk `zod` ou dans un chunk nomme, le contrat faisait passer `zod` de 7,95 a 16,5-18,4 Ko pour la connexion, le fil, les reglages et le profil (rolldown entraine les dependances d'un groupe nomme dans le groupe). Il ne se telecharge qu'a la premiere enveloppe a sceller ou a ouvrir. Arrondi au Ko SUPERIEUR (18) + 1 Ko de marge."
+      }
+    },
+    "shared_translations_session": {
+      "pattern": "^assets/shared-translations-session-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #9899, NON ARBITREE",
+        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 2,56 Ko -- la lecture des traductions partagees par les autres membres (#9899, `lib/device-translation/shared-translations-session.ts` : le receveur `shared-translations.ts`, sa memoire d'ouverture bornee et l'abonnement a `message:translation-shared`). Charge par `import()` depuis `use-shared-translations.ts` : le fil ne l'importe jamais statiquement, sans quoi chaque ouverture de fil en paierait le receveur. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+      }
+    },
+    "device_translation_runtime": {
+      "pattern": "^assets/runtime-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #9899, NON ARBITREE",
+        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 3,59 Ko -- la file de traduction de l'appareil, son cache et le partage scelle de ce qu'elle livre (#9898, #9899, `lib/device-translation/runtime.ts`). Charge par `import()` depuis `use-device-translation.ts` APRES le consentement : le fil ne l'importe jamais statiquement. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+      }
+    },
+    "device_translation_consent": {
+      "pattern": "^assets/consent-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #9899, NON ARBITREE",
+        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 0,20 Ko -- l'accord a la traduction sur l'appareil (#9898, `lib/device-translation/consent.ts`). Charge par `import()` depuis le fil ET depuis les reglages : un import statique depuis l'un des deux ferait de leurs chunks de route un chunk partage, et son adresse grossirait le point d'entree (budget de premiere peinture). Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+      }
+    },
     "floating_menus": {
       "pattern": "^assets/floating-menus-",
       "kb": {

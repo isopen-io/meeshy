@@ -288,13 +288,18 @@ export function registerEditMessagePutRoute(
       // et le Prisme Linguistique fait que la plupart des lecteurs ne voient
       // QUE celle-là : ils relisaient l'ancien message, présenté comme la
       // traduction du nouveau.
+      //
+      // L'instant est nommé pour pouvoir être REMIS tel quel à
+      // `applyMessageEditEffects` : la version de source d'une traduction
+      // partagée en est l'ISO, et un second `new Date()` désignerait une autre.
+      const editedAt = new Date();
       const updatedMessage = await prisma.message.update({
         where: { id: messageId, deletedAt: null },
         data: {
           content: processedContent,
           ...(claimedCanonicalLanguage === undefined ? {} : { originalLanguage: claimedCanonicalLanguage }),
           isEdited: true,
-          editedAt: new Date(),
+          editedAt,
           translations: null,
           ...nextMetadata
         },
@@ -450,6 +455,7 @@ export function registerEditMessagePutRoute(
         senderUserId: existingMessage.sender?.userId ?? null,
         previousContent: existingMessage.content,
         content: processedContent,
+        editedAt,
       });
 
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
@@ -745,6 +751,7 @@ export function registerEditMessagePatchRoute(
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: processedContent,
+        editedAt,
       });
 
       // Ce que cette édition doit aux gens qu'elle NOMME. Même unité que le

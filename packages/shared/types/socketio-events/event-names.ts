@@ -10,7 +10,17 @@
  * iOS et Android).
  *
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
+ *
+ * **Les noms qu'un client lit dès sa première peinture vivent dans un module de
+ * DOMAINE** (`viewing-event-names.ts`, `session-event-names.ts`,
+ * `call-recording-event-names.ts`), que les deux cartes RÉPANDENT : un import de
+ * `SERVER_EVENTS` tire la carte entière dans le paquet de l'importeur (#9966).
+ * Un nom neuf de ces domaines s'ajoute à son module, jamais ici.
  */
+
+import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
+import { SESSION_SERVER_EVENTS } from './session-event-names.js';
+import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
 
 // ===== ROOM HELPERS =====
 // Convention: entity:${id} (colons, jamais underscores)
@@ -89,6 +99,13 @@ export const SERVER_EVENTS = {
   // l'arrivée, mais rien non plus n'aurait signalé que la moitié de ce câblage
   // ne servait à rien. Retiré au cycle 77.
   /**
+   * La traduction qu'un MEMBRE a calculée sur son appareil et partagée (#9899),
+   * relayée aux lecteurs du message — scellée : la passerelle ne la lit pas.
+   * Distincte de `message:translation`, qui porte une traduction du serveur en
+   * clair. La charge est `SharedTranslation` (`types/shared-translation.ts`).
+   */
+  MESSAGE_TRANSLATION_SHARED: 'message:translation-shared',
+  /**
    * PER-USER "delete for me" on a MESSAGE (`DELETE /api/messages/:id/delete-for-me`
    * and its bulk sibling): a `UserMessageDeletion` row now hides the message from
    * THIS user's view, on every one of their devices. The message itself is
@@ -114,14 +131,7 @@ export const SERVER_EVENTS = {
   MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
-  /** Un pair a ouvert la conversation (#8892) — `ViewingEvent`. */
-  VIEWING_START: 'viewing:start',
-  /** Un pair a quitté la conversation, ou l'a mise en arrière-plan (#8892). */
-  VIEWING_STOP: 'viewing:stop',
-  /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
-  VIEWING_SNAPSHOT: 'viewing:snapshot',
-  /** Un pair ICI regarde, écoute ou agit dans la conversation (#9061) — `ViewingEvent`. */
-  VIEWING_ACTIVITY: 'viewing:activity',
+  ...VIEWING_SERVER_EVENTS,
   /**
    * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
    * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
@@ -149,9 +159,7 @@ export const SERVER_EVENTS = {
    * clients can route the error to the right ViewModel and purge stale
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
-  AUTHENTICATED: 'authenticated',
-  AUTH_TOKEN_EXPIRED: 'auth:token-expired',
-  AUTH_SESSION_REVOKED: 'auth:session-revoked',
+  ...SESSION_SERVER_EVENTS,
   ERROR: 'error',
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
@@ -249,10 +257,7 @@ export const SERVER_EVENTS = {
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
-  /** #8064 — consentement à l'enregistrement : demande diffusée, démarrage après l'accord de TOUS, arrêt. */
-  CALL_RECORDING_REQUESTED: 'call:recording-requested',
-  CALL_RECORDING_STARTED: 'call:recording-started',
-  CALL_RECORDING_STOPPED: 'call:recording-stopped',
+  ...CALL_RECORDING_SERVER_EVENTS,
   /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
   CALL_PARTICIPANT_INVITED: 'call:participant-invited',
   /** #8470 — la personne invitée a refusé : diffusé aux participants, sa puce « Sonne… » se résout. */
@@ -634,11 +639,7 @@ export const CLIENT_EVENTS = {
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
-  /** L'écran de la conversation est ouvert et au premier plan (#8892). */
-  VIEWING_START: 'viewing:start',
-  VIEWING_STOP: 'viewing:stop',
-  /** L'utilisateur ICI fait défiler, lit un média, écrit ou réagit (#9061). */
-  VIEWING_ACTIVITY: 'viewing:activity',
+  ...VIEWING_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et
@@ -712,10 +713,7 @@ export const CLIENT_EVENTS = {
    * passerelle depuis toujours — déclaré ici seulement au cycle 107.
    */
   CALL_ANALYTICS: 'call:analytics',
-  /** #8064 — demander, accepter ou refuser, arrêter l'enregistrement d'un appel. */
-  CALL_RECORDING_REQUEST: 'call:recording-request',
-  CALL_RECORDING_CONSENT: 'call:recording-consent',
-  CALL_RECORDING_STOP: 'call:recording-stop',
+  ...CALL_RECORDING_CLIENT_EVENTS,
   /** #8433 — inviter un ami accepté dans l'appel en cours (accusé `CallControlAck`). */
   CALL_INVITE_PARTICIPANT: 'call:invite-participant',
   /** #8438 — couper le micro d'un participant (initiateur, ou modérateur+ qui dépasse la cible). */

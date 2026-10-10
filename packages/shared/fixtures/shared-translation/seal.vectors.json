@@ -1,0 +1,301 @@
+{
+  "cases": [
+    {
+      "_label": "anglais vers français, clé tirée du texte du message",
+      "input": {
+        "kdf": "message-content",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "inner": {
+          "v": 1,
+          "text": "Bonjour, comment vas-tu aujourd'hui ?",
+          "sourceLanguage": "en",
+          "engine": "apple-translation"
+        },
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "nonce": "AAECAwQFBgcICQoL",
+        "secret": null
+      },
+      "expected": {
+        "sourceDigest": "6e766a49e512e0ba0bc935e2aacd3e5a4a34add17f83afc4c9e669c70241cd48",
+        "key": "dUVQPvfz9pclfSpWnEbxp46Tgx2NmZFQ+1ycu3YYe84=",
+        "aad": "meeshy-shared-translation/v1|message-content|64f0c0ffee0000000000c0de|64f0c0ffee0000000000a001|fr|6e766a49e512e0ba0bc935e2aacd3e5a4a34add17f83afc4c9e669c70241cd48",
+        "innerJson": "{\"engine\":\"apple-translation\",\"sourceLanguage\":\"en\",\"text\":\"Bonjour, comment vas-tu aujourd'hui ?\",\"v\":1}",
+        "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+      }
+    },
+    {
+      "_label": "français décomposé (NFD) vers arabe : l’empreinte se calcule en NFC",
+      "input": {
+        "kdf": "message-content",
+        "messageId": "64f0c0ffee0000000000a002",
+        "targetLanguage": "ar",
+        "sourceContent": "Le café est prêt",
+        "inner": {
+          "v": 1,
+          "text": "القهوة جاهزة",
+          "sourceLanguage": "fr",
+          "engine": "opus-mt"
+        },
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "nonce": "AAECAwQFBgcICQoL",
+        "secret": null
+      },
+      "expected": {
+        "sourceDigest": "239aaf56ac2dbe182acae907c3d46a552758eb716836651a1c00b6bfb8247667",
+        "key": "0rN0MJnm+DDM6U3UQKvKritua9pL27YvxkuRSMtZH4w=",
+        "aad": "meeshy-shared-translation/v1|message-content|64f0c0ffee0000000000c0de|64f0c0ffee0000000000a002|ar|239aaf56ac2dbe182acae907c3d46a552758eb716836651a1c00b6bfb8247667",
+        "innerJson": "{\"engine\":\"opus-mt\",\"sourceLanguage\":\"fr\",\"text\":\"القهوة جاهزة\",\"v\":1}",
+        "payload": "AAECAwQFBgcICQoLyuAYsbsqhwY1oZ0PPb+3nfwHxDFqHJQg07TZfP6u+Mxn7kZnaS5g8S+dcfMt2zA0M2nkf5vHZ3IOuoh5MUorOpv8ujR0sKyuWC6atasOdX7ff0nCkRRnDP4OHT/FteuqrQ=="
+      }
+    },
+    {
+      "_label": "espagnol vers anglais : émoji, guillemets, retour à la ligne",
+      "input": {
+        "kdf": "message-content",
+        "messageId": "64f0c0ffee0000000000a003",
+        "targetLanguage": "en",
+        "sourceContent": "¡Hola! 👋\n\"Nos vemos\" mañana",
+        "inner": {
+          "v": 1,
+          "text": "Hi! 👋\n\"See you\" tomorrow",
+          "sourceLanguage": "es",
+          "engine": "chrome-translator"
+        },
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "nonce": "AAECAwQFBgcICQoL",
+        "secret": null
+      },
+      "expected": {
+        "sourceDigest": "f041c6fbf0d59f9b69a8994e668b0c1f5407616c26ca453f12e63a6af56ad8b1",
+        "key": "nWkhgw/wHiai8a5aUvOm99wvNC7r5tBAF3pVskVVIkw=",
+        "aad": "meeshy-shared-translation/v1|message-content|64f0c0ffee0000000000c0de|64f0c0ffee0000000000a003|en|f041c6fbf0d59f9b69a8994e668b0c1f5407616c26ca453f12e63a6af56ad8b1",
+        "innerJson": "{\"engine\":\"chrome-translator\",\"sourceLanguage\":\"es\",\"text\":\"Hi! 👋\\n\\\"See you\\\" tomorrow\",\"v\":1}",
+        "payload": "AAECAwQFBgcICQoL2tIU5PNm45Z1FrxoA0Si9ga6cuAilqNgMgNMg+VvWN/W6+HvwBGd2nojh8/zaN7BO7hPhrRbVaiudynXQdhKFs9ZXZUgvonhRB1n32J/F/gObkL/5MtvjdOHE23YTnFPtDzu6tbehNX0+rExK4jWhRia"
+      }
+    },
+    {
+      "_label": "allemand vers italien, clé tirée du secret du message (E2EE)",
+      "input": {
+        "kdf": "message-secret",
+        "messageId": "64f0c0ffee0000000000a004",
+        "targetLanguage": "it",
+        "sourceContent": "Guten Morgen, bis später!",
+        "secret": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "inner": {
+          "v": 1,
+          "text": "Buongiorno, a dopo!",
+          "sourceLanguage": "de",
+          "engine": "apple-translation"
+        },
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "nonce": "AAECAwQFBgcICQoL"
+      },
+      "expected": {
+        "sourceDigest": "536ad4494290a81aa13e22d2240548966db51d906db20186d29cab8fbda6593e",
+        "key": "4Jf4cq+77L4sM6L2IDuURXMOO8lNYddjLNRzIKeqsrA=",
+        "aad": "meeshy-shared-translation/v1|message-secret|64f0c0ffee0000000000c0de|64f0c0ffee0000000000a004|it|536ad4494290a81aa13e22d2240548966db51d906db20186d29cab8fbda6593e",
+        "innerJson": "{\"engine\":\"apple-translation\",\"sourceLanguage\":\"de\",\"text\":\"Buongiorno, a dopo!\",\"v\":1}",
+        "payload": "AAECAwQFBgcICQoLhWR2GDtwnuM0nklQv4KycSAy3TuO+uFKZl9VMOdyp6J2eU3d2dqDMZL0phdtm0pYf5q+EDy0DBFGnylkXkXm4a5qIdHHH9Os4c4ZexIOvhnM/d8pcfac3bj3D6PYR6SzGtyVZozkDw=="
+      }
+    },
+    {
+      "_label": "portugais vers espagnol",
+      "input": {
+        "kdf": "message-content",
+        "messageId": "64f0c0ffee0000000000a005",
+        "targetLanguage": "es",
+        "sourceContent": "Obrigado pela ajuda!",
+        "inner": {
+          "v": 1,
+          "text": "¡Gracias por la ayuda!",
+          "sourceLanguage": "pt",
+          "engine": "nllb-200-distilled-600M"
+        },
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "nonce": "AAECAwQFBgcICQoL",
+        "secret": null
+      },
+      "expected": {
+        "sourceDigest": "f9773075c8917acf3835c3e5f48262ebcc8a2fa53b3bba10eff17d53c9be75be",
+        "key": "8Keh5aqfpVSV1hqXmSkQEMXi60/Upiku3lYuGfFM4n0=",
+        "aad": "meeshy-shared-translation/v1|message-content|64f0c0ffee0000000000c0de|64f0c0ffee0000000000a005|es|f9773075c8917acf3835c3e5f48262ebcc8a2fa53b3bba10eff17d53c9be75be",
+        "innerJson": "{\"engine\":\"nllb-200-distilled-600M\",\"sourceLanguage\":\"pt\",\"text\":\"¡Gracias por la ayuda!\",\"v\":1}",
+        "payload": "AAECAwQFBgcICQoL6aur8io0NWEmgVWGZIlS1nm/JODc200Fkl+Pi7khK4iBjlH001Ns6FFhbyEIY45h0pHFwqDxiGQC26PXgHcYlPWNhD5q32kTofaMGxMOJ0pS7uHpizmh0oSTaFPuhMMS05ijomJgCfWI6AjIxrYjtUI="
+      }
+    }
+  ],
+  "rejections": [
+    {
+      "_label": "une autre langue cible",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "es",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    },
+    {
+      "_label": "le message a été modifié depuis",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you tonight?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    },
+    {
+      "_label": "un autre message",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a009",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    },
+    {
+      "_label": "une autre conversation",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0df",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    },
+    {
+      "_label": "une enveloppe altérée",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqg=="
+        }
+      }
+    },
+    {
+      "_label": "une dérivation annoncée autre que celle du scellement",
+      "open": {
+        "kdf": "message-secret",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=",
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-secret",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    },
+    {
+      "_label": "un autre secret",
+      "open": {
+        "kdf": "message-secret",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a004",
+        "targetLanguage": "it",
+        "sourceContent": "Guten Morgen, bis später!",
+        "secret": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=",
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-secret",
+          "payload": "AAECAwQFBgcICQoLhWR2GDtwnuM0nklQv4KycSAy3TuO+uFKZl9VMOdyp6J2eU3d2dqDMZL0phdtm0pYf5q+EDy0DBFGnylkXkXm4a5qIdHHH9Os4c4ZexIOvhnM/d8pcfac3bj3D6PYR6SzGtyVZozkDw=="
+        }
+      }
+    },
+    {
+      "_label": "un base64 aux bits de remplissage non nuls",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqx=="
+        }
+      }
+    },
+    {
+      "_label": "un base64 sans son remplissage",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw"
+        }
+      }
+    },
+    {
+      "_label": "un base64 coupé d’un retour à la ligne",
+      "open": {
+        "kdf": "message-content",
+        "conversationId": "64f0c0ffee0000000000c0de",
+        "messageId": "64f0c0ffee0000000000a001",
+        "targetLanguage": "fr",
+        "sourceContent": "Hello, how are you today?",
+        "secret": null,
+        "envelope": {
+          "v": 1,
+          "alg": "A256GCM",
+          "kdf": "message-content",
+          "payload": "AAECAwQFBgcICQoLIaP2d4BN5n7LZzhFfM5LMgef8yGgP//5NrcvJA9z36m/1Tml\n0IZMetr+N2zhj0cbYgXZsgojwOyrz8yrUP+kW6OK0TUlUqajG5GkbVUeP3AXRRQjYCjJGwie+7TDCjKgrSRsU8HTuvyvE7jkBytmwpfaBP90FIcZqw=="
+        }
+      }
+    }
+  ]
+}

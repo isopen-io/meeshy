@@ -307,6 +307,51 @@ describe('la galerie de la coque Android (#8308)', () => {
   });
 });
 
+describe('la traduction sur l’appareil (#9898)', () => {
+  test('sans réglage fourni, aucune bascule n’est offerte', () => {
+    expect(dom(<DataSection language="fr" />).querySelector('[data-setting="deviceTranslation"]')).toBeNull();
+  });
+
+  test('la bascule s’annonce avec son état ; la légende nomme les sept langues, la taille d’une paire et ce que le serveur garde', () => {
+    const on = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+    const toggle = switchNamed(on, 'Traduire sur cet appareil');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('deviceTranslation');
+    expect(toggle?.hasAttribute('disabled')).toBe(false);
+    for (const language of ['français', 'anglais', 'espagnol', 'portugais', 'allemand', 'italien', 'arabe']) expect(on.textContent).toContain(language);
+    expect(on.textContent).toContain('110 Mo');
+    expect(on.textContent).toContain('une seule fois');
+    expect(on.textContent).toContain('par le serveur');
+    expect(on.textContent).toContain('non chiffrées de bout en bout');
+
+    const off = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(off, 'Traduire sur cet appareil')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  test('tant que l’accord n’est pas lu sur l’appareil, la bascule existe mais n’est pas actionnable', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: false, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(host, 'Traduire sur cet appareil')?.hasAttribute('disabled')).toBe(true);
+  });
+
+  test('la rangée est légendée : la légende est lue avec la bascule', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    const toggle = switchNamed(host, 'Traduire sur cet appareil');
+    const captionId = toggle?.getAttribute('aria-describedby') ?? '';
+    expect(captionId).not.toBe('');
+    expect(host.querySelector(`[id="${captionId}"]`)?.textContent).toContain('110 Mo');
+  });
+
+  test('chaque langue d’interface la dit', async () => {
+    for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<DataSection language={language} deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+      const toggle = host.querySelector('[data-setting="deviceTranslation"]');
+      expect(toggle?.getAttribute('aria-label') ?? '').not.toBe('');
+      expect(host.textContent).toContain('110');
+    }
+  });
+});
+
 describe('l’apparence', () => {
   const appearance = (props: Partial<Parameters<typeof AppearanceSection>[0]> = {}) =>
     dom(

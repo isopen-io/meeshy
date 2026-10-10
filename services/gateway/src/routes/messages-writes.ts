@@ -295,6 +295,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: editedContent,
+        editedAt,
       });
 
       // Ce que cette édition doit aux gens qu'elle NOMME. Ce transport — celui

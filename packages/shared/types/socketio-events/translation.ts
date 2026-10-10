@@ -5,6 +5,8 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { SharedTranslation } from '../shared-translation.js';
+
 /**
  * Données pour l'événement de mise à jour des traductions d'un textObject de story.
  * Émis après que le pipeline ZMQ a traduit un textObject de storyEffects.
@@ -22,6 +24,12 @@ export interface RequestTranslationData {
   readonly messageId: string;
   readonly targetLanguage: string;
 }
+
+/**
+ * La traduction partagée par un membre (`message:translation-shared`, #9899) —
+ * la même forme que la lecture REST, enveloppe scellée comprise.
+ */
+export type MessageTranslationSharedEventData = SharedTranslation;
 
 export interface TranslationEvent {
   readonly messageId: string;

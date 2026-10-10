@@ -119,6 +119,7 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
+  'conversations/shared-translations.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'mentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'reactions.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },

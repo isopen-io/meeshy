@@ -24,6 +24,7 @@ import itCallRecording from './catalog-it-call-recording';
 import itSignup from './catalog-it-signup';
 
 import itGallery from './catalog-it-gallery';
+import itDeviceTranslation from './catalog-it-device-translation';
 import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
@@ -1099,6 +1100,7 @@ const it = {
   ...itEphemeral,
   ...itWriteRestriction,
   ...itGallery,
+  ...itDeviceTranslation,
   ...itMessageCard,
   ...itConversationCard,
   ...itStoriesMine,

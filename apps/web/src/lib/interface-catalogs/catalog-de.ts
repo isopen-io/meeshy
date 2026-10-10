@@ -24,6 +24,7 @@ import deCallRecording from './catalog-de-call-recording';
 import deSignup from './catalog-de-signup';
 
 import deGallery from './catalog-de-gallery';
+import deDeviceTranslation from './catalog-de-device-translation';
 import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
@@ -1099,6 +1100,7 @@ const de = {
   ...deEphemeral,
   ...deWriteRestriction,
   ...deGallery,
+  ...deDeviceTranslation,
   ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,

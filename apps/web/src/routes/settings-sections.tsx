@@ -16,6 +16,7 @@ import {
   SECTION_INK_2,
 } from '@/components/grouped-section';
 import type { AppPreferences } from '@/lib/api/app-preferences';
+import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { appInstitutionalHref } from '@/lib/institutional-href';
@@ -188,10 +189,19 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
    jamais l'ancienne `meeshy.me/settings#privacy`. */
 export type GalleryToggle = { readonly enabled: boolean; readonly onToggle: (enabled: boolean) => void };
 
-export function DataSection({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery?: GalleryToggle }) {
+export function DataSection({
+  language,
+  gallery,
+  deviceTranslation,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly gallery?: GalleryToggle;
+  readonly deviceTranslation?: DeviceTranslationSetting;
+}) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
       {gallery === undefined ? null : <GalleryToggleRow language={language} gallery={gallery} />}
+      {deviceTranslation === undefined ? null : <DeviceTranslationRow language={language} toggle={deviceTranslation} />}
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
@@ -203,32 +213,88 @@ export function DataSection({ language, gallery }: { readonly language: Interfac
   );
 }
 
+/* UNE BASCULE LOCALE À L'APPAREIL — la galerie de la coque (#8308) et la
+   traduction sur l'appareil (#9898) : un réglage qui n'attend aucune passerelle,
+   donc jamais grisé hors ligne. `disabled` ne sert qu'à poser une bascule dont
+   l'état n'est pas encore lu. */
+function LocalToggleRow({
+  language,
+  setting,
+  label,
+  info,
+  icon,
+  tint,
+  enabled,
+  disabled = false,
+  onToggle,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly setting: string;
+  readonly label: SettingsKey;
+  readonly info: SettingsKey;
+  readonly icon: IconSpec;
+  readonly tint?: string;
+  readonly enabled: boolean;
+  readonly disabled?: boolean;
+  readonly onToggle: (enabled: boolean) => void;
+}) {
+  const captionId = useId();
+  const name = translate(language, label);
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon {...(tint === undefined ? {} : { tint })}>
+        <IconOf icon={icon} size={15} />
+      </RowIcon>
+      <RowText label={name} caption={translate(language, info)} captionId={captionId} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={name}
+        aria-describedby={captionId}
+        data-setting={setting}
+        {...(disabled ? { disabled: true } : {})}
+        onClick={() => onToggle(!enabled)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)', ...(disabled ? { opacity: 0.5 } : {}) }}
+      >
+        <Switch checked={enabled} />
+      </button>
+    </div>
+  );
+}
+
 /* LA GALERIE DE LA COQUE ANDROID (#8308) — réglage LOCAL à l'appareil (la
    galerie est la sienne), offert sur la seule coque qui sait y écrire (loi 4) :
    l'écran l'omet partout ailleurs. Actif par défaut. */
 function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
-  const captionId = useId();
-  const label = translate(language, 'settings.gallery.auto_save');
   return (
-    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
-      <RowIcon tint="var(--color-success)">
-        <IconOf icon={{ set: 'socle', name: 'image' }} size={15} />
-      </RowIcon>
-      <RowText label={label} caption={translate(language, 'settings.gallery.auto_save.info')} captionId={captionId} />
-      <button
-        type="button"
-        role="switch"
-        aria-checked={gallery.enabled}
-        aria-label={label}
-        aria-describedby={captionId}
-        data-setting="galleryAutoSave"
-        onClick={() => gallery.onToggle(!gallery.enabled)}
-        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
-        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
-      >
-        <Switch checked={gallery.enabled} />
-      </button>
-    </div>
+    <LocalToggleRow
+      language={language}
+      setting="galleryAutoSave"
+      label="settings.gallery.auto_save"
+      info="settings.gallery.auto_save.info"
+      icon={{ set: 'socle', name: 'image' }}
+      tint="var(--color-success)"
+      enabled={gallery.enabled}
+      onToggle={gallery.onToggle}
+    />
+  );
+}
+
+/* LA TRADUCTION SUR L'APPAREIL (#9898) — offerte partout : tout navigateur a un Worker, et le consentement est local. */
+function DeviceTranslationRow({ language, toggle }: { readonly language: InterfaceLanguage; readonly toggle: DeviceTranslationSetting }) {
+  return (
+    <LocalToggleRow
+      language={language}
+      setting="deviceTranslation"
+      label="settings.device_translation"
+      info="settings.device_translation.info"
+      icon={{ set: 'socle', name: 'translate' }}
+      enabled={toggle.enabled}
+      disabled={!toggle.ready}
+      onToggle={toggle.onToggle}
+    />
   );
 }
 

@@ -24,6 +24,7 @@ import ptCallRecording from './catalog-pt-call-recording';
 import ptSignup from './catalog-pt-signup';
 
 import ptGallery from './catalog-pt-gallery';
+import ptDeviceTranslation from './catalog-pt-device-translation';
 import ptMessageCard from './catalog-pt-message-card';
 import ptMentions from './catalog-pt-mentions';
 import ptStudioChrome from './catalog-pt-studio-chrome';
@@ -1103,6 +1104,7 @@ const pt = {
   ...ptEphemeral,
   ...ptWriteRestriction,
   ...ptGallery,
+  ...ptDeviceTranslation,
   ...ptMessageCard,
   ...ptConversationCard,
   ...ptStoriesMine,

@@ -5,6 +5,10 @@ import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
+import {
+  eraseSharedTranslationsOfAccount,
+  type SharedTranslationAccountErasureClient,
+} from './messaging/sharedTranslationErasure';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -16,6 +20,8 @@ export type AccountPurgeSummary = {
   readonly addressBookContactsDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
+  /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
+  readonly sharedTranslationsDeleted: number;
   readonly game: GamePurgeSummary;
 };
 
@@ -25,7 +31,10 @@ export type AccountPurgeSummary = {
  * sessions, profil vocal, liens de partage créés par ce compte, notifications
  * qui lui étaient destinées, et son carnet d'adresses synchronisé (#8284 —
  * `eraseAddressBookOf`, qui retire aussi les annonces « X a rejoint Meeshy »
- * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus).
+ * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus),
+ * et les traductions PARTAGÉES (#9899) que ses participants avaient scellées
+ * pour les autres membres (`eraseSharedTranslationsOfAccount`, par
+ * `sharedById` — le `Participant.id`, jamais le `User.id`).
  * Aucune ligne partagée avec un tiers — supprimables sans arbitrage sur ce
  * qu'un AUTRE participant continue de voir. Les notifications d'AUTRES comptes
  * nées de son activité (un message, une réaction) ne sont PAS visées ici :
@@ -57,15 +66,21 @@ export async function purgeAccountIsolatedData(
     PrismaClient,
     'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
   > &
+    SharedTranslationAccountErasureClient &
     Parameters<typeof purgeGameData>[0],
   userId: string,
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, game] = await Promise.all([
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game] = await Promise.all([
     prisma.userSession.deleteMany({ where: { userId } }),
     prisma.userVoiceModel.deleteMany({ where: { userId } }),
     prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
     prisma.notification.deleteMany({ where: { userId } }),
     eraseAddressBookOf(prisma, userId),
+    // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
+    // appelants la journalisent et la passe suivante rejoue la purge, que son
+    // idempotence autorise. La taire ferait compter comme purgé un compte dont
+    // des contributions subsistent.
+    eraseSharedTranslationsOfAccount(prisma, userId),
     purgeGameData(prisma, userId),
   ]);
 
@@ -77,6 +92,7 @@ export async function purgeAccountIsolatedData(
     addressBookContactsDeleted: addressBook.contactsDeleted,
     contactJoinNoticesDeleted: addressBook.joinNoticesDeleted,
     arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
+    sharedTranslationsDeleted: sharedTranslations,
     game,
   };
 
@@ -84,7 +100,8 @@ export async function purgeAccountIsolatedData(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
-      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} gameDuos=${summary.game.duosDeleted}`
+      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
+      `gameDuos=${summary.game.duosDeleted}`
   );
 
   return summary;
