@@ -98,6 +98,47 @@ nonisolated enum StoryComposerFold {
         presentation == .expanded
     }
 
+    /// Ce qu'un toucher fait au composeur (#9893).
+    struct Tap: Equatable, Sendable {
+        let userFolded: Bool
+        let resignsKeyboard: Bool
+        let focusesField: Bool
+    }
+
+    /// Le ⌄ ferme le clavier s'il est ouvert ET replie le composeur en bulle.
+    static let chevronTapped = Tap(userFolded: true, resignsKeyboard: true, focusesField: false)
+    /// La bulle rouvre le composeur, sans rouvrir le clavier : écrire reste un
+    /// second geste, que l'utilisateur choisit.
+    static let bubbleTapped = Tap(userFolded: false, resignsKeyboard: false, focusesField: false)
+
+    /// **Sur la story, le ⌄ replie TOUJOURS** (#9893), réponse en cours
+    /// comprise : la plaque reste montée, donc la bannière « Réponse à X » et
+    /// le brouillon attendent la réouverture. Le fil et le détail d'un post
+    /// gardent `presentation(userFolded:isReplying:)`.
+    static func readerPresentation(userFolded: Bool) -> Presentation {
+        userFolded ? .folded : .expanded
+    }
+
+    /// Seule une NOUVELLE demande de réponse rouvre un composeur replié —
+    /// annuler ou envoyer la réponse ne rouvre rien.
+    static func unfoldsOnReply(from oldReplyId: String?, to newReplyId: String?) -> Bool {
+        newReplyId != nil && newReplyId != oldReplyId
+    }
+
+    /// Ce que la bulle signale de ce que le repli garde.
+    enum BubbleBadge: Equatable, Sendable {
+        case none
+        case recording
+        case reply
+    }
+
+    /// Une prise en cours passe avant la réponse : c'est elle qu'il ne faut
+    /// pas oublier sous la bulle.
+    static func bubbleBadge(isRecording: Bool, isReplying: Bool) -> BubbleBadge {
+        if isRecording { return .recording }
+        return isReplying ? .reply : .none
+    }
+
     static let foldSymbol = "chevron.down"
     static let unfoldSymbol = "bubble.left.fill"
 }

@@ -142,6 +142,12 @@ export type CommentComposerProps = {
    * au-dessus de la barre (`lib/view/scene-yields.ts`).
    */
   readonly onWritingChange?: (writing: boolean) => void;
+  /**
+   * **REPLIÉ EN BULLE** (#9894) — annoncé à chaque changement, état initial
+   * compris : l'hôte d'un lecteur de story en fait monter ou redescendre sa
+   * zone de commentaires (`lib/view/comments-zone.ts`).
+   */
+  readonly onFoldChange?: (folded: boolean) => void;
   /** Un envoi RÉUSSI replie la saisie (lecteur de story ou de réel : on
    * revient à la lecture, la scène reprend sa taille). Absent : on enchaîne. */
   readonly foldOnSend?: boolean;
@@ -173,6 +179,7 @@ export function CommentComposer({
   replyTo = null,
   onCancelReply,
   onWritingChange,
+  onFoldChange,
   foldOnSend = false,
   onSendSticker,
   recording,
@@ -220,20 +227,30 @@ export function CommentComposer({
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, []);
 
-  /* LE REPLI (#9122, miroir `StoryComposerFold`) — le ⌄, visible d'emblée,
-     réduit la barre à UNE icône de commentaire ; le brouillon reste dans
-     `text`. Une réponse en cours la rouvre : sa bannière vit dedans. */
+  /* LE REPLI (#9122, #9894, miroir `StoryComposerFold`) — le ⌄, tout à droite
+     et toujours visible, retire le focus du champ (le clavier virtuel se
+     ferme) et réduit la barre à UNE bulle de commentaire ; le brouillon reste
+     dans `text`. La bulle la rouvre SANS rendre le focus au champ — aucun
+     clavier ne surgit ; le focus va au ⌄, pour qu'au clavier physique on
+     enchaîne. Une réponse en cours la rouvre : sa bannière vit dedans. */
+  const foldRef = useRef<HTMLButtonElement | null>(null);
+  const bodyId = useId();
   const fold = useCallback(() => {
     release();
     setUserFolded(true);
   }, [release]);
   const unfold = useCallback(() => {
     setUserFolded(false);
-    requestAnimationFrame(() => fieldRef.current?.focus());
+    requestAnimationFrame(() => foldRef.current?.focus());
   }, []);
   useEffect(() => {
     if (replyTo !== null) setUserFolded(false);
   }, [replyTo]);
+  const reportFold = useRef(onFoldChange);
+  reportFold.current = onFoldChange;
+  useEffect(() => {
+    reportFold.current?.(folded);
+  }, [folded]);
 
   /* LA MENTION PRÉREMPLIE SUIT LA CIBLE — posée pour une réponse à une
      réponse, retirée quand la cible change ou disparaît, jamais cumulée
@@ -363,6 +380,8 @@ export function CommentComposer({
           type="button"
           data-comment-unfold=""
           aria-label={translate(language, 'comments.composer.unfold')}
+          aria-expanded={false}
+          aria-controls={bodyId}
           onClick={unfold}
           className="grid place-items-center self-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, background: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
@@ -372,7 +391,7 @@ export function CommentComposer({
           </span>
         </button>
       ) : null}
-      <div data-comment-composer-body="" className={folded ? 'hidden' : 'contents'}>
+      <div id={bodyId} data-comment-composer-body="" className={folded ? 'hidden' : 'contents'}>
       {replyTo === null ? null : (
         <div data-comment-reply-banner={replyTo.commentId} className="flex items-center gap-2 pb-1">
           <span aria-hidden className="shrink-0 rounded-full" style={{ width: 3, height: 32, background: 'var(--color-ios-brand)' }} />
@@ -471,9 +490,8 @@ export function CommentComposer({
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>
-      {/* LA PLAQUE DU CHAMP (#8643) — le ⌄ vit DEDANS, à l'angle haut-droit
-          (haut-gauche en RTL : `insetInlineEnd`), visible d'emblée (#9122,
-          `StoryComposerFold.offersFoldButton` côté iOS). */}
+      {/* LA PLAQUE DU CHAMP (#8643) — le ⌄ n'y vit plus : il est TOUT À DROITE
+          de la rangée, après l'envoi (#9894). */}
       <div data-comment-plate="" className="relative flex min-w-0 flex-1">
       <textarea
         id={fieldId}
@@ -512,26 +530,8 @@ export function CommentComposer({
           background: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-ios-brand)',
-          paddingInlineEnd: FOLD_TARGET_PX,
         }}
       />
-      {folded ? null : (
-      <button
-        type="button"
-        data-comment-fold=""
-        aria-label={translate(language, 'comments.composer.fold')}
-        /* Le doigt ne VOLE pas le focus au champ avant le clic : sans cela,
-           le champ perdrait la rédaction au `pointerdown` et le ⌄ se
-           démonterait avant de recevoir son propre clic. */
-        onPointerDown={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={fold}
-        className="absolute grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
-        style={{ top: 0, insetInlineEnd: '0px', width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
-      >
-        <Glyph name="caretDown" size={14} />
-      </button>
-      )}
       </div>
       <button
         type="submit"
@@ -549,6 +549,25 @@ export function CommentComposer({
       >
         <Glyph name="arrowUp" size={18} />
       </button>
+      {folded ? null : (
+      <button
+        ref={foldRef}
+        type="button"
+        data-comment-fold=""
+        aria-label={translate(language, 'comments.composer.fold')}
+        aria-expanded
+        aria-controls={bodyId}
+        /* Le doigt ne VOLE pas le focus au champ avant le clic : le repli
+           décide lui-même où va le focus (`release`). */
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={fold}
+        className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Glyph name="caretDown" size={14} />
+      </button>
+      )}
       </div>
       {isRecording ? null : (
         <CommentComposerTools

@@ -81,40 +81,23 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 1bis. Les TROIS formes de partage vivent dans le menu (...)
+    // MARK: - 1bis. Envoyer et Republier vivent au RAIL, plus dans le menu (...)
 
-    /// Les trois formes n'étaient offertes que sur les stories PUBLIQUES, un
-    /// gate qui reflétait une barrière serveur ABOLIE (`repostPost` refusait
-    /// tout original non-`PUBLIC`). Le laisser rendait le menu VIDE de toute
-    /// forme de partage sur les stories que la nouvelle loi d'audience vise
-    /// précisément.
-    ///
-    /// #9953 — le menu se décide dans `StoryOptionsMenuPlan`, et les formes de
-    /// partage dans son sous-menu « Partager ». La garde prouve désormais
-    /// l'OFFRE sur le plan, sans lire la contenance d'un `if` : les trois
-    /// formes sont offertes sur une story FRIENDS, le partage EXTERNE ne l'est
-    /// que sur une story publique (son lien `meeshy.me/l/…` est ouvrable par
-    /// n'importe qui, donc lui seul garde le gate).
-    func test_theThreeShareForms_areOfferedOnEveryAudience_onlyExternalShareNeedsAPublicStory() throws {
+    /// Le porteur a retiré du menu (…) « Envoyer », « Republier en post » et
+    /// « Citer en post » (#9953). Republier et transférer ne disparaissent
+    /// pas : le rail garde « Envoyer » (qui transfère n'importe où dans l'app)
+    /// et « Republier », dont le composeur offre l'éventail story / post.
+    func test_sendAndRepublish_stayOnTheRail_andLeftTheMenu() throws {
+        let sidebar = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+        XCTAssertTrue(sidebar.contains("story.viewer.action.send"), "« Envoyer » reste au rail.")
+        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(content: .story("))
+        XCTAssertTrue(sidebar.contains("republishStorySource = RepostPostSourceWrapper("), "« Republier » reste au rail.")
+
         let header = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
-        for key in ["story.viewer.repostAsPost",
-                    "story.viewer.editAndRepostAsPost",
-                    "story.viewer.action.send",
-                    "story.viewer.share.external"] {
-            XCTAssertTrue(header.contains(key), "\(key) doit figurer dans le menu (...)")
-        }
-
-        let threeForms: [StoryShareMenuEntry] = [.send, .repostAsPost, .quoteAsPost]
-        for isPublicStory in [true, false] {
-            let plan = StoryOptionsMenuPlan.resolve(
-                hasStory: true, isOwnStory: false, isPublicStory: isPublicStory,
-                hasAudioTranscript: false, canCompose: false, hasSavableStickers: false
-            )
-            XCTAssertEqual(Array(plan.shareEntries.prefix(3)), threeForms,
-                           "Les trois formes ne dépendent pas de l'audience — isPublic=\(isPublicStory)")
-            XCTAssertEqual(plan.shareEntries.contains(.shareOutside), isPublicStory,
-                           "Le partage HORS Meeshy reste gardé : son lien élargirait l'audience hors de tout contrôle.")
+        for key in ["story.viewer.repostAsPost", "story.viewer.editAndRepostAsPost", "story.viewer.share.internal"] {
+            XCTAssertFalse(header.contains(key), "\(key) a quitté le menu (…) — #9953")
         }
     }
 

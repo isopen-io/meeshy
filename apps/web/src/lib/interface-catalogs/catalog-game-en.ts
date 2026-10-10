@@ -521,6 +521,7 @@ const en = {
   'game.season.claim': 'Claim step {step}',
   'game.season.completed': 'Path completed: a cup, a dated badge and {glory} Glory.',
   'game.season.none': 'No season is open right now. The next one starts soon.',
+  'game.season.upcoming': 'Season {number} opens on {date}.',
   'game.season.seal.title': 'Seal row',
   'game.season.seal.body': 'The Seal is purely cosmetic: a collectible every {every} steps, with no effect on the game.',
   'game.season.seal.buy': 'Get the Seal · {price}',

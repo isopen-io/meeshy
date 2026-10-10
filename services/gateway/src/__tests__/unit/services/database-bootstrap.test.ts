@@ -23,6 +23,7 @@ const STEP_NAMES = [
   'ensureContactDeltaIndex',
   'initializeDatabase',
   'ensureSeedAccountsVerified',
+  'ensureWorldConversation',
 ] as const;
 
 function makeSteps(shouldInitialize: boolean) {
@@ -71,5 +72,22 @@ describe('bootstrapDatabase — ce qui vit hors de la porte du seed (#6581)', ()
     (steps.ensurePostGeoIndex as jest.Mock<any>).mockRejectedValue(new Error('not authorized on meeshy'));
 
     await expect(bootstrapDatabase(steps)).rejects.toThrow('not authorized on meeshy');
+  });
+
+  it('sème World Wide même quand la porte est FERMÉE — la production existe déjà et ne l’a pas (#10000)', async () => {
+    const { steps, order } = makeSteps(false);
+
+    await bootstrapDatabase(steps);
+
+    expect(order).toContain('ensureWorldConversation');
+  });
+
+  it('sème World Wide APRÈS les comptes — son créateur et ses administrateurs doivent exister (#10000)', async () => {
+    const { steps, order } = makeSteps(true);
+
+    await bootstrapDatabase(steps);
+
+    expect(order.indexOf('ensureWorldConversation')).toBeGreaterThan(order.indexOf('initializeDatabase'));
+    expect(order.indexOf('ensureWorldConversation')).toBeGreaterThan(order.indexOf('ensureSeedAccountsVerified'));
   });
 });

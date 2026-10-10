@@ -1,6 +1,7 @@
 package me.meeshy.app;
 
 import android.app.NotificationManager;
+import android.content.Context;
 import android.util.Log;
 import androidx.annotation.NonNull;
 import com.google.firebase.messaging.FirebaseMessagingService;
@@ -37,6 +38,11 @@ import java.util.List;
  * remettre », ce qui est exactement l'etat d'une coque sans le plugin.
  */
 public class MeeshyMessagingService extends FirebaseMessagingService {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(ShellLocale.wrap(base));
+    }
 
     private static final String TAG = "MeeshyMessaging";
     private static final String PLUGIN = "com.capacitorjs.plugins.pushnotifications.PushNotificationsPlugin";

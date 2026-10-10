@@ -535,6 +535,7 @@ const fr = {
   'game.season.claim': 'Réclamer l’étape {step}',
   'game.season.completed': 'Parcours terminé : une coupe, un badge daté et {glory} de Gloire.',
   'game.season.none': 'Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.',
+  'game.season.upcoming': 'La saison {number} ouvre le {date}.',
   'game.season.seal.title': 'Rangée Sceau',
   'game.season.seal.body': 'Le Sceau est purement décoratif : un objet à collectionner toutes les {every} étapes, qui ne change rien au jeu.',
   'game.season.seal.buy': 'Prendre le Sceau · {price}',

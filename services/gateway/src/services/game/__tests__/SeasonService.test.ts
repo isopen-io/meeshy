@@ -14,8 +14,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
 }));
 
-const IN_SEASON = new Date('2026-10-14T12:00:00Z');
-const BEFORE = new Date('2026-10-05T12:00:00Z');
+// La saison 1 ouvre le lundi 2026-12-21 (#10014) : le 14 octobre, qui était dans
+// la saison 1 quand elle ouvrait le 12, est désormais AVANT la première saison.
+const IN_SEASON = new Date('2026-12-23T12:00:00Z');
+const BEFORE = new Date('2026-10-14T12:00:00Z');
 
 const setup = (stars = 0, extra: Record<string, unknown> = {}) => {
   const db = fakeGameDb();
@@ -171,7 +173,7 @@ describe('SeasonService.claim', () => {
 
   it('une saison terminée ne se réclame plus : la suivante repart de zéro', async () => {
     const { service } = setup(160);
-    const nextSeason = new Date('2026-12-10T12:00:00Z');
+    const nextSeason = new Date('2027-02-17T12:00:00Z');
     expect((await service.state(USER, nextSeason)).stars).toBe(0);
     await expect(service.claim({ userId: USER, step: 1, now: nextSeason })).rejects.toMatchObject({ code: 'SEASON_STEP_LOCKED' });
   });

@@ -125,7 +125,7 @@ extension UniversalComposerBar {
     /// de la plaque ; il ferme désormais la rangée d'outils, dont la bande
     /// `trailing` ne défile jamais — Dynamic Type ne peut pas le pousser hors de
     /// l'écran. Glyphe au format des outils (30 pt), cible de 44 pt.
-    private func foldButton(_ fold: ComposerFoldControl) -> some View {
+    func foldButton(_ fold: ComposerFoldControl) -> some View {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
@@ -138,6 +138,7 @@ extension UniversalComposerBar {
         .buttonStyle(.plain)
         .padding(.vertical, -7)
         .accessibilityLabel(fold.label)
+        .accessibilityHint(fold.hint ?? "")
     }
 
     /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
@@ -236,6 +237,16 @@ extension UniversalComposerBar {
 /// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
 /// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
 /// épaisseur perçue (#9173).
+/// **Le ⌄ pendant une prise vocale** (#9893). La barre d'outils, qui le porte,
+/// s'efface pendant l'enregistrement. Un hôte qui le demande
+/// (`ComposerFoldControl.survivesRecording`) garde le ⌄ seul, tout à droite,
+/// sur une rangée à lui ; les autres (fils, posts) gardent la barre nue.
+nonisolated enum ComposerFoldPlacement {
+    static func rowDuringRecording(isRecording: Bool, survivesRecording: Bool) -> Bool {
+        isRecording && survivesRecording
+    }
+}
+
 nonisolated enum ComposerGlassDoors {
     static let glyphWeight: Font.Weight = .regular
 
@@ -328,6 +339,9 @@ nonisolated enum ComposerLanguagePillMetrics {
 struct ComposerFoldControl {
     let symbol: String
     let label: String
+    var hint: String? = nil
+    /// Le ⌄ reste visible pendant une prise vocale (`ComposerFoldPlacement`).
+    var survivesRecording: Bool = false
     let action: () -> Void
 }
 

@@ -5,10 +5,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
+import android.media.AudioManager;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
@@ -16,6 +19,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
+import androidx.core.content.ContextCompat;
 
 /**
  * Le message vocal ecoute tient la lecture au PREMIER PLAN (#9257). Sans lui,
@@ -43,8 +47,17 @@ import android.util.Log;
  * lecteur : la session passe en pause, la notification offre « Lecture » et
  * quitte le premier plan, donc se balaie. « Lecture », a la notification ou
  * au casque, repasse au premier plan et remet la reprise a la page.
+ *
+ * Un casque debranche ou deconnecte pendant la lecture (#9946) met le vocal
+ * en pause par la meme voie, comme Chrome : sans cela il repartait sur le
+ * haut-parleur du telephone.
  */
 public class PlaybackForegroundService extends Service {
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(ShellLocale.wrap(base));
+    }
 
     private static final String CHANNEL_PLAYBACK = "meeshy_playback";
     private static final int NOTIFICATION_ID = 0x4d50; // "MP"
@@ -78,6 +91,15 @@ public class PlaybackForegroundService extends Service {
     }
 
     private MediaSession session;
+    private boolean playing = true;
+
+    private final BroadcastReceiver noisy = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!playing) return;
+            if (!MeeshyPlaybackPlugin.pauseRequested()) stopSelf();
+        }
+    };
 
     @Override
     public void onCreate() {
@@ -97,6 +119,7 @@ public class PlaybackForegroundService extends Service {
         });
         session.setPlaybackState(state(true));
         session.setActive(true);
+        ContextCompat.registerReceiver(this, noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     private static PlaybackState state(boolean playing) {
@@ -115,6 +138,7 @@ public class PlaybackForegroundService extends Service {
     void parked() {
         MediaSession current = session;
         if (current == null) return;
+        playing = false;
         current.setPlaybackState(state(false));
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.notify(NOTIFICATION_ID, notification(false));
@@ -128,6 +152,7 @@ public class PlaybackForegroundService extends Service {
             stopSelf();
             return;
         }
+        playing = true;
         if (session != null) session.setPlaybackState(state(true));
         foreground();
     }
@@ -135,6 +160,7 @@ public class PlaybackForegroundService extends Service {
     @Override
     public void onDestroy() {
         if (running == this) running = null;
+        unregisterReceiver(noisy);
         if (session != null) session.release();
         // Une notification garee a quitte le premier plan : elle ne part pas seule.
         NotificationManager manager = getSystemService(NotificationManager.class);
@@ -154,6 +180,7 @@ public class PlaybackForegroundService extends Service {
             resume();
             return START_NOT_STICKY;
         }
+        playing = true;
         if (session != null) session.setPlaybackState(state(true));
         foreground();
         return START_NOT_STICKY;

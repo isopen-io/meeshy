@@ -24,7 +24,8 @@ const LOGO_SVG = readFileSync(resolve(REPO_ROOT, 'apps/ios/logo_master.svg'), 'u
 
 const echapper = (texte) => String(texte).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const attribut = (texte) => String(texte).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-const mots = (texte) => texte.split(/(\s+)/u).filter((m) => m.length).map((m) => (/^\s+$/u.test(m) ? m : `<span class="mot">${echapper(m)}</span>`)).join('')
+// Les mots se coupent aux espaces ordinaires seulement : une espace insécable lie deux mots dans le même bloc, jamais séparés.
+export const mots = (texte) => texte.split(/([ \t\n]+)/u).filter((m) => m.length).map((m) => (/^[ \t\n]+$/u.test(m) ? m : `<span class="mot">${echapper(m)}</span>`)).join('')
 
 const CSS = `
 * { box-sizing: border-box; }
@@ -198,7 +199,7 @@ const poserBulles = (copie, p, local) => {
   const avant = Math.max(0, rangs.length - p.revelations.length)
   rangs.forEach((r, i) => {
     const debut = i < avant ? -1 : p.revelations[i - avant]
-    const u = debut < 0 ? 1 : lin(local, debut, debut + 0.3)
+    const u = debut <= 0 ? 1 : lin(local, debut, debut + 0.3)
     r.style.opacity = String(easeOut(u))
     r.style.transformOrigin = (r.classList.contains('mine') !== RTL ? '100%' : '0%') + ' 100%'
     r.style.transform = 'translateY(' + ((1 - easeOut(u)) * 30) + 'px) scale(' + mix(0.7, 1, backOut(u)) + ')'

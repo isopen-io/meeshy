@@ -28,7 +28,10 @@ public class MeeshyLocalePlugin extends Plugin {
                 call.getString("tag"),
                 Boolean.TRUE.equals(call.getBoolean("ifUnset", false))
             );
-            if (target != null) AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(target));
+            if (target != null) {
+                ShellLocale.store(getContext(), target);
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(target));
+            }
             call.resolve();
         });
     }

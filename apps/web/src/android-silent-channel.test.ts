@@ -38,6 +38,6 @@ describe('la coque Android a un canal muet pour les notifications sans son (#867
   test('le canal est créé au démarrage de la coque', () => {
     const activite = lire(join(JAVA, 'MainActivity.java'));
     const pont = activite.indexOf('super.onCreate(savedInstanceState)');
-    expect(activite.indexOf('SilentNotificationChannel.ensure(this)', pont)).toBeGreaterThan(pont);
+    expect(activite.indexOf('SilentNotificationChannel.ensure(ShellLocale.wrap(this))', pont)).toBeGreaterThan(pont);
   });
 });
