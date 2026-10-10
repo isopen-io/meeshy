@@ -27,6 +27,60 @@ extension View {
     func foldableComment(isReplying: Bool) -> some View {
         modifier(CommentComposerFoldModifier(isReplying: isReplying))
     }
+
+    /// Rend la barre d'une CONVERSATION repliable (#9955, directive porteur
+    /// 2026-10-10) — le MÊME repli que la story et les commentaires. Le ⌄
+    /// s'efface pendant qu'on écrit ou qu'on enregistre (`isComposing`), et
+    /// une saisie qui commence rouvre la barre (une réponse, une édition qui
+    /// demandent le focus). Une réponse en cours ne force PAS l'ouverture :
+    /// elle survit au repli, comme le brouillon et les pièces jointes.
+    func foldableConversationComposer(isComposing: Bool, onFold: @escaping () -> Void) -> some View {
+        modifier(CommentComposerFoldModifier(
+            isReplying: false,
+            isComposing: isComposing,
+            wording: .conversation,
+            onFold: onFold))
+    }
+}
+
+/// **Quand la barre d'une conversation offre son ⌄** (#9955) : la loi de la
+/// story (#8431, #9122 — déplié ⇒ ⌄), moins les instants où l'on compose.
+nonisolated enum ConversationComposerFold {
+    static func isComposing(isFocused: Bool, isRecording: Bool) -> Bool {
+        isFocused || isRecording
+    }
+
+    static func offersFoldButton(presentation: StoryComposerFold.Presentation, isComposing: Bool) -> Bool {
+        StoryComposerFold.offersFoldButton(presentation: presentation) && !isComposing
+    }
+
+    /// Une saisie qui commence sur une barre repliée la rouvre.
+    static func reopens(userFolded: Bool, isComposing: Bool) -> Bool {
+        userFolded && isComposing
+    }
+}
+
+/// Les deux libellés VoiceOver d'un repli : ceux d'un espace commentaire, ou
+/// ceux de la barre d'une conversation (#9955).
+struct ComposerFoldWording {
+    let fold: String
+    let unfold: String
+
+    static var comment: ComposerFoldWording {
+        ComposerFoldWording(
+            fold: String(localized: "story.composer.fold",
+                         defaultValue: "Masquer la zone de commentaire", bundle: .main),
+            unfold: String(localized: "story.composer.unfold",
+                           defaultValue: "Afficher la zone de commentaire", bundle: .main))
+    }
+
+    static var conversation: ComposerFoldWording {
+        ComposerFoldWording(
+            fold: String(localized: "conversation.composer.fold",
+                         defaultValue: "Réduire la barre de message", bundle: .main),
+            unfold: String(localized: "conversation.composer.unfold",
+                           defaultValue: "Afficher la barre de message", bundle: .main))
+    }
 }
 
 /// **Replié, la barre reste MONTÉE** — à hauteur nulle et invisible : le texte,
@@ -34,6 +88,11 @@ extension View {
 /// l'hôte. La démonter jetterait le brouillon.
 struct CommentComposerFoldModifier: ViewModifier {
     let isReplying: Bool
+    /// On écrit ou on enregistre : le ⌄ s'efface (#9955). Toujours `false`
+    /// dans un espace commentaire, dont le ⌄ reste visible clavier levé.
+    var isComposing: Bool = false
+    var wording: ComposerFoldWording = .comment
+    var onFold: (() -> Void)? = nil
     @State private var userFolded = false
 
     func body(content: Content) -> some View {
@@ -53,20 +112,25 @@ struct CommentComposerFoldModifier: ViewModifier {
                 .accessibilityHidden(isFolded)
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.82), value: isFolded)
+        .adaptiveOnChange(of: isComposing) { _, composing in
+            guard ConversationComposerFold.reopens(userFolded: userFolded, isComposing: composing) else { return }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = false }
+        }
     }
 
     private func foldControl(isFolded: Bool) -> ComposerFoldControl? {
-        guard StoryComposerFold.offersFoldButton(presentation: isFolded ? .folded : .expanded) else { return nil }
+        guard ConversationComposerFold.offersFoldButton(presentation: isFolded ? .folded : .expanded,
+                                                        isComposing: isComposing) else { return nil }
         return ComposerFoldControl(
             symbol: StoryComposerFold.foldSymbol,
-            label: String(localized: "story.composer.fold",
-                          defaultValue: "Masquer la zone de commentaire", bundle: .main),
+            label: wording.fold,
             action: fold)
     }
 
     private func fold() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         HapticFeedback.light()
+        onFold?()
         withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { userFolded = true }
     }
 
@@ -86,7 +150,6 @@ struct CommentComposerFoldModifier: ViewModifier {
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
-        .accessibilityLabel(String(localized: "story.composer.unfold",
-                                   defaultValue: "Afficher la zone de commentaire", bundle: .main))
+        .accessibilityLabel(wording.unfold)
     }
 }

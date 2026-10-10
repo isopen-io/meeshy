@@ -20,6 +20,7 @@ import { KIT_LANGS, appStoreLocale } from '../lib/locales.mjs'
 import { FPS, SORTIE, cheminsDePrise } from './filmer.mjs'
 import { boutonDuVocal, mesurerLeSon, sourceVerifiee } from './entete-epique.mjs'
 import { documentDeLEcran } from './statut-amour-ecrans.mjs'
+import { PUBLICATION } from '../textes/statut-amour.mjs'
 import { CSS_HAUTEUR, CSS_LARGEUR, FACTEUR, documentDuStatut, modeleDeLaPage } from './statut-amour-page.mjs'
 import {
   AMOUREUX, DUREE_S, GLOUTONS, HAUTEUR, IMAGES, LARGEUR, MUSIQUE, PLANS, POIDS_MAX_OCTETS, SONS, argumentsDeMixage, debitVideoKbps, planDuStatut,
@@ -120,6 +121,20 @@ const rendreLaPlanche = ({ video, sortie }) => {
   return sortie
 }
 
+const NOMS_DES_LANGUES = { fr: 'Français', en: 'English', es: 'Español', de: 'Deutsch', it: 'Italiano', pt: 'Português (Brasil)', ar: 'العربية' }
+
+// TEXTES.md : pour chaque langue, la légende de statut et le titre et la description YouTube Shorts.
+export const textesDePublication = () => [
+  '# Meeshy — « Trouve ta moitié » (statut, 25 s)',
+  '',
+  'Une légende de statut (WhatsApp, Instagram, Facebook, Meeshy), puis le titre et la description YouTube Shorts. L’arabe est à faire relire par un locuteur natif.',
+  ...KIT_LANGS.flatMap((lang) => {
+    const p = PUBLICATION[lang]
+    return ['', `## ${NOMS_DES_LANGUES[lang]} — ${nomDuFichier(lang)}`, '', '**Statut**', '', p.statut, '', '**YouTube Shorts — titre**', '', p.titre, '', '**YouTube Shorts — description**', '', p.description]
+  }),
+  '',
+].join('\n')
+
 const preparer = ({ lang }) => {
   const dossier = resolve(TRAVAIL, appStoreLocale(lang))
   mkdirSync(dossier, { recursive: true })
@@ -161,6 +176,8 @@ const main = async () => {
   const { values } = parseArgs({ options: { langue: { type: 'string', default: 'fr' }, jusqua: { type: 'string' }, son: { type: 'boolean', default: false } } })
   const langs = values.langue === 'all' ? KIT_LANGS : values.langue.split(',')
   const { chromium } = await import('@playwright/test')
+  mkdirSync(LIVRAISON, { recursive: true })
+  writeFileSync(resolve(LIVRAISON, 'TEXTES.md'), textesDePublication())
   for (const lang of langs) {
     if (values.son) {
       const { dossier, plan } = preparer({ lang })

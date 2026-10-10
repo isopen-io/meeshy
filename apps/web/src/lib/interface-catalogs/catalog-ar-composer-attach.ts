@@ -9,6 +9,7 @@ const arComposerAttach = {
   'composer.attach.camera.action': 'التقاط صورة',
   'composer.attach.file': 'ملف',
   'composer.attach.file.action': 'اختيار ملف',
+  'composer.drop.veil': 'أفلِت للإرفاق',
   'composer.attach.contact': 'جهة اتصال',
   'composer.attach.contact.action': 'مشاركة جهة اتصال',
   'composer.contact.failed': 'لا يمكن مشاركة جهة الاتصال هذه',

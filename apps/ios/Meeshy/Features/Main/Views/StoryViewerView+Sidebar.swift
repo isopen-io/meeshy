@@ -76,28 +76,21 @@ nonisolated struct StoryActionRailPlan: Equatable {
     }
 }
 
-// MARK: - Export Rail Buttons (Partager / Enregistrer)
+// MARK: - Export Rail Button (Enregistrer)
 
-/// Résolution PURE de la paire Partager/Enregistrer du rail — extraite pour
-/// être testée sans instancier de vue (Task 10, revue « le reader a perdu
-/// tout accès au partage externe »).
+/// Résolution PURE du bouton Enregistrer du rail auteur — testée sans
+/// instancier de vue. Membership = `showsExport` (== `isOwnStory`, voir
+/// `StoryActionRailPlan.resolve`) ; pendant un job de sauvegarde, le bouton
+/// cède la place à l'anneau de progression.
 ///
-/// Membership des DEUX boutons = `showsExport` (== `isOwnStory`, voir
-/// `StoryActionRailPlan.resolve`) : Partager et Enregistrer apparaissent ou
-/// disparaissent TOUJOURS ensemble. Seul Enregistrer bascule vers l'anneau de
-/// progression pendant un job de sauvegarde — Partager reste au premier plan
-/// tout du long : il doit rester atteignable jusqu'à la présentation de la
-/// share sheet système, jamais relégué derrière une tâche de fond, sinon
-/// cette sheet surgirait après coup alors que l'utilisateur a déjà navigué
-/// ailleurs.
+/// Le bouton « Partager » (export vidéo) n'en fait plus partie (#9953) : le
+/// menu « … » l'offre à tout lecteur sous « Partager ▸ Exporter en vidéo ».
 nonisolated struct StoryExportRailButtons: Equatable {
-    let showsShareButton: Bool
     let showsSaveButton: Bool
     let showsSaveProgressRing: Bool
 
     static func resolve(showsExport: Bool, saveProgress: Double?) -> StoryExportRailButtons {
         StoryExportRailButtons(
-            showsShareButton: showsExport,
             showsSaveButton: showsExport && saveProgress == nil,
             showsSaveProgressRing: showsExport && saveProgress != nil
         )
@@ -165,7 +158,6 @@ struct StoryActionSidebarView: View {
     @Binding var showLanguageOptions: Bool
     @Binding var showFullLanguagePicker: Bool
     @Binding var showViewersSheet: Bool
-    @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
     /// Republication en STORY : ouvre le composeur prérempli au lieu de
@@ -717,43 +709,19 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // Author-only Partager + Enregistrer — deux actions DISTINCTES
-            // (Task 10, revue Task 7 : le rail avait perdu tout accès au
-            // partage externe en passant l'ancien bouton « Exporter » par
-            // `StoryPhotoSaveService`, silencieusement, sous une icône et un
-            // libellé de partage). Alignées sur la ligne « Mes stories » :
+            // Author-only Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
+            // EXACTEMENT comme sur la ligne « Mes stories » : un export lancé ici
+            // apparaît aussi dans la liste et réciproquement. Tant qu'un job est
+            // en vol pour cette story, ce bouton devient l'anneau de progression
+            // et son tap annule. NEVER uploads to the Meeshy backend.
             //
-            //   Partager    → sheet `StoryExportShareSheet` (choix de langue)
-            //                 → `UIActivityViewController` (WhatsApp, Messages,
-            //                 AirDrop, Photos…). Reste au PREMIER PLAN — une
-            //                 sheet modale, jamais une tâche de fond, sinon
-            //                 elle surgirait après coup alors que l'utilisateur
-            //                 a déjà navigué ailleurs.
-            //   Enregistrer → `StoryPhotoSaveService.shared.save(story:)`,
-            //                 EXACTEMENT comme sur la ligne « Mes stories »
-            //                 (Task 7) : même source de vérité, donc un export
-            //                 lancé ici apparaît aussi dans la liste et
-            //                 réciproquement. Tant qu'un job est en vol pour
-            //                 cette story, ce bouton (lui seul) devient
-            //                 l'anneau de progression et son tap annule.
+            // Le bouton « Partager » (export vidéo) a quitté le rail de l'auteur
+            // (#9953) : le menu « … » offre « Exporter en vidéo » à TOUT lecteur,
+            // la même feuille au choix de la langue. « Envoyer » reste au rail.
             //
-            // NEVER uploads to the Meeshy backend (stories publish RAW, see
-            // CLAUDE.md "Story Architecture").
-            //
-            // Membership des DEUX boutons = `railPlan.showsExport` SEUL,
-            // jamais `currentStory` — même patron que Reply (L276) et Repost
-            // (L322) : `currentStory` n'est déballé que DANS les closures, pas
-            // pour décider si un bouton existe. Conditionner l'existence sur
-            // `let story = currentStory` romprait l'invariant documenté plus
-            // haut (L160-164) : un bouton ne doit jamais apparaître/disparaître
-            // en cours de lecture — seul le rail figé à l'entrée du slide en
-            // décide. `currentStory` n'a aucune raison structurelle de
-            // s'aligner sur ce figement (revue Task 7, finding Important).
-            //
-            // Résolution PURE extraite dans `StoryExportRailButtons` (testée
-            // par `StoryViewerExportRailTests`) : Partager reste vrai que la
-            // sauvegarde soit ou non en vol, seul Enregistrer bascule vers
-            // l'anneau.
+            // Membership = `railPlan.showsExport` SEUL, jamais `currentStory` :
+            // un bouton n'apparaît ni ne disparaît en cours de lecture. Résolution
+            // PURE dans `StoryExportRailButtons` (`StoryViewerExportRailTests`).
             let exportSaveProgress = railPlan.showsExport
                 ? currentStory.flatMap { saveService.progress(for: $0.id) }
                 : nil
@@ -765,17 +733,6 @@ struct StoryActionSidebarView: View {
             // des `Shape` à couleur explicite, `.disabled` seul ne change
             // strictement rien à l'écran (cf. `StorySaveProgressRing.appearance`).
             let exportIsCancellable = currentStory.map { saveService.isCancellable(storyId: $0.id) } ?? false
-
-            if exportRailButtons.showsShareButton {
-                StoryActionButton(
-                    icon: "square.and.arrow.up.fill",
-                    label: String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main)
-                ) {
-                    HapticFeedback.light()
-                    // Feuille posée SUR la story : elle boucle (#9821).
-                    showExportShareSheet = true
-                }
-            }
 
             if exportRailButtons.showsSaveProgressRing, let progress = exportSaveProgress {
                 // Même job, même source de vérité que la ligne « Mes

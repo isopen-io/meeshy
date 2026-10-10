@@ -664,6 +664,7 @@ private struct LentilleRowAvatar: View {
             // verrouillé par MeeshyAvatar, pas ici).
             presenceState: presenceState,
             isHere: isDirect ? isPeerHere : .absent,
+            enablePulse: false,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,

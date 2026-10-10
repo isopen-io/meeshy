@@ -24,6 +24,9 @@ struct PresenceHereWaveView: View {
             .onAppear {
                 withAnimation(.easeOut(duration: wave.duration).repeatForever(autoreverses: false)) { spread = true }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) { spread = false }
+            }
     }
 }
 

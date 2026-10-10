@@ -80,6 +80,25 @@ extension StoryViewModel {
         return result
     }
 
+    private func uploadStoryVideo(
+        _ videoURL: URL,
+        uploader: TusUploadManager,
+        token: String
+    ) async throws -> TusUploadResult {
+        let video = await StoryVideoUploadFile.prepared(from: videoURL) { source in
+            try await MediaCompressor.shared.compressVideo(source, context: .story)
+        }
+        defer {
+            if video.isDerived { try? FileManager.default.removeItem(at: video.fileURL) }
+        }
+        let result = try await uploader.uploadFile(
+            fileURL: video.fileURL, mimeType: video.mimeType,
+            credential: .bearer(token), uploadContext: "story"
+        )
+        await CacheCoordinator.shared.video.seed(copyingLocalFile: video.fileURL, for: result.fileUrl)
+        return result
+    }
+
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
     ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
@@ -165,13 +184,7 @@ extension StoryViewModel {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = mediaObjects[i]
                     if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
-                        let result = try await uploader.uploadFile(
-                            fileURL: videoURL, mimeType: "video/mp4",
-                            credential: .bearer(token), uploadContext: "story"
-                        )
-                        // Seed the video cache under the server URL — metadata-only
-                        // reconciliation: viewer gets a cache hit, never re-downloads.
-                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
@@ -578,11 +591,7 @@ extension StoryViewModel {
                         continue
                     }
                     if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
-                        let result = try await uploader.uploadFile(
-                            fileURL: videoURL, mimeType: "video/mp4",
-                            credential: .bearer(token), uploadContext: "story"
-                        )
-                        await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
+                        let result = try await uploadStoryVideo(videoURL, uploader: uploader, token: token)
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         newMediaIds.append(result.id)
