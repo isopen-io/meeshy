@@ -327,7 +327,7 @@ extension ConversationView {
             )
             viewModel.insertOptimisticMediaMessage(
                 tempId: send.tempId,
-                content: "",
+                content: send.group.messageContent,
                 attachments: send.locals,
                 messageType: msgType,
                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -347,12 +347,13 @@ extension ConversationView {
         }
 
         // --- Optimistic TEXT insert: upfront, like every media group ---
-        // Le groupe texte est ENVOYÉ en dernier (règle A2.2 de la spec
-        // multi-pièces : le texte est toujours son propre message, après les
-        // pièces). Mais son insert optimiste vivait À L'INTÉRIEUR de
-        // `sendMessage`, appelé après la boucle d'upload : la bulle texte
-        // n'apparaissait donc qu'une fois le DERNIER octet du dernier fichier
-        // monté — l'utilisateur voyait « les pièces d'abord, le message
+        // La légende d'un lot VISUEL voyage avec ses pièces, dans le même
+        // message (#9860) : le plan n'a alors pas de groupe texte. Sans pièce
+        // visuelle (vocaux seuls), le texte reste son propre message, ENVOYÉ
+        // en dernier (règle A2.2 de la spec multi-pièces). Mais son insert
+        // optimiste vivait À L'INTÉRIEUR de `sendMessage`, appelé après la
+        // boucle d'upload : la bulle texte n'apparaissait donc qu'une fois le
+        // DERNIER octet du dernier fichier monté — l'utilisateur voyait « les pièces d'abord, le message
         // ensuite ». On pose la ligne ici, dans le même tour MainActor que les
         // bulles média, en conservant l'ordre d'affichage : `createdAt` est
         // postérieur aux groupes média puisque l'insert suit, et l'envoi réel
@@ -446,7 +447,7 @@ extension ConversationView {
                         _ = try await OfflineQueue.shared.enqueueAudios(
                             sourceAudioURLs: urls,
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -483,7 +484,7 @@ extension ConversationView {
                             sourceMediaURLs: pairs.map { $0.url },
                             kinds: pairs.map { $0.kind },
                             conversationId: viewModel.conversationId,
-                            content: nil,
+                            content: send.group.text,
                             clientMessageId: send.tempId,
                             originalLanguage: lang,
                             replyToId: send.group.carriesReply ? replyId : nil,
@@ -639,7 +640,7 @@ extension ConversationView {
                         }
                     }
                     let ok = await viewModel.sendMessage(
-                        content: "",
+                        content: send.group.messageContent,
                         replyToId: send.group.carriesReply ? replyId : nil,
                         storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
                         storyReplyReference: send.group.carriesReply ? storyRef : nil,
@@ -671,7 +672,7 @@ extension ConversationView {
                             requeued = (try? await OfflineQueue.shared.enqueueAudios(
                                 sourceAudioURLs: urls,
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
@@ -689,7 +690,7 @@ extension ConversationView {
                                 sourceMediaURLs: pairs.map { $0.url },
                                 kinds: pairs.map { $0.kind },
                                 conversationId: viewModel.conversationId,
-                                content: nil,
+                                content: send.group.text,
                                 clientMessageId: send.tempId,
                                 originalLanguage: lang,
                                 replyToId: send.group.carriesReply ? replyId : nil,
