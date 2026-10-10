@@ -83,7 +83,7 @@ describe('le couloir des disques flottants', () => {
 describe('l’en-tête', () => {
   test('un retour NOMMÉ vers les conversations, et le titre', () => {
     const host = dom(<SettingsHeaderBar language="fr" />);
-    expect(host.querySelector('a[aria-label="Revenir aux conversations"]')?.getAttribute('href')).toBe('/');
+    expect(host.querySelector('a[aria-label="Revenir aux conversations"]')?.getAttribute('href')).toBe('/chats');
     expect(host.querySelector('h1')?.textContent).toBe('Réglages');
   });
 

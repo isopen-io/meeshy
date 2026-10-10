@@ -728,7 +728,7 @@ describe('chaque refus est un bandeau qui dit la cause et garde une sortie', () 
       const el = await mount(deps);
       const alert = el.querySelector('[role="alert"]');
       expect(text(alert)).toContain(cause);
-      const home = [...(alert?.querySelectorAll('a') ?? [])].find((a) => a.getAttribute('href') === '/');
+      const home = [...(alert?.querySelectorAll('a') ?? [])].find((a) => a.getAttribute('href') === '/chats');
       expect(text(home ?? null)).toBe('Revenir à l’accueil');
       expect(Number.parseInt(home?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
       expect(el.querySelector('h1')).toBeNull();

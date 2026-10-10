@@ -165,8 +165,8 @@ export function ActionAnchor({
   );
 }
 
-/** Les seules destinations qu'une page de lien propose : l'accueil, la connexion, les réglages. */
-export type LinkDestination = 'list' | 'login' | 'settings';
+/** Les seules destinations qu'une page de lien propose : la landing (`home`, #10002), la liste, la connexion, les réglages. */
+export type LinkDestination = 'home' | 'list' | 'login' | 'settings';
 
 /**
  * `replace` : la page d'un lien reçu est une ENTRÉE, pas une étape. La
