@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -237,7 +238,7 @@ final class StoryOptionsMenuLoopTests: XCTestCase {
         let causes = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
                                                        from: "var playbackCauses: StoryPlaybackCauses {")
         let engaged = try XCTUnwrap(causes.range(of: "engaged:"))
-        XCTAssertTrue(causes[engaged.upperBound...].contains("isOptionsMenuOpen"),
+        XCTAssertTrue(causes[engaged.upperBound...].contains("optionsMenuWatch.declaredOpen"),
                       "Le menu « … » ouvert doit être une cause de boucle, pas de pause.")
         let hold = StoryPlaybackHold.resolve(StoryPlaybackCauses(engaged: true))
         XCTAssertEqual(hold, .loop)
@@ -250,7 +251,7 @@ final class StoryOptionsMenuLoopTests: XCTestCase {
         let header = try StoryPlaybackHoldSource.header()
         XCTAssertTrue(header.contains("FullscreenMoreMenu(onPresentationChange: optionsMenuPresenceChange)"))
         XCTAssertTrue(header.contains("@Environment(\\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange"))
-        XCTAssertTrue(try StoryPlaybackHoldSource.viewer().contains(".storyOptionsMenuPresence($isOptionsMenuOpen)"))
+        XCTAssertTrue(try StoryPlaybackHoldSource.viewer().contains(".storyOptionsMenuPresence(optionsMenuWatch)"))
     }
 
     /// Le bouton partagé de MeeshyUI sait dire qu'il est ouvert : le contenu
@@ -261,5 +262,84 @@ final class StoryOptionsMenuLoopTests: XCTestCase {
         let body = try StoryPlaybackHoldSource.block(menu, from: "public struct FullscreenMoreMenu<Content: View>: View {")
         XCTAssertTrue(body.contains(".onAppear { onPresentationChange?(true) }"))
         XCTAssertTrue(body.contains(".onDisappear { onPresentationChange?(false) }"))
+    }
+}
+
+// MARK: - Refermé d'un toucher à côté, le menu relâche la story (#9949)
+
+/// Recette du 2026-10-10 : menu « … » refermé d'un toucher sur la scène, la
+/// story bouclait sans fin. Le contenu d'un `Menu` ne reçoit pas toujours son
+/// `onDisappear` : la déclaration d'ouverture ne suffit donc pas à tenir la
+/// boucle. À la fin de la story, le lecteur VÉRIFIE que quelque chose couvre
+/// encore la scène ; sinon il oublie le menu et avance.
+@MainActor
+final class StoryOptionsMenuReleaseTests: XCTestCase {
+
+    func test_aDeclaredMenuThatStillCoversTheScene_isShown() {
+        XCTAssertTrue(StoryOptionsMenuPresence.isShown(declaredOpen: true, sceneCovered: true))
+    }
+
+    func test_aDeclaredMenuThatNoLongerCoversTheScene_isReleased() {
+        XCTAssertFalse(StoryOptionsMenuPresence.isShown(declaredOpen: true, sceneCovered: false))
+    }
+
+    func test_withoutAProbe_theMenuNeverHoldsTheStory() {
+        XCTAssertFalse(StoryOptionsMenuPresence.isShown(declaredOpen: true, sceneCovered: nil))
+    }
+
+    func test_aMenuNeverDeclared_isNotShown_evenIfSomethingCoversTheScene() {
+        XCTAssertFalse(StoryOptionsMenuPresence.isShown(declaredOpen: false, sceneCovered: true))
+    }
+
+    func test_theWatch_forgetsAMenuClosedWithoutSignal_atTheEndOfTheStory() {
+        let scene = SceneUnderTest()
+        let watch = StoryOptionsMenuWatch()
+        watch.probe = scene.probe
+        watch.declare(true)
+
+        watch.forgetUnlessShown()
+
+        XCTAssertFalse(watch.declaredOpen, "Rien ne couvre la scène : la déclaration orpheline est oubliée.")
+    }
+
+    func test_theWatch_keepsTheLoop_whileTheMenuCoversTheScene() {
+        let scene = SceneUnderTest()
+        let watch = StoryOptionsMenuWatch()
+        watch.probe = scene.probe
+        watch.declare(true)
+        scene.coverWithAWindowLevelView()
+
+        watch.forgetUnlessShown()
+
+        XCTAssertTrue(watch.declaredOpen, "Le menu couvre la scène : la story boucle encore.")
+    }
+
+    func test_theViewer_resolvesItsEnd_onTheVerifiedMenu() throws {
+        let end = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
+                                                    from: "func storyDidReachItsEnd() {")
+        let check = try XCTUnwrap(end.range(of: "optionsMenuWatch.forgetUnlessShown()"))
+        let resolve = try XCTUnwrap(end.range(of: "playbackHold"))
+        XCTAssertLessThan(check.lowerBound, resolve.lowerBound,
+                          "La vérification précède la décision de fin.")
+    }
+
+    /// Une fenêtre réelle : la sonde est posée dans la vue du contrôleur, un
+    /// menu ouvert pose son conteneur AU-DESSUS, au niveau de la fenêtre.
+    private final class SceneUnderTest {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 300, height: 600))
+        let probe = UIView(frame: CGRect(x: 0, y: 0, width: 300, height: 600))
+
+        init() {
+            let controller = UIViewController()
+            window.rootViewController = controller
+            window.isHidden = false
+            controller.view.frame = window.bounds
+            probe.isUserInteractionEnabled = false
+            controller.view.addSubview(probe)
+        }
+
+        func coverWithAWindowLevelView() {
+            window.addSubview(UIView(frame: window.bounds))
+        }
     }
 }
