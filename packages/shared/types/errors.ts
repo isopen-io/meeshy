@@ -42,6 +42,12 @@ export enum ErrorCode {
   DAILY_COMMENT_LIMIT = 'DAILY_COMMENT_LIMIT',
   /** #9584 : limite quotidienne de réactions de post atteinte. Jusqu'à `resetAt`, minuit du jour civil du compte. */
   DAILY_REACTION_LIMIT = 'DAILY_REACTION_LIMIT',
+  /** #9927 : un mineur déclaré (13-17 ans) n'écrit pas dans Meeshy Global — il la lit. Définitif jusqu'à ses 18 ans. */
+  GLOBAL_ADULTS_ONLY = 'GLOBAL_ADULTS_ONLY',
+  /** #9927 : la date de naissance déclarée donne moins de 13 ans révolus — rien n'est écrit. */
+  AGE_BELOW_MINIMUM = 'AGE_BELOW_MINIMUM',
+  /** #9927 : la date de naissance est déjà posée et ne se redéclare pas (une correction passe par le support). */
+  BIRTH_DATE_ALREADY_SET = 'BIRTH_DATE_ALREADY_SET',
   
   // System (9xxx)
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -155,6 +161,18 @@ export const ErrorMessages: Record<ErrorCode, { fr: string; en: string }> = {
     fr: 'Vous avez fait toutes les réactions permises aujourd’hui. La limite compte vos gestes, jamais vos points : elle se renouvelle à minuit.',
     en: 'You have made all the reactions allowed today. The limit counts your actions, never your points: it renews at midnight.',
   },
+  [ErrorCode.GLOBAL_ADULTS_ONLY]: {
+    fr: 'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.',
+    en: 'Meeshy Global is read-only until you turn 18: you can read it and react, but not post.',
+  },
+  [ErrorCode.AGE_BELOW_MINIMUM]: {
+    fr: 'Meeshy est réservé aux personnes de 13 ans et plus.',
+    en: 'Meeshy is for people aged 13 and over.',
+  },
+  [ErrorCode.BIRTH_DATE_ALREADY_SET]: {
+    fr: 'Votre date de naissance est déjà enregistrée. Pour la corriger, contactez le support.',
+    en: 'Your date of birth is already recorded. To correct it, contact support.',
+  },
   
   // System
   [ErrorCode.INTERNAL_ERROR]: {
@@ -213,6 +231,7 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.CANNOT_DELETE_MESSAGE]: 403,
   [ErrorCode.CANNOT_ACCESS_CONVERSATION]: 403,
   [ErrorCode.USER_BLOCKED]: 403,
+  [ErrorCode.GLOBAL_ADULTS_ONLY]: 403,
   
   // Business Logic (409, 422)
   [ErrorCode.ALREADY_EXISTS]: 409,
@@ -222,6 +241,8 @@ export const ErrorStatusMap: Record<ErrorCode, number> = {
   [ErrorCode.NEWCOMER_SLOW_MODE]: 429,
   [ErrorCode.DAILY_COMMENT_LIMIT]: 429,
   [ErrorCode.DAILY_REACTION_LIMIT]: 429,
+  [ErrorCode.AGE_BELOW_MINIMUM]: 422,
+  [ErrorCode.BIRTH_DATE_ALREADY_SET]: 409,
   
   // System (500)
   [ErrorCode.INTERNAL_ERROR]: 500,

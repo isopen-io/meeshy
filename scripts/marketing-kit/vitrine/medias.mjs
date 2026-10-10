@@ -117,7 +117,70 @@ export const VIDEOS = {
     width: 720,
     height: 1280,
   },
+  // Les réels drôles de l'en-tête (#9904) : Mixkit, « Mixkit Stock Video Free License » relevée sur la page de chaque
+  // vidéo le 2026-10-10 (« for commercial or personal use », « Online marketing ads », modification permise, sans
+  // attribution exigée — https://mixkit.co/license/#videoFree). Des personnes s'y amusent d'elles-mêmes, aucune n'est
+  // montrée en mauvaise posture ; le visage du réel « réunion » est caché par un émoji.
+  'miroir-brosse': {
+    fichier: 'reel-miroir-brosse.mp4',
+    sujet: 'Un homme chante dans sa salle de bain, une brosse à dents en guise de micro',
+    titre: 'Man Dancing in the Mirror',
+    auteur: 'Mixkit',
+    page: 'https://mixkit.co/free-stock-video/man-dancing-in-the-mirror-101308/',
+    source: 'https://assets.mixkit.co/83tgdssraio4axz74ddb0rv5n7pb',
+    sha256: 'c8fbb941873bc08c36fecb2f380958fd1aaeebd563eb58500e24e05da5afb666',
+    licence: 'https://mixkit.co/license/#videoFree',
+    personnes: 1,
+    extrait: { debutS: 3, dureeS: 5 },
+    width: 720,
+    height: 1280,
+  },
+  'louche-micro': {
+    fichier: 'reel-louche-micro.mp4',
+    sujet: 'Une femme en pyjama chante à pleine voix dans une louche',
+    titre: 'Inspired Singing With Ladle Mic',
+    auteur: 'Mixkit',
+    page: 'https://mixkit.co/free-stock-video/inspired-singing-with-ladle-mic-101073/',
+    source: 'https://assets.mixkit.co/wtdt6olnzx6dtmqg6x1tihwxa8ar',
+    sha256: '7daf2f13d89293177a2eff971ac89733ef52b4ab2b3ac82a689e958f7079c369',
+    licence: 'https://mixkit.co/license/#videoFree',
+    personnes: 1,
+    extrait: { debutS: 0, dureeS: 5 },
+    width: 720,
+    height: 1280,
+  },
+  'emoji-reunion': {
+    fichier: 'reel-emoji-reunion.mp4',
+    sujet: 'Un employé de bureau, le visage caché par un émoji qui pleure de rire, montre la caméra du doigt',
+    titre: 'Corporate Employee With Laughing Emoji Face',
+    auteur: 'Mixkit',
+    page: 'https://mixkit.co/free-stock-video/corporate-employee-with-laughing-emoji-face-100848/',
+    source: 'https://assets.mixkit.co/t575rbq231um3wymatacfxblkh1d',
+    sha256: '239b7f640ee7bdd3515064655da3da131b3167f1466629c6219162785dfb9c2a',
+    licence: 'https://mixkit.co/license/#videoFree',
+    personnes: 0,
+    extrait: { debutS: 3.4, dureeS: 5 },
+    width: 720,
+    height: 1280,
+  },
+  'menage-danse': {
+    fichier: 'reel-menage-danse.mp4',
+    sujet: 'Une femme danse avec sa serpillière au lieu de faire le ménage',
+    titre: 'Woman Sassy Dancing While Mopping',
+    auteur: 'Mixkit',
+    page: 'https://mixkit.co/free-stock-video/woman-sassy-dancing-while-mopping-101068/',
+    source: 'https://assets.mixkit.co/rj4z0vmvda777jwor8vkxh4xdsj9',
+    sha256: '44a62340ea6f0d5353306f912f2b50c463acb9fb381a2e3b1080bf43a222de44',
+    licence: 'https://mixkit.co/license/#videoFree',
+    personnes: 1,
+    extrait: { debutS: 1, dureeS: 5 },
+    width: 720,
+    height: 1280,
+  },
 }
+
+// Les vidéos des réels drôles que la scène `interaction-defilement` fait défiler (#9904), dans l'ordre du fil.
+export const VIDEOS_DES_REELS_DROLES = ['miroir-brosse', 'louche-micro', 'emoji-reunion', 'menage-danse']
 
 // La vidéo que publie la scène `interaction-reel`.
 export const VIDEO_DU_REEL = 'coucher-ocean'
@@ -127,6 +190,19 @@ export const videoMedia = (video) => {
   if (!v) throw new Error(`vidéo inconnue : ${video}`)
   return { url: urlMedia(v.fichier), fichier: v.fichier, genre: 'video', video, width: v.width, height: v.height, dureeMs: v.extrait.dureeS * 1000 }
 }
+
+// L'affiche d'une vidéo (#9904), comme la passerelle la tire : une image JPEG de la première seconde, aux dimensions de
+// l'extrait. Sans elle, la page d'un réel peint sa couleur d'attente tant que la première image n'est pas décodée.
+export const fichierAffiche = (video) => VIDEOS[video].fichier.replace(/\.mp4$/, '.jpg')
+
+export const afficheMedia = (video) => {
+  const v = VIDEOS[video]
+  if (!v) throw new Error(`vidéo inconnue : ${video}`)
+  return { url: urlMedia(fichierAffiche(video)), fichier: fichierAffiche(video), genre: 'image', affiche: video, width: v.width, height: v.height }
+}
+
+export const argumentsAffiche = ({ extrait, sortie }) =>
+  ['-v', 'error', '-y', '-ss', '0.3', '-i', extrait, '-frames:v', '1', '-q:v', '3', sortie]
 
 export const empreinte = (octets) => createHash('sha256').update(octets).digest('hex')
 
@@ -160,5 +236,13 @@ export const preparerVideo = (video, { telecharger = curl, extraire = (args) => 
     throw new Error(`${video} : la source téléchargée n’est pas celle du kit (empreinte ${recue}, attendue ${v.sha256})`)
   }
   extraire(argumentsExtrait({ source, sortie, video }))
+  return sortie
+}
+
+// L'affiche tirée une fois de l'extrait, à côté de lui.
+export const preparerAffiche = (video, { extraireVideo = preparerVideo, tirer = (args) => execFileSync('ffmpeg', args), dossier = CACHE_VIDEOS } = {}) => {
+  const sortie = resolve(dossier, fichierAffiche(video))
+  if (existsSync(sortie)) return sortie
+  tirer(argumentsAffiche({ extrait: extraireVideo(video, { dossier }), sortie }))
   return sortie
 }

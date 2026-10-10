@@ -26,7 +26,6 @@ const enCallJoin = {
   'keypad.input.placeholder': 'Number or name',
   'keypad.input.label': 'Number or name to search',
   'keypad.delete': 'Delete',
-  'keypad.clear': 'Clear all',
   'keypad.prompt.title': 'Dial a number or a name',
   'keypad.prompt.subtitle': 'Find someone by phone number or by name.',
   'keypad.searching': 'Searching…',

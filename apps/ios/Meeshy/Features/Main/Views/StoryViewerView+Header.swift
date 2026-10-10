@@ -11,7 +11,7 @@ import MeeshyUI
 // est nette : « un fichier hors budget se découpe par responsabilité AVANT
 // qu'une vue lui ajoute quoi que ce soit ». L'en-tête est une responsabilité
 // entière : l'identité de l'auteur, l'heure de publication, l'attribution de
-// republication, le crédit du son de fond, le menu d'options et la fermeture.
+// republication, le crédit du son de fond et le menu d'options.
 //
 // Ce que la vue `2f` établit, et que cet en-tête porte :
 //
@@ -19,10 +19,73 @@ import MeeshyUI
 // > local à la surface : le couper ici ne coupe rien dans le fil, et l'annonce
 // > ne disparaît jamais parce qu'on a coupé le son. »
 
+// MARK: - Le menu « … » de la story, en quelques entrées (#9953)
+
+/// **Une story se quitte par le glissement vers le bas ; « Fermer » est la
+/// DERNIÈRE entrée du menu « … »** (porteur, 2026-10-10). Le (X) de l'en-tête
+/// a quitté l'écran : le geste ferme déjà, et le menu offre la sortie quand le
+/// geste n'est pas disponible (VoiceOver, Switch Control).
+///
+/// Le même menu pour TOUT lecteur, sa story ou celle d'un autre : la lecture
+/// (plein écran, transcription), « Composer », UN sous-menu « Partager »
+/// (exporter en vidéo, partager à un ami), l'action sur la story (signaler, ou
+/// supprimer la sienne), puis « Fermer ». Envoyer et republier restent au rail.
+nonisolated enum StoryOptionsMenuEntry: Hashable {
+    case fullscreen
+    case transcript
+    case compose
+    case share
+    case report
+    case delete
+    case close
+}
+
+/// Le sous-menu « Partager ».
+/// - `exportVideo` : la feuille d'export au choix de la LANGUE
+///   (`StoryExportShareSheet`), qu'offrait le bouton « Partager » du rail auteur.
+/// - `shareWithFriend` : la feuille du système — le lien traçable, et le
+///   fichier pour « Enregistrer la vidéo », AirDrop, Fichiers.
+nonisolated enum StoryShareMenuEntry: Hashable {
+    case exportVideo
+    case shareWithFriend
+}
+
+nonisolated struct StoryOptionsMenuPlan: Equatable {
+    let sections: [[StoryOptionsMenuEntry]]
+    let shareEntries: [StoryShareMenuEntry]
+
+    var entries: [StoryOptionsMenuEntry] { sections.flatMap { $0 } }
+
+    /// `isPublicStory` ne garde que « Partager à un ami » : son lien
+    /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
+    /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
+    /// comme l'était « Enregistrer » (#8823).
+    static func resolve(
+        hasStory: Bool,
+        isOwnStory: Bool,
+        isPublicStory: Bool,
+        hasAudioTranscript: Bool,
+        canCompose: Bool
+    ) -> StoryOptionsMenuPlan {
+        let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
+        guard hasStory else {
+            return StoryOptionsMenuPlan(sections: [reading, [.close]], shareEntries: [])
+        }
+        let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
+        let sharing: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
+        let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
+        return StoryOptionsMenuPlan(
+            sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },
+            shareEntries: sharing
+        )
+    }
+}
+
 // MARK: - Story Header
 
-/// Top header bar of the story viewer: author avatar + name + timestamp,
-/// the kebab options menu, and the close button. Extracted from
+/// Top header bar of the story viewer: author avatar + name + timestamp and
+/// the kebab options menu — no close button: the swipe down closes, and
+/// « Fermer » is the last entry of the menu (#9953). Extracted from
 /// `StoryViewerView.storyHeader` (formerly an `AnyView`).
 struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
@@ -84,12 +147,14 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// Partage INTERNE (vers une conversation ou un contact) — troisième forme
-    /// du menu (...) demandée le 2026-08-19, aux côtés de « Republier en post »
-    /// et « Citer en post ». La même feuille que le bouton « Envoyer » du rail,
-    /// qui reste en place : le menu regroupe les trois formes de partage, il ne
-    /// retire pas l'affordance directe.
+    /// Partage INTERNE, « Republier en post » et « Citer en post » ont quitté le
+    /// menu (#9953) : « Envoyer » et « Republier » restent au rail. Leurs liens
+    /// restent câblés jusqu'ici pour qu'un retour au menu ne coûte qu'une entrée.
     @Binding var sharedContentWrapper: SharedContentWrapper?
+
+    /// « Partager ▸ Exporter en vidéo » (#9953) : la feuille d'export au choix
+    /// de la langue, présentée par le lecteur.
+    @Binding var showExportShareSheet: Bool
 
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
@@ -123,8 +188,7 @@ struct StoryHeaderView: View {
     /// lecteur, qui seul survit aux ticks de la barre.
     @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
 
-    /// La cible résolue pour la slide COURANTE. Cachée pour la MÊME raison que
-    /// `savableStickers` juste en dessous : l'en-tête est reconstruit à chaque
+    /// La cible résolue pour la slide COURANTE. Cachée : l'en-tête est reconstruit à chaque
     /// tick de la barre de progression, et le contenu d'un `Menu` est construit
     /// avec lui — résoudre la règle d'offre en ligne la rejouerait des dizaines
     /// de fois par seconde, en re-bridant les médias à chaque passe.
@@ -141,12 +205,6 @@ struct StoryHeaderView: View {
     /// 2026-07-13, angle optimisation).
     @State private var cachedProfileLabel: String = ""
 
-    /// Stickers IMAGE de la slide courante, copiables dans « Mes stickers ».
-    /// Caché pour la MÊME raison que `cachedProfileLabel` : le header est
-    /// reconstruit à chaque tick de la barre de progression, et le contenu
-    /// d'un `Menu` est construit avec lui.
-    @State private var savableStickers: [StoryStickerLibrary.Savable] = []
-
     /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
     /// republication (icône + @handle visuels que ce label unique remplace).
     private func computeProfileLabel(for group: StoryGroup) -> String {
@@ -162,12 +220,6 @@ struct StoryHeaderView: View {
 
     var body: some View {
         HStack(spacing: FullscreenChromeMetrics.barSpacing) {
-            FullscreenCloseButton(
-                hint: String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main)
-            ) {
-                dismissViewer()
-            }
-
             if let group = currentGroup {
                 Button {
                     HapticFeedback.light()
@@ -302,245 +354,14 @@ struct StoryHeaderView: View {
 
             Spacer(minLength: 0)
 
-            // Options menu (three dots)
+            // Le menu « … » rend le plan, section par section (#9953) : sa
+            // composition se décide dans `StoryOptionsMenuPlan`, jamais ici.
             FullscreenMoreMenu(onPresentationChange: optionsMenuPresenceChange) {
-                // Toggle mode plein écran (session-scoped) — pertinent quelle
-                // que soit la propriété de la story. Placé en tête du menu
-                // pour être accessible immédiatement, avec un `Divider`
-                // suivant qui le sépare visuellement des actions destructives
-                // ou de partage propres à la story courante.
-                Button {
-                    HapticFeedback.light()
-                    isFullscreenStorySession.toggle()
-                    // Synchronise instantanément l'état au repos du chrome :
-                    // mode actif ⇒ caché ; mode inactif ⇒ visible. Le
-                    // touch-and-hold inversera ce repos pendant le hold.
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                        chromeVisible = !isFullscreenStorySession
-                    }
-                } label: {
-                    Label(
-                        isFullscreenStorySession
-                            ? String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
-                            : String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main),
-                        systemImage: isFullscreenStorySession
-                            ? "arrow.down.right.and.arrow.up.left"
-                            : "arrow.up.left.and.arrow.down.right"
-                    )
-                }
-
-                // Transcription de l'audio parlé — item 7a : elle vit ICI, dans
-                // les options, et non en bandeau permanent sur la story. Le
-                // texte affiché suit la langue choisie via « Traductions »,
-                // puisqu'il se résout sur la même chaîne de langues préférées.
-                if hasAudioTranscript {
-                    Button {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showAudioTranscript.toggle()
-                        }
-                    } label: {
-                        Label(
-                            showAudioTranscript
-                                ? String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main)
-                                : String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
-                            systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
-                        )
-                    }
-                }
-
-                Divider()
-
-                if let story = currentStory, let group = currentGroup {
-                    // **« Composer » — le même item, dans le menu de la PIÈCE**
-                    // (#6085, directive porteur 2026-09-11 : « il faut permettre
-                    // de pouvoir composer les pièces jointes d'une conversation,
-                    // d'un poste ou d'une story »).
-                    //
-                    // Le menu « … » EST le menu de la slide courante : c'est déjà
-                    // là que vivent « enregistrer le sticker » et les trois formes
-                    // de partage. Le libellé est celui de la conversation
-                    // (`message.compose.title`) et le glyphe le même — un geste
-                    // qui change de nom d'un écran à l'autre est un geste de plus
-                    // à apprendre.
-                    //
-                    // AVANT les actions propres au propriétaire : composer à
-                    // partir d'une slide n'est ni un partage ni une suppression,
-                    // et c'est offert à tout le monde — l'auteur compris, qui
-                    // reprend souvent sa propre image.
-                    if let cible = composableSlide, let demanderComposer {
-                        Button {
-                            HapticFeedback.light()
-                            pauseTimer()
-                            demanderComposer(cible)
-                        } label: {
-                            Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
-                                  systemImage: "wand.and.stars")
-                        }
-                        Divider()
-                    }
-
-                    // **« Enregistrer » — pour TOUT lecteur** (#8823, demande
-                    // porteur 2026-09-30). La sauvegarde EXISTANTE, celle du
-                    // rail auteur et de « Mes stories » : même bake, même
-                    // filigrane, même anneau. `save(story:)` est idempotent —
-                    // un second tap pendant l'export est ignoré — et dit
-                    // lui-même son issue (succès, refus Photos, échec).
-                    Button {
-                        HapticFeedback.light()
-                        StoryPhotoSaveService.shared.save(story: story, authorUsername: group.username)
-                    } label: {
-                        Label(String(localized: "story.viewer.action.save", defaultValue: "Enregistrer", bundle: .main),
-                              systemImage: "square.and.arrow.down")
-                    }
-                    Divider()
-
-                    if isOwnStory {
-                        // External share via system share sheet (Messages,
-                        // Mail, other apps). Only for public stories.
-                        // The link is minted on tap so the user always
-                        // shares a trackable `meeshy.me/l/<token>` URL.
-                        if story.isPublic {
-                            Button {
-                                Task { await mintAndShareStory(story) }
-                            } label: {
-                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
-                            }
-                            Divider()
-                        }
-                        Button(role: .destructive) {
-                            deleteCurrentStory()
-                        } label: {
-                            Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                        }
-                    } else {
-                        Button {
-                            selectedProfileUser = .from(storyGroup: group)
-                        } label: {
-                            Label(String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.fill")
-                        }
-
-                        // S5 — « enregistrer ce sticker », depuis le contenu
-                        // REÇU. Le lecteur de stories est la surface où l'on
-                        // rencontre le sticker d'un autre ; le menu (…) y est
-                        // déjà l'endroit des actions sur la slide courante,
-                        // aux côtés des trois formes de partage.
-                        //
-                        // Loi 4 : rien à copier, rien d'offert. La liste est
-                        // vide dès que la slide ne porte aucun sticker IMAGE —
-                        // un sticker emoji n'a aucune image à garder.
-                        if !savableStickers.isEmpty {
-                            Button {
-                                HapticFeedback.light()
-                                let stickers = savableStickers
-                                Task { await StickerLibraryReceive.saveAndAnnounce(stickers) }
-                            } label: {
-                                Label(
-                                    savableStickers.count == 1
-                                        ? String(localized: "story.viewer.sticker.save.one",
-                                                 defaultValue: "Enregistrer le sticker",
-                                                 bundle: .main)
-                                        : String(format: String(localized: "story.viewer.sticker.save.many",
-                                                                defaultValue: "Enregistrer les %d stickers",
-                                                                bundle: .main),
-                                                 savableStickers.count),
-                                    systemImage: "square.and.arrow.down"
-                                )
-                            }
-                        }
-
-                        // ── Les TROIS formes de partage (demande produit
-                        // 2026-08-19) ─────────────────────────────────────────
-                        //
-                        // Elles n'étaient offertes que sur les stories
-                        // PUBLIQUES (« Gated on `story.isPublic` … so we never
-                        // expose these for FRIENDS / PRIVATE visibilities »).
-                        // Ce gate était le REFLET d'une barrière serveur qui
-                        // n'existe plus : `PostService.repostPost` refusait tout
-                        // original non-`PUBLIC` (« Cannot repost private
-                        // content »). Elle a été remplacée par la LOI
-                        // D'AUDIENCE — même audience ou plus restreinte, jamais
-                        // plus large — que le serveur applique désormais aux
-                        // deux portes (`repostPost` ET `createPost`, 403
-                        // `REPOST_AUDIENCE_WIDENING`).
-                        //
-                        // Garder le gate reviendrait à protéger contre une
-                        // restriction abolie, tout en rendant le menu VIDE de
-                        // toute forme de partage sur les stories que la
-                        // nouvelle règle vise précisément. C'est la loi qui
-                        // borne l'audience du résultat, plus l'appartenance au
-                        // menu — exactement le raisonnement appliqué au bouton
-                        // du rail (`showsRepost: !isOwnStory`).
-
-                        // 1. Republier en post — DIRECT, un tap (arbitrage D3).
-                        // Sans `visibility` : le serveur hérite de l'audience de
-                        // l'original, donc jamais plus large. C'est l'ANCRAGE web
-                        // (`onRepostAsPost` / `KeepOnFeedIcon`, StoryViewer.tsx) :
-                        // glyphe DISTINCT du bouton du rail (:519, composeur), qui
-                        // portait le même `arrow.2.squarepath` avant le premier
-                        // correctif — deux permanences différentes n'ont pas le
-                        // même dessin. `bookmark.fill` (premier choix) désigne
-                        // déjà « Publications enregistrées » ailleurs dans l'app
-                        // (SettingsView.swift:606 et 4 autres sites, constat de
-                        // revue R3, 2026-08-25) : collision levée dans CE fichier,
-                        // rouverte à l'échelle de l'app. `infinity` reste libre de
-                        // tout sens produit concurrent et porte la permanence
-                        // (story éphémère → post durable).
-                        Button {
-                            repostAsPostDirect()
-                        } label: {
-                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
-                        }
-
-                        // 2. Citer en post — ouvre le composeur de POST avec la
-                        // story citée, pour ajouter d'autres contenus par-dessus.
-                        Button {
-                            HapticFeedback.light()
-                            pauseTimer()
-                            editAndRepostAsPostSource = RepostPostSourceWrapper(
-                                story: story,
-                                authorHandle: group.username
-                            )
-                        } label: {
-                            Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Citer en post", bundle: .main), systemImage: "square.and.pencil")
-                        }
-
-                        // 3. Partager — transmettre DANS Meeshy (conversation
-                        // existante ou contact). Même feuille que le bouton
-                        // « Envoyer » du rail, qui reste en place : le menu
-                        // regroupe les formes, il ne retire pas l'affordance
-                        // directe. Aucune garde d'audience — le rail n'en a pas
-                        // (`showsForward: true`), et en inventer une ici
-                        // créerait deux règles pour un seul geste.
-                        Button {
-                            HapticFeedback.light()
-                            EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                            sharedContentWrapper = SharedContentWrapper(
-                                content: .story(item: story, authorName: group.username)
-                            )
-                        } label: {
-                            Label(String(localized: "story.viewer.share.internal", defaultValue: "Partager", bundle: .main), systemImage: "paperplane.fill")
-                        }
-
-                        // Partage EXTERNE (Messages, Mail, autres apps) — reste
-                        // réservé aux stories publiques : le lien `meeshy.me/l/…`
-                        // est ouvrable par n'importe qui, ce qui élargirait
-                        // l'audience hors de tout contrôle. C'est le seul des
-                        // quatre où le gate `isPublic` dit encore quelque chose.
-                        if story.isPublic {
-                            Button {
-                                Task { await mintAndShareStory(story) }
-                            } label: {
-                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
-                            }
-                        }
-
-                        Divider()
-
-                        Button(role: .destructive) {
-                            showReportSheet = true
-                        } label: {
-                            Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+                let plan = optionsMenuPlan
+                ForEach(plan.sections, id: \.self) { section in
+                    Section {
+                        ForEach(section, id: \.self) { entry in
+                            optionsMenuItem(entry, shareEntries: plan.shareEntries)
                         }
                     }
                 }
@@ -549,7 +370,6 @@ struct StoryHeaderView: View {
         }
         .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
-            savableStickers = currentStory.map { StoryStickerLibrary.savable(in: $0) } ?? []
             composableSlide = resolveComposableSlide()
         }
         .sheet(item: $selectedProfileUser) { user in
@@ -590,6 +410,123 @@ struct StoryHeaderView: View {
             // Trackable `meeshy.me/l/<token>` URL minted in
             // `mintAndShareStory` — the author owns the analytics.
             ShareSheet(activityItems: link.activityItems)
+        }
+    }
+
+    private var optionsMenuPlan: StoryOptionsMenuPlan {
+        StoryOptionsMenuPlan.resolve(
+            hasStory: currentStory != nil && currentGroup != nil,
+            isOwnStory: isOwnStory,
+            isPublicStory: currentStory?.isPublic ?? false,
+            hasAudioTranscript: hasAudioTranscript,
+            canCompose: composableSlide != nil && demanderComposer != nil
+        )
+    }
+
+    @ViewBuilder
+    private func optionsMenuItem(_ entry: StoryOptionsMenuEntry, shareEntries: [StoryShareMenuEntry]) -> some View {
+        switch entry {
+        case .fullscreen:
+            // Plein écran (session) : au repos, le chrome suit le mode — caché
+            // s'il est actif, visible sinon ; le touch-and-hold l'inverse.
+            Button {
+                HapticFeedback.light()
+                isFullscreenStorySession.toggle()
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                    chromeVisible = !isFullscreenStorySession
+                }
+            } label: {
+                Label(
+                    isFullscreenStorySession
+                        ? String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
+                        : String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main),
+                    systemImage: isFullscreenStorySession
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
+                )
+            }
+        case .transcript:
+            // Item 7a : la transcription vit dans les options, jamais en
+            // bandeau permanent ; elle suit la langue choisie par « Traductions ».
+            Button {
+                HapticFeedback.light()
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showAudioTranscript.toggle()
+                }
+            } label: {
+                Label(
+                    showAudioTranscript
+                        ? String(localized: "story.viewer.transcript.hide", defaultValue: "Masquer la transcription", bundle: .main)
+                        : String(localized: "story.viewer.transcript.show", defaultValue: "Afficher la transcription", bundle: .main),
+                    systemImage: showAudioTranscript ? "captions.bubble.fill" : "captions.bubble"
+                )
+            }
+        case .compose:
+            // « Composer » (#6085) : même libellé et même glyphe que dans la
+            // conversation ; l'éventail du meuble offre story, réel ou post.
+            // L'en-tête DEMANDE, le conteneur présente.
+            if let cible = composableSlide, let demanderComposer {
+                Button {
+                    HapticFeedback.light()
+                    pauseTimer()
+                    demanderComposer(cible)
+                } label: {
+                    Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
+                          systemImage: "wand.and.stars")
+                }
+            }
+        case .share:
+            Menu {
+                ForEach(shareEntries, id: \.self) { shareMenuItem($0) }
+                    .onAppear { optionsMenuPresenceChange?(true) }
+            } label: {
+                Label(String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main),
+                      systemImage: "square.and.arrow.up")
+            }
+        case .report:
+            Button(role: .destructive) {
+                showReportSheet = true
+            } label: {
+                Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        case .delete:
+            Button(role: .destructive) {
+                deleteCurrentStory()
+            } label: {
+                Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        case .close:
+            Button {
+                dismissViewer()
+            } label: {
+                Label(String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
+                      systemImage: FullscreenChromeSymbol.close)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func shareMenuItem(_ entry: StoryShareMenuEntry) -> some View {
+        switch entry {
+        case .exportVideo:
+            // La feuille d'export EXISTANTE, au choix de la langue, présentée
+            // par le lecteur. Posée SUR la story : elle boucle (#9821).
+            Button {
+                HapticFeedback.light()
+                showExportShareSheet = true
+            } label: {
+                Label(String(localized: "story.export.share.title", defaultValue: "Exporter en vidéo", bundle: .main), systemImage: "film")
+            }
+        case .shareWithFriend:
+            // La feuille du système : le lien traçable `meeshy.me/l/<token>`,
+            // frappé au tap, et le fichier rendu à la demande.
+            if let story = currentStory {
+                Button {
+                    Task { await mintAndShareStory(story) }
+                } label: {
+                    Label(String(localized: "story.viewer.share.friend", defaultValue: "Partager à un ami", bundle: .main), systemImage: "person.2")
+                }
+            }
         }
     }
 

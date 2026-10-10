@@ -654,6 +654,42 @@ describe('PostTranslationService', () => {
       expect(cmd[0]).toMatchObject({ update: 'PostComment' });
     });
 
+    describe('une traduction vers la langue d\'origine ne s\'écrit pas (#9861)', () => {
+      it('n\'écrit la traduction d\'un post que si sa langue d\'origine diffère de la cible', async () => {
+        const { prisma, zmqClient } = makeService({ post: { authorId: 'author-1' } });
+        zmqClient.emit('translationCompleted', makeEvent('post:post-1'));
+        await flushPromises();
+        const cmd = (prisma.$runCommandRaw as jest.Mock).mock.calls[0] as [{ updates: Array<{ q: object }> }];
+        expect(cmd[0].updates[0].q).toEqual({ _id: { $oid: 'post-1' }, originalLanguage: { $ne: 'fr' } });
+      });
+
+      it('n\'écrit la traduction d\'un commentaire que si sa langue d\'origine diffère de la cible', async () => {
+        const { prisma, zmqClient } = makeService({ postComment: { postId: 'post-1' }, post: { authorId: 'author-1' } });
+        zmqClient.emit('translationCompleted', makeEvent('comment:comment-1'));
+        await flushPromises();
+        const cmd = (prisma.$runCommandRaw as jest.Mock).mock.calls[0] as [{ updates: Array<{ q: object }> }];
+        expect(cmd[0].updates[0].q).toEqual({ _id: { $oid: 'comment-1' }, originalLanguage: { $ne: 'fr' } });
+      });
+
+      it('ne diffuse pas une traduction de post que la garde a refusée', async () => {
+        const { prisma, zmqClient, socialEvents } = makeService({ post: { authorId: 'author-1' } });
+        (prisma.$runCommandRaw as jest.Mock).mockResolvedValue({ n: 0, nModified: 0, ok: 1 } as never);
+        zmqClient.emit('translationCompleted', makeEvent('post:post-1'));
+        await flushPromises();
+        await flushPromises();
+        expect(socialEvents.broadcastPostTranslationUpdated).not.toHaveBeenCalled();
+      });
+
+      it('ne diffuse pas une traduction de commentaire que la garde a refusée', async () => {
+        const { prisma, zmqClient, socialEvents } = makeService({ postComment: { postId: 'post-1' }, post: { authorId: 'author-1' } });
+        (prisma.$runCommandRaw as jest.Mock).mockResolvedValue({ n: 0, nModified: 0, ok: 1 } as never);
+        zmqClient.emit('translationCompleted', makeEvent('comment:comment-1'));
+        await flushPromises();
+        await flushPromises();
+        expect(socialEvents.broadcastCommentTranslationUpdated).not.toHaveBeenCalled();
+      });
+    });
+
     it('does not broadcast post translation when post author is not found', async () => {
       const { socialEvents, zmqClient } = makeService({ post: null });
       zmqClient.emit('translationCompleted', makeEvent('post:post-missing'));

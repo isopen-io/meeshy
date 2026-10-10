@@ -173,6 +173,7 @@ extension ConversationView {
         }
 
         let route = outgoingReplyRoute
+        let replyAnchor = outgoingAttachmentAnchor
         let replyId = route.replyToId
         let storyReplyId = route.storyReplyToId
         let storyRef = route.storyReference
@@ -230,7 +231,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place)
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place, attachmentReplyTo: replyAnchor)
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -648,7 +649,8 @@ extension ConversationView {
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         protection: protection,
                         originalLanguage: lang,
-                        existingTempId: send.tempId
+                        existingTempId: send.tempId,
+                        attachmentReplyTo: send.group.carriesReply ? replyAnchor : nil
                     )
                     anySuccess = anySuccess || ok
                 } catch {
@@ -737,7 +739,8 @@ extension ConversationView {
                     protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
-                    location: place
+                    location: place,
+                    attachmentReplyTo: textGroup.carriesReply ? replyAnchor : nil
                 )
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok

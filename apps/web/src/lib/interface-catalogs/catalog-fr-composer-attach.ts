@@ -6,13 +6,13 @@
  */
 const frComposerAttach = {
   'composer.attach.group': 'Types de pièces jointes',
-  'composer.attach.handle': 'Poignée du panneau',
   'composer.attach.photo': 'Photos',
   'composer.attach.photo.action': 'Choisir des photos',
   'composer.attach.camera': 'Caméra',
   'composer.attach.camera.action': 'Prendre une photo',
   'composer.attach.file': 'Fichier',
   'composer.attach.file.action': 'Choisir un fichier',
+  'composer.drop.veil': 'Déposer pour joindre',
   'composer.attach.contact': 'Contact',
   'composer.attach.contact.action': 'Partager un contact',
   'composer.contact.failed': 'Ce contact ne peut pas être partagé',
@@ -31,7 +31,6 @@ const frComposerAttach = {
   'composer.mic.unavailable': 'Micro indisponible sur cet appareil',
   'composer.openSettings': 'Réglages',
   'composer.location.chip': 'LIEU',
-  'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Envoyer un sticker',

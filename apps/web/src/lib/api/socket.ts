@@ -14,7 +14,7 @@ import { noteGalleryReception } from '@/lib/gallery/auto-save-runtime';
 import type { SocketAuth, SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
 import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
-import { decodeNotification } from '@/lib/notifications/record';
+import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -768,7 +768,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const seenNotifications = new Set<string>();
   const SEEN_NOTIFICATIONS_CAP = 200;
   const onNotificationNew = (payload: unknown): void => {
-    const notification = decodeNotification(payload);
+    const notification = decodeRealtimeNotification(payload);
     if (notification === null || seenNotifications.has(notification.id)) return;
     seenNotifications.add(notification.id);
     if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {

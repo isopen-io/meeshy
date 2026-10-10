@@ -28,9 +28,9 @@ import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
+import itWriteRestriction from './catalog-it-write-restriction';
 import itConversationCard from './catalog-it-conversation-card';
 import itStoriesMine from './catalog-it-stories-mine';
-import itSoundsMine from './catalog-it-sounds-mine';
 import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
@@ -51,16 +51,6 @@ const it = {
   'message.excerpt.protected': 'contenuto protetto',
   'a11y.message.menu.subject': 'Azioni del messaggio di {author}: {excerpt}',
 
-  'selection.toolbar': 'Selezione messaggi',
-  'selection.cancel': 'Annulla',
-  'selection.count': '{count} selezionati',
-  'forward.title': 'Inoltra a…',
-  'forward.empty': 'Nessuna conversazione',
-  'forward.search.label': 'Cerca una conversazione',
-  'forward.search.placeholder': 'Cerca',
-  'forward.announce.sent': 'Messaggio inoltrato',
-  'forward.announce.sentMany': '{count} messaggi inoltrati',
-  'forward.announce.failed': 'Inoltro non riuscito',
   'forward.refusal.viewOnce': 'Un messaggio a visualizzazione singola non può essere inoltrato',
   'forward.refusal.unavailable': 'Il messaggio originale non è più disponibile: niente da inoltrare',
 
@@ -260,7 +250,6 @@ const it = {
   'feed.gesture.pending': 'Azione non confermata — offline',
   'feed.share.error': 'Errore nella condivisione del post',
   'feed.share.copied': 'Link copiato — non resta che incollarlo.',
-  'feed.share.text': 'Una pubblicazione su Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'I miei link',
@@ -641,7 +630,6 @@ const it = {
   'discover.blocked.empty.title': 'Nessun utente bloccato',
   'discover.blocked.empty.subtitle': 'Le persone che blocchi appariranno qui.',
   'discover.unknown': 'Sconosciuto',
-  'discover.loading': 'Caricamento',
   'discover.allLoaded': 'L’elenco completo è caricato',
   'discover.error.title': 'Impossibile caricare questo elenco',
   'discover.error.body': 'Controlla la connessione e riprova.',
@@ -696,8 +684,6 @@ const it = {
   'links.detail.disable': 'Disattiva',
   'links.detail.activate': 'Attiva',
   'links.detail.stats': 'Statistiche',
-  'links.detail.stats.uses': 'Utilizzi',
-  'links.detail.stats.max': 'Massimo',
   'links.detail.info': 'Informazioni',
   'links.detail.identifier': 'Identificativo',
   'links.detail.createdAt': 'Creato il',
@@ -771,8 +757,6 @@ const it = {
   'feed.scene.mosaic.more': 'Scena {index} e altre {count}',
   'feed.scene.mosaic.video': 'Scena {index}, video',
   'feed.scene.shared_by': 'Scena condivisa da {author}',
-  'feed.scene.open.fullscreen': 'Tocca due volte per vedere a schermo intero',
-  'feed.scene.open.post': 'Tocca due volte per aprire il post',
   'feed.scene.sound.muted': 'Audio disattivato',
   'feed.scene.count': '{count} scene',
   'scene.fullscreen.play': 'Riprendi tutto',
@@ -788,7 +772,6 @@ const it = {
      pubblicata in CanvasV3 come su iOS. */
   'story.studio.title': 'Nuova story',
   'story.studio.cancel': 'Annulla',
-  'story.studio.publish': 'Pubblica',
   'story.studio.publishing': 'Pubblicazione…',
   'story.studio.publish.waiting': 'In attesa della rete…',
   'story.studio.publishing.progress': 'Pubblicazione {current}/{total}…',
@@ -819,7 +802,6 @@ const it = {
   'story.studio.text.label': 'Testo della story',
   'story.studio.text.placeholder': 'Aggiungi testo',
   'story.studio.hint.duration': 'Una story resta visibile per venti ore.',
-  'story.studio.error.upload': 'Il file non è stato inviato.',
   'story.studio.error.publish': 'La story non è stata pubblicata.',
   'story.studio.refusal.title': 'Serve un account per creare una story.',
   'story.studio.refusal.login': 'Accedi',
@@ -840,8 +822,6 @@ const it = {
   'story.studio.text.add': 'Aggiungi testo',
   'story.studio.object.text': 'Testo {index}',
   'story.studio.object.overlay': 'Livello',
-  'story.studio.object.select': 'Seleziona {name}',
-  'story.studio.objects.label': 'Oggetti della scena',
   'story.studio.overlay.add': 'Metti un’immagine sulla scena',
   'story.studio.overlay.label': 'Livello',
   'story.studio.overlay.remove': 'Rimuovi il livello',
@@ -911,8 +891,6 @@ const it = {
   'story.studio.pose.rotateLeft': 'Ruota a sinistra',
   'story.studio.pose.rotateRight': 'Ruota a destra',
   'story.studio.pose.reset': 'Ricentra',
-  'story.studio.pose.handle': 'Sposta {name} — frecce per spostare, + e − per la dimensione, [ e ] per ruotare',
-  'story.studio.pose.grip': 'Ridimensiona e ruota {name}',
 
   /* IL FOGLIO DI DESTINATARI DELLO STUDIO (#7683) — i sei PostVisibility,
      specchio di PostVisibility.swift (packages/MeeshySDK). */
@@ -1004,7 +982,6 @@ const it = {
   'comment.refused.session': 'Sessione scaduta — accedi di nuovo.',
   'comment.refused.right': 'Questa azione non ti è consentita.',
   'comment.like.limit': 'Al massimo cinque reazioni a persona.',
-  'feed.action.comment': 'Commenta',
 
   'admin.title': 'Amministrazione',
 
@@ -1120,11 +1097,12 @@ const it = {
   ...itMentions,
   ...itStudioChrome,
   ...itEphemeral,
+  ...itWriteRestriction,
   ...itGallery,
   ...itMessageCard,
   ...itConversationCard,
   ...itStoriesMine,
-  ...itSoundsMine,
+  'settings.tools.sounds': 'I miei suoni',
   ...itContactCard,
   ...itQuote,
   ...itCommentRow,

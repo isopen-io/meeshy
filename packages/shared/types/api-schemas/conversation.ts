@@ -356,6 +356,15 @@ export const conversationSchema = {
     // leur absence rendait les conversations non modifiables. `GET
     // /conversations/:id` résolvait déjà le rang (`callerConversationRole`) pour
     // décider du plafond d'effectif, et le jetait faute d'être déclaré ici.
+    // #9927 — ce que le LECTEUR n'a pas le droit d'écrire ici, calculé depuis
+    // sa date de naissance déclarée (`viewerWriteRestrictionOf`). Non déclaré,
+    // `fast-json-stringify` le retirerait du fil, comme `currentUserRole`.
+    viewerWriteRestriction: {
+      type: 'string',
+      enum: ['minor-global', null],
+      nullable: true,
+      description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
+    },
     currentUserRole: {
       type: 'string',
       nullable: true,
@@ -571,6 +580,15 @@ export const conversationMinimalSchema = {
     // Minuscules, comme la colonne `Participant.role` en base ('creator',
     // 'admin', 'moderator', 'member') — pas d'`enum` ici : le rang voyage tel
     // que la base le stocke, et un enum ne servirait que la documentation.
+    // #9927 — ce que le LECTEUR n'a pas le droit d'écrire ici, calculé depuis
+    // sa date de naissance déclarée (`viewerWriteRestrictionOf`). Non déclaré,
+    // `fast-json-stringify` le retirerait du fil, comme `currentUserRole`.
+    viewerWriteRestriction: {
+      type: 'string',
+      enum: ['minor-global', null],
+      nullable: true,
+      description: "Restriction d'écriture du lecteur : 'minor-global' = mineur (13-17 ans) dans Meeshy Global, en lecture seule jusqu'à ses 18 ans ; null = aucune"
+    },
     currentUserRole: {
       type: 'string',
       nullable: true,

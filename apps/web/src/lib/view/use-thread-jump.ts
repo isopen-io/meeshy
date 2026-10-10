@@ -25,7 +25,9 @@ export type AroundWindow = {
 
 export type ThreadJump = {
   readonly highlightedId: string | null;
-  readonly jumpToMessage: (messageId: string) => void;
+  /** La TUILE que la citation nommait (#9911) — mise en évidence avec sa rangée, effacée avec elle. */
+  readonly highlightedPieceId: string | null;
+  readonly jumpToMessage: (messageId: string, pieceId?: string) => void;
   /** LE SAUT DIFFÉRÉ (#5695) — les trois sorties du Résumé Vivant l'appellent
    * quand `<ol>` n'est pas encore monté (`usesFlatRow`) ; `null` désarme une
    * demande en cours sans en poser de nouvelle. */
@@ -68,6 +70,9 @@ export function useThreadJump(params: {
   const [seek, setSeek] = useState<string | null>(null);
 
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [highlightedPieceId, setHighlightedPieceId] = useState<string | null>(null);
+  /* La pièce d'un saut qui attend sa fenêtre (`around`) — elle se pose à l'atterrissage. */
+  const seekPiece = useRef<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /**
@@ -78,7 +83,7 @@ export function useThreadJump(params: {
    * l'hôte — la chaîne tient de bout en bout.
    */
   const land = useCallback(
-    (index: number, messageId: string) => {
+    (index: number, messageId: string, pieceId: string | null) => {
       // ANNONCE le défilement PROGRAMMÉ avant de le déclencher — ni le
       // révélé ni l'armement de la scène ne doivent réagir à un saut de
       // citation (§1.5 de la spécification #5648, même famille de
@@ -86,22 +91,27 @@ export function useThreadJump(params: {
       noteProgrammaticScroll();
       virtualizer.scrollToIndex(index, { align: 'center' });
       setHighlightedId(messageId);
+      setHighlightedPieceId(pieceId);
       if (highlightTimer.current !== null) clearTimeout(highlightTimer.current);
-      highlightTimer.current = setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
+      highlightTimer.current = setTimeout(() => {
+        setHighlightedId(null);
+        setHighlightedPieceId(null);
+      }, HIGHLIGHT_MS);
     },
     [virtualizer, noteProgrammaticScroll],
   );
 
   const jumpToMessage = useCallback(
-    (messageId: string) => {
+    (messageId: string, pieceId?: string) => {
       const index = placed.findIndex((p) => p.message.id === messageId);
       if (index !== -1) {
         setSeek(null);
-        land(index, messageId);
+        land(index, messageId, pieceId ?? null);
         return;
       }
       const around = aroundRef.current;
       if (around === undefined) return;
+      seekPiece.current = pieceId ?? null;
       setSeek(messageId);
       around.seek(messageId);
     },
@@ -115,7 +125,7 @@ export function useThreadJump(params: {
     const index = placed.findIndex((p) => p.message.id === seek);
     if (index !== -1) {
       setSeek(null);
-      land(index, seek);
+      land(index, seek, seekPiece.current);
       return;
     }
     if (aroundTarget === seek && aroundSettled) setSeek(null);
@@ -143,5 +153,5 @@ export function useThreadJump(params: {
     setPendingJump(null);
   }, [pendingJump, mode, jumpToMessage]);
 
-  return { highlightedId, jumpToMessage, requestJump: setPendingJump };
+  return { highlightedId, highlightedPieceId, jumpToMessage, requestJump: setPendingJump };
 }

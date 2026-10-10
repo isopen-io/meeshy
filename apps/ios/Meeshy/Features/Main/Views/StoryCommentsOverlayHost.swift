@@ -10,16 +10,19 @@ import MeeshySDK
 /// eux (#9821) coûtait 75 à 90 % du processeur, et l'app a figé une fois à
 /// 100 %, le fil principal tournant dans la mise en page de la liste paresseuse
 /// des commentaires (`CommentMoreMenu` dans l'échantillon). La cause : la
-/// progression est un `@State` du lecteur, rafraîchie jusqu'à 60 fois par
-/// seconde. Chaque tick réévaluait le lecteur, sa carte, et l'overlay des
+/// progression était un `@State` du lecteur (elle vit désormais dans
+/// `StoryPlaybackProgressClock`, que seule la barre observe). Chaque tick
+/// réévaluait le lecteur, sa carte, et l'overlay des
 /// commentaires — dont les fermetures (`makeStoryCommentRow`, les chasses)
 /// changent d'identité à chaque passe : SwiftUI ne pouvait pas prouver que rien
 /// n'avait changé, il reconstruisait chaque rangée, chaque menu « … », et
 /// remesurait la `LazyVStack` à chaque image. Dès qu'une passe dépassait une
 /// image, le fil principal ne rendait plus la main.
 ///
-/// L'hôte compare ce que la liste AFFICHE — les commentaires, les fils, l'état
-/// de chaque rangée — et rien d'autre. La progression n'en fait pas partie.
+/// Le tick ne réévalue plus le lecteur ; l'hôte reste la seconde ligne : quand
+/// le lecteur se réévalue pour un vrai événement (boucle, pause, réaction), il
+/// compare ce que la liste AFFICHE — les commentaires, les fils, l'état de
+/// chaque rangée — et rien d'autre.
 nonisolated struct StoryCommentsRenderInputs: Equatable {
     var comments: [FeedComment]
     var commentCount: Int
@@ -38,6 +41,8 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
     var likedIds: Set<String>
     var likeDelta: [String: Int]
     var inFlightIds: Set<String>
+    /// Où la liste se pose : la carte la place sur le composeur (#9893).
+    var zone: StoryCommentsZone.Frame = .unplaced
 
     static func == (lhs: StoryCommentsRenderInputs, rhs: StoryCommentsRenderInputs) -> Bool {
         let sameComments = ArrayStorageIdentity.same(lhs.comments, rhs.comments)
@@ -53,6 +58,7 @@ nonisolated struct StoryCommentsRenderInputs: Equatable {
             && lhs.targetParentCommentId == rhs.targetParentCommentId
             && lhs.safeBottom == rhs.safeBottom
             && lhs.replyingToId == rhs.replyingToId
+            && lhs.zone == rhs.zone
         let sameRows = lhs.likedIds == rhs.likedIds
             && lhs.likeDelta == rhs.likeDelta
             && lhs.inFlightIds == rhs.inFlightIds
@@ -90,10 +96,19 @@ nonisolated enum ArrayStorageIdentity {
 /// `inputs` change. Ses fermetures lisent l'état du lecteur par ses `@State`,
 /// donc toujours à jour, même quand l'hôte garde l'overlay d'un rendu précédent.
 struct StoryCommentsOverlayHost: View, Equatable {
-    let inputs: StoryCommentsRenderInputs
-    let make: () -> StoryCommentsOverlayView
+    var inputs: StoryCommentsRenderInputs
+    let make: (StoryCommentsZone.Frame) -> StoryCommentsOverlayView
 
-    var body: some View { make() }
+    var body: some View { make(inputs.zone) }
+
+    /// **La carte place la liste sur son composeur** (#9893) : elle seule sait
+    /// s'il est replié, déplié, soulevé par le clavier, et combien il mesure.
+    /// La zone entre dans la comparaison : la liste suit chaque état.
+    func placed(_ reading: StoryCommentsZone.ComposerReading) -> StoryCommentsOverlayHost {
+        var placed = self
+        placed.inputs.zone = reading.frame(safeBottom: inputs.safeBottom)
+        return placed
+    }
 
     static func == (lhs: StoryCommentsOverlayHost, rhs: StoryCommentsOverlayHost) -> Bool {
         lhs.inputs == rhs.inputs
@@ -124,6 +139,6 @@ extension StoryViewerView {
     }
 
     func storyCommentsOverlayHost() -> StoryCommentsOverlayHost {
-        StoryCommentsOverlayHost(inputs: storyCommentsRenderInputs, make: { storyCommentsOverlay() })
+        StoryCommentsOverlayHost(inputs: storyCommentsRenderInputs, make: { storyCommentsOverlay(zone: $0) })
     }
 }

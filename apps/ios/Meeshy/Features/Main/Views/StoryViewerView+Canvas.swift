@@ -708,7 +708,7 @@ struct StoryCardView: View {
     let quickEmojis: [String]
 
     // Animation drivers (written by parent transition funcs)
-    let progress: CGFloat
+    let progressClock: StoryPlaybackProgressClock
     let currentSlideDuration: TimeInterval
     let outgoingOpacity: Double
     let closingScale: CGFloat
@@ -855,15 +855,14 @@ struct StoryCardView: View {
     /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
     /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
     /// Cf. spec stories-video-layers-text-sprint § 3.D.
-    /// **Le token de retour en tête du corpus** (#4831).
-    ///
-    /// État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
+    /// **Le token de retour en tête du corpus** (#4831). État d'INTERACTION, donc local : contrairement à `isCaptionExpanded` — qui
     /// suspend l'horloge de lecture et appartient donc au parent — remonter une
     /// fenêtre de défilement ne regarde personne d'autre que cette carte.
     @State var captionScrollToTopToken: Int = 0 // internal for cross-file extension access
-    /// Repli du composeur et hauteur mesurée de son bloc (#8431).
+    /// Repli du composeur, hauteur mesurée de son bloc (#8431), prise vocale en cours (#9893).
     @State var isComposerFolded: Bool = false // internal for cross-file extension access
     @State var composerBlockHeight: CGFloat? // internal for cross-file extension access
+    @State var isComposerRecording: Bool = false // internal for cross-file extension access
     @State private var slideContentProgress: Double = 0
     /// Le pont du parcours au doigt (#7878) : la barre le pilote, le canvas de
     /// la story COURANTE s'y attache au montage.
@@ -1544,8 +1543,7 @@ struct StoryCardView: View {
                !audios.isEmpty {
                 AudioForegroundReaderOverlay(
                     foregroundAudios: audios,
-                    slideDuration: currentSlideDuration,
-                    fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
+                    slideDuration: currentSlideDuration
                 )
                 .storyFocusFade(readerDecorationsShown)
             }
@@ -1576,10 +1574,10 @@ struct StoryCardView: View {
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
-                StoryProgressBarsView(
+                StoryLiveProgressBars(
+                    clock: progressClock,
                     group: currentGroup,
                     currentIndex: currentStoryIndex,
-                    progress: progress,
                     scrubber: sceneScrubber,
                     onScrubStateChanged: onScrubStateChanged,
                     onSeek: seekTimer
@@ -1598,6 +1596,7 @@ struct StoryCardView: View {
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
                     sharedContentWrapper: $sharedContentWrapper,
+                    showExportShareSheet: $showExportShareSheet,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,
@@ -1662,7 +1661,7 @@ struct StoryCardView: View {
             // are visible. Background story stays interactable (tap to pause,
             // long-press) through the overlay's transparent surface.
             if showCommentsOverlay {
-                makeCommentsOverlay().equatable()
+                makeCommentsOverlay().placed(commentsZoneReading(geometry: geometry)).equatable()
                     // Le UIViewRepresentable du canvas expanse le ZStack parent
                     // au-delà du viewport (même cause que Layer 7 header et
                     // Layer 8 sidebar, cf. note ligne ~1024). Sans contrainte de
@@ -1726,7 +1725,6 @@ struct StoryCardView: View {
                     showLanguageOptions: $showLanguageOptions,
                     showFullLanguagePicker: $showFullLanguagePicker,
                     showViewersSheet: $showViewersSheet,
-                    showExportShareSheet: $showExportShareSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
                     republishStorySource: $republishStorySource,

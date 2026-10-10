@@ -59,7 +59,7 @@ const buildPostPrisma = (createdMetadata: Record<string, unknown> | null = null)
     }),
     findFirst: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue(null),
   };
-  const prisma = { post, __updateCalls: updateCalls };
+  const prisma = { post, user: { findUnique: jest.fn(async () => null) }, __updateCalls: updateCalls };
   return prisma as unknown as ConstructorParameters<typeof PostService>[0] & {
     post: typeof post; __updateCalls: unknown[];
   };

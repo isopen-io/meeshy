@@ -215,6 +215,7 @@ nonisolated final class CallMontageMovieWriter: @unchecked Sendable {
     init(url: URL, size: CGSize, audio format: CallMontageAudioFormat?) throws {
         try? FileManager.default.removeItem(at: url)
         let assetWriter = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        assetWriter.shouldOptimizeForNetworkUse = true
         let pixelWidth = Self.evenDimension(size.width)
         let pixelHeight = Self.evenDimension(size.height)
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [

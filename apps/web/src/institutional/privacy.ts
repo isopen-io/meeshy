@@ -21,7 +21,7 @@ import type { ContentPage } from './type';
  */
 export const PAGE_PRIVACY: ContentPage = {
   title: 'Politique de Confidentialité',
-  mention: 'Dernière mise à jour : 27 septembre 2026',
+  mention: 'Dernière mise à jour : 10 octobre 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   mee: { sticker: 'mee-rougit', caption: 'Mee se cache les yeux : vos conversations ne regardent que vous.' },
   sections: [
@@ -48,7 +48,7 @@ export const PAGE_PRIVACY: ContentPage = {
                 "Nom, prénom et nom d'utilisateur",
                 'Adresse email',
                 'Numéro de téléphone (optionnel)',
-                'Date de naissance (optionnel, requis pour certaines fonctionnalités)',
+                'Date de naissance (facultative, voir « Âge et Mineurs »)',
                 'Photo de profil et bannière (optionnels)',
               ],
             },
@@ -138,6 +138,19 @@ export const PAGE_PRIVACY: ContentPage = {
               title: 'Communication',
               body: 'Vous tenir informé des nouveautés et changements importants',
             },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Âge et Mineurs',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Meeshy est réservé aux personnes de 13 ans et plus. Une date de naissance indiquant moins de 13 ans est refusée et n'est pas enregistrée.",
+            "Votre date de naissance vous est demandée après l'inscription, et sa déclaration est facultative : vous pouvez passer cette étape.",
+            "Si vous la déclarez, elle sert uniquement à calculer votre tranche d'âge, à chaque fois que c'est nécessaire, sans qu'aucun autre indicateur ne soit conservé : Meeshy Global n'est ouverte en écriture qu'à partir de 18 ans. De 13 à 17 ans, vous pouvez la lire sans y écrire, et l'écriture s'ouvre d'elle-même le jour de vos 18 ans.",
           ],
         },
       ],

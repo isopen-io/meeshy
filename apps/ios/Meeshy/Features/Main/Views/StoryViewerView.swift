@@ -116,7 +116,9 @@ struct StoryViewerView: View {
     static let heartEmoji = MeeshyQuickReactions.heart
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
-    @State var progress: CGFloat = 0 // internal for cross-file extension access
+    /// La progression vit dans une horloge que SEULE la barre observe (#9859) :
+    /// tenue par référence, jamais observée ici, elle ne réévalue pas le lecteur.
+    @State var progressClock = StoryPlaybackProgressClock() // internal for cross-file extension access
     /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
     /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
     /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
@@ -157,7 +159,7 @@ struct StoryViewerView: View {
     @State var storyLoopPass = 0 // tours de boucle de la story courante (#9821)
     @State var isCallInterrupting = false // un appel sonne ou se tient (#9821)
     @State var isGameMomentShown = false // un événement du jeu passe devant (#9821)
-    @State var isOptionsMenuOpen = false // le menu « … » est ouvert : la story boucle (#9821)
+    @State var optionsMenuWatch = StoryOptionsMenuWatch() // le menu « … » ouvert fait boucler la story (#9821, #9949)
     /// Légende dépliée. Vit ici parce que déplier SUSPEND la lecture : la carte
     /// de contenu porte la vue, le lecteur porte l'horloge.
     @State var isCaptionExpanded = false // internal for cross-file extension access
@@ -642,7 +644,7 @@ struct StoryViewerView: View {
         }
         // Seule une PAUSE arrête le timer gated ; une boucle le laisse courir (#9821).
         .storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)
-        .storyOptionsMenuPresence($isOptionsMenuOpen)
+        .storyOptionsMenuPresence(optionsMenuWatch)
         .adaptiveOnChange(of: shouldPauseTimer) { _, paused in
             slideTimer.setPaused(paused)
         }
@@ -868,7 +870,7 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 StoryExportShareSheet(
                     story: story,
-                    viewModel: exportShareViewModel
+                    viewModel: exportShareViewModel, authorUsername: currentGroup?.username
                 )
                 .presentationDetents([.medium, .large] as Set<PresentationDetent>)
                 .presentationDragIndicator(.visible)
@@ -1021,13 +1023,9 @@ struct StoryViewerView: View {
         // vivent ici ; la pause est asservie à `shouldPauseTimer` via
         // `adaptiveOnChange` (+ `setPaused` initial dans `startTimer()`).
         t.onProgressChange = { [self] p in
-            let raw = CGFloat(min(1.0, p))
-            // Granularité 1/300 : évite de committer le @State `progress`
-            // à chaque tick 60 Hz pour des deltas invisibles (la barre fait
-            // ~300 pt de large au maximum).
-            if abs(raw - progress) >= 1.0 / 300.0 || raw >= 1.0 || raw == 0 {
-                progress = raw
-            }
+            // Le tick n'écrit AUCUN état du lecteur (#9859) : il publie dans
+            // l'horloge de la barre, seule à se redessiner.
+            progressClock.publish(p)
             // Seuil d'amorçage du prefetch de la slide suivante : 5 s avant
             // la fin, borné à 50 % minimum (cf. rationale historique dans
             // l'ancien `startTimer()` — conservée à l'identique).
@@ -1404,7 +1402,7 @@ struct StoryViewerView: View {
     /// NOT inside it, so the overlay does not inherit the card's drag offset,
     /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
     /// drag / scale transitions).
-    func storyCommentsOverlay() -> StoryCommentsOverlayView {
+    func storyCommentsOverlay(zone: StoryCommentsZone.Frame) -> StoryCommentsOverlayView {
         // L'overlay commentaires n'embarque PLUS son propre composer. Il
         // affiche uniquement : (1) la liste des commentaires, (2) les
         // actions « Répondre » / « like » de chaque row qui mutent
@@ -1432,8 +1430,7 @@ struct StoryViewerView: View {
             },
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
-            keyboard: keyboard,
-            safeBottom: windowBottomInset,
+            zone: zone,
             makeStoryCommentRow: makeStoryCommentRow,
             toggleStoryCommentThread: toggleStoryCommentThread
         )
@@ -1475,7 +1472,7 @@ struct StoryViewerView: View {
             isContentTranslated: isContentTranslated,
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
-            progress: progress,
+            progressClock: progressClock,
             currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
@@ -2159,7 +2156,7 @@ extension StoryViewerView {
         groupTransition(forward: false) {
             currentGroupIndex -= 1
             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-            progress = 0
+            progressClock.reset()
         }
     }
 

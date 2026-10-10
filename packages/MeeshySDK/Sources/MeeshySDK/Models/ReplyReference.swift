@@ -174,6 +174,21 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
     /// posée pour un média protégé : le fichier EST le secret.
     public var quotedAudioTracks: QuotedAudioTracks?
+    /// **Combien de TUILES (photos, vidéos) porte le message cité** (#9911),
+    /// quand la citation vise le message ENTIER — la face montre la première,
+    /// « +N » dit qu'il y en a d'autres. `nil` quand la citation NOMME une
+    /// pièce (elle n'en montre qu'une, et c'est la bonne) et pour un contenu
+    /// protégé : un compte est déjà un fait sur ce que la protection retient.
+    ///
+    /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
+    /// ce champ doit toujours se décoder.
+    public var quotedPieceCount: Int?
+
+    /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
+    public var quotedExtraPieceCount: Int? {
+        guard let quotedPieceCount, quotedPieceCount > 1, !quotedMediaIsProtected else { return nil }
+        return quotedPieceCount - 1
+    }
 
     /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
     /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni

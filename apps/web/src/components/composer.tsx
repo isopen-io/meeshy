@@ -53,6 +53,8 @@ import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { useWindowFileDrop } from '@/lib/view/use-window-file-drop';
+import { ComposerDropVeil } from './composer-drop-veil';
 
 /**
  * LE PANNEAU D'EFFETS, CHARGÉ À LA DEMANDE (#6175, panneau inline depuis
@@ -173,7 +175,7 @@ export const Composer = memo(function Composer({
    * pas ANNONCÉ à qui l'affiche. `bubble.tsx:180` et `focal-row.tsx:263`
    * posent déjà `lang={rendered.language}` pour la même raison.
    */
-  replyTo?: { author: string; excerpt: string; language?: string };
+  replyTo?: { author: string; excerpt: string; language?: string; more?: number };
   onCancelReply?: () => void;
   /** CE QUE LE MESSAGE CITÉ IMPOSE À LA RÉPONSE (#8557) — `imposedReplyProtection`
    * de `@meeshy/shared`, calculé par l'hôte (`useThreadCompose`). Il RECOUVRE
@@ -546,6 +548,8 @@ export const Composer = memo(function Composer({
     setPanelOpen(false);
   };
 
+  const fileHovering = useWindowFileDrop(addFiles);
+
   /**
    * LA TUILE « CONTACT » (#8242) — la fiche CHOISIE devient une carte
    * `text/vcard` (`lib/send/contact-card.ts`) qui rejoint la sélection par
@@ -692,6 +696,11 @@ export const Composer = memo(function Composer({
             >
               {replyTo.excerpt}
             </span>
+            {replyTo.more !== undefined && replyTo.more > 0 ? (
+              <span data-composer-reply-more={replyTo.more} aria-hidden className="ms-1 font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                +{replyTo.more}
+              </span>
+            ) : null}
           </span>
           <button
             type="button"
@@ -828,6 +837,8 @@ export const Composer = memo(function Composer({
           <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
+
+      {fileHovering ? <ComposerDropVeil language={uiLanguage} /> : null}
 
       {capturing
         ? createPortal(

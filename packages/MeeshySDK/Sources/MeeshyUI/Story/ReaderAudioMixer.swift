@@ -219,6 +219,11 @@ public final class ReaderAudioMixer {
             try resumeWithoutRescheduling()
             return false
         }
+        if StoryAudioActivationPolicy.shouldHoldEngine(hasClips: !entries.isEmpty || backgroundEntry != nil,
+                                                       isMuted: isMuted) {
+            logger.info("ReaderAudioMixer.play held while muted — engine left idle slideKey=\(slideKey, privacy: .public)")
+            return false
+        }
         playbackStartHostTime = originHost
         pausedAtHostTime = nil
         guard !entries.isEmpty || backgroundEntry != nil else {

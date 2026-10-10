@@ -26,7 +26,6 @@ const deCallJoin = {
   'keypad.input.placeholder': 'Nummer oder Name',
   'keypad.input.label': 'Zu suchende Nummer oder Name',
   'keypad.delete': 'Löschen',
-  'keypad.clear': 'Alles löschen',
   'keypad.prompt.title': 'Wähle eine Nummer oder einen Namen',
   'keypad.prompt.subtitle': 'Finde jemanden per Telefonnummer oder Name.',
   'keypad.searching': 'Suche…',

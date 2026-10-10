@@ -12,6 +12,7 @@ const esNotificationRow = {
   'notifications.row.media.video': '🎥 Vídeo',
   'notifications.row.media.audio': '🎵 Audio',
   'notifications.row.expired': 'caducada',
+  'notifications.row.directMessage': 'Mensaje privado',
   'notifications.row.milestone.level': 'Nivel {level}',
   'notifications.row.milestone.streak': '{days} días seguidos',
   'notifications.row.milestone.badgeReason': 'Insignia desbloqueada · nivel {threshold}',

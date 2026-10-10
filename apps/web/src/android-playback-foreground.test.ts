@@ -138,6 +138,26 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     }
   });
 
+  test('débrancher le casque met le vocal en pause, comme dans Chrome, par la même voie que la « Pause » (#9946)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    expect(corpsDe(service, 'public void onCreate(')).toContain('new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)');
+    const debranche = corpsDe(service, 'public void onReceive(');
+    expect(debranche).toContain('if (!playing) return;');
+    expect(debranche).toContain('MeeshyPlaybackPlugin.pauseRequested(');
+    expect(corpsDe(service, 'void parked(')).toContain('playing = false;');
+    expect(corpsDe(service, 'void resume(')).toContain('playing = true;');
+    expect(corpsDe(service, 'public void onDestroy(')).toContain('unregisterReceiver(noisy)');
+  });
+
+  test('débrancher le casque est signalé à la page tant qu’elle vit, pour mettre la vidéo en pause comme Chrome (#9985)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'public void load(')).toContain('new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)');
+    expect(plugin).toContain('notifyListeners("becomingNoisy"');
+    expect(corpsDe(plugin, 'protected void handleOnDestroy(')).toContain('unregisterReceiver(noisy)');
+    const main = readFileSync(join(APP, 'src', 'main.tsx'), 'utf8');
+    expect(main).toMatch(/pauseVideosWhenNoisy\(document, shellNoisy\(\)\)/);
+  });
+
   test('une vidéo passe en image dans l’image d’un appui : plein écran, puis l’activité flotte (#9410)', () => {
     const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
     const flotter = corpsDe(plugin, 'public void floatVideo(');

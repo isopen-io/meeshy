@@ -182,7 +182,7 @@ export function GameMedallion({ accent }: { readonly accent: string }) {
 }
 
 function footerGlyph(footer: RowFooter): GlyphShape | null {
-  if (footer.kind === 'conversation') return NOTIFICATIONS_GLYPHS.chatCircle;
+  if (footer.kind === 'conversation') return footer.scope === 'direct' ? GLYPHS.user : GLYPHS.users;
   if (footer.kind === 'plain') return null;
   return footer.expired ? GLYPHS.clock : CONTENT_GLYPHS[footer.content];
 }

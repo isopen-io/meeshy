@@ -423,6 +423,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'audit L2-4) est PRÉMATURÉE : les écrans Sécurité iOS et web ne l'appellent
 // pas encore ; #9651 la branche et fera redescendre la référence d'un cran.
 // Valeur MESURÉE le 2026-10-08.
+// 291 -> 292 (#9927, 2026-10-10) : `MeEndpoint.birthDate` (`PUT /me/birth-date`),
+// GÉNÉRÉE depuis `route-manifest.json` avec la route — PRÉMATURÉE : l'étape d'âge de
+// l'onboarding iOS l'appellera avec #9929, qui ramène la référence à 291. Valeur
+// MESURÉE le 2026-10-10.
+//
+// 292 -> 291 (#9929, 2026-10-10) : l'étape d'âge de l'onboarding iOS appelle
+// désormais `MeEndpoint.birthDate` (`BirthDateService.setBirthDate`) — l'entrée
+// n'est plus morte, comme annoncé ci-dessus. Valeur MESURÉE sur l'arbre fusionné
+// avec `dev` du 2026-10-10.
 const BASELINE_DEAD_ENTRIES = 291;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
