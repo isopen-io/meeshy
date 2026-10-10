@@ -28,6 +28,7 @@ import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
+import deWriteRestriction from './catalog-de-write-restriction';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
 import deContactCard from './catalog-de-contact-card';
@@ -1096,6 +1097,7 @@ const de = {
   ...deMentions,
   ...deStudioChrome,
   ...deEphemeral,
+  ...deWriteRestriction,
   ...deGallery,
   ...deMessageCard,
   ...deConversationCard,

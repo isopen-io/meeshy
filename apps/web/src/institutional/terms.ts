@@ -17,7 +17,7 @@ import type { ContentPage } from './type';
 export const PAGE_TERMS: ContentPage = {
   title: "Conditions d'Utilisation",
   hero: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
-  mention: 'Dernière mise à jour : 23 août 2026',
+  mention: 'Dernière mise à jour : 10 octobre 2026',
   description: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
   mee: { sticker: 'meo-ok', caption: 'Meo a tout lu. L’essentiel tient en quelques règles claires, juste en dessous.' },
   sections: [
@@ -62,6 +62,19 @@ export const PAGE_TERMS: ContentPage = {
         {
           kind: 'accent',
           body: "Note : Les utilisateurs anonymes n'ont pas de clé de chiffrement personnelle. Leurs données ne peuvent donc pas être chiffrées au repos. Pour une sécurité maximale, créez un compte utilisateur.",
+        },
+      ],
+    },
+    {
+      title: 'Âge Minimum',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            "Meeshy est réservé aux personnes de 13 ans et plus. Si vous avez moins de 13 ans, vous ne pouvez ni créer de compte ni utiliser le service.",
+            "Déclarer votre date de naissance est facultatif. Une date déclarée n'est enregistrée qu'une fois ; pour la corriger, contactez le support.",
+            "Meeshy Global, l'espace ouvert à tous, n'est ouvert en écriture qu'à partir de 18 ans. De 13 à 17 ans, vous pouvez y lire les messages sans pouvoir y écrire, et l'écriture s'ouvre d'elle-même le jour de vos 18 ans.",
+          ],
         },
       ],
     },

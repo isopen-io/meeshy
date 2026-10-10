@@ -41,6 +41,11 @@ describe('rowMenuItems — les libellés BASCULENT avec l’état (#5559 T13)', 
     const items = rowMenuItems({ flags: { isPinned: false, isMuted: false, isArchived: false }, unread: false, language: 'fr' });
     expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read', 'archive']);
   });
+
+  test('une archive verrouillée (Global fermée à un mineur, #9928) : aucun « Désarchiver »', () => {
+    const items = rowMenuItems({ flags: { isPinned: false, isMuted: false, isArchived: true, archiveLocked: true }, unread: false, language: 'fr' });
+    expect(items.map((i) => i.id)).toEqual(['pin', 'mute', 'read']);
+  });
 });
 
 describe('rowMenuItems — appeler depuis la ligne (#8109)', () => {
