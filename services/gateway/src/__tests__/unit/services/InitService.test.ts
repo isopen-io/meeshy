@@ -226,3 +226,16 @@ describe('InitService.ensurePostGeoIndex', () => {
     await expect(sut.ensurePostGeoIndex()).rejects.toThrow('not authorized on meeshy');
   });
 });
+
+// #10000 — World Wide se sème à CHAQUE boot. Son échec ne doit pas arrêter la
+// passerelle : la messagerie entière ne tombe pas parce que la porte publique
+// n'a pas pu être posée — l'erreur est journalisée, le boot suivant réessaie.
+describe('InitService.ensureWorldConversation', () => {
+  it('ne rejette pas quand la base refuse le seed — le démarrage continue', async () => {
+    const prisma = makePrisma();
+    (prisma.conversation.findFirst as jest.Mock<any>).mockRejectedValue(new Error('not authorized on meeshy'));
+    const sut = new InitService(prisma as any);
+
+    await expect(sut.ensureWorldConversation()).resolves.toBeUndefined();
+  });
+});

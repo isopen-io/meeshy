@@ -9,6 +9,7 @@ import { getJwtSecret, requireStrongSecret } from '../utils/secrets';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation-primitives';
 import { UserAuditAction } from '@meeshy/shared/types';
 import { maySeedEmailVerification, seedAccountEmail, seedAccounts, type SeedAccount } from './seed-accounts';
+import { ensureWorldConversation } from './world/worldConversation';
 
 /**
  * Les trois comptes de bootstrap (#3623) — `bigboss123`/`admin123` étaient un
@@ -418,6 +419,27 @@ export class InitService {
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la vérification d\'e-mail des comptes semés', error);
       throw error;
+    }
+  }
+
+  /**
+   * World Wide (#10000) — la conversation publique et son lien `mshy_world`, à
+   * CHAQUE boot (`world/worldConversation.ts` en porte la loi).
+   *
+   * NON FATALE, à l'inverse des index ci-dessus : un index manquant casse des
+   * routes existantes, alors qu'un World Wide absent ne retire que la porte
+   * publique — `GET /world` répond 404 et la landing n'offre pas d'entrée.
+   * L'échec est journalisé avec sa conséquence, et le démarrage suivant
+   * réessaie (le seed est idempotent).
+   */
+  async ensureWorldConversation(): Promise<void> {
+    try {
+      await ensureWorldConversation({ prisma: this.prisma, logger });
+    } catch (error) {
+      logger.error(
+        '[INIT] ❌ World Wide non semée — la landing n\'offrira aucune entrée invité tant qu\'un démarrage ne l\'aura pas posée',
+        error,
+      );
     }
   }
 

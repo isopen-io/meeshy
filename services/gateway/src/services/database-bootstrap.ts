@@ -23,7 +23,10 @@
  *     peuplée, donc jamais derrière la porte ;
  *  2. l'ensemencement, derrière la porte, qui n'a de sens que sur une base vide ;
  *  3. la vérification d'e-mail des comptes semés APRÈS l'ensemencement, pour que
- *     la base fraîchement semée et la base héritée passent par le MÊME site.
+ *     la base fraîchement semée et la base héritée passent par le MÊME site ;
+ *  4. World Wide (#10000) en dernier : son créateur (`meeshy`) et ses
+ *     administrateurs doivent déjà exister, et la production — peuplée, donc
+ *     porte fermée — ne l'a pas encore.
  */
 
 export type DatabaseBootstrapSteps = {
@@ -33,6 +36,7 @@ export type DatabaseBootstrapSteps = {
   shouldInitialize(): Promise<boolean>;
   initializeDatabase(): Promise<void>;
   ensureSeedAccountsVerified(): Promise<void>;
+  ensureWorldConversation(): Promise<void>;
 };
 
 export type BootstrapLogger = { info(message: string): void };
@@ -60,4 +64,5 @@ export async function bootstrapDatabase(
   }
 
   await steps.ensureSeedAccountsVerified();
+  await steps.ensureWorldConversation();
 }
