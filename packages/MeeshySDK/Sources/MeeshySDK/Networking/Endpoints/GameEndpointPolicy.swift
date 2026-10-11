@@ -89,6 +89,14 @@ public extension MeEndpoint {
         MeEndpoint.gameSeasonsByNumber(number: String(number))
     }
 
+    /// Le calendrier des saisons servi (#10232) : `GET /api/v1/me/game/seasons/calendar`. Le manifeste ne porte pas
+    /// encore la route statique ; elle partage le gabarit généré de `seasons/:number`, et le routeur de la passerelle
+    /// (find-my-way) préfère la route statique au paramètre. À remplacer par le cas généré dès la régénération du
+    /// catalogue (`npm run ios-endpoints:generate`).
+    static var gameSeasonCalendar: MeEndpoint {
+        MeEndpoint.gameSeasonsByNumber(number: "calendar")
+    }
+
     /// Une semaine de ligue par son lundi (#10018). La clé vient d'un lien : encodée.
     static func gameLeagueWeekArchive(weekKey: String) -> MeEndpoint {
         MeEndpoint.gameLeagueWeeksByWeekKey(weekKey: GamePathSegment.encoded(weekKey))

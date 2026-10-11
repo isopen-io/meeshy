@@ -202,7 +202,8 @@ private struct GameSeasonPath: View {
             LazyVGrid(columns: columns, spacing: MeeshySpacing.xsPlus) {
                 ForEach(1...GameSeason.steps, id: \.self) { step in
                     GameSeasonStepButton(
-                        step: step, state: GameSeasonStepState.of(step: step, in: season), online: model.isOnline,
+                        step: step, reward: season.stepReward(step), state: GameSeasonStepState.of(step: step, in: season),
+                        online: model.isOnline,
                         busy: model.pending.claimingStep == step, detail: GameElementDetails.seasonStep(step, in: season)
                     ) {
                         Task { await model.claim(step: step) }
@@ -219,6 +220,8 @@ private struct GameSeasonPath: View {
 /// (bouton), à venir (éteinte) ; les récompenses spéciales — fragment, gel, coupe — portent leur marque.
 private struct GameSeasonStepButton: View {
     let step: Int
+    /// Sa récompense, aux points de LA saison (`GameSeasonBlock.stepReward`, #10232).
+    let reward: SeasonReward?
     let state: GameSeasonStepState
     let online: Bool
     let busy: Bool
@@ -242,8 +245,6 @@ private struct GameSeasonStepButton: View {
         case .locked: theme.textMuted
         }
     }
-
-    private var reward: SeasonReward? { GameSeason.stepReward(step) }
 
     private var mark: String {
         if state == .claimed { return "✓" }

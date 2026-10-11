@@ -220,14 +220,16 @@ public enum GameSeason {
         )
     }
 
-    /// La récompense GRATUITE d'une étape : des points ; UN fragment d'étoile (`GameStarFragments`)
+    /// La récompense GRATUITE d'une étape : des points (ceux de LA saison, bornés par le calendrier servi —
+    /// `SeasonSchedule`, #10232 ; à défaut ou illisibles, la loi : 100) ; UN fragment d'étoile (`GameStarFragments`)
     /// toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
-    public static func stepReward(_ step: Int) -> SeasonReward? {
+    public static func stepReward(_ step: Int, stepPoints seasonPoints: Int? = nil) -> SeasonReward? {
         guard (1...steps).contains(step) else { return nil }
         if step == steps { return SeasonReward(kind: .seasonCup, amount: 1) }
         if step % 10 == 0 { return SeasonReward(kind: .freeze, amount: 1) }
         if step % 5 == 0 { return SeasonReward(kind: .fragment, amount: 1) }
-        return SeasonReward(kind: .points, amount: stepPoints)
+        let amount = seasonPoints.flatMap { $0 > 0 ? $0 : nil } ?? stepPoints
+        return SeasonReward(kind: .points, amount: amount)
     }
 
     /// Le cosmétique de la rangée Sceau à cette étape, `nil` hors des étapes marquées.
@@ -242,8 +244,10 @@ public enum GameSeason {
         return balance >= sealPrice ? nil : .insufficientBalance
     }
 
-    public static func claim(season: Int, step: Int, stepsReached: Int, claimed: [Int], sealOwned: Bool) -> SeasonClaim {
-        guard let reward = stepReward(step) else { return .refused(.outOfRange) }
+    /// `stepPoints` : les points d'une étape ordinaire de CETTE saison (calendrier servi) ; absent, la loi.
+    public static func claim(season: Int, step: Int, stepsReached: Int, claimed: [Int], sealOwned: Bool,
+                             stepPoints seasonPoints: Int? = nil) -> SeasonClaim {
+        guard let reward = stepReward(step, stepPoints: seasonPoints) else { return .refused(.outOfRange) }
         if claimed.contains(step) { return .refused(.alreadyClaimed) }
         if step > stepsReached { return .refused(.locked) }
         return .allowed(reward: reward, seal: sealOwned ? sealReward(season: season, step: step) : nil)

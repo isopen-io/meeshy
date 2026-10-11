@@ -27,6 +27,7 @@ struct GameSeasonFocusScreen: View {
 
     var body: some View {
         let shown = GameSeasonShown.of(focus: focus, game: game, load: archive.season, moment: moment ?? .local())
+        let shown = GameSeasonShown.of(focus: focus, game: game, load: archive.season, schedule: model.seasonSchedule)
         Group {
             if shown == .current {
                 GameSeasonScreen(model: model, game: game, moment: moment)
