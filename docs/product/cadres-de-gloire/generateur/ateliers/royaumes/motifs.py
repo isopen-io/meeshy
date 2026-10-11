@@ -17,11 +17,7 @@ import itertools
 
 from base import f, pt, W, H, METALS, sparkle
 
-_seq = itertools.count(1)
-
-
-def nid(prefix):
-    return f"{prefix}{next(_seq)}"
+from base import nid  # noqa: E402,F401  le compteur des identifiants vit dans Card
 
 
 def T(x, y, s=1.0, r=0.0, flip=False):

@@ -510,6 +510,10 @@ def ansa(x0, y, h, m):
     return outer, inner
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def cartouche(c, message=None, adinkra=False):
     """Tabula ansata : une table de lapis-lazuli piquée de pyrite, cerclée d'or, à deux anses en queue d'aronde.
 
@@ -559,6 +563,7 @@ RIB_CY = 832
 RIB_X = (92, 448)
 
 
+@plate_layer
 def ribbon(c, message=None, held=False):
     """Banderole de pourpre bordée d'or ; quand `held`, ses bouts remontent jusqu'au bec de Mee et Meo."""
     rib = c.grad("ban", [(0, "#A3388A"), (0.45, "#74205F"), (1, "#3A0B32")])
@@ -625,6 +630,7 @@ def k_bot(x):
     return (1 - t) ** 2 * K_BOT[0] + 2 * (1 - t) * t * K_BOT[1] + t * t * K_BOT[0]
 
 
+@plate_layer
 def ribbon_kente(c, message=None):
     """L'étoffe d'honneur : une bande de kente tissée — lisières de blocs or, vert, rouge et noir, champ d'ébène
     au fil d'or — que Mee et Meo tiennent au bec. Le présent qu'on offre à l'hôte d'honneur, porté jusqu'à l'Olympe."""
@@ -678,6 +684,7 @@ def kente_tails_to_beaks(c, beaks):
         c.add(f'<path d="M{f(bx - 7)} {f(by + 1)} L{f(bx + 7)} {f(by + 1)} L{f(bx + 5)} {f(by + 7)} L{f(bx - 5)} {f(by + 7)} Z" fill="{K_GOLD}" stroke="{GOLD_LO}" stroke-width="0.8"/>')
 
 
+@plate_layer
 def parchment(c, message=None):
     """Un volumen déroulé : papyrus doré, bâtons d'ébène aux pommeaux d'or."""
     h = 146 if message else 114
@@ -778,6 +785,7 @@ VARIANTS = [
 
 def build(v):
     c = Card("p-" + v["file"].replace("poses-", ""))
+    c.slots(kicker=KICKER, title=TITLE, message=v["message"], date=DATE)
     frame(c, v.get("people", 2))
     style = v["style"]
     if style == "ruban-tenu":

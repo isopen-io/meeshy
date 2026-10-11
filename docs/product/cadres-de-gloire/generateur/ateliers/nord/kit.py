@@ -276,6 +276,10 @@ def numero_badge(card, cx, cy, text="Nº 42 / 100", name="nb"):
 
 # ---------------------------------------------------------------- l'inscription
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, title, message=None, y=752, style="bois", metal=OR, panel=("#24170E", "#0C0704"),
                 ink="#FFF4DC", accent=None, title_size=40, w=430, date=DATE, msg_color=None, kicker=KICKER,
                 title_font=CINZEL, extra="", band=None, op=0.93):

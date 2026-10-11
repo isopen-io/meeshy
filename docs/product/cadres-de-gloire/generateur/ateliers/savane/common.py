@@ -64,6 +64,10 @@ def legende_crest(c, cx, cy, s, division):
     crest(c, cx, cy, s, "obsidian", division=division, gem=VIOLET_GEM, ink=GOLD[0], edge=GOLD[1])
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def legende_plaque(c, title, message, y, extra=""):
     inscription(c, KICKER, title, message, y=y, style="ebene", metal=GOLD, panel=("#120E22", "#05040A"), extra=extra)
 
@@ -86,6 +90,7 @@ def prism_rim(c, win, w=4):
     c.add(f'<path d="{win}" fill="none" stroke="#FFFFFF" stroke-width="0.8" opacity="0.8"/>')
 
 
+@plate_layer
 def mythe_plaque(c, message, y):
     inscription(c, KICKER, "Mythe nº 42", message, y=y + 8, style="cosmos", metal=PRISM, panel=("#0C0A1E", "#04030A"),
                 ink="#FFFFFF", accent="#D8CCFF")

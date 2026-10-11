@@ -14,6 +14,7 @@ ROSE_VELVET = ("#E0607E", "#8A1838", "#2A0612")
 TEAL_VELVET = ("#5ED0C0", "#11665E", "#032824")
 
 
+@plate_layer
 def steel_plate(card, x0, y0, x1, y1, key="sp", r=14, m=STEEL):
     d = rrect(x0, y0, x1, y1, r)
     bv = bevel(card, key + "-bv", 1.2, 3.0, 0.9, 22, shadow=(0, 6, 7, 0.65))
@@ -27,6 +28,10 @@ def steel_plate(card, x0, y0, x1, y1, key="sp", r=14, m=STEEL):
     return "".join(out)
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer(title="palier")
 def engraved_inscription(card, palier, message=None, y=750, dark="#1C222A", accent="#34404E", title_size=40):
     hi = inscription(card, palier, message, y=y + 1.2, ink="#FFFFFF", accent="#FFFFFF", shadow=False, title_size=title_size, msg_color="#FFFFFF")
     lo = inscription(card, palier, message, y=y, ink=dark, accent=accent, shadow=False, title_size=title_size, msg_color="#3A2A10")

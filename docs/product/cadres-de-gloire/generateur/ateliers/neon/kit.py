@@ -39,12 +39,7 @@ WHITE = "#FFFFFF"
 GOLD = "#F5C443"
 GOLD_HI = "#FFF2B8"
 
-_n = [0]
-
-
-def nid(prefix="k"):
-    _n[0] += 1
-    return f"{prefix}{_n[0]}"
+from base import nid  # noqa: E402,F401  le compteur des identifiants vit dans Card
 
 
 def rgb(c):
@@ -659,6 +654,10 @@ def birds(card, spots, glow=None):
 
 # ---------------------------------------------------------------- la plaque néon
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def plaque(card, title, message=None, y=752, c1=MAGENTA, c2=CYAN, chrome_kind="cool", style="glass", kicker=KICK, date=DATE,
            badge=None, title_size=40, title_font=CINZEL, msg_color=YELLOW, panel=("#170B36", "#05020F"), split=True, x0=56, x1=484,
            kicker_color=None, bulbs=None):

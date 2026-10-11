@@ -74,6 +74,10 @@ def gold_frame(card, d, key="gf", m=GOLD, w=7, inner=True):
     return "".join(out)
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def text_panel(card, x0, y0, x1, y1, r=20, fill="#0B0A12", op=0.78, stroke=None, sw=1.5, key="tp", blur_shadow=True):
     d = rrect(x0, y0, x1, y1, r)
     out = []

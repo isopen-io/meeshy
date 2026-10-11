@@ -48,6 +48,10 @@ def quartz_chain(x, y0, y1, color="#E9DDFF", si="#FFE7A0", o="#FF9A8A", step=22)
     return "".join(out)
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def leg_plate(c, title, message=None, y=780, **kw):
     return plate(c, title, message, y=y, style="cosmos", **kw)
 

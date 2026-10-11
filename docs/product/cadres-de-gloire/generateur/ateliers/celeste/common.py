@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "lib"))
 sys.path.insert(0, str(ATL))
 
 from base import *  # noqa: E402,F401,F403
+from base import nid as base_nid  # noqa: E402
 from geo import *  # noqa: E402,F401,F403
 
 SLUG = "celeste"
@@ -38,12 +39,8 @@ PAPER = "#F5ECD8"
 SILVER = "#E9EEF6"
 
 MANIFEST = []
-_N = [0]
-
-
 def nid(p="u"):
-    _N[0] += 1
-    return f"{p}{_N[0]}"
+    return base_nid(p)
 
 
 def lg(card, stops, x1=0, y1=0, x2=0, y2=1, name=None, user=None):
@@ -209,6 +206,10 @@ PLATES = {
 }
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def plate(card, title, message=None, y=752, style="laque", w=424, kicker=KICK, numero=None, title_size=38,
           ornament="ruyi", rollers=False, opacity=0.94, h=None):
     """L'inscription : un panneau de laque à double filet de métal, têtes de ruyi aux flancs."""
