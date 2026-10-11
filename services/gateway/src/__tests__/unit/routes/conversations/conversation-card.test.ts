@@ -197,7 +197,7 @@ describe('GET /links/:identifier/card — lien de partage (#8099)', () => {
     expect(corps.data).toBeUndefined();
   });
 
-  it('sert la carte complète à un visiteur sans session, sans identifiant de conversation', async () => {
+  it('sert la carte à un visiteur sans session, sans identifiant de conversation ni effectif (#10205)', async () => {
     const { statut, corps } = await lire(`/links/${LINK_ID}/card`, {});
     expect(statut).toBe(200);
     expect(corps.data).toEqual({
@@ -208,7 +208,7 @@ describe('GET /links/:identifier/card — lien de partage (#8099)', () => {
       avatarUrl: 'https://cdn.meeshy.me/a.png',
       bannerUrl: 'https://cdn.meeshy.me/b.png',
       conversationType: 'group',
-      stats: { memberCount: 7, onlineCount: null, messageCount: 42, languages: ['de', 'en', 'es', 'fr'] },
+      stats: { memberCount: null, onlineCount: null, messageCount: 42, languages: ['de', 'en', 'es', 'fr'] },
       viewer: { isMember: false, canJoin: true, requiresAccount: false, canJoinAnonymously: true },
       link: { identifier: LINK_ID, isActive: true, expiresAt: null },
       inviter: { displayName: 'Alice Martin', username: 'alice', avatarUrl: 'https://cdn.meeshy.me/alice.png' },
@@ -229,6 +229,11 @@ describe('GET /links/:identifier/card — lien de partage (#8099)', () => {
   it('retient le décompte des messages quand le lien n’ouvre pas l’historique', async () => {
     const { corps } = await lire(`/links/${LINK_ID}/card`, { lien: lien({ allowViewHistory: false }) });
     expect(corps.data.stats.messageCount).toBeNull();
+    expect(corps.data.stats.memberCount).toBeNull();
+  });
+
+  it('sert l’effectif à un compte Meeshy, même non membre (#10205)', async () => {
+    const { corps } = await lire(`/links/${LINK_ID}/card`, { membre: false }, JETON);
     expect(corps.data.stats.memberCount).toBe(7);
   });
 
@@ -248,7 +253,7 @@ describe('GET /links/:identifier/card — lien de partage (#8099)', () => {
     expect(corps.data.description).toBeNull();
     expect(corps.data.inviteMessage).toBeNull();
     expect(corps.data.inviter).toBeNull();
-    expect(corps.data.stats).toEqual({ memberCount: 0, onlineCount: null, messageCount: null, languages: [] });
+    expect(corps.data.stats).toEqual({ memberCount: null, onlineCount: null, messageCount: null, languages: [] });
     expect(corps.data.viewer).toEqual({ isMember: false, canJoin: false, requiresAccount: false, canJoinAnonymously: false });
     expect(corps.data.title).toBe('Les bêta-testeurs');
   });

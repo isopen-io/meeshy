@@ -21,7 +21,7 @@ export const conversationCardSchema = {
       additionalProperties: false,
       required: ['memberCount', 'onlineCount', 'messageCount', 'languages'],
       properties: {
-        memberCount: { type: 'integer' },
+        memberCount: { type: 'integer', nullable: true, description: 'null pour un lecteur sans compte Meeshy (#10205)' },
         onlineCount: { type: 'null', description: 'Toujours null (visibilité de la présence)' },
         messageCount: { type: 'integer', nullable: true, description: 'null sauf membre ou allowViewHistory' },
         languages: { type: 'array', items: { type: 'string' } }

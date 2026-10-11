@@ -22,6 +22,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { composeDirectCard, composeShareLinkCard, loadShareLinkCardSource } from '../../services/conversationCard';
+import { isGuestViewer } from '../../services/guests/guestMemberVisibility';
 import { verdictAccesConversation, type MessagesDeRefusDAcces } from './utils/access-control';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 
@@ -75,7 +76,9 @@ export function registerShareLinkCardRoute(
       const isMember = authContext?.isAuthenticated === true
         && (await verdictAccesConversation(prisma, authContext, link.conversation.id, link.conversation.id)).genre === 'ok';
 
-      const card = await composeShareLinkCard({ prisma, link, isMember, now: new Date() });
+      const card = await composeShareLinkCard({
+        prisma, link, isMember, viewerIsGuest: isGuestViewer(authContext), now: new Date()
+      });
       return sendSuccess(reply, card);
     } catch (error) {
       logger.error('Share link card error', error);
@@ -122,7 +125,7 @@ export function registerDirectConversationCardRoute(
       }
 
       const viewerUserId = authContext.isAnonymous ? undefined : authContext.userId;
-      const card = await composeDirectCard({ prisma, conversationId, viewerUserId });
+      const card = await composeDirectCard({ prisma, conversationId, viewerUserId, viewerIsGuest: isGuestViewer(authContext) });
       if (!card) {
         return sendNotFound(reply, 'Conversation not found');
       }

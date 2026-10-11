@@ -30,7 +30,8 @@ export type ConversationCardInviter = {
 };
 
 export type ConversationCardStats = {
-  readonly memberCount: number;
+  /** `null` pour un lecteur sans compte Meeshy (#10205) : l'effectif ne part que vers un compte. */
+  readonly memberCount: number | null;
   /** Toujours `null` : la loi de visibilité de la présence ne s'ouvre pas ici. */
   readonly onlineCount: null;
   /** `null` sauf membre ou lien qui autorise l'historique (`allowViewHistory`). */

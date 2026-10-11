@@ -204,6 +204,10 @@ async function loadStats(params: {
 
 const EMPTY_STATS: ConversationCardStats = { memberCount: 0, onlineCount: null, messageCount: null, languages: [] };
 
+/** #10205 — l'effectif ne part que vers un compte Meeshy ; un lecteur sans compte lit `null`. */
+const statsServedTo = (stats: ConversationCardStats, viewerIsGuest: boolean): ConversationCardStats =>
+  viewerIsGuest ? { ...stats, memberCount: null } : stats;
+
 /**
  * L'hôte qu'une invitation peut NOMMER : un compte actif, par son nom affiché
  * sinon son pseudo. Site unique, que la carte et l'aperçu des robots (#9712)
@@ -226,9 +230,10 @@ export async function composeShareLinkCard(params: {
   readonly prisma: PrismaClient;
   readonly link: ShareLinkCardSource;
   readonly isMember: boolean;
+  readonly viewerIsGuest: boolean;
   readonly now: Date;
 }): Promise<ConversationCard> {
-  const { prisma, link, isMember, now } = params;
+  const { prisma, link, isMember, viewerIsGuest, now } = params;
   const conversation = link.conversation;
   const open = isShareLinkOpen(link, now);
   const title = conversation.title?.trim() || link.name?.trim() || 'Conversation';
@@ -246,7 +251,7 @@ export async function composeShareLinkCard(params: {
     return {
       ...base,
       description: null,
-      stats: EMPTY_STATS,
+      stats: statsServedTo(EMPTY_STATS, viewerIsGuest),
       viewer: { isMember, canJoin: false, requiresAccount: false, canJoinAnonymously: false },
       inviter: null,
       inviteMessage: null
@@ -261,7 +266,7 @@ export async function composeShareLinkCard(params: {
   return {
     ...base,
     description: truncateCardText(conversation.description, CONVERSATION_CARD_DESCRIPTION_MAX),
-    stats,
+    stats: statsServedTo(stats, viewerIsGuest),
     viewer: {
       isMember,
       canJoin: !isMember,
@@ -282,8 +287,9 @@ export async function composeDirectCard(params: {
   readonly prisma: PrismaClient;
   readonly conversationId: string;
   readonly viewerUserId: string | undefined;
+  readonly viewerIsGuest: boolean;
 }): Promise<ConversationCard | null> {
-  const { prisma, conversationId, viewerUserId } = params;
+  const { prisma, conversationId, viewerUserId, viewerIsGuest } = params;
   const conversation: CardConversation | null = await prisma.conversation.findFirst({
     where: { id: conversationId },
     select: cardConversationSelect
@@ -314,7 +320,7 @@ export async function composeDirectCard(params: {
     avatarUrl: conversation.avatar ?? peerAvatar,
     bannerUrl: conversation.banner ?? null,
     conversationType: conversation.type,
-    stats,
+    stats: statsServedTo(stats, viewerIsGuest),
     viewer: { isMember: true, canJoin: false, requiresAccount: false, canJoinAnonymously: false },
     link: null,
     inviter: null,
