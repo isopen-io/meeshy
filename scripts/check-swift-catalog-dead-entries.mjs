@@ -470,7 +470,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 295 -> 296 (#10157, 2026-10-11) : `PackAssetsEndpoint.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
 // adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP2 #10150 lira
 // couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
-const BASELINE_DEAD_ENTRIES = 296;
+// 296 -> 290 (2026-10-11) : LP2 (6046fcc6cd, la Boutique des cadres dans Réglages ›
+// Packs et téléchargements) donne leur appelant aux entrées de packs prématurées
+// ci-dessus ; trois relèvements partis de bases différentes s'étaient croisés sur dev.
+// Valeur MESURÉE le 2026-10-11 sur dev efee739ae5 (CI run 38160460790 rouge sur 296).
+const BASELINE_DEAD_ENTRIES = 290;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
