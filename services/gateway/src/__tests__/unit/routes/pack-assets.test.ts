@@ -12,10 +12,10 @@
 import { describe, it, expect } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
-import { packAssetsRoutes, PACK_ASSETS_CACHE_CONTROL } from '../../../routes/pack-assets';
+import { packAssetsRoutes, PACK_ASSETS_CACHE_CONTROL, PACK_ASSETS_RATE_LIMIT_MAX } from '../../../routes/pack-assets';
 import { buildPackIndex, loadPackIndex, packDesignDirCandidates, type PackIndex } from '../../../services/packs/PackIndex';
 import { gloryFramePackSpec } from '../../../services/packs/gloryFramePackSpec';
 import { stickerPackSpec } from '../../../services/packs/stickerPackSpec';
@@ -124,6 +124,20 @@ describe('GET /api/v1/pack-assets/:file — le magasin adressé par contenu', ()
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('son seau propre est une PROTECTION, jamais une exemption : la requête au-delà du plafond par IP répond 429', async () => {
+    const dir = tempAssets({ [SERVED]: '{}' });
+    const app = await buildApp({ index: RETAINED_ONLY, assetsDir: dir, globalMax: 10_000 });
+    try {
+      const codes: number[] = [];
+      for (let i = 0; i <= PACK_ASSETS_RATE_LIMIT_MAX; i += 1) codes.push((await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${SERVED}` })).statusCode);
+      expect(codes.slice(0, PACK_ASSETS_RATE_LIMIT_MAX).every((code) => code === 200)).toBe(true);
+      expect(codes[PACK_ASSETS_RATE_LIMIT_MAX]).toBe(429);
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('le pack de cadres d’EXEMPLE — servi sous PACK_SAMPLES=1 seulement (fail-closed)', () => {
@@ -163,6 +177,31 @@ describe('le pack de cadres d’EXEMPLE — servi sous PACK_SAMPLES=1 seulement 
     for (const { thumb } of contract.frames) {
       expect(index.isServedAsset(thumb.src)).toBe(true);
       expect(thumb.src.startsWith(thumb.sha256.slice(0, 16))).toBe(true);
+    }
+  });
+
+  it('un contrat ALTÉRÉ sur le disque n’ouvre aucune de ses vignettes (seule reste la couverture, que le registre nomme lui-même) ; le contrat intègre les ouvre', () => {
+    const design = mkdtempSync(join(tmpdir(), 'meeshy-pack-design-'));
+    const honest = mkdtempSync(join(tmpdir(), 'meeshy-pack-honest-'));
+    const altered = mkdtempSync(join(tmpdir(), 'meeshy-pack-altered-'));
+    try {
+      mkdirSync(join(design, 'packs/samples'), { recursive: true });
+      copyFileSync(join(DESIGN, 'packs/samples/glory-frame.json'), join(design, 'packs/samples/glory-frame.json'));
+      const contractSrc = sampleEntry().contract.src;
+      const bytes = readFileSync(join(ASSETS, contractSrc), 'utf8');
+      writeFileSync(join(honest, contractSrc), bytes);
+      writeFileSync(join(altered, contractSrc), `${bytes} `);
+      const thumbs = (JSON.parse(bytes) as { frames: { thumb: { src: string } }[] }).frames.map((frame) => frame.thumb.src);
+      const servedBy = (assetsDir: string) => {
+        const index = loadPackIndex([design], { PACK_SAMPLES: '1' }, assetsDir);
+        return thumbs.map((src) => index.isServedAsset(src));
+      };
+      expect(servedBy(honest)).toEqual([true, true, true, true]);
+      const cover = sampleEntry().cover.src;
+      expect(servedBy(altered)).toEqual(thumbs.map((src) => src === cover));
+      expect(servedBy(altered).filter(Boolean)).toHaveLength(1);
+    } finally {
+      [design, honest, altered].forEach((dir) => rmSync(dir, { recursive: true, force: true }));
     }
   });
 
