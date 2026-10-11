@@ -3,14 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  MEESH_FRAGMENT_MINT_COST,
-  MEESH_PRICE_CAP,
-  meeshEdition,
-  meeshPrice,
-  previewFragmentMint,
-  previewMint,
-} from '../../utils/game/mint.js';
+import { MEESH_PRICE_CAP, meeshEdition, meeshPrice, previewMint } from '../../utils/game/mint.js';
 import { LEVEL_CAP_AMBASSADOR, LEVEL_CAP_BASE, levelThreshold } from '../../utils/game/levels.js';
 import { MEESH_MINT_COST, computeMeeshMintPlan } from '../../utils/meesh.js';
 
@@ -135,39 +128,5 @@ describe('le plan de frappe reçoit le prix', () => {
   it('retombe sur la base si le prix reçu est illisible', () => {
     expect(computeMeeshMintPlan(axes, { mintCost: Number.NaN }).debits.reduce((s, d) => s + d.points, 0)).toBe(1221);
     expect(computeMeeshMintPlan(axes, { mintCost: 0 }).debits.reduce((s, d) => s + d.points, 0)).toBe(1221);
-  });
-});
-
-describe('la frappe gratuite par fragments de Meesh (#10011)', () => {
-  it('coûte cinq fragments, aucun point, et garde le numéro, l\'édition et la Gloire d\'une frappe', () => {
-    const preview = previewFragmentMint({ score: 12_180, mintedLifetime: 99, fragmentsHeld: 6, levelCap: LEVEL_CAP_BASE, steps: null });
-    expect(MEESH_FRAGMENT_MINT_COST).toBe(5);
-    expect(preview).toEqual({
-      number: 100,
-      edition: 'gold',
-      cost: 5,
-      held: 6,
-      canMint: true,
-      missingFragments: 0,
-      levelBefore: 11,
-      levelAfter: 11,
-      gloryGained: 1000,
-    });
-  });
-
-  it('dit les fragments qui manquent, sans Gloire promise', () => {
-    const preview = previewFragmentMint({ score: 2000, mintedLifetime: 0, fragmentsHeld: 3, levelCap: LEVEL_CAP_BASE, steps: null });
-    expect(preview).toMatchObject({ canMint: false, missingFragments: 2, gloryGained: 0, levelAfter: preview.levelBefore });
-  });
-
-  it('ne fait jamais perdre un niveau, et peut faire l\'étape de la première Meesh (#9706)', () => {
-    const preview = previewFragmentMint({ score: 15_000, mintedLifetime: 0, fragmentsHeld: 5, levelCap: LEVEL_CAP_BASE, steps: { missionsDone: 0, flameRecord: 0, glory: 0, rank: 'murmure' } });
-    expect(preview.levelBefore).toBe(9);
-    expect(preview.levelAfter).toBeGreaterThan(preview.levelBefore);
-  });
-
-  it('ignore le prix courant : la frappe d\'après, payée en points, coûte le prix de son rang', () => {
-    expect(previewFragmentMint({ score: 0, mintedLifetime: 10, fragmentsHeld: 5, levelCap: LEVEL_CAP_BASE, steps: null }).number).toBe(11);
-    expect(previewMint({ score: 5000, mintedLifetime: 11, debitablePoints: 5000, levelCap: LEVEL_CAP_BASE, steps: null }).price).toBe(1587);
   });
 });

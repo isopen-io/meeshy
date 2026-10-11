@@ -47,21 +47,21 @@ public struct ChestClaimResponse: Decodable, Sendable, Equatable {
     public let reward: DailyChest
     /// Le score en poche après le crédit.
     public let score: Int
-    /// Les fragments de Meesh en poche après l'ouverture (#10011) — `nil` devant un serveur antérieur.
-    public let meeshFragments: MeeshFragmentProgress?
+    /// Les fragments d'étoile collectés après l'ouverture (#10011) — `nil` devant un serveur antérieur.
+    public let starFragments: StarFragmentsTotal?
 
     public var alreadyDone: Bool { status.hasPrefix("already-") }
 
     public init(status: String, reward: DailyChest, score: Int,
-                meeshFragments: MeeshFragmentProgress? = nil) {
+                starFragments: StarFragmentsTotal? = nil) {
         self.status = status
         self.reward = reward
         self.score = score
-        self.meeshFragments = meeshFragments
+        self.starFragments = starFragments
     }
 
     private enum CodingKeys: String, CodingKey {
-        case status, reward, score, meeshFragments
+        case status, reward, score, starFragments
     }
 
     public init(from decoder: Decoder) throws {
@@ -69,7 +69,7 @@ public struct ChestClaimResponse: Decodable, Sendable, Equatable {
         status = try container.decode(String.self, forKey: .status)
         reward = try container.decode(DailyChest.self, forKey: .reward)
         score = try container.decode(Int.self, forKey: .score)
-        meeshFragments = (try? container.decodeIfPresent(MeeshFragmentProgress.self, forKey: .meeshFragments)) ?? nil
+        starFragments = (try? container.decodeIfPresent(StarFragmentsTotal.self, forKey: .starFragments)) ?? nil
     }
 }
 

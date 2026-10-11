@@ -27,6 +27,7 @@ import {
 } from '../../types/game.js';
 import { CHEST_ODDS, chestContentForEffort, dayEffort } from '../../utils/game/chest.js';
 import { buildGameBlock, type GameMissionRecord } from '../../utils/game/game-block.js';
+import { meeshPrice } from '../../utils/game/mint.js';
 import { levelThreshold } from '../../utils/game/levels.js';
 import { drawDailyMissions } from '../../utils/game/missions.js';
 import { isEngagementProgressPayload } from '../../types/engagement.js';
@@ -228,20 +229,22 @@ describe('le bloc game', () => {
     expect(block().chest.reward).toBeNull();
   });
 
-  it('dit le contenu certain du coffre avant l\'ouverture : l\'effort des missions du jour tirées (#10011)', () => {
+  it('dit le contenu certain du coffre et ses primes avant l\'ouverture : l\'effort du jour, le cours de la Meesh (#10011)', () => {
     const missions = missionRecords(34);
-    expect(block({ missions }).chest.today).toEqual(chestContentForEffort(dayEffort(missions)));
+    expect(block({ missions }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions, mintedLifetime: 100 }).chest.today).toMatchObject({ bonusWhole: 16_556, bonusFifth: 3311 });
     expect(block({ missions: [] }).chest.today).toBeNull();
   });
 
-  it('sert les fragments en poche et la frappe gratuite quand la passerelle les connaît, et pas sinon', () => {
-    const served = block({ meeshFragments: { earned: 12, spent: 5 } });
-    expect(served.chest.meeshFragments).toEqual({ held: 7, perMeesh: 5 });
-    expect(served.mint.withFragments).toEqual({ cost: 5, held: 7, canMint: true, missingFragments: 0 });
-    expect(block({ meeshFragments: { earned: 3, spent: 0 } }).mint.withFragments).toEqual({ cost: 5, held: 3, canMint: false, missingFragments: 2 });
-    expect('meeshFragments' in block().chest).toBe(false);
-    expect('withFragments' in block().mint).toBe(false);
+  it('sert les fragments d\'étoile collectés quand la passerelle les connaît, et pas sinon — aucune frappe par fragments', () => {
+    const served = block({ starFragments: 7 });
+    expect(served.starFragments).toEqual({ collected: 7 });
+    expect('starFragments' in block()).toBe(false);
+    expect('withFragments' in served.mint).toBe(false);
+    expect('meeshFragments' in served.chest).toBe(false);
     expect(gameBlockSchema.safeParse(served).success).toBe(true);
+    const parsed = gameBlockSchema.safeParse({ ...served, starFragments: { collected: 'beaucoup' } });
+    expect(parsed.success && parsed.data.starFragments).toBeUndefined();
   });
 
   it('lit encore le coffre d\'un ancien serveur, et laisse tomber seul un contenu du jour illisible', () => {
@@ -395,12 +398,13 @@ describe('les réponses', () => {
     expect(
       chestClaimResponseSchema.safeParse({
         status: 'claimed',
-        reward: { points: 1750, fragment: true, freeze: false, glory: 175, meeshFragments: 2 },
+        reward: { points: 2083 + 244, fragment: true, freeze: false, glory: 208, bonus: 'fifth', bonusPoints: 244 },
         score: 12_270,
-        meeshFragments: { held: 3, perMeesh: 5 },
+        starFragments: { collected: 3 },
       }).success,
     ).toBe(true);
-    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'fragments' }).success).toBe(true);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'points' }).success).toBe(true);
+    expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'fragments' }).success).toBe(false);
     expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001', payWith: 'euros' }).success).toBe(false);
     expect(meeshMintRequestSchema.safeParse({ requestId: 'frappe-0001' }).success).toBe(true);
     expect(guideSeenResponseSchema.safeParse({ guideSeen: ['a'] }).success).toBe(true);

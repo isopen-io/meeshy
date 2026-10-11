@@ -57,8 +57,9 @@ const mintBodySchema = {
   properties: {
     // Borné : un identifiant d'idempotence est un UUID, pas un champ libre.
     requestId: { type: 'string', minLength: 8, maxLength: 64 },
-    // La frappe GRATUITE (#10011) : `fragments` paie de cinq fragments de Meesh. Absent (anciens clients) : en points.
-    payWith: { type: 'string', enum: ['points', 'fragments'] },
+    // Une Meesh ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : tout autre moyen est refusé en 400, AVANT
+    // toute écriture — jamais ignoré en silence (une frappe en points que le client n'a pas demandée).
+    payWith: { type: 'string', enum: ['points'] },
   },
   additionalProperties: false,
 } as const;
@@ -71,10 +72,6 @@ const mintResponseSchema = {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['minted', 'already-minted', 'insufficient'] },
-        // La frappe par fragments (#10011) : ce qui l'a payée, ce qu'elle a consommé, ce qui reste en poche.
-        paidWith: { type: 'string', enum: ['points', 'fragments'] },
-        fragmentsSpent: { type: 'number' },
-        meeshFragments: { type: 'object', properties: { held: { type: 'number' }, perMeesh: { type: 'number' } } },
         balance: { type: 'number' },
         mintedLifetime: { type: 'number' },
         missingPoints: { type: 'number' },
@@ -118,14 +115,14 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           // devait relire toute la progression pour le dire.
           409: {
             ...errorResponseSchema,
-            properties: { ...errorResponseSchema.properties, missingPoints: { type: 'number' }, missingFragments: { type: 'number' } },
+            properties: { ...errorResponseSchema.properties, missingPoints: { type: 'number' } },
           },
           429: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { requestId: string; payWith?: 'points' | 'fragments' } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) => {
       const userId = request.auth?.userId;
       if (!userId) {
         // Le sens est NOMMÉ plutôt qu'hérité du défaut : `undefined` disparaît
@@ -139,23 +136,6 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        if (request.body.payWith === 'fragments') {
-          const paid = await new MeeshService(fastify.prisma).mintWithFragments(userId, request.body.requestId);
-          if (paid.status === 'insufficient-fragments') {
-            return sendError(reply, 409, 'INSUFFICIENT_FRAGMENTS', {
-              code: 'INSUFFICIENT_FRAGMENTS',
-              details: { missingFragments: paid.missingFragments },
-            });
-          }
-          return sendSuccess(reply, {
-            status: paid.status,
-            balance: paid.balance,
-            mintedLifetime: paid.mintedLifetime,
-            ...(paid.receipt === null ? {} : receiptOnTheWire(paid.receipt)),
-            ...(paid.status === 'minted' ? { meeshFragments: paid.fragments } : {}),
-          });
-        }
-
         const outcome = await new MeeshService(fastify.prisma).mint(userId, request.body.requestId);
 
         if (outcome.status === 'insufficient') {

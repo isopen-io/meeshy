@@ -452,10 +452,11 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0002', now: NOW });
 
     const rows = db.dailyMission.rows.map((r) => ({ templateKey: String(r.templateKey), difficulty: String(r.difficulty), target: Number(r.target) }));
-    const drawn = dailyChest({ userId: USER, dayKey: DAY, effort: dayEffort(rows) });
+    // Aucune Meesh frappée : la prime se tire au cours de la 1re, 1 221 points — ce compte tire un cinquième.
+    const drawn = dailyChest({ userId: USER, dayKey: DAY, effort: dayEffort(rows), nextMeeshPrice: 1221 });
     expect(issue.status).toBe('claimed');
     expect(issue.reward).toEqual(drawn);
-    expect(drawn.points).toBe(371);
+    expect(drawn).toMatchObject({ points: 760 + 244, glory: 76, bonus: 'fifth', bonusPoints: 244 });
     expect(creditPoints).toHaveBeenCalledWith(USER, drawn.points, expect.any(String));
   });
 
@@ -471,7 +472,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const heavyIssue = await heavy.service.claimChest({ userId: USER, requestId: 'coffre-lourd-1', now: NOW });
 
     expect(heavyIssue.reward.points).toBeGreaterThan(lightIssue.reward.points);
-    expect(heavyIssue.reward.points).toBe(10_000);
+    expect(heavyIssue.reward.points - (heavyIssue.reward.bonusPoints ?? 0)).toBe(10_000);
     expect(heavyIssue.reward.glory).toBe(1000);
   });
 
@@ -485,25 +486,47 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const lines = db.gloryLedger.rows.filter((r) => r.reason === 'chest');
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({ delta: first.reward.glory, requestId: `chest:${DAY}` });
-    expect(db.gameDay.rows[0]).toMatchObject({ chestGlory: first.reward.glory, chestMeeshFragments: first.reward.meeshFragments });
+    expect(db.gameDay.rows[0]).toMatchObject({ chestGlory: first.reward.glory, chestBonus: first.reward.bonus, chestBonusPoints: first.reward.bonusPoints });
   });
 
-  it('ajoute ses fragments de Meesh à ceux en poche, moins ceux qu\'une frappe gratuite a consommés', async () => {
+  it('ajoute son fragment d\'étoile au total collecté — coffres d\'avant et étapes de saison compris —, une seule fois', async () => {
     const { db, creditPoints } = setup();
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: true, freeze: false, glory: 10, meeshFragments: 2 }),
+      chest: () => ({ points: 500, fragment: true, freeze: false, glory: 50, bonus: 'none', bonusPoints: 0 }),
     });
-    db.gameDay.rows.push({ id: 'veille', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: NOW, chestMeeshFragments: 9 });
-    db.meeshLedger.rows.push({ id: 'gratuite', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-gratuite-1', fragmentsSpent: 5 });
+    db.gameDay.rows.push({ id: 'veille', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: NOW, chestFragment: true });
+    db.gameDay.rows.push({ id: 'avant-veille', userId: USER, dayKey: '2026-09-30', rerollCount: 0, chestClaimedAt: NOW, chestFragment: false });
+    db.gameSeason.rows.push({ id: 's1', userId: USER, number: 1, stars: 80, claimedSteps: [1, 5, 10, 15] });
     allDone(db);
 
-    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-fragments-1', now: NOW });
-    const again = await service.claimChest({ userId: USER, requestId: 'coffre-fragments-1', now: NOW });
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-etoile-1', now: NOW });
+    const again = await service.claimChest({ userId: USER, requestId: 'coffre-etoile-1', now: NOW });
 
-    expect(issue).toMatchObject({ status: 'claimed', meeshFragments: { held: 6, perMeesh: 5 } });
-    expect(again).toMatchObject({ status: 'already-claimed', reward: { meeshFragments: 2 } });
-    expect(db.meeshLedger.rows).toHaveLength(1);
+    expect(issue).toMatchObject({ status: 'claimed', reward: { fragment: true }, starFragments: { collected: 1 + 1 + 2 } });
+    expect(again).toMatchObject({ status: 'already-claimed', reward: { fragment: true }, starFragments: { collected: 4 } });
+    expect(db.meeshLedger.rows).toHaveLength(0);
+  });
+
+  it('crédite la prime en points, au cours de la Meesh du COMPTE lu à la réclamation, et ne frappe rien', async () => {
+    const { db, creditPoints } = setup();
+    const seen: number[] = [];
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: (params) => {
+        seen.push(params.nextMeeshPrice);
+        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
+      },
+    });
+    for (let n = 0; n < 10; n += 1) db.meeshLedger.rows.push({ id: `m${n}`, userId: USER, delta: 1, reason: 'mint', requestId: `frappe-${n}` });
+    allDone(db);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-prime-1', now: NOW });
+
+    expect(seen).toEqual([1587]);
+    expect(issue.reward).toMatchObject({ points: 500 + 1587, bonus: 'whole', bonusPoints: 1587 });
+    expect(creditPoints).toHaveBeenCalledWith(USER, 500 + 1587, expect.anything());
+    expect(db.meeshLedger.rows).toHaveLength(10);
   });
 
   it('des points qui ne passent pas rendent le coffre : un nouvel essai ne paie la Gloire qu’une fois', async () => {
@@ -516,7 +539,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     allDone(db);
 
     await service.claimChest({ userId: USER, requestId: 'coffre-panne-1', now: NOW }).catch(() => undefined);
-    expect(db.gameDay.rows[0]).toMatchObject({ chestClaimedAt: null, chestMeeshFragments: null, chestGlory: null });
+    expect(db.gameDay.rows[0]).toMatchObject({ chestClaimedAt: null, chestBonus: null, chestBonusPoints: null, chestGlory: null });
     const retry = await service.claimChest({ userId: USER, requestId: 'coffre-panne-2', now: NOW });
 
     expect(retry.status).toBe('claimed');
@@ -524,14 +547,15 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     expect(creditPoints).toHaveBeenCalledTimes(2);
   });
 
-  it('rejouer un coffre ouvert AVANT #10011 rend zéro Gloire et zéro fragment, sans rien créditer', async () => {
+  it('rejouer un coffre ouvert AVANT #10011 rend zéro Gloire, aucune prime, son fragment d\'étoile, sans rien créditer', async () => {
     const { db, service, creditPoints } = setup();
     allDone(db);
     db.gameDay.rows.push({ id: 'ancien', userId: USER, dayKey: DAY, rerollCount: 0, chestClaimedAt: NOW, chestPoints: 140, chestFragment: true, chestFreeze: false });
 
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-ancien', now: NOW });
 
-    expect(issue).toMatchObject({ status: 'already-claimed', reward: { points: 140, fragment: true, freeze: false, glory: 0, meeshFragments: 0 } });
+    expect(issue).toMatchObject({ status: 'already-claimed', reward: { points: 140, fragment: true, freeze: false, glory: 0 }, starFragments: { collected: 1 } });
+    expect('bonus' in issue.reward).toBe(false);
     expect(creditPoints).not.toHaveBeenCalled();
   });
 
@@ -550,13 +574,13 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 2 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: true, freeze: true, glory: 0, meeshFragments: 0 }),
+      chest: () => ({ points: 100, fragment: true, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
 
     const issue = await service.claimChest({ userId: USER, requestId: 'coffre-0004', now: NOW });
 
-    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true, glory: 0, meeshFragments: 0 });
+    expect(issue.reward).toEqual({ points: 100, fragment: true, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 });
     expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 
@@ -575,7 +599,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
     const update = db.user.update.bind(db.user);
@@ -598,7 +622,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 0 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
     const findUnique = db.user.findUnique.bind(db.user);
@@ -621,7 +645,7 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     const { db, creditPoints } = setup({ flameFreezes: 1 });
     const service = new MissionService(db.prisma, {
       creditPoints,
-      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, meeshFragments: 0 }),
+      chest: () => ({ points: 100, fragment: false, freeze: true, glory: 0, bonus: 'none', bonusPoints: 0 }),
     });
     allDone(db);
 

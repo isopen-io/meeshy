@@ -130,7 +130,6 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
             celebration={actions.celebration}
             strikeKey={actions.strikeKey}
             onMint={actions.mint}
-            {...(actions.mintWithFragments === undefined ? {} : { onMintWithFragments: actions.mintWithFragments })}
           />
         );
       }
@@ -158,6 +157,7 @@ function gesturesOf(concept: ProgressionConcept, view: EngagementWithGame, host:
         <GameMissions
           missions={game.missions}
           chest={game.chest}
+          starFragments={game.starFragments?.collected}
           held={game.treasury.held}
           level={shownLevelOf(game.level).level}
           prismHour={game.boosts.prismHour}

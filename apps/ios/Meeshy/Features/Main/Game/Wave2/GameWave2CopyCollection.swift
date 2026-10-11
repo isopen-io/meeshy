@@ -45,7 +45,7 @@ extension GameText {
 
     static var seasonStepLocked: String { String(localized: "game2.season.step.locked", defaultValue: "à venir", bundle: .main) }
 
-    static var seasonRewardFragment: String { String(localized: "game2.season.reward.fragment", defaultValue: "Un fragment", bundle: .main) }
+    static var seasonRewardFragment: String { String(localized: "game2.season.reward.fragment", defaultValue: "Un fragment d’étoile", bundle: .main) }
 
     static var seasonRewardFreeze: String { String(localized: "game2.season.reward.freeze", defaultValue: "Un gel de Flamme", bundle: .main) }
 

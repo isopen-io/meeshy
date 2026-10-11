@@ -8,6 +8,9 @@
  * la 20e, 12 948 pour la 100e (or), et le plafond de 16 556 dès la 101e. L'ancienne loi (+6 %, plafond 4 884)
  * aurait mis 451 frappes à l'atteindre.
  *
+ * Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun autre chemin n'existe — ni
+ * fragment, ni frappe gratuite (porteur, 2026-10-10, #10011 ; `no-money-invariants.test.ts`).
+ *
  * `MEESH_MINT_COST` (`utils/meesh.ts`) reste la BASE — le prix des dix
  * premières — et le défaut de `computeMeeshMintPlan`. Le prix d'une frappe est
  * RECALCULÉ par le serveur (`MeeshService.mint`) : aucun client ne l'envoie, un
@@ -16,7 +19,6 @@
  */
 
 import { MEESH_MINT_COST } from '../meesh.js';
-import { MEESH_FRAGMENTS_PER_MEESH } from './chest.js';
 import { GLORY_POINTS, gloryStanding, levelCapForRank } from './glory.js';
 import { levelStepGate, type LevelStepFacts } from './level-steps.js';
 import { levelFromScore, tighterLevelCap, type LevelCap } from './levels.js';
@@ -111,60 +113,6 @@ export function previewMint(params: {
     levelBefore,
     levelAfter,
     levelsLost: Math.max(0, levelBefore - levelAfter),
-    gloryGained: canMint ? GLORY_POINTS.mint : 0,
-  };
-}
-
-/** Une frappe GRATUITE consomme cinq fragments de Meesh, au lieu des points (porteur, 2026-10-10, #10011). */
-export const MEESH_FRAGMENT_MINT_COST = MEESH_FRAGMENTS_PER_MEESH;
-
-export type FragmentMintPreview = {
-  /** Le numéro que porterait la pièce — une frappe par fragments en est une : elle compte, et renchérit la suivante. */
-  readonly number: number;
-  readonly edition: MeeshEdition;
-  /** Les fragments que la frappe consomme : cinq. */
-  readonly cost: number;
-  /** Les fragments en poche. */
-  readonly held: number;
-  readonly canMint: boolean;
-  readonly missingFragments: number;
-  readonly levelBefore: number;
-  /** Aucun point débité : le niveau ne perd rien, et peut MONTER si la frappe fait une étape (#9706). */
-  readonly levelAfter: number;
-  /** `0` quand la frappe n'est pas possible. */
-  readonly gloryGained: number;
-};
-
-/**
- * La frappe PAR FRAGMENTS (#10011) : cinq fragments, au prix courant IGNORÉ — aucun point débité, aucun niveau
- * perdu. Elle reste une frappe : numéro, édition, Gloire de frappe, et elle compte dans les frappes à vie (la
- * suivante, payée en points, coûte le prix de son rang). Pur : le serveur le rejoue à l'écriture.
- */
-export function previewFragmentMint(params: {
-  readonly score: number;
-  readonly mintedLifetime: number;
-  readonly fragmentsHeld: number;
-  readonly levelCap: LevelCap;
-  readonly steps: Omit<LevelStepFacts, 'minted'> | null;
-}): FragmentMintPreview {
-  const score = sanitizeCount(params.score);
-  const number = sanitizeCount(params.mintedLifetime) + 1;
-  const held = sanitizeCount(params.fragmentsHeld);
-  const canMint = held >= MEESH_FRAGMENT_MINT_COST;
-  const steps = params.steps === null ? null : { ...params.steps, minted: sanitizeCount(params.mintedLifetime) };
-  const after = steps === null ? null : stepsAfterMint(steps);
-  const capBefore = tighterLevelCap(params.levelCap, levelStepGate(steps));
-  const capAfter = after === null ? capBefore : tighterLevelCap(levelCapForRank(after.rank), levelStepGate(after));
-  const levelBefore = levelFromScore(score, capBefore);
-  return {
-    number,
-    edition: meeshEdition(number),
-    cost: MEESH_FRAGMENT_MINT_COST,
-    held,
-    canMint,
-    missingFragments: canMint ? 0 : MEESH_FRAGMENT_MINT_COST - held,
-    levelBefore,
-    levelAfter: canMint ? Math.max(levelBefore, levelFromScore(score, capAfter)) : levelBefore,
     gloryGained: canMint ? GLORY_POINTS.mint : 0,
   };
 }
