@@ -56,6 +56,12 @@ import {
 } from '../../utils/game/league.js';
 import type { MissionSignal } from '../../utils/game/missions.js';
 import { photoMomentId, photoMomentOfGuideEvent } from '../../utils/game/photo-moments.js';
+import {
+  GAME_VECTOR_LAWS_PHOTO,
+  buildGameVectorsPhoto,
+  evaluateGameVectorPhoto,
+  type GameVectorInputPhoto,
+} from './game-vectors-law-photo.js';
 import { prestigeTransition } from '../../utils/game/prestige.js';
 import {
   achievementGloryAtEarning,
@@ -169,7 +175,8 @@ export type GameVectorInputV2 =
   | { readonly law: 'photo-moment'; readonly event: GuideEventV2 }
   | { readonly law: 'trophy-visitor-key'; readonly key: string; readonly awardedMonth: string }
   | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }
-  | { readonly law: 'season-tense'; readonly startDay: string; readonly endDay: string; readonly served: SeasonTense; readonly dayKey: string; readonly minuteOfDay: number };
+  | { readonly law: 'season-tense'; readonly startDay: string; readonly endDay: string; readonly served: SeasonTense; readonly dayKey: string; readonly minuteOfDay: number }
+  | GameVectorInputPhoto;
 
 export const GAME_VECTOR_LAWS_V2 = [
   'league-week',
@@ -219,6 +226,7 @@ export const GAME_VECTOR_LAWS_V2 = [
   'trophy-visitor-key',
   'showcase-visitor',
   'season-tense',
+  ...GAME_VECTOR_LAWS_PHOTO,
 ] as const;
 
 const lawSet: ReadonlySet<string> = new Set(GAME_VECTOR_LAWS_V2);
@@ -383,6 +391,10 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       return { tense: seasonTenseAt(input, input), live: liveSeasonTense(input, input) };
     case 'showcase-visitor':
       return visitorShowcase(input);
+    case 'photo-catch-up':
+    case 'photo-offer':
+    case 'photo-standing':
+      return evaluateGameVectorPhoto(input);
   }
 }
 
@@ -874,5 +886,6 @@ export function buildGameVectorsV2() {
     ...monthParses,
     ...visitorShowcases,
     ...tenses,
+    ...buildGameVectorsPhoto(),
   ];
 }

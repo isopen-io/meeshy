@@ -16693,6 +16693,4318 @@
         "tense": "current",
         "live": "past"
       }
+    },
+    {
+      "_label": "rattrapage — un compte neuf",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — 53 Meeshes frappées",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 53,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:20",
+            "emblem": {
+              "kind": "meesh",
+              "number": 20,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:30",
+            "emblem": {
+              "kind": "meesh",
+              "number": 30,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:40",
+            "emblem": {
+              "kind": "meesh",
+              "number": 40,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:50",
+            "emblem": {
+              "kind": "meesh",
+              "number": 50,
+              "edition": "silver"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:1",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:10",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:20",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:30",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:40",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:50",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — la centième Meesh",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 100,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:20",
+            "emblem": {
+              "kind": "meesh",
+              "number": 20,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:30",
+            "emblem": {
+              "kind": "meesh",
+              "number": 30,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:40",
+            "emblem": {
+              "kind": "meesh",
+              "number": 40,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:50",
+            "emblem": {
+              "kind": "meesh",
+              "number": 50,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:60",
+            "emblem": {
+              "kind": "meesh",
+              "number": 60,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:70",
+            "emblem": {
+              "kind": "meesh",
+              "number": 70,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:80",
+            "emblem": {
+              "kind": "meesh",
+              "number": 80,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:90",
+            "emblem": {
+              "kind": "meesh",
+              "number": 90,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:100",
+            "emblem": {
+              "kind": "meesh",
+              "number": 100,
+              "edition": "gold"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:1",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:10",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:20",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:30",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:40",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:50",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:60",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:70",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:80",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:90",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:100",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — Écho IV",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "echo",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 4
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:4",
+            "track": "rank",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — le Mythe",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "mythe",
+          "division": null,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:mythe:0",
+            "emblem": {
+              "kind": "rank",
+              "rank": "mythe",
+              "division": null
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:4",
+            "track": "rank",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:mythe:0",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — le Murmure sans division",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": null,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — record de niveau 34",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 34,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lueur",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:eclat",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — le sommet et deux Prestiges",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 100,
+          "prestige": 2,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:rayon",
+            "emblem": {
+              "kind": "tier",
+              "tier": "rayon",
+              "level": 40
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:aurore",
+            "emblem": {
+              "kind": "tier",
+              "tier": "aurore",
+              "level": 50
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:comete",
+            "emblem": {
+              "kind": "tier",
+              "tier": "comete",
+              "level": 60
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:etoile",
+            "emblem": {
+              "kind": "tier",
+              "tier": "etoile",
+              "level": 70
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:constellation",
+            "emblem": {
+              "kind": "tier",
+              "tier": "constellation",
+              "level": 80
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:galaxie",
+            "emblem": {
+              "kind": "tier",
+              "tier": "galaxie",
+              "level": 90
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:2",
+            "emblem": {
+              "kind": "prestige",
+              "number": 2
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lueur",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:eclat",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:rayon",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:aurore",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:comete",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:etoile",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:constellation",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:galaxie",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          },
+          {
+            "id": "prestige:2",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — un Prestige sous le niveau 100",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 12,
+          "prestige": 1,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lueur",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — le coffret et 45 jours de Flamme",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": "coffret",
+          "flameRecord": 45
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:bourse",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "bourse"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:escarcelle",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "escarcelle"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:coffret",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "coffret"
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:7",
+            "emblem": {
+              "kind": "flame",
+              "form": "flamme",
+              "days": 7
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:30",
+            "emblem": {
+              "kind": "flame",
+              "form": "brasier",
+              "days": 30
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "treasury:bourse",
+            "track": "treasury",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "treasury:escarcelle",
+            "track": "treasury",
+            "state": "locked",
+            "blockedBy": "treasury:bourse"
+          },
+          {
+            "id": "treasury:coffret",
+            "track": "treasury",
+            "state": "locked",
+            "blockedBy": "treasury:bourse"
+          },
+          {
+            "id": "flame:7",
+            "track": "flame",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "flame:30",
+            "track": "flame",
+            "state": "locked",
+            "blockedBy": "flame:7"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — 53 Meeshes, les quatre premières gardées",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 53,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1",
+          "meesh:10",
+          "meesh:20",
+          "meesh:30"
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:20",
+            "emblem": {
+              "kind": "meesh",
+              "number": 20,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:30",
+            "emblem": {
+              "kind": "meesh",
+              "number": 30,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:40",
+            "emblem": {
+              "kind": "meesh",
+              "number": 40,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:50",
+            "emblem": {
+              "kind": "meesh",
+              "number": 50,
+              "edition": "silver"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "meesh:40",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:50",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:40"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — 53 Meeshes, la 40e gardée",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 53,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1",
+          "meesh:10",
+          "meesh:20",
+          "meesh:30",
+          "meesh:40"
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:20",
+            "emblem": {
+              "kind": "meesh",
+              "number": 20,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:30",
+            "emblem": {
+              "kind": "meesh",
+              "number": 30,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:40",
+            "emblem": {
+              "kind": "meesh",
+              "number": 40,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:50",
+            "emblem": {
+              "kind": "meesh",
+              "number": 50,
+              "edition": "silver"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "meesh:50",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — les pistes ne s’attendent pas",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 12,
+          "treasuryTier": null,
+          "flameRecord": 8
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:7",
+            "emblem": {
+              "kind": "flame",
+              "form": "flamme",
+              "days": 7
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:1",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:10",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "flame:7",
+            "track": "flame",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — un carnet complet",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1"
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          }
+        ],
+        "entries": []
+      }
+    },
+    {
+      "_label": "rattrapage — toutes les pistes",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 100,
+          "prestige": 1,
+          "minted": 10,
+          "treasuryTier": "bourse",
+          "flameRecord": 7
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:rayon",
+            "emblem": {
+              "kind": "tier",
+              "tier": "rayon",
+              "level": 40
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:aurore",
+            "emblem": {
+              "kind": "tier",
+              "tier": "aurore",
+              "level": 50
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:comete",
+            "emblem": {
+              "kind": "tier",
+              "tier": "comete",
+              "level": 60
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:etoile",
+            "emblem": {
+              "kind": "tier",
+              "tier": "etoile",
+              "level": 70
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:constellation",
+            "emblem": {
+              "kind": "tier",
+              "tier": "constellation",
+              "level": 80
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:galaxie",
+            "emblem": {
+              "kind": "tier",
+              "tier": "galaxie",
+              "level": 90
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:bourse",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "bourse"
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:7",
+            "emblem": {
+              "kind": "flame",
+              "form": "flamme",
+              "days": 7
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lueur",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:eclat",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:rayon",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:aurore",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:comete",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:etoile",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:constellation",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:galaxie",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          },
+          {
+            "id": "meesh:1",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:10",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "treasury:bourse",
+            "track": "treasury",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "flame:7",
+            "track": "flame",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — Légende II, une photo gardée au milieu de chaque piste",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "legende",
+          "division": 2,
+          "levelRecord": 160,
+          "prestige": 3,
+          "minted": 41,
+          "treasuryTier": "tresor",
+          "flameRecord": 400
+        },
+        "kept": [
+          "rank:voix:3",
+          "tier:eclat",
+          "prestige:2",
+          "meesh:20",
+          "treasury:coffret",
+          "flame:30",
+          "achievement:first_message"
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:murmure:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "murmure",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:echo:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "echo",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:voix:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "voix",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:conteur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "conteur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:passeur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "passeur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:polyglotte:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "polyglotte",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:ambassadeur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "ambassadeur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:orateur:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "orateur",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 2
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:oracle:1",
+            "emblem": {
+              "kind": "rank",
+              "rank": "oracle",
+              "division": 1
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:5",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 5
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:4",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 4
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:3",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 3
+            }
+          },
+          {
+            "track": "rank",
+            "id": "rank:legende:2",
+            "emblem": {
+              "kind": "rank",
+              "rank": "legende",
+              "division": 2
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:rayon",
+            "emblem": {
+              "kind": "tier",
+              "tier": "rayon",
+              "level": 40
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:aurore",
+            "emblem": {
+              "kind": "tier",
+              "tier": "aurore",
+              "level": 50
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:comete",
+            "emblem": {
+              "kind": "tier",
+              "tier": "comete",
+              "level": 60
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:etoile",
+            "emblem": {
+              "kind": "tier",
+              "tier": "etoile",
+              "level": 70
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:constellation",
+            "emblem": {
+              "kind": "tier",
+              "tier": "constellation",
+              "level": 80
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:galaxie",
+            "emblem": {
+              "kind": "tier",
+              "tier": "galaxie",
+              "level": 90
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:nebuleuse",
+            "emblem": {
+              "kind": "tier",
+              "tier": "nebuleuse",
+              "level": 101
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:2",
+            "emblem": {
+              "kind": "prestige",
+              "number": 2
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:3",
+            "emblem": {
+              "kind": "prestige",
+              "number": 3
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:1",
+            "emblem": {
+              "kind": "meesh",
+              "number": 1,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:10",
+            "emblem": {
+              "kind": "meesh",
+              "number": 10,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:20",
+            "emblem": {
+              "kind": "meesh",
+              "number": 20,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:30",
+            "emblem": {
+              "kind": "meesh",
+              "number": 30,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "meesh",
+            "id": "meesh:40",
+            "emblem": {
+              "kind": "meesh",
+              "number": 40,
+              "edition": "silver"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:bourse",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "bourse"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:escarcelle",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "escarcelle"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:coffret",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "coffret"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:coffre",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "coffre"
+            }
+          },
+          {
+            "track": "treasury",
+            "id": "treasury:tresor",
+            "emblem": {
+              "kind": "treasury",
+              "tier": "tresor"
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:7",
+            "emblem": {
+              "kind": "flame",
+              "form": "flamme",
+              "days": 7
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:30",
+            "emblem": {
+              "kind": "flame",
+              "form": "brasier",
+              "days": 30
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:100",
+            "emblem": {
+              "kind": "flame",
+              "form": "astre",
+              "days": 100
+            }
+          },
+          {
+            "track": "flame",
+            "id": "flame:365",
+            "emblem": {
+              "kind": "flame",
+              "form": "soleil",
+              "days": 365
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:4",
+            "track": "rank",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "rank:murmure:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:murmure:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:echo:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:voix:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:conteur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:passeur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:polyglotte:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:ambassadeur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:orateur:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:oracle:1",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:5",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:4",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:3",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "rank:legende:2",
+            "track": "rank",
+            "state": "locked",
+            "blockedBy": "rank:murmure:4"
+          },
+          {
+            "id": "tier:lueur",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:rayon",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:aurore",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:comete",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:etoile",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:constellation",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:galaxie",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "tier:nebuleuse",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur"
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          },
+          {
+            "id": "prestige:3",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          },
+          {
+            "id": "meesh:1",
+            "track": "meesh",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "meesh:10",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:30",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "meesh:40",
+            "track": "meesh",
+            "state": "locked",
+            "blockedBy": "meesh:1"
+          },
+          {
+            "id": "treasury:bourse",
+            "track": "treasury",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "treasury:escarcelle",
+            "track": "treasury",
+            "state": "locked",
+            "blockedBy": "treasury:bourse"
+          },
+          {
+            "id": "treasury:coffre",
+            "track": "treasury",
+            "state": "locked",
+            "blockedBy": "treasury:bourse"
+          },
+          {
+            "id": "treasury:tresor",
+            "track": "treasury",
+            "state": "locked",
+            "blockedBy": "treasury:bourse"
+          },
+          {
+            "id": "flame:7",
+            "track": "flame",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "flame:100",
+            "track": "flame",
+            "state": "locked",
+            "blockedBy": "flame:7"
+          },
+          {
+            "id": "flame:365",
+            "track": "flame",
+            "state": "locked",
+            "blockedBy": "flame:7"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — des valeurs négatives",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": -3,
+          "prestige": -1,
+          "minted": -5,
+          "treasuryTier": null,
+          "flameRecord": -2
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "proposition — le plus marquant d’une transition",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "meesh:10",
+          "tier:lueur",
+          "rank:murmure:4"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 4,
+          "levelRecord": 10,
+          "prestige": 0,
+          "minted": 10,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1"
+        ]
+      },
+      "expected": {
+        "offer": "rank:murmure:4",
+        "tracks": [
+          "meesh",
+          "tier",
+          "rank"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — la 50e sans la 40e propose la 40e",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "meesh:50"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 50,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1",
+          "meesh:10",
+          "meesh:20",
+          "meesh:30"
+        ]
+      },
+      "expected": {
+        "offer": "meesh:40",
+        "tracks": [
+          "meesh"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — un moment hors piste passe tel quel",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "achievement:first_message"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ]
+      },
+      "expected": {
+        "offer": "achievement:first_message",
+        "tracks": [
+          null
+        ]
+      }
+    },
+    {
+      "_label": "proposition — une piste déjà photographiée",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1"
+        ]
+      },
+      "expected": {
+        "offer": null,
+        "tracks": [
+          "meesh"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — aucun moment",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "offer": null,
+        "tracks": []
+      }
+    },
+    {
+      "_label": "proposition — deux moments hors piste : le premier",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "trophy:trophy.flame.100",
+          "season:3"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ]
+      },
+      "expected": {
+        "offer": "trophy:trophy.flame.100",
+        "tracks": [
+          null,
+          null
+        ]
+      }
+    },
+    {
+      "_label": "proposition — deux Meeshes de la même transition",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "meesh:10",
+          "meesh:20"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 20,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ]
+      },
+      "expected": {
+        "offer": "meesh:1",
+        "tracks": [
+          "meesh",
+          "meesh"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — le sommet passe avant la ligue",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "league-up:2026-W40:or",
+          "prestige:3",
+          "level-100:0"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 100,
+          "prestige": 3,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ]
+      },
+      "expected": {
+        "offer": "level-100:0",
+        "tracks": [
+          null,
+          "summit",
+          "summit"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — un rang dont la piste est à jour",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "rank:voix:5"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "rank:murmure:4",
+          "rank:murmure:3",
+          "rank:murmure:2",
+          "rank:murmure:1",
+          "rank:echo:5",
+          "rank:echo:4",
+          "rank:echo:3",
+          "rank:echo:2",
+          "rank:echo:1"
+        ]
+      },
+      "expected": {
+        "offer": "rank:voix:5",
+        "tracks": [
+          "rank"
+        ]
+      }
+    },
+    {
+      "_label": "proposition — une identité inconnue",
+      "input": {
+        "law": "photo-offer",
+        "momentIds": [
+          "rank",
+          "tier:",
+          "nimporte:quoi"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 20,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": []
+      },
+      "expected": {
+        "offer": "tier:lueur",
+        "tracks": [
+          "rank",
+          "tier",
+          null
+        ]
+      }
+    },
+    {
+      "_label": "situation — Voix V, record 36",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 7000,
+            "rank": "voix",
+            "division": 3,
+            "division5": 5,
+            "next": {
+              "rank": "voix",
+              "division": 3,
+              "division5": 4,
+              "minGlory": 7800
+            },
+            "gloryMissing": 800,
+            "progress": 0.5555555555555556,
+            "mythic": null
+          },
+          "level": {
+            "level": 34,
+            "tier": "eclat",
+            "score": 121800,
+            "floorScore": 115600,
+            "nextThreshold": 122500,
+            "pointsToNext": 700,
+            "progress": 0.8985507246376812,
+            "record": 36,
+            "prestige": 0,
+            "canPrestige": false,
+            "ladder": {
+              "level": 34,
+              "tier": "eclat",
+              "floorScore": 115600,
+              "nextThreshold": 122500,
+              "pointsToNext": 700,
+              "progress": 0.8985507246376812,
+              "record": 36,
+              "cap": 499,
+              "isMax": false,
+              "held": false,
+              "step": {
+                "level": 40,
+                "kind": "flame",
+                "target": 7,
+                "current": 23,
+                "met": true,
+                "rank": null
+              },
+              "steps": {
+                "minted": 12,
+                "missionsDone": 3,
+                "flameRecord": 23
+              }
+            }
+          },
+          "mint": {
+            "number": 13,
+            "price": 1587,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 34,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 34,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 9,
+            "tier": "bourse",
+            "next": {
+              "key": "escarcelle",
+              "minHeld": 10,
+              "missing": 1
+            }
+          },
+          "flame": {
+            "days": 4,
+            "form": "braise",
+            "bonusPercent": 8,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 5,
+        "levelRecord": 36,
+        "prestige": 0,
+        "minted": 12,
+        "treasuryTier": "bourse",
+        "flameRecord": 23
+      }
+    },
+    {
+      "_label": "situation — devant un ancien serveur",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 7000,
+            "rank": "voix",
+            "division": 3,
+            "next": {
+              "rank": "voix",
+              "division": 3,
+              "division5": 4,
+              "minGlory": 7800
+            },
+            "gloryMissing": 800,
+            "progress": 0.5555555555555556,
+            "mythic": null
+          },
+          "level": {
+            "level": 34,
+            "tier": "eclat",
+            "score": 121800,
+            "floorScore": 115600,
+            "nextThreshold": 122500,
+            "pointsToNext": 700,
+            "progress": 0.8985507246376812,
+            "record": 36,
+            "prestige": 0,
+            "canPrestige": false
+          },
+          "mint": {
+            "number": 13,
+            "price": 1587,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 34,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 34,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 9,
+            "tier": "bourse",
+            "next": {
+              "key": "escarcelle",
+              "minHeld": 10,
+              "missing": 1
+            }
+          },
+          "flame": {
+            "days": 4,
+            "form": "braise",
+            "bonusPercent": 8,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 3,
+        "levelRecord": 36,
+        "prestige": 0,
+        "minted": 12,
+        "treasuryTier": "bourse",
+        "flameRecord": 4
+      }
+    },
+    {
+      "_label": "situation — la série en cours dépasse le record",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 7000,
+            "rank": "voix",
+            "division": 3,
+            "division5": 5,
+            "next": {
+              "rank": "voix",
+              "division": 3,
+              "division5": 4,
+              "minGlory": 7800
+            },
+            "gloryMissing": 800,
+            "progress": 0.5555555555555556,
+            "mythic": null
+          },
+          "level": {
+            "level": 34,
+            "tier": "eclat",
+            "score": 121800,
+            "floorScore": 115600,
+            "nextThreshold": 122500,
+            "pointsToNext": 700,
+            "progress": 0.8985507246376812,
+            "record": 36,
+            "prestige": 0,
+            "canPrestige": false,
+            "ladder": {
+              "level": 34,
+              "tier": "eclat",
+              "floorScore": 115600,
+              "nextThreshold": 122500,
+              "pointsToNext": 700,
+              "progress": 0.8985507246376812,
+              "record": 36,
+              "cap": 499,
+              "isMax": false,
+              "held": false,
+              "step": {
+                "level": 40,
+                "kind": "flame",
+                "target": 7,
+                "current": 4,
+                "met": false,
+                "rank": null
+              },
+              "steps": {
+                "minted": 12,
+                "missionsDone": 3,
+                "flameRecord": 4
+              }
+            }
+          },
+          "mint": {
+            "number": 13,
+            "price": 1587,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 34,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 34,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 9,
+            "tier": "bourse",
+            "next": {
+              "key": "escarcelle",
+              "minHeld": 10,
+              "missing": 1
+            }
+          },
+          "flame": {
+            "days": 9,
+            "form": "flamme",
+            "bonusPercent": 18,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 5,
+        "levelRecord": 36,
+        "prestige": 0,
+        "minted": 12,
+        "treasuryTier": "bourse",
+        "flameRecord": 9
+      }
+    },
+    {
+      "_label": "situation — aucune Meesh frappée, Prestige 2",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 7000,
+            "rank": "voix",
+            "division": 3,
+            "division5": 5,
+            "next": {
+              "rank": "voix",
+              "division": 3,
+              "division5": 4,
+              "minGlory": 7800
+            },
+            "gloryMissing": 800,
+            "progress": 0.5555555555555556,
+            "mythic": null
+          },
+          "level": {
+            "level": 9,
+            "tier": "etincelle",
+            "score": 121800,
+            "floorScore": 8100,
+            "nextThreshold": 10000,
+            "pointsToNext": 0,
+            "progress": 1,
+            "record": 36,
+            "prestige": 2,
+            "canPrestige": false,
+            "ladder": {
+              "level": 9,
+              "tier": "etincelle",
+              "floorScore": 8100,
+              "nextThreshold": 10000,
+              "pointsToNext": 0,
+              "progress": 1,
+              "record": 36,
+              "cap": 499,
+              "isMax": false,
+              "held": true,
+              "step": {
+                "level": 10,
+                "kind": "mint",
+                "target": 1,
+                "current": 0,
+                "met": false,
+                "rank": null
+              },
+              "steps": {
+                "minted": 0,
+                "missionsDone": 3,
+                "flameRecord": 23
+              }
+            }
+          },
+          "mint": {
+            "number": 1,
+            "price": 1221,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 9,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 9,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 9,
+            "tier": "bourse",
+            "next": {
+              "key": "escarcelle",
+              "minHeld": 10,
+              "missing": 1
+            }
+          },
+          "flame": {
+            "days": 4,
+            "form": "braise",
+            "bonusPercent": 8,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 5,
+        "levelRecord": 36,
+        "prestige": 2,
+        "minted": 0,
+        "treasuryTier": "bourse",
+        "flameRecord": 23
+      }
+    },
+    {
+      "_label": "situation — le Mythe",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 400000,
+            "rank": "mythe",
+            "division": null,
+            "division5": null,
+            "next": null,
+            "gloryMissing": null,
+            "progress": 1,
+            "mythic": null
+          },
+          "level": {
+            "level": 34,
+            "tier": "eclat",
+            "score": 121800,
+            "floorScore": 115600,
+            "nextThreshold": 122500,
+            "pointsToNext": 700,
+            "progress": 0.8985507246376812,
+            "record": 36,
+            "prestige": 0,
+            "canPrestige": false,
+            "ladder": {
+              "level": 34,
+              "tier": "eclat",
+              "floorScore": 115600,
+              "nextThreshold": 122500,
+              "pointsToNext": 700,
+              "progress": 0.8985507246376812,
+              "record": 36,
+              "cap": null,
+              "isMax": false,
+              "held": false,
+              "step": {
+                "level": 40,
+                "kind": "flame",
+                "target": 7,
+                "current": 23,
+                "met": true,
+                "rank": null
+              },
+              "steps": {
+                "minted": 12,
+                "missionsDone": 3,
+                "flameRecord": 23
+              }
+            }
+          },
+          "mint": {
+            "number": 13,
+            "price": 1587,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 34,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 34,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 5000,
+            "tier": "reserve",
+            "next": null
+          },
+          "flame": {
+            "days": 4,
+            "form": "braise",
+            "bonusPercent": 8,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "mythe",
+        "division": null,
+        "levelRecord": 36,
+        "prestige": 0,
+        "minted": 12,
+        "treasuryTier": "reserve",
+        "flameRecord": 23
+      }
     }
   ]
 }

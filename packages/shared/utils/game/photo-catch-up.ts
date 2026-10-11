@@ -13,9 +13,14 @@
  * `photoOfferFor` règle le RYTHME : une transition ne propose qu'UN moment, le plus marquant, et jamais une
  * étape qui en saute une autre — c'est l'étape ouverte de sa piste qui est proposée à sa place.
  *
- * Miroir Swift : `apps/ios/Meeshy/Features/Main/Game/Photo/GamePhotoCatchUp.swift`.
+ * `catchUpStandingOf` lit la situation dans le bloc `game` servi : UNE dérivation, que le web, iOS et le job
+ * serveur partagent — deux dérivations jumelles annonceraient des étapes que le carnet ne montre pas.
+ *
+ * Miroir Swift : `packages/MeeshySDK/Sources/MeeshySDK/Game/GamePhotoCatchUpLaw.swift`, rejoué sur les lois
+ * `photo-catch-up`, `photo-offer` et `photo-standing` de `game.vectors.json` (#10155).
  */
 
+import type { GameBlock } from '../../types/game.js';
 import { flameForm, type FlameFormKey } from './flame.js';
 import { GLORY_RANKS, type GloryDivision5, type GloryRankOrMythic } from './glory.js';
 import { LEVEL_TIER_KEYS, levelTierIndex, levelTierStart, type LevelTierKey } from './levels.js';
@@ -43,6 +48,27 @@ export type PhotoCatchUpStanding = {
   /** La plus longue Flamme (`ladder.steps.flameRecord`, à défaut les jours en cours). */
   readonly flameRecord: number;
 };
+
+/** Les cinq blocs du bloc `game` que la situation lit — le job serveur les sert sans le reste. */
+export type PhotoStandingSource = Pick<GameBlock, 'glory' | 'level' | 'mint' | 'treasury' | 'flame'>;
+
+/**
+ * La situation lue dans le bloc `game` servi : la division V..I (ou héritée devant un ancien serveur), le record
+ * de l'échelle ouverte par le rang (ou celui d'hier), les Meeshes déjà frappées (`mint.number` est la PROCHAINE),
+ * la plus longue Flamme (le record gravé, ou la série en cours si elle le dépasse).
+ */
+export function catchUpStandingOf(game: PhotoStandingSource): PhotoCatchUpStanding {
+  const ladder = game.level.ladder;
+  return {
+    rank: game.glory.rank,
+    division: game.glory.division5 ?? game.glory.division,
+    levelRecord: ladder?.record ?? game.level.record,
+    prestige: game.level.prestige,
+    minted: Math.max(0, game.mint.number - 1),
+    treasuryTier: game.treasury.tier,
+    flameRecord: Math.max(ladder?.steps?.flameRecord ?? 0, game.flame.days),
+  };
+}
 
 export type PhotoStepEmblem =
   | { readonly kind: 'start' }

@@ -13,7 +13,7 @@ import MeeshySDK
 
 extension GameLawVectorEvaluator {
 
-    /// Les quarante-sept lois de la vague 2 — la liste que `GameLawVectorTests` exige.
+    /// Les quarante-sept lois de la vague 2, plus celles du carnet (#10155) — la liste que `GameLawVectorTests` exige.
     static let wave2Laws: [String] = [
         "league-week", "league-week-points", "league-access", "league-pseudonym", "league-pseudonym-draw",
         "league-pseudonym-check", "league-snapshot", "league-groups", "league-settle", "league-friends",
@@ -23,7 +23,7 @@ extension GameLawVectorEvaluator {
         "showcase-view", "showcase-cap", "trophy-month", "atlas", "atlas-language", "prestige", "rarity",
         "rarity-display", "mythic-seats", "mythic-crossing", "mythic-signature", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
         "trophy-visitor-key", "showcase-visitor", "season-tense",
-    ]
+    ] + photoLaws
 
     static func evaluateWave2(law: String, input: GameJSON) throws -> GameJSON {
         switch law {
@@ -78,6 +78,7 @@ extension GameLawVectorEvaluator {
         case "trophy-visitor-key":
             return object(["key": .optionalString(GameTrophies.visitorKey(key: string(input, "key"), awardedMonth: string(input, "awardedMonth")))])
         case "showcase-visitor": return showcaseVisitor(input)
+        case "photo-catch-up", "photo-offer", "photo-standing": return try evaluatePhoto(law: law, input: input)
         default: throw GameLawVectorError.unknownLaw(law)
         }
     }
