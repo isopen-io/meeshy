@@ -5081,7 +5081,7 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **La colonne du fil (#10072)** se calcule déjà sur la largeur du VOLET : `100%` y est celle du bloc conteneur. Pas de container query : `container-type` crée un bloc conteneur pour `position: fixed` et aurait enfermé visionneuse, appel et voiles plein écran dans le volet. Dans le volet, le chevron de retour se retire (`thread-column.css`, `[data-split-detail] [data-thread-back]`).
 - **Libellés** : une table synchrone de sept langues dans le chunk du volet vide (discipline `lib/skip-link.ts`) — le catalogue de démarrage n'est pas touché.
 
-**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande.
+**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande. *Révisé par D-189 : le cadre est désormais chargé à la demande.*
 
 **Limites assumées.** Franchir 1024 px pendant la lecture d'un fil remonte le fil (la structure de l'arbre change) — les brouillons persistés n'en souffrent pas. Les menus flottants suivent toujours la route (`showsFloatingMenus`) : présents sur `/chats`, absents sur `/c/:id`, comme au téléphone.
 
@@ -5126,3 +5126,20 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Mesure.** Première peinture +0,10 Ko (import différé et deux règles CSS) ; le commentaire de `index.html` retiré en rend 0,09. Dev dépassait déjà le plafond de 90 Ko avant ce lot (90,91 Ko, cadre côte à côte) : #10086.
 
 **Kotlin natif** : rien (gel).
+
+## D-189 — La première peinture repasse sous 90 Ko : le cadre côte à côte et les gestes de l'enregistrement d'appel sortent du module d'entrée (2026-10-11, #10086)
+
+**Contexte.** `measure-weight.mjs` rougissait sur `dev` : 91,03 Ko pour un plafond de 90 (`budgets.json › first_paint.kb`, arbitré par le porteur, D-49 — il ne bouge pas). D-185 avait fait entrer `split-frame.tsx` dans le module d'entrée, et D-188 y avait ajouté 0,10 Ko.
+
+**Décision.**
+
+- **Le cadre côte à côte est chargé à la demande.** La RÈGLE (`lib/view/split-query.ts` : seuil `(min-width: 1024px)`, `splitPaneOf`, abonnement `matchMedia`) reste dans le socle ; le cadre, sa mémoire de scrollport et son volet vide ne partent que lorsqu'elle l'accorde. `DeferredSplitFrame` (`route-table.tsx`, là où chaque `import()` est un arbitrage visible) rend l'écran routé tel quel sous 1024 px, hors de la liste et du fil, et pour l'invité d'un lien — sans rien charger ; sinon il monte le cadre par `lazy`. Sur un grand écran au démarrage, le chunk part dès l'évaluation de la table des routes, en parallèle du premier rendu.
+- **La couche d'appel ne lit que l'ÉTAT de l'enregistrement.** `callRecordingStore` vit seul dans `lib/calls/call-recording-store.ts` ; les gestes (`call-recording.ts`) et leur instance (`call-recording-live.ts`) partent avec la connexion et l'écran d'appel, qui partagent la même instance de magasin.
+
+**Mesure** (`bun run build` puis `node scripts/measure-weight.mjs`) : 91,03 → 90,78 Ko (cadre différé) → **88,89 Ko** (magasin d'enregistrement séparé) ; module d'entrée 36,19 → 34,27 Ko, une requête de moins (18).
+
+**Limites assumées.** Sur grand écran, le premier passage par la liste ou le fil attend un chunk d'environ un kilo-octet — chargé dès le démarrage quand l'écran est déjà large ; franchir 1024 px pour la première fois montre le squelette du routeur le temps de ce chunk.
+
+**Kotlin natif** : rien (gel). **iOS** : rien.
+
+**Témoins.** `routes/first-paint-graph.test.ts` parcourt les imports STATIQUES depuis `main.tsx` et rougit si le cadre, son volet vide ou les gestes de l'enregistrement y rentrent ; `routes/split-frame.test.tsx` monte désormais le routeur avec le cadre DIFFÉRÉ que la table remet vraiment.
