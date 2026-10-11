@@ -226,6 +226,10 @@ describe('la feuille de bureau du fil', () => {
     expect(ruleIn(block, '[data-reading-mode]:hover .focal-meta')).toContain('opacity: 1');
   });
 
+  test('l’heure révélée ne passe pas sous l’icône « Répondre » : le contenu lui réserve son bord, au repos comme au survol', () => {
+    expect(ruleIn(mediaBlock(POINTER), '[data-reading-mode] [data-row-content]')).toContain('padding-inline-end');
+  });
+
   test('le vocal, le fichier et la citation gardent une largeur de carte au lieu de courir sur la colonne', () => {
     const block = mediaBlock(WIDE);
     expect(ruleIn(block, '.voice-card')).toContain('max-width');

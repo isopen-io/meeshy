@@ -15,6 +15,7 @@ import { webOriginOf } from '@/lib/links/web-origin';
 import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
 import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
 import { ThreadWriteLock } from '@/components/thread-write-lock';
+import { ThreadComposerChrome } from '@/components/thread-composer-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -915,7 +916,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
           l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
           jointes) ne désengage rien.
         */
-        /* `glass-prominent` — LE MATÉRIAU DU SITE UNIQUE (#7143, D-51). Cette
+        /* `glass-prominent` — LE MATÉRIAU DU SITE UNIQUE (#7143, D-51), posé
+            par `ThreadComposerChrome` : la bande au téléphone, le dock de la
+            colonne sur ordinateur (#10101). Cette
             bande flotte depuis #6213 et n'a JAMAIS rien porté : le fil
             transitait dessous et ses bulles restaient lisibles sous le rail et
             la pilule « Message… ». D-50 l'interdit déjà pour tout le chrome
@@ -928,11 +931,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
-        <div
-          className="thread-composer-chrome thread-column glass-prominent"
-          onFocus={chrome.onComposerFocus}
-          onBlur={chrome.onComposerBlur}
-        >
+        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             preferred={readerLanguages}
             onSend={sendAndReplayFlame}
@@ -946,7 +945,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
           />
-        </div>
+        </ThreadComposerChrome>
         </ThreadWriteLock>
       )}
       </div>

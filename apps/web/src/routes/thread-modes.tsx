@@ -649,7 +649,7 @@ export function ThreadModes({
                 }}
               >
                 {p.opensDay ? (
-                  <div className="flex justify-center py-1.5">
+                  <div data-day-separator="" className="flex justify-center py-1.5">
                     <span
                       className="glass glass-card rounded-chip px-3 py-1 text-time font-semibold"
                       style={{
