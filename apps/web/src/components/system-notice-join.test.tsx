@@ -60,6 +60,15 @@ describe('SystemNotice — avis d’arrivée (#9710)', () => {
       );
     });
 
+    test(`peau ${surface} : le glyphe et la phrase ne se collent pas`, () => {
+      for (const isAnonymous of [true, false]) {
+        const html = renderToStaticMarkup(
+          <SystemNotice row={{ kind: 'join', displayName: 'Emma', handle: null, isAnonymous }} timeString="10:04" surface={surface} language="fr" />,
+        );
+        expect(html).toMatch(/<\/(?:svg|span)> <span>Emma a rejoint la conversation<\/span>/);
+      }
+    });
+
     test(`peau ${surface} : un arrivant AVEC compte n'a ni masque ni mention`, () => {
       const row = { kind: 'join', displayName: 'Bob Martin', handle: '@bob', isAnonymous: false } as const;
       const html = renderToStaticMarkup(<SystemNotice row={row} timeString="10:04" surface={surface} language="fr" />);
