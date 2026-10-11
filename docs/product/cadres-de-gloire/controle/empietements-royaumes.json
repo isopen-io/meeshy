@@ -1,0 +1,229 @@
+[
+ {
+  "file": "royaumes-ambassadeur-1",
+  "overlap": 10718,
+  "face": 0,
+  "depth": 56,
+  "bbox": [
+   71,
+   627,
+   468,
+   712
+  ],
+  "windowPx": 155766
+ },
+ {
+  "file": "royaumes-ambassadeur-2",
+  "overlap": 125,
+  "face": 0,
+  "depth": 10,
+  "bbox": [
+   88,
+   703,
+   455,
+   716
+  ],
+  "windowPx": 162414
+ },
+ {
+  "file": "royaumes-ambassadeur-3",
+  "overlap": 40,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   98,
+   690,
+   101,
+   705
+  ],
+  "windowPx": 154416
+ },
+ {
+  "file": "royaumes-ambassadeur-4",
+  "overlap": 10138,
+  "face": 0,
+  "depth": 60,
+  "bbox": [
+   78,
+   631,
+   461,
+   715
+  ],
+  "windowPx": 172044
+ },
+ {
+  "file": "royaumes-ambassadeur-5",
+  "overlap": 11442,
+  "face": 0,
+  "depth": 63,
+  "bbox": [
+   76,
+   631,
+   463,
+   719
+  ],
+  "windowPx": 176710
+ },
+ {
+  "file": "royaumes-legende-1",
+  "overlap": 8548,
+  "face": 0,
+  "depth": 75,
+  "bbox": [
+   78,
+   622,
+   461,
+   715
+  ],
+  "windowPx": 157700
+ },
+ {
+  "file": "royaumes-legende-2",
+  "overlap": 2376,
+  "face": 0,
+  "depth": 31,
+  "bbox": [
+   103,
+   631,
+   431,
+   692
+  ],
+  "windowPx": 138629
+ },
+ {
+  "file": "royaumes-legende-3",
+  "overlap": 178,
+  "face": 0,
+  "depth": 6,
+  "bbox": [
+   84,
+   689,
+   445,
+   715
+  ],
+  "windowPx": 160627
+ },
+ {
+  "file": "royaumes-legende-4",
+  "overlap": 3948,
+  "face": 0,
+  "depth": 55,
+  "bbox": [
+   103,
+   638,
+   436,
+   714
+  ],
+  "windowPx": 150576
+ },
+ {
+  "file": "royaumes-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 166619
+ },
+ {
+  "file": "royaumes-mythe-a",
+  "overlap": 7331,
+  "face": 0,
+  "depth": 75,
+  "bbox": [
+   87,
+   627,
+   453,
+   711
+  ],
+  "windowPx": 154625
+ },
+ {
+  "file": "royaumes-mythe-b",
+  "overlap": 1102,
+  "face": 0,
+  "depth": 28,
+  "bbox": [
+   92,
+   391,
+   447,
+   489
+  ],
+  "windowPx": 142976
+ },
+ {
+  "file": "royaumes-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 155398
+ },
+ {
+  "file": "royaumes-oracle-a",
+  "overlap": 6133,
+  "face": 0,
+  "depth": 74,
+  "bbox": [
+   88,
+   628,
+   451,
+   715
+  ],
+  "windowPx": 161096
+ },
+ {
+  "file": "royaumes-oracle-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 152908
+ },
+ {
+  "file": "royaumes-oracle-c",
+  "overlap": 977,
+  "face": 0,
+  "depth": 26,
+  "bbox": [
+   94,
+   395,
+   445,
+   486
+  ],
+  "windowPx": 150045
+ },
+ {
+  "file": "royaumes-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 156047
+ },
+ {
+  "file": "royaumes-orateur-b",
+  "overlap": 2707,
+  "face": 0,
+  "depth": 47,
+  "bbox": [
+   117,
+   629,
+   422,
+   714
+  ],
+  "windowPx": 134750
+ },
+ {
+  "file": "royaumes-orateur-c",
+  "overlap": 1,
+  "face": 0,
+  "depth": 0,
+  "bbox": [
+   101,
+   697,
+   101,
+   697
+  ],
+  "windowPx": 141950
+ }
+]

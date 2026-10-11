@@ -423,7 +423,16 @@ export const callersIn = (contents, nsNames) => {
 // (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
 // 275 → 274 (2026-10-10, #9945) : une entrée morte de moins, consommée par les lots
 // #9906-#9911 (pièce visée). Valeur MESURÉE le 2026-10-10.
-const BASELINE_DEAD_ENTRIES = 274;
+// 274 → 275 (#10000, 2026-10-10) : `world.root` (`GET /api/v1/world`), GÉNÉRÉE
+// depuis `route-manifest.json` par `916e564ac9` sans relever cette référence —
+// PRÉMATURÉE : l'entrée publique de World Wide sera lue par la landing et la
+// connexion web (#10003, #10007), qui la feront redescendre. Valeur MESURÉE le
+// 2026-10-10.
+// 275 → 277 (2026-10-11, #9947) : `me.gameSeasonsByNumber` et `me.gameLeagueWeeksByWeekKey` —
+// comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
+// (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
+// Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -123,6 +123,20 @@ export function navigate(url: string, replace = false): void {
   notify();
 }
 
+/**
+ * L'ADRESSE COURANTE EST-ELLE `path` ? (#10073) — un BOOLÉEN observé, pas
+ * l'adresse : une liste de cent rangées qui demande chacune « suis-je la
+ * conversation ouverte ? » ne re-rend, à chaque navigation, que les DEUX
+ * rangées dont la réponse change.
+ */
+export function useIsCurrentPath(path: string): boolean {
+  return useSyncExternalStore(
+    subscriber,
+    () => currentLocation.path === path,
+    () => false,
+  );
+}
+
 // --- La compilation des motifs --------------------------------------------
 
 type CompiledPattern = { readonly regex: RegExp; readonly names: readonly string[] };
@@ -226,10 +240,24 @@ export type RouterOptions = {
    * les deux.
    */
   readonly screenPrerequisite?: () => Promise<unknown>;
+  /**
+   * LE CADRE (#10073) — ce qui ENTOURE l'écran routé, et peut monter à côté de
+   * lui l'écran d'une AUTRE route (`screenOf`) : la liste des conversations à
+   * gauche du fil, sur grand écran. Rendu à la MÊME position de l'arbre quelle
+   * que soit la route, il garde montés les écrans qu'il rend d'une navigation
+   * à l'autre — c'est ce qu'un `<Screen key>` seul ne peut pas faire.
+   */
+  readonly frame?: ComponentType<FrameProps>;
+};
+
+export type FrameProps = {
+  readonly routeKey: string;
+  readonly screen: ReactNode;
+  readonly screenOf: (key: string) => ComponentType | undefined;
 };
 
 export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
-  const { screenPrerequisite } = options;
+  const { screenPrerequisite, frame: Frame } = options;
   const entries = Object.entries(table).map(([key, route]) => {
     const load =
       screenPrerequisite === undefined
@@ -245,6 +273,8 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
       load,
     };
   });
+
+  const screenOf = (key: string): ComponentType | undefined => entries.find((e) => e.key === key)?.Screen;
 
   function href<C extends keyof T & string>(
     key: C,
@@ -327,7 +357,11 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
       <Context.Provider value={context}>
         {wrap(
           <Suspense fallback={skeleton}>
-            <Screen key={routeKey(context)} />
+            {Frame === undefined ? (
+              <Screen key={routeKey(context)} />
+            ) : (
+              <Frame routeKey={context.key} screen={<Screen key={routeKey(context)} />} screenOf={screenOf} />
+            )}
           </Suspense>,
         )}
       </Context.Provider>

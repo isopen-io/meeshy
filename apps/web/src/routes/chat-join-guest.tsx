@@ -5,6 +5,7 @@ import type { GuestDraft, GuestField, GuestTerms } from '@/lib/api/link-join';
 import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 
 /**
  * **LE FORMULAIRE D'INVITÉ** (#5561) — ce qu'on demande à quelqu'un qui n'a pas
@@ -298,4 +299,22 @@ export function GuestSubmit({
       )}
     </div>
   );
+}
+
+/**
+ * L'ENTRÉE QU'APPORTE LA LANDING (#10003, D-186) — le nom et la langue déjà
+ * choisis sur meeshy.me, que l'adresse transporte
+ * (`/chat/:link?mode=anonymous&name=…&language=…`). La jonction crée l'invité
+ * avec eux sans redemander : elle ne se dispense jamais d'un champ que le lien
+ * exige en plus (`validateGuestDraft` en décide). Hors mode invité ou sans nom,
+ * il n'y a pas d'entrée — l'invitation s'affiche comme d'ordinaire.
+ */
+export type GuestEntry = { readonly nickname: string; readonly language: string | null };
+
+export function guestEntryOf(search: URLSearchParams): GuestEntry | null {
+  if (search.get('mode') !== ANONYMOUS_MODE) return null;
+  const nickname = (search.get('name') ?? '').trim();
+  if (nickname === '') return null;
+  const language = (search.get('language') ?? '').trim();
+  return { nickname, language: language === '' ? null : language };
 }

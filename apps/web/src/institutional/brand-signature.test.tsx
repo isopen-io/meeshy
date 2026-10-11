@@ -1,17 +1,14 @@
-/** @jsxImportSource preact */
 import { describe, expect, test } from 'bun:test';
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup as render } from 'react-dom/server';
 
 import { BrandSignature } from './brand-signature';
 
 /**
  * LA SIGNATURE WEB REPRODUIT `BrandSignature.swift` (#5606).
  *
- * Rendue par `preact-render-to-string` — le MÊME moteur que le préchauffage
- * (`scripts/prerender-institutional.tsx`), pas `react-dom/server` : ce fichier
- * porte le pragma preact (comme `src/institutional/page.tsx`), donc son JSX
- * compile déjà vers de vrais éléments Preact. `react-dom/server` y rendrait
- * une chaîne vide sans erreur (même précédent que #5554).
+ * Rendue par `react-dom/server` — le MÊME moteur que le préchauffage
+ * (`scripts/prerender-institutional.tsx`) depuis que les pages statiques
+ * partagent l'en-tête de la landing (#10071).
  */
 describe('BrandSignature — pied de marque des pages institutionnelles', () => {
   const html = render(<BrandSignature version="3.1.0" />);

@@ -50,7 +50,16 @@ export type LandingCopy = {
   readonly privacy: string;
   readonly terms: string;
   readonly download: string;
+  readonly about: string;
+  readonly contact: string;
+  readonly partners: string;
   readonly unavailable: string;
+  readonly languageTitle: string;
+  readonly languageHint: string;
+  readonly back: string;
+  readonly enter: string;
+  readonly entryFailed: string;
+  readonly returnToWorld: string;
 };
 
 const fr: LandingCopy = {
@@ -104,7 +113,16 @@ const fr: LandingCopy = {
   privacy: 'Confidentialité',
   terms: "Conditions d'utilisation",
   download: "Télécharger l'app",
+  about: 'À propos',
+  contact: 'Contact',
+  partners: 'Partenaires',
   unavailable: 'World Wide est momentanément fermée. Connectez-vous pour retrouver vos conversations.',
+  languageTitle: 'Votre langue',
+  languageHint: 'Tout ce que vous lirez dans World Wide arrivera dans cette langue.',
+  back: 'Retour',
+  enter: 'Entrer dans World Wide',
+  entryFailed: "L'entrée de World Wide n'a pas pu s'ouvrir. Vérifiez votre connexion, puis réessayez.",
+  returnToWorld: 'Revenir dans World Wide',
 };
 
 const en: LandingCopy = {
@@ -158,7 +176,16 @@ const en: LandingCopy = {
   privacy: 'Privacy',
   terms: 'Terms of use',
   download: 'Download the app',
+  about: 'About',
+  contact: 'Contact',
+  partners: 'Partners',
   unavailable: 'World Wide is closed for now. Sign in to find your conversations.',
+  languageTitle: 'Your language',
+  languageHint: 'Everything you read in World Wide will arrive in this language.',
+  back: 'Back',
+  enter: 'Enter World Wide',
+  entryFailed: 'World Wide could not be opened. Check your connection, then try again.',
+  returnToWorld: 'Back to World Wide',
 };
 
 const es: LandingCopy = {
@@ -212,7 +239,16 @@ const es: LandingCopy = {
   privacy: 'Privacidad',
   terms: 'Condiciones de uso',
   download: 'Descargar la app',
+  about: 'Acerca de',
+  contact: 'Contacto',
+  partners: 'Socios',
   unavailable: 'World Wide está cerrada por ahora. Inicia sesión para encontrar tus conversaciones.',
+  languageTitle: 'Tu idioma',
+  languageHint: 'Todo lo que leas en World Wide llegará en este idioma.',
+  back: 'Atrás',
+  enter: 'Entrar en World Wide',
+  entryFailed: 'No se pudo abrir la entrada de World Wide. Comprueba tu conexión y vuelve a intentarlo.',
+  returnToWorld: 'Volver a World Wide',
 };
 
 const pt: LandingCopy = {
@@ -266,7 +302,16 @@ const pt: LandingCopy = {
   privacy: 'Privacidade',
   terms: 'Termos de uso',
   download: 'Baixar o app',
+  about: 'Sobre',
+  contact: 'Contato',
+  partners: 'Parceiros',
   unavailable: 'O World Wide está fechado no momento. Entre para encontrar suas conversas.',
+  languageTitle: 'Seu idioma',
+  languageHint: 'Tudo o que você ler no World Wide chegará neste idioma.',
+  back: 'Voltar',
+  enter: 'Entrar no World Wide',
+  entryFailed: 'Não foi possível abrir a entrada do World Wide. Verifique sua conexão e tente de novo.',
+  returnToWorld: 'Voltar ao World Wide',
 };
 
 const de: LandingCopy = {
@@ -320,7 +365,16 @@ const de: LandingCopy = {
   privacy: 'Datenschutz',
   terms: 'Nutzungsbedingungen',
   download: 'App herunterladen',
+  about: 'Über uns',
+  contact: 'Kontakt',
+  partners: 'Partner',
   unavailable: 'World Wide ist gerade geschlossen. Melde dich an, um deine Unterhaltungen zu finden.',
+  languageTitle: 'Deine Sprache',
+  languageHint: 'Alles, was du in World Wide liest, kommt in dieser Sprache an.',
+  back: 'Zurück',
+  enter: 'World Wide betreten',
+  entryFailed: 'Der Eingang zu World Wide konnte nicht geöffnet werden. Prüfe deine Verbindung und versuche es erneut.',
+  returnToWorld: 'Zurück zu World Wide',
 };
 
 const it: LandingCopy = {
@@ -374,7 +428,16 @@ const it: LandingCopy = {
   privacy: 'Privacy',
   terms: "Condizioni d'uso",
   download: "Scarica l'app",
+  about: 'Chi siamo',
+  contact: 'Contatti',
+  partners: 'Partner',
   unavailable: 'World Wide è chiusa per ora. Accedi per ritrovare le tue conversazioni.',
+  languageTitle: 'La tua lingua',
+  languageHint: 'Tutto ciò che leggerai in World Wide arriverà in questa lingua.',
+  back: 'Indietro',
+  enter: 'Entra in World Wide',
+  entryFailed: "Non è stato possibile aprire l'ingresso di World Wide. Controlla la connessione e riprova.",
+  returnToWorld: 'Torna in World Wide',
 };
 
 const ar: LandingCopy = {
@@ -428,7 +491,16 @@ const ar: LandingCopy = {
   privacy: 'الخصوصية',
   terms: 'شروط الاستخدام',
   download: 'تنزيل التطبيق',
+  about: 'حول Meeshy',
+  contact: 'اتصل بنا',
+  partners: 'الشركاء',
   unavailable: 'World Wide مغلقة حاليًا. سجّل الدخول للعثور على محادثاتك.',
+  languageTitle: 'لغتك',
+  languageHint: 'كل ما تقرؤه في World Wide سيصلك بهذه اللغة.',
+  back: 'رجوع',
+  enter: 'ادخل إلى World Wide',
+  entryFailed: 'تعذّر فتح مدخل World Wide. تحقّق من اتصالك ثم أعد المحاولة.',
+  returnToWorld: 'العودة إلى World Wide',
 };
 
 export const LANDING_COPY: Readonly<Record<LandingLanguage, LandingCopy>> = { fr, en, es, pt, de, it, ar };

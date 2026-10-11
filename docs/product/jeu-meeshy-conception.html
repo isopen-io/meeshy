@@ -248,8 +248,10 @@ ul.tight li,ol.tight li{margin:3px 0}
   <div class="eyebrow">II.3 · la pièce rare</div>
   <h2>Les Meeshes</h2>
   <p>Toujours frappée à la main, avec l'aperçu du prix avant de confirmer et une ligne au registre. Le prix monte avec le nombre de Meeshes déjà frappées.</p>
-  <div class="formula">prix(n) = 1 221 × 1,06<sup>⌊(n − 1) ÷ 10⌋</sup>, plafonné à 4 884</div>
-  <p class="muted">Les 10 premières coûtent 1 221 points. La 50e en coûte 1 541, la 100e 2 063, la 250e atteint le plafond.</p>
+  <div class="formula">prix(n) = 1 221 × 1,3<sup>⌊(n − 1) ÷ 10⌋</sup>, plafonné à 16 556</div>
+  <p class="muted">Les 10 premières coûtent 1 221 points, de la 11e à la 20e 1 587, la 50e 3 487, la 100e (or) 12 948 ; le plafond de 16 556 tombe dès la 101e (porteur, 2026-10-10, #10011 — l'ancienne courbe, +6 % plafonné à 4 884, aurait mis 451 frappes à l'atteindre).</p>
+  <h3>La frappe gratuite</h3>
+  <p>Cinq fragments de Meesh, gagnés au coffre du jour, paient une frappe à la place des points : le prix courant est ignoré, aucun point ne part, aucun niveau ne se perd. C'est une frappe pour le reste — numéro, édition, Gloire de frappe — et elle compte : la suivante, payée en points, coûte le prix de son rang. Les fragments ne s'achètent pas, ne se transfèrent pas et ne servent qu'à frapper.</p>
   <h3>Chaque Meesh est numérotée</h3>
   <p>Le revers porte son numéro et l'année : « N° 13 · 2026 ». Chaque centième est frappée en or, chaque millième en prisme. Ces éditions ne valent rien de plus en jeu ; elles se collectionnent.</p>
   <h3>Les paliers du trésor</h3>
@@ -313,7 +315,7 @@ ul.tight li,ol.tight li{margin:3px 0}
     <li>Jamais deux missions du même axe le même jour, jamais une mission impossible pour le compte.</li>
     <li>Une mission Prisme (langues, traduction) au moins un jour sur trois.</li>
     <li>Tirage au premier lancement du jour, dans le fuseau de l'utilisateur. Validation au geste, case cochée sans écran intermédiaire.</li>
-    <li>Coffre du jour : 60 à 200 points, un fragment de cosmétique (1 chance sur 6), un gel de Flamme (1 sur 20). Contenu et probabilités affichés avant l'ouverture. Jamais de Meesh.</li>
+    <li>Coffre du jour (porteur, 2026-10-10, #10011) : de 100 à 10 000 points selon la complexité des trois missions du jour, de la Gloire (un point pour dix points, de 10 à 1 000), des fragments de Meesh (1, 2 dès 2 500 points, 3 dès 7 500, plus un en prime une fois sur six — cinq paient une frappe gratuite), un gel de Flamme (1 sur 20). La complexité est l'effort que le catalogue donne à chaque mission (base de sa difficulté + points par unité × objectif) ; les points suivent une droite de 100 (300 d'effort) à 10 000 (4 500). Contenu certain et probabilités affichés avant l'ouverture. Gratuit ; rien ne se transfère ni ne se convertit en argent.</li>
   </ul>
 </section>
 
@@ -600,11 +602,11 @@ ul.tight li,ol.tight li{margin:3px 0}
   <div class="tablebox"><table>
     <thead><tr><th>Question</th><th>Choix adopté</th></tr></thead>
     <tbody>
-      <tr><td>Le prix d'une Meesh dépasse-t-il 1 221 ?</td><td>Oui après la 10e (+6 % toutes les 10, plafond ×4) : la difficulté monte avec les pièces, comme demandé le 5 octobre.</td></tr>
+      <tr><td>Le prix d'une Meesh dépasse-t-il 1 221 ?</td><td>Oui après la 10e (+30 % toutes les 10, plafond 16 556 dès la 101e, porteur 2026-10-10) : la difficulté monte avec les pièces.</td></tr>
       <tr><td>La courbe de 100 niveaux remplace-t-elle les 6 seuils ?</td><td>Oui, anciens seuils servis aux anciens clients.</td></tr>
       <tr><td>Le Vent arrière accélère-t-il trop la frappe suivante ?</td><td>Non, la rareté croissante compense.</td></tr>
       <tr><td>Ligues entre inconnus ?</td><td>Sur consentement, en vague 2, après revue de conformité.</td></tr>
-      <tr><td>Hasard dans le coffre ?</td><td>Oui, probabilités affichées, aucune valeur monétaire.</td></tr>
+      <tr><td>Hasard dans le coffre ?</td><td>Oui, pour le fragment en prime et le gel seulement : probabilités affichées, contenu certain dit avant l'ouverture, aucune valeur monétaire.</td></tr>
       <tr><td>Visibilité du rang et du trésor ?</td><td>Amis par défaut.</td></tr>
       <tr><td>Photos synchronisées ?</td><td>Non par défaut ; activable, privé.</td></tr>
       <tr><td>Le Prestige remet-il le niveau record à 1 ?</td><td>Oui, tranché par le porteur le 5 octobre : la ligue et le duo se referment jusqu'à ce qu'on remonte, et la confirmation le dit.</td></tr>
@@ -956,7 +958,7 @@ const MEE={"meeGuide":"<defs><radialGradient id=\"a1mee1b\" cx=\".38\" cy=\".3\"
     strip2(filig('#f87171')+ringV2(3,.4,64)+jauge('Niveau 3 · Étincelle I','100 / 160 pts','40','encore 60 pour le 4'),'4 · un nouveau joueur : seulement ce qui existe','linear-gradient(90deg,color-mix(in srgb,#f87171 12%,var(--surface)),var(--surface))');
 
   const lvl=s=>Math.min(100,Math.floor(Math.sqrt(s/10)));
-  const cost=n=>Math.min(Math.round(1221*Math.pow(1.06,Math.floor((n-1)/10))),4884);
+  const cost=n=>Math.min(Math.round(1221*Math.pow(1.3,Math.floor((n-1)/10))),16556);
   const tiers=[[0,'Aucun'],[1,'Bourse'],[10,'Escarcelle'],[50,'Coffret'],[100,'Coffre'],[500,'Trésor'],[1000,'Réserve royale']];
   const tier=h=>tiers.filter(t=>h>=t[0]).pop()[1];
   const edition=n=>n%1000===0?'prisme':n%100===0?'or':'argent';

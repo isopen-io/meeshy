@@ -48,7 +48,9 @@ export type RouteKey =
    * en squelette sans fin devant un visiteur.
    */
   | 'progressionLigue'
+  | 'progressionLigueSemaine'
   | 'progressionSaison'
+  | 'progressionSaisonNumero'
   | 'progressionVitrine'
   | 'progressionAtlas'
   | 'progressionPrestige'
@@ -324,7 +326,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'progression',
   /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
   'progressionLigue',
+  'progressionLigueSemaine',
   'progressionSaison',
+  'progressionSaisonNumero',
   'progressionVitrine',
   'progressionAtlas',
   'progressionPrestige',

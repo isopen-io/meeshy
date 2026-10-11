@@ -146,6 +146,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         case .image: break
         case .video: XCTFail("Une image reçue doit devenir un BITMAP : le fond de slide n'accepte rien d'autre.")
         case .audio: XCTFail("Une image reçue n'est pas un son — la forme est élue par le mime, une seule fois.")
+        case .scene: XCTFail("Une pièce reçue n'est pas une story : la scène entière n'est semée que depuis une story publiée.")
         case .none: XCTFail("Une image reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
 
@@ -158,6 +159,7 @@ final class ConversationMediaDoorTests: XCTestCase {
         case .video: break
         case .image: XCTFail("Une vidéo reçue doit rester un FICHIER : décoder une piste vidéo en bitmap perdrait le son et le mouvement.")
         case .audio: XCTFail("Une vidéo n'est pas une piste sonore : elle se pose sur le canvas, le son ne s'y pose pas.")
+        case .scene: XCTFail("Une pièce reçue n'est pas une story : la scène entière n'est semée que depuis une story publiée.")
         case .none: XCTFail("Une vidéo reçue doit produire une charge — une graine SANS payload ne pose rien sur le canvas.")
         }
     }

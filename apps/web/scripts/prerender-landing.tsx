@@ -26,13 +26,14 @@ import * as worldEndpoints from '@meeshy/shared/api/endpoints/world';
 
 import budgets from '../budgets.json';
 import { LANDING_COPY } from '../src/landing/landing-copy';
-import { landingDocument, landingOgImagePath } from '../src/landing/landing-document';
+import { landingBootConfig, landingBootScript, landingDocument, landingOgImagePath } from '../src/landing/landing-document';
 import { LANDING_APP_PATH, LANDING_LANGUAGES, landingFiles, landingPath } from '../src/landing/landing-languages';
-import { WORLD_GUEST_ENTRY_TEMPLATE } from '../src/landing/world-entry';
+import { WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from '../src/landing/world-entry';
 import { resolveApiConfig } from '../src/lib/api/config';
 import { SESSION_STORAGE_KEY } from '../src/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '../src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
+import { minifyInlineScript } from './lib/minify-inline-script';
 import { resolveDistDir } from './lib/resolve-dist-dir.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -58,7 +59,14 @@ const BUDGET_KB: number | null = budgets.landing_page.kb.value;
  * valeur recopiée.
  */
 function themeColors(): { readonly dark: string; readonly light: string } {
-  const tokens = readFileSync(join(HERE, '../../../packages/design-tokens/ios.css'), 'utf8');
+  // `@meeshy/design-tokens` est une dépendance workspace résolue (package.json),
+  // jamais un chemin relatif codé en dur : la disposition du monorepo local
+  // (3 remontées depuis apps/web/scripts/) diffère de celle, aplatie, de
+  // l'image Docker (apps/web/Dockerfile copie packages/design-tokens/ sous
+  // /app/packages/design-tokens/) — un chemin relatif qui marche dans l'une
+  // sort du système de fichiers dans l'autre (#10069).
+  const iosCssPath = fileURLToPath(import.meta.resolve('@meeshy/design-tokens/ios.css'));
+  const tokens = readFileSync(iosCssPath, 'utf8');
   const [dark, light] = [...tokens.matchAll(/--ios-surface:\s*(#[0-9a-fA-F]{3,8})\s*;/g)].map((m) => m[1]);
   if (dark === undefined || light === undefined) throw new Error('--ios-surface introuvable dans @meeshy/design-tokens/ios.css');
   return { dark, light };
@@ -112,6 +120,16 @@ const colors = themeColors();
 const overBudget: string[] = [];
 let broken = false;
 
+const boot = {
+  apiBase: API_BASE,
+  worldPath: worldEndpoints.root,
+  sessionKey: SESSION_STORAGE_KEY,
+  languageKey: INTERFACE_LANGUAGE_KEY,
+  entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
+  threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
+  appPath: LANDING_APP_PATH,
+};
+
 for (const language of LANDING_LANGUAGES) {
   const html = landingDocument({
     language,
@@ -119,14 +137,8 @@ for (const language of LANDING_LANGUAGES) {
     sheet,
     schemeScript: INLINE_SCHEME_BOOTSTRAP,
     themeColors: colors,
-    boot: {
-      apiBase: API_BASE,
-      worldPath: worldEndpoints.root,
-      sessionKey: SESSION_STORAGE_KEY,
-      languageKey: INTERFACE_LANGUAGE_KEY,
-      entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
-      appPath: LANDING_APP_PATH,
-    },
+    boot,
+    bootScript: await minifyInlineScript(landingBootScript(landingBootConfig(language, boot))),
   });
   const failures = check(language, html);
   if (failures.length > 0) {

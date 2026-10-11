@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-/** @jsxImportSource preact */
 /**
  * PRÉCHAUFFE les sept pages institutionnelles en HTML STATIQUE.
  *
@@ -26,7 +25,7 @@ import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import packageJson from '../package.json';
 import budgets from '../budgets.json';
@@ -123,8 +122,11 @@ function producedSheet(): string {
 const escape = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** Un texte tel que `react-dom/server` l'écrit dans le corps — l'apostrophe y devient `&#x27;`. */
+const served = (s: string): string => escape(s).replace(/'/g, '&#x27;');
+
 function document(route: string, page: ContentPage, sheet: string): string {
-  const body = render(<InstitutionalPage page={page} version={VERSION} />);
+  const body = renderToStaticMarkup(<InstitutionalPage page={page} version={VERSION} />);
   const url = `${ORIGIN}/${route}`;
   /* « À propos de Meeshy · Meeshy » : le suffixe de marque ne s'ajoute qu'aux
      titres qui ne la portent pas déjà. Un onglet qui bégaie le nom du produit
@@ -207,11 +209,11 @@ function check(route: string, html: string, page: ContentPage): void {
   const failures: string[] = [];
 
   if (body.length < 500) failures.push(`corps quasi vide (${body.length} caractères)`);
-  if (!body.includes(escape(page.title))) failures.push('le titre de la page est absent du corps');
+  if (!body.includes(served(page.title))) failures.push('le titre de la page est absent du corps');
   // Chaque section doit avoir laissé une trace : un bloc perdu en silence est
   // exactement ce qu'un `switch` non exhaustif produirait.
   for (const section of page.sections) {
-    if (!body.includes(escape(section.title))) failures.push(`section absente : « ${section.title} »`);
+    if (!body.includes(served(section.title))) failures.push(`section absente : « ${section.title} »`);
   }
   if (!html.includes(`<link rel="canonical" href="${ORIGIN}/${route}">`)) failures.push('canonical absent ou faux');
   if (!html.includes('property="og:url"')) failures.push('og:url absent');

@@ -8,6 +8,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { gameBlockSchema } from '@meeshy/shared/types/game';
+import { chestContentForEffort, dayEffort } from '@meeshy/shared/utils/game/chest';
 import { GameBlockService } from '../GameBlockService';
 import { MissionService } from '../MissionService';
 import { PersonalMissionService } from '../PersonalMissionService';
@@ -98,7 +99,7 @@ describe('GameBlockService.build', () => {
     expect(block.guideSeen).toEqual([]);
   });
 
-  it('la frappe annonce le prix de la PROCHAINE pièce : la 11e coûte 1 294', async () => {
+  it('la frappe annonce le prix de la PROCHAINE pièce : la 11e coûte 1 587 (#10011)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 5000, levelRecord: 31 });
     counter(db, 5000);
@@ -106,7 +107,7 @@ describe('GameBlockService.build', () => {
 
     const block = await build(db);
 
-    expect(block.mint).toMatchObject({ number: 11, price: 1294, canMint: true, edition: 'silver' });
+    expect(block.mint).toMatchObject({ number: 11, price: 1587, canMint: true, edition: 'silver' });
   });
 
   it('la Flamme éteinte se rallume sous 48 h : la série perdue est celle d’avant la rupture', async () => {
@@ -142,8 +143,41 @@ describe('GameBlockService.build', () => {
     const claimed = await build(db);
 
     expect(ready.chest).toMatchObject({ status: 'ready', reward: null });
-    expect(claimed.chest).toMatchObject({ status: 'claimed', reward: { points: 123, fragment: true, freeze: false } });
+    expect(claimed.chest).toMatchObject({ status: 'claimed', reward: { points: 123, fragment: true, freeze: false, glory: 0, meeshFragments: 0 } });
     expect(claimed.missions.rerollAvailable).toBe(false);
+  });
+
+  it('dit le contenu certain du coffre avant l’ouverture, celui des missions tirées (#10011)', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+
+    const block = await build(db);
+
+    expect(block.chest.today).toEqual(chestContentForEffort(dayEffort(block.missions.items)));
+    expect(block.chest.today?.points).toBeGreaterThanOrEqual(100);
+  });
+
+  it('sert le coffre ouvert avec sa Gloire et ses fragments, les fragments en poche et la frappe gratuite', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 10 * 20 * 20, levelRecord: 20 });
+    await build(db);
+    for (const row of db.dailyMission.rows) row.completedAt = NOW;
+    db.gameDay.rows.push({ id: 'avant', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: NOW, chestMeeshFragments: 11 });
+    db.gameDay.rows.push({
+      id: 'gd', userId: USER, dayKey: DAY, rerollCount: 0, chestClaimedAt: NOW,
+      chestPoints: 1750, chestFragment: true, chestFreeze: false, chestGlory: 175, chestMeeshFragments: 2,
+    });
+
+    const block = await build(db);
+
+    expect(block.chest.reward).toEqual({ points: 1750, fragment: true, freeze: false, glory: 175, meeshFragments: 2 });
+    expect(block.chest.meeshFragments).toEqual({ held: 13, perMeesh: 5 });
+    expect(block.mint.withFragments).toEqual({ cost: 5, held: 13, canMint: true, missingFragments: 0 });
+
+    db.meeshLedger.rows.push({ id: 'gratuite', userId: USER, delta: 1, reason: 'mint', requestId: 'frappe-gratuite-1', fragmentsSpent: 10 });
+    const spent = await build(db);
+    expect(spent.chest.meeshFragments).toEqual({ held: 3, perMeesh: 5 });
+    expect(spent.mint.withFragments).toMatchObject({ canMint: false, missingFragments: 2 });
   });
 
   it('une mission faite n’est plus à changer : sans mission non faite, pas de changement offert', async () => {

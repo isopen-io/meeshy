@@ -66,6 +66,16 @@ const ACTIVITY_WEEKS = 3;
 const PAGE = 500;
 /** La conservation : 4 semaines après la fin de la saison. */
 export const LEAGUE_RETENTION_DAYS = 28;
+
+/**
+ * L'horizon de la purge (#9947) : les semaines d'avant ce lundi n'ont plus ni
+ * groupe, ni appartenance, ni points. `null` tant que rien n'est à purger. La
+ * purge et la lecture d'une semaine passée (`GameArchiveService`) le partagent.
+ */
+export function leagueRetentionHorizon(now: Date): string | null {
+  const season = seasonAt(addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS));
+  return season === null ? null : seasonCalendar(season)?.startDay ?? null;
+}
 /** Combien de temps, après sa fermeture, un groupe non réglé retient le placement de la semaine suivante. */
 export const SETTLEMENT_GRACE_MS = 6 * 3_600_000;
 
@@ -414,9 +424,7 @@ export class LeagueSettlement {
    * 2026-12-20, avec le premier horizon de saison.
    */
   async purgeOld(now: Date = new Date()): Promise<number> {
-    const cutoffDay = addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS);
-    const season = seasonAt(cutoffDay);
-    const horizon = season === null ? null : seasonCalendar(season)?.startDay ?? null;
+    const horizon = leagueRetentionHorizon(now);
     if (horizon === null) return 0;
     const where = { weekKey: { lt: horizon } };
     const [groups, memberships, points] = await Promise.all([

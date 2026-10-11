@@ -7,6 +7,7 @@ import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog'
 import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
+import { SplitFrame } from '@/routes/split-frame';
 
 /**
  * LA TABLE DES ROUTES — le seul endroit du depot qui connait les adresses.
@@ -239,8 +240,15 @@ export const ROUTES = {
   /* LA LIGUE (#9384, #9385) — la ligue publique, la ligue entre amis et la
      mission en duo. PRIVÉE : `session-guard.ts`. */
   progressionLigue: { pattern: '/me/progression/ligue', screen: progressionLigueScreen },
+  /* UNE SEMAINE DE LIGUE NOMMÉE (#9947) — le lien canonique d'une semaine, son lundi
+     (`leagueWeekLinkPath`, `packages/shared`) : celui que porte la carte d'un événement
+     in-app `COMPETITION`. PRIVÉE. */
+  progressionLigueSemaine: { pattern: '/me/progression/ligue/$semaine', screen: progressionLigueScreen },
   /* LA SAISON (#9386) — huit semaines, quarante étapes gratuites, la rangée Sceau. PRIVÉE. */
   progressionSaison: { pattern: '/me/progression/saison', screen: progressionSaisonScreen },
+  /* UNE SAISON NOMMÉE (#9947) — passée, en cours ou future (`seasonLinkPath`) : celle
+     que porte la carte d'un événement in-app `NEW_SEASON`. PRIVÉE. */
+  progressionSaisonNumero: { pattern: '/me/progression/saison/$saison', screen: progressionSaisonScreen },
   /* LA VITRINE, L'ATLAS ET LE PRESTIGE (#9387, #9388, #9389) — PRIVÉES. */
   progressionVitrine: { pattern: '/me/progression/vitrine', screen: progressionVitrineScreen },
   progressionAtlas: { pattern: '/me/progression/atlas', screen: progressionAtlasScreen },
@@ -661,4 +669,7 @@ export function NotFound() {
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
 export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
+  /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
+     1024 px, le cadre rend l'écran routé tel quel. */
+  frame: SplitFrame,
 });

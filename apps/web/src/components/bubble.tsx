@@ -460,7 +460,7 @@ export function Bubble({
       style={{ marginBottom: tail ? 6 : 2 }}
     >
       <div
-        className="relative max-w-[70%] min-w-0"
+        className="thread-bubble-measure relative max-w-[70%] min-w-0"
         style={{ marginInlineStart: isMine ? 50 : 0, marginInlineEnd: isMine ? 0 : 50 }}
       >
         {/* LA COCHE DE SÉLECTION (#5814, question 5) — DANS la gouttière de

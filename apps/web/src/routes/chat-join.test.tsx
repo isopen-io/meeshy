@@ -11,6 +11,7 @@ import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ChatJoin, type ChatJoinDeps } from './chat-join';
+import { guestEntryOf, type GuestEntry } from './chat-join-guest';
 import { ROUTES } from './route-table';
 
 /**
@@ -161,13 +162,13 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false): Promise<HTMLDivElement> {
+async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false, entry: GuestEntry | null = null): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
   await act(async () => {
-    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} />);
+    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} entry={entry} />);
   });
   await settle();
   return container;
@@ -860,5 +861,90 @@ describe('un compte CONNECTÉ peut rejoindre en « Anonyme » sans perdre sa ses
     await fillAndSubmit(el, 'Masque');
     expect(recorded.adopted.map(([, guest]) => guest.language)).toEqual(['en']);
     expect(recorded.interfaceLanguages).toEqual([]);
+  });
+});
+
+/* ========================================================================= *
+ *  L'ENTRÉE DE WORLD WIDE DEPUIS LA LANDING (#10003)
+ * ========================================================================= */
+
+describe('l’adresse d’entrée de la landing (#10003)', () => {
+  const entryOf = (query: string) => guestEntryOf(new URLSearchParams(query));
+
+  test('mode invité, nom et langue ⇒ une entrée ; le nom est rogné', () => {
+    expect(entryOf('mode=anonymous&name=%20Kenji%20&language=ar')).toEqual({ nickname: 'Kenji', language: 'ar' });
+    expect(entryOf('mode=anonymous&name=Kenji')).toEqual({ nickname: 'Kenji', language: null });
+  });
+
+  test('sans mode invité ou sans nom, aucune entrée', () => {
+    expect(entryOf('name=Kenji&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous&name=%20&language=ar')).toBe(null);
+    expect(entryOf('mode=anonymous')).toBe(null);
+  });
+});
+
+describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)', () => {
+  const KENJI: GuestEntry = { nickname: 'Kenji', language: 'ar' };
+
+  test('l’invité est CRÉÉ sans autre geste : le corps part, la session est adoptée, la langue prend l’interface, le fil s’ouvre', async () => {
+    const { deps, recorded } = depsWith();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.adopted.map(([, guest]) => [guest.nickname, guest.language])).toEqual([['Kenji', 'ar']]);
+    expect(recorded.order).toEqual(['adopt', 'interface ar', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('pendant l’entrée, l’invitation n’est pas peinte : l’écran attend, il ne propose rien', async () => {
+    const { deps } = depsWith({ joinGuest: () => never() });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(el.querySelector('[data-invite-layout]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('une entrée sans langue prend la langue pré-choisie du lien', async () => {
+    const { deps, recorded } = depsWith();
+    await mount(deps, LINK, true, { nickname: 'Kenji', language: null });
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Kenji' }]]);
+  });
+
+  test('nom PRIS : le formulaire s’ouvre, la suggestion pré-remplie et dite, la langue choisie gardée', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ok: false, status: 409, error: 'pris', code: 'USERNAME_TAKEN_IN_CONVERSATION', suggestedNickname: 'Kenji2' }),
+    });
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji2');
+    expect(languageField(el)?.value).toBe('ar');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('Kenji2');
+    expect(recorded.order).toEqual([]);
+  });
+
+  test('un lien qui exige plus que le nom et la langue ne s’en dispense pas : rien ne part, le champ manquant est demandé', async () => {
+    const { deps, recorded } = depsWith(withTerms({ emailRequired: true }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('Kenji');
+    expect(el.querySelector('[data-guest-email]')?.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  test('un lien réservé aux comptes ne crée personne', async () => {
+    const { deps, recorded } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
+    expect(el.querySelector('[data-invite-account-required]')).not.toBeNull();
+  });
+
+  test('l’entrée ne part qu’UNE fois', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async (link, body) => {
+        recorded.guestJoins.push([link, body]);
+        return { ok: false, status: 429, error: 'trop', code: 'RATE_LIMITED' };
+      },
+    });
+    await mount(deps, LINK, true, KENJI);
+    await settle();
+    expect(recorded.guestJoins.length).toBe(1);
   });
 });

@@ -1,7 +1,6 @@
-import { BRAND_LOGO_PATH } from '@/lib/brand';
-
 import type { LandingCopy } from './landing-copy';
-import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingPath, type LandingLanguage } from './landing-languages';
+import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, type LandingLanguage } from './landing-languages';
+import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome';
 
 /**
  * LA LANDING DE meeshy.me (#10002, planche « Main »).
@@ -15,58 +14,19 @@ import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingPath, type LandingLanguage
  * que les robots lisent tel quel.
  *
  * Les adresses sont celles de l'application : `/login`, `/signup`, `/chats`, et
- * les pages statiques `/help`, `/faq`, `/privacy`, `/terms`, `/download`.
+ * les pages statiques `/help`, `/faq`, `/privacy`, `/terms`, `/download`. Son
+ * en-tête et son pied sont ceux de tout meeshy.me (`site-chrome.tsx`, #10071).
  */
 export type LandingPageProps = {
   readonly language: LandingLanguage;
   readonly copy: LandingCopy;
 };
 
-const GlobeIcon = ({ size }: { readonly size: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" />
-  </svg>
-);
-
 export function LandingPage({ language, copy }: LandingPageProps) {
   return (
     <div className="ld" data-landing={language}>
       <div className="ld-glow" aria-hidden="true" />
-      <header className="ld-header glass">
-        <div className="ld-wrap ld-bar">
-          <a href={landingPath(language)} className="ld-brand">
-            <img src={BRAND_LOGO_PATH} alt="" width={36} height={36} />
-            <span className="ld-wordmark">Meeshy</span>
-          </a>
-          <nav className="ld-nav" aria-label={copy.navLabel}>
-            <a href="#comment">{copy.navHow}</a>
-            <a href="#world">{copy.navWorld}</a>
-            <a href="/faq">{copy.navFaq}</a>
-          </nav>
-          <span className="ld-spacer" />
-          <label className="ld-language">
-            <GlobeIcon size={16} />
-            <span className="ld-sr">{copy.languageLabel}</span>
-            <select data-landing-language defaultValue={language}>
-              {LANDING_LANGUAGES.map((code) => (
-                <option key={code} value={code} lang={code}>
-                  {LANGUAGE_AUTONYMS[code]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <a href="/login" className="ld-btn ld-btn--ghost" data-session-visitor>
-            {copy.signIn}
-          </a>
-          <a href="#rejoindre" className="ld-btn ld-btn--primary" data-session-visitor data-world-entry data-world-cta>
-            {copy.enterWithoutAccount}
-          </a>
-          <a href="/chats" className="ld-btn ld-btn--primary" data-session-member data-my-conversations>
-            {copy.myConversations}
-          </a>
-        </div>
-      </header>
+      <SiteHeader language={language} copy={copy} onLanding languageControl={<LanguageSelect language={language} copy={copy} />} />
 
       <main>
         <section className="ld-wrap ld-hero">
@@ -80,14 +40,42 @@ export function LandingPage({ language, copy }: LandingPageProps) {
               <span className="ld-accent">{copy.headlineAccent}</span>
             </h1>
             <p className="ld-lede">{copy.lede}</p>
+            <a href="/chats" className="ld-btn ld-btn--primary ld-btn--large ld-return" data-world-return hidden>
+              {copy.returnToWorld}
+            </a>
             <form id="rejoindre" className="ld-form" aria-label={copy.formLabel} data-world-form data-world-entry>
-              <label className="ld-field">
-                {copy.nameLabel}
-                <input type="text" name="name" required maxLength={40} autoComplete="nickname" placeholder={copy.namePlaceholder} />
-              </label>
-              <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
-                {copy.join}
-              </button>
+              <div className="ld-step" data-world-step="name">
+                <label className="ld-field">
+                  {copy.nameLabel}
+                  <input type="text" name="name" required maxLength={40} autoComplete="nickname" placeholder={copy.namePlaceholder} />
+                </label>
+                <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
+                  {copy.join}
+                </button>
+              </div>
+              <fieldset className="ld-step ld-step--language" data-world-step="language" aria-describedby="ld-language-hint" hidden>
+                <legend>{copy.languageTitle}</legend>
+                <p id="ld-language-hint" className="ld-note">
+                  {copy.languageHint}
+                </p>
+                <div className="ld-langs">
+                  {LANDING_LANGUAGES.map((code) => (
+                    <label key={code} className="ld-lang" lang={code} dir={landingDirection(code)}>
+                      <input type="radio" name="language" value={code} defaultChecked={code === language} />
+                      {LANGUAGE_AUTONYMS[code]}
+                    </label>
+                  ))}
+                </div>
+                <button type="button" className="ld-btn ld-btn--ghost ld-btn--large" data-world-back>
+                  {copy.back}
+                </button>
+                <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
+                  {copy.enter}
+                </button>
+              </fieldset>
+              <p className="ld-note ld-error" role="alert" data-world-error hidden>
+                {copy.entryFailed}
+              </p>
             </form>
             <p className="ld-note" data-world-entry>
               {copy.joinNote}
@@ -195,27 +183,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
         </section>
       </main>
 
-      <footer className="ld-footer">
-        <div className="ld-wrap ld-footer-row">
-          <span className="ld-footer-name">Meeshy</span>
-          <nav aria-label={copy.footerLabel}>
-            <a href="/help">{copy.help}</a>
-            <a href="/faq">{copy.faq}</a>
-            <a href="/privacy">{copy.privacy}</a>
-            <a href="/terms">{copy.terms}</a>
-            <a href="/download">{copy.download}</a>
-          </nav>
-          <span className="ld-spacer" />
-          <nav aria-label={copy.languageLabel}>
-            {LANDING_LANGUAGES.map((code) => (
-              <a key={code} href={landingPath(code)} hrefLang={code} lang={code} {...(code === language ? { 'aria-current': 'page' as const } : {})}>
-                {LANGUAGE_AUTONYMS[code]}
-              </a>
-            ))}
-          </nav>
-          <span>© Meeshy</span>
-        </div>
-      </footer>
+      <SiteFooter language={language} copy={copy} onLanding />
     </div>
   );
 }
