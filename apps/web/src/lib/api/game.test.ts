@@ -177,42 +177,49 @@ describe('les écritures du jeu', () => {
   });
 });
 
-describe('le coffre et la frappe gratuite de #10011', () => {
-  test('le contenu du jour, les fragments en poche et la frappe par fragments se lisent', () => {
-    const block = gameBlockFixture({ meeshFragments: { earned: 7, spent: 0 } });
+describe('le coffre de #10011 : points, Gloire, prime en points, fragment d’étoile', () => {
+  test('le contenu du jour, ses primes possibles et les fragments d’étoile collectés se lisent — aucune frappe par fragments', () => {
+    const block = gameBlockFixture({ starFragments: 7 });
     const read = readGameBlock(block);
     expect(read?.chest.today).toEqual(block.chest.today);
-    expect(read?.chest.meeshFragments).toEqual({ held: 7, perMeesh: 5 });
-    expect(read?.mint.withFragments).toEqual({ cost: 5, held: 7, canMint: true, missingFragments: 0 });
+    expect(read?.chest.today?.bonusWhole).toBeGreaterThan(0);
+    expect(read?.starFragments).toEqual({ collected: 7 });
+    expect(read && 'withFragments' in read.mint).toBe(false);
+    expect(read && 'meeshFragments' in read.chest).toBe(false);
   });
 
   test('illisibles, ils tombent SEULS : le bloc reste lu', () => {
-    const block = gameBlockFixture({ meeshFragments: { earned: 7, spent: 0 } });
+    const block = gameBlockFixture({ starFragments: 7, chestClaimed: true, chestReward: { points: 744, fragment: false, freeze: false, glory: 50, bonus: 'fifth', bonusPoints: 244 } });
     const broken = {
       ...block,
-      chest: { ...block.chest, today: { points: 'beaucoup' }, meeshFragments: { held: -1, perMeesh: 5 } },
-      mint: { ...block.mint, withFragments: { cost: 0 } },
+      starFragments: { collected: -1 },
+      chest: { ...block.chest, today: { points: 'beaucoup' }, reward: { ...block.chest.reward, bonus: 'triple', bonusPoints: 'beaucoup' } },
     };
     const read = readGameBlock(broken);
     expect(read).not.toBeNull();
     expect(read && 'today' in read.chest).toBe(false);
-    expect(read && 'meeshFragments' in read.chest).toBe(false);
-    expect(read && 'withFragments' in read.mint).toBe(false);
+    expect(read && 'starFragments' in read).toBe(false);
+    expect(read?.chest.reward).toEqual({ points: 744, fragment: false, freeze: false, glory: 50 });
   });
 
-  test('un coffre d’avant #10011 se lit encore, sans Gloire ni fragments', async () => {
+  test('un coffre d’avant #10011 se lit encore, sans Gloire ni prime ; son fragment est un fragment d’étoile', async () => {
     const transport = transportServing({ success: true, data: { status: 'already-claimed', reward: { points: 140, fragment: true, freeze: false }, score: 900 } });
     const result = await claimChest(transport, 'req-0008-abcd');
     expect(result.ok && result.data.reward).toEqual({ points: 140, fragment: true, freeze: false });
   });
 
-  test('un coffre d’aujourd’hui porte sa Gloire, ses fragments et ceux en poche', async () => {
+  test('un coffre d’aujourd’hui porte sa Gloire, sa prime et le total de fragments d’étoile', async () => {
     const transport = transportServing({
       success: true,
-      data: { status: 'claimed', reward: { points: 1750, fragment: true, freeze: false, glory: 175, meeshFragments: 2 }, score: 3000, meeshFragments: { held: 6, perMeesh: 5 } },
+      data: {
+        status: 'claimed',
+        reward: { points: 2083 + 1221, fragment: true, freeze: false, glory: 208, bonus: 'whole', bonusPoints: 1221 },
+        score: 3000,
+        starFragments: { collected: 6 },
+      },
     });
     const result = await claimChest(transport, 'req-0009-abcd');
-    expect(result.ok && result.data.meeshFragments).toEqual({ held: 6, perMeesh: 5 });
-    expect(result.ok && result.data.reward.glory).toBe(175);
+    expect(result.ok && result.data.starFragments).toEqual({ collected: 6 });
+    expect(result.ok && result.data.reward).toMatchObject({ glory: 208, bonus: 'whole', bonusPoints: 1221 });
   });
 });

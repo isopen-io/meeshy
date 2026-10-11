@@ -180,7 +180,7 @@ const de = {
   'game.detail.mission.what': 'Eine Mission ist ein kleines Ziel für heute.',
   'game.detail.mission.how': 'Sie bringt Punkte und bringt dich der Truhe des Tages näher.',
   'game.detail.chest.what': 'Die Truhe des Tages öffnet sich, wenn deine Missionen erledigt sind.',
-  'game.detail.chest.how': 'Punkte je nach Missionen, Ruhm, Meesh-Fragmente – fünf bezahlen eine Prägung – und manchmal ein Eis.',
+  'game.detail.chest.how': 'Punkte je nach Missionen, Ruhm, manchmal ein Punktebonus, ein Sternfragment oder ein Eis.',
   'game.detail.coin.what': 'Die Meesh ist die seltene Münze von Meeshy. Jede Münze trägt ihre Nummer.',
   'game.detail.coin.how': 'Präge sie mit deinen Punkten, sobald du genug hast.',
   'game.detail.ring.what': 'Der Ring zeigt dein Level: Er füllt sich mit deinen Punkten.',

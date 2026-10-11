@@ -144,7 +144,10 @@ enum GameOptimistic {
     }
 
     /// Le contenu servi s'y pose, et le score en poche après le crédit.
-    static func withChestReward(_ state: GameState, reward: DailyChest, score: Int) -> GameState {
+    /// `starFragments` : le total collecté tel que la passerelle le sert après l'ouverture (#10011) — `nil`, il reste
+    /// celui du bloc.
+    static func withChestReward(_ state: GameState, reward: DailyChest, score: Int,
+                                starFragments: StarFragmentsTotal? = nil) -> GameState {
         let game = state.game
         let level = GameLevelWire.level(score: score, levelCap: GameGlory.levelCap(forRank: game.glory.rank),
                                          levelRecord: game.level.shown.record, prestige: game.level.prestige,
@@ -152,7 +155,8 @@ enum GameOptimistic {
         return GameState(
             game: game.replacing(
                 level: level,
-                chest: game.chest.replacing(status: .claimed, reward: .some(reward))
+                chest: game.chest.replacing(status: .claimed, reward: .some(reward)),
+                starFragments: starFragments.map { .some($0) }
             ),
             meesh: state.meesh
         )

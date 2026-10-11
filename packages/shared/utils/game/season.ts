@@ -145,7 +145,7 @@ export type SeasonReward = { readonly kind: SeasonRewardKind; readonly amount: n
 export const SEASON_STEP_POINTS = 100;
 
 /**
- * La récompense GRATUITE d'une étape : des points ; un fragment de cosmétique
+ * La récompense GRATUITE d'une étape : des points ; UN fragment d'étoile (`star-fragments.ts`)
  * toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
  */
 export function seasonStepReward(step: number): SeasonReward | null {

@@ -65,5 +65,37 @@ expect_redirect '/?affiliate=aff_123' 308 /signup/affiliate/aff_123
 
 expect_relative_location /join/mshy_abc
 
+# UNE ADRESSE INCONNUE RÉPOND 404 (#10123) — avec la coquille, qui dit
+# « introuvable » à un humain ; une adresse de l'application reste en 200.
+expect_status() {
+  got=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$base$1")
+  case "$got" in
+    "$2"*) echo "ok    $1 -> $got" ;;
+    *) echo "FAUX  $1 -> $got (attendu $2)"; fail=1 ;;
+  esac
+}
+expect_status /n-existe-pas-recette '404 text/html'
+expect_status /chats '200 text/html'
+expect_status /c/64f0c0ffee0000000000abcd '200 text/html'
+expect_status /chat/mshy_world '200 text/html'
+expect_status /world '200 text/html'
+
+# LE STAGING NE S'INDEXE PAS (#10123) — l'hôte seul le distingue.
+staging_robots=$(curl -s -H 'Host: staging.meeshy.me' "$base/robots.txt")
+case "$staging_robots" in
+  *"Disallow: /"*) echo "ok    staging /robots.txt ferme tout" ;;
+  *) echo "FAUX  staging /robots.txt : $staging_robots"; fail=1 ;;
+esac
+if curl -s -o /dev/null -D - -H 'Host: staging.meeshy.me' "$base/chats" | grep -qi '^x-robots-tag: noindex'; then
+  echo "ok    staging /chats -> X-Robots-Tag noindex"
+else
+  echo "FAUX  staging /chats sans X-Robots-Tag noindex"; fail=1
+fi
+if curl -s -o /dev/null -D - -H 'Host: meeshy.me' "$base/chats" | grep -qi '^x-robots-tag'; then
+  echo "FAUX  production /chats porte un X-Robots-Tag"; fail=1
+else
+  echo "ok    production /chats sans X-Robots-Tag"
+fi
+
 [ "$fail" -eq 0 ] || { echo "des adresses publiques du domaine sont FAUSSES"; exit 1; }
 echo "les adresses publiques du domaine sont servies"

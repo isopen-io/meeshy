@@ -8,7 +8,7 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
  * **LA FICHE D'UN PARTICIPANT DE WORLD WIDE** (#10102, partie web) —
- * `world.participantsByParticipantId` (le `GET` du catalogue), ce que l'ÉQUIPE (rôle de
+ * `world.participantsByParticipantId`, ce que l'ÉQUIPE (rôle de
  * plateforme au-delà de USER) lit d'une personne entrée dans World Wide pour
  * la modérer : nom, compte ou anonyme, langues, pays, navigateur, appareil,
  * date d'entrée, lien, rôle. `participantId` est le `senderId` du message.

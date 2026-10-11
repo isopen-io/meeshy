@@ -180,7 +180,7 @@ const it = {
   'game.detail.mission.what': 'Una missione è un piccolo obiettivo per oggi.',
   'game.detail.mission.how': 'Dà punti e ti avvicina al forziere del giorno.',
   'game.detail.chest.what': 'Il forziere del giorno si apre quando le tue missioni sono fatte.',
-  'game.detail.chest.how': 'Punti secondo le tue missioni, Gloria, frammenti di Meesh — cinque pagano un conio — e a volte un gelo.',
+  'game.detail.chest.how': 'Punti secondo le tue missioni, Gloria, a volte un premio in punti, un frammento di stella o un gelo.',
   'game.detail.coin.what': 'La Meesh è la moneta rara di Meeshy. Ogni moneta porta il suo numero.',
   'game.detail.coin.how': 'Coniala con i tuoi punti appena ne hai abbastanza.',
   'game.detail.ring.what': 'L’anello mostra il tuo livello: si riempie con i tuoi punti.',

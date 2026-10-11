@@ -71,6 +71,7 @@ import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
+import { selfSenderOf } from '@/lib/view/self-sender';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
@@ -189,6 +190,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * rendu final ne montre pas encore le fil réel.
    */
   const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  /** L'auteur d'un envoi en vol : un invité y porte le nom qu'il a donné (#10120). */
+  const selfSender = useMemo(() => selfSenderOf({ participants: conversation?.participants, viewer }), [conversation, viewer]);
   const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
 
   /**
@@ -304,7 +307,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
     conversationId,
     viewerId: viewer.id ?? '',
-    ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
+    ...(selfSender === undefined ? {} : { sender: selfSender }),
     announce: announcer.announce,
   });
   /**
@@ -584,7 +587,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
   /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
-  useEngagementRevalidation(conversationId);
+  useEngagementRevalidation({ conversationId, registered: !viewer.isAnonymous });
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({

@@ -87,8 +87,10 @@ export function LoginWorldEntry({
           <GlobeGlyph size={22} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-body font-extrabold">{translate(language, 'login.world.title', { title: door.title })}</span>
-          <span className="block truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <span data-login-world-title className="block text-body font-extrabold">
+            {translate(language, 'login.world.title', { title: door.title })}
+          </span>
+          <span data-login-world-subtitle className="block text-caption leading-snug" style={{ color: 'var(--color-ios-ink-2)' }}>
             {translate(language, 'login.world.subtitle')}
           </span>
         </span>

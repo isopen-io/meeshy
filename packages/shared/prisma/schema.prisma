@@ -5196,28 +5196,24 @@ model EngagementPostPoints {
 /// Aucune ligne n'est jamais modifiée ni supprimée : une correction s'écrit par
 /// une ligne INVERSE, qui se lit.
 model MeeshLedger {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String   @db.ObjectId
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
   /// Positif (frappe, don reçu, octroi) ou négatif (don envoyé, dépense,
   /// sanction) — jamais zéro.
-  delta          Int
+  delta     Int
   /// "mint" | "transfer_in" | "transfer_out" | "spend" | "sanction" | "grant"
-  reason         String
+  reason    String
   /// L'auteur de l'écriture quand ce n'est pas `userId` : l'expéditeur d'un
   /// don, le modérateur d'une sanction. Absent pour une frappe.
-  actorId        String?  @db.ObjectId
+  actorId   String?  @db.ObjectId
   /// Identifiant fourni par l'appelant — l'IDEMPOTENCE. Un double-tap, un retry
   /// réseau ou une reprise d'application ne frappent qu'une fois.
-  requestId      String
+  requestId String
   /// Le détail que la ligne doit pouvoir rendre plus tard : pour une frappe, les
   /// axes débités et ce qu'ils ont rendu — la MÉMOIRE de ce qui a été dépensé,
   /// dont les badges éteints ne gardent plus trace.
-  meta           Json?
-  /// Les fragments de Meesh qu'une frappe GRATUITE a consommés (#10011) : 5 sur sa ligne `mint`, absent
-  /// partout ailleurs (champ optionnel, aucun backfill). Les fragments en poche se LISENT : Σ
-  /// `GameDay.chestMeeshFragments` − Σ `fragmentsSpent` — jamais une colonne incrémentée.
-  fragmentsSpent Int?
-  createdAt      DateTime @default(now())
+  meta      Json?
+  createdAt DateTime @default(now())
 
   @@unique([userId, requestId])
   @@index([userId, createdAt])
@@ -5283,21 +5279,24 @@ model DailyMission {
 /// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de
 /// mission consommés et coffre du jour.
 model GameDay {
-  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId              String    @db.ObjectId
-  dayKey              String
-  rerollCount         Int       @default(0)
-  chestClaimedAt      DateTime?
-  chestPoints         Int?
-  /// Le fragment de Meesh EN PRIME (une chance sur six) — le seul que lisent les clients d'avant #10011.
-  chestFragment       Boolean?
-  chestFreeze         Boolean?
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String    @db.ObjectId
+  dayKey           String
+  rerollCount      Int       @default(0)
+  chestClaimedAt   DateTime?
+  /// Le TOTAL crédité, prime comprise.
+  chestPoints      Int?
+  /// UN fragment d'étoile trouvé (une chance sur six) — compté dans le total collecté du compte
+  /// (`star-fragments.ts`, lu, jamais incrémenté).
+  chestFragment    Boolean?
+  chestFreeze      Boolean?
   /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
-  chestGlory          Int?
-  /// Les fragments de Meesh du coffre, prime comprise (#10011). Leur somme sur les jours est le total gagné ;
-  /// cinq paient une frappe gratuite (`MeeshLedger.fragmentsSpent`).
-  chestMeeshFragments Int?
-  createdAt           DateTime  @default(now())
+  chestGlory       Int?
+  /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
+  /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
+  chestBonus       String?
+  chestBonusPoints Int?
+  createdAt        DateTime  @default(now())
 
   @@unique([userId, dayKey])
 }

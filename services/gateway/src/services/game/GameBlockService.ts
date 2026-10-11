@@ -26,9 +26,9 @@ import { GameBlockExtrasService } from './GameBlockExtrasService';
 import type { PersonalMissionService } from './PersonalMissionService';
 import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
-import { toGameMission, type MissionService } from './MissionService';
+import { chestRewardOf, toGameMission, type MissionService } from './MissionService';
 import { countMissionsDone } from './LevelStepFacts';
-import { meeshFragmentsLedger } from './MeeshFragments';
+import { starFragmentsOf } from './StarFragments';
 
 const log = enhancedLogger.child({ module: 'GameBlockService' });
 
@@ -68,15 +68,15 @@ export class GameBlockService {
     const now = params.now ?? new Date();
 
     const user = await this.prisma.user.findUnique({ where: { id: userId }, select: GAME_USER_SELECT });
-    const [totals, glory, missionsDone, counters, fragments] = await Promise.all([
+    const [totals, glory, missionsDone, counters, starFragments] = await Promise.all([
       meeshTotalsFromLedger(this.prisma, userId),
       gloryTotalFromLedger(this.prisma, userId),
       // Les missions du jour accomplies à vie, que jugent les étapes des niveaux (#9706).
       countMissionsDone(this.prisma, userId),
       params.counters ??
         this.prisma.engagementCounter.findMany({ where: { userId }, select: { axisKey: true, count: true, points: true }, take: 100 }),
-      // Les fragments de Meesh gagnés et consommés (#10011) : un appoint — une lecture qui tombe ne retient pas le bloc.
-      meeshFragmentsLedger(this.prisma, userId).catch(() => undefined),
+      // Les fragments d'étoile collectés (#10011) : un appoint — une lecture qui tombe ne retient pas le bloc.
+      starFragmentsOf(this.prisma, userId).catch(() => undefined),
     ]);
     const day = await this.deps.missions.ensureToday(userId, now);
     const gameDay = await this.deps.missions.gameDay(userId, day.dayKey);
@@ -134,16 +134,8 @@ export class GameBlockService {
         : {}),
       rerollsUsedToday: gameDay?.rerollCount ?? 0,
       chestClaimed: gameDay?.chestClaimedAt != null,
-      chestReward: gameDay?.chestClaimedAt
-        ? {
-            points: gameDay.chestPoints ?? 0,
-            fragment: gameDay.chestFragment ?? false,
-            freeze: gameDay.chestFreeze ?? false,
-            glory: gameDay.chestGlory ?? 0,
-            meeshFragments: gameDay.chestMeeshFragments ?? 0,
-          }
-        : null,
-      ...(fragments === undefined ? {} : { meeshFragments: fragments }),
+      chestReward: gameDay?.chestClaimedAt ? chestRewardOf(gameDay) : null,
+      ...(starFragments === undefined ? {} : { starFragments }),
       guideSeen: user?.guideSeen ?? [],
     });
 

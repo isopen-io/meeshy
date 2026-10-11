@@ -14,6 +14,7 @@
 import { seedOf, seededRng } from '../../utils/game/day-prng.js';
 import { tailwindFactor, prismHourWindow } from '../../utils/game/boosts.js';
 import { dailyChest } from '../../utils/game/chest.js';
+import { starFragmentsCollected } from '../../utils/game/star-fragments.js';
 import {
   advanceFlame,
   canRelight,
@@ -42,7 +43,7 @@ import {
   recordLevel,
 } from '../../utils/game/levels.js';
 import { levelStepGate, nextLevelStep, type LevelStepCounts, type LevelStepFacts } from '../../utils/game/level-steps.js';
-import { meeshEdition, meeshPrice, previewFragmentMint, previewMint } from '../../utils/game/mint.js';
+import { meeshEdition, meeshPrice, previewMint } from '../../utils/game/mint.js';
 import {
   drawDailyMissions,
   missionObjective,
@@ -72,13 +73,6 @@ export type GameVectorInputV1 =
       readonly glory: number;
       /** Missions et record de Flamme des étapes (#9706) — absents : sans étapes. */
       readonly steps?: { readonly missionsDone: number; readonly flameRecord: number };
-    }
-  | {
-      readonly law: 'mint-fragments';
-      readonly score: number;
-      readonly mintedLifetime: number;
-      readonly fragmentsHeld: number;
-      readonly glory: number;
     }
   | { readonly law: 'glory-standing'; readonly glory: number; readonly mythic: boolean; readonly mythicSeat?: { readonly number: number; readonly edition: number } | null }
   | {
@@ -124,7 +118,8 @@ export type GameVectorInputV1 =
       readonly index: number;
       readonly rerollCount: number;
     }
-  | { readonly law: 'chest'; readonly userId: string; readonly dayKey: string; readonly effort: number }
+  | { readonly law: 'chest'; readonly userId: string; readonly dayKey: string; readonly effort: number; readonly nextMeeshPrice: number }
+  | { readonly law: 'star-fragments'; readonly chestDays: number; readonly seasons: readonly (readonly number[])[] }
   | { readonly law: 'guide'; readonly event: GuideEvent; readonly seen: readonly string[] };
 
 /** La vague 1 puis la vague 2 : un seul fichier de vecteurs, une seule table de lois. */
@@ -186,14 +181,6 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
         levelCap: levelCapForGlory(input.glory),
         steps: input.steps === undefined ? null : { ...input.steps, glory: input.glory, rank: gloryStanding({ glory: input.glory }).rank },
       });
-    case 'mint-fragments':
-      return previewFragmentMint({
-        score: input.score,
-        mintedLifetime: input.mintedLifetime,
-        fragmentsHeld: input.fragmentsHeld,
-        levelCap: levelCapForGlory(input.glory),
-        steps: null,
-      });
     case 'glory-standing': {
       const s = gloryStanding(input);
       return {
@@ -252,6 +239,8 @@ function evaluateGameVectorV1(input: GameVectorInputV1): unknown {
     }
     case 'chest':
       return dailyChest(input);
+    case 'star-fragments':
+      return { collected: starFragmentsCollected(input) };
     case 'guide':
       return guideMoment(input.event, input.seen);
   }
@@ -355,14 +344,6 @@ export function buildGameVectors() {
         { score: 12_000, mintedLifetime: 0, debitablePoints: 1000, glory: 0, steps: { missionsDone: 0, flameRecord: 0 } },
       ].map((c) => vector(`aperçu de frappe qui fait une étape : score ${c.score}, ${c.mintedLifetime} frappées, ${c.glory} de Gloire`, { law: 'mint-preview', ...c })),
     );
-
-  /** La frappe gratuite par fragments (#10011) : cinq fragments, aucun point, aucun niveau perdu. */
-  const fragmentMints = [
-    { score: 121_800, mintedLifetime: 12, fragmentsHeld: 5, glory: 0 },
-    { score: 2000, mintedLifetime: 0, fragmentsHeld: 3, glory: 0 },
-    { score: 9000, mintedLifetime: 99, fragmentsHeld: 12, glory: 0 },
-    { score: 0, mintedLifetime: 999, fragmentsHeld: 0, glory: 0 },
-  ].map((c) => vector(`frappe par fragments : ${c.fragmentsHeld} en poche, ${c.mintedLifetime} frappées`, { law: 'mint-fragments', ...c }));
 
   const glories = [
     0, 399, 400, 1999, 2000, 2799, 2800, 3600, 4400, 5199, 5200, 5999, 6000, 14_999, 15_000, 34_999, 35_000, 69_999, 70_000, 129_999,
@@ -507,10 +488,28 @@ export function buildGameVectors() {
 
   /** L'effort des missions du jour (#10011) : sous le plancher, aux deux ancres, entre elles, au-delà du plafond. */
   const EFFORTS = [0, 300, 415, 1000, 2400, 3550, 4500, 9000] as const;
-  const chests = SEEDS.map(([userId, dayKey], i) => {
-    const effort = EFFORTS[i % EFFORTS.length]!;
-    return vector(`coffre de « ${userId} » le ${dayKey}, effort ${effort}`, { law: 'chest', userId, dayKey, effort });
-  });
+  /** Le cours de la prochaine Meesh du compte, d'où vient la prime : 1re, 11e, 101e frappe. */
+  const PRICES = [1221, 1587, 16_556] as const;
+  const chests = [
+    ...SEEDS.map(([userId, dayKey], i) => {
+      const effort = EFFORTS[i % EFFORTS.length]!;
+      const nextMeeshPrice = PRICES[i % PRICES.length]!;
+      return vector(`coffre de « ${userId} » le ${dayKey}, effort ${effort}, Meesh à ${nextMeeshPrice}`, { law: 'chest', userId, dayKey, effort, nextMeeshPrice });
+    }),
+    // Les trois issues de la prime (aucune, un cinquième, entière) — graines trouvées une fois, gravées ici.
+    ...['prime-0', 'prime-1', 'prime-25'].map((userId) =>
+      vector(`coffre de « ${userId} » le 2026-10-11, effort 1000, Meesh à 1587`, { law: 'chest', userId, dayKey: '2026-10-11', effort: 1000, nextMeeshPrice: 1587 }),
+    ),
+  ];
+
+  /** Les fragments d'étoile collectés (#10011) : le coffre et les étapes 5, 15, 25, 35 — une fois chacune. */
+  const starFragments = [
+    { chestDays: 0, seasons: [] },
+    { chestDays: 4, seasons: [] },
+    { chestDays: 0, seasons: [[1, 2, 3, 4, 5, 6, 10, 15]] },
+    { chestDays: 2, seasons: [[5, 15, 25, 35, 40], [5, 5, 10]] },
+    { chestDays: 1, seasons: [[0, 45, -5]] },
+  ].map((c) => vector(`fragments d'étoile : ${c.chestDays} coffres, ${c.seasons.length} saisons`, { law: 'star-fragments', ...c }));
 
   const events: readonly GuideEvent[] = [
     { kind: 'first-level', level: 2, pointsToNext: 50 },
@@ -538,7 +537,6 @@ export function buildGameVectors() {
     ...records,
     ...prices,
     ...previews,
-    ...fragmentMints,
     ...glories,
     ...gains,
     ...treasuries,
@@ -554,6 +552,7 @@ export function buildGameVectors() {
     ...draws,
     ...rerolls,
     ...chests,
+    ...starFragments,
     ...guides,
     ...buildGameVectorsV2(),
   ];
@@ -563,9 +562,9 @@ export { GAME_VECTOR_LAWS_V2 };
 
 export const GAME_VECTORS_FORMAT = {
   input:
-    "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, mint-fragments, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, star-fragments, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
   expected:
-    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier, held, gate (palier des étapes, null : rien ne retient), step (prochaine étape {level, kind, target, current, met, rank} ou null), unlockLevel (lu sur le score et le record)} — le plafond se lit sur la Gloire (`glory`), les étapes sur `steps` (#9706) ; mint-price → {price, edition} (+30 % toutes les dix frappes, plafond 16 556) ; mint-fragments → {number, edition, cost (5), held, canMint, missingFragments, levelBefore, levelAfter, gloryGained} ; chest → {points (100 à 10 000 selon la complexité des missions), fragment (la prime), freeze, glory, meeshFragments} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
+    'La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier, held, gate (palier des étapes, null : rien ne retient), step (prochaine étape {level, kind, target, current, met, rank} ou null), unlockLevel (lu sur le score et le record)} — le plafond se lit sur la Gloire (`glory`), les étapes sur `steps` (#9706) ; mint-price → {price, edition} (+30 % toutes les dix frappes, plafond 16 556) ; chest → {points (500 à 10 000 selon la complexité des missions, prime comprise), fragment (UN fragment d\'étoile), freeze, glory, bonus (none | fifth | whole), bonusPoints (au cours de la Meesh : nextMeeshPrice ou son cinquième arrondi)} ; star-fragments → {collected} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l\'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.',
   provenance:
     "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts.",
 } as const;
