@@ -3,10 +3,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { GameLeagueWeekArchive, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
-import { QueryClient, QueryObserver, onlineManager } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryObserver, onlineManager } from '@tanstack/react-query';
 
-import { leagueShown, needsLeagueWeekArchive, needsSeasonArchive, seasonShown } from '@/components/game-archive';
-import { seasonArchiveQuery } from '@/lib/api/game-archive';
+import { leagueShown, needsLeagueWeekArchive, needsSeasonArchive, seasonHeaderCount, seasonShown } from '@/components/game-archive';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/engagement';
+import { seasonArchiveQuery, seasonArchiveQueryKey } from '@/lib/api/game-archive';
 import type { HttpTransport } from '@/lib/api/http';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -16,7 +17,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import type { GameV2Actions } from './game-v2-actions';
 import { LigueWeekFocus } from './progression-ligue';
-import { SaisonFocusBody } from './progression-saison';
+import { ProgressionSaisonPage, SaisonFocusBody } from './progression-saison';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -212,6 +213,50 @@ describe('la saison à venir gardée hors ligne, le jour J (#10131)', () => {
       client.unmount();
       client.clear();
     }
+  });
+});
+
+/**
+ * L'EN-TÊTE D'UNE ARCHIVE MONTRE LA SAISON DU LIEN (#10132) — son numéro et son état, comme iOS ; jamais le compteur
+ * de la saison en cours sous le lien d'une autre.
+ */
+describe('l’en-tête de la page Saison sous un lien (#10132)', () => {
+  const page = async (focus: number | null, data: GameSeasonArchive | undefined, moment = { dayKey: '2026-10-11', minuteOfDay: 600 }) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, progress());
+    if (focus !== null && data !== undefined) client.setQueryData(seasonArchiveQueryKey(focus), data);
+    const host = await mount(
+      <QueryClientProvider client={client}>
+        <ProgressionSaisonPage focus={focus} moment={moment} />
+      </QueryClientProvider>,
+    );
+    return host.querySelector('header')?.textContent ?? host.textContent ?? '';
+  };
+
+  test('une saison passée : « Saison n · terminée », pas le compteur de la saison en cours', async () => {
+    const header = await page(currentSeason + 1, season());
+    expect(header).toContain(`Saison ${currentSeason + 1} · terminée`);
+    expect(header).not.toContain(`${game.season?.steps ?? 0} / ${game.season?.stepsTotal ?? 40}`);
+  });
+
+  test('une saison future : « Saison n · à venir »', async () => {
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }))).toContain(`Saison ${currentSeason + 1} · à venir`);
+  });
+
+  test('une saison future gardée hors ligne, le jour J : « Saison n · en cours »', async () => {
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }), { dayKey: '2027-02-15', minuteOfDay: 600 })).toContain(`Saison ${currentSeason + 1} · en cours`);
+  });
+
+  test('sans lien, ou sur la saison en cours : le compteur d’étapes d’avant', async () => {
+    const counter = `${game.season?.steps ?? 0} / ${game.season?.stepsTotal ?? 40}`;
+    expect(await page(null, undefined)).toContain(counter);
+    expect(await page(currentSeason, undefined)).toContain(counter);
+  });
+
+  test('le compte pur : chaque état de la saison du lien a sa ligne', () => {
+    const current = game.season ?? null;
+    expect(seasonHeaderCount({ kind: 'past', season: season() }, current)).toBe(`Saison ${currentSeason + 1} · terminée`);
+    expect(seasonHeaderCount({ kind: 'loading' }, current)).toBeNull();
   });
 });
 

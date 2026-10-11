@@ -695,6 +695,7 @@ const fr = {
   'game.settings.notifications.switch': 'Recevoir les notifications du jeu',
   'game.archive.season.past_title': 'Saison {number} · terminée',
   'game.archive.season.current_title': 'Saison {number} · en cours',
+  'game.archive.season.upcoming_title': 'Saison {number} · à venir',
   'game.archive.season.opened_note': 'La saison est ouverte : ton parcours s’affiche dès qu’elle est relue.',
   'game.archive.season.dates': 'Du {start} au {end}',
   'game.archive.season.rewards.one': '{count} récompense réclamée',

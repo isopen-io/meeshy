@@ -681,6 +681,7 @@ const de = {
   'game.settings.notifications.switch': 'Spielbenachrichtigungen erhalten',
   'game.archive.season.past_title': 'Saison {number} · beendet',
   'game.archive.season.current_title': 'Saison {number} · läuft',
+  'game.archive.season.upcoming_title': 'Saison {number} · demnächst',
   'game.archive.season.opened_note': 'Die Saison ist eröffnet: Dein Weg erscheint, sobald sie neu geladen ist.',
   'game.archive.season.dates': 'Vom {start} bis {end}',
   'game.archive.season.rewards.one': '{count} Belohnung abgeholt',
