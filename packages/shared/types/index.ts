@@ -76,6 +76,9 @@ export * from './call-controls.js';
 export * from './call-preview.js';
 export * from './call-live-frame.js';
 
+// Cadres de gloire (#10146, #10148) — la loi d'usage des cadres et le moteur de packs à domaines
+export * from './frame-usage.js';
+
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
 
