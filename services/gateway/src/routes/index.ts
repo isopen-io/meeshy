@@ -137,6 +137,7 @@ import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
+import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -338,6 +339,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // Les packs de stickers (#9141) — boutique, installation, proposition par
   // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
   { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
+  // Les packs de cadres de gloire (#10148, LP0) — le MÊME moteur que les
+  // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
+  // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
+  { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

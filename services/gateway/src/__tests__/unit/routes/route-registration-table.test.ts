@@ -213,7 +213,15 @@ describe('ROUTE_TABLE (#4278)', () => {
     // participant de World Wide, réservée aux rôles au-delà de USER), montage
     // autonome. Aucun alias, aucune route retirée ni renommée. Vérifié : le
     // manifeste passe de 656 à 657 routes, soit exactement celle-là.
-    expect(ROUTE_TABLE.length).toBe(78);
+    // 79 : #10148 (LP0) ajoute `packs-glory-frame` — le montage AUTONOME des
+    // packs de cadres de gloire sous `/api/v1/packs/glory-frame`, servi par le
+    // MÊME moteur que `sticker-packs` (un montage par domaine, jamais un
+    // `:domain`). Aucun alias, aucune route retirée ni renommée : les routes de
+    // `/api/v1/sticker-packs` gardent chemins, méthodes et réponses à l'octet.
+    // Vérifié : le manifeste passe de 657 à 662 routes, soit exactement les
+    // cinq neuves (GET /, GET /installed, GET /:slug, PUT et DELETE
+    // /:slug/install).
+    expect(ROUTE_TABLE.length).toBe(79);
   });
 });
 
