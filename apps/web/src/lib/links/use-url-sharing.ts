@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { partagerLien, portailDuNavigateur } from '@/lib/view/invitation';

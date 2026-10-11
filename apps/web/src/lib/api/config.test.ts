@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { publicWebOriginOf, resolveApiConfig } from './config';
+import { publicWebOriginOf } from '@/lib/links/public-origin';
+
+import { resolveApiConfig } from './config';
 
 /**
  * `resolveApiConfig` — LA SEULE source de la base d'API et de la source de

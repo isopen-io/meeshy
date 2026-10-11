@@ -4,7 +4,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { performCreateTrackingLink, type CreateFamilyLinkOutcome } from '@/lib/api/link-family-actions';
 import { emptyTrackingLinkDraft, normalizedUrl, TRACKING_NAME_MAX, TRACKING_UTM_MAX, trackingLinkUrl, type MyTrackingLink, type TrackingLinkDraft, type TrackingLinkDraftField } from '@/lib/api/my-tracking-links';
 import { appQueryClient } from '@/lib/api/query-client';
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { translateLinkFamilies, type PlainLinkFamiliesKey } from '@/lib/i18n-link-families-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';

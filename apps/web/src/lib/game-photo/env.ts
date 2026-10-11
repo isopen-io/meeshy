@@ -1,4 +1,4 @@
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';

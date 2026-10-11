@@ -4,7 +4,7 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import { hasBlockSyntax, parseBlocks, type TextBlock } from '@meeshy/shared/utils/text-blocks';
 import { segmentText, type EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { displaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';

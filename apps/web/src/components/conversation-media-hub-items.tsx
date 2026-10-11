@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Message } from '@/lib/api/types';

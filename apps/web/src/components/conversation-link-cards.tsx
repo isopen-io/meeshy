@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage } from '@/lib/interface-language';

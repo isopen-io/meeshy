@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { endRevokedSession } from '@/lib/api/account-caches';
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';

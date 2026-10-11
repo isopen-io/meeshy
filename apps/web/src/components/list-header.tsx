@@ -4,7 +4,7 @@ import { Glyph } from '@/components/glyph';
 import { RailTitleSlot } from '@/components/rail-title-slot';
 import { ShareLinkSheet } from '@/components/share-link-sheet';
 import type { StoryRailProps } from '@/components/story-rail';
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import type { Conversation } from '@/lib/api/types';
 import { Link } from '@/routes/route-table';

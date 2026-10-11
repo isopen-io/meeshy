@@ -35,8 +35,6 @@
  * a coupé la connexion sur `staging.meeshy.me` le 2026-09-09 (#5872).
  */
 
-import { webOriginOf } from '@/lib/links/web-origin';
-
 /** Le CHOIX de source de données — jamais lu ailleurs qu'ici et par les
  * consommateurs de `apiConfig.source`. */
 export type DataSource = 'fixtures' | 'gateway';
@@ -194,22 +192,17 @@ function resolveBase(env: ApiEnv, { shell, runtime, page }: ResolveOptions): str
 }
 
 /**
- * Une origine déclarée au démarrage — ABSOLUE, `http`/`https`, sans
- * identifiants ni requête — ou rien. Une valeur malformée est ignorée, jamais
- * réparée : l'entrypoint refuse déjà de démarrer sur elle, ce filtre ne sert
- * que le cas où `config.js` aurait été écrit à la main.
+ * Une origine déclarée au démarrage — la MÊME grammaire que l'entrypoint
+ * (`docker/runtime-config.sh`, `is_origin`) : `http(s)://hôte[:port][/chemin]`,
+ * sans identifiants, requête ni guillemet. Une valeur malformée est ignorée,
+ * jamais réparée : l'entrypoint refuse déjà de démarrer sur elle, ce filtre ne
+ * sert que le cas où `config.js` aurait été écrit à la main.
  */
+const DECLARED_ORIGIN_PATTERN = /^https?:\/\/([a-z0-9]([a-z0-9.-]*[a-z0-9])?|\[[0-9a-f:.]+\])(:\d{1,5})?(\/[\w.~/-]*)?$/i;
+
 function runtimeOrigin(raw: unknown): string | undefined {
-  if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.trim();
-  if (!ABSOLUTE_ORIGIN_PATTERN.test(trimmed)) return undefined;
-  try {
-    const url = new URL(trimmed);
-    if (url.username !== '' || url.password !== '' || url.search !== '' || url.hash !== '') return undefined;
-  } catch {
-    return undefined;
-  }
-  return normalizeOrigin(trimmed);
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return DECLARED_ORIGIN_PATTERN.test(value) ? normalizeOrigin(value) : undefined;
 }
 
 const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
@@ -244,13 +237,6 @@ export function resolveApiConfig(env: ApiEnv, options: ResolveOptions): ApiConfi
   };
 }
 
-/**
- * L'ORIGINE PUBLIQUE DES LIENS PARTAGÉS — la déclarée (`MEESHY_WEB_URL`),
- * sinon celle que nomme la passerelle (`webOriginOf`), sinon la page.
- */
-export function publicWebOriginOf(config: ApiConfig, pageOrigin: string): string {
-  return config.webOrigin ?? webOriginOf(config.base, pageOrigin);
-}
 
 /**
  * `__SHELL__` — littéral de construction posé par `vite.config.ts` (même
@@ -269,8 +255,3 @@ export const apiConfig: ApiConfig = resolveApiConfig(import.meta.env, {
   runtime: (globalThis as { __MEESHY_RUNTIME__?: RuntimeConfig }).__MEESHY_RUNTIME__,
   page: typeof window === 'undefined' ? undefined : window.location,
 });
-
-/** `publicWebOriginOf` contre la configuration de CE déploiement. */
-export function publicWebOrigin(pageOrigin: string): string {
-  return publicWebOriginOf(apiConfig, pageOrigin);
-}

@@ -790,7 +790,14 @@ export default defineConfig({
                      bloquant), hors ligne compris, et la relit en fond — une
                      origine changée au redémarrage du conteneur s'applique au
                      lancement suivant. Fonction AUTONOME : Workbox la
-                     stringifie dans `dist/sw.js`. */
+                     stringifie dans `dist/sw.js`.
+                     `index.html` la charge en script CLASSIQUE et bloquant
+                     (`<script src="/config.js">`, sans commentaire : chaque
+                     octet du document compte dans la première peinture) parce
+                     que `src/lib/api/config.ts` la lit à l'évaluation du
+                     module ; le défaut `public/config.js` est vide, et
+                     l'entrypoint du conteneur (`docker/runtime-config.sh`) le
+                     réécrit. */
                   urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
                   handler: 'StaleWhileRevalidate',
                   options: {
