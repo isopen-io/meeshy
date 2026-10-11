@@ -352,6 +352,15 @@ describe('WorldGuestEntry — ce qui précède le parcours', () => {
     await mount({ deps: d });
     expect(recorded.gone).toEqual([['/chat/mshy_world_served', true]]);
   });
+
+  /* La landing d'un compte mène aussi à `/world?name=…&language=…` (#10100) :
+     le nom et la langue qu'il y a choisis le suivent jusqu'à la jonction, qui
+     le fait entrer sous son identité anonyme (#8816) comme avant. */
+  test('un compte venu de la landing garde son nom et sa langue jusqu’à la jonction anonyme', async () => {
+    const { deps: d, recorded } = deps({ signedIn: () => true });
+    await mount({ initialName: ' Awa ', initialLanguage: 'pt', deps: d });
+    expect(recorded.gone).toEqual([['/chat/mshy_world_served?mode=anonymous&name=Awa&language=pt', true]]);
+  });
 });
 
 const HELD: GuestIdentity = { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-world', link: 'mshy_world_served', mayWrite: true };
