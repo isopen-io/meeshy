@@ -450,7 +450,10 @@ export const callersIn = (contents, nsNames) => {
 // 278 -> 279 (#10157, 2026-10-11) : `packAssets.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
 // adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP1 #10149 lira
 // couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
-const BASELINE_DEAD_ENTRIES = 279;
+// 279 -> 274 (2026-10-11) : plusieurs lots partis de bases différentes (packs, aperçus
+// Open Graph #10192, accueil des visiteurs sans compte) ont donné leur appelant à cinq
+// entrées sur dev sans relever le cliquet. Valeur MESURÉE sur dev 827ee17789.
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
