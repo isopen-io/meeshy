@@ -169,3 +169,16 @@ final class GuestRouterProfileRefusalTests: XCTestCase {
         XCTAssertEqual(router.deepLinkProfileUser?.username, "bob")
     }
 }
+
+/// #10216 — « Qui a vu » rend 403 à un invité : la porte ne lui est pas offerte.
+final class GuestViewerAccessTests: XCTestCase {
+
+    func test_offersWhoSaw_neverToAGuest() {
+        XCTAssertFalse(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: true, isGuest: true))
+    }
+
+    func test_offersWhoSaw_toAMemberWhoKeepsReadReceipts() {
+        XCTAssertTrue(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: true, isGuest: false))
+        XCTAssertFalse(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: false, isGuest: false))
+    }
+}

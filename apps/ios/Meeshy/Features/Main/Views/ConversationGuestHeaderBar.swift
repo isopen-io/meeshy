@@ -86,6 +86,18 @@ struct ConversationShareLinkSlot: View {
     }
 }
 
+// MARK: - Ce qu'un invité ne demande pas (#10205, #10216)
+
+/// La passerelle répond `403 ACCOUNT_REQUIRED` à un invité sans compte sur
+/// « qui a vu » (`GET /messages/:id/read-status`), la liste des participants
+/// et les fiches. Le fil ne lui OFFRE donc pas ces portes : un geste qui
+/// n'aboutirait qu'à une erreur n'existe pas.
+enum GuestViewerAccess {
+    static func offersWhoSaw(prefersReadReceipts: Bool, isGuest: Bool) -> Bool {
+        prefersReadReceipts && !isGuest
+    }
+}
+
 // MARK: - Le bouton « Partager » de l'en-tête (#10206)
 
 /// Le partage natif de l'adresse publique, posé à côté de l'avatar. Même

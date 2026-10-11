@@ -42,6 +42,28 @@ public struct WorldEntry: Decodable, Sendable, Equatable {
     }
 }
 
+/// L'effectif n'est plus servi à un visiteur sans compte (#10205, #10216) :
+/// absent, il vaut 0 et ne s'affiche nulle part — jamais une entrée World Wide
+/// perdue parce qu'un agrégat manque.
+extension WorldEntry {
+    enum CodingKeys: String, CodingKey {
+        case identifier, title, shareLinkIdentifier, memberCount, memberCountCapped, avatar, banner
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            identifier: try c.decode(String.self, forKey: .identifier),
+            title: try c.decode(String.self, forKey: .title),
+            shareLinkIdentifier: try c.decode(String.self, forKey: .shareLinkIdentifier),
+            memberCount: try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0,
+            memberCountCapped: try c.decodeIfPresent(Bool.self, forKey: .memberCountCapped),
+            avatar: try c.decodeIfPresent(String.self, forKey: .avatar),
+            banner: try c.decodeIfPresent(String.self, forKey: .banner)
+        )
+    }
+}
+
 // MARK: - POST /links/:key/members (porte canonique, #4167)
 
 /// Le corps de la jonction d'un INVITÉ : son nom (le pseudo que le fil

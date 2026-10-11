@@ -790,7 +790,7 @@ struct ConversationView: View {
                     // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
                     // par un grisé.
                     stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
-                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+                    showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
                     exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
                 )
                 MessageMoreSheet(

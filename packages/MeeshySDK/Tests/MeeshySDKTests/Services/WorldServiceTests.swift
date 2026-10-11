@@ -49,6 +49,12 @@ final class WorldServiceTests: XCTestCase {
         XCTAssertEqual(entry.avatar.flatMap { MeeshyConfig.resolveMediaURL($0) }?.absoluteString, entry.avatar)
     }
 
+    func test_worldEntry_withoutMemberCount_forAVisitorWithoutAccount_stillDecodes() throws {
+        let entry = try decode(WorldEntry.self, #"{"identifier":"world","title":"World Wide","shareLinkIdentifier":"k"}"#)
+        XCTAssertEqual(entry.shareLinkIdentifier, "k")
+        XCTAssertEqual(entry.memberCount, 0)
+    }
+
     func test_formattedMemberCount_capped_appendsPlus() {
         let entry = WorldEntry(identifier: "world", title: "World Wide", shareLinkIdentifier: "k", memberCount: 199, memberCountCapped: true)
         XCTAssertEqual(entry.formattedMemberCount, "199+")
