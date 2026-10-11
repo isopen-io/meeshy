@@ -5254,7 +5254,7 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **L'en-tête est un vrai bouton accordéon** : `aria-expanded`, `aria-controls` vers la liste de ses rangées — qui reste dans le DOM repliée, VIDE et `hidden`, pour que la référence ne pointe jamais dans le vide —, cible de 44 px (le padding vertical du jeton passe dans le bouton : le bandeau ne s'épaissit pas deux fois), clavier natif, nom lu « Aujourd'hui, repliée, 32 messages non lus » (#8694, toute section désormais). Repliée, une section monte le compte de non-lus de ses conversations à côté du chevron, à jour sans déplier.
 - **Animation** (`styles/lens-section.css`, chunk de la liste) : seul le dépliage qu'un GESTE vient de provoquer s'anime (`data-section-unfolding`), 160 ms, opacité et `transform` seules — rien qui remette la liste en page — ; la première peinture d'une liste en cache s'affiche d'un coup ; le repli est immédiat ; le chevron tourne sous `motion-safe` seulement ; `prefers-reduced-motion` coupe tout.
 - **Recherche et filtres.** Pendant une recherche, rien n'est replié — ce qu'on cherche ne se cache pas derrière un chevron — et l'en-tête redevient un titre (un bouton sans effet mentirait) ; la mémoire n'est pas touchée : effacer la recherche rend la liste rangée. Un FILTRE (Tous, Non lus, Groupes, Directs…) ne déplie rien : il retire des rangées, et le compte d'une section repliée ne dit que ce que le filtre garde. La sentinelle de pagination ne s'arme que s'il y a au moins une rangée MONTÉE : toutes sections repliées, elle aurait vidé le corpus entier pour des sections que personne ne regarde.
-- **World Wide** épinglée reste en carte au-dessus des sections (#10004), hors pliage.
+- **World Wide** épinglée reste au-dessus des sections (#10004), hors pliage — en rangée ordinaire depuis D-197.
 - **Libellés** : `lensSection.label.*` dans les sept catalogues de la liste (`catalog-*-row-actions.ts`), mot pour mot ceux d'iOS (`lentille.section.*`, « Plus ancien », « Older », « Más antiguo »…) ; Épingles : « Épingles », « Pinned », « Fijadas », « Fixadas », « Angeheftet », « Fissate », « المثبّتة ».
 
 **Fixtures** : « Travail » range `c-annonces` et `c-page-01`, « Proches » `c-page-02` et `c-page-03` (`fixtures-categories.ts`) — les gates de navigateur replient des catégories sans passerelle.
@@ -5308,3 +5308,16 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **L'inventaire des avatars tient.** Dans le bouton de la fiche, l'avatar de l'auteur passe par un relais qui répand tout ce que l'hôte lui donne, photo comprise. L'hôte n'en retire que l'identité, parce qu'un lien de profil ne se pose pas dans un bouton. L'en-tête de la feuille est exempté dans `check-avatar-src`, avec l'endroit où la chaîne s'arrête : la liste blanche `worldParticipantCardSchema` ne porte aucune photo.
 
 **Ce qui reste.** La vue iOS est suivie dans #10125. L'écart avec la matrice d'administration est à trancher dans #10105.
+
+## D-197 — Sur `/chats`, World Wide et Meeshy Global sont des rangées de liste : aucune carte, et la rangée ouverte à côté se marque d'une bande pleine largeur (2026-10-11, #10191, amende #10004 et D-185)
+
+**Contexte.** Retour porteur du 2026-10-11 : World Wide et Meeshy Global se lisaient dans un cadre arrondi, une carte, au lieu d'une rangée comme les autres. Mesuré sur les captures d'avant : World Wide portait la peau de carte de #10004 (rayon 16, dégradé et bordure à l'accent, retrait de 12 px) ; Meeshy Global n'en avait aucune, mais OUVERTE à côté de la liste (≥ 1024 px, D-185) elle prenait la marque de rangée active, elle aussi au rayon 16 et rentrée de 8 px — la même carte, vue sur la conversation que le porteur consultait.
+
+**Décision.**
+- **World Wide** garde sa place en tête, hors sections et hors pliage (#10004), et son épingle ; elle perd sa peau. La propriété `card` de `LensRow` devient `pinnedAtHead`, qui ne pilote plus que l'épingle.
+- **La rangée ouverte** (`data-active`) se marque d'une bande teintée à l'accent, pleine largeur et à la hauteur exacte de sa case de 84 (`inset-block: 8px` sur le conteneur visuel de 100), sans rayon ni bordure : une sélection de liste, pas une carte.
+- **Le témoin** (`conversation-look.test.tsx`) parcourt toutes les règles `.lens-row` de `lens-row-meta.css` : aucune ne porte de rayon, de bordure ni de dégradé, et l'écran de liste ne passe plus de `card` à la rangée.
+
+**Ce que cela coûte.** Rien : des règles CSS en moins, aucune case ni aucune hauteur de rangée touchée, la Lentille inchangée.
+
+**iOS** : la liste iOS ne rend World Wide ni Meeshy Global en carte, rien à reporter. **Kotlin natif** : rien (gel).

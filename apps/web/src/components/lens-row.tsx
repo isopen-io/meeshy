@@ -140,12 +140,11 @@ export type LensRowProps = {
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
   now?: (() => number) | undefined;
   /**
-   * LA RANGÉE EN CARTE ÉPINGLÉE EN TÊTE DE LISTE (#10004) — World Wide.
-   * MÊME rangée (aperçu, non-lus, frappe, menu), même case de 84 : seule la
-   * peau change (carte teintée par l'accent, `lens-row-meta.css`), et
-   * l'épingle se voit toujours.
+   * LA RANGÉE ÉPINGLÉE EN TÊTE DE LISTE (#10004) — World Wide. Une rangée
+   * ORDINAIRE, sans cadre ni fond de carte (#10191) : seule l'épingle, qui se
+   * voit toujours, dit pourquoi elle est en tête.
    */
-  card?: boolean | undefined;
+  pinnedAtHead?: boolean | undefined;
 };
 
 function LensRowImpl({
@@ -164,7 +163,7 @@ function LensRowImpl({
   engagement,
   interfaceLanguage,
   now,
-  card = false,
+  pinnedAtHead = false,
 }: LensRowProps) {
   const unread = unreadCount > 0;
   /* LA CONVERSATION OUVERTE À CÔTÉ (#10073) — sur grand écran, la liste reste
@@ -301,8 +300,7 @@ function LensRowImpl({
          * réserve qui apparaîtrait/disparaîtrait décalerait le texte sous le
          * pointeur — un mouvement que rien ne justifie ici.
          */
-        className={`lens-row${card ? ' lens-row--card' : ''} absolute inset-x-0 flex items-center gap-3 ps-3 pe-12`}
-        {...(card ? { 'data-world-card': '' } : {})}
+        className="lens-row absolute inset-x-0 flex items-center gap-3 ps-3 pe-12"
         {...(active ? { 'data-active': '' } : {})}
         style={withAccent(accent, {
           top: -OVERHANG,
@@ -448,7 +446,7 @@ function LensRowImpl({
               (`ThemedConversationRow.swift:296-300`, qui annonce épinglage ET
               sourdine).
             */}
-            {flags.isPinned || card ? (
+            {flags.isPinned || pinnedAtHead ? (
               <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
             {/* La sourdine, elle, ne prend PAS de glyphe : la peau Lentille la
@@ -639,7 +637,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
-  if ((prev.card ?? false) !== (next.card ?? false)) return false;
+  if ((prev.pinnedAtHead ?? false) !== (next.pinnedAtHead ?? false)) return false;
 
   const s1 = prev.status ?? AT_REST;
   const s2 = next.status ?? AT_REST;
