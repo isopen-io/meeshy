@@ -43,9 +43,6 @@
  */
 
 export * from './socketio-events/event-names.js';
-export * from './socketio-events/viewing-event-names.js';
-export * from './socketio-events/session-event-names.js';
-export * from './socketio-events/call-recording-event-names.js';
 export * from './socketio-events/rate-limits.js';
 export * from './socketio-events/auth.js';
 export * from './socketio-events/user.js';
