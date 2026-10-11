@@ -38,9 +38,30 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
  * `options` passe tel quel à `register()` : `router.test.tsx` et
  * `magic-link.test.tsx` servent une `url` au document.
  */
-export const ensureHappyDomRegistered = (options?: Parameters<typeof GlobalRegistrator.register>[0]): void => {
+type RegisterOptions = NonNullable<Parameters<typeof GlobalRegistrator.register>[0]>;
+
+/**
+ * UN LIEN `target="_blank"` CLIQUÉ NE TÉLÉCHARGE RIEN SOUS `bun test` (2026-10-11).
+ *
+ * happy-dom 20.14.6 ouvre une PAGE ENFANT pour un tel lien et va chercher son
+ * adresse : le témoin des documents reçus (`attachment-blocks.test.tsx`, une
+ * rangée qui pointe `https://cdn/contrat.pdf`) faisait partir un vrai `fetch`,
+ * dont le refus (`ECONNREFUSED`, en CI) arrivait APRÈS les tests en erreur non
+ * gérée — 22 171 verts, 0 échec, et le job « Test web » rouge quand même. Un
+ * test unitaire n'ouvre jamais d'onglet : la navigation des pages enfants est
+ * coupée pour tous, la page principale gardant la sienne.
+ */
+const withoutChildPageNavigation = (options?: RegisterOptions): RegisterOptions => ({
+  ...options,
+  settings: {
+    ...options?.settings,
+    navigation: { ...options?.settings?.navigation, disableChildPageNavigation: true },
+  },
+});
+
+export const ensureHappyDomRegistered = (options?: RegisterOptions): void => {
   if (!GlobalRegistrator.isRegistered) {
-    GlobalRegistrator.register(options);
+    GlobalRegistrator.register(withoutChildPageNavigation(options));
   }
   installNodePortrait(globalThis.Node.prototype);
 };
