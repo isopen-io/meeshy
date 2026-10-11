@@ -28,18 +28,29 @@ export function useLiveEngagements(): EngagementState['byConversation'] {
   return useStore(engagementStore, (s) => s.byConversation);
 }
 
-/** Le fil ouvert relit son état serveur une fois par conversation (#8906). */
-export function useEngagementRevalidation(conversationId: string | undefined): void {
+export type EngagementRevalidation = {
+  readonly conversationId: string | undefined;
+  /** Un COMPTE : `GET /conversations/:id/engagement` est réservé aux comptes
+   * (403 `REGISTERED_USER_REQUIRED` pour une session invitée, #10122). */
+  readonly registered: boolean;
+  readonly deps?: Pick<typeof apiDeps, 'source' | 'transport'>;
+};
+
+/** Le fil ouvert relit son état serveur une fois par conversation (#8906) —
+ * celui d'un compte seulement : un invité n'a pas de flamme, et la porte le
+ * refuserait à chaque ouverture (#10122). */
+export function useEngagementRevalidation({ conversationId, registered, deps = apiDeps }: EngagementRevalidation): void {
+  const { source, transport } = deps;
   useEffect(() => {
-    if (conversationId === undefined || conversationId === '') return undefined;
-    if (__FIXTURES__ && apiDeps.source === 'fixtures') return undefined;
+    if (!registered || conversationId === undefined || conversationId === '') return undefined;
+    if (__FIXTURES__ && source === 'fixtures') return undefined;
     const controller = new AbortController();
     void revalidateConversationEngagement({
-      transport: apiDeps.transport,
+      transport,
       store: engagementStore,
       conversationId,
       signal: controller.signal,
     }).catch(() => undefined);
     return () => controller.abort();
-  }, [conversationId]);
+  }, [conversationId, registered, source, transport]);
 }

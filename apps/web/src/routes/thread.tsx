@@ -584,7 +584,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
   /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
-  useEngagementRevalidation(conversationId);
+  useEngagementRevalidation({ conversationId, registered: !viewer.isAnonymous });
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
