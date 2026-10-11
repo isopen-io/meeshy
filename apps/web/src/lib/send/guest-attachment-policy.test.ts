@@ -72,6 +72,11 @@ describe('guestAttachmentKindsFor — les familles qui gouvernent CE fil', () =>
     const session = guestSession(guest({ link: WORLD_SHARE_LINK_IDENTIFIER, attachmentKinds: ['text', 'audio', 'image', 'pdf'] }));
     expect(guestAttachmentKindsFor(session, 'c-world')).toEqual(['text', 'audio']);
   });
+
+  test('une famille enregistrée que ce client ne connaît pas n’ouvre rien — fail-closed', () => {
+    const session = guestSession(guest({ attachmentKinds: ['exe', 'text'] }));
+    expect(guestAttachmentKindsFor(session, 'c-world')).toEqual(['text']);
+  });
 });
 
 describe('guestAcceptAttribute — le sélecteur ne propose que les familles ouvertes', () => {

@@ -6,7 +6,7 @@ import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
- * L'ENTRÉE PUBLIQUE DE WORLD WIDE (#10000) — `GET /api/v1/world`, sans
+ * L'ENTRÉE PUBLIQUE DE WORLD WIDE (#10000) — `worldEndpoints.root` (GET), sans
  * identité, identique pour tous : la clé de jonction (`shareLinkIdentifier`),
  * jamais écrite en dur, et l'effectif. Un 404 `WORLD_UNAVAILABLE` dit qu'il n'y
  * a pas d'entrée ouverte.
