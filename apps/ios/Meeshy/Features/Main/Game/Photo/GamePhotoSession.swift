@@ -10,8 +10,14 @@ struct PhotoNotice: Equatable {
         case error
     }
 
+    /// Le geste que l'avis propose : enregistrer dans Photos quand le carnet n'a plus de place (#10161).
+    enum Action: Equatable {
+        case saveToLibrary
+    }
+
     let tone: Tone
     let text: String
+    var action: Action?
 }
 
 /// LE DÉROULÉ D'UNE PHOTO (#9382) — conception, partie VI :
@@ -23,7 +29,7 @@ struct PhotoNotice: Equatable {
 ///     photo se fige.
 ///  4. Image 9:16 pour la story et 1:1 pour le profil : enregistrer dans Photos,
 ///     partager, ou garder au carnet.
-///  5. « Plus tard » laisse le moment en attente 7 jours dans le carnet.
+///  5. « Plus tard » laisse le moment en attente dans le carnet, sans échéance (#10161).
 ///
 /// La carte porte le lien de parrainage de l'utilisateur en carré QR (#9554) et sa Flamme (#7742, `ReferralCard`) ;
 /// le partage transmet aussi le lien en texte. Le lien d'un jeton EXISTANT se lit PENDANT la proposition
@@ -301,14 +307,34 @@ final class GamePhotoSession: ObservableObject {
 
     // MARK: - Étape 4 : le résultat
 
+    /// Garde le 9:16, la photo d'origine réduite (jamais pour une carte seule) et la recette (#10161).
+    /// Un disque plein se DESSINE et propose Photos ; l'entrée n'est pas créée.
     func keep() async {
         guard case .result = state else { return }
-        var ok = false
-        if let kept = exportable()?.kept { ok = await notebook.keep(moment, photo: kept) }
-        send(.kept(ok))
-        notice = ok
-            ? PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
-            : PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+        var outcome = NotebookKeepOutcome.unavailable
+        if let composed = exportable() {
+            let taken = composedMode == .card ? nil : composedSource
+            var source: Data?
+            if let taken {
+                let box = SendableSourceImage(image: taken)
+                source = await Task.detached(priority: .userInitiated) { GamePhotoNotebook.sourceData(from: box.image) }.value
+            }
+            let recipe = NotebookRecipe(mirror: taken == nil ? nil : composedMode == .selfie, showLink: referral != nil && linkOnCard)
+            outcome = await notebook.keep(moment, photo: KeptPhoto(story: composed.storyData, mode: composed.mode, source: source, recipe: recipe))
+        }
+        send(.kept(outcome == .kept))
+        switch outcome {
+        case .kept:
+            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
+        case .noSpace:
+            notice = PhotoNotice(
+                tone: .error,
+                text: String(localized: "game.photo.notice.no_space", defaultValue: "Plus de place sur cet appareil : la photo n’a pas été gardée.", bundle: .main),
+                action: .saveToLibrary
+            )
+        case .unavailable:
+            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+        }
     }
 
     /// Enregistre dans Photos (autorisation en ajout seul) l'image du format choisi.
@@ -326,4 +352,10 @@ final class GamePhotoSession: ObservableObject {
         guard completed else { return }
         notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.shared", defaultValue: "Image partagée.", bundle: .main))
     }
+}
+
+/// Traversée de la photo prise vers la tâche qui la réduit pour le carnet — même discipline que
+/// `SendableAttachmentImage` : l'image n'est que LUE, jamais mutée.
+private nonisolated struct SendableSourceImage: @unchecked Sendable {
+    let image: UIImage
 }

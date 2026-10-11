@@ -290,6 +290,20 @@ struct GamePhotoFlowView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .accessibilityIdentifier("game.photo.notice")
+                if notice.action == .saveToLibrary {
+                    Button {
+                        HapticFeedback.light()
+                        Task { await session.save(square: squareFormat) }
+                    } label: {
+                        Text(String(localized: "game.photo.notice.no_space_save", defaultValue: "L’enregistrer dans Photos", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(minHeight: 44)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .background(Capsule().fill(MeeshyColors.brandPrimary))
+                    }
+                    .accessibilityIdentifier("game.photo.no_space_save")
+                }
             }
             HStack(spacing: MeeshySpacing.sm) {
                 resultButton(String(localized: "game.photo.save", defaultValue: "Enregistrer", bundle: .main), "square.and.arrow.down", id: "game.photo.save") {

@@ -21,6 +21,7 @@ struct GameNotebookPage: View {
                 if !viewModel.pending.isEmpty { pendingSection }
                 if !viewModel.catchUp.isEmpty { catchUpSection }
                 if !viewModel.kept.isEmpty { keptSection }
+                if viewModel.isLoaded { placeCaption }
             }
         }
         .task { await viewModel.load() }
@@ -38,6 +39,18 @@ struct GameNotebookPage: View {
     private struct SharedImage: Identifiable {
         let image: UIImage
         var id: ObjectIdentifier { ObjectIdentifier(image) }
+    }
+
+    /// La place qu'occupe le carnet, et où vivent ses photos (#10161) : elles ne quittent pas l'appareil.
+    private var placeCaption: some View {
+        let deviceOnly = String(localized: "game.notebook.device_only", defaultValue: "Tes photos vivent sur cet appareil.", bundle: .main)
+        let size = ByteCountFormatter.string(fromByteCount: viewModel.occupiedBytes, countStyle: .file)
+        let occupied = String(format: String(localized: "game.notebook.size", defaultValue: "Le carnet occupe %@.", bundle: .main), size)
+        return Text(viewModel.occupiedBytes > 0 ? "\(occupied) \(deviceOnly)" : deviceOnly)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+            .foregroundColor(theme.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("game.notebook.place")
     }
 
     private var emptyState: some View {
