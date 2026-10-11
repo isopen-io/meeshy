@@ -449,13 +449,18 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
 // `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
 // `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
-// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11. 
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11.
+//
 // 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
 // (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
 // Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
 // en touchant un auteur est #10125, qui ramène la référence à 292. Valeur MESURÉE le
 // 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 293;
+//
+// 293 -> 291 (2026-10-11) : les deux mouvements ci-dessus, partis chacun de 292, se sont
+// croisés sur dev — #10018 (−2) et #10102 (+1) donnent 291, et non 293. Valeur MESURÉE
+// le 2026-10-11 sur dev 33e24c995c (CI run 38133983531 rouge sur 293).
+const BASELINE_DEAD_ENTRIES = 291;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
