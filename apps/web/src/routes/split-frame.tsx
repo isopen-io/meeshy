@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { sessionStore } from '@/lib/api/session';
 import type { FrameProps } from '@/lib/router';
+import { isWide, splitPaneOf, subscribeWide } from '@/lib/view/split-query';
 import { ScrollportKeyScope } from '@/lib/view/use-scrollport-memory';
 
 /**
@@ -19,41 +20,10 @@ import { ScrollportKeyScope } from '@/lib/view/use-scrollport-memory';
  * Sous 1024 px, et pour l'invité d'un lien (World Wide sans compte, qui n'a pas
  * de liste), il rend l'écran routé TEL QUEL : rien ne change.
  *
- * Le seuil est OBSERVÉ hors React (`matchMedia`, un abonnement par cadre),
- * jamais mesuré à chaque rendu : franchir 1024 px bascule la vue sans
- * rechargement, et aucun écouteur `resize` ne tourne.
+ * Ce module n'est JAMAIS dans la première peinture (#10086) : la table des
+ * routes ne le charge qu'au moment où la règle (`lib/view/split-query.ts`)
+ * accorde le cadre — grand écran, liste ou fil, lecteur avec une liste.
  */
-export const SPLIT_QUERY = '(min-width: 1024px)';
-
-export type SplitPane = 'empty' | 'thread';
-
-export function splitPaneOf({
-  routeKey,
-  wide,
-  guest,
-}: {
-  readonly routeKey: string;
-  readonly wide: boolean;
-  readonly guest: boolean;
-}): SplitPane | null {
-  if (!wide || guest) return null;
-  if (routeKey === 'list') return 'empty';
-  if (routeKey === 'thread') return 'thread';
-  return null;
-}
-
-function wideMedia(): MediaQueryList | null {
-  return typeof window === 'undefined' || typeof window.matchMedia !== 'function' ? null : window.matchMedia(SPLIT_QUERY);
-}
-
-function subscribeWide(onChange: () => void): () => void {
-  const media = wideMedia();
-  if (media === null) return () => {};
-  media.addEventListener('change', onChange);
-  return () => media.removeEventListener('change', onChange);
-}
-
-const isWide = (): boolean => wideMedia()?.matches ?? false;
 
 /* L'état vide du volet ne se charge que sur grand écran, à la première
    ouverture de la liste : ses libellés et son glyphe ne pèsent rien sur la

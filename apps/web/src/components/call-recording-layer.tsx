@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { CallRecordingNotice, CallRecordingState } from '@/lib/calls/call-recording';
-import { callRecording, callRecordingStore } from '@/lib/calls/call-recording-live';
+import { callRecording } from '@/lib/calls/call-recording-live';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { callStore } from '@/lib/calls/call-store';
 import { translateCallRecording as translate } from '@/lib/i18n-call-recording-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';

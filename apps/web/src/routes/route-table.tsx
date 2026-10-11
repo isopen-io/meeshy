@@ -1,3 +1,7 @@
+import { lazy, useSyncExternalStore, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
+
+import { sessionStore } from '@/lib/api/session';
 import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -6,8 +10,8 @@ import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { GameScreen } from '@/lib/i18n-game-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
-import { createRouter } from '@/lib/router';
-import { SplitFrame } from '@/routes/split-frame';
+import { createRouter, type FrameProps } from '@/lib/router';
+import { isWide, splitPaneOf, subscribeWide } from '@/lib/view/split-query';
 
 /**
  * LA TABLE DES ROUTES — le seul endroit du depot qui connait les adresses.
@@ -665,11 +669,32 @@ export function NotFound() {
   );
 }
 
+/* LE CADRE CÔTE À CÔTE, CHARGÉ À LA DEMANDE (#10086, après #10073 / D-185).
+   Le cadre n'est utile qu'à partir de 1024 px : un téléphone ne doit pas le
+   télécharger avant son premier pixel. La règle (`split-query.ts`, quelques
+   lignes) reste dans le socle ; le cadre lui-même, sa mémoire de scrollport
+   et son volet vide ne partent que lorsqu'elle l'accorde. Sur un grand écran
+   au démarrage, le chunk part dès l'évaluation de ce module, en parallèle du
+   premier rendu — jamais à la suite de l'écran qu'il encadre ; s'il échoue,
+   c'est `lazy` qui redemande et qui le dit au rendu. */
+const splitFrameModule = () => import('@/routes/split-frame').then(({ SplitFrame }) => ({ default: SplitFrame }));
+const SplitFrame = lazy(splitFrameModule);
+if (isWide()) void splitFrameModule().catch(() => undefined);
+
+/** Sous 1024 px, sur toute autre route que la liste et le fil, et pour
+ * l'invité d'un lien : l'écran routé TEL QUEL, sans rien charger. */
+export function DeferredSplitFrame(props: FrameProps): ReactNode {
+  const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
+  const guest = useStore(sessionStore, (state) => state.session.status === 'guest');
+  if (splitPaneOf({ routeKey: props.routeKey, wide, guest }) === null) return props.screen;
+  return <SplitFrame {...props} />;
+}
+
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
 export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
   /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
      1024 px, le cadre rend l'écran routé tel quel. */
-  frame: SplitFrame,
+  frame: DeferredSplitFrame,
 });
