@@ -206,9 +206,6 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
      le réserve à ADMIN et BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous
      l'accès à l'espace — un MODERATOR ne verrait qu'un refus. */
   section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
-  /* LE CALENDRIER DES SAISONS (#10232) — `canManageGame` : la tuile porte le seuil de ce qu'elle
-     OUVRE (programmer, décaler, mettre en pause, valider une proposition de l'IA). */
-  section('gameSeasons', { permission: 'canManageGame', glyph: 'calendarBlank', ready: true }),
   section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 

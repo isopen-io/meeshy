@@ -6,7 +6,7 @@ import { DEFAULT_SEASON_SCHEDULE, normalizeSeasonSchedule, type SeasonSchedule }
 import { apiDeps } from './deps';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
-import { GAME_V2_QUERY_PREFIX } from './game-v2-queries';
+import { SEASON_CALENDAR_QUERY_KEY } from './game-v2-queries';
 
 /**
  * LE CALENDRIER DES SAISONS SERVI (#10232, #10016) — `GET /me/game/seasons/calendar`,
@@ -33,7 +33,7 @@ import { GAME_V2_QUERY_PREFIX } from './game-v2-queries';
 const API_PREFIX = '/api/v1';
 const CALENDAR_ROUTE = '/me/game/seasons/calendar';
 export const SEASON_CALENDAR_STORAGE_KEY = 'meeshy.game.season-calendar.v1';
-export const seasonCalendarQueryKey = [...GAME_V2_QUERY_PREFIX, 'season-calendar'] as const;
+export const seasonCalendarQueryKey = SEASON_CALENDAR_QUERY_KEY;
 
 /** L'ETag que la passerelle sert pour une révision — celui qu'on renvoie en `If-None-Match`. */
 export const seasonScheduleEtag = (revision: number): string => `"season-schedule-${revision}"`;

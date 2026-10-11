@@ -83,7 +83,6 @@ describe('le registre des dix-neuf sections (spécification § 1.2)', () => {
       ['languages', 'platform', 'canViewAnalytics', false, 'adminLanguages'],
       ['agent', 'platform', 'canManageAgent', false, 'adminAgent'],
       ['engagementScale', 'platform', 'canAccessAdmin', true, 'adminEngagementScale'],
-      ['gameSeasons', 'platform', 'canManageGame', false, 'adminGameSeasons'],
       ['settings', 'platform', 'canAccessAdmin', false, 'adminSettings'],
     ]);
   });
@@ -213,20 +212,6 @@ describe('visibleAdminSections — fail-closed par construction (registres synth
     const moderateur: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageConversations: true, canManageAgent: false };
     expect(ids(moderateur, 'MODERATOR')).not.toContain('agent');
     expect(ids({ ...AUCUNE, canAccessAdmin: true, canManageAgent: true })).toContain('agent');
-  });
-});
-
-describe('la tuile « Jeu — saisons » (#10232)', () => {
-  const ids = (permissions: AdminPermissions | null, role?: string | null) => visibleAdminSections(permissions, role).map((s) => s.id);
-
-  test('se lit sur `canManageGame`, jamais sur l’accès à l’espace', () => {
-    expect(ids({ ...AUCUNE, canAccessAdmin: true }, 'MODERATOR')).not.toContain('gameSeasons');
-    expect(ids({ ...AUCUNE, canAccessAdmin: true, canManageGame: true }, 'ADMIN')).toContain('gameSeasons');
-  });
-
-  test('l’accès à l’espace précède : `canManageGame` seule n’ouvre rien', () => {
-    expect(ids({ ...AUCUNE, canManageGame: true }, 'ADMIN')).toEqual([]);
-    expect(ids(null, 'ADMIN')).toEqual([]);
   });
 });
 

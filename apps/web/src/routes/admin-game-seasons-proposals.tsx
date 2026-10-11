@@ -9,7 +9,7 @@ import { AdminFormActions, AdminFormError, AdminSelect, AdminTextArea } from '@/
 import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
-import { draftOfProposal, editBody, hasIssues, validateDraft, type DraftIssues, type SeasonDraft } from '@/lib/admin/game-season-form';
+import { draftOfProposal, editBody, hasIssues, validateDraft, type DraftIssues, type SeasonDraft, ADMIN_SEASON_CALENDAR_QUERY_KEY } from '@/lib/admin/game-season-form';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_GAME_SEASONS_QUERY_KEY,
@@ -21,7 +21,6 @@ import {
   type ProposalStatusFilter,
   type SeasonProposal,
 } from '@/lib/api/admin-game-seasons';
-import { seasonCalendarQueryKey } from '@/lib/api/game-season-calendar';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { appEventFaultText, seasonFailureText } from '@/routes/admin-game-seasons-errors';
 import { SeasonFields } from '@/routes/admin-game-seasons-fields';
@@ -133,7 +132,7 @@ function PendingReview({
   const refresh = async (): Promise<void> => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ADMIN_GAME_SEASONS_QUERY_KEY }),
-      queryClient.invalidateQueries({ queryKey: seasonCalendarQueryKey }),
+      queryClient.invalidateQueries({ queryKey: ADMIN_SEASON_CALENDAR_QUERY_KEY }),
     ]);
   };
 

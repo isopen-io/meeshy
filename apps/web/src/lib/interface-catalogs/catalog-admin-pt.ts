@@ -53,8 +53,6 @@ const pt = {
   'admin.nav.settings.hint': 'Seu acesso e as preferências do espaço',
   'admin.nav.engagementScale': 'Tabela de pontos',
   'admin.nav.engagementScale.hint': 'O que cada gesto rende em pontos',
-  'admin.nav.gameSeasons': 'Jogo — temporadas',
-  'admin.nav.gameSeasons.hint': 'Programar, adiar ou pausar as temporadas',
   'admin.users.search': 'Procurar uma conta',
   'admin.users.count': '{count} conta(s)',
   'admin.users.unavailable': 'Lista indisponível no momento.',
