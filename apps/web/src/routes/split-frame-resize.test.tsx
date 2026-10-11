@@ -96,6 +96,13 @@ const handleOf = (el: HTMLElement): HTMLElement => {
 
 const frameOf = (el: HTMLElement): HTMLElement => el.querySelector<HTMLElement>('[data-split-frame]')!;
 
+const sheet = readFileSync(new URL('../styles/split-frame.css', import.meta.url).pathname, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+const ruleOf = (selector: string): string => {
+  const start = sheet.indexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  return sheet.slice(start, sheet.indexOf('}', start));
+};
+
 const listWidthOf = (el: HTMLElement): string => frameOf(el).style.getPropertyValue('--split-list-w');
 
 const press = (handle: HTMLElement, key: string, init: KeyboardEventInit = {}) =>
@@ -128,14 +135,18 @@ describe('le séparateur se présente (#10101)', () => {
     expect(handle.getAttribute('aria-valuetext')).toContain('30');
   });
 
-  test('la colonne de la liste est bornée par la feuille, sur les cotes que pose le cadre : 20rem, 24rem, 40 %', () => {
+  test('le cadre borne la colonne de la liste, sur les cotes qu’il porte : 20rem, 24rem, 40 %', () => {
     const frame = frameOf(mount());
     expect(frame.style.getPropertyValue('--split-list-min')).toBe('20rem');
     expect(frame.style.getPropertyValue('--split-list-default')).toBe('24rem');
     expect(frame.style.getPropertyValue('--split-list-max')).toBe('40%');
-    const css = readFileSync(new URL('../styles/split-frame.css', import.meta.url).pathname, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    const rule = css.slice(css.indexOf('[data-split-list] {'), css.indexOf('}', css.indexOf('[data-split-list] {')));
-    expect(rule).toContain('width: clamp(var(--split-list-min), var(--split-list-w, var(--split-list-default)), var(--split-list-max))');
+    const rule = ruleOf('[data-split-frame]').replace(/\s+/g, ' ');
+    expect(rule).toContain('grid-template-columns: clamp(var(--split-list-min), var(--split-list-w, var(--split-list-default)), var(--split-list-max)) 1px minmax(0, 1fr)');
+  });
+
+  test('la largeur qui change à chaque image ne s’hérite pas : seul le cadre recalcule son style', () => {
+    const rule = ruleOf('@property --split-list-w');
+    expect(rule).toContain('inherits: false');
   });
 
   test('le libellé parle les sept langues', () => {
