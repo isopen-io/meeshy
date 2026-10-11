@@ -22,7 +22,7 @@ const setup = (chestFragmentDays: number, claimedSteps: number[] = []) => {
   seedUser(db, {}, OTHER);
   for (let i = 0; i < chestFragmentDays; i += 1) {
     const day = String(i + 1).padStart(2, '0');
-    db.gameDay.rows.push({ id: `d${i}`, userId: USER, dayKey: `2026-09-${day}`, rerollCount: 0, chestClaimedAt: new Date(), chestFragment: true });
+    db.gameDay.rows.push({ id: `d${i}`, userId: USER, dayKey: `2026-09-${day}`, rerollCount: 0, chestClaimedAt: new Date(`2026-09-${day}T12:00:00Z`), chestFragment: true });
   }
   db.gameDay.rows.push({ id: 'sans', userId: USER, dayKey: '2026-10-01', rerollCount: 0, chestClaimedAt: new Date(), chestFragment: false });
   if (claimedSteps.length > 0) db.gameSeason.rows.push({ id: 's1', userId: USER, number: 1, claimedSteps, stars: 0 });
@@ -70,7 +70,7 @@ describe('TrophyService.showcaseFor — la constellation (#10053)', () => {
   it('un fragment collecté ce mois-ci ne change RIEN pour un visiteur avant le mois suivant ; le membre le voit tout de suite', async () => {
     const { db, service } = setup(9);
     db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: OTHER, receiverId: USER });
-    db.gameDay.rows.push({ id: 'today', userId: USER, dayKey: '2026-10-11', rerollCount: 0, chestClaimedAt: new Date(), chestFragment: true });
+    db.gameDay.rows.push({ id: 'today', userId: USER, dayKey: '2026-10-11', rerollCount: 0, chestClaimedAt: new Date('2026-10-11T11:00:00Z'), chestFragment: true });
     const friend = { viewer: { userId: OTHER, role: 'USER' as const }, targetId: USER };
 
     expect((await service.showcaseFor({ ...friend, now: NOW })).constellation).toEqual({ stars: 0 });
@@ -79,9 +79,20 @@ describe('TrophyService.showcaseFor — la constellation (#10053)', () => {
     expect((await service.showcaseFor({ ...friend, now: new Date('2026-11-01T12:00:00Z') })).constellation).toEqual({ stars: 1 });
   });
 
+  it('un coffre d’un jour LOCAL d’avant le mois, réclamé après le 1er UTC (fuseau négatif, journée qui déborde), ne compte qu’au mois suivant', async () => {
+    const { db, service } = setup(9);
+    db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: OTHER, receiverId: USER });
+    db.gameDay.rows.push({ id: 'late', userId: USER, dayKey: '2026-10-31', rerollCount: 0, chestClaimedAt: new Date('2026-11-01T18:30:00Z'), chestFragment: true });
+    const friend = { viewer: { userId: OTHER, role: 'USER' as const }, targetId: USER };
+
+    expect((await service.showcaseFor({ ...friend, now: new Date('2026-11-01T17:00:00Z') })).constellation).toEqual({ stars: 0 });
+    expect((await service.showcaseFor({ ...friend, now: new Date('2026-11-01T19:00:00Z') })).constellation).toEqual({ stars: 0 });
+    expect((await service.showcaseFor({ ...friend, now: new Date('2026-12-01T00:30:00Z') })).constellation).toEqual({ stars: 1 });
+  });
+
   it('les étapes d’une saison EN COURS ne comptent pour un visiteur qu’à partir du mois qui suit sa fin', async () => {
     const { db, service } = setup(0, [5, 15, 25, 35]);
-    db.gameDay.rows.push(...Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, userId: USER, dayKey: `2026-11-0${i + 1}`, rerollCount: 0, chestClaimedAt: new Date(), chestFragment: true })));
+    db.gameDay.rows.push(...Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, userId: USER, dayKey: `2026-11-0${i + 1}`, rerollCount: 0, chestClaimedAt: new Date(`2026-11-0${i + 1}T12:00:00Z`), chestFragment: true })));
     db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: OTHER, receiverId: USER });
     const friend = { viewer: { userId: OTHER, role: 'USER' as const }, targetId: USER };
 
