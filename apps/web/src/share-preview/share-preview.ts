@@ -24,7 +24,7 @@ export type { SharePreviewFamily } from './share-preview-copy';
  * ne porte pas d'`og:url` (le robot garde l'adresse qu'il a demandée). Ce qui
  * dépend d'une donnée — le titre d'une invitation ouverte, la cible d'un lien
  * suivi — se rend côté PASSERELLE, aux robots seuls (routeurs Traefik
- * `*-unfurl`, décision D-197).
+ * `*-unfurl`, décision D-198).
  */
 
 /** Les adresses de chaque famille — l'ordre est celui de nginx, la première qui répond gagne. */
@@ -63,7 +63,7 @@ export function sharePreviewFamily(path: string): SharePreviewFamily {
 export const SHARE_PREVIEW_LANGUAGE_RULES: readonly { readonly pattern: string; readonly language: LandingLanguage }[] = [
   ...LANDING_LANGUAGES.map((language) => ({ pattern: `^${language}_`, language })),
   ...LANDING_LANGUAGES.filter((language) => language !== ROOT_LANDING_LANGUAGE).map((language) => ({
-    pattern: `^[^|]*[|] *${language}(?![a-z])`,
+    pattern: `^[^|]*[|]${language}(?![a-z])`,
     language,
   })),
 ];

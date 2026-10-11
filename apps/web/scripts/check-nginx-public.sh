@@ -80,6 +80,29 @@ expect_status /c/64f0c0ffee0000000000abcd '200 text/html'
 expect_status /chat/mshy_world '200 text/html'
 expect_status /world '200 text/html'
 
+# L'APERÇU DE CHAQUE ADRESSE (#10192) — ce qu'un robot de messagerie lit : le
+# titre de la famille dans la langue demandée, la grande carte, et RIEN de
+# l'adresse elle-même (identifiant, jeton) dans le document servi.
+expect_og() {
+  body=$(curl -s -A 'facebookexternalhit/1.1' -H "Accept-Language: $2" "$base$1")
+  case "$body" in
+    *"<meta property=\"og:title\" content=\"$3\">"*'<meta name="twitter:card" content="summary_large_image">'*) echo "ok    $1 [$2] -> og:title « $3 »" ;;
+    *) echo "FAUX  $1 [$2] sans og:title « $3 » ni grande carte"; fail=1 ;;
+  esac
+  if [ -n "${4:-}" ] && printf '%s' "$body" | grep -qF "$4"; then
+    echo "FAUX  $1 divulgue « $4 » dans le document servi"; fail=1
+  fi
+}
+expect_og /world fr 'World Wide — la conversation du monde entier, sur Meeshy'
+expect_og /login en-US,en 'Sign in to Meeshy'
+expect_og /signup/affiliate/aff_123 de-DE 'Ein Meeshy-Konto erstellen' aff_123
+expect_og /chats pt-BR 'Meeshy — o mensageiro que traduz'
+expect_og /c/64f0c0ffee0000000000abcd ar 'محادثة على Meeshy' 64f0c0ffee0000000000abcd
+expect_og /chat/mshy_world es 'Una invitación en Meeshy' mshy_world
+expect_og /l/Ab3xYz it 'Un link condiviso su Meeshy' Ab3xYz
+expect_og /about fr 'À propos de Meeshy'
+expect_status /shell-og/app/fr.html '404 text/html'
+
 # LE STAGING NE S'INDEXE PAS (#10123) — l'hôte seul le distingue.
 staging_robots=$(curl -s -H 'Host: staging.meeshy.me' "$base/robots.txt")
 case "$staging_robots" in

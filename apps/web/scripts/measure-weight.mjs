@@ -61,7 +61,26 @@ const critical = documentReferences
   .filter((f) => existsSync(join(dist, f)))
   .map((f) => ({ file: f, gzip: gz(join(dist, f)) }));
 
-const documentGzip = gzipSync(Buffer.from(index), { level: 9 }).length;
+/**
+ * LE DOCUMENT LE PLUS LOURD qu'une adresse de l'application sert (#10192).
+ * nginx sert aux adresses de l'application une copie de la coquille habillée
+ * de son aperçu Open Graph (`shell-og/<famille>/<langue>.html`) — les mêmes
+ * scripts, quelques balises de plus. La première peinture se mesure sur la
+ * plus lourde : mesurer `index.html` seul serait un chiffre faux dans le sens
+ * rassurant.
+ */
+const shellOgDir = join(dist, 'shell-og');
+const servedDocuments = [
+  { file: 'index.html', html: index },
+  ...(existsSync(shellOgDir)
+    ? readdirSync(shellOgDir, { recursive: true })
+        .map(String)
+        .filter((f) => f.endsWith('.html'))
+        .map((f) => ({ file: `shell-og/${f}`, html: readFileSync(join(shellOgDir, f), 'utf8') }))
+    : []),
+].map(({ file, html }) => ({ file, gzip: gzipSync(Buffer.from(html), { level: 9 }).length }));
+const heaviestDocument = servedDocuments.reduce((a, b) => (b.gzip > a.gzip ? b : a));
+const documentGzip = heaviestDocument.gzip;
 
 // Tout le reste du repertoire : les ecrans a la demande.
 const allAssets = [];
@@ -253,7 +272,7 @@ if (asJson) {
 } else {
   console.log(`\n  runtime ${measure.runtime} · cible ${measure.target}\n`);
   for (const c of critical) console.log(`  ${String(kb(c.gzip)).padStart(8)} Ko  ${c.file}`);
-  console.log(`  ${String(kb(documentGzip)).padStart(8)} Ko  index.html`);
+  console.log(`  ${String(kb(documentGzip)).padStart(8)} Ko  ${heaviestDocument.file} (document le plus lourd servi)`);
   console.log(`  ${'-'.repeat(48)}`);
   console.log(`  ${String(measure.first_paint_kb).padStart(8)} Ko  AVANT LE PREMIER PIXEL`);
   console.log(`  ${String(measure.requests_before_first_pixel).padStart(8)}     requetes`);

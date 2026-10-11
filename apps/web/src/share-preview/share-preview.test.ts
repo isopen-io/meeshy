@@ -47,7 +47,7 @@ const meta = (html: string, key: string): string | null =>
   new RegExp(`<meta (?:property|name)="${key.replace(/:/g, ':')}" content="([^"]*)">`).exec(html)?.[1] ?? null;
 
 describe('la famille d’une adresse', () => {
-  test.each([
+  const cases = [
     ['/world', 'world'],
     ['/world/', 'world'],
     ['/login', 'login'],
@@ -62,13 +62,16 @@ describe('la famille d’une adresse', () => {
     ['/u/zoe', 'app'],
     ['/worldwide', 'app'],
     ['/loginx', 'app'],
-  ] as const)('%s → %s', (path, family) => {
-    expect(sharePreviewFamily(path)).toBe(family);
-  });
+  ] as const;
+  for (const [path, family] of cases) {
+    test(`${path} → ${family}`, () => {
+      expect(sharePreviewFamily(path)).toBe(family);
+    });
+  }
 });
 
 describe('la langue de l’aperçu, lue sur la requête du robot', () => {
-  test.each([
+  const cases: readonly (readonly [{ readonly facebookLocale?: string; readonly acceptLanguage?: string }, string])[] = [
     [{}, 'fr'],
     [{ acceptLanguage: 'en-US,en;q=0.9' }, 'en'],
     [{ acceptLanguage: 'pt-BR' }, 'pt'],
@@ -80,9 +83,12 @@ describe('la langue de l’aperçu, lue sur la requête du robot', () => {
     [{ facebookLocale: 'es_ES', acceptLanguage: 'en-US' }, 'es'],
     [{ facebookLocale: 'fr_FR', acceptLanguage: 'en-US' }, 'fr'],
     [{ facebookLocale: 'ja_JP', acceptLanguage: 'it-IT' }, 'it'],
-  ] as const)('%o → %s', (headers, language) => {
-    expect(sharePreviewLanguage(headers)).toBe(language);
-  });
+  ];
+  for (const [headers, language] of cases) {
+    test(`${JSON.stringify(headers)} → ${language}`, () => {
+      expect(sharePreviewLanguage(headers)).toBe(language);
+    });
+  }
 });
 
 describe('le document d’aperçu', () => {
