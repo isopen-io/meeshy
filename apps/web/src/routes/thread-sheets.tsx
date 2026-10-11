@@ -1,8 +1,9 @@
 
+import { lazy, Suspense } from 'react';
+
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { MessageDetailSheet } from '@/components/message-detail-sheet';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
 import { ReactionSheet } from '@/components/reaction-sheet';
@@ -16,6 +17,11 @@ import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { ExportCatalogGate } from './export-catalog-gate';
 import { href, navigate } from './route-table';
 import { MessageExportSheet } from './thread-export-sheet';
+
+/** « PLUS… » se charge au geste (#10149) : la fiche détail et sa section
+ * d'accusés nominatifs ne servent qu'au message visé, jamais au premier rendu
+ * du fil — les embarquer gonflait le chunk « thread » au-delà de son plafond. */
+const MessageDetailSheet = lazy(() => import('@/components/message-detail-sheet').then((m) => ({ default: m.MessageDetailSheet })));
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
  * `Pick`, jamais le contrôleur entier : le contrat de ce composant se lit
@@ -149,30 +155,32 @@ export function ThreadMessageSheets({
         const imageable = imageableOf(menuContext);
         const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (
-          <MessageDetailSheet
-            choices={
-              exposed
-                ? translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
-                : []
-            }
-            reactions={reactionEntries(detailMessage.reactionSummary)}
-            sentAt={new Date(detailMessage.createdAt)}
-            delivery={isMineOf(detailMessage, viewerId) ? deliveryStatusOf(detailMessage) : null}
-            locale={readerLocale}
-            conversationId={conversationId}
-            messageId={detailMessage.id}
-            attachments={exposed ? (detailMessage.attachments ?? []) : []}
-            star={messageMenu.starOf(detailFor)}
-            create={{
-              onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
-              onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
-            }}
-            onPickLanguage={(code) => {
-              messageMenu.onPickLanguage(detailFor, code);
-              messageMenu.setDetailFor(null);
-            }}
-            onClose={() => messageMenu.setDetailFor(null)}
-          />
+          <Suspense fallback={null}>
+            <MessageDetailSheet
+              choices={
+                exposed
+                  ? translationChoices({ message: detailMessage, preferredLanguages: readerLanguages, servedLanguage: servedDetail?.language ?? '' })
+                  : []
+              }
+              reactions={reactionEntries(detailMessage.reactionSummary)}
+              sentAt={new Date(detailMessage.createdAt)}
+              delivery={isMineOf(detailMessage, viewerId) ? deliveryStatusOf(detailMessage) : null}
+              locale={readerLocale}
+              conversationId={conversationId}
+              messageId={detailMessage.id}
+              attachments={exposed ? (detailMessage.attachments ?? []) : []}
+              star={messageMenu.starOf(detailFor)}
+              create={{
+                onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
+                onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
+              }}
+              onPickLanguage={(code) => {
+                messageMenu.onPickLanguage(detailFor, code);
+                messageMenu.setDetailFor(null);
+              }}
+              onClose={() => messageMenu.setDetailFor(null)}
+            />
+          </Suspense>
         );
       })(messageMenu.detailFor)}
       {((request) => {
