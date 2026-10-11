@@ -4,10 +4,14 @@
  * `@meeshy/shared/types/world-participant-card`. Décision et finalité :
  * `services/gateway/decisions/2026-10-11-l-equipe-lit-la-fiche-d-un-participant-de-world-wide-10102.md`.
  *
- * Ce module ne JUGE pas qui lit — la route le fait avant tout appel. Il ne fait
- * que deux choses : retrouver le participant DANS World Wide (jamais ailleurs :
- * la lecture porte l'id de la conversation, un participant d'une autre
- * conversation est introuvable), et PROJETER sa fiche champ par champ.
+ * Ce module ne JUGE pas qui OUVRE la fiche — la route le fait avant tout appel.
+ * Il fait trois choses : retrouver le participant DANS World Wide (jamais
+ * ailleurs : la lecture porte l'id de la conversation, un participant d'une
+ * autre conversation est introuvable), décider ce que le lecteur lit d'un
+ * COMPTE — la hiérarchie, la règle de `requireHierarchy` : rôle global, rangs
+ * du Prisme et session ne sortent que pour qui SURCLASSE la cible, ou pour
+ * elle-même ; sinon la session n'est même pas lue —, et PROJETER sa fiche
+ * champ par champ.
  *
  * La projection est une liste BLANCHE écrite ici, pas un `select` qu'on
  * espère étroit : une ligne qui porterait davantage (une adresse IP héritée
@@ -19,8 +23,13 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
 import type { WorldParticipantCard, WorldParticipantClient } from '@meeshy/shared/types/world-participant-card';
 import { majorVersion } from '../conversations/guestClient';
+import { permissionsService } from '../admin/permissions.service';
+import type { UserRoleEnum } from '@meeshy/shared/types';
 
 type CardPrisma = Pick<PrismaClient, 'conversation' | 'participant' | 'user' | 'userSession' | 'conversationShareLink'>;
+
+/** Qui lit — un COMPTE que la route a déjà admis. */
+export type WorldParticipantCardReader = { readonly userId: string; readonly role: string };
 
 export type LoadedWorldParticipantCard = {
   readonly card: WorldParticipantCard;
@@ -133,12 +142,25 @@ function status(row: { readonly isActive: boolean; readonly bannedAt: Date | nul
 }
 
 /**
+ * Le lecteur lit-il le COMPTE de la cible ? Soi-même, toujours ; sinon il doit
+ * la SURCLASSER strictement (`canManageUser`, la comparaison de
+ * `requireHierarchy`). Une cible sans ligne `User`, ou dont le rôle ne se
+ * compare pas, est retenue : fail-closed.
+ */
+function readsAccountOf(reader: WorldParticipantCardReader, targetUserId: string, targetRole: string | null): boolean {
+  if (targetUserId === reader.userId) return true;
+  if (!targetRole) return false;
+  return permissionsService.canManageUser(reader.role as UserRoleEnum, targetRole as UserRoleEnum);
+}
+
+/**
  * `null` : pas de World Wide, ou ce participant n'y est pas. Les deux se
  * disent de la même façon — la route ne révèle pas qu'un id existe ailleurs.
  */
 export async function loadWorldParticipantCard(
   prisma: CardPrisma,
   participantId: string,
+  reader: WorldParticipantCardReader,
 ): Promise<LoadedWorldParticipantCard | null> {
   const world = await prisma.conversation.findFirst({
     where: { identifier: WORLD_CONVERSATION_IDENTIFIER },
@@ -155,17 +177,20 @@ export async function loadWorldParticipantCard(
   const userId = participant.userId ?? null;
   const shareLinkId = participant.shareLinkId ?? participant.anonymousSession?.shareLinkId ?? null;
 
-  const [user, session, link] = await Promise.all([
+  const [user, link] = await Promise.all([
     userId ? prisma.user.findUnique({ where: { id: userId }, select: USER_CARD_SELECT }) : null,
-    userId
-      ? prisma.userSession.findFirst({
-          where: { userId, isValid: true },
-          orderBy: { lastActivityAt: 'desc' },
-          select: SESSION_CARD_SELECT,
-        })
-      : null,
     shareLinkId ? prisma.conversationShareLink.findUnique({ where: { id: shareLinkId }, select: SHARE_LINK_CARD_SELECT }) : null,
   ]);
+
+  const accountDetailsWithheld = userId !== null && !readsAccountOf(reader, userId, user ? orNull(String(user.role)) : null);
+  const account = accountDetailsWithheld ? null : user;
+  const session = userId && account
+    ? await prisma.userSession.findFirst({
+        where: { userId, isValid: true },
+        orderBy: { lastActivityAt: 'desc' },
+        select: SESSION_CARD_SELECT,
+      })
+    : null;
 
   const card: WorldParticipantCard = {
     participantId: participant.id,
@@ -173,19 +198,20 @@ export async function loadWorldParticipantCard(
     displayName: participant.displayName,
     username: orNull(user?.username) ?? orNull(participant.anonymousSession?.profile?.username),
     conversationRole: participant.role,
-    accountRole: user ? orNull(String(user.role)) : null,
+    accountRole: account ? orNull(String(account.role)) : null,
     languages: {
       conversation: participant.language,
-      system: orNull(user?.systemLanguage),
-      regional: orNull(user?.regionalLanguage),
-      customDestination: orNull(user?.customDestinationLanguage),
-      deviceLocale: orNull(user?.deviceLocale),
+      system: orNull(account?.systemLanguage),
+      regional: orNull(account?.regionalLanguage),
+      customDestination: orNull(account?.customDestinationLanguage),
+      deviceLocale: orNull(account?.deviceLocale),
     },
     country: orNull(participant.joinCountry) ?? orNull(session?.country),
     client: userId ? sessionClient(session) : guestClient(participant.anonymousSession?.session?.client),
     joinedAt: participant.joinedAt.toISOString(),
     shareLink: link ? { identifier: orNull(link.identifier), linkId: link.linkId, name: orNull(link.name) } : null,
     status: status(participant),
+    accountDetailsWithheld,
   };
 
   return { card, conversationId: world.id, userId };
