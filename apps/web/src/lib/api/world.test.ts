@@ -63,3 +63,10 @@ describe('loadWorldEntry — GET /api/v1/world', () => {
     expect(!result.ok && result.code).toBe('UNREADABLE_WORLD_ENTRY');
   });
 });
+
+test('en fixtures : l’entrée se lit sans requête, sur un lien ouvert aux invités du corpus', async () => {
+  const { transport, requests } = fakeTransport({ ok: false, status: 0, error: 'jamais appelé' });
+  const result = await loadWorldEntry({ source: 'fixtures', transport });
+  expect(requests).toEqual([]);
+  expect(result.ok && result.data.shareLinkIdentifier).toBe('mshy_equipe-deploiement_7f3a');
+});

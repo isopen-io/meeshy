@@ -40,16 +40,11 @@ export function decodeWorldEntry(raw: unknown): WorldEntry | null {
   return memberCountCapped === true ? { ...entry, memberCountCapped } : entry;
 }
 
-/** La conversation que les fixtures font jouer à World Wide : un lien ouvert aux invités du corpus. */
-const FIXTURE_WORLD: WorldEntry = {
-  identifier: 'world',
-  title: 'World Wide',
-  shareLinkIdentifier: 'mshy_equipe-deploiement_7f3a',
-  memberCount: 42,
-};
-
 export async function loadWorldEntry(params: WorldDeps & { readonly signal?: AbortSignal }): Promise<ApiResult<WorldEntry>> {
-  if (__FIXTURES__ && params.source === 'fixtures') return { ok: true, data: FIXTURE_WORLD };
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { fixtureWorldEntry } = await import('./fixtures-link-join');
+    return fixtureWorldEntry();
+  }
   const result = await params.transport.request<unknown>({
     method: 'GET',
     path: worldEndpoints.root,
