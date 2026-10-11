@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import type { Conversation, Participant } from '@/lib/api/types';
+import type { Conversation, Message, Participant } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { SPLIT_QUERY } from '@/lib/view/split-query';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { FocalRow } from './focal-row';
 import { ThreadComposerChrome } from './thread-composer-chrome';
 import { ThreadHeader } from './thread-header';
 
@@ -247,6 +249,48 @@ describe('la feuille de bureau du fil', () => {
     const rule = ruleIn(mediaBlock(WIDE), '.thread-composer-dock');
     expect(rule).toContain('22px');
     expect(rule).toContain('var(--accent)');
+  });
+});
+
+describe('la largeur de lecture d’une rangée plate', () => {
+  const message = {
+    id: 'm-long',
+    conversationId: 'c-groupe',
+    senderId: 'u-nour',
+    content: 'Une phrase assez longue pour courir sur toute la colonne si rien ne la borne, ce qui arrive sur un grand écran.',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    createdAt: new Date('2026-10-11T09:41:00.000Z'),
+    sender: participant('nour', 'Nour Haddad'),
+  } as unknown as Message;
+
+  test('le corps de la rangée (citation, médias, texte) porte sa marque, la colonne méta reste à côté', () => {
+    const html = renderToStaticMarkup(
+      <FocalRow
+        mode="script"
+        place={{ message, head: true, tail: true, opensDay: null }}
+        languages={['fr']}
+        viewerId="u-moi"
+        ephemeralDeadline={{ state: 'none' }}
+        onJumpToMessage={() => {}}
+        group
+      />,
+    );
+    expect(html).toMatch(/data-row-content[^>]*><div data-row-body/);
+  });
+
+  test('sur ordinateur, une ligne qu’on relit sans perdre le retour (~85 caractères) au lieu de toute la colonne', () => {
+    expect(ruleIn(mediaBlock(WIDE), '[data-reading-mode] [data-row-body]')).toContain('max-width: 42rem');
   });
 });
 
