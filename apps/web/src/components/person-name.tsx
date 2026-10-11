@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useContext, type CSSProperties, type ReactNode } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
+import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-access';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -49,12 +50,17 @@ export function PersonName({
   name,
   username,
   storyRing,
+  participantId,
   redundant,
   className,
   style,
   children,
 }: {
   readonly name: string;
+  /** Le participant qui a écrit (`message.senderId`) : quand le fil ouvre les
+      fiches de World Wide à l'équipe (#10102), le nom ouvre la MÊME fiche que
+      l'avatar, compte ou anonyme — jamais le profil. */
+  readonly participantId?: string | undefined;
   readonly username?: string | null | undefined;
   readonly storyRing?: AuthorStoryRing | undefined;
   /** Un AUTRE chemin vers la même adresse est déjà annoncé : celui-ci sort du
@@ -64,8 +70,28 @@ export function PersonName({
   readonly style?: CSSProperties | undefined;
   readonly children?: ReactNode | undefined;
 }) {
+  const worldCard = useContext(WorldParticipantCardContext);
   const cible = identityTarget({ ...(username === undefined ? {} : { username }), ...(storyRing === undefined ? {} : { storyRing }) });
   const contenu = children ?? name;
+
+  if (worldCard !== null && participantId !== undefined && participantId !== '') {
+    return (
+      <button
+        type="button"
+        data-world-card-trigger="name"
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          event.stopPropagation();
+          worldCard.open(participantId);
+        }}
+        className={`cursor-pointer border-0 bg-transparent p-0 text-start${className === undefined ? '' : ` ${className}`}`}
+        style={style}
+        {...(redundant === true ? { tabIndex: -1 } : { 'aria-label': worldCard.labelFor(name) })}
+      >
+        {contenu}
+      </button>
+    );
+  }
 
   if (cible === null) {
     return (

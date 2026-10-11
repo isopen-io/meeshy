@@ -10,6 +10,7 @@ import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
+import { WorldParticipantCardHost } from '@/components/world-participant-card-host';
 import { apiConfig } from '@/lib/api/config';
 import { webOriginOf } from '@/lib/links/web-origin';
 import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
@@ -814,6 +815,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         */}
         <ConversationDetailsContext.Provider value={openDetails}>
           <AfterReadSeenContext.Provider value={afterRead.noteSeen}>
+          <WorldParticipantCardHost conversationIdentifier={conversation?.identifier}>
           <ThreadModes
             mode={reading.readingDecision.mode}
             viewer={viewer}
@@ -862,6 +864,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
             unreadCount={unreadBoundary?.unreadCount ?? 0}
           />
+          </WorldParticipantCardHost>
           </AfterReadSeenContext.Provider>
         </ConversationDetailsContext.Provider>
       </main>

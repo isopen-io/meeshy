@@ -133,7 +133,7 @@ describe('le geste : toucher un auteur ouvre sa fiche quand le fil le permet', (
       test(`${skin} · auteur ${sender} : l’avatar ouvre la fiche du participant (senderId)`, () => {
         const { opened, value } = opener();
         mount(<WorldParticipantCardContext.Provider value={value}>{skinOf(skin, sender)}</WorldParticipantCardContext.Provider>);
-        const avatar = triggers().find((node) => node.tagName === 'BUTTON' && node.getAttribute('aria-label') !== null);
+        const avatar = triggers().find((node) => node.dataset.worldCardTrigger === 'avatar');
         if (avatar === undefined) throw new Error('aucun déclencheur de fiche sur l’avatar');
         expect(avatar.getAttribute('aria-label')).toBe(`Voir la fiche de ${sender === 'anonymous' ? 'Awa' : 'Nour Haddad'}`);
         expect(avatar.getAttribute('aria-haspopup')).toBe('dialog');
@@ -145,7 +145,7 @@ describe('le geste : toucher un auteur ouvre sa fiche quand le fil le permet', (
       test(`${skin} · auteur ${sender} : le nom ouvre la même fiche, sans mener au profil`, () => {
         const { opened, value } = opener();
         mount(<WorldParticipantCardContext.Provider value={value}>{skinOf(skin, sender)}</WorldParticipantCardContext.Provider>);
-        const name = triggers().find((node) => (node.textContent ?? '').includes(sender === 'anonymous' ? 'Awa' : 'Nour Haddad') && node.getAttribute('aria-haspopup') === null);
+        const name = triggers().find((node) => node.dataset.worldCardTrigger === 'name' && (node.textContent ?? '').includes(sender === 'anonymous' ? 'Awa' : 'Nour Haddad'));
         if (name === undefined) throw new Error('le nom n’ouvre pas la fiche');
         click(name);
         expect(opened).toEqual([PARTICIPANT_ID]);

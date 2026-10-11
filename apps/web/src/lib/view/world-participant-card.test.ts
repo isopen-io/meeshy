@@ -112,7 +112,7 @@ const rowIds = (view: WorldParticipantCardView) => view.sections.flatMap((sectio
 describe('worldParticipantCardView — ce que la fiche montre d’un INVITÉ', () => {
   test('l’en-tête dit « Anonyme », jamais un pseudo inventé', () => {
     const view = viewOf(guestCard());
-    expect(view.header).toEqual({ name: 'Awa', handle: null, kind: 'anonymous', kindLabel: 'Anonyme', initials: 'A' });
+    expect(view.header).toEqual({ name: 'Awa', handle: null, kind: 'anonymous', kindLabel: 'Anonyme', initials: 'AW' });
   });
 
   test('pays avec son drapeau, nommé dans la langue d’interface', () => {
@@ -191,7 +191,8 @@ describe('worldParticipantCardView — ce que la fiche montre d’un COMPTE', ()
 
   test('un pays d’arrivée reste servi quand le reste est retenu', () => {
     const view = viewOf(accountCard({ accountDetailsWithheld: true, accountRole: null, client: null, country: 'MA' }));
-    expect(row(view, 'country')).toMatchObject({ leading: '🇲🇦', tone: undefined });
+    expect(row(view, 'country')?.leading).toBe('🇲🇦');
+    expect(row(view, 'country')?.tone).toBeUndefined();
   });
 
   test('un rôle de conversation ou de compte inconnu de ce client s’affiche tel quel', () => {
