@@ -40,6 +40,7 @@ import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/li
 import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
 import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
 import { extractUserAgent } from '../services/GeoIPService';
+import { isGuestViewer } from '../services/guests/guestMemberVisibility';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -745,6 +746,17 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       const spokenLanguages = spokenLanguagesOf(allActiveParticipants);
       const languageCount = spokenLanguages.length;
 
+      // #10205 — un lecteur sans compte Meeshy ne lit ni le nombre de
+      // participants (effectifs, compteurs d'usage) ni la fiche de l'hôte :
+      // de lui ne restent que le nom affiché, le pseudo et l'avatar.
+      const viewerIsGuest = isGuestViewer((request as UnifiedAuthRequest).authContext);
+      const creator = viewerIsGuest && shareLink.creator
+        ? { username: shareLink.creator.username, displayName: shareLink.creator.displayName, avatar: shareLink.creator.avatar }
+        : shareLink.creator;
+      const stats = viewerIsGuest
+        ? { languageCount, spokenLanguages }
+        : { totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages };
+
       return sendSuccess(reply, {
           id: shareLink.id, // ID de la conversationShareLink pour les appels ulterieurs
           linkId: shareLink.linkId,
@@ -752,9 +764,9 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           description: shareLink.description,
           expiresAt: shareLink.expiresAt,
           maxUses: shareLink.maxUses,
-          currentUses: shareLink.currentUses,
+          ...(viewerIsGuest ? {} : { currentUses: shareLink.currentUses }),
           maxConcurrentUsers: shareLink.maxConcurrentUsers,
-          currentConcurrentUsers: shareLink.currentConcurrentUsers,
+          ...(viewerIsGuest ? {} : { currentConcurrentUsers: shareLink.currentConcurrentUsers }),
           requireAccount: shareLink.requireAccount,
           requireNickname: shareLink.requireNickname,
           requireEmail: shareLink.requireEmail,
@@ -766,15 +778,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           allowViewHistory: shareLink.allowViewHistory,
           allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
           conversation: shareLink.conversation,
-          creator: shareLink.creator,
-          // Nouvelles statistiques
-          stats: {
-            totalParticipants,
-            memberCount,
-            anonymousCount,
-            languageCount,
-            spokenLanguages
-          }
+          creator,
+          stats
         });
 
     } catch (error) {
