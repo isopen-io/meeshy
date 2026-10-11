@@ -299,3 +299,9 @@ export function GuestSubmit({
     </div>
   );
 }
+
+export type GuestEntry = { readonly nickname: string; readonly language: string | null };
+
+export function guestEntryOf(_search: URLSearchParams): GuestEntry | null {
+  return null;
+}

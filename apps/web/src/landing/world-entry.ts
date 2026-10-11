@@ -14,3 +14,5 @@
  * table des routes ne sert pas.
  */
 export const WORLD_GUEST_ENTRY_TEMPLATE = '/chat/{link}?mode=anonymous&name={name}';
+
+export const WORLD_GUEST_THREAD_TEMPLATE = '';
