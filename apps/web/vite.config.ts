@@ -601,8 +601,9 @@ export default defineConfig({
                  (aucun `screenOrientation`) et iOS (paysage déclaré, comme
                  l'app iOS) : `portrait` y verrouillait vidéos, reels et appels. */
               orientation: 'any',
-              background_color: '#0b0c14',
-              theme_color: '#0b0c14',
+              /* #10005 — la surface de l'écran (`--ios-surface` sombre). */
+              background_color: '#09090b',
+              theme_color: '#09090b',
               icons: [
                 { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
                 { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

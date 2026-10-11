@@ -549,6 +549,14 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
+      # staging faisait tirer et garder une image figée sous un déploiement
+      # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout
+      # service recréé qui ne tourne pas `:staging` ; son auto-test rejoue
+      # l'état réel du run 38105794544.
+      - name: Staging deploy verdict self-test
+        run: node infrastructure/scripts/staging-deploy-verdict.mjs --self-test
+
       # #9668 — la sauvegarde nocturne publie son verdict (etat.json) en succès
       # ET en échec, y compris hors de tout `|| fail` ; la dernière réussite
       # survit à un échec ; ni chemin d'hôte ni secret. `docker`, `df`, `flock`

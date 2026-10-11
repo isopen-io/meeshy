@@ -1,3 +1,5 @@
+import type { WorldEntry } from '@meeshy/shared/types/world';
+
 import { CONVERSATION_ID, portraitStandIn } from './fixtures-base';
 import type { ApiFailure, ApiResult } from './http';
 import type { GuestJoinBody, GuestTerms, LinkGuestJoined, LinkInvitation, LinkJoined } from './link-join';
@@ -189,4 +191,13 @@ export function fixtureJoinLinkAsGuest(link: string, body: GuestJoinBody): ApiRe
   }
   if (!entry.guestJoin.ok) return entry.guestJoin;
   return { ...entry.guestJoin, data: { ...entry.guestJoin.data, mayWrite: entry.invitation.guest.mayWrite } };
+}
+
+/**
+ * WORLD WIDE, SANS RÉSEAU (#10003) — l'entrée de `GET /world` que les fixtures
+ * servent : un lien ouvert aux invités de ce corpus, pour que le parcours
+ * `/world` se joue jusqu'au fil.
+ */
+export function fixtureWorldEntry(): ApiResult<WorldEntry> {
+  return { ok: true, data: { identifier: 'world', title: 'World Wide', shareLinkIdentifier: 'mshy_equipe-deploiement_7f3a', memberCount: 42 } };
 }

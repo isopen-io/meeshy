@@ -624,6 +624,13 @@ jobs:
             echo "::error::un service de staging ne tient pas debout après déploiement"
             exit 1
           fi
+          # (#9825, #10048) `healthy` ne dit pas QUELLE image tourne. Un
+          # `GATEWAY_IMAGE=…:sha-…` épinglé à la main dans le `.env` de l'hôte
+          # fait tirer et garder un tag figé : `pull` réussit, `up -d` répond
+          # `Running`, et l'image que la CI vient de pousser n'est jamais
+          # servie. On exige le tag flottant `:staging` sur chaque service
+          # recréé, en nommant la variable à retirer.
+          printf '%s\n' "$SORTIE" | node infrastructure/scripts/staging-deploy-verdict.mjs --services "$CIBLES"
 
           {
             echo "## Staging déployé"

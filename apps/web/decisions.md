@@ -5081,7 +5081,7 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **La colonne du fil (#10072)** se calcule déjà sur la largeur du VOLET : `100%` y est celle du bloc conteneur. Pas de container query : `container-type` crée un bloc conteneur pour `position: fixed` et aurait enfermé visionneuse, appel et voiles plein écran dans le volet. Dans le volet, le chevron de retour se retire (`thread-column.css`, `[data-split-detail] [data-thread-back]`).
 - **Libellés** : une table synchrone de sept langues dans le chunk du volet vide (discipline `lib/skip-link.ts`) — le catalogue de démarrage n'est pas touché.
 
-**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande.
+**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande. *Révisé par D-189 : le cadre est désormais chargé à la demande.*
 
 **Limites assumées.** Franchir 1024 px pendant la lecture d'un fil remonte le fil (la structure de l'arbre change) — les brouillons persistés n'en souffrent pas. Les menus flottants suivent toujours la route (`showsFloatingMenus`) : présents sur `/chats`, absents sur `/c/:id`, comme au téléphone.
 
@@ -5104,3 +5104,42 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Coque Android.** Pas de landing (`/` → `/chats`) : l'entrée sans compte y passera par la carte World Wide de l'écran de connexion, qui est l'objet de #10007. **iOS** : même parcours depuis l'écran de connexion (#10006). **Kotlin natif** : rien (gel).
 
 **Témoins.** `landing/landing.test.tsx` (étape langue prérendue dans les sept documents ; nom → langue sans rien envoyer ; nom vide ; langue de l'appareil ; arabe `dir="rtl"` ; entrée encodée et langue d'interface ; compte qui garde la sienne ; retour par bouton, Échap, historique ; relance et échec dit de `GET /world` ; « Revenir dans World Wide » ; script MINIFIÉ rejoué), `routes/chat-join.test.tsx` (`guestEntryOf` ; création sans geste et ordre adoption → interface → fil ; écran en attente ; langue par défaut ; nom pris avec suggestion ; champ exigé non contourné ; lien réservé aux comptes ; une seule tentative).
+
+## D-187 — On entre dans World Wide sans compte par `/world` : nom, glissement, langue principale, puis le fil ; un invité n'y joint que du `.txt` et de l'audio (2026-10-11, #10003)
+
+**Parcours.** `routes/world-entry.tsx` sert `/world` — l'entrée de la coque Android et de l'écran de connexion (#10007), où la landing prérendue n'est pas servie ; la landing, elle, fait le même parcours dans sa page et joint par `/chat/{link}?mode=anonymous&name=&language=` (D-186). Nom → glissement → langue principale (la première langue de l'appareil parmi les sept, groupe radio au clavier, flèches inversées en arabe) → jonction invité par la clé que sert `GET /world` (`worldEndpoints.root`), jamais une clé en dur. La langue choisie devient la langue de lecture (rang 1 du Prisme) et la langue d'interface. Un invité déjà entré retourne directement dans son fil ; un compte suit la jonction par lien. « Retour » ramène de la langue au nom, puis à la page d'avant (lue sur la navigation de l'application, jamais sur `history.length`).
+
+**Pièces jointes de l'invité.** La jonction sert `entry.allowedAttachmentKinds` ; la session le garde comme des NOMS (`string[]`), et `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`) écarte une famille inconnue (fail-closed) et applique le plafond `.txt` + audio à une session World Wide d'avant le champ. Charger la table des familles dans la session la faisait entrer dans la première peinture (90,41 Ko pour un plafond de 90) ; sans elle, 89,96 Ko. Le composeur n'offre que « Fichier texte (.txt) », « Audio » et le vocal, refuse en le nommant ce qui sort des familles, et dit la cause des refus serveur `GUEST_ATTACHMENT_*`. La passerelle reste l'autorité (#10001).
+
+**Budgets relevés sur mesure.** `interface_catalogs_invite` 20 → 22 Ko (20,91 mesurés : 16 clés `invite.world.*` × 7) ; `story_reader` 13 → 14 Ko (13,02 mesurés : le chemin d'envoi partagé porte la règle de l'invité).
+
+**Kotlin natif** : rien (gel). **Reste** : recette navigateur et coque Android (#10075), jumelles sans Zod (#10038), entrée depuis l'écran de connexion (#10007).
+
+---
+
+## D-188 — Le clavier se lit au `visualViewport` et se pose une fois sur `<html>` ; la barre du navigateur se peint de la surface de l'écran (2026-10-11, #10005)
+
+**Clavier.** Safari et Chrome iOS ignorent `interactive-widget=resizes-content` : le clavier RECOUVRE la page et `100dvh` ne bouge pas. `installKeyboardViewport` (`lib/view/keyboard-viewport.ts`, chargé par `import()` après le premier rendu) mesure ce que le clavier recouvre et pose `--keyboard-inset` et `data-keyboard="open"` sur `<html>` ; les écrans d'application (fil, ses états, `/chats`, `/world`) se dimensionnent en `h-app` = `100dvh − --keyboard-inset`. Un écran d'application que Safari a fait glisser revient en haut ; une page qui défile garde sa place ; un zoom au pincement (`scale > 1`) n'est pas un clavier. Clavier ouvert, `--safe-bottom` tombe à zéro. Chrome Android et les coques réduisent la vue elles-mêmes : la variable y reste absente.
+
+**Surface.** `theme-color` = `--ios-surface` (#09090b / #ffffff) sur `index.html`, les pages institutionnelles, le manifeste, le fond des WebView et la fenêtre de la coque Android ; `SystemBars` est averti de `viewport-fit=cover` dès le lancement. Garde : `src/surface-color-parity.test.ts`. Recette navigateur : `scripts/check-mobile-browsers.mjs` (iPhone et Pixel émulés, deux schémas).
+
+**Mesure.** Première peinture +0,10 Ko (import différé et deux règles CSS) ; le commentaire de `index.html` retiré en rend 0,09. Dev dépassait déjà le plafond de 90 Ko avant ce lot (90,91 Ko, cadre côte à côte) : #10086.
+
+**Kotlin natif** : rien (gel).
+
+## D-189 — La première peinture repasse sous 90 Ko : le cadre côte à côte et les gestes de l'enregistrement d'appel sortent du module d'entrée (2026-10-11, #10086)
+
+**Contexte.** `measure-weight.mjs` rougissait sur `dev` : 91,03 Ko pour un plafond de 90 (`budgets.json › first_paint.kb`, arbitré par le porteur, D-49 — il ne bouge pas). D-185 avait fait entrer `split-frame.tsx` dans le module d'entrée, et D-188 y avait ajouté 0,10 Ko.
+
+**Décision.**
+
+- **Le cadre côte à côte est chargé à la demande.** La RÈGLE (`lib/view/split-query.ts` : seuil `(min-width: 1024px)`, `splitPaneOf`, abonnement `matchMedia`) reste dans le socle ; le cadre, sa mémoire de scrollport et son volet vide ne partent que lorsqu'elle l'accorde. `DeferredSplitFrame` (`route-table.tsx`, là où chaque `import()` est un arbitrage visible) rend l'écran routé tel quel sous 1024 px, hors de la liste et du fil, et pour l'invité d'un lien — sans rien charger ; sinon il monte le cadre par `lazy`. Sur un grand écran au démarrage, le chunk part dès l'évaluation de la table des routes, en parallèle du premier rendu.
+- **La couche d'appel ne lit que l'ÉTAT de l'enregistrement.** `callRecordingStore` vit seul dans `lib/calls/call-recording-store.ts` ; les gestes (`call-recording.ts`) et leur instance (`call-recording-live.ts`) partent avec la connexion et l'écran d'appel, qui partagent la même instance de magasin.
+
+**Mesure** (`bun run build` puis `node scripts/measure-weight.mjs`) : 91,03 → 90,78 Ko (cadre différé) → **88,89 Ko** (magasin d'enregistrement séparé) ; module d'entrée 36,19 → 34,27 Ko, une requête de moins (18).
+
+**Limites assumées.** Sur grand écran, le premier passage par la liste ou le fil attend un chunk d'environ un kilo-octet — chargé dès le démarrage quand l'écran est déjà large ; franchir 1024 px pour la première fois montre le squelette du routeur le temps de ce chunk.
+
+**Kotlin natif** : rien (gel). **iOS** : rien.
+
+**Témoins.** `routes/first-paint-graph.test.ts` parcourt les imports STATIQUES depuis `main.tsx` et rougit si le cadre, son volet vide ou les gestes de l'enregistrement y rentrent ; `routes/split-frame.test.tsx` monte désormais le routeur avec le cadre DIFFÉRÉ que la table remet vraiment.

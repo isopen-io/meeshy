@@ -147,7 +147,7 @@ function document(route: string, page: ContentPage, sheet: string): string {
 <meta property="og:description" content="${escape(page.description)}">
 <meta property="og:url" content="${escape(url)}">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
 <style>${sheet}</style>
