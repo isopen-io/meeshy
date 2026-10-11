@@ -19,7 +19,9 @@ import {
   languageSharesOf,
   remainingPlacesOf,
   type AnonymousRight,
+  type AnonymousRightRow,
   type AskedField,
+  type FileKind,
 } from '@/lib/links/invitation-view';
 import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
@@ -334,13 +336,28 @@ export function InvitationFigures({ language, invitation }: { readonly language:
   );
 }
 
-function RightRow({ language, right, granted }: { readonly language: InterfaceLanguage; readonly right: AnonymousRight; readonly granted: boolean }) {
+const FILE_KIND_KEY: Readonly<Record<FileKind, Extract<InviteCatalogKey, `invite.fileKind.${FileKind}`>>> = {
+  text: 'invite.fileKind.text',
+  audio: 'invite.fileKind.audio',
+  pdf: 'invite.fileKind.pdf',
+};
+
+/** Le libellé d'une ligne de droits — celle des fichiers nomme les familles que
+ * le lien ouvre quand il les liste (#10121 : « des fichiers texte (.txt) et audio »). */
+export function rightLabelOf(language: InterfaceLanguage, row: AnonymousRightRow): string {
+  if (row.right !== 'files' || row.kinds === undefined || row.kinds.length === 0) return translateInvite(language, RIGHT_KEY[row.right]);
+  const kinds = new Intl.ListFormat(language, { type: 'conjunction' }).format(row.kinds.map((kind) => translateInvite(language, FILE_KIND_KEY[kind])));
+  return translateInvite(language, 'invite.rights.files.kinds', { kinds });
+}
+
+function RightRow({ language, row }: { readonly language: InterfaceLanguage; readonly row: AnonymousRightRow }) {
+  const { right, granted } = row;
   return (
     <li data-invite-right={right} data-granted={granted} className="flex items-center gap-2.5 text-body font-semibold" style={{ color: granted ? INK : INK_2 }}>
       <span aria-hidden="true" className="shrink-0" style={{ color: granted ? 'var(--color-success)' : 'var(--color-error)' }}>
         {granted ? <Glyph name="check" size={18} /> : <Glyph name="x" size={18} />}
       </span>
-      <span className={granted ? '' : 'line-through decoration-1'}>{translateInvite(language, RIGHT_KEY[right])}</span>
+      <span className={granted ? '' : 'line-through decoration-1'}>{rightLabelOf(language, row)}</span>
       <span className="sr-only">{translateInvite(language, granted ? 'invite.rights.granted' : 'invite.rights.denied')}</span>
     </li>
   );
@@ -385,7 +402,7 @@ export function RightsCard({ language, invitation, now }: { readonly language: I
       </h2>
       <ul className="grid gap-2.5">
         {anonymousRightsOf(guest, invitation.readsHistory).map((row) => (
-          <RightRow key={row.right} language={language} right={row.right} granted={row.granted} />
+          <RightRow key={row.right} language={language} row={row} />
         ))}
       </ul>
       <span aria-hidden="true" className="my-0.5 block h-px" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)' }} />

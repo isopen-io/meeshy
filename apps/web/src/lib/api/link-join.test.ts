@@ -181,6 +181,12 @@ describe('decodeLinkInvitation — une invitation, et rien de ce qui IDENTIFIE u
     });
   });
 
+  test('les familles servies (#10121) voyagent jusqu’à la carte, une famille inconnue écartée', () => {
+    expect(decodeLinkInvitation({ ...servedPreview(), allowedAttachmentKinds: ['text', 'audio', 'exe'] })?.guest.attachmentKinds).toEqual(['text', 'audio']);
+    expect(decodeLinkInvitation({ ...servedPreview(), allowedAttachmentKinds: null })?.guest.attachmentKinds).toBeNull();
+    expect('attachmentKinds' in (decodeLinkInvitation(servedPreview())?.guest ?? {})).toBe(false);
+  });
+
   test('une permission ABSENTE est refusée : images et fichiers ne se promettent pas', () => {
     const { allowAnonymousImages: _images, allowAnonymousFiles: _files, ...base } = servedPreview();
     const guest = decodeLinkInvitation(base)?.guest;
