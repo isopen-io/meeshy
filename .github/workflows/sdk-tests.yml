@@ -20,12 +20,18 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/presence-vectors.json'
+      - 'packages/shared/types/frame-usage.ts'
   pull_request:
     branches:
       - dev
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/presence-vectors.json'
+      - 'packages/shared/types/frame-usage.ts'
   # Intentionally NOT triggered by changes to this workflow file itself: an
   # app-only PR that merely touches CI config must not be gated by the SDK suite.
   # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.
