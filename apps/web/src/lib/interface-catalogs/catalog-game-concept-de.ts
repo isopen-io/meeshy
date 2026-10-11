@@ -259,6 +259,10 @@ const de = {
   'game.badge.rung.next': 'Nächster Stern · noch {missing}',
   'game.badge.upcoming_title': 'Als Nächstes',
   'game.badge.guide_link': 'Abzeichen verstehen',
+  'game.notebook.legacy_quarantine': 'Ein altes Heft auf diesem Gerät gehört zu keinem bekannten Konto: Es wird niemandem gezeigt.',
+  'game.notebook.legacy_delete': 'Altes Heft löschen',
+  'game.notebook.device_only': 'Deine Fotos leben auf diesem Gerät.',
+  'game.notebook.size': 'Das Heft belegt {size}.',
 } as const satisfies GameConceptCatalog;
 
 export default de;

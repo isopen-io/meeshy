@@ -12,7 +12,8 @@ import type { PhotoPalette, PhotoSource } from './compose';
 import { rasterizeSvg } from './compose';
 import { rootVarReader } from './css-vars';
 import type { PhotoMoment } from './moments';
-import { createNotebook, lazyBackend, openIndexedDbBackend, type Notebook } from './notebook';
+import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
+import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
 import type { PhotoReferral } from './referral';
 import { renderPhotoFiles, type PhotoFiles } from './render';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
@@ -56,6 +57,8 @@ export type PhotoEnv = {
    * carte part sans bandeau. Absent : aucun emplacement n'est proposé.
    */
   readonly createReferral?: () => Promise<string | null>;
+  /** La photo d'origine réduite pour le carnet (`developNotebookSource`, #10161) ; absent ou `null` : gardée sans source. */
+  readonly developSource?: (photo: PhotoSource) => Promise<Blob | null>;
   readonly captureVideo: (video: HTMLVideoElement) => PhotoSource | null;
   readonly readGallery: (file: File) => Promise<PhotoSource | null>;
   readonly now: () => Date;
@@ -137,12 +140,57 @@ const doors = (): PhotoDoors => ({
   saver: currentGallerySaver(),
 });
 
+const browserStorage = (): KeyedStorage => ({
+  keys: () => {
+    const storage = globalThis.localStorage;
+    return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => key !== null);
+  },
+  getItem: (key) => globalThis.localStorage.getItem(key),
+});
+
+/**
+ * LE CARNET DU COMPTE CONNECTÉ (D-154) : sa base s'ouvre au premier geste, et
+ * c'est là que se règle UNE fois le sort de l'ancienne base partagée —
+ * adoptée si l'appareil n'a connu que ce compte, en quarantaine sinon.
+ */
+function browserNotebook(now: () => Date): Notebook {
+  const factory = typeof indexedDB === 'undefined' ? undefined : indexedDB;
+  const legacyStates = new Map<string, Promise<LegacyState>>();
+  const open = async (userId: string): Promise<NotebookBackend | null> => {
+    const backend = await openIndexedDbBackend(factory, notebookDbName(userId));
+    if (backend === null || factory === undefined) return backend;
+    const settled = settleLegacyNotebook({ legacy: indexedDbLegacyStore(factory), userId, known: knownAccountsOf(browserStorage(), userId), target: backend });
+    legacyStates.set(userId, settled);
+    await settled;
+    return backend;
+  };
+  const backend = accountBackend({ reader: currentReader, open });
+  return createNotebook({
+    backend,
+    now,
+    persist: async () => navigator.storage?.persist?.(),
+    legacy: async () => {
+      const userId = currentReader();
+      if (userId === null) return 'none';
+      await backend.all().catch(() => undefined);
+      return (await legacyStates.get(userId)) ?? 'none';
+    },
+    discardLegacy: async () => {
+      if (factory === undefined) return false;
+      try {
+        await indexedDbLegacyStore(factory).discard();
+        legacyStates.clear();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
+}
+
 export function browserPhotoEnv(): PhotoEnv {
   const now = (): Date => new Date();
-  const notebook = createNotebook({
-    backend: lazyBackend(() => openIndexedDbBackend(typeof indexedDB === 'undefined' ? undefined : indexedDB)),
-    now,
-  });
+  const notebook = browserNotebook(now);
   return {
     openCamera: () => openFrontCamera(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
     notebook,
@@ -166,6 +214,7 @@ export function browserPhotoEnv(): PhotoEnv {
       if (art === null) return null;
       return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null });
     },
+    developSource: (photo) => developNotebookSource(photo),
     captureVideo,
     readGallery,
     now,

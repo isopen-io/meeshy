@@ -43,7 +43,20 @@ function forgetAccountLocally(userId: string): void {
   forgetAccountCaches({ userId });
 }
 
-export const accountVault = forgettingLocalData(createAccountVault({ storage: safeLocalStorage(), now }), forgetAccountLocally);
+/**
+ * « RETIRER CE COMPTE » efface en plus son carnet de progression (#10161, D-154) :
+ * ses photos n'ont pas d'autre exemplaire, la DÉCONNEXION les garde donc, et
+ * seul le retrait du compte de l'appareil les emporte.
+ */
+function retireAccountLocally(userId: string): void {
+  forgetAccountLocally(userId);
+  /* Chargé au geste : l'écran de connexion et les réglages n'embarquent pas le carnet. */
+  void import('../game-photo/notebook-legacy')
+    .then(({ forgetAccountNotebook }) => forgetAccountNotebook(typeof indexedDB === 'undefined' ? undefined : indexedDB, userId))
+    .catch(() => undefined);
+}
+
+export const accountVault = forgettingLocalData(createAccountVault({ storage: safeLocalStorage(), now }), retireAccountLocally);
 
 export const accountSwitcher = createAccountSwitcher({
   vault: accountVault,

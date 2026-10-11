@@ -257,6 +257,10 @@ const fr = {
   'game.badge.rung.next': 'Prochaine étoile · encore {missing}',
   'game.badge.upcoming_title': 'À venir',
   'game.badge.guide_link': 'Comprendre les badges',
+  'game.notebook.legacy_quarantine': 'Un ancien carnet de cet appareil n’appartient à aucun compte connu : il n’est montré à personne.',
+  'game.notebook.legacy_delete': 'Supprimer l’ancien carnet',
+  'game.notebook.device_only': 'Tes photos vivent sur cet appareil.',
+  'game.notebook.size': 'Le carnet occupe {size}.',
 } as const;
 
 export default fr;

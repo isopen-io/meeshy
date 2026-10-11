@@ -259,6 +259,10 @@ const ar = {
   'game.badge.rung.next': 'النجمة التالية · يتبقى {missing}',
   'game.badge.upcoming_title': 'القادم',
   'game.badge.guide_link': 'فهم الشارات',
+  'game.notebook.legacy_quarantine': 'دفتر قديم على هذا الجهاز لا ينتمي إلى أي حساب معروف: لا يُعرض على أحد.',
+  'game.notebook.legacy_delete': 'احذف الدفتر القديم',
+  'game.notebook.device_only': 'صورك موجودة على هذا الجهاز.',
+  'game.notebook.size': 'يشغل الدفتر {size}.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

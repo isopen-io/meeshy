@@ -3,7 +3,7 @@ import { act } from 'react';
 
 import { gameBlockFixture } from '@/lib/api/game-fixture';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { flameMoment, meeshMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { achievementMoment, flameMoment, meeshMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { Notebook, NotebookEntry } from '@/lib/game-photo/notebook';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -51,11 +51,17 @@ const pending = (moment: PhotoMoment, createdAt: string, expiresAt: string): Not
   expiresAt,
 });
 
-function bench(entries: readonly NotebookEntry[] | 'broken', link: string | null = null) {
-  const state = { entries: [...(entries === 'broken' ? [] : entries)], removed: [] as string[], shared: [] as File[], texts: [] as (string | undefined)[] };
+function bench(entries: readonly NotebookEntry[] | 'broken', link: string | null = null, legacy: 'none' | 'quarantined' | null = null) {
+  const state = { entries: [...(entries === 'broken' ? [] : entries)], removed: [] as string[], shared: [] as File[], texts: [] as (string | undefined)[], legacy, discarded: 0 };
   const notebook: Notebook = {
     defer: async () => true,
-    keep: async () => true,
+    keep: async () => 'kept',
+    ...(legacy === null
+      ? {}
+      : {
+          legacy: async () => state.legacy ?? 'none',
+          discardLegacy: async () => ((state.discarded += 1), (state.legacy = 'none'), true),
+        }),
     list: async () => (entries === 'broken' ? [] : [...state.entries]),
     remove: async (id) => {
       state.removed.push(id);
@@ -169,14 +175,16 @@ describe('les photos gardées', () => {
 });
 
 describe('les moments en attente', () => {
-  const entries = [pending(flameMoment(7), '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')];
+  const trophy = achievementMoment('achievement.first_voice');
+  const entries = [pending(trophy, '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')];
 
-  test('« en attente » avec l’échéance, et de quoi photographier maintenant', async () => {
+  test('« En attente », sans échéance — l’attente n’expire plus (#10161) —, et de quoi photographier maintenant', async () => {
     const { env } = bench(entries);
     const host = await mount(<CarnetBody env={env} />);
     await settle();
-    expect(host.textContent).toContain('En attente jusqu’au 10 octobre 2026');
-    expect(host.textContent).toContain('7 jours de Flamme');
+    const row = host.querySelector(`[data-carnet-entry="${trophy.id}"]`);
+    expect(row?.textContent).toContain('En attente');
+    expect(row?.textContent).not.toContain('jusqu’au');
     expect(by(host, 'data-carnet-take')).not.toBeNull();
   });
 
@@ -185,7 +193,7 @@ describe('les moments en attente', () => {
     const host = await mount(<CarnetBody env={env} />);
     await settle();
     await click(by(host, 'data-carnet-take'));
-    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Photo : 7 jours de Flamme');
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe(`Photo : ${trophy.title}`);
   });
 
   test('une entrée en attente n’a pas d’aperçu ni de partage : rien à partager', async () => {
@@ -194,6 +202,43 @@ describe('les moments en attente', () => {
     await settle();
     expect(by(host, 'data-carnet-share')).toBeNull();
     expect(host.querySelector('img')).toBeNull();
+  });
+
+  test('une étape de piste reportée n’apparaît jamais « en attente », même sans bloc du jeu en cache (#10161)', async () => {
+    const { env } = bench([pending(rankMoment({ rank: 'voix', division: 2 }), '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelector('[data-carnet-entry]')).toBeNull();
+    expect(host.textContent).not.toContain('En attente');
+  });
+});
+
+describe('la place et l’appareil (#10161)', () => {
+  test('le carnet dit la place qu’il occupe et que ses photos vivent sur cet appareil', async () => {
+    const { env } = bench([kept(startMoment(), '2026-10-04T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(by(host, 'data-carnet-size')?.textContent).toContain('Le carnet occupe');
+    expect(host.textContent).toContain('Tes photos vivent sur cet appareil.');
+  });
+
+  test('un ancien carnet en quarantaine se signale, sans rien montrer, et se supprime', async () => {
+    const { env, state } = bench([], null, 'quarantined');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    const notice = by(host, 'data-carnet-legacy');
+    expect(notice?.textContent).toContain('n’appartient à aucun compte connu');
+    await click(notice?.querySelector<HTMLElement>('[data-carnet-legacy-delete]') ?? null);
+    await settle();
+    expect(state.discarded).toBe(1);
+    expect(by(host, 'data-carnet-legacy')).toBeNull();
+  });
+
+  test('sans ancien carnet : aucun signalement', async () => {
+    const { env } = bench([], null, 'none');
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(by(host, 'data-carnet-legacy')).toBeNull();
   });
 });
 

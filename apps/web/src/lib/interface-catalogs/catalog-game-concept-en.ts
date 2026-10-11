@@ -259,6 +259,10 @@ const en = {
   'game.badge.rung.next': 'Next star · {missing} to go',
   'game.badge.upcoming_title': 'Coming up',
   'game.badge.guide_link': 'Understand badges',
+  'game.notebook.legacy_quarantine': 'An old notebook on this device belongs to no known account: it is shown to no one.',
+  'game.notebook.legacy_delete': 'Delete the old notebook',
+  'game.notebook.device_only': 'Your photos live on this device.',
+  'game.notebook.size': 'The notebook takes up {size}.',
 } as const satisfies GameConceptCatalog;
 
 export default en;
