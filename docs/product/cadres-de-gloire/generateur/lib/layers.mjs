@@ -104,6 +104,7 @@ export function show({ kinds, probe = null, flatSlots = null }) {
       const el = document.querySelectorAll('text[data-slot]')[index];
       el.setAttribute('data-flat', '1');
       el.setAttribute('style', `visibility:visible;display:inline;fill:${color};stroke:none;filter:none;opacity:1`);
+      el.querySelectorAll('*').forEach((d) => d.setAttribute('style', `visibility:visible;fill:${color};stroke:none;filter:none;opacity:1`));
       for (let n = el.parentElement; n && n !== root; n = n.parentElement) {
         n.setAttribute('data-flat', '1');
         n.setAttribute('style', 'display:inline;visibility:hidden;filter:none;opacity:1;mask:none');

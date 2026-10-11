@@ -42,7 +42,16 @@ export async function showSvg(handle, svg, { fonts }) {
   const html = '<!doctype html><html><head><meta charset="utf-8">' + cssFor(fonts) + '<style>html,body{margin:0;background:transparent}svg{display:block}</style></head><body>' + svg + '</body></html>';
   fs.writeFileSync(handle.file, html);
   await handle.page.goto('file://' + handle.file);
-  await handle.page.evaluate(() => document.fonts.ready);
+  await handle.page.evaluate(async () => {
+    await document.fonts.ready;
+    const hrefs = [...new Set([...document.querySelectorAll('image')].map((im) => im.getAttribute('href') ?? im.getAttribute('xlink:href')).filter(Boolean))];
+    await Promise.all(hrefs.map((href) => {
+      const img = new Image();
+      img.src = href;
+      return img.decode().catch(() => null);
+    }));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
 }
 
 export const shoot = (handle) => handle.page.screenshot({ type: 'png', omitBackground: true, clip: { x: 0, y: 0, width: W, height: H } });

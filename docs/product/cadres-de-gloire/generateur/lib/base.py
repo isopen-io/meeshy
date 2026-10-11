@@ -118,7 +118,7 @@ class Card:
             attrs, inner = m.group(1) or "", m.group(2)
             if "data-slot=" in attrs:
                 return m.group(0)
-            key = self._slots.get(TAG_RE.sub("", inner).strip())
+            key = self._slots.get(TAG_RE.sub("", inner).strip()) if scope == "plate" else None
             if key is None:
                 if scope == "plate":
                     counter[0] += 1

@@ -1,6 +1,7 @@
 // L'exportateur unique (lot L1, § 5.1 et § 5.3 du prompt) : chaque cadre généré devient un jeu de couches raster
 // WebP rognées à leur boîte, et un export.json BRUT qui décrit ce que l'app peindra elle-même (texte, oiseaux, blason).
-// Usage : node lib/export.mjs [--out out] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
+// Usage : node lib/export.mjs [--generate] [--out out] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
+//   --generate régénère d'abord les SVG de chaque atelier (python3, ou $PYTHON ; poses demande numpy et Pillow)
 //   --mutate rejoue un défaut connu pour montrer export-check.mjs ROUGE : text-in-decor | birds-in-decor | veil | no-contrast
 //
 // Méthode, par cadre (Chromium, 1080×1920, polices aux graisses exactes) :
@@ -9,6 +10,7 @@
 //   - le décor est rendu sans photo, sans texte, sans oiseaux, sans blason, sans plaque, puis COUPÉ à la fenêtre :
 //     dans la fenêtre son alpha est nul, et ce qu'il y peignait part dans `grade` (normal, ou `screen` séparément) ;
 //   - chaque couche est rognée à sa boîte, encodée par sharp, adressée par son empreinte dans export.json.
+import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -283,6 +285,13 @@ const bytesOf = (frame) => {
   return files.reduce((acc, f) => acc + f.bytes, 0);
 };
 
+if (process.argv.includes('--generate')) {
+  const ateliers = path.join(HERE, '../ateliers');
+  for (const atelier of fs.readdirSync(ateliers).filter((d) => fs.existsSync(path.join(ateliers, d, 'gen.py'))).sort()) {
+    fs.rmSync(path.join(OUT, atelier), { recursive: true, force: true });
+    execFileSync(process.env.PYTHON ?? 'python3', ['-B', 'gen.py'], { cwd: path.join(ateliers, atelier), stdio: ['ignore', 'ignore', 'inherit'] });
+  }
+}
 const collections = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory() && (!ONLY || ONLY.has(d) || [...ONLY].some((o) => o.startsWith(d + '-')))).sort();
 const jobs = collections.flatMap((collection) => {
   const manifest = JSON.parse(fs.readFileSync(path.join(OUT, collection, 'manifest.json'), 'utf8'));

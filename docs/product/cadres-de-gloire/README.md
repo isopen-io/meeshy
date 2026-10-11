@@ -48,7 +48,7 @@ Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `ran
 4. Mee et Meo (poses PNG de `generateur/mee/`, dérivées des stickers `packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers`) ;
 5. la plaque : sur-titre « Nouveau rang · <Atmosphère> », titre, date, message optionnel (Caveat).
 
-Aujourd'hui texte et oiseaux sont **cuits** dans chaque SVG : l'app aura besoin de couches séparées (décor à fenêtre transparente, ancres des poses, emplacements de texte vivant et localisé). C'est le premier lot du prompt de développement.
+Texte et oiseaux sont **cuits** dans chaque SVG ; l'export (ci-dessous) en sépare les couches, les ancres des poses et les emplacements de texte vivant.
 
 ## Régénérer
 
@@ -60,7 +60,40 @@ cd ../.. && node lib/render.mjs out/<collection>  # → .jpg 540×960 + sheet.pn
 node lib/overlap.mjs out/<collection> --png       # → overlap.json + .overlap/*.png (empiètement en rouge)
 ```
 
-`lib/launch.mjs` trouve Chromium : `$PW_CHROMIUM`, sinon celui de Playwright, sinon `/opt/pw-browsers/chromium-*/chrome-linux/chrome`. `v1/frames.py <dossier>` génère la première proposition (Murmure → Polyglotte).
+`lib/launch.mjs` trouve Chromium : `$PW_CHROMIUM` (ou `$CHROMIUM`), sinon celui que Playwright attend, sinon le plus récent `chromium_headless_shell-*` du cache de Playwright (macOS, Linux), sinon `/opt/pw-browsers/chromium-*/chrome-linux/chrome`. L'atelier `poses` demande `numpy` et `Pillow`. `v1/frames.py <dossier>` génère la première proposition (Murmure → Polyglotte).
+
+## Exporter
+
+L'app ne peint pas ces SVG : elle compose des **couches raster** et peint elle-même le texte, Mee et Meo, le blason et le bandeau (prompt § 5.1, § 5.3). Une commande, depuis `generateur/` :
+
+```bash
+node lib/export.mjs --generate      # régénère les 11 ateliers puis exporte les 191 cadres → generateur/export/ (ignoré par git)
+node lib/export-check.mjs           # ROUGE tant qu'une couche porte un texte ou un oiseau, qu'une fenêtre est voilée,
+                                    # que la bande du bandeau est trouée ou qu'un emplacement n'a pas de contraste mesuré
+node lib/recompose.mjs              # recompose chaque cadre et le compare à la référence (§ 8.3) → export/fidelity.json
+```
+
+Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--quality 82`, `--lossless`, `PYTHON=…` pour l'interpréteur des ateliers. `export.mjs --mutate text-in-decor|birds-in-decor|veil|no-contrast` rejoue un défaut connu : `export-check.mjs --partial` doit alors être ROUGE.
+
+**Ce que l'export écrit**, par collection (`export/<collection>/export.json`, plus `export/index.json` : versions de Chromium, de sharp et de libwebp, poids par collection) et par cadre (`export/<collection>/<cadre>/*.webp`), en pixels de l'image finale 1080×1920 :
+
+| Clé | Contenu |
+|---|---|
+| `window` | la fenêtre photo, TROUVÉE et non devinée : la photo factice rendue magenta puis verte, la fenêtre est là où les deux rendus diffèrent. `mask` (WebP sans perte), `box`, `area`, `veilMaxAlpha` (0) |
+| `layers.decor` | le décor sans texte, sans oiseaux, sans blason, sans plaque, d'alpha nul dans la fenêtre ; la bande du bandeau (`banner.box`) y reste pleine |
+| `layers.windowFill` | le fond d'atmosphère (le fond de la photo factice), découpé à la fenêtre : ce que montre une carte sans photo |
+| `layers.grade` | ce que le décor peignait DANS la fenêtre, par mode de fusion : `normal`, `screen`, `multiply`, `color`, et `over` (le décor normal dessiné après un élément fondu) |
+| `layers.front` | `under-birds` (décor dessiné après le blason ou la plaque, avant les oiseaux) et `over-birds` (après les oiseaux) |
+| `layers.plate` | le panneau de la plaque, en `plain` ou `message` selon le cadre (une seule variante par cadre : l'atelier ne dessine que la sienne) |
+| `thumb` | la vignette 270×480 du cadre complet |
+| `stack` | l'ordre des couches de CE cadre, lu dans le SVG — le peintre ne le devine jamais |
+| `text` | chaque emplacement (`kicker`, `title`, `message`, `date`, `plate.<n>`, `decor.<n>`) : texte, ligne de base, ancre, matrice, police (famille, graisse exacte, taille, interlettrage), remplissage résolu (dégradé et arrêts), contour, opacité, filtres, chemin courbe, boîte, effets (les copies décalées, floues ou dédoublées), et `contrast` : le contraste WCAG mesuré contre les pixels réellement dessous (5ᵉ centile, et `contrastMin`) |
+| `birds` | chaque oiseau : pose, boîte carrée du sticker, rotation, miroir, opacité |
+| `crest`, `motifs`, `banner`, `veil`, `inventory` | la boîte du blason ; les motifs (`afrique`, `cosmos`) ; la bande du bandeau et sa part opaque ; le voile de la fenêtre ; ce que chaque couche contient de texte et d'oiseaux, compté dans le DOM au moment du rendu |
+
+**Comment le générateur le dit.** `lib/base.py` : `Card.layer(kind)` pose un `<g data-layer>` (photo, fond, blason, oiseaux, plaque) ; chaque `<text>` reçoit `data-slot` ; `@plate_layer` sur une fonction d'inscription range ce qu'elle dessine dans la plaque et nomme ses emplacements par ses arguments ; `nid()` est un compteur porté par `Card` (une régénération partielle rend des SVG identiques à l'octet) ; un cadre qui dessine avec la bibliothèque africaine ou cosmique d'un atelier porte le motif `afrique` ou `cosmos`. Le rendu ne bouge pas : les 191 SVG instrumentés rendent, au pixel près, la référence ci-dessous. L'export charge les polices variables dans leur plage de graisses (`lib/page.mjs`, `exactFontsCss`) : Manrope 600, Fraunces 700 ou Caveat 600 ne sont plus substituées.
+
+**La référence de fidélité** (`reference/`, lot L0) : la génération de `c5b1390040` rendue en 1080×1920, `sha256.json` (empreinte de chaque SVG et de chaque rendu, versions de Chromium et de libwebp) et un WebP sans perte par collection (`reference/samples/`). `node lib/reference.mjs out ../reference --commit <sha>` la reproduit ; `recompose.mjs` vérifie d'abord que le rendu de référence retrouve son sha256, puis juge la recomposition hors boîtes de texte et de blason. sharp est celui du workspace de la passerelle (ou `$SHARP_MODULE`) : sa version épingle les octets des couches.
 
 ## La règle d'empiètement
 
