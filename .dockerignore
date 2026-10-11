@@ -96,6 +96,9 @@ docker-compose*.yml
 # `runner` ne copie que `dist/`.
 !apps/web/scripts
 !apps/web/scripts/**
+# La configuration de démarrage de la webapp (#10208) : l'étage `runner` la copie
+# (apps/web/Dockerfile) ; filtrée par `**/*.sh`, le build échouait sur « not found ».
+!apps/web/docker/runtime-config.sh
 !services/gateway/docker-entrypoint.sh
 !services/translator/docker-entrypoint.sh
 !services/translator/docker-entrypoint-mongodb.sh
