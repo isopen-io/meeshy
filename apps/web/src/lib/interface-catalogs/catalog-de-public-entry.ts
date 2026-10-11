@@ -1,0 +1,40 @@
+import type frPublicEntry from './catalog-fr-public-entry';
+
+/** L'entrée publique (#10007) — tranche `de` de `catalog-fr-public-entry.ts`, mêmes clés. */
+const dePublicEntry = {
+  'publicHeader.home': 'Meeshy-Startseite',
+  'publicHeader.language': 'Sprache',
+  'login.world.title': '{title} betreten',
+  'login.world.subtitle': 'Ohne Konto · dein Name und deine Sprache',
+  'login.world.or': 'oder mit deinem Konto',
+  'login.offline': 'Offline – eine Anmeldung ist gerade nicht möglich.',
+  'login.twoFactor.title': 'Zwei-Faktor-Authentifizierung',
+  'login.twoFactor.lead': 'Gib den Code aus deiner Authentifizierungs-App ein.',
+  'login.twoFactor.code': '6-stelliger Code',
+  'login.twoFactor.submit': 'Bestätigen',
+  'login.twoFactor.busy': 'Wird geprüft…',
+  'login.twoFactor.cancel': 'Abbrechen',
+  'login.passwordDoor': 'Mit Benutzername und Passwort anmelden',
+  'login.username.label': 'E-Mail, Telefon oder Benutzername',
+  'login.username.placeholder': 'Benutzername, E-Mail oder Telefon',
+  'login.password.label': 'Passwort',
+  'login.submit': 'Anmelden',
+  'login.submit.busy': 'Anmeldung…',
+  'login.emailDoor': 'Per E-Mail anmelden',
+  'login.forgotPassword': 'Passwort vergessen?',
+  'login.forgotPassword.label': 'Passwort vergessen',
+  'login.noAccount': 'Kein Konto?',
+  'login.createAccount': 'Konto erstellen',
+  'magicLink.title': 'Deine E-Mail-Adresse',
+  'magicLink.howItWorks': 'So funktioniert’s',
+  'magicLink.howItWorks.text': 'Kein Passwort zum Merken: Wir schicken dir einen Link per E-Mail. Öffne ihn und du bist angemeldet.',
+  'magicLink.email.label': 'E-Mail-Adresse',
+  'magicLink.email.placeholder': 'name@beispiel.de',
+  'magicLink.email.invalid': 'Ungültige E-Mail-Adresse',
+  'magicLink.rateLimited': 'Zu viele Anfragen – versuche es in einer Stunde erneut.',
+  'magicLink.offline': 'Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.',
+  'magicLink.submit': 'Link erhalten',
+  'magicLink.submit.busy': 'Wird gesendet…',
+} satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
+
+export default dePublicEntry;

@@ -1,0 +1,40 @@
+import type frPublicEntry from './catalog-fr-public-entry';
+
+/** L'entrée publique (#10007) — tranche `ar` de `catalog-fr-public-entry.ts`, mêmes clés. */
+const arPublicEntry = {
+  'publicHeader.home': 'الصفحة الرئيسية لـ Meeshy',
+  'publicHeader.language': 'اللغة',
+  'login.world.title': 'ادخل إلى {title}',
+  'login.world.subtitle': 'بدون حساب · اسمك ولغتك',
+  'login.world.or': 'أو بحسابك',
+  'login.offline': 'غير متصل — لا يمكن تسجيل الدخول حاليًا.',
+  'login.twoFactor.title': 'المصادقة الثنائية',
+  'login.twoFactor.lead': 'أدخل الرمز من تطبيق المصادقة لديك.',
+  'login.twoFactor.code': 'رمز من 6 أرقام',
+  'login.twoFactor.submit': 'تأكيد',
+  'login.twoFactor.busy': 'جارٍ التحقق…',
+  'login.twoFactor.cancel': 'إلغاء',
+  'login.passwordDoor': 'تسجيل الدخول باسم المستخدم وكلمة المرور',
+  'login.username.label': 'البريد الإلكتروني أو الهاتف أو اسم المستخدم',
+  'login.username.placeholder': 'اسم المستخدم أو البريد الإلكتروني أو الهاتف',
+  'login.password.label': 'كلمة المرور',
+  'login.submit': 'تسجيل الدخول',
+  'login.submit.busy': 'جارٍ تسجيل الدخول…',
+  'login.emailDoor': 'تسجيل الدخول عبر البريد الإلكتروني',
+  'login.forgotPassword': 'هل نسيت كلمة المرور؟',
+  'login.forgotPassword.label': 'نسيت كلمة المرور',
+  'login.noAccount': 'ليس لديك حساب؟',
+  'login.createAccount': 'إنشاء حساب',
+  'magicLink.title': 'عنوان بريدك الإلكتروني',
+  'magicLink.howItWorks': 'كيف يعمل',
+  'magicLink.howItWorks.text': 'لا كلمة مرور لتتذكرها: نرسل إليك رابطًا عبر البريد الإلكتروني. افتحه وستكون قد سجّلت الدخول.',
+  'magicLink.email.label': 'عنوان البريد الإلكتروني',
+  'magicLink.email.placeholder': 'name@example.com',
+  'magicLink.email.invalid': 'عنوان بريد إلكتروني غير صالح',
+  'magicLink.rateLimited': 'طلبات كثيرة جدًا — أعد المحاولة بعد ساعة.',
+  'magicLink.offline': 'لا يوجد اتصال. تحقّق من شبكتك وأعد المحاولة.',
+  'magicLink.submit': 'استلام الرابط',
+  'magicLink.submit.busy': 'جارٍ الإرسال…',
+} satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
+
+export default arPublicEntry;

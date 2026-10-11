@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { WorldEntry } from '@meeshy/shared/types/world';
@@ -65,7 +65,7 @@ const closed = (): Promise<ApiResult<WorldEntry>> =>
 
 const never = (): Promise<ApiResult<WorldEntry>> => new Promise(() => undefined);
 
-async function mount(node: JSX.Element): Promise<HTMLDivElement> {
+async function mount(node: ReactNode): Promise<HTMLDivElement> {
   window.history.replaceState({}, '', '/login');
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -78,6 +78,18 @@ async function mount(node: JSX.Element): Promise<HTMLDivElement> {
 }
 
 const text = (el: Element | null) => (el?.textContent ?? '').replace(/\s+/gu, ' ').trim();
+
+/** Le catalogue de la langue choisie se charge (`import()`) AVANT qu'elle ne
+ * soit posée : on attend qu'elle le soit, sans présumer d'un délai. */
+async function choose(select: HTMLSelectElement, language: string): Promise<void> {
+  await act(async () => {
+    select.value = language;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    for (let tries = 0; tries < 200 && document.documentElement.lang !== language; tries += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  });
+}
 
 const precedes = (first: Element, second: Element) =>
   (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
@@ -124,7 +136,7 @@ describe('/login — World Wide en premier (#10007)', () => {
 
   test('pendant le second facteur, la carte se tait : l’écran ne propose que le code', async () => {
     sessionStore.getState().beginTwoFactor({
-      user: { id: 'u1', username: 'ada', email: 'ada@example.com', firstName: 'Ada', lastName: 'L', displayName: 'Ada', avatar: null },
+      user: { id: 'u1', username: 'ada', email: 'ada@example.com', firstName: 'Ada', lastName: 'L', displayName: 'Ada', avatar: '' },
       twoFactorToken: 'jeton-2fa',
     });
     const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
@@ -135,13 +147,11 @@ describe('/login — World Wide en premier (#10007)', () => {
 });
 
 describe('l’en-tête public change la langue d’interface (#10007)', () => {
-  test('la connexion porte le logo vers l’accueil et un sélecteur des sept langues, chacune dans sa propre langue', async () => {
+  test('la connexion porte le sélecteur des sept langues, chacune dans sa propre langue — et pas l’icône d’application', async () => {
     const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
     const header = el.querySelector('[data-public-header]');
     expect(header).not.toBeNull();
-    const home = header?.querySelector('a[data-public-home]');
-    expect(home?.getAttribute('href')).toBe('/');
-    expect(home?.querySelector('img')?.getAttribute('src')).toBe('/brand/logo.png');
+    expect(el.innerHTML).not.toContain('/brand/logo.png');
 
     const select = header?.querySelector('select[data-interface-language]') as HTMLSelectElement | null;
     expect(select).not.toBeNull();
@@ -162,11 +172,7 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
   test('choisir « English » retient le choix et relit l’écran en anglais, sans rechargement', async () => {
     const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
-    await act(async () => {
-      select.value = 'en';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await choose(select, 'en');
 
     expect(document.documentElement.lang).toBe('en');
     expect(localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('en');
@@ -180,24 +186,22 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
   test('l’arabe retourne la page : `dir="rtl"` posé avec la langue', async () => {
     const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
-    await act(async () => {
-      select.value = 'ar';
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    await choose(select, 'ar');
     expect(document.documentElement.lang).toBe('ar');
     expect(document.documentElement.dir).toBe('rtl');
     expect(text(el)).not.toContain('Mot de passe oublié');
   });
 
-  test('l’inscription porte le même en-tête, avec « Se connecter »', async () => {
+  test('l’inscription porte le même en-tête — sa croix vers la connexion, la marque vers l’accueil et la langue', async () => {
     const el = await mount(
       <SignupScreen referralDeps={{ validate: async () => ({ ok: false, status: 0, error: 'hors sujet' }) }} />,
     );
     const header = el.querySelector('[data-public-header]');
     expect(header).not.toBeNull();
     expect(header?.querySelector('select[data-interface-language]')).not.toBeNull();
-    expect(header?.querySelector('a[data-public-home]')?.getAttribute('href')).toBe('/');
-    expect(header?.querySelector('a[data-public-sign-in]')?.getAttribute('href')).toBe(href('login'));
+    const home = header?.querySelector('a[data-public-home]');
+    expect(home?.getAttribute('href')).toBe('/');
+    expect(home?.querySelectorAll('line')).toHaveLength(3);
+    expect(header?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe(href('login'));
   });
 });
