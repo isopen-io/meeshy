@@ -88,7 +88,7 @@ async function submit(deps: PublishSamplePackDeps, token: string): Promise<'subm
   const form = new FormData();
   form.append('manifest', JSON.stringify(sampleStickerPackManifest()));
   const images = await Promise.all(SAMPLE_STICKER_FILES.map(async ({ file }) => ({ file, bytes: await deps.readAsset(file) })));
-  images.forEach(({ file, bytes }) => form.append(file, new Blob([bytes], { type: 'image/webp' }), file));
+  images.forEach(({ file, bytes }) => form.append(file, new Blob([Uint8Array.from(bytes)], { type: 'image/webp' }), file));
   const { status, body } = await call(deps, '/sticker-packs/submissions', { method: 'POST', headers: bearer(token), body: form });
   if (status === 201) return 'submitted';
   if (status === 409 && body.code === 'STICKER_PACK_SLUG_TAKEN') return 'taken';
