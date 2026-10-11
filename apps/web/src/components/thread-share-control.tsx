@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
-import { publicWebOrigin } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { LINK_ANNOUNCE_MS } from '@/lib/links/link-copy';
