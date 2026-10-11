@@ -971,6 +971,15 @@
         "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 3,44 Ko gzip -9 pour les SEPT catalogues de « Mes sons » (cles `soundsMine.*` : l ecran `/me/sounds`, son etat vide, son erreur, le retrait d un son et sa confirmation). Sortis du catalogue d interface, qu ils avaient porte a 183,9 Ko sur dev (plafond 182) ; charges par l ecran (`SoundsMineScreen`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_device_translation": {
+      "pattern": "^assets/catalog-device-translation-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #9898, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,52 Ko gzip -9 pour les SEPT catalogues de la rangee « Traduire sur cet appareil » de Reglages et de sa legende (langues prises en charge, ~110 Mo par paire, partage aux membres). Sortis du catalogue d interface, qu ils portaient a 183,18 Ko sur la PR #9902 fusionnee avec dev (181,61 sans eux, plafond 182) ; charges par la rangee (`DeviceTranslationRow`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+      }
+    },
     "send_sheet_screen": {
       "pattern": "^assets/send-sheet-screen-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,

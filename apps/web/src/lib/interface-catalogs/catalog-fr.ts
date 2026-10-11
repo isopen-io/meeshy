@@ -10,7 +10,6 @@
  * où un site d'appel le concatène.
  */
 import frGallery from './catalog-fr-gallery';
-import frDeviceTranslation from './catalog-fr-device-translation';
 import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
 import frStudioChrome from './catalog-fr-studio-chrome';
@@ -1089,7 +1088,6 @@ const fr = {
   ...frEphemeral,
   ...frWriteRestriction,
   ...frGallery,
-  ...frDeviceTranslation,
   ...frMessageCard,
   ...frConversationCard,
 

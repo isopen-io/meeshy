@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -18,6 +18,7 @@ import {
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { isDeviceTranslationCatalogLoaded, loadDeviceTranslationCatalog, translateDeviceTranslation } from '@/lib/i18n-device-translation-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -218,20 +219,18 @@ export function DataSection({
    donc jamais grisé hors ligne. `disabled` ne sert qu'à poser une bascule dont
    l'état n'est pas encore lu. */
 function LocalToggleRow({
-  language,
   setting,
-  label,
-  info,
+  name,
+  caption,
   icon,
   tint,
   enabled,
   disabled = false,
   onToggle,
 }: {
-  readonly language: InterfaceLanguage;
   readonly setting: string;
-  readonly label: SettingsKey;
-  readonly info: SettingsKey;
+  readonly name: string;
+  readonly caption: string;
   readonly icon: IconSpec;
   readonly tint?: string;
   readonly enabled: boolean;
@@ -239,13 +238,12 @@ function LocalToggleRow({
   readonly onToggle: (enabled: boolean) => void;
 }) {
   const captionId = useId();
-  const name = translate(language, label);
   return (
     <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
       <RowIcon {...(tint === undefined ? {} : { tint })}>
         <IconOf icon={icon} size={15} />
       </RowIcon>
-      <RowText label={name} caption={translate(language, info)} captionId={captionId} />
+      <RowText label={name} caption={caption} captionId={captionId} />
       <button
         type="button"
         role="switch"
@@ -270,10 +268,9 @@ function LocalToggleRow({
 function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
   return (
     <LocalToggleRow
-      language={language}
       setting="galleryAutoSave"
-      label="settings.gallery.auto_save"
-      info="settings.gallery.auto_save.info"
+      name={translate(language, 'settings.gallery.auto_save')}
+      caption={translate(language, 'settings.gallery.auto_save.info')}
       icon={{ set: 'socle', name: 'image' }}
       tint="var(--color-success)"
       enabled={gallery.enabled}
@@ -282,14 +279,29 @@ function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceL
   );
 }
 
-/* LA TRADUCTION SUR L'APPAREIL (#9898) — offerte partout : tout navigateur a un Worker, et le consentement est local. */
+/* LA TRADUCTION SUR L'APPAREIL (#9898) — offerte partout : tout navigateur a un Worker, et le consentement est local.
+   Ses libellés vivent hors du catalogue d'interface (`i18n-device-translation-catalog.ts`) : la rangée les attend. */
 function DeviceTranslationRow({ language, toggle }: { readonly language: InterfaceLanguage; readonly toggle: DeviceTranslationSetting }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isDeviceTranslationCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadDeviceTranslationCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isDeviceTranslationCatalogLoaded(language)) return null;
   return (
     <LocalToggleRow
-      language={language}
       setting="deviceTranslation"
-      label="settings.device_translation"
-      info="settings.device_translation.info"
+      name={translateDeviceTranslation(language, 'settings.device_translation')}
+      caption={translateDeviceTranslation(language, 'settings.device_translation.info')}
       icon={{ set: 'socle', name: 'translate' }}
       enabled={toggle.enabled}
       disabled={!toggle.ready}

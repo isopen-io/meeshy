@@ -6,6 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadDeviceTranslationCatalog } from '@/lib/i18n-device-translation-catalog';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 
 import {
@@ -33,8 +34,9 @@ import {
  * qu'aucun contrôle n'est offert quand il ne peut rien faire.
  */
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
+  await loadDeviceTranslationCatalog('fr');
 });
 
 afterAll(async () => {
@@ -341,9 +343,9 @@ describe('la traduction sur l’appareil (#9898)', () => {
     expect(host.querySelector(`[id="${captionId}"]`)?.textContent).toContain('110 Mo');
   });
 
-  test('chaque langue d’interface la dit', async () => {
+  test('chaque langue d’interface la dit, depuis son catalogue chargé à la demande', async () => {
     for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
-      await loadInterfaceCatalog(language);
+      await Promise.all([loadInterfaceCatalog(language), loadDeviceTranslationCatalog(language)]);
       const host = dom(<DataSection language={language} deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
       const toggle = host.querySelector('[data-setting="deviceTranslation"]');
       expect(toggle?.getAttribute('aria-label') ?? '').not.toBe('');
