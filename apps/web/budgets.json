@@ -917,6 +917,24 @@
         "source": "Mesure du 2026-10-09 (`bun run build` puis gzip -9) : 3,03 Ko pour les SEPT catalogues de la feuille « Vues » enrichie (cles `viewerEngagement.*` : ce que chaque personne a fait, le detail d une personne, l etat vide et le refus d une publication). Charges AVEC la feuille (`preparePublicationViewersSheet`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_world_participant_card": {
+      "pattern": "^assets/catalog-world-participant-card-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #10102, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (`bunx vite build` sur une construction de recette a part, puis `measure-weight`, gzip -9) : 5,99 Ko pour les SEPT catalogues de la fiche d un participant de World Wide (cles `worldCard.*` : en-tete, sections, rangs, roles, statuts, etats). Charges pour l EQUIPE seulement, quand le fil de World Wide lui ouvre les fiches (`world-participant-card-host.tsx`), jamais avec la premiere peinture ni pour un autre lecteur ; un lecteur n en telecharge qu UN (moins de 1 Ko). Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
+      }
+    },
+    "world_participant_card_sheet": {
+      "pattern": "^assets/world-participant-card-sheet-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #10102, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (construction de recette a part, `measure-weight`, gzip -9) : 3,75 Ko pour la feuille de la fiche d un participant de World Wide (projection de la fiche, lignes, etats, decodeur zod/mini du contrat). Chargee au premier toucher d un auteur par l equipe, jamais avant. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+      }
+    },
     "interface_catalogs_message_pieces": {
       "pattern": "^assets/catalog-message-pieces-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
