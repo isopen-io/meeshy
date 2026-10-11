@@ -5303,4 +5303,8 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **Une donnée personnelle ne touche pas le disque.** La clé de requête descend d'`ADMIN_SOUVERAIN_PREFIXE`, donc elle n'est pas persistée : le cache-first reste en mémoire, avec une minute de fraîcheur pour ne pas écrire une trace d'audit à chaque rendu. La route sort du seau `api` du service worker, car Workbox ne lit pas `no-store`.
 - **Rien ne se charge pour qui n'ouvre rien.** Les libellés `worldCard.*` (sept langues) se chargent quand la porte s'ouvre, pour l'équipe seulement. La feuille se charge au premier toucher.
 
+- **Un refus relit le rôle.** Un 403 referme la feuille ET invalide la matrice `/me/permissions` : un rôle retiré côté passerelle referme la porte aussitôt, sans laisser cinq minutes d'auteurs touchables dont le toucher ne fait rien.
+- **La pastille se lit.** « Anonyme » et « Compte Meeshy » écrivent leur libellé à l'encre du texte. La teinte (violet du masque, accent du fil) ne colore que le fond et le glyphe : teinte sur sa propre teinte à 14 %, le libellé tombait à 3,15:1 et 3,55:1, sous le 4,5:1 de WCAG 1.4.3.
+- **L'inventaire des avatars tient.** Dans le bouton de la fiche, l'avatar de l'auteur passe par un relais qui répand tout ce que l'hôte lui donne, photo comprise. L'hôte n'en retire que l'identité, parce qu'un lien de profil ne se pose pas dans un bouton. L'en-tête de la feuille est exempté dans `check-avatar-src`, avec l'endroit où la chaîne s'arrête : la liste blanche `worldParticipantCardSchema` ne porte aucune photo.
+
 **Ce qui reste.** La vue iOS est suivie dans #10125. L'écart avec la matrice d'administration est à trancher dans #10105.
