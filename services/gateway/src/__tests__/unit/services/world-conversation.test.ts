@@ -218,6 +218,15 @@ describe('ensureWorldConversation — la conversation World Wide (#10000)', () =
     expect(prisma.participant.rows.find((row) => row.userId === ADMIN.id)?.language).toBe('fr');
   });
 
+  it('descend le Prisme jusqu’à la locale appareil : un compte sans langue applicative entre dans la sienne', async () => {
+    const localeOnly = { ...JCNM, systemLanguage: null, regionalLanguage: null, customDestinationLanguage: null, deviceLocale: 'es' };
+    const prisma = makeDb({ users: [MEESHY, ADMIN, localeOnly] });
+
+    await seed(prisma);
+
+    expect(prisma.participant.rows.find((row) => row.userId === JCNM.id)?.language).toBe('es');
+  });
+
   it('ne crée jamais jcnm : absent, il est journalisé SANS son adresse et le seed continue', async () => {
     const prisma = makeDb({ users: [MEESHY, ADMIN] });
     const logger = makeLogger();

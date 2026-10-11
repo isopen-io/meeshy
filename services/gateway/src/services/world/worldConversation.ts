@@ -47,7 +47,7 @@ import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { generateUniqueShareLinkId } from '../../routes/links/utils/link-helpers';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { isShareLinkOpen } from '../conversationCard';
-import { recipientLanguage } from '../../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import {
   WORLD_CREATOR_DESIGNATION,
   designateWorldReservedAccounts,
@@ -167,6 +167,9 @@ async function ensureMember(
   const existing = await find();
   if (existing) return existing.isActive ? 'already-member' : 'left';
 
+  // La langue de la participation se descend ICI, sur une lecture qui charge
+  // les quatre colonnes du Prisme (#4642, #4662) : posée une fois, à la création.
+  const prefs = await prisma.user.findUnique({ where: { id: account.id }, select: { ...RECIPIENT_LANG_SELECT } });
   const { created } = await createOrReread(
     () =>
       prisma.participant.create({
@@ -176,7 +179,7 @@ async function ensureMember(
           type: 'user',
           displayName: account.displayName || account.username,
           role,
-          language: recipientLanguage(account, 'fr'),
+          language: recipientLanguage(prefs, 'fr'),
           permissions: { ...FOUNDING_MEMBER_PERMISSIONS },
           joinedAt: new Date(),
           isActive: true,
