@@ -58,9 +58,9 @@ describe('la feuille de la colonne ne touche pas au téléphone', () => {
   });
 });
 
-describe('dans le volet du cadre scindé (#10073)', () => {
-  test('le retour vers la liste se retire, la liste étant à côté', () => {
-    expect(ruleIn(mediaBlock(SPLIT), '[data-split-detail] [data-thread-back]')).toContain('display: none');
+describe('dans le volet du cadre scindé (#10073, #10117)', () => {
+  test('le retour vers la liste reste : il referme le fil, la liste à côté', () => {
+    expect(withoutComments(css)).not.toContain('[data-thread-back]');
   });
 });
 
