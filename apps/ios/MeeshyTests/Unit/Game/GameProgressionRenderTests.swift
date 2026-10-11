@@ -235,14 +235,14 @@ final class GameProgressionRenderTests: XCTestCase {
         let sans = APIEngagementProgress(
             counters: [], milestones: [], streak: .init(currentStreakDays: 0, longestStreakDays: 0),
             level: .init(engagementScore: 36),
-            meesh: GameFixture.meesh()
+            meesh: GameFixture.meesh(debitable: 50_000_000)
         )
         let vm = await loadedViewModel(sans)
 
         let rendu = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
-        // La fiche relit la progression à l'apparition : son contenu ne se pose qu'après quelques tours. On ATTEND
-        // le détail d'avant (le conteneur, ou son bouton de frappe) au lieu de lire l'arbre une seule fois.
-        let detail = rendu.frame(of: "progression.meesh.detail") ?? rendu.frame(of: "progression.meesh.mint", borne: 2)
+        // Le harnais ne relève que les ÉLÉMENTS d'accessibilité : le conteneur du détail d'avant (`.contain`) n'en est
+        // pas un, son bouton de frappe si — d'où des points de quoi frapper. On attend le bouton, posé après la relecture.
+        let detail = rendu.frame(of: "progression.meesh.mint")
         let identifiants = rendu.identifiers
 
         XCTAssertNotNil(detail, "la fiche des Meeshes garde sa frappe d'avant : \(identifiants) — "
