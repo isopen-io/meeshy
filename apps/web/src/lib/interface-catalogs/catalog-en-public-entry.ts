@@ -1,0 +1,40 @@
+import type frPublicEntry from './catalog-fr-public-entry';
+
+/** L'entrée publique (#10007) — tranche `en` de `catalog-fr-public-entry.ts`, mêmes clés. */
+const enPublicEntry = {
+  'publicHeader.home': 'Meeshy home',
+  'publicHeader.language': 'Language',
+  'login.world.title': 'Enter {title}',
+  'login.world.subtitle': 'No account · your name and your language',
+  'login.world.or': 'or with your account',
+  'login.offline': 'Offline — signing in isn’t possible right now.',
+  'login.twoFactor.title': 'Two-factor authentication',
+  'login.twoFactor.lead': 'Enter the code from your authenticator app.',
+  'login.twoFactor.code': '6-digit code',
+  'login.twoFactor.submit': 'Verify',
+  'login.twoFactor.busy': 'Verifying…',
+  'login.twoFactor.cancel': 'Cancel',
+  'login.passwordDoor': 'Sign in with a username and password',
+  'login.username.label': 'Email, phone or username',
+  'login.username.placeholder': 'Username, email or phone',
+  'login.password.label': 'Password',
+  'login.submit': 'Sign in',
+  'login.submit.busy': 'Signing in…',
+  'login.emailDoor': 'Sign in by email',
+  'login.forgotPassword': 'Forgot password?',
+  'login.forgotPassword.label': 'Forgot password',
+  'login.noAccount': 'No account?',
+  'login.createAccount': 'Create an account',
+  'magicLink.title': 'Your email address',
+  'magicLink.howItWorks': 'How it works',
+  'magicLink.howItWorks.text': 'No password to remember: we email you a link. Open it and you’re signed in.',
+  'magicLink.email.label': 'Email address',
+  'magicLink.email.placeholder': 'name@example.com',
+  'magicLink.email.invalid': 'Invalid email address',
+  'magicLink.rateLimited': 'Too many requests — try again in an hour.',
+  'magicLink.offline': 'No connection. Check your network and try again.',
+  'magicLink.submit': 'Get the link',
+  'magicLink.submit.busy': 'Sending…',
+} satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
+
+export default enPublicEntry;
