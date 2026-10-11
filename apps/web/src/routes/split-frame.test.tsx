@@ -6,6 +6,7 @@ import { LensRow, type LensRowProps } from '@/components/lens-row';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
 import { createRouter, navigate, useParams } from '@/lib/router';
+import { floatingMenusReady } from '@/test-support/floating-menus-ready';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { SPLIT_QUERY, splitPaneOf } from '@/lib/view/split-query';
@@ -31,7 +32,7 @@ type Listener = (event: { matches: boolean }) => void;
 const media = { wide: true, listeners: new Set<Listener>() };
 let originalMatchMedia: typeof window.matchMedia;
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   originalMatchMedia = window.matchMedia;
@@ -43,6 +44,7 @@ beforeAll(() => {
     addEventListener: (_: string, listener: Listener) => media.listeners.add(listener),
     removeEventListener: (_: string, listener: Listener) => media.listeners.delete(listener),
   })) as unknown as typeof window.matchMedia;
+  await floatingMenusReady();
 });
 
 afterAll(async () => {
