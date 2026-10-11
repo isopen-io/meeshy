@@ -104,6 +104,8 @@ const EXEMPLES = {
   invitation: 'demande-inconnue',
   report: 'signalement-inconnu',
   concept: 'level',
+  semaine: '2026-12-21',
+  saison: '1',
 };
 
 const concretise = (pattern) =>
