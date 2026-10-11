@@ -32,7 +32,7 @@ export type LensStickerCategory = { readonly name: string };
 const rowsIdOf = (id: LensSectionId): string => `section-rows-${id.replace(/[^\w-]/g, '-')}`;
 
 /** La cible du doigt (#10103) : 44 px, la hauteur minimale d'un contrôle. */
-const TOGGLE_MIN_HEIGHT = 44;
+export const SECTION_TOGGLE_MIN_HEIGHT = 44;
 
 /**
  * LE STICKER DE SECTION (#5694, écart 6) — miroir
@@ -117,7 +117,7 @@ function FoldToggle({ id, label, fold }: { readonly id: LensSectionId; readonly 
       aria-label={lensSectionAccessibleName({ language: currentInterfaceLanguage(), label, folded: fold.folded, unread: fold.unread })}
       onClick={fold.onToggle}
       className="flex w-full items-center gap-2 text-start uppercase"
-      style={{ font: 'inherit', letterSpacing: 'inherit', color: 'inherit', minHeight: TOGGLE_MIN_HEIGHT }}
+      style={{ font: 'inherit', letterSpacing: 'inherit', color: 'inherit', minHeight: SECTION_TOGGLE_MIN_HEIGHT }}
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <span className="normal-case" style={{ letterSpacing: 'normal' }}>
