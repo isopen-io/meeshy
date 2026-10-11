@@ -654,3 +654,92 @@ describe('MissionService.claimChest — le coffre du jour', () => {
     expect(db.user.rows[0]?.flameFreezes).toBe(2);
   });
 });
+
+/**
+ * LE COURS DE LA PRIME EST FIGÉ AU DÉBUT DU JOUR DE JEU (#10219, suite de #10011). La prime se tire au prix de la
+ * prochaine Meesh pour les frappes ANTÉRIEURES au jour de jeu, gravé sur `GameDay.chestMintBase` à la première
+ * lecture : une frappe du jour, avant l'ouverture, ne fait plus monter la prime.
+ */
+describe('MissionService.claimChest — la prime au cours du début du jour (#10219)', () => {
+  const YESTERDAY = new Date('2026-10-04T12:00:00Z');
+  const THIS_MORNING = new Date('2026-10-05T09:00:00Z');
+  const allDone = (db: FakeGameDb) => {
+    insertMission(db, { completedAt: NOW });
+    insertMission(db, { completedAt: NOW, difficulty: 'medium' });
+    insertMission(db, { completedAt: NOW, difficulty: 'hard' });
+  };
+  const mint = (db: FakeGameDb, n: number, createdAt: Date) =>
+    db.meeshLedger.rows.push({ id: `m${n}`, userId: USER, delta: 1, reason: 'mint', requestId: `frappe-${n}`, createdAt });
+  const spying = (db: FakeGameDb, creditPoints: ReturnType<typeof setup>['creditPoints']) => {
+    const seen: number[] = [];
+    const service = new MissionService(db.prisma, {
+      creditPoints,
+      chest: (params) => {
+        seen.push(params.nextMeeshPrice);
+        return { points: 500 + params.nextMeeshPrice, fragment: false, freeze: false, glory: 50, bonus: 'whole', bonusPoints: params.nextMeeshPrice };
+      },
+    });
+    return { service, seen };
+  };
+
+  it('une frappe avant l’ouverture ne change pas la prime : le cours reste celui des frappes d’avant le jour', async () => {
+    const { db, creditPoints } = setup();
+    const { service, seen } = spying(db, creditPoints);
+    for (let n = 0; n < 9; n += 1) mint(db, n, YESTERDAY);
+    // La 10e frappe, CE MATIN : le prix de la 11e passerait de 1 221 à 1 587.
+    mint(db, 9, THIS_MORNING);
+    allDone(db);
+
+    const issue = await service.claimChest({ userId: USER, requestId: 'coffre-cours-1', now: NOW });
+
+    expect(seen).toEqual([1221]);
+    expect(issue.reward).toMatchObject({ bonus: 'whole', bonusPoints: 1221 });
+    expect(db.gameDay.rows[0]).toMatchObject({ dayKey: DAY, chestMintBase: 9 });
+  });
+
+  it('le montant est le même avant et après une frappe du jour : le cours lu à l’affichage est celui de la réclamation', async () => {
+    const { db, creditPoints } = setup();
+    const { service, seen } = spying(db, creditPoints);
+    for (let n = 0; n < 9; n += 1) mint(db, n, YESTERDAY);
+    allDone(db);
+
+    const before = await service.chestPriceBase({ userId: USER, now: NOW });
+    mint(db, 9, THIS_MORNING);
+    const after = await service.chestPriceBase({ userId: USER, now: NOW });
+    await service.claimChest({ userId: USER, requestId: 'coffre-cours-2', now: NOW });
+
+    expect(before).toBe(9);
+    expect(after).toBe(9);
+    expect(seen).toEqual([1221]);
+  });
+
+  it('le cours GRAVÉ fait foi : il ne se recalcule pas, même si le registre dit autre chose', async () => {
+    const { db, creditPoints } = setup();
+    const { service, seen } = spying(db, creditPoints);
+    for (let n = 0; n < 12; n += 1) mint(db, n, YESTERDAY);
+    db.gameDay.rows.push({ id: 'grave', userId: USER, dayKey: DAY, rerollCount: 0, chestMintBase: 9 });
+    allDone(db);
+
+    await service.claimChest({ userId: USER, requestId: 'coffre-cours-3', now: NOW });
+
+    expect(seen).toEqual([1221]);
+    expect(db.gameDay.rows[0]).toMatchObject({ chestMintBase: 9 });
+  });
+
+  it('une journée sans cours gravé (ouverte avant #10219) le grave à la réclamation, une seule fois', async () => {
+    const { db, creditPoints } = setup();
+    const { service, seen } = spying(db, creditPoints);
+    for (let n = 0; n < 10; n += 1) mint(db, n, YESTERDAY);
+    db.gameDay.rows.push({ id: 'ancienne', userId: USER, dayKey: DAY, rerollCount: 0 });
+    allDone(db);
+
+    const first = await service.claimChest({ userId: USER, requestId: 'coffre-cours-4', now: NOW });
+    mint(db, 10, THIS_MORNING);
+    const again = await service.claimChest({ userId: USER, requestId: 'coffre-cours-4', now: NOW });
+
+    expect(seen).toEqual([1587]);
+    expect(again).toMatchObject({ status: 'already-claimed', reward: first.reward });
+    expect(creditPoints).toHaveBeenCalledTimes(1);
+    expect(db.gameDay.rows[0]).toMatchObject({ chestMintBase: 10 });
+  });
+});
