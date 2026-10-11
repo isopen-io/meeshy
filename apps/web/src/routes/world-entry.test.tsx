@@ -135,7 +135,7 @@ describe('WorldGuestEntry — le nom, puis la langue', () => {
     typeInto(nameField(host), 'Awa');
     await submitName(host);
     expect(step(host)).toBe('language');
-    expect(host.textContent).toContain('Bonjour Awa');
+    expect(host.textContent?.replace(/[\u2066-\u2069]/gu, '')).toContain('Bonjour Awa');
   });
 
   test('le nom venu de la landing ouvre directement sur la langue', async () => {
@@ -152,10 +152,10 @@ describe('WorldGuestEntry — le nom, puis la langue', () => {
     expect(radio(host, 'fr')?.getAttribute('aria-checked')).toBe('false');
   });
 
-  test('un appareil dans une langue hors des sept propose l’anglais', async () => {
-    const { deps: d } = deps({ deviceLanguages: () => ['ja-JP'] });
+  test('la première langue de l’appareil parmi les sept est proposée', async () => {
+    const { deps: d } = deps({ deviceLanguages: () => ['ja-JP', 'de-DE', 'en'] });
     const host = await mount({ initialName: 'Awa', deps: d });
-    expect(radio(host, 'en')?.getAttribute('aria-checked')).toBe('true');
+    expect(radio(host, 'de')?.getAttribute('aria-checked')).toBe('true');
   });
 
   test('retour depuis la langue rend le nom, saisi tel quel', async () => {

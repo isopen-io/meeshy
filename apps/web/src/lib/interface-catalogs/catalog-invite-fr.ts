@@ -185,6 +185,22 @@ const fr = {
   'linkDetail.announce.deleted': 'Lien supprimé.',
   'linkDetail.announce.deleteFailed': 'Le lien n’a pas été supprimé.',
   'linkDetail.announce.offline': 'Hors ligne : rien n’a été envoyé.',
+  'world.enter': 'Entrer dans {title}',
+  'world.name.prompt': 'Comment doit-on vous appeler ?',
+  'world.name.label': 'Votre nom',
+  'world.name.placeholder': 'Ex. Awa',
+  'world.name.missing': 'Écrivez le nom que les autres verront.',
+  'world.continue': 'Continuer',
+  'world.language.greeting': 'Bonjour {name}, vous lirez tout en…',
+  'world.language.hint': 'Proposée depuis votre appareil.',
+  'world.language.group': 'Langue principale',
+  'world.step': 'Étape {index} sur {total}',
+  'world.back': 'Retour',
+  'world.loading': 'Un instant…',
+  'world.entering': 'Entrée…',
+  'world.unavailable': 'L’entrée sans compte n’est pas ouverte pour le moment.',
+  'world.error.enter': 'Impossible d’entrer pour le moment. Réessayez.',
+  'world.error.offline': 'Pas de connexion. Réessayez une fois en ligne.',
 } as const;
 
 export default fr;
