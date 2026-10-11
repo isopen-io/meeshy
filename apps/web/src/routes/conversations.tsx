@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
@@ -6,7 +7,7 @@ import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
-import { LensSection, type LensSectionFold } from '@/components/lens-sticker';
+import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
@@ -15,6 +16,7 @@ import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
+import { setCategoryExpanded, useConversationCategories } from '@/lib/api/conversation-categories';
 import { refreshListAction, rowAction, useConversations } from '@/lib/api/query';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
@@ -29,8 +31,8 @@ import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversatio
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
-import { foldedSectionUnread, isLensSectionFoldable } from '@/lib/lens/folded-unread';
-import { resolveLensSections, type LensSection as ResolvedLensSection, type LensSectionId } from '@/lib/lens/sections';
+import { resolveLensSections } from '@/lib/lens/sections';
+import { useSectionFolds } from '@/lib/view/use-section-folds';
 import { pinWorldWide } from '@/lib/lens/world-pin';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
@@ -355,6 +357,12 @@ export default function ConversationsScreen() {
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
   const overrides = useStore(conversationStore, (s) => s.overrides);
   /**
+   * LES CATÉGORIES DU LECTEUR (#10103) — un COMPTE seulement : un invité ou un
+   * visiteur anonyme n'a pas de tiroirs, ses conversations tombent par date.
+   * Servies depuis le cache persisté d'abord (aucune attente à l'ouverture).
+   */
+  const categories = useConversationCategories(apiDeps, apiDeps.source === 'fixtures' || session.status === 'authenticated');
+  /**
    * QUI ÉCRIT, PAR CONVERSATION (#5793) — l'écran s'abonne UNE fois et
    * distribue : une rangée est rendue dans un `.map`, elle ne peut pas appeler
    * de hook. Même forme que `overrides` juste au-dessus, et `sameRowProps`
@@ -421,33 +429,33 @@ export default function ConversationsScreen() {
       visible: ordered,
       emptiness: emptinessOf(conversations, ordered),
       world: pinned.world,
-      sections: resolveLensSections({ conversations: pinned.rest, overrides, now: new Date(), timeZone }),
+      sections: resolveLensSections({ conversations: pinned.rest, overrides, categories, now: new Date(), timeZone }),
     };
     // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversations, filter, search, viewer.id, overrides, timeZone, minute]);
+  }, [conversations, filter, search, viewer.id, overrides, categories, timeZone, minute]);
 
   /**
-   * LE PLIAGE DES SECTIONS (#8694) — l'état de l'ÉCRAN, comme `expandedSections`
-   * iOS pour `pinned` (jamais persisté là-bas non plus). Repliée, une section
-   * porte le compte de non-lus de ses conversations, lu sur la même source que
-   * les pastilles des rangées (`effectiveUnreadOf`) : un message reçu ou lu le
-   * fait bouger sans déplier.
+   * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
+   * sections par date mémorisées sur l'APPAREIL, catégories sur le SERVEUR
+   * (`isExpanded`, la préférence qu'iOS partage) ; suspendu le temps d'une
+   * recherche. Repliée, une section porte le compte de non-lus de ses
+   * conversations, lu sur la même source que les pastilles des rangées
+   * (`effectiveUnreadOf`) : un message reçu ou lu le fait bouger sans déplier.
+   * Les FILTRES, eux, ne déplient rien : ils retirent des rangées, et le compte
+   * d'une section repliée ne dit que ce que le filtre garde.
    */
-  const [folded, setFolded] = useState<ReadonlySet<LensSectionId>>(() => new Set());
-  const toggleFold = useCallback((id: LensSectionId) => {
-    setFolded((current) => (current.has(id) ? new Set([...current].filter((other) => other !== id)) : new Set([...current, id])));
-  }, []);
-  const foldOf = (section: ResolvedLensSection): LensSectionFold | undefined => {
-    if (!isLensSectionFoldable(section.id)) return undefined;
-    const isFolded = folded.has(section.id);
-    return {
-      folded: isFolded,
-      unread: foldedSectionUnread({ unreadCounts: section.conversations.map((c) => effectiveUnreadOf(c, overrides)), folded: isFolded }),
-      onToggle: () => toggleFold(section.id),
-    };
-  };
+  const queryClient = useQueryClient();
+  const { foldOf } = useSectionFolds({
+    searching: search.trim().length > 0,
+    onCategoryToggle: (id, isExpanded) => void setCategoryExpanded({ client: queryClient, deps: apiDeps, id, isExpanded }),
+  });
+  const folds = sections.map((section) =>
+    foldOf(section, section.conversations.map((c) => effectiveUnreadOf(c, overrides))),
+  );
+  /** Les rangées RÉELLEMENT montées — World Wide et les sections dépliées. */
+  const shownRows = (world === undefined ? 0 : 1) + sections.reduce((sum, section, i) => (folds[i]?.folded === true ? sum : sum + section.conversations.length), 0);
 
   /**
    * LA SENTINELLE DE DÉFILEMENT INFINI (#6195) — déclarée APRÈS `visible`
@@ -467,7 +475,11 @@ export default function ConversationsScreen() {
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
     rootMargin: loadMoreRootMargin(ROW_HEIGHT),
-    enabled: paginationState === 'idle' && visible.length > 0,
+    /* `shownRows`, pas `visible` (#10103) : une liste dont toutes les sections
+       sont repliées n'a AUCUNE rangée à l'écran — la sentinelle, posée juste
+       sous les en-têtes, serait intersectée à chaque page et viderait le
+       corpus entier pour des sections que personne ne regarde. */
+    enabled: paginationState === 'idle' && visible.length > 0 && shownRows > 0,
     onReach: () => void list.fetchNextPage(),
   });
 
@@ -652,11 +664,16 @@ export default function ConversationsScreen() {
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
         {world === undefined ? null : lensRowOf(world, true)}
-        {sections.map((section) => {
-          const fold = foldOf(section);
+        {sections.map((section, i) => {
+          const fold = folds[i];
           return (
-          <LensSection key={section.id} id={section.id} {...(fold === undefined ? {} : { fold })}>
-            {section.conversations.map((c) => lensRowOf(c))}
+          <LensSection
+            key={section.id}
+            id={section.id}
+            {...(section.category === undefined ? {} : { category: section.category })}
+            {...(fold === undefined ? {} : { fold })}
+          >
+            {fold?.folded === true ? null : section.conversations.map((c) => lensRowOf(c))}
           </LensSection>
           );
         })}

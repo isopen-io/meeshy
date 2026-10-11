@@ -28,6 +28,7 @@ import { UNREAD_CONVERSATION, UNREAD_CONVERSATION_ID, UNREAD_MESSAGES } from './
 import { LONG_MESSAGE_CONVERSATION, LONG_MESSAGE_CONVERSATION_ID, LONG_MESSAGE_MESSAGES } from './fixtures-long-message';
 import { ARCHIVE_CONVERSATION, ARCHIVE_CONVERSATION_ID, ARCHIVE_MESSAGES } from './fixtures-archive';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
+import { FIXTURE_TRAVAIL_CATEGORY_ID } from './fixtures-categories';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
 import { RENDER_MATRIX_CONVERSATION, RENDER_MATRIX_CONVERSATION_ID, RENDER_MATRIX_MESSAGES } from './fixtures-render-matrix';
@@ -550,7 +551,8 @@ export const CONVERSATIONS: readonly Conversation[] = [
     participants: [viewer, kwame],
     unreadCount: 0,
     /** LA SOURDINE (#5559 §5.3) : rend l'opacité 0.55 de la rangée observable. */
-    userPreferences: [{ isPinned: false, isMuted: true, isArchived: false }],
+    /** RANGÉE dans « Travail » (#10103) : la section de catégorie a une rangée de page 1. */
+    userPreferences: [{ isPinned: false, isMuted: true, isArchived: false, categoryId: FIXTURE_TRAVAIL_CATEGORY_ID }],
     lastMessage: message({
       id: 'm-annonces',
       senderId: 'u-kwame',
