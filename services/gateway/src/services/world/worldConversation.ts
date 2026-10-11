@@ -99,11 +99,13 @@ export type WorldSeedReport = {
  * l'entrée (`link-admission.ts`), et un salon vide de tout historique n'est
  * pas une conversation du monde entier.
  *
- * Le seed ne réécrit jamais ces termes sur un lien existant, à deux exceptions :
+ * Le seed ne réécrit jamais ces termes sur un lien existant, à une exception :
  * un lien semé AVANT la colonne `allowedAttachmentKinds` (liste vide) la reçoit
- * — jamais un choix qu'un administrateur a posé depuis ; et un lien semé avec
- * l'ancien terme `allowViewHistory: false` est réaligné, avec les entrants
- * qu'il a gravés sans historique (`realignWorldHistory`).
+ * — jamais un choix qu'un administrateur a posé depuis. Un historique coupé
+ * depuis par un administrateur ou un hôte reste donc coupé au démarrage
+ * suivant ; le lien et les entrants semés avec l'ancien terme
+ * `allowViewHistory: false` se réalignent UNE fois, par la migration
+ * `packages/shared/prisma/migrations/2026-10-11-world-wide-history-open.mongodb.js`.
  */
 export const WORLD_SHARE_LINK_TERMS = {
   name: WORLD_CONVERSATION_TITLE,
@@ -209,35 +211,6 @@ async function poseGuestAttachmentKinds(
   deps.logger.info(`[WORLD] lien "${WORLD_SHARE_LINK_IDENTIFIER}" : familles des invités posées (${WORLD_GUEST_ATTACHMENT_KINDS.join(', ')})`);
 }
 
-/**
- * #10099 — World Wide ouvre l'historique à qui y entre. Le lien semé AVANT la
- * décision porte `allowViewHistory: false`, et chaque entrée l'a GRAVÉ dans
- * `Participant.permissions.canViewHistory` (on entre sous les conditions du
- * moment) : réaligner le lien seul laisserait tous les entrants déjà là devant
- * un salon vide. Deux mises à jour ciblées et idempotentes, sans suppression :
- *  - le seul champ `allowViewHistory` du lien, s'il est encore faux ;
- *  - le seul `permissions.canViewHistory` des participations de CE salon qui le
- *    portent à faux. La surcharge qu'un hôte pose sur un entrant vit dans
- *    `anonymousSession.rights`, lue AVANT par `historyFloor.ts` : elle n'est
- *    pas touchée, et sa décision tient.
- */
-async function realignWorldHistory(
-  deps: WorldSeedDeps,
-  link: { readonly id: string; readonly conversationId: string; readonly allowViewHistory?: boolean | null },
-): Promise<void> {
-  if (link.allowViewHistory === false) {
-    await deps.prisma.conversationShareLink.update({ where: { id: link.id }, data: { allowViewHistory: true } });
-    deps.logger.info(`[WORLD] lien "${WORLD_SHARE_LINK_IDENTIFIER}" : historique ouvert aux entrants (allowViewHistory réaligné, #10099)`);
-  }
-  const { count } = await deps.prisma.participant.updateMany({
-    where: { conversationId: link.conversationId, permissions: { is: { canViewHistory: { equals: false } } } },
-    data: { permissions: { update: { canViewHistory: true } } },
-  });
-  if (count > 0) {
-    deps.logger.info(`[WORLD] ${count} participation(s) de World Wide entrée(s) sans historique : canViewHistory réaligné (#10099)`);
-  }
-}
-
 async function ensureShareLink(
   deps: WorldSeedDeps,
   conversationId: string,
@@ -247,13 +220,12 @@ async function ensureShareLink(
   const find = () =>
     prisma.conversationShareLink.findFirst({
       where: { identifier: WORLD_SHARE_LINK_IDENTIFIER },
-      select: { id: true, conversationId: true, allowedAttachmentKinds: true, allowViewHistory: true },
+      select: { id: true, conversationId: true, allowedAttachmentKinds: true },
     });
   const existing = await find();
   if (existing) {
     if (existing.conversationId === conversationId) {
       await poseGuestAttachmentKinds(deps, existing);
-      await realignWorldHistory(deps, existing);
       return 'existing';
     }
     logger.error(

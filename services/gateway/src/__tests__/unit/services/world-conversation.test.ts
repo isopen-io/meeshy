@@ -33,29 +33,11 @@ function matches(row: Row, where: Where | undefined): boolean {
     if (key === 'OR') return (expected as Where[]).some((clause) => matches(row, clause));
     if (key === 'AND') return (expected as Where[]).every((clause) => matches(row, clause));
     if (expected !== null && typeof expected === 'object' && !(expected instanceof Date)) {
-      const operator = expected as { in?: unknown[]; is?: Where; equals?: unknown };
+      const operator = expected as { in?: unknown[] };
       if (operator.in) return operator.in.includes(row[key]);
-      if ('equals' in operator) return row[key] === operator.equals;
-      if (operator.is) {
-        const composite = row[key];
-        return composite !== null && typeof composite === 'object' && matches(composite as Row, operator.is);
-      }
     }
     return row[key] === expected;
   });
-}
-
-/** `{ champ: { update: {…} } }` sur un type composite Mongo : fusion des seules clés nommées, comme Prisma. */
-function applyCompositeUpdates(row: Row, data: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => {
-      const envelope = value as { update?: Record<string, unknown> } | null;
-      if (envelope && typeof envelope === 'object' && envelope.update) {
-        return [key, { ...(row[key] as Record<string, unknown>), ...envelope.update }];
-      }
-      return [key, value];
-    }),
-  );
 }
 
 function uniqueViolation(): Error {
@@ -108,7 +90,7 @@ function table(name: string, uniqueKeys: readonly (readonly string[])[], seed: r
     updateMany: jest.fn(async (args: { where?: Where; data: Record<string, unknown> }) => {
       await tick();
       const targets = rows.filter((row) => matches(row, args.where));
-      targets.forEach((row) => Object.assign(row, applyCompositeUpdates(row, args.data)));
+      targets.forEach((row) => Object.assign(row, args.data));
       return { count: targets.length };
     }),
     deleteMany: jest.fn(async (args: { where?: Where } = {}) => {
@@ -519,9 +501,9 @@ describe('ensureWorldConversation — un entrant lit l’historique du salon (#1
     canSendLinks: false,
   };
 
-  function enterWorld(prisma: ReturnType<typeof makeDb>, id: string, permissions: Record<string, boolean>, extra: Record<string, unknown> = {}) {
+  function enterWorld(prisma: ReturnType<typeof makeDb>, id: string, permissions: Record<string, boolean>) {
     const [conversation] = worldConversation(prisma);
-    prisma.participant.rows.push({ id, conversationId: conversation.id, type: 'anonymous', role: 'member', isActive: true, permissions, ...extra });
+    prisma.participant.rows.push({ id, conversationId: conversation.id, type: 'anonymous', role: 'member', isActive: true, permissions });
   }
 
   it('le lien créé ouvre l’historique aux entrants', async () => {
@@ -532,68 +514,26 @@ describe('ensureWorldConversation — un entrant lit l’historique du salon (#1
     expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(true);
   });
 
-  it('un lien semé avec l’ancien terme est réaligné au démarrage suivant — ce seul champ, journalisé, sans rien supprimer', async () => {
-    const prisma = makeDb();
-    await seed(prisma);
-    const legacy = prisma.conversationShareLink.rows[0];
-    legacy.allowViewHistory = false;
-    legacy.isActive = false;
-    const logger = makeLogger();
-
-    const report = await seed(prisma, logger);
-
-    expect(report.shareLink).toBe('existing');
-    expect(prisma.conversationShareLink.rows).toHaveLength(1);
-    expect(prisma.conversationShareLink.rows[0]).toMatchObject({ allowViewHistory: true, isActive: false, allowAnonymousFiles: false, allowAnonymousImages: false, allowAnonymousMessages: true });
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('historique'));
-    expect(prisma.conversationShareLink.deleteMany).not.toHaveBeenCalled();
-    expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
-  });
-
-  it('les entrants déjà gravés sans historique le reçoivent, sans qu’aucun droit d’envoi ne bouge', async () => {
-    const prisma = makeDb();
-    await seed(prisma);
-    enterWorld(prisma, 'guest-before', { ...GUEST_PERMISSIONS, canViewHistory: false });
-    const logger = makeLogger();
-
-    await seed(prisma, logger);
-
-    const guest = prisma.participant.rows.find((row) => row.id === 'guest-before');
-    expect(guest?.permissions).toEqual({ ...GUEST_PERMISSIONS, canViewHistory: true });
-    expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/1 participation/));
-  });
-
-  it('la surcharge posée par un hôte sur un entrant n’est pas touchée', async () => {
-    const prisma = makeDb();
-    await seed(prisma);
-    const hostOverride = { shareLinkId: 'link-1', rights: { canViewHistory: false } };
-    enterWorld(prisma, 'guest-restricted', { ...GUEST_PERMISSIONS, canViewHistory: false }, { anonymousSession: hostOverride });
-
-    await seed(prisma);
-
-    expect(prisma.participant.rows.find((row) => row.id === 'guest-restricted')?.anonymousSession).toEqual(hostOverride);
-  });
-
-  it('seul World Wide change : une participation sans historique d’une autre conversation reste fermée', async () => {
-    const prisma = makeDb();
-    await seed(prisma);
-    prisma.participant.rows.push({ id: 'elsewhere', conversationId: 'conversation-other', type: 'anonymous', isActive: true, permissions: { ...GUEST_PERMISSIONS, canViewHistory: false } });
-
-    await seed(prisma);
-
-    expect(prisma.participant.rows.find((row) => row.id === 'elsewhere')?.permissions).toMatchObject({ canViewHistory: false });
-  });
-
-  it('réaligné une fois, un démarrage suivant ne réécrit plus rien sur le lien', async () => {
+  it('un historique qu’un administrateur a coupé sur le lien n’est pas rouvert par un démarrage suivant', async () => {
     const prisma = makeDb();
     await seed(prisma);
     prisma.conversationShareLink.rows[0].allowViewHistory = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(false);
+  });
+
+  it('un entrant à qui l’historique a été coupé ne le retrouve pas au démarrage suivant', async () => {
+    const prisma = makeDb();
     await seed(prisma);
-    const before = prisma.conversationShareLink.update.mock.calls.length;
+    enterWorld(prisma, 'guest-closed', { ...GUEST_PERMISSIONS, canViewHistory: false });
 
     await seed(prisma);
 
-    expect(prisma.conversationShareLink.update.mock.calls.length).toBe(before);
+    expect(prisma.participant.rows.find((row) => row.id === 'guest-closed')?.permissions).toEqual({ ...GUEST_PERMISSIONS, canViewHistory: false });
+    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
   });
 });
 
