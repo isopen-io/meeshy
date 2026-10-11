@@ -7,8 +7,10 @@
  * - une conversation `public` : le créateur, le rang `creator`/`admin` de la
  *   conversation, ou un administrateur plateforme (ADMIN, BIGBOSS) — un
  *   modérateur, de conversation comme de plateforme, n'en lance pas ;
- * - les autres types (`direct`, `group`, `broadcast`) : tout membre, comme
- *   avant. L'appartenance elle-même est vérifiée par l'appelant.
+ * - `direct` et `group` : tout membre, comme avant. L'appartenance elle-même
+ *   est vérifiée par l'appelant ;
+ * - tout autre type (`broadcast`, inconnu) : personne — la passerelle ne les
+ *   a jamais ouverts aux appels, et un type qu'on ne connaît pas échoue fermé.
  *
  * Rejoindre un appel déjà en cours n'est pas gouverné ici.
  *
@@ -25,6 +27,8 @@ export type CallStartContext = {
   readonly viewerIsGuest?: boolean;
 };
 
+const OPEN_CALL_TYPES: ReadonlySet<string> = new Set(['direct', 'group']);
+
 export const CALL_NOT_ALLOWED_CODE = 'CALL_NOT_ALLOWED' as const;
 
 function holdsPublicCallRight(context: CallStartContext): boolean {
@@ -39,5 +43,5 @@ export function canStartCall(context: CallStartContext): boolean {
   const type = context.conversationType.toLowerCase();
   if (type === 'global') return false;
   if (type === 'public') return holdsPublicCallRight(context);
-  return true;
+  return OPEN_CALL_TYPES.has(type);
 }

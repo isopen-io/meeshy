@@ -73,10 +73,15 @@ describe('canStartCall', () => {
     expect(canStartCall(viewer({ conversationType: 'public', viewerConversationRole: undefined }))).toBe(false);
   });
 
-  it('dans un direct, un group ou un broadcast, un membre lance l’appel comme avant', () => {
+  it('dans un direct ou un group, un membre lance l’appel comme avant', () => {
     expect(canStartCall(viewer({ conversationType: 'direct' }))).toBe(true);
     expect(canStartCall(viewer({ conversationType: 'group' }))).toBe(true);
-    expect(canStartCall(viewer({ conversationType: 'broadcast' }))).toBe(true);
+  });
+
+  it('un broadcast ou un type inconnu n’a pas d’appel, comme la passerelle le refusait déjà', () => {
+    expect(canStartCall(viewer({ conversationType: 'broadcast', viewerPlatformRole: 'BIGBOSS' }))).toBe(false);
+    expect(canStartCall(viewer({ conversationType: 'community', viewerIsCreator: true }))).toBe(false);
+    expect(canStartCall(viewer({ conversationType: '' }))).toBe(false);
   });
 
   it('les champs optionnels absents valent un membre inscrit sans rôle plateforme', () => {
