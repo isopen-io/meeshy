@@ -25,7 +25,7 @@ import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import type { GameChestReward, GameMission } from '@meeshy/shared/types/game';
 import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/shared/utils/game/boosts';
-import { chestPriceMints, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
 import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
@@ -164,8 +164,7 @@ const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: fals
 const CHEST_UNCLAIMED = { OR: [{ chestClaimedAt: null }, { chestClaimedAt: { isSet: false } }] };
 /** Un cours de prime pas encore gravé (#10219) : absent du document, ou `null`. */
 const MINT_BASE_UNSET = { OR: [{ chestMintBase: null }, { chestMintBase: { isSet: false } }] };
-/** Les frappes relues pour figer le cours : trois jours couvrent tout jour de jeu, quel que soit le fuseau. */
-const CHEST_PRICE_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
+
 
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -601,7 +600,7 @@ export class MissionService {
     if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
-    const mintBase = await this.chestPriceBase({ userId, now, dayKey, timezone: user?.timezone });
+    const mintBase = await this.chestPriceBase({ userId, now, dayKey });
     const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1) });
     const claimed = await this.prisma.gameDay.updateMany({
       where: { userId, dayKey, ...CHEST_UNCLAIMED },
@@ -675,35 +674,29 @@ export class MissionService {
   }
 
   /**
-   * LE COURS DE LA PRIME DU JOUR (#10219) — les Meeshes frappées AVANT le jour de jeu, gravées sur
-   * `GameDay.chestMintBase` à la première lecture (le bloc `game` ou la réclamation) et relues ensuite telles
-   * quelles : l'affichage d'avant l'ouverture et la réclamation tirent la prime au MÊME cours, et une frappe du jour
-   * n'y change rien. La gravure est conditionnelle (`chestMintBase` absent) : deux lectures concurrentes gravent la
-   * même valeur, et la première gagne. Une journée sans gravure (ouverte avant #10219) se grave à sa lecture suivante.
+   * LE COURS DE LA PRIME DU JOUR (#10219) — les Meeshes frappées AVANT l'ouverture du jour de jeu (le tirage de ses
+   * missions, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` à la première lecture (le bloc `game` ou la
+   * réclamation) et relues ensuite telles quelles : l'affichage d'avant l'ouverture et la réclamation tirent la prime
+   * au MÊME cours, et une frappe du jour n'y change rien. Le compte est UNE requête bornée par l'instant d'ouverture :
+   * une frappe concurrente, postérieure, n'y entre pas ; le fuseau n'y entre pas non plus. La gravure est
+   * conditionnelle (`chestMintBase` absent) : la première gagne. Une journée sans gravure (ouverte avant #10219) se
+   * grave à sa lecture suivante.
    */
   async chestPriceBase(params: {
     readonly userId: string;
     readonly now?: Date;
     readonly dayKey?: string;
-    readonly timezone?: string | null;
   }): Promise<number> {
     const { userId } = params;
     const now = params.now ?? new Date();
-    const timezone = params.dayKey !== undefined && params.timezone !== undefined ? params.timezone : (await this.userRow(userId))?.timezone;
-    const dayKey = params.dayKey ?? (await this.gameDayKey(userId, timezone, now));
+    const dayKey = params.dayKey ?? (await this.gameDayKey(userId, (await this.userRow(userId))?.timezone, now));
 
     const engraved = (await this.gameDay(userId, dayKey))?.chestMintBase;
     if (typeof engraved === 'number') return engraved;
 
-    const [{ mintedLifetime }, recent] = await Promise.all([
-      meeshTotalsFromLedger(this.prisma, userId),
-      // Les frappes qui peuvent tomber le jour même : un jour de jeu ne dure jamais plus de deux jours civils.
-      this.prisma.meeshLedger.findMany({
-        where: { userId, reason: 'mint', createdAt: { gte: new Date(now.getTime() - CHEST_PRICE_LOOKBACK_MS) } },
-        select: { createdAt: true },
-      }),
-    ]);
-    const base = chestPriceMints({ mintedLifetime, dayKey, recentMintDays: recent.map((row) => dayKeyOf(row.createdAt, timezone)) });
+    const missions = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, select: { createdAt: true } });
+    const cutoff = chestPriceCutoff({ missionsOpenedAt: missions.map((row) => row.createdAt), now });
+    const base = await this.prisma.meeshLedger.count({ where: { userId, reason: 'mint', createdAt: { lt: cutoff } } });
 
     await this.ensureGameDay(userId, dayKey);
     await this.prisma.gameDay.updateMany({ where: { userId, dayKey, ...MINT_BASE_UNSET }, data: { chestMintBase: base } });
