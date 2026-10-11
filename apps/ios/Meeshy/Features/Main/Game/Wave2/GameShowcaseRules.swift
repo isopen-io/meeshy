@@ -40,6 +40,13 @@ enum GameVisitorShowcase {
         var id: String { key }
     }
 
+    /// Les étoiles de sa constellation (#10053) : une vitrine ouverte qui en sert au moins une ; `nil` sinon — une
+    /// vitrine fermée, un ancien serveur ou une constellation éteinte ne se dessinent pas.
+    static func constellationStars(_ showcase: UserShowcaseResponse?) -> Int? {
+        guard let showcase, showcase.visible, let stars = showcase.constellation?.stars, stars >= 1 else { return nil }
+        return stars
+    }
+
     static func entries(_ showcase: UserShowcaseResponse?) -> [Entry] {
         guard let showcase, showcase.visible else { return [] }
         let items = Dictionary(showcase.items.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
