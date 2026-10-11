@@ -17,7 +17,6 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameAchievementRarities, GamePhotoBlock } from '@meeshy/shared/types/game';
-import type { GameAchievementRarities } from '@meeshy/shared/types/game';
 import { seasonSchedule } from './SeasonScheduleService';
 import { buildGameBlockExtras, type GameBlockExtras, type GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { enhancedLogger } from '../../utils/logger-enhanced';
