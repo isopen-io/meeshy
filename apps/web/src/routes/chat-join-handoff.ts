@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import * as z from 'zod/mini';
 
 import { WORLD_ENTRY_HANDOFF_KEY, WORLD_ENTRY_HANDOFF_TTL_MS } from '@/landing/world-entry';
 import type { GuestEntry } from '@/routes/chat-join-guest';
@@ -22,10 +22,10 @@ import type { GuestEntry } from '@/routes/chat-join-guest';
 export type HandoffStorage = Pick<Storage, 'getItem' | 'removeItem'>;
 
 const handoffSchema = z.object({
-  link: z.string().min(1),
-  name: z.string().min(1),
-  language: z.string().min(1),
-  at: z.number().int(),
+  link: z.string().check(z.minLength(1)),
+  name: z.string().check(z.minLength(1)),
+  language: z.string().check(z.minLength(1)),
+  at: z.int(),
 });
 
 export function takeLandingHandoff(input: {
