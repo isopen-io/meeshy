@@ -34,9 +34,11 @@ describe('la sauvegarde de la coque laisse la WebView sur l’appareil (#10143)'
     expect(regles).toMatch(APPEL);
   });
 
-  test.each(['cloud-backup', 'device-transfer'])('%s (API 31+)', (balise) => {
-    const regles = section(sansCommentaires(readFileSync(join(XML, 'data_extraction_rules.xml'), 'utf8')), balise);
-    expect(regles).toMatch(WEBVIEW);
-    expect(regles).toMatch(APPEL);
-  });
+  for (const balise of ['cloud-backup', 'device-transfer']) {
+    test(`${balise} (API 31+)`, () => {
+      const regles = section(sansCommentaires(readFileSync(join(XML, 'data_extraction_rules.xml'), 'utf8')), balise);
+      expect(regles).toMatch(WEBVIEW);
+      expect(regles).toMatch(APPEL);
+    });
+  }
 });
