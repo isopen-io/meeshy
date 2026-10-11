@@ -25,6 +25,7 @@ import { useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-con
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
+import { useGuestFocus } from '@/lib/view/guest-focus';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { EngagementPill } from './engagement-pill';
@@ -163,7 +164,11 @@ export function ThreadHeader({
      l'aperçu porte déjà (#8821). Déplier y ajoute ce qu'il ajoutait (la
      flamme du jour, les plus actifs), sans plus rien retirer. */
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
-  const besideIdentity = preview || wide;
+  /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
+     liste qu'il n'a pas, et la place libérée dit où il est — le nom et
+     l'effectif, comme l'aperçu et l'ordinateur. */
+  const focus = useGuestFocus();
+  const besideIdentity = preview || wide || focus;
 
   return (
     /*
@@ -221,7 +226,7 @@ export function ThreadHeader({
           Centré dans ses 44, il aurait sauté de 11 px d'une conversation à
           l'autre — un repère de navigation qui se déplace tout seul.
         */}
-        {preview ? null : (
+        {preview || focus ? null : (
           <Link
             to="list"
             data-thread-back=""

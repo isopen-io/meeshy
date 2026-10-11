@@ -50,6 +50,8 @@
                 <data android:pathPrefix="/story/" />
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
+                <!-- #10100 — World Wide, l'entrée sans compte et le fil de l'invité en focus. -->
+                <data android:path="/world" />
                 <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
                      ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
                 <data android:pathPrefix="/signup/affiliate/" />

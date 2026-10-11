@@ -220,9 +220,10 @@ export const ROUTES = {
   chatJoin: { pattern: '/chat/$link', screen: chatJoinScreen },
   /* ENTRER DANS WORLD WIDE SANS COMPTE (#10003, planche « Onboarding ») — nom,
      langue, puis le fil, par la clé que sert `GET /world`. La landing y mène
-     avec le nom saisi (`?name=`, `landing/world-entry.ts`). PUBLIQUE, comme
-     `chatJoin` : l'écran renvoie lui-même un compte vers la jonction par lien
-     et un invité déjà entré vers son fil. */
+     avec le nom et la langue (`landing/world-entry.ts`). L'invité y RESTE
+     (#10100) : son fil s'y ouvre en focus, sans liste ni navigation, et s'y
+     rouvre au rafraîchissement. PUBLIQUE, comme `chatJoin` : l'écran renvoie
+     lui-même un compte vers la jonction par lien, puis son application. */
   world: { pattern: '/world', screen: worldEntryScreen },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de

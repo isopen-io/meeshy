@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { WorldEntry } from '@meeshy/shared/types/world';
 
 import '@/styles/site-chrome.css';
 import { LanguageSelect } from '@/landing/site-chrome';
 
+import { ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import type { ApiResult } from '@/lib/api/http';
@@ -16,6 +17,8 @@ import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, ty
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { useSearch } from '@/lib/router';
+import { useFocusGuest } from '@/lib/view/guest-focus';
+import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
 import { INK, INK_2, INVITE_ACTION_BACKGROUND, INVITE_ACTION_FLOOR, isolated, RefusalBanner } from '@/routes/chat-join-parts';
 import { href, navigate } from '@/routes/route-table';
 
@@ -36,6 +39,16 @@ import { href, navigate } from '@/routes/route-table';
  * Le nom se tape PENDANT que l'entrée se lit : aucun écran d'attente devant un
  * champ qui n'a besoin d'aucun réseau. Seul « Entrer » attend la clé.
  *
+ * L'INVITÉ RESTE SUR `/world` (#10100, décision porteur du 2026-10-11) — sans
+ * compte, la structure de l'application n'a rien à lui montrer. Une fois entré,
+ * le fil de World Wide s'ouvre ICI, en FOCUS (`ThreadScreen` en `focus`) :
+ * l'en-tête de la conversation, ses messages, son composeur — ni liste, ni
+ * panneau, ni navigation. Rafraîchir rouvre le fil depuis la session TENUE,
+ * sans attendre le réseau ; une session retirée ou expirée rend l'entrée. La
+ * landing y mène aussi : son jeton de passage (#10094) fait entrer sans autre
+ * geste, comme il le faisait sur la jonction par lien. Un COMPTE garde son
+ * application : il suit la jonction par lien, puis son fil, dans son cadre.
+ *
  * LES EFFETS DE BORD SONT INJECTÉS (`WorldEntryDeps`), même dispositif que
  * `ChatJoinDeps` : le témoin monte l'écran sans routeur ni passerelle.
  */
@@ -45,8 +58,6 @@ export type WorldEntryDeps = {
   readonly joinGuest: (link: string, body: GuestJoinBody) => Promise<ApiResult<LinkGuestJoined>>;
   readonly adoptGuest: (sessionToken: string, guest: GuestIdentity) => void;
   readonly adoptInterfaceLanguage: (language: string) => void;
-  /** L'identité d'invité déjà tenue, s'il y en a une — un retour par ce lien rouvre son fil. */
-  readonly heldGuest: () => GuestIdentity | null;
   /** Un compte connecté rejoint par la jonction de lien, jamais par ce formulaire. */
   readonly signedIn: () => boolean;
   readonly go: (url: string, replace: boolean) => void;
@@ -55,6 +66,11 @@ export type WorldEntryDeps = {
    * pas : il compte les pages des autres sites (`lib/reels/exit.ts`). */
   readonly canGoBack: () => boolean;
   readonly back: () => void;
+  /** L'onglet où la landing pose son jeton de passage (#10094). */
+  readonly handoff: () => HandoffStorage;
+  readonly now: () => number;
+  /** Charge le fil pendant que le nom se tape : « Entrer » n'attend plus que le réseau. */
+  readonly warmFocus?: () => void;
 };
 
 const DEFAULT_DEPS: WorldEntryDeps = {
@@ -65,10 +81,6 @@ const DEFAULT_DEPS: WorldEntryDeps = {
     const language = interfaceLanguageOf(code);
     if (language !== null) setInterfaceLanguage(language).catch(() => undefined);
   },
-  heldGuest: () => {
-    const session = sessionStore.getState().session;
-    return session.status === 'guest' ? session.guest : null;
-  },
   signedIn: () => sessionStore.getState().session.status === 'authenticated',
   go: navigate,
   joined: () => {
@@ -76,7 +88,24 @@ const DEFAULT_DEPS: WorldEntryDeps = {
   },
   canGoBack: () => reelsExitOf(currentHistory()) === 'back',
   back: () => window.history.back(),
+  handoff: () => window.sessionStorage,
+  now: () => Date.now(),
+  warmFocus: () => {
+    void threadModule().catch(() => undefined);
+  },
 };
+
+const threadModule = () => import('@/routes/thread');
+const FocusThread = lazy(threadModule);
+
+/** Le fil de l'invité, en focus — le squelette du fil pendant que son chunk arrive. */
+function focusThread(conversationId: string): ReactNode {
+  return (
+    <Suspense fallback={<ThreadSkeleton />}>
+      <FocusThread focus={{ conversationId }} />
+    </Suspense>
+  );
+}
 
 type LoadState =
   | { readonly kind: 'loading' }
@@ -94,7 +123,8 @@ const NAME_MAX = 40;
 
 export default function WorldEntryScreen() {
   const [search] = useSearch();
-  return <WorldGuestEntry initialName={search.get('name') ?? ''} />;
+  const held = useFocusGuest();
+  return <WorldGuestEntry initialName={search.get('name') ?? ''} initialLanguage={search.get('language')} held={held} />;
 }
 
 const PAGE_BACKGROUND =
@@ -103,13 +133,28 @@ const PAGE_BACKGROUND =
 const PRIMARY_CLASS =
   'grid w-full place-items-center rounded-field text-body font-bold text-ios-on-brand transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2';
 
-export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly initialName: string; readonly deps?: WorldEntryDeps }) {
+export function WorldGuestEntry({
+  initialName,
+  initialLanguage = null,
+  held = null,
+  deps = DEFAULT_DEPS,
+  focus = focusThread,
+}: {
+  readonly initialName: string;
+  /** La langue choisie sur la landing (`?language=`), pré-sélectionnée. */
+  readonly initialLanguage?: string | null;
+  /** L'invité sans compte TENU (`useFocusGuest`) — son fil s'ouvre ici. */
+  readonly held?: GuestIdentity | null;
+  readonly deps?: WorldEntryDeps;
+  readonly focus?: (conversationId: string) => ReactNode;
+}) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const direction = language === 'ar' ? 'rtl' : 'ltr';
   const [name, setName] = useState(() => initialName.trim().slice(0, NAME_MAX));
   const [nameRefusal, setNameRefusal] = useState<string | null>(null);
-  const [reading, setReading] = useState<InterfaceLanguage>(language);
+  const [reading, setReading] = useState<InterfaceLanguage>(() => interfaceLanguageOf(initialLanguage ?? '') ?? language);
+  const handoffRead = useRef(false);
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' });
   const [join, setJoin] = useState<JoinState>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
@@ -123,20 +168,18 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
         setLoad(result.code === WORLD_UNAVAILABLE ? { kind: 'unavailable' } : { kind: 'failed' });
         return;
       }
-      const link = result.data.shareLinkIdentifier;
-      const held = deps.heldGuest();
-      if (held !== null && held.link === link) {
-        deps.go(href('thread', { conversation: held.conversationId }), true);
-        return;
-      }
       if (deps.signedIn()) {
-        deps.go(href('chatJoin', { link }), true);
+        deps.go(href('chatJoin', { link: result.data.shareLinkIdentifier }), true);
         return;
       }
       setLoad({ kind: 'ready', entry: result.data });
     });
     return () => controller.abort();
   }, [deps, attempt]);
+
+  useEffect(() => {
+    if (held === null) deps.warmFocus?.();
+  }, [deps, held]);
 
   /* Une lecture échouée se relance au retour du réseau, sans geste. */
   useEffect(() => {
@@ -153,8 +196,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
     setAttempt((count) => count + 1);
   };
 
-  const enter = async () => {
-    const nickname = name.trim();
+  const enter = async (nickname: string = name.trim(), chosen: InterfaceLanguage = reading) => {
     if (nickname === '') {
       refuseName(translateInvite(language, 'world.name.missing'));
       return;
@@ -168,7 +210,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
     const link = load.entry.shareLinkIdentifier;
     setName(nickname);
     setJoin({ kind: 'joining' });
-    const result = await deps.joinGuest(link, { language: reading, nickname });
+    const result = await deps.joinGuest(link, { language: chosen, nickname });
     if (!result.ok) {
       const refusal = guestRefusalOf(result);
       if (refusal.on === 'input') {
@@ -193,13 +235,38 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
       conversationId: result.data.conversationId,
       link,
       mayWrite: result.data.mayWrite,
-      language: reading,
+      language: chosen,
       ...(result.data.attachmentKinds === undefined ? {} : { attachmentKinds: result.data.attachmentKinds }),
     });
-    deps.adoptInterfaceLanguage(reading);
-    deps.go(href('thread', { conversation: result.data.conversationId }), true);
+    deps.adoptInterfaceLanguage(chosen);
+    setJoin({ kind: 'idle' });
+    /* L'invité RESTE sur `/world` (#10100) : l'adresse perd seulement le nom
+       et la langue qui l'avaient amené, et l'entrée ne revient pas au retour. */
+    deps.go(href('world'), true);
     deps.joined();
   };
+
+  /**
+   * L'ENTRÉE DEPUIS LA LANDING (#10094, #10100) — le nom et la langue y sont
+   * déjà choisis : avec le jeton de passage de l'onglet, l'invité entre sans
+   * autre geste. Le jeton est lu et effacé UNE fois, quand la clé est connue ;
+   * sans lui (adresse forgée, périmée, autre onglet), le formulaire attend le
+   * geste, pré-rempli.
+   */
+  useEffect(() => {
+    if (load.kind !== 'ready' || handoffRead.current) return;
+    handoffRead.current = true;
+    const nickname = initialName.trim().slice(0, NAME_MAX);
+    if (nickname === '' || initialLanguage === null) return;
+    const link = load.entry.shareLinkIdentifier;
+    const handedOff = takeLandingHandoff({ storage: deps.handoff, link, entry: { nickname, language: initialLanguage }, now: deps.now() });
+    const chosen = interfaceLanguageOf(initialLanguage);
+    if (!handedOff || chosen === null || (held !== null && held.link === link)) return;
+    void enter(nickname, chosen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- l'entrée part une fois, quand la clé arrive
+  }, [load]);
+
+  if (held !== null && (load.kind !== 'ready' || held.link === load.entry.shareLinkIdentifier)) return focus(held.conversationId);
 
   const title = load.kind === 'ready' ? load.entry.title : WORLD_FALLBACK_TITLE;
   const blocked = load.kind === 'loading' || join.kind === 'joining' || !online;
