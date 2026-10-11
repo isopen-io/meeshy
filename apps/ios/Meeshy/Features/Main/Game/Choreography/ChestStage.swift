@@ -5,9 +5,9 @@ import MeeshyUI
 /// LE COFFRE DU JOUR (#9381) — conception, partie V : « le couvercle s'ouvre,
 /// les récompenses montent une à une », en 1,4 s, « une tape par récompense ».
 ///
-/// Le coffre dit son contenu AVANT l'ouverture (#10011 : 100 à 10 000 points selon
-/// les missions du jour, leur Gloire, des fragments de Meesh, une chance sur six d'un
-/// fragment en prime, une sur vingt d'un gel) : la scène ne tire rien, elle MONTRE
+/// Le coffre dit son contenu AVANT l'ouverture (#10011 : 500 à 10 000 points selon
+/// les missions du jour, leur Gloire, une prime en points au cours de la Meesh, une
+/// chance sur six d'un fragment d'étoile, une sur vingt d'un gel) : la scène ne tire rien, elle MONTRE
 /// ce que la passerelle a tiré. Ouvert au repos (écran rouvert), il montre son
 /// contenu sans rejouer. Sous « réduire les animations » : le contenu apparaît en fondu.
 struct ChestStage: View {
@@ -76,28 +76,30 @@ struct ChestStage: View {
     }
 }
 
-/// Ce que le coffre ouvert montre, une ligne par récompense, dans l'ordre où elles montent : les points, la
-/// Gloire, les fragments de Meesh, le gel. Un coffre ouvert avant #10011 n'a ni Gloire ni fragments comptés :
-/// il garde sa ligne d'hier (« Un fragment de Meesh ») quand son fragment est sorti.
+/// Ce que le coffre ouvert montre, une ligne par récompense, dans l'ordre où elles montent : les points de
+/// l'effort, la Gloire, la prime en points, le fragment d'étoile, le gel. `points` est le total crédité : la ligne
+/// des points montre ce qui revient à l'effort, la prime a la sienne. Un coffre ouvert avant #10011 n'a ni Gloire
+/// ni prime ; son `fragment: true` est un fragment d'étoile.
 enum GameChestLines {
     static func of(_ reward: DailyChest) -> [String] {
-        let points = String(localized: "game.chest.reward.points", defaultValue: "+\(GameCopy.points(reward.points))", bundle: .main)
+        let base = max(0, reward.points - reward.bonusPoints)
+        let points = String(localized: "game.chest.reward.points", defaultValue: "+\(GameCopy.points(base))", bundle: .main)
         let glory = reward.glory > 0 ? GameCopy.chestGlory(reward.glory) : nil
-        let fragments: String? = reward.meeshFragments > 0
-            ? GameCopy.meeshFragments(reward.meeshFragments)
-            : reward.fragment ? String(localized: "game.chest.reward.fragment", defaultValue: "Un fragment de Meesh", bundle: .main) : nil
+        let bonus = GameCopy.chestBonus(reward)
+        let fragment = reward.fragment
+            ? String(localized: "game.chest.reward.fragment", defaultValue: "Un fragment d’étoile", bundle: .main) : nil
         let freeze = reward.freeze ? String(localized: "game.chest.reward.freeze", defaultValue: "Un gel de Flamme", bundle: .main) : nil
-        return [points, glory, fragments, freeze].compactMap { $0 }
+        return [points, glory, bonus, fragment, freeze].compactMap { $0 }
     }
 }
 
 extension GameCopy {
-    /// « 3 fragments de Meesh » — cinq paient une frappe gratuite (#10011).
-    static func meeshFragments(_ count: Int) -> String {
+    /// « 3 fragments d’étoile » — le total collecté, toutes sources confondues (#10011).
+    static func starFragments(_ count: Int) -> String {
         let number = formatCount(count)
         return isSingular(count)
-            ? String(localized: "game.meeshFragments.one", defaultValue: "\(number) fragment de Meesh", bundle: .main)
-            : String(localized: "game.meeshFragments.other", defaultValue: "\(number) fragments de Meesh", bundle: .main)
+            ? String(localized: "game.starFragments.one", defaultValue: "\(number) fragment d’étoile", bundle: .main)
+            : String(localized: "game.starFragments.other", defaultValue: "\(number) fragments d’étoile", bundle: .main)
     }
 
     /// « +175 Gloire » — la Gloire du coffre.
@@ -105,18 +107,36 @@ extension GameCopy {
         String(localized: "game.chest.reward.glory", defaultValue: "+\(formatCount(glory)) Gloire", bundle: .main)
     }
 
-    /// « Ce coffre : 1 750 points · +175 Gloire · 1 fragment de Meesh » — le contenu certain, avant l'ouverture.
+    /// « Prime : +1 221 points, le prix d’une Meesh » — la prime tombée, `nil` sans prime.
+    static func chestBonus(_ reward: DailyChest) -> String? {
+        guard reward.bonusPoints > 0, let bonus = reward.bonus else { return nil }
+        let amount = points(reward.bonusPoints)
+        switch bonus {
+        case .whole:
+            return String(localized: "game.chest.reward.bonus.whole", defaultValue: "Prime\u{00A0}:\u{00A0}+\(amount), le prix d’une Meesh", bundle: .main)
+        case .fifth:
+            return String(localized: "game.chest.reward.bonus.fifth", defaultValue: "Prime\u{00A0}:\u{00A0}+\(amount), un cinquième de Meesh", bundle: .main)
+        case .noBonus:
+            return nil
+        }
+    }
+
+    /// « Ce coffre : 2 083 points · +208 Gloire » — le contenu certain, avant l’ouverture.
     static func chestToday(_ content: ChestContent) -> String {
         let points = GameCopy.points(content.points)
         let glory = chestGlory(content.glory)
-        let fragments = meeshFragments(content.meeshFragments)
-        return String(localized: "game.chest.today", defaultValue: "Ce coffre : \(points) · \(glory) · \(fragments)", bundle: .main)
+        return String(localized: "game.chest.today", defaultValue: "Ce coffre : \(points) · \(glory)", bundle: .main)
     }
 
-    /// « 3 / 5 fragments pour une frappe gratuite » — plus de cinq se lisent tels quels (« 7 / 5 »).
-    static func chestFragmentsProgress(_ progress: MeeshFragmentProgress) -> String {
-        let held = formatCount(progress.held)
-        let perMeesh = formatCount(progress.perMeesh)
-        return String(localized: "game.chest.fragmentsProgress", defaultValue: "\(held) / \(perMeesh) fragments pour une frappe gratuite", bundle: .main)
+    /// « Prime : 1 chance sur 20 de 1 221 points, sinon 1 chance sur 6 de 244 points » — avant l’ouverture, au
+    /// cours de la prochaine Meesh du compte. `nil` devant un serveur qui ne sert pas la prime.
+    static func chestBonusOdds(_ content: ChestContent, odds: ChestOdds) -> String? {
+        guard let whole = content.bonusWhole, let fifth = content.bonusFifth,
+              let wholeChance = odds.bonusWhole, let fifthChance = odds.bonusFifth, whole > 0 else { return nil }
+        return String(
+            localized: "game.chest.bonusOdds",
+            defaultValue: "Prime : \(chance(wholeChance)) de \(points(whole)), sinon \(chance(fifthChance)) de \(points(fifth))",
+            bundle: .main
+        )
     }
 }
