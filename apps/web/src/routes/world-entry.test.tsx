@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { WorldEntry } from '@meeshy/shared/types/world';
+import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import type { ApiResult } from '@/lib/api/http';
 import type { GuestJoinBody, LinkGuestJoined } from '@/lib/api/link-join';
@@ -14,8 +15,8 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { WorldGuestEntry, type WorldEntryDeps } from './world-entry';
 
 /**
- * ENTRER DANS WORLD WIDE SANS COMPTE (#10003, planche « Onboarding ») — nom,
- * glissement, langue principale proposée depuis l'appareil, puis le fil.
+ * ENTRER DANS WORLD WIDE SANS COMPTE (#10003, #10098) — une vue : le nom, la
+ * langue (celle de l'interface proposée), puis le fil, d'un clic.
  *
  * Les effets de bord sont INJECTÉS (motif `ChatJoinDeps`) : chaque témoin
  * compte ce qu'un geste DÉCLENCHE — la jonction, l'identité adoptée, la langue,
@@ -75,7 +76,6 @@ function deps(overrides: Partial<WorldEntryDeps> = {}): { readonly deps: WorldEn
       adoptInterfaceLanguage: (code) => recorded.languages.push(code),
       heldGuest: () => null,
       signedIn: () => false,
-      deviceLanguages: () => ['es-ES', 'en'],
       go: (url, replace) => recorded.gone.push([url, replace]),
       joined: () => undefined,
       canGoBack: () => false,
@@ -100,8 +100,9 @@ async function mount(props: { readonly initialName?: string; readonly deps: Worl
 }
 
 const nameField = (host: HTMLElement) => host.querySelector<HTMLInputElement>('[data-world-name]');
-const step = (host: HTMLElement) => host.querySelector('[data-world-step]')?.getAttribute('data-world-step');
-const radio = (host: HTMLElement, code: string) => host.querySelector<HTMLButtonElement>(`[data-world-language="${code}"]`);
+const languageSelect = (host: HTMLElement) => host.querySelector<HTMLSelectElement>('select[data-world-language]');
+const shownFlag = (host: HTMLElement) => host.querySelector('[data-world-language-flag]')?.textContent ?? null;
+const enterButton = (host: HTMLElement) => host.querySelector<HTMLButtonElement>('[data-world-enter]');
 const click = async (element: Element | null) => {
   await act(async () => {
     element?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -110,67 +111,89 @@ const click = async (element: Element | null) => {
     await Promise.resolve();
   });
 };
-const submitName = async (host: HTMLElement) => {
+const pick = async (host: HTMLElement, code: string) => {
+  const select = languageSelect(host);
+  if (select === null) throw new Error('aucun sélecteur de langue');
   await act(async () => {
-    host.querySelector('[data-world-name-form]')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    select.value = code;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
   });
 };
+const submit = async (host: HTMLElement) => {
+  await act(async () => {
+    host.querySelector('[data-world-form]')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+const precedes = (first: Element | null, second: Element | null): boolean =>
+  first !== null && second !== null && (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-describe('WorldGuestEntry — le nom, puis la langue', () => {
-  test('sans nom transmis, l’écran s’ouvre sur le nom', async () => {
+describe('WorldGuestEntry — une vue, un clic (#10098)', () => {
+  test('le nom, la liste déroulante de la langue, puis « Entrer » — sur la même vue, sans étape', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
-    expect(step(host)).toBe('name');
-    expect(nameField(host)).not.toBeNull();
+    expect(host.querySelector('[data-world-step]')).toBeNull();
+    expect(host.querySelectorAll('[role="radio"]').length).toBe(0);
+    expect(precedes(nameField(host), languageSelect(host))).toBe(true);
+    expect(precedes(languageSelect(host), enterButton(host))).toBe(true);
+    expect(languageSelect(host)?.closest('label')?.classList.contains('ld-language')).toBe(true);
+    expect(languageSelect(host)?.querySelectorAll('option').length).toBe(7);
   });
 
-  test('un nom vide ne glisse pas vers la langue', async () => {
+  test('la langue proposée est celle de l’INTERFACE, drapeau de la source unique', async () => {
     const { deps: d } = deps();
     const host = await mount({ deps: d });
-    await submitName(host);
-    expect(step(host)).toBe('name');
+    expect(languageSelect(host)?.value).toBe('fr');
+    expect(shownFlag(host)).toBe(getLanguageInfo('fr').flag);
+    for (const option of Array.from(languageSelect(host)?.querySelectorAll('option') ?? [])) {
+      expect(option.textContent?.startsWith(getLanguageInfo(option.value).flag)).toBe(true);
+    }
   });
 
-  test('le nom validé glisse vers la langue, et la salutation le reprend', async () => {
-    const { deps: d } = deps();
+  test('un clic entre : la clé SERVIE, le nom et la langue montrée', async () => {
+    const { deps: d, recorded } = deps();
     const host = await mount({ deps: d });
     typeInto(nameField(host), 'Awa');
-    await submitName(host);
-    expect(step(host)).toBe('language');
-    expect(host.textContent?.replace(/[\u2066-\u2069]/gu, '')).toContain('Bonjour Awa');
+    await submit(host);
+    expect(recorded.joins).toEqual([['mshy_world_served', { language: 'fr', nickname: 'Awa' }]]);
   });
 
-  test('le nom venu de la landing ouvre directement sur la langue', async () => {
+  test('une autre langue choisie change le drapeau, et c’est elle qui entre', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ initialName: 'Awa', deps: d });
+    await pick(host, 'pt');
+    expect(shownFlag(host)).toBe(getLanguageInfo('pt').flag);
+    await click(enterButton(host));
+    expect(recorded.joins).toEqual([['mshy_world_served', { language: 'pt', nickname: 'Awa' }]]);
+  });
+
+  test('un nom vide n’entre pas : le refus est dit et le champ reprend le focus', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ deps: d });
+    await submit(host);
+    expect(recorded.joins).toEqual([]);
+    expect(host.querySelector('[role="alert"]')).not.toBeNull();
+    expect(document.activeElement).toBe(nameField(host));
+  });
+
+  test('le nom venu d’une adresse est pré-rempli', async () => {
     const { deps: d } = deps();
     const host = await mount({ initialName: 'Awa', deps: d });
-    expect(step(host)).toBe('language');
+    expect(nameField(host)?.value).toBe('Awa');
   });
 
-  test('la langue de l’appareil est proposée parmi les sept', async () => {
-    const { deps: d } = deps();
-    const host = await mount({ initialName: 'Awa', deps: d });
-    expect(host.querySelectorAll('[role="radio"]').length).toBe(7);
-    expect(radio(host, 'es')?.getAttribute('aria-checked')).toBe('true');
-    expect(radio(host, 'fr')?.getAttribute('aria-checked')).toBe('false');
-  });
-
-  test('la première langue de l’appareil parmi les sept est proposée', async () => {
-    const { deps: d } = deps({ deviceLanguages: () => ['ja-JP', 'de-DE', 'en'] });
-    const host = await mount({ initialName: 'Awa', deps: d });
-    expect(radio(host, 'de')?.getAttribute('aria-checked')).toBe('true');
-  });
-
-  test('retour depuis le nom rend la page d’avant quand l’application en a une', async () => {
+  test('retour rend la page d’avant quand l’application en a une', async () => {
     const { deps: d, recorded } = deps({ canGoBack: () => true });
     const host = await mount({ deps: d });
     await click(host.querySelector('[data-world-back]'));
     expect(recorded.gone).toEqual([['<back>', false]]);
   });
 
-  /* L'historique du navigateur compte aussi l'entrée qu'a posée l'étape de la
-     langue (retour matériel) et les pages des autres sites : seul ce que
-     l'application sait de SA page d'avant décide. */
-  test('retour depuis le nom mène à l’accueil quand /world a été ouvert seul, quel que soit l’historique', async () => {
+  /* L'historique du navigateur compte aussi les pages des autres sites : seul
+     ce que l'application sait de SA page d'avant décide. */
+  test('retour mène à l’accueil quand /world a été ouvert seul, quel que soit l’historique', async () => {
     window.history.pushState({}, '', '/world');
     const { deps: d, recorded } = deps({ canGoBack: () => false });
     const host = await mount({ deps: d });
@@ -178,54 +201,26 @@ describe('WorldGuestEntry — le nom, puis la langue', () => {
     expect(recorded.gone).toEqual([['/', true]]);
   });
 
-  test('les flèches parcourent les langues, un seul arrêt de tabulation', async () => {
-    const { deps: d } = deps();
-    const host = await mount({ initialName: 'Awa', deps: d });
-    await act(async () => {
-      radio(host, 'es')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    });
-    expect(radio(host, 'pt')?.getAttribute('aria-checked')).toBe('true');
-    expect(Array.from(host.querySelectorAll('[role="radio"]')).filter((node) => node.getAttribute('tabindex') === '0')).toHaveLength(1);
-  });
-
-  test('en arabe, la flèche gauche avance', async () => {
+  test('en arabe, l’écran se lit de droite à gauche et propose l’arabe', async () => {
     await loadInviteCatalog('ar');
     document.documentElement.lang = 'ar';
     try {
       const { deps: d } = deps();
       const host = await mount({ initialName: 'Awa', deps: d });
       expect(host.querySelector('[data-world-entry-screen]')?.getAttribute('dir')).toBe('rtl');
-      await act(async () => {
-        radio(host, 'es')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
-      });
-      expect(radio(host, 'pt')?.getAttribute('aria-checked')).toBe('true');
+      expect(languageSelect(host)?.value).toBe('ar');
+      expect(languageSelect(host)?.querySelector('option[value="ar"]')?.getAttribute('dir')).toBe('rtl');
     } finally {
       document.documentElement.lang = 'fr';
     }
   });
-
-  test('retour depuis la langue rend le nom, saisi tel quel', async () => {
-    const { deps: d } = deps();
-    const host = await mount({ initialName: 'Awa', deps: d });
-    await click(host.querySelector('[data-world-back]'));
-    expect(step(host)).toBe('name');
-    expect(nameField(host)?.value).toBe('Awa');
-  });
 });
 
 describe('WorldGuestEntry — entrer', () => {
-  test('entrer rejoint par la clé SERVIE, avec le nom et la langue choisie', async () => {
-    const { deps: d, recorded } = deps();
-    const host = await mount({ initialName: 'Awa', deps: d });
-    await click(radio(host, 'pt'));
-    await click(host.querySelector('[data-world-enter]'));
-    expect(recorded.joins).toEqual([['mshy_world_served', { language: 'pt', nickname: 'Awa' }]]);
-  });
-
   test('la jonction ouvre la session invité, avec les familles de pièces jointes du lien', async () => {
     const { deps: d, recorded } = deps();
     const host = await mount({ initialName: 'Awa', deps: d });
-    await click(host.querySelector('[data-world-enter]'));
+    await click(enterButton(host));
     expect(recorded.adopted).toEqual([
       [
         'anon_awa',
@@ -235,7 +230,7 @@ describe('WorldGuestEntry — entrer', () => {
           conversationId: 'c-world',
           link: 'mshy_world_served',
           mayWrite: true,
-          language: 'es',
+          language: 'fr',
           attachmentKinds: ['text', 'audio'],
         },
       ],
@@ -245,12 +240,13 @@ describe('WorldGuestEntry — entrer', () => {
   test('la langue choisie devient la langue d’interface, puis le fil s’ouvre sans retour vers l’entrée', async () => {
     const { deps: d, recorded } = deps();
     const host = await mount({ initialName: 'Awa', deps: d });
-    await click(host.querySelector('[data-world-enter]'));
+    await pick(host, 'es');
+    await click(enterButton(host));
     expect(recorded.languages).toEqual(['es']);
     expect(recorded.gone).toEqual([['/c/c-world', true]]);
   });
 
-  test('un nom déjà pris ramène au nom, la suggestion pré-remplie', async () => {
+  test('un nom déjà pris garde la vue, la suggestion pré-remplie et le refus dit', async () => {
     const taken: ApiResult<LinkGuestJoined> = {
       ok: false,
       status: 409,
@@ -260,8 +256,7 @@ describe('WorldGuestEntry — entrer', () => {
     };
     const { deps: d, recorded } = deps({ joinGuest: async () => taken });
     const host = await mount({ initialName: 'Awa', deps: d });
-    await click(host.querySelector('[data-world-enter]'));
-    expect(step(host)).toBe('name');
+    await click(enterButton(host));
     expect(nameField(host)?.value).toBe('Awa2');
     expect(host.querySelector('[role="alert"]')).not.toBeNull();
     expect(recorded.adopted).toEqual([]);
@@ -271,7 +266,7 @@ describe('WorldGuestEntry — entrer', () => {
     const refused: ApiResult<LinkGuestJoined> = { ok: false, status: 410, error: 'fermé', code: 'LINK_INACTIVE' };
     const { deps: d, recorded } = deps({ joinGuest: async () => refused });
     const host = await mount({ initialName: 'Awa', deps: d });
-    await click(host.querySelector('[data-world-enter]'));
+    await click(enterButton(host));
     expect(host.querySelector('[data-world-refused]')).not.toBeNull();
     expect(recorded.adopted).toEqual([]);
     expect(recorded.gone).toEqual([]);
