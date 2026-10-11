@@ -96,7 +96,7 @@ struct FrameUsageVectorTests {
     @Test("les dix clés de libellé sont celles de FRAME_USAGE_LABEL_KEYS")
     func labelKeysMatchTheSharedTable() throws {
         let source = try String(contentsOf: Self.packagesURL.appendingPathComponent("shared/types/frame-usage.ts"), encoding: .utf8)
-        let block = try #require(source.range(of: #"export const FRAME_USAGE_LABEL_KEYS = \{(.*?)\} as const;"#, options: .regularExpression))
+        let block = try #require(source.range(of: #"(?s)export const FRAME_USAGE_LABEL_KEYS = \{(.*?)\} as const;"#, options: .regularExpression))
         let regex = try NSRegularExpression(pattern: #"'(frame\.usage\.[A-Za-z]+)'"#)
         let text = String(source[block])
         let keys = regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in

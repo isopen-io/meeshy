@@ -10,10 +10,10 @@ struct FrameUsageLocalizationTests {
 
     private static let locales = ["fr", "en", "es", "pt-BR", "de", "it", "ar"]
 
-    /// `packages/MeeshySDK/Tests/MeeshyUITests/Packs/…` : **3** composants à retirer pour atteindre `packages/MeeshySDK/`.
+    /// `packages/MeeshySDK/Tests/MeeshyUITests/Packs/…` : **4** composants à retirer (le fichier, puis `Packs`, `MeeshyUITests`, `Tests`) pour atteindre `packages/MeeshySDK/`.
     private static var catalogURL: URL {
         var url = URL(fileURLWithPath: #filePath)
-        for _ in 0..<3 { url.deleteLastPathComponent() }
+        for _ in 0..<4 { url.deleteLastPathComponent() }
         return url.appendingPathComponent("Sources/MeeshyUI/Resources/Localizable.xcstrings")
     }
 
