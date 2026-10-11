@@ -35,6 +35,7 @@ import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/li
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
 import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
+import { focusGuestOf } from '@/lib/view/guest-focus';
 import {
   GroupCard,
   INK,
@@ -246,6 +247,16 @@ export function ChatJoin({
   const [arrival] = useState(entry);
   const [handedOff] = useState(() => arrival !== null && takeLandingHandoff({ storage: deps.handoff, link, entry: arrival, now: deps.now().getTime() }));
   const [entering, setEntering] = useState(arrival !== null);
+  /* L'INVITÉ DÉJÀ ENTRÉ PAR CE LIEN (#10100) — un ancien lien rouvert ne lui
+     repropose pas d'entrer : il rouvre son fil, en focus. Lu au montage : une
+     jonction réussie ici navigue d'elle-même. */
+  const [returning] = useState(() => {
+    const held = focusGuestOf(sessionStore.getState().session);
+    return held !== null && held.link === link ? held.conversationId : null;
+  });
+  useEffect(() => {
+    if (returning !== null) deps.go(href('thread', { conversation: returning }), true);
+  }, [deps, returning]);
 
   /**
    * LA LECTURE — relancée au retour du réseau.
@@ -398,7 +409,10 @@ export function ChatJoin({
        rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
        son interface. Un COMPTE qui rejoint en anonyme garde la sienne (#8816). */
     if (heldAccountOf(session) === null) deps.adoptInterfaceLanguage(validated.body.language);
-    deps.go(href('thread', { conversation: result.data.conversationId }), true);
+    /* LA LANDING NE FAIT ENTRER QUE DANS WORLD WIDE, qui se lit sur `/world`
+       (#10100) : une entrée portée par son jeton y mène, même par l'ancienne
+       adresse de jonction qu'une page de la landing en cache vise encore. */
+    deps.go(handedOff ? href('world') : href('thread', { conversation: result.data.conversationId }), true);
     deps.joined();
   }
 
@@ -456,6 +470,8 @@ export function ChatJoin({
     ) : choices.accountRequired ? (
       <GuestExits language={language} next={next} withSeparator={false} accountRequired />
     ) : null;
+
+  if (returning !== null) return <InvitationPending language={language} />;
 
   return (
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>

@@ -1,4 +1,5 @@
 import { Glyph } from '@/components/glyph';
+import { useGuestFocus } from '@/lib/view/guest-focus';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -15,6 +16,9 @@ import { Link } from '@/routes/route-table';
  * d'écran d'où revenir : aucun chevron, aucune porte « Retour aux
  * conversations » (la feuille a sa croix), et l'état remplit la feuille au lieu
  * du viewport.
+ *
+ * L'INVITÉ SANS COMPTE (#10100) n'a pas de liste non plus : ni chevron, ni
+ * « Retour aux conversations » — deux portes vers la connexion.
  */
 
 type PreviewProp = { readonly preview?: boolean | undefined };
@@ -31,6 +35,7 @@ const rootClass = (preview: boolean | undefined) =>
  * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
  */
 function MinimalHeader({ preview }: PreviewProp) {
+  const focus = useGuestFocus();
   return (
     <header className="glass z-10 shrink-0">
       <div className="thread-column flex items-center gap-2 px-4 py-2" style={preview === true ? { minHeight: 60 } : undefined}>
@@ -40,7 +45,7 @@ function MinimalHeader({ preview }: PreviewProp) {
             sous la barre AA non-texte (3:1). `--color-ios-ink` y tient
             (même ton, même densité que `thread-header.tsx`, mesuré par
             `scripts/lib/glass-contrast.test.ts`). */}
-        {preview === true ? null : (
+        {preview === true || focus ? null : (
           <Link
             to="list"
             className="grid size-11 shrink-0 place-items-center rounded-chip"
@@ -58,6 +63,7 @@ function MinimalHeader({ preview }: PreviewProp) {
 /** `status === 'refused'` (D-6) — 403/404 confondus : « elle n'existe pas,
  * ou vous n'en êtes pas membre », jamais l'un ou l'autre distingué. */
 export function ThreadRefused({ preview }: PreviewProp = {}) {
+  const focus = useGuestFocus();
   return (
     <div className={rootClass(preview)}>
       <MinimalHeader preview={preview} />
@@ -71,7 +77,7 @@ export function ThreadRefused({ preview }: PreviewProp = {}) {
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           Elle n’existe pas, ou vous n’en êtes pas membre.
         </p>
-        {preview === true ? null : (
+        {preview === true || focus ? null : (
           <Link
             to="list"
             className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"

@@ -111,10 +111,15 @@ import { ThreadModes } from './thread-modes';
  * depuis la bannière (`conversation-preview-host.tsx`) : la conversation vient
  * de l'aperçu et non de l'adresse, la racine remplit la feuille au lieu du
  * viewport, et l'en-tête se montre COMPLET, sans chevron retour.
+ *
+ * EN FOCUS (#10100, `focus`) — le fil de l'invité sur `/world` : la
+ * conversation vient de sa session, pas de l'adresse ; le reste est le fil.
  */
-export default function ThreadScreen({ preview }: { readonly preview?: { readonly conversationId: string } } = {}) {
+type ThreadScreenProps = { readonly preview?: { readonly conversationId: string }; readonly focus?: { readonly conversationId: string } };
+
+export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {}) {
   const route = useOptionalRoute();
-  const id = preview?.conversationId ?? route?.params['conversation'] ?? '';
+  const id = preview?.conversationId ?? focus?.conversationId ?? route?.params['conversation'] ?? '';
 
   /**
    * LA SOURCE (#5650, F2/F5/§5 étape 10) — `useThreadData(id)` compose
