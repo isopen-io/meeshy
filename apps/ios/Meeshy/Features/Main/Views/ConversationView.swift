@@ -2042,30 +2042,14 @@ struct ConversationView: View {
         .transition(.opacity)
     }
 
-    @ViewBuilder
     private var anonymousHeaderBar: some View {
-        HStack {
-            ConversationTitleLabel(
-                name: liveConversation?.displayName ?? "Conversation",
-                favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
-                color: .white
-            )
-            Spacer()
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
-                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
-            }
-            .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.md)
+        ConversationGuestHeaderBar(
+            title: liveConversation?.displayName ?? "Conversation",
+            favoriteEmoji: conversation?.userState.reaction,
+            avatarURL: liveConversation?.avatar,
+            accentColor: accentColor, secondaryColor: secondaryColor,
+            guestLinkId: anonymousSession?.linkId, titleColor: theme.textPrimary, mutedColor: theme.textMuted
+        ) { dismiss() }
     }
 
     /// Type-erased to break the deep opaque-type chain that crashes the
@@ -2098,7 +2082,8 @@ struct ConversationView: View {
             },
             midContent: { expandedHeaderMidContent },
             avatar: { headerAvatarView },
-            background: { expandedHeaderBackground }
+            background: { expandedHeaderBackground },
+            share: { AnyView(ConversationShareLinkSlot(conversation: liveConversation, guestLinkId: anonymousSession?.linkId, accentColor: accentColor, secondaryColor: secondaryColor)) }
         ))
     }
 

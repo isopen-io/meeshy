@@ -224,7 +224,21 @@ final class Router: ObservableObject {
             AnalyticsManager.shared.trackRoute(path.last)
         }
     }
-    @Published var deepLinkProfileUser: ProfileSheetUser?
+    @Published var deepLinkProfileUser: ProfileSheetUser? {
+        didSet { if refusesProfiles, deepLinkProfileUser != nil { deepLinkProfileUser = nil } }
+    }
+
+    /// Le routeur du fil d'un INVITÉ sans compte (#10205, directive porteur du
+    /// 2026-10-11) : « il ne faut pas permettre d'afficher les profils
+    /// utilisateurs […] sauf [aux] membres de Meeshy ». Le refus vit ICI, au
+    /// seul canal par lequel toute fiche passe — avatar d'une bulle, citation,
+    /// avis d'arrivée, Rivière, plein écran audio — plutôt qu'à chacune de ces
+    /// portes, qu'une porte ajoutée demain aurait oublié de garder.
+    let refusesProfiles: Bool
+
+    init(refusesProfiles: Bool = false) {
+        self.refusesProfiles = refusesProfiles
+    }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
     ///
@@ -234,7 +248,9 @@ final class Router: ObservableObject {
     /// identité vit dans UNE conversation et se demande par le couple
     /// `(conversationId, participantId)`. Les faire transiter par le même canal
     /// obligeait à donner un `userId` à qui n'en a pas.
-    @Published var participantProfileTarget: ParticipantProfileTarget?
+    @Published var participantProfileTarget: ParticipantProfileTarget? {
+        didSet { if refusesProfiles, participantProfileTarget != nil { participantProfileTarget = nil } }
+    }
 
     @Published var pendingShareContent: SharedContentType? = nil
 

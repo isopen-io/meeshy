@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .ribbon, font: .fantasy, color: "#2E1A47", fill: "#F3E2A9"),
                 title: CallFrameTitle(source: .names, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E2A9", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.tarot.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .fantasy, color: "#F3E2A9", fill: "#2E1A47E6"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E2A9", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.tarot.groupe",
@@ -70,7 +72,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .fantasy, color: "#F3E2A9", fill: "#140B24D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E2A9", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.tarot.tablee",
@@ -91,7 +94,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .fantasy, color: "#F3E2A9", fill: nil),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D4AF37", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .calligraphy, color: "#F3E2A9", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.grimoire.duo",
@@ -114,7 +118,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .calligraphy, color: "#3B2412", fill: nil),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#3B2412", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .fantasy, color: "#7A5A2F", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.grimoire.comite",
@@ -137,7 +142,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .calligraphy, color: "#3B2412", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#3B2412", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .fantasy, color: "#7A5A2F", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.grimoire.groupe",
@@ -160,7 +166,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .list, font: .calligraphy, color: "#3B2412", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#3B2412", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .fantasy, color: "#7A5A2F", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.portail.duo",
@@ -183,7 +190,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .caption, font: .fantasy, color: "#F3E2A9", fill: nil),
                 title: CallFrameTitle(source: .names, font: .fantasy, color: "#F3E2A9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.portail.comite",
@@ -206,7 +214,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .fantasy, color: "#F3E2A9", fill: "#140B24D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#F3E2A9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.portail.groupe",
@@ -229,7 +238,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .fantasy, color: "#F3E2A9", fill: "#140B24D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#F3E2A9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.portail.tablee",
@@ -252,7 +262,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .fantasy, color: "#F3E2A9", fill: nil),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#F3E2A9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "fantastique.pacte.duo",
@@ -274,7 +285,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .ribbon, font: .calligraphy, color: "#062019", fill: "#D4AF37"),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F3E2A9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .fantasy, color: "#D4AF37", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

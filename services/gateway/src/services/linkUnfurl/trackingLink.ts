@@ -2,7 +2,7 @@
  * L'APERÇU D'UN LIEN SUIVI `/l/<jeton>` POUR LES ROBOTS (#10192) — ce que la
  * page fait de la cible, et rien d'autre.
  *
- * Décision : `apps/web/decisions.md` § D-198.
+ * Décision : `apps/web/decisions.md` § D-199.
  *
  * Trois issues, décidées sur la ligne du lien et son seul `originalUrl` :
  *

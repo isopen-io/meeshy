@@ -56,6 +56,8 @@ import * as meGroup from './endpoints/me.js';
 import * as mentionsGroup from './endpoints/mentions.js';
 import * as messagesGroup from './endpoints/messages.js';
 import * as notificationsGroup from './endpoints/notifications.js';
+import * as packAssetsGroup from './endpoints/pack-assets.js';
+import * as packsGroup from './endpoints/packs.js';
 import * as postsGroup from './endpoints/posts.js';
 import * as reactionsGroup from './endpoints/reactions.js';
 import * as reportsGroup from './endpoints/reports.js';
@@ -114,6 +116,8 @@ export const API_ENDPOINTS = {
   mentions: mentionsGroup,
   messages: messagesGroup,
   notifications: notificationsGroup,
+  packAssets: packAssetsGroup,
+  packs: packsGroup,
   posts: postsGroup,
   reactions: reactionsGroup,
   reports: reportsGroup,
@@ -520,6 +524,11 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/notifications/read-all',
   '/api/v1/notifications/read-by-types',
   '/api/v1/notifications/unread-count',
+  '/api/v1/pack-assets/:file',
+  '/api/v1/packs/glory-frame',
+  '/api/v1/packs/glory-frame/:slug',
+  '/api/v1/packs/glory-frame/:slug/install',
+  '/api/v1/packs/glory-frame/installed',
   '/api/v1/posts',
   '/api/v1/posts/:postId',
   '/api/v1/posts/:postId/anonymous-view',
@@ -1056,6 +1065,11 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/notifications/read-all': ['POST'],
   '/api/v1/notifications/read-by-types': ['POST'],
   '/api/v1/notifications/unread-count': ['GET'],
+  '/api/v1/pack-assets/:file': ['GET'],
+  '/api/v1/packs/glory-frame': ['GET'],
+  '/api/v1/packs/glory-frame/:slug': ['GET'],
+  '/api/v1/packs/glory-frame/:slug/install': ['PUT', 'DELETE'],
+  '/api/v1/packs/glory-frame/installed': ['GET'],
   '/api/v1/posts': ['POST'],
   '/api/v1/posts/:postId': ['GET', 'PUT', 'DELETE'],
   '/api/v1/posts/:postId/anonymous-view': ['POST'],

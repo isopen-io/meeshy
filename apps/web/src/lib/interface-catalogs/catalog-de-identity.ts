@@ -39,6 +39,7 @@ const deIdentity = {
   'conversation.details.share.failed': 'Der Link konnte nicht erstellt werden – versuche es gleich noch einmal.',
   'conversation.details.share.unavailable': 'Teilen ist hier nicht möglich – kopiere den Link: {url}',
   'thread.header.active_members': 'Aktivste Mitglieder',
+  'thread.header.share': 'Unterhaltung teilen',
 };
 
 export default deIdentity;

@@ -39,6 +39,7 @@ const itIdentity = {
   'conversation.details.share.failed': 'Impossibile creare il link: riprova tra un momento.',
   'conversation.details.share.unavailable': 'Impossibile condividere qui: copia il link: {url}',
   'thread.header.active_members': 'Membri più attivi',
+  'thread.header.share': 'Condividi la conversazione',
 };
 
 export default itIdentity;

@@ -48,12 +48,17 @@ export const GUEST_ATTACHMENT_KIND_CEILINGS: Readonly<Record<string, readonly Gu
  * reçoit « 199+ » au-delà du plafond, jamais le chiffre exact.
  *
  * Rendu client : `formatMemberCount(memberCount, memberCountCapped)`.
+ *
+ * `memberCount` est OPTIONNEL (#10205, directive porteur du 2026-10-11 : un
+ * visiteur sans compte ne voit pas le nombre de participants) : la passerelle
+ * peut cesser de le servir sur cette route publique sans casser la landing ni
+ * l'entrée `/world`, qui ne le montrent plus à un non-membre.
  */
 export const worldEntrySchema = z.object({
   identifier: z.string().min(1),
   title: z.string().min(1),
   shareLinkIdentifier: z.string().min(1),
-  memberCount: z.number().int().nonnegative(),
+  memberCount: z.number().int().nonnegative().optional(),
   memberCountCapped: z.literal(true).optional(),
 });
 

@@ -32,7 +32,14 @@ jest.mock('../../../../middleware/auth', () => ({
   // getOptionalAuth (presence-gate.ts) calls this at route-registration time
   // for the dedicated email/id/phone lookups — a no-op preValidation hook is
   // enough since these tests don't exercise presence-gating itself.
-  createUnifiedAuthMiddleware: jest.fn(() => async () => {}),
+  // Un lecteur INSCRIT (lui-même) : un lecteur sans compte ne lit plus aucun
+  // profil (#10205), et sa propre fiche ne pose pas la question du blocage.
+  createUnifiedAuthMiddleware: jest.fn(() => async (req: any) => {
+    req.authContext ??= {
+      type: 'user', isAuthenticated: true, isAnonymous: false,
+      userId: '507f1f77bcf86cd799439011', registeredUser: { id: '507f1f77bcf86cd799439011', role: 'USER' },
+    };
+  }),
 }));
 
 jest.mock('../../../../services/CacheStore', () => ({

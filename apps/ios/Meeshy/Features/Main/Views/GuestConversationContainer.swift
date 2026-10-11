@@ -50,6 +50,8 @@ struct GuestSession {
                 identifier: entry.identifier,
                 type: .global,
                 title: entry.title,
+                avatar: entry.avatar,
+                banner: entry.banner,
                 memberCount: entry.memberCount,
                 memberCountCapped: entry.memberCountCapped == true
             )
@@ -63,6 +65,14 @@ struct GuestConversationContainer: View {
     /// « Se connecter » / « Créer un compte » depuis la page d'invitation.
     let onAccountRequest: (InviteLandingChoice) -> Void
 
+    /// Ce que `RootView` pose pour un membre, et qu'un invité n'a pas : le fil
+    /// est présenté HORS de `RootView`. Sans eux, `ConversationView` trappait
+    /// dès l'entrée (« No ObservableObject of type Router found »). Le routeur
+    /// de l'invité refuse toute fiche de profil (#10205).
+    @StateObject private var router = Router(refusesProfiles: true)
+    @StateObject private var storyViewModel = StoryViewModel()
+    @StateObject private var statusViewModel = StatusViewModel()
+
     var body: some View {
         if let stored = session.context {
             let context = session.effectiveContext(stored)
@@ -71,6 +81,9 @@ struct GuestConversationContainer: View {
                 anonymousSession: context,
                 showsOwnConnectionBanner: true
             )
+            .environmentObject(router)
+            .environmentObject(storyViewModel)
+            .environmentObject(statusViewModel)
             .reportsConversationViewing(context.conversationId)
         } else if case .world(let entry) = session.origin {
             // #10006 — nom → langue → fil, depuis l'écran de connexion.

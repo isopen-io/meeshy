@@ -152,30 +152,39 @@ extension ConversationView {
     }
 
     private var headerCallButtonsOnly: AnyView {
-        // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
-        // poignée de l'appel est la conversation, son nom le titre du groupe.
-        if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
+        guard let entry = HeaderCallEntry.resolve(
+            conversation: conversation,
+            viewerPlatformRole: AuthManager.shared.currentUser?.role,
+            viewerIsGuest: anonymousSession != nil
+        ) else { return AnyView(EmptyView()) }
+        switch entry.callee {
+        case .conversation:
+            // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+            // poignée de l'appel est la conversation, son nom le titre du groupe.
+            let groupId = conversation?.id ?? ""
             return AnyView(HeaderCallButtonsView(
                 conversationId: groupId,
                 userId: groupId,
                 calleeName: conversation?.displayName ?? "",
                 accentColor: accentColor,
                 secondaryColor: secondaryColor,
-                isGroup: true
+                isGroup: true,
+                canStart: entry.canStart
+            ))
+        case .peer(let userId):
+            // §7.6 — the start-call buttons are owned by a dedicated subview that
+            // observes CallManager, so during an active call they swap to a
+            // "tap to return" indicator (preventing a 2nd call from the header)
+            // without forcing the whole ConversationView to observe the singleton.
+            return AnyView(HeaderCallButtonsView(
+                conversationId: conversation?.id ?? "",
+                userId: userId,
+                calleeName: resolvedCalleeName,
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                canStart: entry.canStart
             ))
         }
-        guard isDirect, let userId = conversation?.participantUserId else { return AnyView(EmptyView()) }
-        // §7.6 — the start-call buttons are owned by a dedicated subview that
-        // observes CallManager, so during an active call they swap to a
-        // "tap to return" indicator (preventing a 2nd call from the header)
-        // without forcing the whole ConversationView to observe the singleton.
-        return AnyView(HeaderCallButtonsView(
-            conversationId: conversation?.id ?? "",
-            userId: userId,
-            calleeName: resolvedCalleeName,
-            accentColor: accentColor,
-            secondaryColor: secondaryColor
-        ))
     }
 
     /// Resolves the callee display name for DM calls.
@@ -304,6 +313,50 @@ extension ConversationView {
     }
 }
 
+// MARK: - Ce que l'en-tête offre pour appeler (#10207)
+
+/// Qui l'en-tête appelle, et si le lecteur peut LANCER cet appel. La
+/// permission est la loi unique du SDK (`CallPermission.canStartCall`, miroir
+/// de `packages/shared/utils/call-permission.ts`) ; ce type n'y ajoute que la
+/// FORME de l'appel que l'app sait passer : un pair pour un direct, la
+/// conversation pour un groupe ou une public.
+///
+/// `nil` : aucun bouton d'appel — invité sans compte, conversation `global`,
+/// ou type que l'app n'appelle pas. Une `public` dont le lecteur n'est ni
+/// créateur ni administrateur garde l'entrée avec `canStart == false` : il ne
+/// lance rien, mais rejoint l'appel déjà en cours.
+struct HeaderCallEntry: Equatable {
+
+    enum Callee: Equatable {
+        case peer(userId: String)
+        case conversation
+    }
+
+    let callee: Callee
+    let canStart: Bool
+
+    static func resolve(conversation: Conversation?, viewerPlatformRole: String?, viewerIsGuest: Bool) -> HeaderCallEntry? {
+        guard let conversation, !viewerIsGuest, conversation.type != .global else { return nil }
+        let canStart = CallPermission.canStartCall(CallPermission.Context(
+            conversationType: conversation.type.rawValue,
+            viewerIsCreator: conversation.currentUserRole?.lowercased() == MemberRole.creator.rawValue,
+            viewerConversationRole: conversation.currentUserRole,
+            viewerPlatformRole: viewerPlatformRole,
+            viewerIsGuest: viewerIsGuest
+        ))
+        switch conversation.type {
+        case .direct:
+            guard let peer = conversation.participantUserId, !peer.isEmpty else { return nil }
+            return HeaderCallEntry(callee: .peer(userId: peer), canStart: canStart)
+        case .group, .public:
+            guard !conversation.id.isEmpty else { return nil }
+            return HeaderCallEntry(callee: .conversation, canStart: canStart)
+        default:
+            return nil
+        }
+    }
+}
+
 // MARK: - Header Call Buttons (§7.6)
 // Owns the CallManager observation so the header reacts to call state without
 // the whole ConversationView subscribing. Idle → audio + video start buttons;
@@ -319,6 +372,10 @@ private struct HeaderCallButtonsView: View {
     /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
     /// et `calleeName` son titre.
     var isGroup = false
+    /// `false` : le lecteur ne LANCE pas d'appel ici (#10207 — une `public`
+    /// dont il n'est ni créateur ni administrateur) ; il rejoint seulement
+    /// celui qui est déjà en cours.
+    var canStart = true
 
     @ObservedObject private var callManager = CallManager.shared
     /// Set when the SERVER (not this device's own `CallManager`) reports an
@@ -345,7 +402,7 @@ private struct HeaderCallButtonsView: View {
                 }
             } else if let activeCall = reconciledActiveCall {
                 rejoinCallIndicator(activeCall)
-            } else {
+            } else if canStart {
                 startCallButtons
             }
         }

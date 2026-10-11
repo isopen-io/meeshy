@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// Source-level guards for `HeaderCallButtonsView`'s server-reconciled
 /// "rejoin call" indicator — user-requested 2026-07-11: when this device's
@@ -215,5 +216,61 @@ final class HeaderCallButtonsViewTests: XCTestCase {
                 && body.contains("await reconcileActiveCall()"),
             "body must reconcile on every conversation change (task id), not on every re-render."
         )
+    }
+}
+
+/// #10207 — l'en-tête ne propose d'appeler que ce que la loi unique
+/// (`CallPermission.canStartCall`) autorise, et rien du tout en `global`.
+@MainActor
+final class HeaderCallEntryTests: XCTestCase {
+
+    private func conversation(
+        type: MeeshyConversation.ConversationType,
+        role: String? = "member",
+        peer: String? = nil
+    ) -> Conversation {
+        Conversation(id: "conv-1", identifier: "c1", type: type, participantUserId: peer, currentUserRole: role)
+    }
+
+    func test_resolve_globalConversation_offersNoCallAtAll_evenToAPlatformAdmin() {
+        XCTAssertNil(HeaderCallEntry.resolve(conversation: conversation(type: .global, role: "creator"),
+                                             viewerPlatformRole: "BIGBOSS", viewerIsGuest: false))
+    }
+
+    func test_resolve_guestViewer_offersNoCall() {
+        XCTAssertNil(HeaderCallEntry.resolve(conversation: conversation(type: .direct, peer: "u2"),
+                                             viewerPlatformRole: nil, viewerIsGuest: true))
+    }
+
+    func test_resolve_publicConversation_ordinaryMember_canOnlyJoin() {
+        let entry = HeaderCallEntry.resolve(conversation: conversation(type: .public, role: "member"),
+                                            viewerPlatformRole: "USER", viewerIsGuest: false)
+        XCTAssertEqual(entry, HeaderCallEntry(callee: .conversation, canStart: false))
+    }
+
+    func test_resolve_publicConversation_creatorOrAdminOrPlatformAdmin_startsTheCall() {
+        let creator = HeaderCallEntry.resolve(conversation: conversation(type: .public, role: "creator"),
+                                              viewerPlatformRole: "USER", viewerIsGuest: false)
+        let admin = HeaderCallEntry.resolve(conversation: conversation(type: .public, role: "ADMIN"),
+                                            viewerPlatformRole: "USER", viewerIsGuest: false)
+        let platformAdmin = HeaderCallEntry.resolve(conversation: conversation(type: .public, role: "member"),
+                                                    viewerPlatformRole: "ADMIN", viewerIsGuest: false)
+        XCTAssertEqual(creator?.canStart, true)
+        XCTAssertEqual(admin?.canStart, true)
+        XCTAssertEqual(platformAdmin?.canStart, true)
+    }
+
+    func test_resolve_directAndGroup_startAsBefore() {
+        XCTAssertEqual(HeaderCallEntry.resolve(conversation: conversation(type: .direct, peer: "u2"),
+                                               viewerPlatformRole: "USER", viewerIsGuest: false),
+                       HeaderCallEntry(callee: .peer(userId: "u2"), canStart: true))
+        XCTAssertEqual(HeaderCallEntry.resolve(conversation: conversation(type: .group),
+                                               viewerPlatformRole: "USER", viewerIsGuest: false),
+                       HeaderCallEntry(callee: .conversation, canStart: true))
+    }
+
+    func test_resolve_directWithoutPeer_offersNoCall() {
+        XCTAssertNil(HeaderCallEntry.resolve(conversation: conversation(type: .direct, peer: nil),
+                                             viewerPlatformRole: "USER", viewerIsGuest: false))
     }
 }

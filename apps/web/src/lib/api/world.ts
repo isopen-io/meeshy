@@ -29,15 +29,16 @@ const WireWorldEntry = z.object({
   identifier: z.string().check(z.minLength(1)),
   title: z.string().check(z.minLength(1)),
   shareLinkIdentifier: z.string().check(z.minLength(1)),
-  memberCount: z.number().check(z.int(), z.nonnegative()),
+  memberCount: z.optional(z.number().check(z.int(), z.nonnegative())),
   memberCountCapped: z.optional(z.literal(true)),
 });
 
 export function decodeWorldEntry(raw: unknown): WorldEntry | null {
   const parsed = WireWorldEntry.safeParse(raw);
   if (!parsed.success) return null;
-  const { memberCountCapped, ...entry } = parsed.data;
-  return memberCountCapped === true ? { ...entry, memberCountCapped } : entry;
+  const { memberCount, memberCountCapped, ...entry } = parsed.data;
+  const counted = memberCount === undefined ? entry : { ...entry, memberCount };
+  return memberCountCapped === true ? { ...counted, memberCountCapped } : counted;
 }
 
 export async function loadWorldEntry(params: WorldDeps & { readonly signal?: AbortSignal }): Promise<ApiResult<WorldEntry>> {

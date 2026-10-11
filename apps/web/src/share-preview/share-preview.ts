@@ -25,7 +25,7 @@ export type { SharePreviewFamily } from './share-preview-copy';
  * ne porte pas d'`og:url` (le robot garde l'adresse qu'il a demandée). Ce qui
  * dépend d'une donnée — le titre d'une invitation ouverte, la cible d'un lien
  * suivi — se rend côté PASSERELLE, aux robots seuls (routeurs Traefik
- * `*-unfurl`, décision D-198).
+ * `*-unfurl`, décision D-199).
  */
 
 /** Les adresses de chaque famille — l'ordre est celui de nginx, la première qui répond gagne. */

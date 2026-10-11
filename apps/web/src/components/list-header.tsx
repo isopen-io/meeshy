@@ -4,10 +4,9 @@ import { Glyph } from '@/components/glyph';
 import { RailTitleSlot } from '@/components/rail-title-slot';
 import { ShareLinkSheet } from '@/components/share-link-sheet';
 import type { StoryRailProps } from '@/components/story-rail';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import type { Conversation } from '@/lib/api/types';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -119,7 +118,7 @@ export function ListHeader({
           conversations={conversations}
           viewerId={viewerId}
           deps={apiDeps}
-          origin={webOriginOf(apiConfig.base, window.location.origin)}
+          origin={publicWebOrigin(window.location.origin)}
           onClose={() => setShareSheetOpen(false)}
           onFeedback={setFeedback}
         />

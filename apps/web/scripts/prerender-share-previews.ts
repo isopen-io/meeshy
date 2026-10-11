@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192, D-198) — une copie de la
+ * LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192, D-199) — une copie de la
  * coquille construite (`dist/index.html`) par famille d'adresse et par langue,
  * habillée de ses balises Open Graph et Twitter (`src/share-preview/`).
  *

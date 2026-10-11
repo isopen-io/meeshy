@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 658,
+  "routeCount": 664,
   "routes": [
     {
       "method": "DELETE",
@@ -772,6 +772,20 @@
       "path": "/api/v1/notifications/read",
       "module": "notificationRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/glory-frame/:slug/install",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -3996,6 +4010,62 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/pack-assets/:file",
+      "module": "packAssetsRoutes",
+      "mountPrefix": "/api/v1/pack-assets",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame/:slug",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame/installed",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -5182,9 +5252,11 @@
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S0",
-        "S1"
+        "S1",
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "optional-identity",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -9230,6 +9302,20 @@
       "path": "/api/v1/messages/:messageId",
       "module": "messageRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/glory-frame/:slug/install",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

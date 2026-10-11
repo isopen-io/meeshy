@@ -149,7 +149,7 @@ export function registerLinkUnfurlRoute(
 
   /**
    * `GET /tracking-links/:token/og` — la page que lisent les robots d'aperçu
-   * quand on colle `https://meeshy.me/l/<jeton>` (#10192, D-198). L'aperçu de
+   * quand on colle `https://meeshy.me/l/<jeton>` (#10192, D-199). L'aperçu de
    * la cible PUBLIQUE, sinon le générique (`services/linkUnfurl/trackingLink.ts`).
    */
   fastify.get<{ Params: { token: string } }>('/tracking-links/:token/og', {

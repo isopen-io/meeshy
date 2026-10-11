@@ -4,8 +4,11 @@
  * titre, la clé du lien de partage à suivre, et l'effectif.
  *
  * PUBLIC par conception : la landing est servie à des visiteurs qui n'ont ni
- * compte ni session. La réponse est la MÊME pour tous — aucune identité n'est
- * lue — d'où un cache PUBLIC court, côté client comme côté serveur.
+ * compte ni session. L'entrée est la MÊME pour tous, d'où un cache serveur
+ * court. L'EFFECTIF, lui, ne part que vers un compte Meeshy (#10205, directive
+ * porteur du 2026-10-11) : un visiteur sans compte, ou un invité de lien, reçoit
+ * l'entrée SANS `memberCount` (cache public), un compte la reçoit avec (cache
+ * PRIVÉ) — `Vary: Authorization` sépare les deux formes dans tout cache partagé.
  *
  * Ce qui ne sort JAMAIS : un id de conversation, de lien ou d'utilisateur, une
  * liste de personnes, la présence de qui que ce soit. Le schéma de réponse est
@@ -22,6 +25,8 @@ import { loadWorldEntry } from '../services/world/worldConversation';
 import { computeETag, ifNoneMatchMatches } from '../utils/etag';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { sendNotFound, sendSuccess } from '../utils/response';
+import { getOptionalAuth } from './users/presence-gate';
+import { isGuestViewer, type GuestViewerContext } from '../services/guests/guestMemberVisibility';
 
 const logger = enhancedLogger.child({ module: 'WorldRoutes' });
 
@@ -31,10 +36,21 @@ export const WORLD_ENTRY_CACHE_TTL_SECONDS = 30;
 const WORLD_ENTRY_CACHE_KEY = 'world:entry:v1';
 
 const CACHE_CONTROL = `public, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}, stale-while-revalidate=60`;
+const MEMBER_CACHE_CONTROL = `private, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}`;
+
+type WorldAuthenticate = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+
+/** L'entrée telle qu'un lecteur la reçoit : l'effectif est réservé aux comptes Meeshy. */
+function servedEntry(entry: WorldEntry, viewerIsGuest: boolean): WorldEntry {
+  if (!viewerIsGuest) return entry;
+  const { memberCount: _memberCount, memberCountCapped: _memberCountCapped, ...withoutCount } = entry;
+  return withoutCount;
+}
 
 export type WorldRoutesOptions = {
   readonly cache?: Pick<CacheStore, 'get' | 'set'>;
   readonly loadEntry?: (prisma: PrismaClient) => Promise<WorldEntry | null>;
+  readonly authenticate?: WorldAuthenticate;
 };
 
 const worldEntryResponseSchema = {
@@ -44,12 +60,12 @@ const worldEntryResponseSchema = {
     data: {
       type: 'object',
       additionalProperties: false,
-      required: ['identifier', 'title', 'shareLinkIdentifier', 'memberCount'],
+      required: ['identifier', 'title', 'shareLinkIdentifier'],
       properties: {
         identifier: { type: 'string', description: 'Identifiant lisible de la conversation World Wide' },
         title: { type: 'string' },
         shareLinkIdentifier: { type: 'string', description: 'Clé de jonction du lien de partage (POST /links/:key/members)' },
-        memberCount: { type: 'integer', description: 'Effectif, plafonné à 199 pour un lecteur anonyme' },
+        memberCount: { type: 'integer', description: 'Effectif, servi à un compte Meeshy seulement (#10205), plafonné à 199' },
         memberCountCapped: { type: 'boolean', description: 'Présent et vrai quand memberCount est plafonné (« 199+ »)' },
       },
     },
@@ -98,13 +114,14 @@ export async function worldRoutes(fastify: FastifyInstance, options: WorldRoutes
   const prisma = fastify.prisma as PrismaClient;
   const cache = options.cache ?? getCacheStore();
   const loadEntry = options.loadEntry ?? loadWorldEntry;
+  const authenticate = options.authenticate ?? (getOptionalAuth(prisma) as unknown as WorldAuthenticate);
 
   fastify.get(
     '/world',
     {
       schema: {
         description:
-          "L'entrée publique de World Wide : ce que la landing de meeshy.me lit pour faire entrer un visiteur sans compte. Identique pour tous, sans identité, mise en cache 30 s.",
+          "L'entrée publique de World Wide : ce que la landing de meeshy.me lit pour faire entrer un visiteur sans compte. Mise en cache 30 s ; l'effectif n'est servi qu'à un compte Meeshy (#10205).",
         tags: ['world', 'public'],
         summary: 'Entrée publique de World Wide',
         response: {
@@ -112,19 +129,23 @@ export async function worldRoutes(fastify: FastifyInstance, options: WorldRoutes
           404: errorResponseSchema,
         },
       },
+      preValidation: [authenticate],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const entry = await resolveEntry(prisma, cache, loadEntry);
-      if (!entry) {
+      const loaded = await resolveEntry(prisma, cache, loadEntry);
+      if (!loaded) {
         return sendNotFound(reply, 'World Wide unavailable', {
           code: 'WORLD_UNAVAILABLE',
           message: "World Wide n'a pas d'entrée ouverte pour le moment",
         });
       }
 
+      const viewerIsGuest = isGuestViewer((request as FastifyRequest & { authContext?: GuestViewerContext }).authContext);
+      const entry = servedEntry(loaded, viewerIsGuest);
       const etag = computeETag(entry);
       reply.header('ETag', etag);
-      reply.header('Cache-Control', CACHE_CONTROL);
+      reply.header('Cache-Control', viewerIsGuest ? CACHE_CONTROL : MEMBER_CACHE_CONTROL);
+      reply.header('Vary', 'Authorization');
       if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) {
         return reply.code(304).send();
       }

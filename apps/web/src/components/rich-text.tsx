@@ -4,10 +4,9 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import { hasBlockSyntax, parseBlocks, type TextBlock } from '@meeshy/shared/utils/text-blocks';
 import { segmentText, type EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { displaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { isAppPath } from '@/routes/app-paths';
@@ -50,7 +49,7 @@ import { Link, navigate } from '@/routes/route-table';
 
 const inAppPathOf = (href: string): string | null =>
   internalPathOf(href, {
-    origins: [webOriginOf(apiConfig.base, window.location.origin), window.location.origin],
+    origins: [publicWebOrigin(window.location.origin), window.location.origin],
     isAppPath,
   });
 

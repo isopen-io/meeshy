@@ -23,7 +23,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .bold, color: "#FFFFFF", fill: "#0F1C2ED9"),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#94A3B8", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.conseil.comite",
@@ -42,7 +43,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .bold, color: "#FFFFFF", fill: "#0F1C2ED9"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#94A3B8", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.conseil.groupe",
@@ -61,7 +63,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .list, font: .classic, color: "#E2E8F0", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#94A3B8", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.conseil.tablee",
@@ -80,7 +83,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .bold, color: "#FFFFFF", fill: "#0F1C2ED9"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#94A3B8", place: .bottom, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.keynote.duo",
@@ -102,7 +106,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .bold, color: "#FFFFFF", fill: "#0F1C2ED9"),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#A5B4FC", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.keynote.comite",
@@ -124,7 +129,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .classic, color: "#E2E8F0", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#A5B4FC", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.keynote.groupe",
@@ -146,7 +152,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .classic, color: "#E2E8F0", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#A5B4FC", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.keynote.tablee",
@@ -168,7 +175,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .caption, font: .classic, color: "#E2E8F0", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#A5B4FC", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.badge.duo",
@@ -187,7 +195,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .bold, color: "#0F1C2E", fill: nil),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#0F1C2E", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#334155", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.badge.comite",
@@ -206,7 +215,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .bold, color: "#0F1C2E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#0F1C2E", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#334155", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.badge.groupe",
@@ -225,7 +235,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .caption, font: .bold, color: "#0F1C2E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#0F1C2E", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#334155", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "corporate.poignee-de-main.duo",
@@ -244,7 +255,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#FFFFFF", fill: "#0F1C2ED9"),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#14B8A6", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

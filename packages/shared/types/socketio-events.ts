@@ -34,7 +34,7 @@
  *
  * Le graphe mesuré est un **DAG à moyeu unique** : `./socketio-events/
  * event-maps.js` — les deux cartes `ServerToClientEvents` et
- * `ClientToServerEvents` — référence les vingt et un autres domaines, et rien
+ * `ClientToServerEvents` — référence les vingt-deux autres domaines, et rien
  * n'en revient. C'est ce qui l'empêche d'être découpé par domaine : il EST le
  * point de rencontre. La seule autre arête inter-domaines est
  * `socket → user` (`AuthenticatedSocket` porte un `SocketIOUser`).
@@ -58,6 +58,7 @@ export * from './socketio-events/social.js';
 export * from './socketio-events/audio.js';
 export * from './socketio-events/translation.js';
 export * from './socketio-events/location.js';
+export * from './socketio-events/pack.js';
 export * from './socketio-events/preferences.js';
 export * from './socketio-events/category.js';
 export * from './socketio-events/link.js';

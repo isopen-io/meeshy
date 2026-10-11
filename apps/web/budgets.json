@@ -18,8 +18,8 @@
       "apps/web/scripts/prerender-institutional.tsx"
     ],
     "kb": {
-      "value": 12.5,
-      "status": "CIBLE — RELEVEE de 10,5 a 12,5 le 2026-10-11 (#10071) : les pages statiques portent l'en-tete et le pied de meeshy.me (directive porteur « toutes les pages statiques » remises en norme), A CONFIRMER PAR LE PORTEUR. Avant : RELEVEE de 10 a 10,5 le 2026-09-30 (#8877) sous la directive porteur « corriger directement la CI rouge », A CONFIRMER PAR LE PORTEUR ; valeur precedente proposee par la revue de #5606 (defaut 3), jamais arbitree",
+      "value": 15,
+      "status": "ARBITRE PAR LE PORTEUR le 2026-10-11 (« OK pour le plafond monte à 15k ») : 15 Ko. Avant : CIBLE — RELEVEE de 10,5 a 12,5 le 2026-10-11 (#10071) : les pages statiques portent l'en-tete et le pied de meeshy.me (directive porteur « toutes les pages statiques » remises en norme), mesure CI /privacy 11,99 Ko. Avant : RELEVEE de 10 a 10,5 le 2026-09-30 (#8877) sous la directive porteur « corriger directement la CI rouge », A CONFIRMER PAR LE PORTEUR ; valeur precedente proposee par la revue de #5606 (defaut 3), jamais arbitree",
       "source": "RELEVE 2026-10-11 (#10071) — mesure : scripts/prerender-institutional.tsx lance sur une feuille institutional.css compilee (Tailwind + lightningcss, hors vite build) : /about 11,81 Ko, /privacy 11,83 Ko (la plus lourde), /terms 9,5, /contact 8,36. Meme methode sur le corps seul de /about : 9,88 Ko avant ce lot, 11,38 apres — +0,91 Ko pour la feuille de l'en-tete et du pied (src/styles/site-chrome.css, partagee avec la landing), +0,6 Ko de balisage (marque, navigation, selecteur de langue sans script, Se connecter / Entrer sans compte, pied a huit liens). 12,5 garde le gate a ~0,5 Ko de marge au-dessus de la page la plus lourde, meme modele que les relevements precedents. Le releve du build (`bun run build`) fait foi et remplace cette estimation. AVANT — RELEVE 2026-09-30 (#8877) — mesure (`bun run build`) : /about 9,94 Ko sur dev, 10,03 Ko avec la charte visuelle iOS. L'ecart (~90 octets gzip par page) vient des 16 cotes d'echelle neuves (MeeshySpacing/Radius/Font) que generate-from-ios.mjs publie dans ios.css, que toute page institutionnelle inline — meme regle que les pas deja publies sans consommateur web. 10,5 garde un gate (0,5 Ko de croissance) sur le modele de first_paint.kb. HISTORIQUE — Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
     }
   },
@@ -942,6 +942,15 @@
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #9907, NON ARBITREE",
         "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,77 Ko gzip -9 pour les SEPT catalogues du menu d une piece (cles `message.piece.*` : repondre a la piece, l enregistrer, la transferer, la supprimer, « Tout le message », son defilement « Photo 3 sur 7 »). Charges avec le fil (`useMessageMenu`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Hors du catalogue d interface, deja au-dessus de son plafond sur dev (183,9 Ko) avant ce lot. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. La premiere peinture ne bouge pas (90 Ko sur dev, 89,98 apres)."
+      }
+    },
+    "interface_catalogs_frame_usage": {
+      "pattern": "^assets/catalog-frame-usage-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #10146, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,74 Ko pour les SEPT catalogues du libelle d usage d un cadre (les dix cles `frame.usage.*` de la loi partagee `FRAME_USAGE_LABEL_KEYS` : « Utilisable : appels video et captures », « Capture photo et video uniquement », rang, prestige, succes, moment), charges avec le mode Montage (`loadMontageModeText`) et demain la photo du jeu, jamais au demarrage. La premiere peinture ne bouge pas : 89,35 Ko avant, 89,33 Ko apres (meme arbre, sans puis avec le lot). Le meme lot fait passer `call_montage_mode` de 4,65 a 5,10 Ko, `call_mode_carousel` de 5,71 a 5,81 Ko et `call_frame_studio` de 31,01 a 31,88 Ko (la loi partagee `frame-usage.ts` et son schema), tous sous leur plafond. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
       }
     },
     "interface_catalogs_sounds_mine": {
