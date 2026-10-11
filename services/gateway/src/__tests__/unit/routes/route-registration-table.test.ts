@@ -233,13 +233,15 @@ describe('ROUTE_TABLE (#4278)', () => {
  * tsconfig.json retire tout le dossier `__tests__` — voir la note de
  * `services/gateway/CLAUDE.md` § « Un cliquet doit être ATTEIGNABLE par le
  * compilateur »). `tsconfig.test.json`, lui, INCLUT `__tests__` sans
- * exclusion — c'est donc ts-jest, au moment où
- * CE fichier de test est chargé, qui type-vérifie les trois blocs
+ * exclusion — et depuis #10203 (ts-jest transpile en modules isolés, sans
+ * types), c'est `tsc -p tsconfig.test.json`, mesuré par
+ * `tsc-never-loaded-tests-ratchet.test.ts`, qui type-vérifie les trois blocs
  * `@ts-expect-error` ci-dessous. Le code TS2578 (directive `@ts-expect-error`
- * inutilisée) n'est PAS dans `diagnostics.ignoreCodes` de `jest.config.json`
- * — si un champ redevenait optionnel, la ligne se mettrait à COMPILER, la
- * directive deviendrait inutile, et ts-jest ferait ROUGIR ce fichier entier
- * au chargement. C'est la preuve, PROUVÉE rouge sous chacune des trois
+ * inutilisée) n'est PAS l'un des quatre codes muets de ce cliquet — si un
+ * champ redevenait optionnel, la ligne se mettrait à COMPILER, la directive
+ * deviendrait inutile, et le compte du cliquet dépasserait son plafond SERRÉ.
+ * Avant #10203, c'était ts-jest qui faisait ROUGIR ce fichier au chargement,
+ * PROUVÉ rouge sous chacune des trois
  * mutations qu'elle nomme (voir le rapport de la session : mutation
  * `prefix?: string`, `module?: RoutePlugin`, `name?: string` — chacune fait
  * tomber CE fichier avec `TS2578: Unused '@ts-expect-error' directive`).

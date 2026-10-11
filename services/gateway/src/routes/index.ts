@@ -14,7 +14,8 @@
  * est ici un champ REQUIS (pas de `?`) : une entrée qui l'omet ne COMPILE
  * PAS. Voir `src/__tests__/unit/routes/route-registration-table.test.ts`
  * pour la preuve — un `@ts-expect-error` qui devient inutilisé, donc rouge
- * sous ts-jest, dès que `prefix` (ou `module`, ou `name`) redevient
+ * au cliquet de types des tests (`tsc-never-loaded-tests-ratchet.test.ts`,
+ * depuis #10203), dès que `prefix` (ou `module`, ou `name`) redevient
  * optionnel.
  *
  * ## Une SEULE convention d'adressage — jamais trois
