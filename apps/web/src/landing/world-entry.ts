@@ -20,3 +20,20 @@ export const WORLD_GUEST_ENTRY_TEMPLATE = '/chat/{link}?mode=anonymous&name={nam
  * `href('thread')`, en chaîne pour la même raison, confrontée à elle par son témoin.
  */
 export const WORLD_GUEST_THREAD_TEMPLATE = '/c/{conversation}';
+
+/**
+ * LE JETON DE PASSAGE DE LA LANDING (#10094) — ce qui distingue une entrée
+ * TAPÉE sur meeshy.me d'une adresse forgée.
+ *
+ * L'adresse d'entrée se fabrique de n'importe où : seule, elle ferait entrer un
+ * visiteur, sous un nom choisi par un tiers, dans n'importe quelle conversation
+ * à lien. Le script de la landing pose donc, juste avant de naviguer, un jeton
+ * dans le `sessionStorage` de l'ONGLET (`{ link, name, language, at }`), qu'aucune
+ * autre origine ne peut écrire ; la jonction le lit ET l'efface, et ne crée
+ * l'invité sans geste que si le jeton concorde avec l'adresse et date de moins
+ * de `WORLD_ENTRY_HANDOFF_TTL_MS`. Toute autre arrivée montre le formulaire,
+ * pré-rempli, et attend le geste (`routes/chat-join-handoff.ts`).
+ */
+export const WORLD_ENTRY_HANDOFF_KEY = 'meeshy.world-entry';
+
+export const WORLD_ENTRY_HANDOFF_TTL_MS = 15_000;

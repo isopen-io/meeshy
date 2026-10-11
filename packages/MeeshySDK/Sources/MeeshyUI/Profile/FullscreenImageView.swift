@@ -100,3 +100,12 @@ public struct FullscreenImageView: View {
         )
     }
 }
+
+enum FullscreenDismissDrag {
+    static let dismissDistance: CGFloat = 0
+    static let minimumBackdropOpacity: Double = 0
+
+    static func backdropOpacity(translation: CGFloat) -> Double { 0 }
+
+    static func shouldDismiss(translation: CGFloat, predictedEnd: CGFloat) -> Bool { false }
+}

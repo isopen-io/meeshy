@@ -19,6 +19,9 @@
  *     celle de l'interface d'un visiteur sans compte. Une soumission sans clé
  *     RELANCE `GET /world` et dit l'échec s'il se répète (#10067) — jamais un
  *     bouton inerte ;
+ *     Juste avant de naviguer, un JETON DE PASSAGE est posé dans l'onglet
+ *     (`sessionStorage`, #10094) : sans lui, la jonction ne crée personne sans
+ *     geste — une adresse d'entrée forgée ailleurs n'ouvre qu'un formulaire ;
  *  5 bis. proposer « Revenir dans World Wide » à l'invité qui y est déjà ;
  *  6. rendre la LISTE à l'application INSTALLÉE (`appPath`) : une PWA posée
  *     avant #10002 garde `start_url: '/'` (iOS ne relit jamais le manifeste),
@@ -45,6 +48,8 @@ export type LandingBootConfig = {
   readonly languageKey: string;
   readonly entryTemplate: string;
   readonly threadTemplate: string;
+  /** La clé du jeton de passage posé dans l'onglet avant l'entrée (#10094, `WORLD_ENTRY_HANDOFF_KEY`). */
+  readonly handoffKey: string;
   readonly appPath: string;
   readonly presence: string;
 };
@@ -215,6 +220,11 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
         } catch {
           /* Stockage refusé : la jonction porte la langue, l'interface suivra. */
         }
+      }
+      try {
+        win.sessionStorage.setItem(config.handoffKey, JSON.stringify({ link, name, language, at: Date.now() }));
+      } catch {
+        /* Onglet sans stockage : la jonction demandera le geste (fail-closed). */
       }
       win.location.assign(
         config.entryTemplate
