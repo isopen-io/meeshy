@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 
+import { getLanguageInfo } from '@meeshy/shared/utils/languages';
+
 import { BRAND_LOGO_PATH } from '@/lib/brand';
 
 import type { LandingCopy } from './landing-copy';
-import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingPath, type LandingLanguage } from './landing-languages';
+import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, landingPath, type LandingLanguage } from './landing-languages';
 
 /**
  * L'EN-TÊTE ET LE PIED DE meeshy.me (#10071) — posés par la landing (#10002),
@@ -78,36 +80,60 @@ export function SiteHeader({ language, copy, onLanding, languageControl }: SiteH
 }
 
 /**
- * LE SÉLECTEUR D'UN DOCUMENT QUI SAIT CHANGER DE LANGUE — la landing (son
- * script suit `data-landing-language`) et `/download` (traduite, qui passe
- * `onSelect` : la page change de langue sur place).
+ * LA LISTE DÉROULANTE DES LANGUES — un `<select>` natif dans sa pastille : la
+ * liste est celle du navigateur ou du système (flottante, au clavier, au
+ * lecteur d'écran, sur mobile, de droite à gauche), sans une ligne de script
+ * pour l'ouvrir. Deux usages, un markup :
+ *
+ * - `purpose: 'page'` (défaut) — la langue de la PAGE : la landing (son script
+ *   suit `data-landing-language`) et `/download` (traduite, qui passe
+ *   `onSelect` : la page change de langue sur place) ;
+ * - `purpose: 'reading'` (#10098) — la langue de LECTURE dans World Wide, posée
+ *   avant « Rejoindre » sur la landing (son script suit `data-world-language`)
+ *   et sur `/world` (`onSelect`). Elle ne change pas la page. Chaque option
+ *   commence par son drapeau (`getLanguageInfo(code).flag`, la source unique) :
+ *   la pastille montre donc celui de la langue choisie à la place du globe,
+ *   sans une ligne de script pour le suivre.
  */
-export function LanguageSelect({
-  language,
-  copy,
-  onSelect,
-}: {
+export type LanguageSelectProps = {
   readonly language: LandingLanguage;
-  readonly copy: LandingCopy;
+  /** Le nom accessible de la liste. */
+  readonly label: string;
   readonly onSelect?: (language: LandingLanguage) => void;
-}) {
+  readonly purpose?: 'page' | 'reading';
+  readonly describedBy?: string;
+};
+
+export function LanguageSelect({ language, label, onSelect, purpose = 'page', describedBy }: LanguageSelectProps) {
+  const reading = purpose === 'reading';
   const options = LANDING_LANGUAGES.map((code) => (
-    <option key={code} value={code} lang={code}>
-      {LANGUAGE_AUTONYMS[code]}
+    <option
+      key={code}
+      value={code}
+      lang={code}
+      dir={landingDirection(code) === 'rtl' ? 'rtl' : undefined}
+    >
+      {reading ? `${getLanguageInfo(code).flag} ${LANGUAGE_AUTONYMS[code]}` : LANGUAGE_AUTONYMS[code]}
     </option>
   ));
+  const marker = reading
+    ? { name: 'language', 'data-world-language': true }
+    : onSelect === undefined
+      ? { 'data-landing-language': true }
+      : { 'data-download-language': true };
   return (
     <label className="ld-language">
-      <GlobeIcon size={16} />
-      <span className="ld-sr">{copy.languageLabel}</span>
+      {reading ? null : <GlobeIcon size={16} />}
+      <span className="ld-sr">{label}</span>
       {onSelect === undefined ? (
-        <select data-landing-language defaultValue={language}>
+        <select {...marker} defaultValue={language} aria-describedby={describedBy}>
           {options}
         </select>
       ) : (
         <select
-          data-download-language
+          {...marker}
           value={language}
+          aria-describedby={describedBy}
           onChange={(event) => {
             const chosen = LANDING_LANGUAGES.find((code) => code === event.currentTarget.value);
             if (chosen !== undefined) onSelect(chosen);

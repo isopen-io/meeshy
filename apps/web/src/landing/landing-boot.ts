@@ -13,10 +13,10 @@
  *     l'application ;
  *  4. lire `GET /world` (#10000) : l'effectif, la clé de jonction, ou
  *     l'absence d'entrée ouverte — et masquer alors l'entrée ;
- *  5. faire entrer dans World Wide en DEUX étapes (#10003, D-186) : le nom,
- *     puis la langue (celle de l'appareil proposée parmi les sept), avec un
- *     retour par le bouton, Échap et l'historique ; la langue choisie devient
- *     celle de l'interface d'un visiteur sans compte. Une soumission sans clé
+ *  5. faire entrer dans World Wide d'UN clic (#10098, amende D-186) : le nom
+ *     et la langue de lecture, choisie dans la liste déroulante posée avant
+ *     « Rejoindre » (celle de la page par défaut) ; la langue choisie devient celle de l'interface d'un visiteur
+ *     sans compte. Une soumission sans clé
  *     RELANCE `GET /world` et dit l'échec s'il se répète (#10067) — jamais un
  *     bouton inerte ;
  *     Juste avant de naviguer, un JETON DE PASSAGE est posé dans l'onglet
@@ -174,43 +174,14 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     let closed = false;
     let reading = false;
     let waiting: (() => void) | null = null;
-    let onLanguage = false;
-    let proposed = false;
     const form = scope.querySelector('[data-world-form]');
     const field = (): Element | null => scope.querySelector('[data-world-form] input[name="name"]');
-    const radios = (): HTMLInputElement[] =>
-      all('[data-world-form] input[name="language"]').filter((node): node is HTMLInputElement => node instanceof win.HTMLInputElement);
+    const chooser = scope.querySelector('[data-world-form] select[data-world-language]');
     const focus = (node: Element | null | undefined): void => {
       if (node instanceof win.HTMLInputElement) node.focus();
     };
 
-    const show = (language: boolean): void => {
-      onLanguage = language;
-      flag('[data-world-step="name"]', !language);
-      flag('[data-world-step="language"]', language);
-    };
-    const toName = (): void => {
-      if (!onLanguage) return;
-      show(false);
-      flag('[data-world-error]', false);
-      focus(field());
-    };
-    const toLanguage = (): void => {
-      if (!proposed) {
-        proposed = true;
-        const device: unknown = Reflect.get(win.navigator ?? {}, 'languages');
-        const codes = Array.isArray(device) ? device.map((tag) => String(tag).slice(0, 2).toLowerCase()) : [];
-        const match = codes.map((code) => radios().find((radio) => radio.value === code)).find((radio) => radio !== undefined);
-        if (match !== undefined) match.checked = true;
-      }
-      show(true);
-      try {
-        win.history.pushState({ worldStep: 1 }, '');
-      } catch {
-        /* Historique refusé : « Retour » et Échap suffisent. */
-      }
-      focus(radios().find((radio) => radio.checked));
-    };
+    if (chooser instanceof win.HTMLSelectElement) chooser.value = config.language;
 
     const enter = (name: string, language: string): void => {
       if (link === null) return;
@@ -269,29 +240,15 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
       event.preventDefault();
       const input = field();
       const name = input instanceof win.HTMLInputElement ? input.value.trim() : '';
-      if (name === '' || closed) return toName();
-      if (!onLanguage) return toLanguage();
-      const language = radios().find((radio) => radio.checked)?.value ?? config.language;
+      if (name === '' || closed) return focus(input);
+      const language = chooser instanceof win.HTMLSelectElement && chooser.value !== '' ? chooser.value : config.language;
       if (link !== null) return enter(name, language);
       waiting = () => enter(name, language);
       flag('[data-world-error]', false);
       if (!reading) readWorld();
     });
-    form?.addEventListener('keydown', (event) => {
-      if (Reflect.get(event, 'key') === 'Escape') toName();
-    });
-    for (const back of all('[data-world-back]')) {
-      back.addEventListener('click', () => {
-        if (Reflect.get(Object(win.history.state), 'worldStep') === 1) win.history.back();
-        toName();
-      });
-    }
-    win.addEventListener('popstate', toName);
     for (const cta of all('[data-world-cta]')) {
-      cta.addEventListener('click', () => {
-        toName();
-        focus(field());
-      });
+      cta.addEventListener('click', () => focus(field()));
     }
 
     readWorld();
