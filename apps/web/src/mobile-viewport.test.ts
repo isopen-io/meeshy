@@ -33,15 +33,18 @@ describe('la hauteur d’un écran d’application (#10005)', () => {
     expect(css).toMatch(/:root\[data-keyboard='open'\]\s*\{\s*--safe-bottom:\s*0px;\s*\}/);
   });
 
-  test.each([
+  const screens = [
     ['le fil', 'src/routes/thread.tsx'],
     ['ses états (chargement, erreur)', 'src/components/thread-states.tsx'],
     ['la liste /chats', 'src/routes/conversations.tsx'],
     ['l’entrée invité dans World Wide', 'src/routes/world-entry.tsx'],
-  ])('%s se dimensionne en h-app, jamais en h-dvh', (_, path) => {
-    const source = read(path);
-    expect(source).toContain('h-app');
-    expect(source).not.toMatch(/['"`\s]h-dvh['"`\s]/);
+  ] as const;
+  screens.forEach(([screen, path]) => {
+    test(`${screen} se dimensionne en h-app, jamais en h-dvh`, () => {
+      const source = read(path);
+      expect(source).toContain('h-app');
+      expect(source).not.toMatch(/['"\s]h-dvh['"\s]/);
+    });
   });
 
   test('le clavier est écouté dès le démarrage, hors de la première peinture', () => {
@@ -51,6 +54,6 @@ describe('la hauteur d’un écran d’application (#10005)', () => {
 
 describe('la coque Android, bord à bord (#10005)', () => {
   test('SystemBars sait dès le lancement que la page couvre l’écran : aucun saut de mise en page', () => {
-    expect(resolveCapacitorConfig({}).plugins?.SystemBars).toEqual({ initialViewportFitValueHint: 'cover' });
+    expect(resolveCapacitorConfig({}).plugins?.SystemBars).toEqual({ insetsHandling: 'css', initialViewportFitValueHint: 'cover' });
   });
 });

@@ -237,7 +237,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
   return (
     <div
       data-world-entry-screen
-      className="relative flex h-dvh flex-col overflow-hidden pt-safe"
+      className="relative flex h-app flex-col overflow-hidden pt-safe"
       style={{ background: PAGE_BACKGROUND, color: INK }}
       lang={language}
       dir={direction}
