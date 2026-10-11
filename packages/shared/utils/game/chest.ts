@@ -135,22 +135,22 @@ export const chestBonusAmounts = (nextMeeshPrice: number): { readonly whole: num
 };
 
 /**
- * LE COURS DE LA PRIME, FIGÉ AU DÉBUT DU JOUR DE JEU (#10219) — le nombre de Meeshes frappées AVANT le jour de jeu.
- * La prime se tire au prix de la Meesh suivante, `meeshPrice(chestPriceMints(…) + 1)` : une frappe du jour, même
- * avant l'ouverture du coffre, ne la fait plus monter.
+ * LE COURS DE LA PRIME, FIGÉ AU DÉBUT DU JOUR DE JEU (#10219) — l'instant qui sépare les frappes qui comptent de
+ * celles qui ne comptent pas : l'OUVERTURE du jour de jeu, soit le tirage de ses missions (le plus ancien `createdAt`
+ * des missions du jour), jamais après `now`. La prime se tire au prix de la Meesh suivante pour les frappes
+ * ANTÉRIEURES à cet instant : `meeshPrice(frappes avant l'ouverture + 1)`. Une frappe du jour, même avant l'ouverture
+ * du coffre, ne la fait plus monter.
  *
- * `recentMintDays` : le jour (dans le fuseau du compte) de chaque frappe RÉCENTE — celles qui peuvent tomber le jour
- * même ou après. Toute frappe d'un jour égal ou postérieur à `dayKey` est retirée du total à vie ; une frappe plus
- * ancienne, absente de la liste, reste comptée. La passerelle grave le résultat sur `GameDay.chestMintBase` à la
- * première lecture du jour : la valeur gravée fait foi ensuite (un fuseau changé ne la déplace plus).
+ * Un instant, pas un jour civil : le fuseau du compte n'y entre pas (le changer ne reclasse aucune frappe), un jour
+ * de jeu prolongé (`resolveGameDayKey`) garde ses frappes, et la passerelle compte en UNE requête bornée par cet
+ * instant — une frappe concurrente, forcément postérieure, n'y entre jamais. Le résultat se grave sur
+ * `GameDay.chestMintBase` à la première lecture du jour et fait foi ensuite.
  */
-export const chestPriceMints = (params: {
-  readonly mintedLifetime: number;
-  readonly dayKey: string;
-  readonly recentMintDays: readonly string[];
-}): number => {
-  const sameDayOrLater = params.recentMintDays.filter((day) => day >= params.dayKey).length;
-  return Math.max(0, sanitize(params.mintedLifetime) - sameDayOrLater);
+export const chestPriceCutoff = (params: { readonly missionsOpenedAt: readonly (Date | null | undefined)[]; readonly now: Date }): Date => {
+  const opened = params.missionsOpenedAt
+    .filter((date): date is Date => date instanceof Date && Number.isFinite(date.getTime()))
+    .reduce((earliest, date) => Math.min(earliest, date.getTime()), params.now.getTime());
+  return new Date(opened);
 };
 
 /** Le contenu certain du coffre pour cet effort, et les primes possibles au cours de la prochaine Meesh. */
@@ -161,7 +161,7 @@ export const chestContentForEffort = (effort: number, nextMeeshPrice: number): C
 };
 
 /**
- * Le coffre du jour. `nextMeeshPrice` est `meeshPrice(chestPriceMints(…) + 1)` : le cours de la Meesh FIGÉ au
+ * Le coffre du jour. `nextMeeshPrice` est `meeshPrice(frappes avant chestPriceCutoff(…) + 1)` : le cours de la Meesh FIGÉ au
  * début du jour de jeu (#10219), gravé par le serveur. La réclamation est idempotente : le contenu gravé fait foi.
  */
 export function dailyChest(params: {

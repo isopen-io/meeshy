@@ -5296,7 +5296,7 @@ model GameDay {
   /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
   chestBonus       String?
   chestBonusPoints Int?
-  /// Le cours de la prime (#10219) : les Meeshes frappées AVANT ce jour de jeu (`chestPriceMints`), gravées une
+  /// Le cours de la prime (#10219) : les Meeshes frappées AVANT l'ouverture de ce jour de jeu (`chestPriceCutoff`), gravées une
   /// fois à la première lecture du jour. Une frappe du jour ne fait plus monter la prime. Absent (journée ouverte
   /// avant lui, ou ancienne passerelle) : calculé puis gravé à la lecture suivante — aucun backfill.
   chestMintBase    Int?

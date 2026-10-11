@@ -60,7 +60,7 @@ export type GameBlockFacts = {
   readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
   /**
-   * Les Meeshes frappées AVANT le jour de jeu (#10219, `chestPriceMints`), gravées sur `GameDay.chestMintBase` : le
+   * Les Meeshes frappées AVANT l'ouverture du jour de jeu (#10219, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` : le
    * cours de la prime du coffre. Absent ou `null` : `mintedLifetime`, le calcul d'avant.
    */
   readonly chestMintBase?: number | null;

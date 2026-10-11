@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHEST_ODDS,
   chestBonusAmounts,
-  chestPriceMints,
+  chestPriceCutoff,
   chestContentForEffort,
   chestPointsForEffort,
   dailyChest,
@@ -215,24 +215,16 @@ describe('le coffre donne au moins 500 points (porteur, 2026-10-10, 3e précisio
 });
 
 describe('le cours de la prime, figé au début du jour de jeu (#10219)', () => {
-  it('ne compte que les frappes des jours ANTÉRIEURS au jour de jeu', () => {
-    expect(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-04', '2026-10-05'] })).toBe(9);
-    expect(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-03', '2026-10-04'] })).toBe(10);
+  const now = new Date('2026-10-05T10:00:00Z');
+
+  it('l’ouverture du jour de jeu : la plus ancienne mission tirée', () => {
+    const missionsOpenedAt = [new Date('2026-10-05T08:00:00Z'), new Date('2026-10-05T06:00:00Z'), new Date('2026-10-05T09:00:00Z')];
+    expect(chestPriceCutoff({ missionsOpenedAt, now })).toEqual(new Date('2026-10-05T06:00:00Z'));
   });
 
-  it('une frappe d’un jour POSTÉRIEUR (fuseau, jour de jeu prolongé) ne compte pas non plus', () => {
-    expect(chestPriceMints({ mintedLifetime: 3, dayKey: '2026-10-05', recentMintDays: ['2026-10-06', '2026-10-05'] })).toBe(1);
-  });
-
-  it('ne descend jamais sous zéro, et rend un entier', () => {
-    expect(chestPriceMints({ mintedLifetime: 1, dayKey: '2026-10-05', recentMintDays: ['2026-10-05', '2026-10-05'] })).toBe(0);
-    expect(chestPriceMints({ mintedLifetime: Number.NaN, dayKey: '2026-10-05', recentMintDays: [] })).toBe(0);
-  });
-
-  it('une frappe du jour ne change pas la prime : le cours reste celui de la veille', () => {
-    const before = chestContentForEffort(1000, meeshPrice(chestPriceMints({ mintedLifetime: 9, dayKey: '2026-10-05', recentMintDays: [] }) + 1));
-    const after = chestContentForEffort(1000, meeshPrice(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-05'] }) + 1));
-    expect(after).toEqual(before);
-    expect(before.bonusWhole).toBe(1221);
+  it('jamais après maintenant, et maintenant quand aucune mission ne porte d’instant', () => {
+    expect(chestPriceCutoff({ missionsOpenedAt: [new Date('2026-10-06T00:00:00Z')], now })).toEqual(now);
+    expect(chestPriceCutoff({ missionsOpenedAt: [null, undefined, new Date(Number.NaN)], now })).toEqual(now);
+    expect(chestPriceCutoff({ missionsOpenedAt: [], now })).toEqual(now);
   });
 });
