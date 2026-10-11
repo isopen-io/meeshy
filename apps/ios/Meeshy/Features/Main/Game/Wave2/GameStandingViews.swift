@@ -5,9 +5,11 @@ import MeeshyUI
 // MARK: - Le niveau et le rang d'un AUTRE membre (#9481)
 //
 // Ce que le serveur sert de SON jeu, selon SON réglage : l'anneau de niveau (emblème du palier, chiffre romain,
-// étoiles de Prestige), le blason de son rang et sa division, le palier de son trésor, la forme de sa Flamme. Jamais
-// un compte exact : ni Gloire, ni jours de série, ni Meeshes. Quand le serveur ne sert rien (réglage fermé, blocage,
-// « Jeu masqué », compte inconnu), la vue ne se dessine PAS — un refus ne se distingue pas d'une absence.
+// étoiles de Prestige), le blason de son rang et sa division, le palier de son trésor. Jamais un compte exact : ni
+// Gloire, ni jours de série, ni Meeshes — et jamais la Flamme, que le serveur sert pourtant : aucun réglage du jeu ne
+// permet à son propriétaire de choisir de la montrer, elle reste donc masquée (#10093). Quand le serveur ne sert rien
+// (réglage fermé, blocage, « Jeu masqué », compte inconnu), la vue ne se dessine PAS — un refus ne se distingue pas
+// d'une absence.
 
 extension GameText {
     static func visitorGameTitle(name: String) -> String {
@@ -17,20 +19,15 @@ extension GameText {
     static func visitorTreasury(tier: String) -> String {
         String(localized: "game2.profile.visitor_treasury", defaultValue: "Trésor : \(tier)", bundle: .main)
     }
-
-    static func visitorFlame(form: String) -> String {
-        String(localized: "game2.profile.visitor_flame", defaultValue: "Flamme : \(form)", bundle: .main)
-    }
 }
 
 extension GameStandingContent {
-    /// Ce que VoiceOver lit : « Niveau 42, palier Éclat, quatrième palier, Voix II, Flamme : Brasier, Trésor : Coffre ».
+    /// Ce que VoiceOver lit : « Niveau 42, palier Éclat, quatrième palier, Voix II, Trésor : Coffre ».
     var accessibilityLabel: String {
         var parts: [String] = []
         if let standing {
             parts.append(GameCopy.levelRingAccessibility(level: standing.shownLevel, tier: standing.shownTier))
             parts.append(GameCopy.rankLabel(standing))
-            if let flame = standing.flame { parts.append(GameText.visitorFlame(form: GameCopy.flameFormName(flame))) }
         }
         if let tier = treasuryTier { parts.append(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier))) }
         return parts.joined(separator: ", ")
@@ -65,11 +62,6 @@ struct GameStandingView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let flame = standing.flame {
-                    FlameView(form: flame, flickers: false)
-                        .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
-                        .accessibilityHidden(true)
-                }
                 RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.shownLevel,
                                mythic: standing.mythic, title: nil, figures: nil)
                     .frame(width: compact ? 36 : 56, height: compact ? 34 : 52)

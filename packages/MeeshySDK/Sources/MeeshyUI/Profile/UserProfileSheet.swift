@@ -35,7 +35,6 @@ public struct UserProfileSheet: View {
     public var onCall: ((ProfileCallRequest) -> Void)? = nil
 
     @State var isBlocked: Bool = false
-    @State var isBlockedByTarget: Bool = false
     @State var connectionStatus: ConnectionStatus = .none
     @State private var pendingRequestId: String?
 
@@ -70,11 +69,9 @@ public struct UserProfileSheet: View {
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
     @State var scrollRelay = ScrollOffsetRelay()
-    @State private var internalFullUser: MeeshyUser?
-    @State private var internalUserStats: UserStats?
+    /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
+    @StateObject var loader = ProfileSheetLoader()
     @State private var internalConversations: [MeeshyConversation] = []
-    @State private var internalIsLoading = false
-    @State private var internalIsLoadingStats = false
     @State private var internalIsLoadingConversations = false
 
     public init(
@@ -107,23 +104,27 @@ public struct UserProfileSheet: View {
         user.accentColor
     }
 
+    var isBlockedByTarget: Bool {
+        loader.isBlockedByTarget
+    }
+
     var displayUser: ProfileSheetUser {
-        if let loaded = internalFullUser {
+        if let loaded = loader.profile {
             return ProfileSheetUser.from(user: loaded, accentColor: user.accentColor)
         }
         return user
     }
 
     var effectiveIsLoading: Bool {
-        internalIsLoading
+        loader.isLoadingProfile
     }
 
     var effectiveUserStats: UserStats? {
-        internalUserStats
+        loader.stats
     }
 
     var effectiveIsLoadingStats: Bool {
-        internalIsLoadingStats
+        loader.isLoadingStats
     }
 
     var effectiveConversations: [MeeshyConversation] {
@@ -144,15 +145,12 @@ public struct UserProfileSheet: View {
                 FullscreenImageView(
                     imageURL: fullscreenImageURL,
                     fallbackText: fullscreenImageFallback,
-                    accentColor: resolvedAccent
+                    accentColor: resolvedAccent,
+                    onClose: closeFullscreenImage
                 )
                 .transition(.opacity)
                 .zIndex(100)
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        showFullscreenImage = false
-                    }
-                }
+                .onTapGesture(perform: closeFullscreenImage)
             }
         }
         .task {
@@ -162,9 +160,11 @@ public struct UserProfileSheet: View {
             resolveConnectionStatus()
         }
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            guard let repainted = Self.repaintedProfile(internalFullUser, with: event) else { return }
-            internalFullUser = repainted
+            guard let repainted = Self.repaintedProfile(loader.profile, with: event) else { return }
+            loader.repaint(repainted)
         }
+        // Le glissement qui referme le plein écran ne doit pas emporter la feuille avec lui.
+        .interactiveDismissDisabled(showFullscreenImage)
         .adaptiveWideSheet()
     }
 
@@ -271,73 +271,12 @@ public struct UserProfileSheet: View {
     // MARK: - Auto-loading
 
     private func loadDataIfNeeded() async {
-        let identifier = user.userId ?? user.username
-        guard !identifier.isEmpty else { return }
-
-        let cacheResult = await CacheCoordinator.shared.profiles.load(for: identifier)
-
-        switch cacheResult {
-        case .fresh(let cached, _):
-            if let profile = cached.first { internalFullUser = profile }
-        case .stale(let cached, _):
-            if let profile = cached.first { internalFullUser = profile }
-            await fetchAndCacheProfile(identifier)
-        case .expired, .empty:
-            internalIsLoading = internalFullUser == nil
-            await fetchAndCacheProfile(identifier)
-        }
-        // Every profile visit extends the 30-day TTL (cache-first behavior):
-        // touch under both the lookup identifier and the resolved id so the
-        // entry survives a month of inactivity regardless of which key was used.
-        await CacheCoordinator.shared.profiles.touch(for: identifier)
-        if let resolvedId = resolvedUserId, resolvedId != identifier {
-            await CacheCoordinator.shared.profiles.touch(for: resolvedId)
-        }
+        await loader.open(userId: user.userId, username: user.username)
         resolveConnectionStatus()
     }
 
-    private func fetchAndCacheProfile(_ idOrUsername: String) async {
-        defer { internalIsLoading = false }
-        do {
-            // `presence` POSE la question (#9063) : la passerelle ne sert
-            // `isOnline` / `lastActiveAt` qu'à un ami accepté, sous les réglages
-            // de la personne regardée — sans elle, le profil chargé écrasait
-            // jusqu'à la présence qu'apportait l'hôte, et « vu il y a » ne
-            // s'affichait jamais.
-            let fetchedUser = try await UserService.shared.getProfile(handle: idOrUsername, expand: [.presence]).user
-            internalFullUser = fetchedUser
-            UserDisplayNameCache.shared.trackFromUser(fetchedUser)
-            // `MeeshyUser.id` is non-optional — save under the resolved id.
-            let cacheKey = fetchedUser.id
-            try await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
-            // When opened by username, the lookup key differs from the resolved
-            // id. Persist under the username too so a future username-open hits
-            // the cache instead of cold-fetching, and touch both keys so the
-            // 30-day TTL is extended on the entry that actually holds the data.
-            if idOrUsername != cacheKey {
-                try? await CacheCoordinator.shared.profiles.save([fetchedUser], for: idOrUsername)
-            }
-            await CacheCoordinator.shared.profiles.touch(for: cacheKey)
-            await SearchIndex.shared.indexUsers([fetchedUser])
-        } catch let error as APIError {
-            if case .serverError(403, _) = error {
-                isBlockedByTarget = true
-            }
-        } catch {}
-    }
-
     var resolvedUserId: String? {
-        user.userId ?? internalFullUser?.id
-    }
-
-    func loadStatsIfNeeded() async {
-        guard let userId = resolvedUserId else { return }
-        internalIsLoadingStats = true
-        do {
-            let fetchedStats = try await UserService.shared.getUserStats(userId: userId)
-            internalUserStats = fetchedStats
-        } catch {}
-        internalIsLoadingStats = false
+        user.userId ?? loader.profile?.id
     }
 
     private func loadConversationsIfNeeded() async {
@@ -607,7 +546,7 @@ public struct UserProfileSheet: View {
             HapticFeedback.medium()
             if let onSendMessage {
                 onSendMessage()
-            } else if let targetUserId = internalFullUser?.id ?? user.userId {
+            } else if let targetUserId = loader.profile?.id ?? user.userId {
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     NotificationCenter.default.post(
@@ -705,6 +644,12 @@ public struct UserProfileSheet: View {
         fullscreenImageFallback = fallback
         withAnimation(.easeIn(duration: 0.2)) {
             showFullscreenImage = true
+        }
+    }
+
+    func closeFullscreenImage() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            showFullscreenImage = false
         }
     }
 }

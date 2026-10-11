@@ -29,6 +29,10 @@ extension UserProfileSheet {
         VStack(spacing: 0) {
             bannerSection
                 .frame(height: bannerHeight)
+                .overlay(alignment: .topTrailing) {
+                    bannerGameBadge
+                        .opacity(1 - Double(progress))
+                }
                 .clipped()
                 .opacity(1 - Double(progress) * 0.6)
 
@@ -72,6 +76,18 @@ extension UserProfileSheet {
             } else {
                 defaultBannerGradient
             }
+        }
+    }
+
+    /// #10093 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce que SA
+    /// visibilité autorise, rien sinon. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
+    @ViewBuilder
+    var bannerGameBadge: some View {
+        if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
+            gameSection.build(userId, displayUser.displayName ?? displayUser.username)
+                .allowsHitTesting(false)
+                .padding(.top, MeeshySpacing.mdPlus)
+                .padding(.trailing, MeeshySpacing.lg)
         }
     }
 
