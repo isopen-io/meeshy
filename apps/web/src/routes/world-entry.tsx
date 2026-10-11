@@ -14,6 +14,7 @@ import { sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { loadWorldEntry, WORLD_FALLBACK_TITLE, WORLD_UNAVAILABLE } from '@/lib/api/world';
 import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { useSearch } from '@/lib/router';
@@ -169,7 +170,7 @@ export function WorldGuestEntry({
         return;
       }
       if (deps.signedIn()) {
-        deps.go(href('chatJoin', { link: result.data.shareLinkIdentifier }), true);
+        deps.go(href('chatJoin', { link: result.data.shareLinkIdentifier }, accountEntryOf(initialName, initialLanguage)), true);
         return;
       }
       setLoad({ kind: 'ready', entry: result.data });
@@ -386,6 +387,18 @@ export function WorldGuestEntry({
       </section>
     </div>
   );
+}
+
+/**
+ * LE NOM D'UN COMPTE VENU DE LA LANDING (#10100) — elle mène tout le monde à
+ * `/world?name=…&language=…`. Un compte y est renvoyé à la jonction par lien :
+ * son nom et sa langue l'y suivent, et elle le fait entrer sous son identité
+ * anonyme (#8816), comme l'ancienne adresse de la landing le faisait.
+ */
+function accountEntryOf(initialName: string, initialLanguage: string | null): Record<string, string> | undefined {
+  const name = initialName.trim().slice(0, NAME_MAX);
+  if (name === '') return undefined;
+  return { mode: ANONYMOUS_MODE, name, ...(initialLanguage === null || initialLanguage === '' ? {} : { language: initialLanguage }) };
 }
 
 /** Quitter : la page d'avant (la landing, l'écran de connexion),
