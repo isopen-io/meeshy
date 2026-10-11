@@ -126,7 +126,7 @@ function FoldToggle({ id, label, fold }: { readonly id: LensSectionId; readonly 
       <Glyph
         name="caretDown"
         size={10}
-        className={`motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out${fold.folded ? ' -rotate-90 rtl:rotate-90' : ''}`}
+        className={`motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out ${fold.folded ? '-rotate-90 rtl:rotate-90' : ''}`}
       />
     </button>
   );
