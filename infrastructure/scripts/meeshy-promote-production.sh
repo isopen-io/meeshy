@@ -16,7 +16,7 @@
 #   promote  <service>=sha256:<64 hex> [...]
 #   rollback <service> [...]
 #
-# <service> ∈ { gateway translator agent }. Rien d'autre.
+# <service> ∈ { gateway translator agent webapp }. Rien d'autre.
 #
 # CE QUE CE SCRIPT FAIT
 #   - Il ne RECONSTRUIT rien et ne choisit rien : il promeut un digest que le
@@ -35,9 +35,11 @@
 #     conteneur, aucun accès à MongoDB ou Redis ;
 #   - aucune purge (`prune`), aucun `down`, aucun volume : les images de
 #     retour arrière doivent survivre, et les données ne sont pas son affaire ;
-#   - jamais la webapp : son image de staging porte `gate.staging.meeshy.me`
-#     figée au build (VITE_API_BASE, docker.yml). La promouvoir enverrait les
-#     utilisateurs de production sur la passerelle de staging.
+#   - jamais une webapp dont l'origine est figée au build : depuis #10208,
+#     l'image se configure au démarrage (`MEESHY_API_URL`, sinon l'hôte de la
+#     page) et la même image vaut pour staging et production. Une image
+#     antérieure — sans l'entrypoint `meeshy-runtime-config` — porte encore
+#     `gate.staging.meeshy.me` figée : elle est refusée au plan.
 #
 # RÉPÉTITION SUR STAGING (root sur l'hôte uniquement — `restrict` et
 # `PermitUserEnvironment no` empêchent la CI de poser ces variables) :
@@ -71,9 +73,13 @@ OVERRIDE_NAME="docker-compose.promotion.yml"
 LOCK_FILE="/run/lock/meeshy-promotion.lock"
 REGISTRY_NS="isopen"
 
-# ÉNUMÉRÉE, et dans l'ORDRE de bascule : la passerelle, face publique, en
-# dernier. `webapp`/`frontend` n'y sont pas, et c'est une décision (en-tête).
-SERVICES_PROMOUVABLES="translator agent gateway"
+# ÉNUMÉRÉE, et dans l'ORDRE de bascule : les services internes, puis la
+# passerelle, puis la webapp — qui peut appeler une route que seule la
+# nouvelle passerelle sert, jamais l'inverse.
+SERVICES_PROMOUVABLES="translator agent gateway webapp"
+# L'entrypoint qui écrit `config.js` au démarrage (#10208) : sa présence
+# prouve que l'image ne porte aucune origine figée au build.
+WEBAPP_ENTRYPOINT="meeshy-runtime-config"
 
 RC_REFUS=64
 RC_ECHEC=70
@@ -94,8 +100,16 @@ delai_sante() {
   esac
 }
 
-conteneur_cible() { echo "meeshy-$1$TARGET_SUFFIX"; }
-conteneur_source() { echo "meeshy-$1$SOURCE_SUFFIX"; }
+# Le service `webapp` (image `meeshy-webapp`) tourne sous le conteneur
+# `meeshy-frontend` sur les deux environnements.
+nom_conteneur() {
+  case "$1" in
+    webapp) echo frontend ;;
+    *) echo "$1" ;;
+  esac
+}
+conteneur_cible() { echo "meeshy-$(nom_conteneur "$1")$TARGET_SUFFIX"; }
+conteneur_source() { echo "meeshy-$(nom_conteneur "$1")$SOURCE_SUFFIX"; }
 conteneur_epingle() { echo "meeshy-rollback-pin-$1$TARGET_SUFFIX"; }
 depot() { echo "$REGISTRY_NS/meeshy-$1"; }
 
@@ -108,8 +122,8 @@ est_promouvable() {
 
 refuser_service() {
   case "$1" in
-    webapp|frontend|web)
-      refus "« $1 » n'est pas promouvable : l'image de staging porte gate.staging.meeshy.me figée au build (VITE_API_BASE)." ;;
+    frontend|web)
+      refus "« $1 » : le service s'appelle « webapp »." ;;
     *)
       refus "service non déclaré « $1 »" ;;
   esac
@@ -335,6 +349,11 @@ planifier() {
       || refus "$svc : l'image de production n'a aucun digest de registre — retour arrière non garanti"
     prod_ref="$(depot "$svc")@$prod_digest"
 
+    if [ "$svc" = "webapp" ] \
+      && ! docker image inspect -f '{{json .Config.Entrypoint}}' "$ref" 2>/dev/null | grep -q "$WEBAPP_ENTRYPOINT"; then
+      refus "webapp : $digest est antérieure à #10208 (pas d'entrypoint $WEBAPP_ENTRYPOINT) — son origine d'API est figée au build"
+    fi
+
     if est_gpu "$image_cible" && ! est_gpu "$ref"; then
       refus "$svc : la production tourne en variante GPU, le digest demandé ne l'est pas"
     fi
@@ -437,11 +456,17 @@ self_test() {
   local echecs=0 rc interdit
   essai() { ( "$0" __valider "$@" ) >/dev/null 2>&1; }
 
-  essai promote "gateway=sha256:$(printf 'a%.0s' $(seq 64))"; rc=$?
-  [ "$rc" -eq 0 ] || { echo "AVEUGLE: une demande valide a été refusée (rc=$rc)" >&2; echecs=$((echecs + 1)); }
+  for valide in \
+    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote webapp=sha256:$(printf 'b%.0s' $(seq 64))" \
+    "rollback webapp"; do
+    # shellcheck disable=SC2086
+    essai $valide; rc=$?
+    [ "$rc" -eq 0 ] || { echo "AVEUGLE: « $valide » a été refusée (rc=$rc)" >&2; echecs=$((echecs + 1)); }
+  done
 
   for interdit in \
-    "promote webapp=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote frontend=sha256:$(printf 'a%.0s' $(seq 64))" \
     "promote database=sha256:$(printf 'a%.0s' $(seq 64))" \
     "promote gateway=sha256:abc" \
     "promote gateway=sha256:$(printf 'A%.0s' $(seq 64))" \
