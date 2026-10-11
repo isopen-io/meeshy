@@ -2,7 +2,6 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { User } from '@meeshy/shared/types/user';
 
-import { isGuestKind, type GuestKind } from '../send/guest-attachment-kinds';
 import { safeLocalStorage } from '../storage';
 
 import { claimLegacySession } from './legacy-session';
@@ -107,9 +106,12 @@ export type GuestIdentity = {
    * fait foi (World Wide : `['text', 'audio']`) ; `null` = le lien ne
    * restreint rien par famille. ABSENT sur une session enregistrée avant le
    * champ : `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
-   * y applique le plafond de la conversation quand il en existe un.
+   * y applique le plafond de la conversation quand il en existe un, et
+   * écarte une famille que ce client ne connaît pas. La session ne garde que
+   * des NOMS : y charger la table des familles la ferait entrer dans la
+   * première peinture.
    */
-  readonly attachmentKinds?: readonly GuestKind[] | null;
+  readonly attachmentKinds?: readonly string[] | null;
 };
 
 export type AuthenticatedSession = {
@@ -358,10 +360,10 @@ function isGuestIdentity(value: unknown): value is GuestIdentity {
   return g.participantId === null || typeof g.participantId === 'string';
 }
 
-/** Absent (session d'avant #10003), `null`, ou un tableau de familles CONNUES. */
+/** Absent (session d'avant #10003), `null`, ou un tableau de noms de familles. */
 function isStoredAttachmentKinds(value: unknown): boolean {
   if (value === undefined || value === null) return true;
-  return Array.isArray(value) && value.every(isGuestKind);
+  return Array.isArray(value) && value.every((kind) => typeof kind === 'string');
 }
 
 function isPersistedSession(value: unknown): value is PersistedSession {

@@ -29,7 +29,8 @@ import {
  */
 export function guestAttachmentKindsFor(session: SessionState, conversationId: string): readonly GuestKind[] | null {
   if (session.status !== 'guest' || session.guest.conversationId !== conversationId) return null;
-  const served = session.guest.attachmentKinds;
+  const stored = session.guest.attachmentKinds;
+  const served = stored === undefined || stored === null ? stored : stored.filter(isGuestKind);
   const ceiling = session.guest.link === WORLD_LINK_IDENTIFIER ? WORLD_GUEST_KINDS : null;
   if (ceiling === null) return served === undefined ? null : served;
   if (served === undefined || served === null) return [...ceiling];

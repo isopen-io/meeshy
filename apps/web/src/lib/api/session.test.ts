@@ -161,8 +161,20 @@ describe('createSessionStore — establishGuest() (#5561)', () => {
     expect(session.status === 'guest' ? session.guest.attachmentKinds : 'perdue').toEqual(['text', 'audio']);
   });
 
+  test('une famille enregistrée inconnue de ce client ne déconnecte pas l’invité — la règle du composeur l’écarte', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({ kind: 'guest', sessionToken: 'a', guest: { ...GUEST, attachmentKinds: ['exe'] }, expiresAt: FIXED_NOW + 1_000 }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().restoreSession();
+
+    const session = store.getState().session;
+    expect(session.status === 'guest' ? session.guest.attachmentKinds : 'perdue').toEqual(['exe']);
+  });
+
   const CORROMPUS: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
-    ['aux familles inconnues', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, attachmentKinds: ['exe'] }, expiresAt: FIXED_NOW + 1_000 }],
+    ['aux familles qui ne sont pas des noms', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, attachmentKinds: [42] }, expiresAt: FIXED_NOW + 1_000 }],
     ['jeton vide', { kind: 'guest', sessionToken: '', guest: GUEST, expiresAt: FIXED_NOW + 1_000 }],
     ['sans conversation', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, conversationId: '' }, expiresAt: FIXED_NOW + 1_000 }],
     ['sans lien', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, link: '' }, expiresAt: FIXED_NOW + 1_000 }],
