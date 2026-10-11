@@ -62,6 +62,7 @@
     "check:utilities": "node scripts/check-utilities.mjs",
     "check:virtualization": "node scripts/check-thread-virtualization.mjs",
     "check:scroll-edges": "node scripts/check-thread-scroll-edges.mjs",
+    "check:mobile-browsers": "node scripts/check-mobile-browsers.mjs",
     "check:states": "node scripts/check-thread-states.mjs",
     "check:reading-mode": "node scripts/check-reading-mode.mjs",
     "check:thread-chrome": "node scripts/check-thread-chrome.mjs",

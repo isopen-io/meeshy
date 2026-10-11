@@ -20,7 +20,7 @@ import { Link } from '@/routes/route-table';
 type PreviewProp = { readonly preview?: boolean | undefined };
 
 const rootClass = (preview: boolean | undefined) =>
-  `thread-root flex ${preview === true ? 'h-full' : 'h-dvh'} flex-col overflow-hidden pt-safe`;
+  `thread-root flex ${preview === true ? 'h-full' : 'h-app'} flex-col overflow-hidden pt-safe`;
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)

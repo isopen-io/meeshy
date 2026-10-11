@@ -180,7 +180,7 @@ const pt = {
   'game.detail.mission.what': 'Uma missão é um pequeno objetivo para hoje.',
   'game.detail.mission.how': 'Ela rende pontos e deixa você mais perto do baú do dia.',
   'game.detail.chest.what': 'O baú do dia se abre quando suas missões estão feitas.',
-  'game.detail.chest.how': 'Pontos conforme tuas missões, Glória, fragmentos de Meesh — cinco pagam uma cunhagem — e às vezes um congelamento.',
+  'game.detail.chest.how': 'Pontos por suas missões, Glória, fragmentos de Meesh (cinco pagam uma cunhagem) e às vezes um congelamento.',
   'game.detail.coin.what': 'A Meesh é a moeda rara do Meeshy. Cada moeda tem o seu número.',
   'game.detail.coin.how': 'Cunhe-a com seus pontos assim que tiver o bastante.',
   'game.detail.ring.what': 'O anel mostra o seu nível: ele se enche com seus pontos.',

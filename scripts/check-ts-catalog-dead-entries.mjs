@@ -432,7 +432,9 @@ export const callersIn = (contents, nsNames) => {
 // comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
 // (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
 // Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
+// l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

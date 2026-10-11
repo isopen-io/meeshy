@@ -100,6 +100,18 @@ export type GuestIdentity = {
    * persistée d'avant ce lot ne la porte pas, et reste valide.
    */
   readonly language?: string;
+  /**
+   * LES FAMILLES DE PIÈCES JOINTES QUE LE LIEN OUVRE À L'INVITÉ (#10001,
+   * #10003) — `entry.allowedAttachmentKinds`, servi à la jonction. Un tableau
+   * fait foi (World Wide : `['text', 'audio']`) ; `null` = le lien ne
+   * restreint rien par famille. ABSENT sur une session enregistrée avant le
+   * champ : `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
+   * y applique le plafond de la conversation quand il en existe un, et
+   * écarte une famille que ce client ne connaît pas. La session ne garde que
+   * des NOMS : y charger la table des familles la ferait entrer dans la
+   * première peinture.
+   */
+  readonly attachmentKinds?: readonly string[] | null;
 };
 
 export type AuthenticatedSession = {
@@ -310,6 +322,9 @@ function pickGuest(guest: GuestIdentity): GuestIdentity {
     link: guest.link,
     mayWrite: guest.mayWrite,
     ...(guest.language === undefined ? {} : { language: guest.language }),
+    ...(guest.attachmentKinds === undefined
+      ? {}
+      : { attachmentKinds: guest.attachmentKinds === null ? null : [...guest.attachmentKinds] }),
   };
 }
 
@@ -341,7 +356,14 @@ function isGuestIdentity(value: unknown): value is GuestIdentity {
   if (typeof g.link !== 'string' || g.link === '') return false;
   if (typeof g.mayWrite !== 'boolean') return false;
   if (g.language !== undefined && typeof g.language !== 'string') return false;
+  if (!isStoredAttachmentKinds(g.attachmentKinds)) return false;
   return g.participantId === null || typeof g.participantId === 'string';
+}
+
+/** Absent (session d'avant #10003), `null`, ou un tableau de noms de familles. */
+function isStoredAttachmentKinds(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  return Array.isArray(value) && value.every((kind) => typeof kind === 'string');
 }
 
 function isPersistedSession(value: unknown): value is PersistedSession {

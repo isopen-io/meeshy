@@ -22,6 +22,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
+import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
@@ -180,10 +181,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
    * rendu final ne montre pas encore le fil réel.
    */
-  const viewerParticipant = useMemo(
-    () => conversation?.participants.find((p) => p.userId === viewer.id),
-    [conversation, viewer.id],
-  );
+  const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
@@ -673,7 +672,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
   return (
-    /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
+    /* `h-app` (`100dvh` moins le clavier qui recouvre, #10005) +
+       `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
        difference entre une PAGE (le document entier defile, le composeur suit)
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
@@ -701,7 +701,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
-      className={`thread-root relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
+      className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
@@ -941,7 +941,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             stickyProtection={compose.stickyProtection}
             /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) — `Composer` ne connaît que la citation PRÉ-ADRESSÉE. */
             onDraftChange={compose.reportComposerDraft}
-            {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
+            {...composerAccess}
             {...(compose.replyTo
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}

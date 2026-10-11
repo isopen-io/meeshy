@@ -38,6 +38,7 @@ import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
+import enPublicEntry from './catalog-en-public-entry';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1108,6 +1109,7 @@ const en = {
   ...enCommentRow,
   ...enContactDiscovery,
   ...enUserProfile,
+  ...enPublicEntry,
 } satisfies InterfaceCatalog;
 
 export default en;

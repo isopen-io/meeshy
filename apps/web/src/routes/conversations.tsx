@@ -516,7 +516,7 @@ export default function ConversationsScreen() {
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
        et poussait la barre de recherche hors du cadre (#5604, app.css). */
-    <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
+    <div className="relative flex h-app flex-col overflow-hidden pt-safe">
       <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
 

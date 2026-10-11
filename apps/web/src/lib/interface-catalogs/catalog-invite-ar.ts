@@ -178,6 +178,22 @@ const ar = {
   'linkDetail.announce.deleted': 'تم حذف الرابط.',
   'linkDetail.announce.deleteFailed': 'لم يتم حذف الرابط.',
   'linkDetail.announce.offline': 'غير متصل: لم يُرسَل شيء.',
+  'world.enter': 'ادخل إلى {title}',
+  'world.name.prompt': 'بماذا نناديك؟',
+  'world.name.label': 'اسمك',
+  'world.name.placeholder': 'مثال: عوا',
+  'world.name.missing': 'اكتب الاسم الذي سيراه الآخرون.',
+  'world.continue': 'متابعة',
+  'world.language.greeting': 'مرحبًا {name}، ستقرأ كل شيء بـ…',
+  'world.language.hint': 'مقترحة من جهازك.',
+  'world.language.group': 'اللغة الرئيسية',
+  'world.step': 'الخطوة {index} من {total}',
+  'world.back': 'رجوع',
+  'world.loading': 'لحظة…',
+  'world.entering': 'جارٍ الدخول…',
+  'world.unavailable': 'الدخول بدون حساب غير متاح حاليًا.',
+  'world.error.enter': 'تعذّر الدخول الآن. حاول مرة أخرى.',
+  'world.error.offline': 'لا يوجد اتصال. حاول مجددًا عند الاتصال بالإنترنت.',
 } satisfies InviteCatalog;
 
 export default ar;

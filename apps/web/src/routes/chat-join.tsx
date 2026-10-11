@@ -392,6 +392,7 @@ export function ChatJoin({
       link,
       mayWrite: result.data.mayWrite,
       language: validated.body.language,
+      ...(result.data.attachmentKinds === undefined ? {} : { attachmentKinds: result.data.attachmentKinds }),
     });
     /* LA LANGUE CHOISIE EST CELLE DE L'INVITÉ (#9710) : elle vient de passer au
        rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
