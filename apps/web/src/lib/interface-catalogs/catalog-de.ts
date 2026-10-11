@@ -401,6 +401,8 @@ const de = {
   'profile.avatar.updated': 'Profilfoto aktualisiert',
   'profile.avatar.error': 'Profilfoto konnte nicht aktualisiert werden',
   'profile.banner.edit': 'Banner bearbeiten',
+  'profile.avatar.view': 'Profilbild im Vollbild ansehen',
+  'profile.banner.view': 'Banner im Vollbild ansehen',
   'profile.banner.updated': 'Banner aktualisiert',
   'profile.banner.error': 'Banner konnte nicht aktualisiert werden',
   'profile.image.uploading': 'Wird hochgeladen',

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -8,6 +8,7 @@ import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import type { GlyphName } from '@/components/glyphs';
 import { PROFILE_GLYPHS, type ProfileGlyphName } from '@/components/glyphs-profile';
+import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import {
   GroupedSection,
   RowIcon,
@@ -266,6 +267,7 @@ export function ProfileHero({
   pending,
   onPick,
   onCancelUpload,
+  game,
 }: {
   readonly language: InterfaceLanguage;
   readonly profile: Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
@@ -273,10 +275,18 @@ export function ProfileHero({
   readonly pending: PendingImages;
   readonly onPick: (kind: ProfileImageKind) => void;
   readonly onCancelUpload: (kind: ProfileImageKind) => void;
+  /** Le niveau et le rang, posés sur la bannière (#10092). */
+  readonly game?: ReactNode;
 }) {
   const name = profile.displayName ?? profile.username;
   const banner = pending.banner ?? profile.banner;
   const avatar = pending.avatar ?? profile.avatar;
+  /* EN PLEIN ÉCRAN AU TOUCHER (#10092) — hors édition seulement : en édition,
+     toucher l'image est le geste qui la REMPLACE. */
+  const images = useMemo(() => ({ avatar: profile.avatar, banner: profile.banner }), [profile.avatar, profile.banner]);
+  const { open, viewer } = useProfileImageViewer({ ownerId: profile.username, images });
+  const viewable = (kind: ProfileImageKind): boolean => !editing && pending[kind] === undefined && profile[kind] !== null;
+  const avatarImage = <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={90} name={name} {...(avatar === null ? {} : { src: avatar })} />;
   return (
     <section data-profile-hero aria-label={name} className="grid justify-items-center">
       <div
@@ -297,8 +307,15 @@ export function ProfileHero({
         ) : (
           /* Une RÉFÉRENCE de média, jamais une adresse (#6388) — et l'aperçu
              local d'un téléversement en cours (`blob:`) traverse intact. */
-          <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
+          viewable('banner') ? (
+            <ProfileImageButton kind="banner" onOpen={open} className="size-full">
+              <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
+            </ProfileImageButton>
+          ) : (
+            <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
+          )
         )}
+        {editing ? null : game}
         {editing && pending.banner === undefined ? (
           <PickButton
             kind="banner"
@@ -312,7 +329,13 @@ export function ProfileHero({
       </div>
       <div className="relative" style={{ marginTop: -45 }} aria-busy={pending.avatar === undefined ? undefined : true}>
         <span className="block rounded-chip" style={{ padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-          <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={90} name={name} {...(avatar === null ? {} : { src: avatar })} />
+          {viewable('avatar') ? (
+            <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
+              {avatarImage}
+            </ProfileImageButton>
+          ) : (
+            avatarImage
+          )}
         </span>
         {editing && pending.avatar === undefined ? (
           <PickButton
@@ -331,6 +354,7 @@ export function ProfileHero({
         </p>
         <p className={`text-body font-medium ${BRAND_INK}`}>{`@${profile.username}`}</p>
       </div>
+      {viewer}
     </section>
   );
 }

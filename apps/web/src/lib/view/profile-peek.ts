@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react';
 
+import { rememberPerson, type KnownPerson } from '@/lib/profile/known-people';
+
 /**
  * **LE PROFIL S'OUVRE LÀ OÙ L'ON SE TROUVE** (parité iOS, directive porteur du
  * 2026-09-25). Sur iOS, toucher l'avatar ou le nom d'un auteur — dans un fil,
@@ -71,8 +73,14 @@ export function useProfilePeekOpen(): boolean {
  * les gestes du navigateur (nouvel onglet, clic du milieu) gardent l'adresse
  * — le `Link` du routeur ne nous appelle même pas pour eux.
  */
-export function peekProfileOnClick(username: string): (event: { preventDefault: () => void }) => void {
+export function peekProfileOnClick(
+  username: string,
+  known?: Omit<KnownPerson, 'username'>,
+): (event: { preventDefault: () => void }) => void {
   return (event) => {
+    /* CE QU'ON VOYAIT AU TOUCHER AMORCE LA FICHE (#10092) — page comme
+       feuille : son premier rendu n'est jamais vide. */
+    if (known !== undefined) rememberPerson({ username, ...known });
     if (peekProfile(username)) event.preventDefault();
   };
 }
