@@ -5114,3 +5114,15 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Budgets relevés sur mesure.** `interface_catalogs_invite` 20 → 22 Ko (20,91 mesurés : 16 clés `invite.world.*` × 7) ; `story_reader` 13 → 14 Ko (13,02 mesurés : le chemin d'envoi partagé porte la règle de l'invité).
 
 **Kotlin natif** : rien (gel). **Reste** : recette navigateur et coque Android (#10075), jumelles sans Zod (#10038), entrée depuis l'écran de connexion (#10007).
+
+---
+
+## D-188 — Le clavier se lit au `visualViewport` et se pose une fois sur `<html>` ; la barre du navigateur se peint de la surface de l'écran (2026-10-11, #10005)
+
+**Clavier.** Safari et Chrome iOS ignorent `interactive-widget=resizes-content` : le clavier RECOUVRE la page et `100dvh` ne bouge pas. `installKeyboardViewport` (`lib/view/keyboard-viewport.ts`, chargé par `import()` après le premier rendu) mesure ce que le clavier recouvre et pose `--keyboard-inset` et `data-keyboard="open"` sur `<html>` ; les écrans d'application (fil, ses états, `/chats`, `/world`) se dimensionnent en `h-app` = `100dvh − --keyboard-inset`. Un écran d'application que Safari a fait glisser revient en haut ; une page qui défile garde sa place ; un zoom au pincement (`scale > 1`) n'est pas un clavier. Clavier ouvert, `--safe-bottom` tombe à zéro. Chrome Android et les coques réduisent la vue elles-mêmes : la variable y reste absente.
+
+**Surface.** `theme-color` = `--ios-surface` (#09090b / #ffffff) sur `index.html`, les pages institutionnelles, le manifeste, le fond des WebView et la fenêtre de la coque Android ; `SystemBars` est averti de `viewport-fit=cover` dès le lancement. Garde : `src/surface-color-parity.test.ts`. Recette navigateur : `scripts/check-mobile-browsers.mjs` (iPhone et Pixel émulés, deux schémas).
+
+**Mesure.** Première peinture +0,10 Ko (import différé et deux règles CSS) ; le commentaire de `index.html` retiré en rend 0,09. Dev dépassait déjà le plafond de 90 Ko avant ce lot (90,91 Ko, cadre côte à côte) : #10086.
+
+**Kotlin natif** : rien (gel).
