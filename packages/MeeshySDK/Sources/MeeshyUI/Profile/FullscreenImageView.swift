@@ -143,3 +143,16 @@ enum FullscreenDismissDrag {
         return translation >= dismissDistance || predictedEnd >= flickDistance
     }
 }
+
+// MARK: - Ce qu'un toucher ouvre en plein écran (#10093)
+
+/// Une image de profil (bannière ou photo) ouverte en plein écran. `nil` sans image : rien ne s'ouvre.
+public struct ProfileFullscreenImage: Identifiable, Equatable {
+    public let url: String
+    public let fallbackText: String
+    public var id: String { url }
+
+    public static func opening(_ url: String?, fallbackText: String) -> ProfileFullscreenImage? {
+        nil
+    }
+}
