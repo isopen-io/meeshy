@@ -239,7 +239,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
           type="button"
           data-world-back
           aria-label={translateInvite(language, 'world.back')}
-          onClick={() => (step === 'language' ? toStep('name') : window.history.back())}
+          onClick={() => (step === 'language' ? toStep('name') : leave(deps))}
           className="grid size-11 place-items-center rounded-full focus-visible:outline-2"
           style={{ color: 'var(--color-ios-brand)' }}
         >
@@ -386,6 +386,13 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
       </div>
     </div>
   );
+}
+
+/** Quitter depuis le nom : la page d'avant (la landing, l'écran de connexion),
+ * ou l'accueil quand l'adresse a été ouverte seule. */
+function leave(deps: WorldEntryDeps): void {
+  if (typeof window !== 'undefined' && window.history.length > 1) window.history.back();
+  else deps.go(href('home'), true);
 }
 
 /** Le retour MATÉRIEL (Android, navigateur) ramène de la langue au nom, comme le bouton. */
