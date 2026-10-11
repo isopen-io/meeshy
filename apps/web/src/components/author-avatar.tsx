@@ -76,7 +76,7 @@ export function AuthorAvatar({
           className="avatar-profile-link cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ '--avatar-size': `${props.size}px`, outlineColor: 'var(--accent)' } as CSSProperties}
         >
-          <Avatar {...(mood === undefined ? {} : { mood })} {...visual} {...decorated} />
+          <CardTriggerAvatar {...(mood === undefined ? {} : { mood })} {...visual} {...decorated} />
         </button>
       </AvatarMenuTrigger>
     );
@@ -91,4 +91,14 @@ export function AuthorAvatar({
       <Avatar {...(mood === undefined ? {} : { mood })} {...props} here={decorated.here} hereActive={decorated.hereActive} hereFocused={decorated.hereFocused} />
     </AvatarMenuTrigger>
   );
+}
+
+/**
+ * L'AVATAR DANS LE BOUTON DE LA FICHE (#10102) — un RELAIS au sens de
+ * `check-avatar-src` : il répand ce que l'hôte lui donne, la photo comprise,
+ * et ne choisit rien. L'hôte en a retiré l'identité (`profileUsername`,
+ * `storyRing`, `name`) : un lien de profil ne se pose pas dans un bouton.
+ */
+function CardTriggerAvatar(props: ComponentProps<typeof Avatar>) {
+  return <Avatar {...props} />;
 }
