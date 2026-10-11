@@ -687,6 +687,22 @@ const ar = {
   'game.settings.notifications.title': 'إشعارات اللعبة',
   'game.settings.notifications.body': 'دعوة إلى مهمة الثنائي، نتيجة الدوري، مرحلة من الموسم: إشعار واحد للعبة في اليوم على الأكثر. يسري هذا الإعداد على حسابك في جميع أجهزتك.',
   'game.settings.notifications.switch': 'تلقي إشعارات اللعبة',
+  'game.archive.season.past_title': 'الموسم ⁦{number}⁩ · انتهى',
+  'game.archive.season.dates': 'من ⁦{start}⁩ إلى ⁦{end}⁩',
+  'game.archive.season.rewards.one': '⁦{count}⁩ مكافأة مُستلمة',
+  'game.archive.season.rewards.other': '⁦{count}⁩ مكافآت مُستلمة',
+  'game.archive.season.cup_won': 'اكتمل المسار: كأس الموسم لك.',
+  'game.archive.season.cup_missed': 'لم يكتمل المسار: لم تُربح كأس الموسم.',
+  'game.archive.season.seal_owned': 'تم الحصول على ختم الموسم.',
+  'game.archive.season.not_played': 'لم تلعب في هذا الموسم.',
+  'game.archive.week.rank': 'الترتيب النهائي: ⁦{rank}⁩',
+  'game.archive.week.points': 'مجموع الأسبوع: ⁦{points}⁩',
+  'game.archive.week.no_cup': 'لا كأس في ذلك الأسبوع.',
+  'game.archive.week.unsettled': 'تُثبَّت النتيجة عند إغلاق الأسبوع.',
+  'game.archive.week.not_placed': 'لم يكن لك مكان في الدوري ذلك الأسبوع.',
+  'game.archive.week.purged': 'هذا الأسبوع قديم جدًا: حُذفت نتيجته كما هو مقرر.',
+  'game.archive.week.upcoming': 'لم يبدأ هذا الأسبوع بعد.',
+  'game.archive.week.privacy': 'تُحفظ نتيجتك وحدها: لا يمكن الاطلاع على بقية أعضاء المجموعة مجددًا.',
 } as const satisfies GameCoreCatalog;
 
 export default ar;

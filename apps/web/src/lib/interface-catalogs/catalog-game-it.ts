@@ -679,6 +679,22 @@ const it = {
   'game.settings.notifications.title': 'Notifiche del gioco',
   'game.settings.notifications.body': 'Un invito alla missione in coppia, un risultato di lega, una tappa della stagione: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi.',
   'game.settings.notifications.switch': 'Ricevi le notifiche del gioco',
+  'game.archive.season.past_title': 'Stagione {number} · conclusa',
+  'game.archive.season.dates': 'Dal {start} al {end}',
+  'game.archive.season.rewards.one': '{count} ricompensa riscattata',
+  'game.archive.season.rewards.other': '{count} ricompense riscattate',
+  'game.archive.season.cup_won': 'Percorso completato: la coppa della stagione è tua.',
+  'game.archive.season.cup_missed': 'Percorso non completato: la coppa della stagione non è stata vinta.',
+  'game.archive.season.seal_owned': 'Sigillo della stagione ottenuto.',
+  'game.archive.season.not_played': 'Non hai giocato in questa stagione.',
+  'game.archive.week.rank': 'Posizione finale: {rank}',
+  'game.archive.week.points': 'Totale della settimana: {points}',
+  'game.archive.week.no_cup': 'Nessuna coppa quella settimana.',
+  'game.archive.week.unsettled': 'Il risultato si incide alla chiusura della settimana.',
+  'game.archive.week.not_placed': 'Non avevi un posto in lega quella settimana.',
+  'game.archive.week.purged': 'Questa settimana è troppo vecchia: il suo risultato è stato cancellato, come previsto.',
+  'game.archive.week.upcoming': 'Questa settimana non è ancora iniziata.',
+  'game.archive.week.privacy': 'Si conserva solo il tuo risultato: gli altri membri del gruppo non si possono più consultare.',
 } as const satisfies GameCoreCatalog;
 
 export default it;

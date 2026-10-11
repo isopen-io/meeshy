@@ -35,3 +35,21 @@ describe('la coque peint le fond des barres système sous Android 15 (#9533)', (
     expect(pont).toMatch(/SystemBarPaint\.paintsNavigation\(Build\.VERSION\.SDK_INT\)[\s\S]*setNavigationBarColor\(/);
   });
 });
+
+/**
+ * LE FOND DE LA FENÊTRE SUIT LE SCHÉMA CHOISI DANS L'APP (#10085).
+ *
+ * Sous une WebView < 140, `SystemBars` rembourre la fenêtre au lieu de passer
+ * les encoches à la page : le fond de la fenêtre se voit derrière la barre
+ * d'état et la barre de gestes. Il venait du thème `DayNight`, donc du schéma
+ * du SYSTÈME : application en sombre sur un téléphone clair, deux bandes
+ * blanches. Le pont le repeint de la même `theme-color`, à toute version.
+ */
+describe('la coque peint le fond de sa fenêtre du schéma de l’app (#10085)', () => {
+  test('le pont repeint le fond de la fenêtre, hors de toute règle de version', () => {
+    const pont = sansCommentaires(readFileSync(join(JAVA, 'MeeshySystemBarsPlugin.java'), 'utf8'));
+    expect(pont).toMatch(/window\.setBackgroundDrawable\(new ColorDrawable\(color\)\);/);
+    const ligne = pont.split('\n').find((l) => l.includes('setBackgroundDrawable(')) ?? '';
+    expect(ligne).not.toContain('SystemBarPaint.');
+  });
+});

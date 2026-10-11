@@ -679,6 +679,22 @@ const de = {
   'game.settings.notifications.title': 'Spielbenachrichtigungen',
   'game.settings.notifications.body': 'Eine Einladung zur Duo-Mission, ein Ligaergebnis, ein Saisonschritt: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten.',
   'game.settings.notifications.switch': 'Spielbenachrichtigungen erhalten',
+  'game.archive.season.past_title': 'Saison {number} · beendet',
+  'game.archive.season.dates': 'Vom {start} bis {end}',
+  'game.archive.season.rewards.one': '{count} Belohnung abgeholt',
+  'game.archive.season.rewards.other': '{count} Belohnungen abgeholt',
+  'game.archive.season.cup_won': 'Pfad abgeschlossen: Der Saisonpokal gehört dir.',
+  'game.archive.season.cup_missed': 'Pfad nicht abgeschlossen: Der Saisonpokal wurde nicht gewonnen.',
+  'game.archive.season.seal_owned': 'Saisonsiegel erhalten.',
+  'game.archive.season.not_played': 'Du hast in dieser Saison nicht gespielt.',
+  'game.archive.week.rank': 'Endplatzierung: {rank}',
+  'game.archive.week.points': 'Wochensumme: {points}',
+  'game.archive.week.no_cup': 'Kein Pokal in dieser Woche.',
+  'game.archive.week.unsettled': 'Das Ergebnis wird beim Wochenabschluss festgeschrieben.',
+  'game.archive.week.not_placed': 'Du warst in dieser Woche in keiner Liga eingeteilt.',
+  'game.archive.week.purged': 'Diese Woche liegt zu weit zurück: Ihr Ergebnis wurde wie vorgesehen gelöscht.',
+  'game.archive.week.upcoming': 'Diese Woche hat noch nicht begonnen.',
+  'game.archive.week.privacy': 'Nur dein Ergebnis wird aufbewahrt: Die anderen Gruppenmitglieder lassen sich nicht mehr einsehen.',
 } as const satisfies GameCoreCatalog;
 
 export default de;

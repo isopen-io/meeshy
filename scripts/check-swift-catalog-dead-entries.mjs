@@ -446,6 +446,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
 // dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
 //
+// 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
+// `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
+// `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11. 
 // 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
 // (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
 // Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
