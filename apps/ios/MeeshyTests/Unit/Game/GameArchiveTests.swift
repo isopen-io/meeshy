@@ -302,4 +302,26 @@ final class GameArchiveTests: XCTestCase {
         XCTAssertFalse(e.identifiers.contains("game.league.standings"), "aucun classement, aucune ligne d’un autre membre")
         XCTAssertTrue(e.says(GameText.archiveWeekPrivacy))
     }
+
+    // MARK: - Une page Saison restée ouverte se repeint au dimanche 20 h (#10225)
+
+    private func local(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int, _ second: Int = 0) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second)) ?? Date()
+    }
+
+    func test_flipSchedule_repaintsNow_thenAtEachSundayEightPm() {
+        let start = local(2026, 12, 20, 19, 59, 30)
+        let entries = Array(GameSeasonFlipSchedule().entries(from: start, mode: .normal).prefix(3))
+        XCTAssertEqual(entries, [start, local(2026, 12, 20, 20, 0), local(2026, 12, 27, 20, 0)])
+        XCTAssertEqual(GameSeasonFlipSchedule.nextClose(after: local(2026, 12, 20, 20, 0)), local(2026, 12, 27, 20, 0),
+                       "à 20 h pile, la prochaine bascule est la semaine suivante")
+    }
+
+    func test_anOpenSeasonPage_flipsFromUpcomingToOpened_atTheScheduledRepaint() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let entries = Array(GameSeasonFlipSchedule().entries(from: local(2026, 12, 20, 19, 59, 30), mode: .normal).prefix(2))
+        let shown = entries.map { GameSeasonShown.of(focus: 1, game: game, load: GameLoad<GameSeasonArchive>(), moment: .local($0)) }
+        XCTAssertEqual(shown, [.upcoming(GameWave2Fixture.upcoming), .opened(GameWave2Fixture.upcoming)],
+                       "la page peinte avant 20 h se repeint « ouverte » à l'entrée suivante de la TimelineView")
+    }
 }

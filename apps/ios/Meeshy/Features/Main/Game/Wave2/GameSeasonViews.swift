@@ -20,15 +20,49 @@ struct GameSeasonPage: View {
     var body: some View {
         GamePageShell(title: GameText.seasonTitle, identifier: "game.season.page") {
             GameWave2Host { model, game in
-                GameSeasonFocusScreen(model: model, game: game, focus: focus?.seasonNumber)
+                // Restée ouverte, la page se repeint à la fermeture du dimanche 20 h (#10225) : c'est le seul instant
+                // où l'état d'une saison change, la `TimelineView` y relit l'horloge locale.
+                TimelineView(GameSeasonFlipSchedule()) { context in
+                    GameSeasonFocusScreen(model: model, game: game, focus: focus?.seasonNumber, moment: .local(context.date))
+                }
             }
         }
+    }
+}
+
+/// LES INSTANTS OÙ UNE PAGE SAISON SE REPEINT (#10225) — maintenant, puis chaque fermeture de semaine (dimanche
+/// 20 h local, `GameLeague.nextWeekClose`), seule bascule possible de l'état d'une saison. Miroir du minuteur web
+/// (`apps/web/src/lib/game/season-clock.ts`).
+struct GameSeasonFlipSchedule: TimelineSchedule {
+    var calendar: Calendar = .current
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var next: Date? = startDate
+        let calendar = calendar
+        return AnyIterator {
+            guard let current = next else { return nil }
+            next = Self.nextClose(after: current, calendar: calendar)
+            return current
+        }
+    }
+
+    /// La prochaine fermeture de semaine, STRICTEMENT après `date`, en date locale.
+    static func nextClose(after date: Date, calendar: Calendar = .current) -> Date? {
+        let close = GameLeague.nextWeekClose(after: .local(date, calendar: calendar))
+        let parts = close.dayKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        let at = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2],
+                                                     hour: close.minuteOfDay / 60, minute: close.minuteOfDay % 60))
+        guard let at, at > date else { return nil }
+        return at
     }
 }
 
 struct GameSeasonScreen: View {
     @ObservedObject var model: GameWave2Model
     let game: GameBlock
+    /// L'instant qui juge l'état de la saison (#10225) — l'horloge locale par défaut.
+    var moment: LeagueMoment? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -37,7 +71,7 @@ struct GameSeasonScreen: View {
                 GameSeasonPath(model: model, season: season)
                 GameSeasonSeal(model: model, season: season, held: game.treasury.held)
             } else if let upcoming = game.seasonUpcoming {
-                GameSeasonUpcoming(upcoming: upcoming)
+                GameSeasonUpcoming(upcoming: upcoming, moment: moment)
             } else {
                 GameCard(title: GameText.seasonTitle) {
                     GameNote(text: GameText.seasonNone)
