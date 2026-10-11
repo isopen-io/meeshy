@@ -1,6 +1,6 @@
 /**
  * #10011 — **les fragments de Meesh de #10013 quittent la base ; aucune Meesh n'est supprimée, aucun solde
- * touché ; chaque coffre qui en avait donné compte pour UN fragment d'étoile ; tout se défait.**
+ * touché ; le fragment d'étoile gravé (`chestFragment`, tirage 1/6) n'est jamais réécrit ; tout se défait.**
  *
  * Le témoin exécute le FICHIER mongosh lui-même, contre des collections simulées : c'est le script qui est jugé,
  * jamais une copie.
@@ -116,11 +116,11 @@ describe('2026-10-11-game-star-fragments-cleanup', () => {
     expect(database.data).toEqual(before);
     expect(printed).toContain('frappes payées en fragments : 1');
     expect(printed).toContain('lignes : l1');
-    expect(printed).toContain('fragments d\'étoile reconstitués : 2');
+    expect(printed).toContain('dont fragment d\'étoile déjà gravé (chestFragment, inchangé) : 1');
     expect(printed).not.toContain('u1');
   });
 
-  it('écrit : retire les deux champs, reconstitue UN fragment d\'étoile par coffre, ne supprime aucune Meesh', () => {
+  it('écrit : retire les deux champs, ne réécrit jamais chestFragment, ne supprime aucune Meesh', () => {
     const database = fakeDatabase(seed());
 
     run(database, { APPLY: '1' });
@@ -129,11 +129,11 @@ describe('2026-10-11-game-star-fragments-cleanup', () => {
     expect(database.data.MeeshLedger!.every((row) => !('fragmentsSpent' in row))).toBe(true);
     expect(database.data.MeeshLedger![0]).toMatchObject({ delta: 1, reason: 'mint', meta: { paidWith: 'fragments' } });
     expect(database.data.GameDay!.every((row) => !('chestMeeshFragments' in row))).toBe(true);
-    expect(database.data.GameDay!.map((row) => [row._id, row.chestFragment])).toEqual([
-      ['d1', true],
+    expect(database.data.GameDay!.map((row) => [row._id, 'chestFragment' in row ? row.chestFragment : 'absent'])).toEqual([
+      ['d1', false],
       ['d2', true],
       ['d3', true],
-      ['d4', true],
+      ['d4', 'absent'],
     ]);
   });
 

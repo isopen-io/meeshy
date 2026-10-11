@@ -14,9 +14,11 @@
  *     (`MeeshLedger.fragmentsSpent > 0`). Il ne supprime AUCUNE Meesh et ne touche à AUCUN solde : la ligne `mint`
  *     reste, son `meta.paidWith = "fragments"` aussi (la mémoire de ce qui a été frappé sans débit). Seul le champ
  *     `fragmentsSpent` quitte la ligne.
- *  2. RECONSTITUE le fragment d'étoile : un coffre dont `chestMeeshFragments > 0` a donné UN fragment d'étoile
- *     (`chestFragment = true`), qu'il ait eu ou non le fragment en prime. Le total collecté se LIT ensuite sur
- *     `chestFragment` (`StarFragments.ts`).
+ *  2. NE TOUCHE PAS `GameDay.chestFragment` : sous #10013 il portait déjà le tirage à une chance sur six, et
+ *     c'est lui que la décision désigne pour reconstituer l'existant (« à partir des `GameDay.chestFragment =
+ *     true` »). Faire compter `chestMeeshFragments > 0` en ferait un fragment d'étoile par coffre (1 sur 1, pas
+ *     1 sur 6) et réécrirait le `fragment` que lisent les anciens clients. Le total se LIT sur `chestFragment`
+ *     (`StarFragments.ts`) ; le script compte seulement les coffres qui portent `chestMeeshFragments`.
  *  3. Retire `GameDay.chestMeeshFragments`.
  *
  * AVANT toute écriture, l'état d'origine de chaque ligne touchée est copié dans la collection
@@ -114,19 +116,12 @@ function cleanLedger(database, options) {
 
 function cleanDays(database, options) {
   const days = database.getCollection('GameDay');
-  const report = { fieldRows: 0, starFragmentsRebuilt: 0, unset: 0 };
+  const report = { fieldRows: 0, starFragments: 0, unset: 0 };
   eachBatch(days, { chestMeeshFragments: { $exists: true } }, { _id: 1, chestMeeshFragments: 1, chestFragment: 1 }, options.batchSize, (page) => {
     report.fieldRows = Number(report.fieldRows) + page.length;
-    const rebuilt = page.filter((row) => Number(row.chestMeeshFragments) > 0 && row.chestFragment !== true);
-    report.starFragmentsRebuilt = Number(report.starFragmentsRebuilt) + rebuilt.length;
+    report.starFragments = Number(report.starFragments) + page.filter((row) => row.chestFragment === true).length;
     if (!options.apply) return;
-    page.forEach((row) => keep(database, 'GameDay', row, ['chestMeeshFragments', 'chestFragment']));
-    if (rebuilt.length > 0) {
-      days.updateMany(
-        { $and: [{ _id: { $in: rebuilt.map((row) => row._id) } }, { chestMeeshFragments: { $gt: 0 } }] },
-        { $set: { chestFragment: true } },
-      );
-    }
+    page.forEach((row) => keep(database, 'GameDay', row, ['chestMeeshFragments']));
     const result = days.updateMany(
       { $and: [{ _id: { $in: page.map((row) => row._id) } }, { chestMeeshFragments: { $exists: true } }] },
       { $unset: { chestMeeshFragments: '' } },
@@ -174,7 +169,7 @@ function runStarFragmentsCleanup(database, options) {
   print(`MeeshLedger — frappes payées en fragments : ${ledger.fragmentMints} (aucune Meesh supprimée, aucun solde touché)`);
   if (ledger.fragmentMintIds.length > 0) print(`MeeshLedger — lignes : ${ledger.fragmentMintIds.join(', ')}`);
   print(`MeeshLedger — lignes portant fragmentsSpent : ${ledger.fieldRows}, champ retiré : ${ledger.unset}`);
-  print(`GameDay — lignes portant chestMeeshFragments : ${days.fieldRows}, fragments d'étoile reconstitués : ${days.starFragmentsRebuilt}, champ retiré : ${days.unset}`);
+  print(`GameDay — lignes portant chestMeeshFragments : ${days.fieldRows}, dont fragment d'étoile déjà gravé (chestFragment, inchangé) : ${days.starFragments}, champ retiré : ${days.unset}`);
   if (!options.apply) print('Relancer avec APPLY=1 pour écrire, ROLLBACK=1 pour revenir en arrière (production : feu vert du porteur et sauvegarde vérifiée).');
 }
 
