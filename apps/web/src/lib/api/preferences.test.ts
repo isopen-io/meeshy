@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { customNameOf, flagsOf, pushConversationFlags, pushRead, pushUnread } from './preferences';
+import { categoryIdOf, customNameOf, flagsOf, pushConversationFlags, pushRead, pushUnread } from './preferences';
 import type { Transport } from '../net/transport';
 import type { Conversation } from './types';
 
@@ -51,6 +51,19 @@ describe('customNameOf', () => {
 
   test('chaîne vide ⇒ undefined (rien à afficher)', () => {
     expect(customNameOf(withPreferences([{ customName: '' }]))).toBeUndefined();
+  });
+});
+
+describe('categoryIdOf — la catégorie où le lecteur a rangé la conversation (#10103)', () => {
+  test('identifiant servi par `userPreferences[0].categoryId`', () => {
+    expect(categoryIdOf(withPreferences([{ categoryId: 'cat-1' }]))).toBe('cat-1');
+  });
+
+  test('absent, nul, vide ou d’une autre forme ⇒ non rangée', () => {
+    expect(categoryIdOf(withPreferences([{ categoryId: null }]))).toBeUndefined();
+    expect(categoryIdOf(withPreferences([{ categoryId: '' }]))).toBeUndefined();
+    expect(categoryIdOf(withPreferences([{ categoryId: 7 }]))).toBeUndefined();
+    expect(categoryIdOf(withPreferences(undefined))).toBeUndefined();
   });
 });
 
