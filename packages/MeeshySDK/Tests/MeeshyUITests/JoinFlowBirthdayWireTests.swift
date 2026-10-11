@@ -22,6 +22,7 @@ final class JoinFlowBirthdayWireTests: XCTestCase {
 
 /// #10216 — la page d'invitation ne montre jamais « 0 personnes » : un
 /// effectif tu ou neutre (visiteur sans compte) retire sa tuile.
+@MainActor
 final class InviteGroupFactsShownCountTests: XCTestCase {
 
     func test_shownCount_zero_isNotShown() {
