@@ -168,6 +168,11 @@ const progressionCarnetScreen = () =>
    sur un catalogue non chargé, et aucun autre écran n'en paie les octets. */
 const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* L'ENTRÉE SANS COMPTE DANS WORLD WIDE (#10003) — ses libellés `world.*`
+   vivent dans le même catalogue que la jonction par lien, dont elle rejoue la
+   porte et les refus. */
+const worldEntryScreen = () =>
+  Promise.all([import('@/routes/world-entry'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkScreen = () =>
   Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkArrivalsScreen = () =>
@@ -208,6 +213,12 @@ export const ROUTES = {
      Le legacy la servait (`apps/web/app/chat/[id]`, D-5) et ne la sert plus.
      PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble. */
   chatJoin: { pattern: '/chat/$link', screen: chatJoinScreen },
+  /* ENTRER DANS WORLD WIDE SANS COMPTE (#10003, planche « Onboarding ») — nom,
+     langue, puis le fil, par la clé que sert `GET /world`. La landing y mène
+     avec le nom saisi (`?name=`, `landing/world-entry.ts`). PUBLIQUE, comme
+     `chatJoin` : l'écran renvoie lui-même un compte vers la jonction par lien
+     et un invité déjà entré vers son fil. */
+  world: { pattern: '/world', screen: worldEntryScreen },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */

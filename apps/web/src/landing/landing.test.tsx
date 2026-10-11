@@ -6,7 +6,6 @@ import { formatMemberCount } from '@meeshy/shared/utils/member-visibility';
 
 import { SESSION_STORAGE_KEY } from '@/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '@/lib/inline-interface-language-bootstrap.js';
-import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 import { href } from '@/routes/route-table';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -106,10 +105,8 @@ describe('le document prérendu, par langue (#10002)', () => {
 });
 
 describe('le point d’accroche de l’entrée invité (#10003)', () => {
-  test('vise la jonction par lien que la table des routes sert, en mode invité', () => {
-    expect(WORLD_GUEST_ENTRY_TEMPLATE.replace('{link}', 'L').replace('{name}', 'N')).toBe(
-      href('chatJoin', { link: 'L' }, { mode: ANONYMOUS_MODE, name: 'N' }),
-    );
+  test('vise le parcours d’entrée invité que la table des routes sert, le nom en paramètre', () => {
+    expect(WORLD_GUEST_ENTRY_TEMPLATE.replace('{link}', 'L').replace('{name}', 'N')).toBe(href('world', {}, { name: 'N' }));
   });
 });
 
@@ -296,13 +293,13 @@ describe('le script de la landing — GET /world (#10000)', () => {
     expect(visible('[data-world-unavailable]')).toBe(false);
   });
 
-  test('le nom saisi entre par la clé de jonction SERVIE, encodée', async () => {
+  test('le nom saisi entre dans le parcours d’entrée, encodé, une fois l’entrée servie ouverte', async () => {
     const { trace, settle } = harness({ language: 'fr' });
     await settle();
     const form = document.querySelector('[data-world-form]') as HTMLFormElement;
-    (form.querySelector('input[name="name"]') as HTMLInputElement).value = '  Amina & co ';
+    (form.querySelector('input[name="name"]') as HTMLInputElement).value = '  Awa & co ';
     form.dispatchEvent(new window.Event('submit', { cancelable: true }));
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Amina%20%26%20co']);
+    expect(trace.assigned).toEqual(['/world?name=Awa%20%26%20co']);
   });
 
   test('un nom saisi avant la réponse attend la clé, puis entre', async () => {
@@ -312,6 +309,6 @@ describe('le script de la landing — GET /world (#10000)', () => {
     form.dispatchEvent(new window.Event('submit', { cancelable: true }));
     expect(trace.assigned).toEqual([]);
     await settle();
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Kenji']);
+    expect(trace.assigned).toEqual(['/world?name=Kenji']);
   });
 });

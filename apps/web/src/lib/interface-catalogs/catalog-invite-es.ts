@@ -178,6 +178,22 @@ const es = {
   'linkDetail.announce.deleted': 'Enlace eliminado.',
   'linkDetail.announce.deleteFailed': 'No se eliminó el enlace.',
   'linkDetail.announce.offline': 'Sin conexión: no se envió nada.',
+  'world.enter': 'Entrar en {title}',
+  'world.name.prompt': '¿Cómo te llamamos?',
+  'world.name.label': 'Tu nombre',
+  'world.name.placeholder': 'Ej. Awa',
+  'world.name.missing': 'Escribe el nombre que verán los demás.',
+  'world.continue': 'Continuar',
+  'world.language.greeting': 'Hola {name}, leerás todo en…',
+  'world.language.hint': 'Sugerido por tu dispositivo.',
+  'world.language.group': 'Idioma principal',
+  'world.step': 'Paso {index} de {total}',
+  'world.back': 'Atrás',
+  'world.loading': 'Un momento…',
+  'world.entering': 'Entrando…',
+  'world.unavailable': 'La entrada sin cuenta no está abierta por ahora.',
+  'world.error.enter': 'No se pudo entrar por ahora. Inténtalo de nuevo.',
+  'world.error.offline': 'Sin conexión. Inténtalo de nuevo cuando estés en línea.',
 } satisfies InviteCatalog;
 
 export default es;

@@ -178,6 +178,22 @@ const de = {
   'linkDetail.announce.deleted': 'Link gelöscht.',
   'linkDetail.announce.deleteFailed': 'Der Link wurde nicht gelöscht.',
   'linkDetail.announce.offline': 'Offline: Es wurde nichts gesendet.',
+  'world.enter': '{title} betreten',
+  'world.name.prompt': 'Wie sollen wir dich nennen?',
+  'world.name.label': 'Dein Name',
+  'world.name.placeholder': 'z. B. Awa',
+  'world.name.missing': 'Gib den Namen ein, den die anderen sehen.',
+  'world.continue': 'Weiter',
+  'world.language.greeting': 'Hallo {name}, du liest alles auf…',
+  'world.language.hint': 'Von deinem Gerät vorgeschlagen.',
+  'world.language.group': 'Hauptsprache',
+  'world.step': 'Schritt {index} von {total}',
+  'world.back': 'Zurück',
+  'world.loading': 'Einen Moment…',
+  'world.entering': 'Zutritt…',
+  'world.unavailable': 'Der Zugang ohne Konto ist gerade nicht geöffnet.',
+  'world.error.enter': 'Der Zutritt ist gerade nicht möglich. Versuch es noch einmal.',
+  'world.error.offline': 'Keine Verbindung. Versuch es erneut, sobald du online bist.',
 } satisfies InviteCatalog;
 
 export default de;
