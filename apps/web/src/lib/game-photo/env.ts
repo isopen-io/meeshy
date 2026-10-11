@@ -1,8 +1,7 @@
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
-import { webOriginOf } from '@/lib/links/web-origin';
 import type { PlayOptions } from '@/lib/game/play';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { memoriserLienParLecteur } from '@/lib/view/invitation';
@@ -116,14 +115,14 @@ async function readGallery(file: File): Promise<PhotoSource | null> {
  */
 const shareableReferralLink = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
-  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await loadShareableReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
 /** Le lien d'un jeton EXISTANT, sans rien créer (décision porteur : aucun jeton sans geste). Un « aucun » n'est pas gardé : le prochain déroulé relit. */
 const existingReferralLink = memoriserLienParLecteur(async () => {
   const { findExistingReferralLink } = await import('@/lib/api/referral-link');
-  const result = await findExistingReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await findExistingReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 

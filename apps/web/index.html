@@ -45,6 +45,15 @@
       la MÊME constante qu'importe `src/lib/interface-language.ts`.
     -->
     <script>/*@INLINE_INTERFACE_LANGUAGE_BOOTSTRAP@*/</script>
+    <!--
+      LA CONFIGURATION DU DÉPLOIEMENT (#10208) — `window.__MEESHY_RUNTIME__`,
+      réécrite au démarrage du conteneur depuis MEESHY_API_URL / MEESHY_WEB_URL
+      (docker/runtime-config.sh). Classique et bloquante parce que
+      `src/lib/api/config.ts` la lit à l'évaluation du module ; le module
+      ci-dessous se télécharge en parallèle, et le service worker la sert de
+      son seau (vite.config.ts, § runtimeCaching).
+    -->
+    <script src="/config.js"></script>
   </head>
   <body>
     <div id="root"></div>

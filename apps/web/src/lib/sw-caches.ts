@@ -36,6 +36,14 @@ export const SW_RUNTIME_CACHES = {
 export const SW_RUNTIME_CACHE_NAMES: readonly string[] = Object.values(SW_RUNTIME_CACHES);
 
 /**
+ * LE SEAU DE `/config.js` (#10208) — la configuration du DÉPLOIEMENT, pas une
+ * donnée de lecteur : hors de `SW_RUNTIME_CACHES`, donc ni la fin d'un compte
+ * ni une mise à jour ne le purgent. Le purger ne ferait que priver le prochain
+ * démarrage hors ligne de l'origine déclarée.
+ */
+export const SW_DEPLOYMENT_CONFIG_CACHE = 'deployment-config';
+
+/**
  * LE NAMESPACE DU LEGACY, dont la v2 a HÉRITÉ la responsabilité (#6702) : son
  * worker ne s'exécutera plus jamais, donc plus rien d'autre n'effacera ce qu'il
  * a laissé. `public/sw-legacy-purge.js` le purge à l'activation ; ce littéral

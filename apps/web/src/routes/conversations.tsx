@@ -13,7 +13,7 @@ import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
-import { apiConfig } from '@/lib/api/config';
+import { apiConfig, publicWebOrigin } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
 import { setCategoryExpanded, useConversationCategories } from '@/lib/api/conversation-categories';
@@ -36,7 +36,6 @@ import { useSectionFolds } from '@/lib/view/use-section-folds';
 import { pinWorldWide } from '@/lib/lens/world-pin';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
@@ -160,7 +159,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
  */
 const lienDeParrainage = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
-  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await loadShareableReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 

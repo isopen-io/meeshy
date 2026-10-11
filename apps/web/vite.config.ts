@@ -18,7 +18,7 @@ import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
-import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
+import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -702,6 +702,11 @@ export default defineConfig({
                    ~7 documents à chaque installation. `/` reste servie par la
                    coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
                 ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
+                /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
+                   démarrage du conteneur, donc JAMAIS précachée : son
+                   empreinte de build est celle du fichier par défaut, pas de
+                   celui que le conteneur sert. Elle a son seau (ci-dessous). */
+                'config.js',
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
@@ -759,6 +764,21 @@ export default defineConfig({
                * « Offline Graceful Degradation »).
                */
               runtimeCaching: [
+                {
+                  /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) en
+                     StaleWhileRevalidate : un démarrage sous service worker la
+                     lit dans son seau sans attendre le réseau (le script est
+                     bloquant), hors ligne compris, et la relit en fond — une
+                     origine changée au redémarrage du conteneur s'applique au
+                     lancement suivant. Fonction AUTONOME : Workbox la
+                     stringifie dans `dist/sw.js`. */
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
+                  handler: 'StaleWhileRevalidate',
+                  options: {
+                    cacheName: SW_DEPLOYMENT_CONFIG_CACHE,
+                    expiration: { maxEntries: 1 },
+                  },
+                },
                 {
                   /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
                      (#6973) : le routeur de Workbox retient la PREMIÈRE route
