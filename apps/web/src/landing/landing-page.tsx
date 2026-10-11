@@ -141,7 +141,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
           <ol className="ld-grid">
             {copy.steps.map((step, index) => (
               <li key={step.title} className="ld-card">
-                <span className="ld-step" aria-hidden="true">
+                <span className="ld-step-num" aria-hidden="true">
                   {index + 1}
                 </span>
                 <h3>{step.title}</h3>
