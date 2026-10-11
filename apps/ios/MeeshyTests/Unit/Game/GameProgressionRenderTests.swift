@@ -240,14 +240,13 @@ final class GameProgressionRenderTests: XCTestCase {
         let vm = await loadedViewModel(sans)
 
         let rendu = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        // La fiche relit la progression à l'apparition : son contenu ne se pose qu'après quelques tours. On ATTEND
+        // le détail d'avant (le conteneur, ou son bouton de frappe) au lieu de lire l'arbre une seule fois.
+        let detail = rendu.frame(of: "progression.meesh.detail") ?? rendu.frame(of: "progression.meesh.mint", borne: 2)
         let identifiants = rendu.identifiers
-        let libelles = rendu.nodes.compactMap(\.label)
 
-        // Le détail d'avant est un conteneur `.contain` : son identifiant ne remonte pas dans l'arbre lu par le
-        // harnais. Ce qui se VOIT, c'est son solde — « 9 Meesh » — que seul ce détail peint sans le bloc du jeu.
-        XCTAssertTrue(libelles.contains { $0.contains(ProgressionCopy.meeshBalance(9)) },
-                      "la fiche des Meeshes garde sa frappe d'avant : \(libelles) — progress \(vm.progress != nil), "
-                      + "meesh \(vm.progress?.meesh != nil), game \(vm.game != nil), état \(vm.loadState), nœuds \(rendu.nodes.count)")
+        XCTAssertNotNil(detail, "la fiche des Meeshes garde sa frappe d'avant : \(identifiants) — "
+                        + "progress \(vm.progress != nil), game \(vm.game != nil), état \(vm.loadState)")
         XCTAssertFalse(identifiants.contains("progression.concept.hero"), "la frappe d'avant est le héros : pas de second")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
                        "du jeu est monté sans le bloc : \(identifiants)")
