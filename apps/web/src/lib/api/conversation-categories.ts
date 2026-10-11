@@ -3,8 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 
 import { unwrap } from './client';
-import type { ConversationsDeps } from './conversations';
-import { CONVERSATION_CATEGORIES_QUERY_KEY } from './conversation-categories-key';
+import { CONVERSATION_CATEGORIES_QUERY_KEY, type ConversationsDeps } from './conversations';
 import { FIXTURE_CONVERSATION_CATEGORIES } from './fixtures-categories';
 import type { ApiResult } from './http';
 

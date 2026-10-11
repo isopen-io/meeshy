@@ -17,7 +17,7 @@ import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
-import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
@@ -40,7 +40,6 @@ import {
   applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { CONVERSATION_CATEGORIES_QUERY_KEY } from './conversation-categories-key';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';

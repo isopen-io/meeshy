@@ -8,7 +8,7 @@ import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socke
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
-import { CONVERSATION_CATEGORIES_QUERY_KEY } from './conversation-categories-key';
+import { CONVERSATION_CATEGORIES_QUERY_KEY } from './conversations';
 import { createTypingStore } from './typing-store';
 
 /**
