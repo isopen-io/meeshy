@@ -1380,7 +1380,11 @@ jobs:
   # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
   # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
   # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
-  # le budget historique.
+  # le budget historique. RELEVÉ À 35/40 le 2026-10-11 (#10058) : même
+  # arbre, 30 616 tests verts, 894 s sur un runner et 1 457 s sur un autre
+  # (chaque suite ~1,6× plus lente — le RUNNER, pas une suite bloquée) ; les
+  # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
+  # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
@@ -1398,8 +1402,8 @@ jobs:
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
-            timeoutMinutes: 30
-            testTimeoutMinutes: 25
+            timeoutMinutes: 40
+            testTimeoutMinutes: 35
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
