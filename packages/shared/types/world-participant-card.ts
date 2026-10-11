@@ -14,6 +14,15 @@ import { GlobalUserRole, globalRoleLevel } from './role-types.js';
  * d'autre : ni un `USER`, ni un `AGENT`, ni un invité. Un rôle inconnu vaut 0
  * (`globalRoleLevel`, la lecture qui échoue FERMÉ) : il ne lit rien.
  *
+ * Ce que la fiche dit d'un COMPTE obéit à une SECONDE loi, la hiérarchie : son
+ * rôle global, les quatre rangs de son Prisme, et ce qui vient de sa session
+ * (poste, pays à défaut de pays d'arrivée) ne sortent que pour un lecteur qui
+ * le SURCLASSE strictement, ou pour lui-même — la règle de `requireHierarchy`
+ * (`PermissionsService.canManageUser`), qui garde déjà les sessions d'un compte
+ * dans l'administration (audit L2-7 : « un ADMIN ne lit pas celles d'un
+ * BIGBOSS »). Sinon ces champs sont `null` et `accountDetailsWithheld` le dit.
+ * Un rôle cible qui ne se compare pas (inconnu) est retenu, même pour BIGBOSS.
+ *
  * Ce qui n'y figure JAMAIS (minimisation) : une adresse IP (le pays suffit), la
  * ville, le jeton ou l'empreinte de session, l'e-mail, le téléphone, la date de
  * naissance, la chaîne User-Agent brute, et la PRÉSENCE (`isOnline`,
@@ -89,7 +98,7 @@ export const worldParticipantCardSchema = z.object({
   username: z.string().nullable(),
   /** Le rang DANS la conversation : `creator` · `admin` · `moderator` · `member`. */
   conversationRole: z.string(),
-  /** Le rôle GLOBAL du compte — `null` pour un invité. */
+  /** Le rôle GLOBAL du compte — `null` pour un invité, ou retenu (`accountDetailsWithheld`). */
   accountRole: z.string().nullable(),
   languages: worldParticipantLanguagesSchema,
   /**
@@ -103,6 +112,13 @@ export const worldParticipantCardSchema = z.object({
   shareLink: worldParticipantShareLinkSchema.nullable(),
   /** `active` : présent ; `left` : a quitté ; `banned` : banni de la conversation. */
   status: z.enum(['active', 'left', 'banned']),
+  /**
+   * `true` : le compte lu n'est pas SURCLASSÉ par le lecteur — `accountRole`,
+   * les quatre rangs du Prisme de `languages`, `client` et le pays de session
+   * sont `null` parce qu'ils sont RETENUS, pas parce que rien n'a été relevé.
+   * Toujours `false` pour un invité, qui n'a pas de compte.
+   */
+  accountDetailsWithheld: z.boolean(),
 });
 
 export type WorldParticipantCard = z.infer<typeof worldParticipantCardSchema>;

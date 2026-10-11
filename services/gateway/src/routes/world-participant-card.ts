@@ -10,7 +10,10 @@
  *     (`mayReadWorldParticipantCard`, fail-closed) — 403 sinon, AVANT toute
  *     lecture : un refus ne dit rien de l'existence de qui que ce soit ;
  *  3. le participant, cherché DANS World Wide seulement — 404 sinon, qu'il
- *     n'existe pas ou qu'il soit d'une autre conversation ;
+ *     n'existe pas ou qu'il soit d'une autre conversation ; de son COMPTE, le
+ *     lecteur ne lit rôle global, Prisme et session que s'il le SURCLASSE ou
+ *     s'il est lui-même (la règle de `requireHierarchy`) — sinon ils sont
+ *     retenus et la fiche le dit (`accountDetailsWithheld`) ;
  *  4. la TRACE au journal d'audit — 503 si elle ne s'écrit pas : aucune fiche
  *     ne sort sans elle ;
  *  5. la fiche, privée et non stockable.
@@ -70,7 +73,7 @@ const cardResponseSchema = {
       additionalProperties: false,
       required: [
         'participantId', 'participantType', 'displayName', 'username', 'conversationRole', 'accountRole',
-        'languages', 'country', 'client', 'joinedAt', 'shareLink', 'status',
+        'languages', 'country', 'client', 'joinedAt', 'shareLink', 'status', 'accountDetailsWithheld',
       ],
       properties: {
         participantId: { type: 'string' },
@@ -101,6 +104,10 @@ const cardResponseSchema = {
           properties: { identifier: nullableString, linkId: { type: 'string' }, name: nullableString },
         },
         status: { type: 'string', enum: ['active', 'left', 'banned'] },
+        accountDetailsWithheld: {
+          type: 'boolean',
+          description: 'true : le lecteur ne SURCLASSE pas ce compte — rôle global, rangs du Prisme, poste et pays de session sont retenus (null)',
+        },
       },
     },
   },
@@ -160,7 +167,7 @@ export async function worldParticipantCardRoutes(
       }
 
       try {
-        const loaded = await loadWorldParticipantCard(prisma, request.params.participantId);
+        const loaded = await loadWorldParticipantCard(prisma, request.params.participantId, reader);
         if (!loaded) {
           return sendNotFound(reply, 'World participant not found', {
             code: WORLD_PARTICIPANT_CARD_ERRORS.notFound,
@@ -179,6 +186,7 @@ export async function worldParticipantCardRoutes(
                 conversationId: loaded.conversationId,
                 participantType: loaded.card.participantType,
                 readerRole: reader.role,
+                accountDetailsWithheld: loaded.card.accountDetailsWithheld,
               }),
               ipAddress: request.ip ?? null,
               userAgent: extractUserAgent(request),
