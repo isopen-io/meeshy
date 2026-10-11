@@ -151,7 +151,7 @@ type Emitted = { rooms: string[]; event: string; payload: any };
 
 function makeSocket(emitted: Emitted[]) {
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: any) => emitted.push({ rooms, event, payload }),
   });
   const io = {

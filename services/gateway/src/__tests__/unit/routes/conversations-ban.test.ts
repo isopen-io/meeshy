@@ -42,7 +42,7 @@ const CONV_ID = 'conv-aabbcc';
 function makeSocketIO() {
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: jest.fn() }]);
   const mockIo = {
-    to: jest.fn().mockReturnThis(),
+    to: jest.fn().mockReturnThis(), except: jest.fn().mockReturnThis(),
     emit: jest.fn(),
     in: jest.fn().mockReturnValue({ fetchSockets: mockFetchSockets }),
   };
@@ -462,7 +462,7 @@ describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du gro
     const sends = io._sendsFor('conversation:participant-banned');
     expect(sends).toHaveLength(2);
     expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
-    expect(sends[0].excepts).toEqual(['user:user-admin']);
+    expect(sends[0].excepts).toEqual(['user:user-admin', expect.stringMatching(/^conversation-guests:/)]);
     expect(sends[1].rooms).toEqual(['user:user-admin']);
     expect(sends[1].payload).toMatchObject({ memberCount: 250 });
   });

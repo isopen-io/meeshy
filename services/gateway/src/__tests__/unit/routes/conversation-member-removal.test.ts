@@ -73,7 +73,7 @@ type Emitted = { event: string; payload: any };
 
 function makeIo(emitted: Emitted[]) {
   const chain = (): any => ({
-    to: () => chain(),
+    to: () => chain(), except: () => chain(),
     emit: (event: string, payload: unknown) => emitted.push({ event, payload: payload as any }),
   });
   return { to: () => chain() };

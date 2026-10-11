@@ -119,8 +119,8 @@ function makeSocketRecorder() {
   // socket. `room` retenu ci-dessous reste la PREMIÈRE room de la chaîne (le
   // fil), et `rooms` porte la chaîne entière.
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
-    emit: (event: string, payload: any) => {
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
+    emit: (event: string, payload: any) => { if (rooms.length === 1 && rooms[0].startsWith('conversation-guests:')) return; // copie sans effectif des invités (#10205)
       order.push(`emit:${event}`);
       emits.push({ room: rooms[0], rooms, event, payload });
     },

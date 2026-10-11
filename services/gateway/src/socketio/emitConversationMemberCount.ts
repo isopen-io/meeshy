@@ -10,6 +10,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from './serverEmit';
+import { conversationGuestsRoom } from './conversationGuestsRoom';
 
 /**
  * Un destinataire du fanout d'effectif, avec les DEUX titres qui ouvrent la
@@ -78,6 +79,12 @@ export function emitConversationMemberCountEvent<E extends ServerEventName>(para
   const { io, conversationId, participants, event, payload, memberCount } = params;
   if (!io) return;
 
+  // #10205 — un invité (socket sans compte) ne reçoit JAMAIS l'effectif : toute
+  // chaîne qui le porte exclut la room des invités, qui reçoit en dernier une
+  // copie SANS effectif. La room est posée par la socket elle-même à
+  // l'authentification, quelle que soit la forme de `participants`.
+  const guestRoom = conversationGuestsRoom(conversationId);
+
   if (memberCount <= MEMBER_COUNT_DISPLAY_CAP) {
     emitToConversationParticipants({
       io,
@@ -85,7 +92,9 @@ export function emitConversationMemberCountEvent<E extends ServerEventName>(para
       participants,
       event,
       payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
+      exceptRooms: [guestRoom],
     });
+    emitServerEvent(io.to(guestRoom), event, payload as ServerEventPayload<E>);
     return;
   }
 
@@ -97,19 +106,21 @@ export function emitConversationMemberCountEvent<E extends ServerEventName>(para
     participants: participants.filter((participant) => !seesExactCount(participant)),
     event,
     payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
-    exceptRooms: exactRooms,
+    exceptRooms: [...exactRooms, guestRoom],
   });
 
   const [firstRoom, ...otherRooms] = exactRooms;
-  if (!firstRoom) return;
+  if (firstRoom) {
+    let emitter = io.to(firstRoom);
+    for (const room of otherRooms) emitter = emitter.to(room);
+    // Même porte que `emitToConversationParticipants` : `emitServerEvent` plutôt
+    // qu'un `.emit()` nu, pour que l'événement et son payload restent liés par le
+    // contrat partagé jusqu'au fil.
+    emitServerEvent(emitter.except(guestRoom), event, {
+      ...payload,
+      ...presentMemberCount(memberCount, { viewerSeesExactCount: true }),
+    } as ServerEventPayload<E>);
+  }
 
-  let emitter = io.to(firstRoom);
-  for (const room of otherRooms) emitter = emitter.to(room);
-  // Même porte que `emitToConversationParticipants` : `emitServerEvent` plutôt
-  // qu'un `.emit()` nu, pour que l'événement et son payload restent liés par le
-  // contrat partagé jusqu'au fil.
-  emitServerEvent(emitter, event, {
-    ...payload,
-    ...presentMemberCount(memberCount, { viewerSeesExactCount: true }),
-  } as ServerEventPayload<E>);
+  emitServerEvent(io.to(guestRoom), event, payload as ServerEventPayload<E>);
 }

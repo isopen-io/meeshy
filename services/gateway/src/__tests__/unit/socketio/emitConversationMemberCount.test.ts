@@ -14,6 +14,11 @@
  * `.except()` est ce qui garantit qu'un autorisé assis dans la room du fil ne
  * reçoive pas les deux.
  *
+ * #10205 — un INVITÉ (socket sans compte, assise dans la room
+ * `conversation-guests:<id>`) ne reçoit JAMAIS l'effectif : chaque chaîne qui
+ * le porte exclut cette room, et une dernière copie SANS effectif lui est
+ * adressée.
+ *
  * @jest-environment node
  */
 
@@ -37,6 +42,7 @@ const conversationId = 'c_1';
 const event = 'conversation:participant-left';
 
 const member = (id: string, userId: string | null) => ({ id, userId, role: 'member', user: { role: 'USER' } });
+const GUESTS = 'conversation-guests:c_1';
 
 describe('emitConversationMemberCountEvent', () => {
   it('plafonne pour tout le monde quand personne n\'est autorisé', () => {
@@ -51,15 +57,16 @@ describe('emitConversationMemberCountEvent', () => {
       memberCount: 250,
     });
 
-    expect(emissions).toHaveLength(1);
+    expect(emissions).toHaveLength(2);
     expect(emissions[0].rooms).toEqual(['conversation:c_1', 'user:u_1', 'user:p_anon']);
-    expect(emissions[0].excluded).toEqual([]);
+    expect(emissions[0].excluded).toEqual([GUESTS]);
     expect(emissions[0].payload).toEqual({
       conversationId,
       userId: 'u_gone',
       memberCount: 199,
       memberCountCapped: true,
     });
+    expect(emissions[1]).toEqual({ rooms: [GUESTS], excluded: [], event, payload: { conversationId, userId: 'u_gone' } });
   });
 
   it('sert l\'effectif ENTIER à l\'admin du groupe dans une seconde chaîne', () => {
@@ -77,20 +84,22 @@ describe('emitConversationMemberCountEvent', () => {
       memberCount: 250,
     });
 
-    expect(emissions).toHaveLength(2);
+    expect(emissions).toHaveLength(3);
 
     const capped = emissions[0];
     expect(capped.rooms).toEqual(['conversation:c_1', 'user:u_1']);
     // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait la copie
     // plafonnée par la room de conversation, en plus de la sienne.
-    expect(capped.excluded).toEqual(['user:u_admin']);
+    expect(capped.excluded).toEqual(['user:u_admin', GUESTS]);
     expect(capped.payload.memberCount).toBe(199);
     expect(capped.payload.memberCountCapped).toBe(true);
 
     const exact = emissions[1];
     expect(exact.rooms).toEqual(['user:u_admin']);
-    expect(exact.excluded).toEqual([]);
+    expect(exact.excluded).toEqual([GUESTS]);
     expect(exact.payload).toEqual({ conversationId, userId: 'u_gone', memberCount: 250 });
+    expect(emissions[2].rooms).toEqual([GUESTS]);
+    expect(emissions[2].payload).toEqual({ conversationId, userId: 'u_gone' });
   });
 
   it('autorise aussi le creator et les rôles plateforme ADMIN/BIGBOSS/MODERATOR', () => {
@@ -128,7 +137,7 @@ describe('emitConversationMemberCountEvent', () => {
   // filtres sur la liste des participants, deux constructions de chaîne et
   // deux emits pour délivrer deux fois le même octet. Le chemin rapide est
   // donc une chaîne UNIQUE, sans exclusion, exactement l'ancien fanout.
-  it('n\'émet qu\'UNE chaîne quand l\'effectif tient sous le plafond', () => {
+  it('n\'émet qu\'UNE chaîne PORTEUSE d\'effectif quand il tient sous le plafond', () => {
     const { io, emissions } = makeRecorder();
 
     emitConversationMemberCountEvent({
@@ -143,10 +152,11 @@ describe('emitConversationMemberCountEvent', () => {
       memberCount: 12,
     });
 
-    expect(emissions).toHaveLength(1);
+    expect(emissions).toHaveLength(2);
     expect(emissions[0].rooms).toEqual(['conversation:c_1', 'user:u_1', 'user:u_admin']);
-    expect(emissions[0].excluded).toEqual([]);
+    expect(emissions[0].excluded).toEqual([GUESTS]);
     expect(emissions[0].payload).toEqual({ conversationId, memberCount: 12 });
+    expect(emissions[1]).toEqual({ rooms: [GUESTS], excluded: [], event, payload: { conversationId } });
   });
 
   // La borne, des deux côtés : à 199 pile la chaîne reste unique, à 200 la
@@ -167,7 +177,7 @@ describe('emitConversationMemberCountEvent', () => {
       payload: { conversationId },
       memberCount: 199,
     });
-    expect(atCap.emissions).toHaveLength(1);
+    expect(atCap.emissions).toHaveLength(2);
     expect(atCap.emissions[0].payload).toEqual({ conversationId, memberCount: 199 });
 
     const overCap = makeRecorder();
@@ -179,7 +189,7 @@ describe('emitConversationMemberCountEvent', () => {
       payload: { conversationId },
       memberCount: 200,
     });
-    expect(overCap.emissions).toHaveLength(2);
+    expect(overCap.emissions).toHaveLength(3);
     expect(overCap.emissions[0].payload).toEqual({
       conversationId,
       memberCount: 199,

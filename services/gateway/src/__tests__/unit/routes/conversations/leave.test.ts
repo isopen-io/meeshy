@@ -125,7 +125,11 @@ function makeRecordingIO(emitted: EmittedEvent[]) {
     to(room: string) {
       return chain([...rooms, room]);
     },
+    except() {
+      return chain(rooms);
+    },
     emit(event: string, payload: any) {
+      if (rooms.length === 1 && rooms[0].startsWith('conversation-guests:')) return; // copie sans effectif des invités (#10205)
       emitted.push({ rooms, event, payload });
     },
   });

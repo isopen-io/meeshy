@@ -192,7 +192,7 @@ describe('ConversationHandler', () => {
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
       const room = ROOMS.conversation(CONV_ID);
-      expect(socket.join).toHaveBeenCalledWith(room);
+      expect((socket.join as jest.Mock).mock.calls).toEqual([[room]]); // un compte n'entre pas dans la room des invités (#10205)
       expect(socket.emit).toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_JOINED,
         { conversationId: CONV_ID, userId: USER_ID }
@@ -290,7 +290,7 @@ describe('ConversationHandler', () => {
       // PAS traité en silence — l'accusé et le compteur partent tous deux, sous
       // l'identité `Participant.id`. Les tests dédiés plus bas verrouillent
       // chacun ; ici on ne garantit que l'entrée en room et l'absence d'erreur.
-      expect(socket.join).toHaveBeenCalled();
+      expect(socket.join).toHaveBeenCalledWith('conversation-guests:' + CONV_ID); // #10205
       expect(socket.emit).not.toHaveBeenCalledWith(
         SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
         expect.anything()

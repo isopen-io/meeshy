@@ -53,6 +53,7 @@ const ANON_PARTICIPANT_ID = '507f1f77bcf86cd799439077';
 const INTRUDER_USER_ID = '507f1f77bcf86cd799439099';
 
 type EmittedEvent = { rooms: string[]; excepts: string[]; event: string; payload: any };
+const guestCopies: EmittedEvent[] = [];
 
 /**
  * Double du `BroadcastOperator` de Socket.IO qui enregistre la CHAÎNE de rooms
@@ -72,6 +73,12 @@ function createRecordingIO(emitted: EmittedEvent[]) {
       return chain(rooms, [...excepts, room]);
     },
     emit(event: string, payload: any) {
+      // #10205 — la copie SANS effectif des invités se range à part : les
+      // témoins ci-dessous jugent l'éventail des MEMBRES.
+      if (rooms.length === 1 && rooms[0].startsWith('conversation-guests:')) {
+        guestCopies.push({ rooms, excepts, event, payload });
+        return;
+      }
       emitted.push({ rooms, excepts, event, payload });
     },
   });
@@ -268,6 +275,18 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     ]);
   });
 
+  it('les invités de la conversation reçoivent l\'arrivée SANS effectif (#10205)', async () => {
+    guestCopies.length = 0;
+    await addTarget();
+
+    const joined = emitted.find((e) => e.event === 'conversation:participant-joined')!;
+    expect(joined.excepts).toContain(`conversation-guests:${CONV_ID}`);
+    const copy = guestCopies.find((e) => e.event === 'conversation:participant-joined')!;
+    expect(copy.rooms).toEqual([`conversation-guests:${CONV_ID}`]);
+    expect(copy.payload).not.toHaveProperty('memberCount');
+    expect(copy.payload).not.toHaveProperty('memberCountCapped');
+  });
+
   it('ÉCARTE le nouvel arrivant de l\'éventail', async () => {
     await addTarget();
 
@@ -369,7 +388,7 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     expect(capped.payload.memberCountCapped).toBe(true);
     expect(capped.rooms).toContain(`conversation:${CONV_ID}`);
     expect(capped.rooms).not.toContain(`user:${ACTOR_ID}`);
-    expect(capped.excepts).toEqual([`user:${ACTOR_ID}`]);
+    expect(capped.excepts).toEqual([`user:${ACTOR_ID}`, `conversation-guests:${CONV_ID}`]);
 
     const exact = joined[1];
     expect(exact.rooms).toEqual([`user:${ACTOR_ID}`]);
@@ -532,7 +551,7 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     const left = emitted.filter((e) => e.event === 'conversation:participant-left');
     expect(left).toHaveLength(2);
     expect(left[0].payload.memberCount).toBe(199);
-    expect(left[0].excepts).toEqual([`user:${ACTOR_ID}`]);
+    expect(left[0].excepts).toEqual([`user:${ACTOR_ID}`, `conversation-guests:${CONV_ID}`]);
     expect(left[1].rooms).toEqual([`user:${ACTOR_ID}`]);
     expect(left[1].payload.memberCount).toBe(250);
     expect(left[1].payload.memberCountCapped).toBeUndefined();

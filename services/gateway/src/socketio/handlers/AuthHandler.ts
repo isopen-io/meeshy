@@ -23,6 +23,7 @@ import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifi
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
+import { conversationGuestsRoom } from '../conversationGuestsRoom';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -547,6 +548,14 @@ export class AuthHandler {
         anonymousId: socketUser.id,
         conversationId: participant.conversationId,
       });
+    }
+
+    // #10205 — la room des INVITÉS de la conversation : ce qui ne doit pas
+    // atteindre une socket sans compte (l'effectif) s'en exclut.
+    try {
+      await socket.join(conversationGuestsRoom(participant.conversationId));
+    } catch (error) {
+      logger.error('failed to join guest room for anonymous user', { anonymousId: socketUser.id, error });
     }
 
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);

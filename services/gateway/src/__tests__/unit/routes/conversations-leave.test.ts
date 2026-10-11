@@ -455,7 +455,7 @@ describe('POST /conversations/:id/leave — l\'effectif ENTIER pour l\'admin du 
     expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
     // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait AUSSI la copie
     // plafonnée, par la room de conversation.
-    expect(sends[0].excepts).toEqual([`user:${WITNESS_ID}`]);
+    expect(sends[0].excepts).toEqual([`user:${WITNESS_ID}`, expect.stringMatching(/^conversation-guests:/)]);
 
     expect(sends[1].rooms).toEqual([`user:${WITNESS_ID}`]);
     expect(sends[1].payload).toMatchObject({ memberCount: 250 });
