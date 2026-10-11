@@ -1,4 +1,4 @@
-import { useSyncExternalStore, type ChangeEvent, type ReactNode } from 'react';
+import { useState, useSyncExternalStore, type ChangeEvent, type ReactNode } from 'react';
 
 import { LANGUAGE_AUTONYMS } from '@/landing/landing-languages';
 import { translate } from '@/lib/i18n-catalog';
@@ -42,11 +42,23 @@ export function useInterfaceLanguage(): InterfaceLanguage {
   return useSyncExternalStore(subscribeInterfaceLanguage, currentInterfaceLanguage, currentInterfaceLanguage);
 }
 
+/**
+ * Le choix se MONTRE tout de suite (Optimistic Updates) : le catalogue de la
+ * langue se charge avant qu'elle ne soit posée, et un `<select>` contrôlé par
+ * la seule langue posée revenait à l'ancienne le temps du chargement. Un
+ * chargement refusé (hors ligne, morceau introuvable) rend la langue posée,
+ * sans rejet laissé sans réponse.
+ */
 export function InterfaceLanguageSelect({ language }: { readonly language: InterfaceLanguage }) {
+  const [pending, setPending] = useState<InterfaceLanguage | null>(null);
+  const shown = pending ?? language;
+
   function choose(event: ChangeEvent<HTMLSelectElement>) {
     const chosen = interfaceLanguageOf(event.currentTarget.value);
-    if (chosen === null || chosen === language) return;
-    void setInterfaceLanguage(chosen);
+    if (chosen === null || chosen === shown) return;
+    const settle = () => setPending((current) => (current === chosen ? null : current));
+    setPending(chosen === language ? null : chosen);
+    setInterfaceLanguage(chosen).then(settle, settle);
   }
 
   return (
@@ -63,7 +75,7 @@ export function InterfaceLanguageSelect({ language }: { readonly language: Inter
       <span className="sr-only">{translate(language, 'publicHeader.language')}</span>
       <select
         data-interface-language
-        value={language}
+        value={shown}
         onChange={choose}
         className="bg-transparent font-semibold outline-none"
         style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}

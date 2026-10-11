@@ -183,6 +183,21 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
     expect((el.querySelector('select[data-interface-language]') as HTMLSelectElement).value).toBe('en');
   });
 
+  test('le sélecteur montre le choix TOUT DE SUITE, pendant que le catalogue de la langue se charge', async () => {
+    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
+    const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
+    act(() => {
+      select.value = 'de';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(document.documentElement.lang).toBe('fr');
+    expect((el.querySelector('select[data-interface-language]') as HTMLSelectElement).value).toBe('de');
+
+    await choose(select, 'de');
+    expect((el.querySelector('select[data-interface-language]') as HTMLSelectElement).value).toBe('de');
+  });
+
   test('l’arabe retourne la page : `dir="rtl"` posé avec la langue', async () => {
     const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
