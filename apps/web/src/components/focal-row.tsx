@@ -706,7 +706,7 @@ export const FocalRow = memo(function FocalRow({
         ) : head ? (
           <span className="relative inline-flex">
           <AuthorAvatar
-            {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), participant: { id: message.senderId, name: senderAvatarName } })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
@@ -756,6 +756,7 @@ export const FocalRow = memo(function FocalRow({
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             username={senderHandle}
             {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+            {...(isMine ? {} : { participantId: message.senderId })}
           />
         ) : null}
 
@@ -809,6 +810,7 @@ export const FocalRow = memo(function FocalRow({
             <PersonName
               name={senderName}
               username={senderHandle}
+              {...(isMine ? {} : { participantId: message.senderId })}
               {...(senderRing === undefined ? {} : { storyRing: senderRing })}
               redundant
               className={`text-title font-extrabold${tintsName ? ' author-ink' : ''}`}

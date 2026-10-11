@@ -618,6 +618,7 @@ export function Bubble({
               {showsIdentity ? (
                 <AuthorAvatar
                   authorId={hereKeyOf(message.sender)}
+                  participant={{ id: message.senderId, name: message.sender?.displayName ?? '' }}
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
                   size={32}
@@ -652,6 +653,7 @@ export function Bubble({
                   <PersonName
                     name={message.sender?.displayName ?? ''}
                     username={message.sender?.user?.username}
+                    participantId={message.senderId}
                     {...(senderStoryRing === undefined ? {} : { storyRing: senderStoryRing })}
                     className="text-title font-semibold"
                     style={{ color: 'var(--color-ios-ink)' }}
