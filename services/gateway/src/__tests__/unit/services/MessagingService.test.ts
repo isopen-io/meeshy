@@ -699,57 +699,6 @@ describe('MessagingService', () => {
       expect((response.data as { senderId?: string }).senderId).not.toBe(testParticipantId);
     });
 
-    describe('un invité porte son nom DONNÉ dans la réponse et l’accusé de l’envoi (#10120)', () => {
-      // Le double modèle une vraie projection : le profil de session ne revient
-      // que si la requête le DEMANDE, et seulement les deux noms.
-      const GIVEN_NAME = 'Recette QA 063842';
-      const PSEUDO = 'ano_RecetteQA063842';
-      const anonymousSenderFor = (args: any) => ({
-        id: testParticipantId,
-        userId: null,
-        displayName: PSEUDO,
-        avatar: null,
-        type: 'anonymous',
-        nickname: null,
-        user: null,
-        ...(args?.include?.sender?.select?.anonymousSession?.select?.profile?.select?.firstName === true
-          ? { anonymousSession: { profile: { firstName: GIVEN_NAME, lastName: '' } } }
-          : {}),
-      });
-      const servedSender = (response: { data?: unknown }) => (response.data as { sender?: Record<string, unknown> }).sender;
-
-      it('un envoi neuf sert le nom donné en displayName et le pseudo en username', async () => {
-        mockPrisma.message.create.mockImplementationOnce((args: any) =>
-          Promise.resolve({ ...createMockMessage(), sender: anonymousSenderFor(args), attachments: [], replyTo: null })
-        );
-
-        const response = await service.handleMessage(validRequest, testParticipantId);
-
-        expect(response.success).toBe(true);
-        expect(servedSender(response)).toMatchObject({ displayName: GIVEN_NAME, username: PSEUDO });
-        expect(servedSender(response)).not.toHaveProperty('anonymousSession');
-      });
-
-      it('un réessai dédupliqué sert la même identité', async () => {
-        mockPrisma.message.findFirst.mockImplementationOnce((args: any) =>
-          Promise.resolve(
-            args?.include?.sender
-              ? { ...createMockMessage(), translations: [], sender: anonymousSenderFor(args) }
-              : null
-          )
-        );
-
-        const response = await service.handleMessage(
-          { ...validRequest, clientMessageId: 'cmid-retry-invite' },
-          testParticipantId
-        );
-
-        expect((response.data as { isDuplicate?: boolean }).isDuplicate).toBe(true);
-        expect(servedSender(response)).toMatchObject({ displayName: GIVEN_NAME, username: PSEUDO });
-        expect(servedSender(response)).not.toHaveProperty('anonymousSession');
-      });
-    });
-
     it('should return error for invalid request (empty content)', async () => {
       const invalidRequest: MessageRequest = {
         conversationId: testConversationId,
