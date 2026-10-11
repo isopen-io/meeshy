@@ -18,6 +18,7 @@ import { PACK_LANGUAGES } from '@meeshy/shared/types/content-pack';
 import { PackCatalog } from '../services/packs/PackCatalog';
 import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { gloryFramePackSpec, type FramePackDetail, type FramePackSummary } from '../services/packs/gloryFramePackSpec';
+import { atmosphereRemovalGuard } from '../services/game/GamePhotoService';
 import { packInstallationBroadcaster, packRouteGuard, registerPackRoutes } from './pack-routes';
 
 export const PACK_ERROR_CODES = {
@@ -105,7 +106,8 @@ export async function gloryFramePacksRoutes(fastify: FastifyInstance, options: G
     options.catalog ??
     new PackCatalog({
       prisma: fastify.prisma,
-      spec: gloryFramePackSpec({ index: options.index ?? startupPackIndex() }),
+      // Le pack de l'atmosphère choisie ne se retire pas tant qu'elle l'est (#10162, PP7).
+      spec: gloryFramePackSpec({ index: options.index ?? startupPackIndex(), removalGuard: atmosphereRemovalGuard(fastify.prisma) }),
       broadcast: packInstallationBroadcaster(fastify),
     });
 
@@ -132,7 +134,8 @@ export async function gloryFramePacksRoutes(fastify: FastifyInstance, options: G
       },
       install: { description: 'Installe un pack de cadres de gloire (#10148). 404 pour un pack inconnu ou masqué.', summary: 'Install a glory frame pack' },
       uninstall: {
-        description: 'Retire un pack de cadres de gloire (#10148). 409 `PACK_NOT_REMOVABLE` pour un pack non retirable.',
+        description:
+          'Retire un pack de cadres de gloire (#10148). 409 `PACK_NOT_REMOVABLE` pour un pack non retirable, ou celui de l’atmosphère choisie (#10162).',
         summary: 'Uninstall a glory frame pack',
       },
     },

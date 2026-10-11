@@ -10,8 +10,9 @@
  * un cadre libre jamais un succès. Le client affiche ce libellé
  * (`describeFrameUsage`) sur chaque vignette, et l'applique (`canUseFrame`).
  *
- * Le registre reste VIDE jusqu'au L3 ; `removalGuard` reste `null` jusqu'au
- * L10a (le pack de l'atmosphère choisie ne se retire pas, PP7).
+ * Le registre reste VIDE jusqu'au L3. `removalGuard` est branché par les
+ * routes (#10162, L10a, `atmosphereRemovalGuard`) : le pack de l'atmosphère
+ * choisie ne se retire pas tant qu'elle l'est (PP7).
  */
 import type { FrameUsage } from '@meeshy/shared/types/frame-usage';
 import type { PackAssetRef, PackLanguage, PackSummary } from '@meeshy/shared/types/content-pack';

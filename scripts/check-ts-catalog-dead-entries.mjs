@@ -453,7 +453,11 @@ export const callersIn = (contents, nsNames) => {
 // 279 -> 274 (2026-10-11) : plusieurs lots partis de bases différentes (packs, aperçus
 // Open Graph #10192, accueil des visiteurs sans compte) ont donné leur appelant à cinq
 // entrées sur dev sans relever le cliquet. Valeur MESURÉE sur dev 827ee17789.
-const BASELINE_DEAD_ENTRIES = 274;
+// 274 -> 277 (#10162, 2026-10-11) : `me.gameFramesAtmosphere`, `me.gamePhotoMomentsInvitations` et
+// `me.gamePhotoMomentsPresented` (L10a, `GAME_PHOTO_ROUTES`), GÉNÉRÉES avec leurs routes — comme les
+// autres `me.game*`, le web les lira par leur table partagée (`packages/shared/types/game-routes.ts`),
+// jamais par le catalogue (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -110,6 +110,23 @@ const gameExportSchema = {
     missions: gameRowsSchema,
     gloryLedger: gameRowsSchema,
     meeshLedger: gameRowsSchema,
+    mythicSeat: {
+      type: 'object',
+      nullable: true,
+      properties: { number: { type: 'integer' }, edition: { type: 'integer' }, grantedAt: { type: 'string', nullable: true } },
+    },
+    photoMoments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          stepId: { type: 'string' },
+          detectedAt: { type: 'string', nullable: true },
+          presentedAt: { type: 'string', nullable: true },
+          notifiedAt: { type: 'string', nullable: true },
+        },
+      },
+    },
     hasMore: { type: 'boolean' },
   },
 } as const;

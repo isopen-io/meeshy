@@ -50,6 +50,7 @@ import type {
   GameUpcomingSeasonBlock,
   GameVisibility,
 } from '../../types/game-v2.js';
+import type { GamePhotoBlock } from '../../types/game-photo.js';
 
 export type GameBlockExtrasFacts = {
   readonly userId: string;
@@ -118,6 +119,8 @@ export type GameBlockExtras = {
    * n'atteint le seuil d'affichage.
    */
   readonly achievementRarities?: GameAchievementRarities;
+  /** Les réglages et le registre des moments photo (#10162) : des faits du compte que la passerelle pose à côté. */
+  readonly photo?: GamePhotoBlock;
 };
 
 const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelForUnlocks({ score, levelRecord }));

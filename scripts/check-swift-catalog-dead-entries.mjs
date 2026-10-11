@@ -474,7 +474,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // Packs et téléchargements) donne leur appelant aux entrées de packs prématurées
 // ci-dessus ; trois relèvements partis de bases différentes s'étaient croisés sur dev.
 // Valeur MESURÉE le 2026-10-11 sur dev efee739ae5 (CI run 38160460790 rouge sur 296).
-const BASELINE_DEAD_ENTRIES = 290;
+// 290 -> 293 (#10162, 2026-10-11) : `MeEndpoint.gameFramesAtmosphere`, `.gamePhotoMomentsInvitations` et
+// `.gamePhotoMomentsPresented` (L10a), générées depuis le manifeste — PRÉMATURÉES : iOS les appellera par
+// `GameRoutes.swift` et ses lots (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+const BASELINE_DEAD_ENTRIES = 293;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

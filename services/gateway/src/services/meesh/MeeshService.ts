@@ -36,6 +36,7 @@ import { meeshEdition, meeshPrice, previewMint, type MeeshEdition } from '@meesh
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
+import { GamePhotoService } from '../game/GamePhotoService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
@@ -336,6 +337,13 @@ export class MeeshService {
 
       // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
       await new GloryService(this.prisma).openLevels(userId);
+      // Le trésor a pu franchir un palier : le plus haut atteint se garde (D14, #10162) — au mieux, une
+      // panne ne coûte que l'écriture, rattrapée par la lecture qui sert le plus haut du gardé et du courant.
+      try {
+        await new GamePhotoService(this.prisma).notePeakTreasury(userId, totaux.balance);
+      } catch (error) {
+        log.warn('treasury peak not recorded', { userId, error: error instanceof Error ? error.message : String(error) });
+      }
 
       log.info('Meesh frappée', {
         userId,

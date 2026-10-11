@@ -42,6 +42,7 @@ import { gameBlockExtensionShape } from './game-v2.js';
 
 export * from './game-routes.js';
 export * from './game-v2.js';
+export * from './game-photo.js';
 
 export { requestIdSchema };
 
