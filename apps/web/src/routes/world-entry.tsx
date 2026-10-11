@@ -293,7 +293,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
             >
               <span
                 aria-hidden="true"
-                className="grid size-[100px] place-items-center rounded-[28px] text-white shadow-lg"
+                className="grid size-[100px] place-items-center rounded-[28px] text-ios-on-brand shadow-lg"
                 style={{ background: 'linear-gradient(135deg, var(--ios-indigo-500), var(--ios-indigo-700))' }}
               >
                 <GlobeGlyph size={48} />
