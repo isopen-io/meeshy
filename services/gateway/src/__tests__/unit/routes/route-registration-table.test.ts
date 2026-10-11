@@ -225,7 +225,12 @@ describe('ROUTE_TABLE (#4278)', () => {
     // contenu des packs officiels sous `/api/v1/pack-assets/:file`. Aucun
     // alias, aucune route retirée ni renommée. Vérifié : le manifeste gagne
     // exactement cette route.
-    expect(ROUTE_TABLE.length).toBe(80);
+    // 81 : #10233 ajoute `admin-game-seasons` — l'administration du calendrier
+    // des saisons du Jeu sous `/api/v1/admin/game` (canManageGame). Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste passe de
+    // 667 à 676 routes, soit exactement les huit routes d'admin et
+    // `GET /me/game/seasons/calendar` (montée par `me-game`, déjà dans la table).
+    expect(ROUTE_TABLE.length).toBe(81);
   });
 });
 
