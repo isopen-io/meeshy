@@ -18,9 +18,9 @@ import { describe, it, expect, jest } from '@jest/globals';
 import {
   WORLD_PARTICIPANT_CARD_ERRORS,
   mayReadWorldParticipantCard,
-  worldParticipantCardPath,
   worldParticipantCardSchema,
 } from '@meeshy/shared/types/world-participant-card';
+import { participantsByParticipantId } from '@meeshy/shared/api/endpoints/world';
 import { worldParticipantCardRoutes } from '../../../routes/world-participant-card';
 
 const WORLD_ID = '507f1f77bcf86cd799439001';
@@ -185,7 +185,7 @@ async function read(participantId: string, reader: ReaderHeader, options: { read
   const { app, prisma } = await buildApp(options);
   const res = await app.inject({
     method: 'GET',
-    url: `/api/v1${worldParticipantCardPath(participantId)}`,
+    url: participantsByParticipantId(participantId),
     headers: { 'x-test-reader': reader, 'user-agent': 'moderator-browser/1.0' },
   });
   await app.close();

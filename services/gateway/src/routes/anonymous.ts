@@ -39,6 +39,7 @@ import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/link-visitor';
 import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
 import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
+import { extractUserAgent } from '../services/GeoIPService';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -236,6 +237,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         key: linkId,
         authContext: undefined,
         requestIp: resolveClientIp(request),
+        requestUserAgent: extractUserAgent(request),
         profile: {
           firstName: body.firstName,
           lastName: body.lastName,

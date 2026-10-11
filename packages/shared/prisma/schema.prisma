@@ -63,7 +63,23 @@ type AnonymousSessionDetails {
   sessionTokenHash  String
   country           String?
   deviceFingerprint String?
+  /// Le poste RÉDUIT relevé à l'entrée par lien (#10102) — absent sur toute
+  /// session antérieure, et sans User-Agent lisible. Voir `AnonymousClientDescriptor`.
+  client            AnonymousClientDescriptor?
   connectedAt       DateTime
+}
+
+/// Le poste d'un invité, RÉDUIT (#10102) : un nom et une version MAJEURE pour le
+/// navigateur et le système, la famille d'appareil. Jamais la chaîne User-Agent,
+/// ni le modèle, ni le fabricant (`describeGuestClient`,
+/// services/gateway/src/services/conversations/guestClient.ts). Lu par la seule
+/// fiche de modération de World Wide (`GET /world/participants/:participantId`).
+type AnonymousClientDescriptor {
+  browser        String?
+  browserVersion String?
+  os             String?
+  osVersion      String?
+  deviceType     String?
 }
 
 /// Profile info captured for an anonymous participant

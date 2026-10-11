@@ -99,6 +99,7 @@ import { syncRoutes } from './sync';
 import { trackingLinksRoutes } from './tracking-links';
 import { anonymousRoutes } from './anonymous';
 import { worldRoutes } from './world';
+import { worldParticipantCardRoutes } from './world-participant-card';
 import { communityRoutes } from './communities';
 import { adminMePermissionsRoutes } from './admin/me-permissions';
 import { dashboardRoutes } from './admin/dashboard';
@@ -253,6 +254,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'entrée PUBLIQUE de World Wide (#10000) — ce que la landing lit pour
   // faire entrer un visiteur sans compte par le lien `mshy_world`.
   { name: 'world', prefix: API_PREFIX, module: worldRoutes },
+  // La fiche de MODÉRATION d'un participant de World Wide (#10102) — réservée
+  // aux comptes dont le rôle global est au-delà de USER, chaque lecture tracée.
+  { name: 'world-participant-card', prefix: API_PREFIX, module: worldParticipantCardRoutes },
   { name: 'communities', prefix: API_PREFIX, module: communityRoutes },
 
   // ── Administration ────────────────────────────────────────────────────
