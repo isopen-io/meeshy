@@ -402,7 +402,7 @@ body {
   background: var(--ios-surface-card);
   border: 0.5px solid var(--ios-edge);
 }
-.ld-step {
+.ld-step-num {
   width: 32px;
   height: 32px;
   border-radius: 50%;
