@@ -68,3 +68,32 @@ describe('la saison et le duo', () => {
     expect(Object.keys(duoReward({ level: 30, flameDays: 5, mineDone: true, partnerDone: true })).sort()).toEqual(['doubled', 'points']);
   });
 });
+
+describe('aucune Meesh sans débit de points (porteur, 2026-10-10, #10011)', () => {
+  it('la loi de la frappe n\'offre aucun autre chemin que les points : ni fragment, ni frappe gratuite', async () => {
+    const mintLaw = await import('../../utils/game/mint.js');
+    const chestLaw = await import('../../utils/game/chest.js');
+    expect(Object.keys(mintLaw).filter((name) => /fragment|free|gratuit/i.test(name))).toEqual([]);
+    expect(Object.keys(chestLaw).filter((name) => /meesh/i.test(name))).toEqual([]);
+  });
+
+  it('toute frappe possible débite son prix entier, jamais zéro', async () => {
+    const { previewMint, meeshPrice } = await import('../../utils/game/mint.js');
+    for (const mintedLifetime of [0, 9, 10, 99, 100, 999, 5000]) {
+      for (const debitable of [0, 1220, 1221, 16_556, 1_000_000]) {
+        const preview = previewMint({ score: debitable, mintedLifetime, debitablePoints: debitable, levelCap: null, steps: null });
+        expect(preview.price).toBe(meeshPrice(mintedLifetime + 1));
+        expect(preview.price).toBeGreaterThan(0);
+        if (preview.canMint) expect(debitable).toBeGreaterThanOrEqual(preview.price);
+        else expect(preview.missingPoints).toBe(preview.price - debitable);
+      }
+    }
+  });
+
+  it('la requête de frappe ne se paie qu\'en points : « payWith: fragments » est refusée à la lecture', async () => {
+    const { meeshMintRequestSchema } = await import('../../types/game.js');
+    const requestId = '01J9ZZZZZZZZZZZZZZZZZZZZZZ';
+    expect(meeshMintRequestSchema.safeParse({ requestId, payWith: 'fragments' }).success).toBe(false);
+    expect(meeshMintRequestSchema.safeParse({ requestId }).success).toBe(true);
+  });
+});

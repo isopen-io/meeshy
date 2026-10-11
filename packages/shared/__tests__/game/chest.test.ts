@@ -176,3 +176,14 @@ describe('les fragments de Meesh', () => {
     expect(meeshFragmentProgress({ earned: Number.NaN, spent: 0 })).toEqual({ held: 0, perMeesh: 5 });
   });
 });
+
+describe('le coffre donne au moins 500 points (porteur, 2026-10-10, 3e précision)', () => {
+  it('500 points au jour le plus léger, 10 000 au plus lourd, la Gloire de 50 à 1 000', () => {
+    expect(chestPointsForEffort(0)).toBe(500);
+    expect(chestPointsForEffort(300)).toBe(500);
+    expect(chestPointsForEffort(4500)).toBe(10_000);
+    expect(CHEST_ODDS.minPoints).toBe(500);
+    expect(CHEST_ODDS.minGlory).toBe(50);
+    expect(CHEST_ODDS.maxGlory).toBe(1000);
+  });
+});
