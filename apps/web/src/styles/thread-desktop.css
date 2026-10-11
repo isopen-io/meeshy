@@ -47,11 +47,14 @@
   }
 
   /* LES CARTES GARDENT UNE LARGEUR DE CARTE — celles de la planche « Thread »
-     (vocal et fichier en `inline-flex`), plutôt que toute la colonne. */
-  .voice-card {
+     (vocal et fichier en `inline-flex`), plutôt que toute la colonne. DANS
+     UNE RANGÉE DE MESSAGE seulement (`[data-message]`, plate ou bulle) : la
+     feuille vaut pour tout le document une fois le chunk du fil chargé, et la
+     médiathèque de la conversation rend les mêmes cartes en rangées de liste. */
+  [data-message] .voice-card {
     max-width: 28rem;
   }
-  .file-card {
+  [data-message] .file-card {
     max-width: 24rem;
   }
   [data-reading-mode] [data-quote-card] {
