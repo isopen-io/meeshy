@@ -93,14 +93,19 @@ export type WorldSeedReport = {
  * porteur ne les a pas acceptés (#10057).
  *
  * `allowAnonymousFiles` reste semé FERMÉ : la porte des fichiers génériques ne
- * s'ouvre pas, la liste des familles la remplace. `allowViewHistory: false` :
- * un invité lit le salon depuis son arrivée, comme tout anonyme (#4169) — la
- * planche « Onboarding » montre d'ailleurs un fil qui commence à « {nom} a
- * rejoint World Wide ».
+ * s'ouvre pas, la liste des familles la remplace. `allowViewHistory: true`
+ * (décision porteur du 2026-10-11, #10099) : qui entre dans World Wide, invité
+ * comme inscrit, lit ce qui s'y est dit avant lui — le droit est gravé à
+ * l'entrée (`link-admission.ts`), et un salon vide de tout historique n'est
+ * pas une conversation du monde entier.
  *
  * Le seed ne réécrit jamais ces termes sur un lien existant, à une exception :
  * un lien semé AVANT la colonne `allowedAttachmentKinds` (liste vide) la reçoit
- * — jamais un choix qu'un administrateur a posé depuis.
+ * — jamais un choix qu'un administrateur a posé depuis. Un historique coupé
+ * depuis par un administrateur ou un hôte reste donc coupé au démarrage
+ * suivant ; le lien et les entrants semés avec l'ancien terme
+ * `allowViewHistory: false` se réalignent UNE fois, par la migration
+ * `packages/shared/prisma/migrations/2026-10-11-world-wide-history-open.mongodb.js`.
  */
 export const WORLD_SHARE_LINK_TERMS = {
   name: WORLD_CONVERSATION_TITLE,
@@ -109,7 +114,7 @@ export const WORLD_SHARE_LINK_TERMS = {
   allowAnonymousMessages: true,
   allowAnonymousFiles: false,
   allowAnonymousImages: false,
-  allowViewHistory: false,
+  allowViewHistory: true,
   requireAccount: false,
   requireNickname: true,
   requireEmail: false,

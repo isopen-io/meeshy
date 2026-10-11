@@ -401,6 +401,8 @@ const en = {
   'profile.avatar.updated': 'Profile photo updated',
   'profile.avatar.error': "Couldn't update the profile photo",
   'profile.banner.edit': 'Edit banner',
+  'profile.avatar.view': 'View profile photo full screen',
+  'profile.banner.view': 'View banner full screen',
   'profile.banner.updated': 'Banner updated',
   'profile.banner.error': "Couldn't update the banner",
   'profile.image.uploading': 'Uploading',

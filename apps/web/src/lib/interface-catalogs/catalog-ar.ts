@@ -400,6 +400,8 @@ const ar = {
   'profile.avatar.updated': 'تم تحديث صورة الملف الشخصي',
   'profile.avatar.error': 'تعذّر تحديث صورة الملف الشخصي',
   'profile.banner.edit': 'تعديل صورة الغلاف',
+  'profile.avatar.view': 'عرض صورة الملف الشخصي بملء الشاشة',
+  'profile.banner.view': 'عرض صورة الغلاف بملء الشاشة',
   'profile.banner.updated': 'تم تحديث صورة الغلاف',
   'profile.banner.error': 'تعذّر تحديث صورة الغلاف',
   'profile.image.uploading': 'جارٍ الإرسال',

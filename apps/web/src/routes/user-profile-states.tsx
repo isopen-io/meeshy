@@ -89,6 +89,14 @@ export function ProfileSkeleton({ language }: { readonly language: InterfaceLang
         <span className="mt-3 block h-4 w-32 rounded-chip" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)' }} />
         <span className="mt-2 block h-3 w-24 rounded-chip" style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)' }} />
       </div>
+      <ProfileBodySkeletonParts />
+    </div>
+  );
+}
+
+function ProfileBodySkeletonParts() {
+  return (
+    <>
       <div className="grid grid-cols-3 gap-2">
         {[0, 1, 2].map((slot) => (
           <span key={slot} className="block rounded-card" style={{ ...SECTION_CARD_STYLE, height: 64 }} />
@@ -97,6 +105,19 @@ export function ProfileSkeleton({ language }: { readonly language: InterfaceLang
       {[0, 1].map((slot) => (
         <span key={slot} className="block rounded-card" style={{ ...SECTION_CARD_STYLE, height: 140 }} />
       ))}
+    </>
+  );
+}
+
+/**
+ * **LE CORPS SEUL** (#10092) — sous une identité AMORCÉE par ce qu'on savait de
+ * la personne touchée : le nom et l'avatar sont déjà là, seuls la relation et
+ * les compteurs attendent la réponse.
+ */
+export function ProfileBodySkeleton({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div data-profile-body-skeleton aria-busy="true" aria-label={translate(language, 'userProfile.loading')} className="grid gap-6">
+      <ProfileBodySkeletonParts />
     </div>
   );
 }
@@ -232,6 +253,7 @@ export function ProfileFailureNotice({
 }) {
   const notice = FAILURE_NOTICE[failure];
   return (
+    <div data-profile-failure={failure}>
     <ProfileNotice
       glyph={notice.glyph}
       tone={notice.tone}
@@ -240,5 +262,6 @@ export function ProfileFailureNotice({
       detail={translate(language, notice.body)}
       {...(failureMayRetry(failure) ? { action: { label: translate(language, 'profile.retry'), onAction: onRetry } } : {})}
     />
+    </div>
   );
 }

@@ -1024,6 +1024,19 @@ export default defineConfig({
            * pour la même raison : dev était à 90,00 Ko pile, et la seule entropie
            * des empreintes faisait basculer le gate (mesuré : 90,01 → 89,9 Ko).
            */
+          /**
+           * LES LOIS PURES DU TRANSPORT MÉDIA (`lib/view/media-transport.ts`) —
+           * temps, vitesses, recherche : lues par le fil, ses visionneuses, le
+           * mini-lecteur, les accusés et le composant de barre de lecture.
+           * Quand Rollup les sort en morceau partagé (2026-10-11, après que la
+           * fiche de profil a monté la visionneuse, #10092), il le nommait
+           * d'après le fichier, `media-transport-…` : le motif du budget
+           * `media_transport` (`^assets/media-transport-`), réservé au
+           * COMPOSANT chargé par `import()`, le comptait alors, et ses importeurs
+           * statiques — légitimes, ce sont des fonctions pures — faisaient
+           * rougir `dynamic_only`. Un nom qui ne commence pas par ce préfixe.
+           */
+          if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },

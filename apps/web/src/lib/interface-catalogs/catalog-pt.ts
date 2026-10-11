@@ -405,6 +405,8 @@ const pt = {
   'profile.avatar.updated': 'Foto de perfil atualizada',
   'profile.avatar.error': 'Não foi possível atualizar a foto de perfil',
   'profile.banner.edit': 'Editar banner',
+  'profile.avatar.view': 'Ver a foto de perfil em tela cheia',
+  'profile.banner.view': 'Ver o banner em tela cheia',
   'profile.banner.updated': 'Banner atualizado',
   'profile.banner.error': 'Não foi possível atualizar o banner',
   'profile.image.uploading': 'Enviando',

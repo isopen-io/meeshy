@@ -5,6 +5,7 @@ import MeeshySDK
 /// #10093 — sur la bannière d'une fiche : le cercle de niveau surmonté du NOM du niveau, et le blason du rang avec
 /// le NOM du rang. Rien d'autre du jeu — et jamais la Flamme : aucun réglage du jeu ne permet à son propriétaire de
 /// la montrer, donc elle reste masquée partout sur une fiche.
+@MainActor
 final class GameBannerBadgeModelTests: XCTestCase {
 
     private func standing(flame: FlameFormKey? = .brasier, rank: GloryRank = .voix) -> GameStanding {

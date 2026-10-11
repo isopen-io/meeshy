@@ -21,10 +21,6 @@ extension UserProfileSheet {
             aboutSection
             voiceSection
             if !isCurrentUser { actionsSection }
-            if !isCurrentUser, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
-                gameSection.build(userId, displayUser.displayName ?? displayUser.username)
-                    .padding(.horizontal, MeeshySpacing.xl)
-            }
             statsSection
         }
         .confirmationDialog(
@@ -406,8 +402,9 @@ extension UserProfileSheet {
     // MARK: - Compact stats band
 
     /// A small horizontal band of mini stat chips + member-since, replacing the
-    /// full stats stack. Triggers `loadStatsIfNeeded()` on appear. Achievements
-    /// grid is dropped here for compactness.
+    /// full stats stack. The figures are read with the profile when the sheet
+    /// opens (#10093) — cached first, then synchronized. Achievements grid is
+    /// dropped here for compactness.
     @ViewBuilder
     var compactStatsBand: some View {
         // Aucune marge horizontale ici : `profileSection` porte déjà celles de
@@ -442,12 +439,6 @@ extension UserProfileSheet {
                             .shimmer()
                     }
                 }
-            } else {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        Task { await loadStatsIfNeeded() }
-                    }
             }
         }
     }

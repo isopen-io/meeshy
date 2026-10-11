@@ -4,6 +4,7 @@ import XCTest
 /// #10093 — la bannière ou la photo ouverte en plein écran se referme d'un
 /// glissement vers le bas : l'image suit le doigt, le fond s'éclaircit avec
 /// elle, et le geste reste annulable tant qu'on ne l'a pas mené assez loin.
+@MainActor
 final class FullscreenDismissDragTests: XCTestCase {
 
     func test_backdropOpacity_atRest_isOpaque() {

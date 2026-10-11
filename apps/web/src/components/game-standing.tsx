@@ -2,10 +2,9 @@ import type { UserGameProfileResponse } from '@meeshy/shared/types/game';
 
 import { shownStanding } from '@/lib/game/ladder';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { flameFormName, formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
+import { formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 
-import { Flame } from './game/flame';
 import { LevelRing } from './game/level-ring';
 import { MeeshCoin } from './game/meesh-coin';
 import { RankBlason } from './game/rank-blason';
@@ -20,7 +19,8 @@ import { GAME_INK, GAME_INK_2 } from './game-surface';
  * qu'un jeu existe.
  *
  * Jamais un compte exact : pas de Gloire, pas de jours de série, pas de Meeshes — l'anneau n'a pas de
- * jauge (`progress={null}`), la Flamme se nomme par sa FORME, le trésor par son PALIER. La même loi qu'au
+ * jauge (`progress={null}`), le trésor se nomme par son PALIER. La Flamme ne se montre PAS (#10092) :
+ * aucun réglage ne permet à son propriétaire de la rendre visible, elle est donc masquée toujours. La même loi qu'au
  * serveur ; si elle change, c'est le contrat qui bouge, pas ce fichier.
  */
 
@@ -60,20 +60,12 @@ export function GameStanding({ game }: { readonly game: VisibleStanding }) {
           <RankBlason {...shownRank(standing)} level={standing.level} size={56} label={rankName(standing.rank)} />
         </div>
       )}
-      {treasuryTier === null && standing?.flame == null ? null : (
+      {treasuryTier === null ? null : (
         <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption" style={{ color: GAME_INK_2 }}>
-          {treasuryTier === null ? null : (
-            <li className="flex items-center gap-1.5" data-game-standing-treasury={treasuryTier}>
-              <MeeshCoin side="obverse" size={20} edition="silver" />
-              {gameText('game.standing.treasury', { tier: treasuryName(treasuryTier) })}
-            </li>
-          )}
-          {standing?.flame == null ? null : (
-            <li className="flex items-center gap-1.5" data-game-standing-flame={standing.flame}>
-              <Flame form={standing.flame} size={20} />
-              {gameText('game.standing.flame', { form: flameFormName(standing.flame) })}
-            </li>
-          )}
+          <li className="flex items-center gap-1.5" data-game-standing-treasury={treasuryTier}>
+            <MeeshCoin side="obverse" size={20} edition="silver" />
+            {gameText('game.standing.treasury', { tier: treasuryName(treasuryTier) })}
+          </li>
         </ul>
       )}
     </div>
@@ -109,12 +101,6 @@ export function GameStandingMini({ game }: { readonly game: VisibleStanding }) {
         <>
           <MeeshCoin side="obverse" size={22} edition="silver" />
           <span className="sr-only">{gameText('game.standing.treasury', { tier: treasuryName(treasuryTier) })}</span>
-        </>
-      )}
-      {standing?.flame == null ? null : (
-        <>
-          <Flame form={standing.flame} size={22} />
-          <span className="sr-only">{gameText('game.standing.flame', { form: flameFormName(standing.flame) })}</span>
         </>
       )}
     </span>

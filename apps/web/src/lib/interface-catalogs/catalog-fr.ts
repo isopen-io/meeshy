@@ -393,6 +393,8 @@ const fr = {
   'profile.avatar.updated': 'Photo de profil mise à jour',
   'profile.avatar.error': 'Impossible de mettre à jour la photo de profil',
   'profile.banner.edit': 'Modifier la bannière',
+  'profile.avatar.view': 'Voir la photo de profil en plein écran',
+  'profile.banner.view': 'Voir la bannière en plein écran',
   'profile.banner.updated': 'Bannière mise à jour',
   'profile.banner.error': 'Impossible de mettre à jour la bannière',
   'profile.image.uploading': 'Envoi en cours',

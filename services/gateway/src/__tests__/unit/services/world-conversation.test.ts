@@ -490,6 +490,53 @@ describe('ensureWorldConversation — le lien semé dit ce qu’un invité peut 
   });
 });
 
+describe('ensureWorldConversation — un entrant lit l’historique du salon (#10099, décision porteur 2026-10-11)', () => {
+  const GUEST_PERMISSIONS = {
+    canSendMessages: true,
+    canSendFiles: false,
+    canSendImages: false,
+    canSendVideos: false,
+    canSendAudios: true,
+    canSendLocations: false,
+    canSendLinks: false,
+  };
+
+  function enterWorld(prisma: ReturnType<typeof makeDb>, id: string, permissions: Record<string, boolean>) {
+    const [conversation] = worldConversation(prisma);
+    prisma.participant.rows.push({ id, conversationId: conversation.id, type: 'anonymous', role: 'member', isActive: true, permissions });
+  }
+
+  it('le lien créé ouvre l’historique aux entrants', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(true);
+  });
+
+  it('un historique qu’un administrateur a coupé sur le lien n’est pas rouvert par un démarrage suivant', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    prisma.conversationShareLink.rows[0].allowViewHistory = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(false);
+  });
+
+  it('un entrant à qui l’historique a été coupé ne le retrouve pas au démarrage suivant', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    enterWorld(prisma, 'guest-closed', { ...GUEST_PERMISSIONS, canViewHistory: false });
+
+    await seed(prisma);
+
+    expect(prisma.participant.rows.find((row) => row.id === 'guest-closed')?.permissions).toEqual({ ...GUEST_PERMISSIONS, canViewHistory: false });
+    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('ensureWorldConversation — idempotence', () => {
   it('un double appel ne duplique rien : une conversation, un lien, une participation par compte', async () => {
     const prisma = makeDb();
