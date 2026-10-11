@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
@@ -252,9 +253,10 @@ describe('la feuille de l’aperçu', () => {
     await sheet(() => undefined);
     const panel = document.querySelector('[data-preview-scrim]')?.nextElementSibling;
     const classes = panel?.className.split(' ') ?? [];
-    expect(classes).toContain('top-[calc(var(--safe-top)+6px)]');
-    expect(classes).toContain('md:top-[7.5dvh]');
+    expect((panel as HTMLElement | undefined)?.style.top).toBe('var(--preview-top, calc(var(--safe-top) + 6px))');
     expect(classes).toContain('md:bottom-[7.5dvh]');
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url).pathname, 'utf8');
+    expect(css).toMatch(/@media \(min-width: 768px\) \{\s*\[data-conversation-preview\] \{\s*--preview-top: 7\.5dvh;/);
   });
 
   test('toucher HORS de l’aperçu le ferme', async () => {

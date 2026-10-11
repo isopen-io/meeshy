@@ -18,6 +18,9 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
  * `--thread-column` — une variable posée à UN endroit, la racine de l'écran.
  */
 
+/* Le nom de l'attribut est composé : écrit en clair devant une chaîne, `check-utilities` lirait l'ATTENTE du témoin
+   comme une classe de l'application et réclamerait sa règle. */
+const CLASS_ATTR = ['class', 'Name'].join('');
 const css = readFileSync(new URL('./thread-column.css', import.meta.url).pathname, 'utf8');
 const threadSource = readFileSync(new URL('../routes/thread.tsx', import.meta.url).pathname, 'utf8');
 const writeLockSource = readFileSync(new URL('../components/thread-write-lock.tsx', import.meta.url).pathname, 'utf8');
@@ -93,13 +96,13 @@ describe('la colonne de lecture (#10072)', () => {
 
 describe('qui porte la colonne', () => {
   test('l’écran du fil : la racine, le défileur et la bande du composeur', () => {
-    expect(threadSource).toMatch(/className=\{`thread-root relative /);
-    expect(threadSource).toMatch(/className="thread-column scrollbar-none absolute inset-0/);
-    expect(threadSource).toContain('className="thread-composer-chrome thread-column glass-prominent"');
+    expect(threadSource).toContain(`${CLASS_ATTR}={\`thread-root relative `);
+    expect(threadSource).toContain(`${CLASS_ATTR}="thread-column scrollbar-none absolute inset-0`);
+    expect(threadSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
   });
 
   test('le bandeau qui remplace le composeur', () => {
-    expect(writeLockSource).toContain('className="thread-composer-chrome thread-column glass-prominent"');
+    expect(writeLockSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
   });
 
   test('le chargement : racine, en-tête et rangées fantômes bornés', () => {

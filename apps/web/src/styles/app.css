@@ -848,3 +848,14 @@
 :root[dir='rtl'] [data-admin-shell] .text-start {
   text-align: left;
 }
+
+/* L'APERÇU D'UNE CONVERSATION, AU BUREAU (#10070) — sur un téléphone le panneau
+   part sous l'encoche (`--safe-top` + 6 px, posé en style inline par
+   `conversation-preview-sheet.tsx`) ; dès 768 px il ne prend plus que 85 % de
+   la hauteur, centré : la variable remplace le haut, la classe `md:bottom-[7.5dvh]`
+   le bas. */
+@media (min-width: 768px) {
+  [data-conversation-preview] {
+    --preview-top: 7.5dvh;
+  }
+}

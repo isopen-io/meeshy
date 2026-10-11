@@ -140,8 +140,9 @@ export function ConversationPreviewSheet({
       />
       <div
         ref={panel}
-        className="absolute inset-x-0 top-[calc(var(--safe-top)+6px)] bottom-0 mx-auto flex w-full flex-col sm:bottom-4 md:top-[7.5dvh] md:bottom-[7.5dvh]"
+        className="absolute inset-x-0 bottom-0 mx-auto flex w-full flex-col sm:bottom-4 md:bottom-[7.5dvh]"
         style={{
+          top: 'var(--preview-top, calc(var(--safe-top) + 6px))',
           maxWidth: 640,
           transform: dragY === 0 ? undefined : `translateY(${dragY}px)`,
         }}
