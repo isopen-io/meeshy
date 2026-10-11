@@ -1,5 +1,3 @@
-import { createContext } from 'react';
-
 import { GlobalUserRole, globalRoleLevel } from '@meeshy/shared/types/role-types';
 
 import { WORLD_IDENTIFIER } from '../lens/world-pin';
@@ -32,21 +30,3 @@ export function opensWorldParticipantCards(params: {
 }): boolean {
   return params.conversationIdentifier === WORLD_IDENTIFIER && mayOpenWorldParticipantCard(params.role);
 }
-
-/**
- * Ce que le fil remet à chaque auteur quand la porte est ouverte : ouvrir la
- * fiche d'un participant (`senderId`), et NOMMER ce geste pour le lecteur
- * d'écran.
- */
-export type WorldParticipantCardOpener = {
-  readonly open: (participantId: string) => void;
-  readonly labelFor: (name: string) => string;
-};
-
-/**
- * Posé par l'hôte du fil (`components/world-participant-card-host.tsx`), lu par
- * l'avatar et le nom de chaque auteur (`AuthorAvatar`, `PersonName`). `null` —
- * hors World Wide, ou lecteur qui n'est pas de l'équipe — : rien ne change, un
- * anonyme reste muet et un compte mène à son profil.
- */
-export const WorldParticipantCardContext = createContext<WorldParticipantCardOpener | null>(null);

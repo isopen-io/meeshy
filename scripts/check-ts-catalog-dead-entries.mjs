@@ -438,7 +438,10 @@ export const callersIn = (contents, nsNames) => {
 // appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
 // Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
 // Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 275;
+// 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
+// la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
+// ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

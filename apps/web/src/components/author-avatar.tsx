@@ -3,7 +3,7 @@ import { useContext, type ComponentProps, type CSSProperties } from 'react';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import { useAuthorMood } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
-import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-access';
+import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
 
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger, ConversationDetailsContext } from './avatar-menu';

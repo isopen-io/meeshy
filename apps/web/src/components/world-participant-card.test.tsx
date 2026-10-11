@@ -11,7 +11,7 @@ import { createSessionStore, type SessionStoreApi } from '@/lib/api/session';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { WorldParticipantCardContext, type WorldParticipantCardOpener } from '@/lib/view/world-participant-card-access';
+import { WorldParticipantCardContext, type WorldParticipantCardOpener } from '@/lib/view/world-participant-card-context';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Bubble } from './bubble';

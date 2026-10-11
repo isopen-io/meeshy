@@ -5,7 +5,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
-import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-access';
+import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
 import { Link } from '@/routes/route-table';
 
 /**
