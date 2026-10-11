@@ -380,6 +380,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/og', why: "page d'aperçu des robots (#10192) : 302 vers la cible web publique d'un lien actif (ce que l'ouverture du lien donne à quiconque le tient, sans clic compté), aperçu d'une invitation ouverte et publique, sinon générique sans rien de la cible" },
   { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },

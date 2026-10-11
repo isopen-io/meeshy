@@ -54,6 +54,8 @@ export type LinkUnfurlSource = {
   readonly expiresAt: Date | null;
   readonly maxUses: number | null;
   readonly currentUses: number;
+  /** Un lien borné à des plages d'adresses n'est pas PUBLIC (#10192) : son aperçu reste générique. */
+  readonly allowedIpRanges: readonly string[];
   readonly conversation: {
     readonly title: string | null;
     readonly isActive: boolean;
@@ -74,6 +76,7 @@ const linkUnfurlSelect = {
   expiresAt: true,
   maxUses: true,
   currentUses: true,
+  allowedIpRanges: true,
   conversation: { select: { title: true, isActive: true, closedAt: true } },
   creator: {
     select: {
@@ -158,8 +161,13 @@ function unfurlLanguage(creator: LinkUnfurlSource['creator'], acceptLanguage: st
   return firstServed(recipientLanguages(creator)) ?? firstServed(acceptedLanguages(acceptLanguage)) ?? DEFAULT_LANGUAGE;
 }
 
-const isOpen = (source: LinkUnfurlSource, now: Date): boolean =>
-  isShareLinkOpen(source, now) && !isConversationClosed(source.conversation);
+/**
+ * Un lien dont l'aperçu NOMME son titre et son hôte : ouvert (actif, non échu,
+ * non épuisé, conversation non close) ET public — aucune plage d'adresses ne le
+ * borne (#10192). Tout autre lien rend l'aperçu générique.
+ */
+const isPublicAndOpen = (source: LinkUnfurlSource, now: Date): boolean =>
+  isShareLinkOpen(source, now) && !isConversationClosed(source.conversation) && source.allowedIpRanges.length === 0;
 
 /** L'hôte que l'invitation NOMME : un compte actif, non supprimé, dont le nom (sinon le pseudo) se lit une fois nettoyé. */
 function nameableHost(creator: LinkUnfurlSource['creator']): string | null {
@@ -187,7 +195,7 @@ export function composeLinkUnfurl(params: {
   readonly now: Date;
 }): LinkUnfurl {
   const { source, identifier, acceptLanguage, origin, now } = params;
-  const live = source !== null && isUnfurlableIdentifier(identifier) && isOpen(source, now) ? source : null;
+  const live = source !== null && isUnfurlableIdentifier(identifier) && isPublicAndOpen(source, now) ? source : null;
   const host = live ? nameableHost(live.creator) : null;
   const lang = unfurlLanguage(host ? live?.creator ?? null : null, acceptLanguage);
   const copy = UNFURL_COPY[lang];
