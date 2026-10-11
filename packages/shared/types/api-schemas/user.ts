@@ -38,7 +38,8 @@ export const userPermissionsSchema = {
     // vérifie contre son PRODUCTEUR — témoin :
     // `services/gateway/.../admin/me-permissions.test.ts` § « le schéma PARTAGÉ
     // déclare les mêmes clés que la projection ».
-    canManageAgent: { type: 'boolean', description: 'Can manage the agent service' }
+    canManageAgent: { type: 'boolean', description: 'Can manage the agent service' },
+    canManageGame: { type: 'boolean', description: 'Can schedule the Game seasons calendar (#10016)' }
   }
 } as const;
 

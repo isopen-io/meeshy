@@ -23,13 +23,14 @@ import {
   SEASON_SEAL_PRICE,
   SEASON_STEPS,
   claimSeasonStep,
-  seasonOfMoment,
   seasonProgress,
   seasonSettlement,
   seasonStarsForMission,
   type SeasonStarSource,
 } from '@meeshy/shared/utils/game/season';
 import { seasonCupTrophy } from '@meeshy/shared/utils/game/trophies';
+import { scheduledSeasonOfMoment, seasonDefinitionOf } from '@meeshy/shared/utils/game/season-schedule';
+import { seasonSchedule } from './SeasonScheduleService';
 import { GameRefusal } from './GameRefusal';
 import type { GameNotifier } from './GameNotifier';
 import { GloryService } from './GloryService';
@@ -77,8 +78,16 @@ export class SeasonService {
 
   /** La saison en cours pour ce compte (son fuseau), `null` avant la première. */
   private async currentNumber(userId: string, now: Date): Promise<number | null> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
-    return seasonOfMoment({ dayKey: dayKeyOf(now, row?.timezone), minuteOfDay: minuteOfDayInTimezone(now, row?.timezone) });
+    const [row, schedule] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }),
+      seasonSchedule(this.prisma),
+    ]);
+    return scheduledSeasonOfMoment(schedule, { dayKey: dayKeyOf(now, row?.timezone), minuteOfDay: minuteOfDayInTimezone(now, row?.timezone) });
+  }
+
+  /** Les points d'une étape ordinaire de cette saison, lus au calendrier servi (#10016). */
+  private async stepPointsOf(season: number): Promise<number | undefined> {
+    return seasonDefinitionOf(await seasonSchedule(this.prisma), season)?.stepPoints;
   }
 
   /** Des étoiles gagnées : une mission achevée (par difficulté) ou un duo mené à bout. */
@@ -146,6 +155,7 @@ export class SeasonService {
       stepsReached: seasonProgress({ stars: state.stars }).steps,
       claimed: state.claimedSteps,
       sealOwned: state.sealOwned,
+      stepPoints: await this.stepPointsOf(season),
     });
 
     if (verdict.allowed === false) {
@@ -216,7 +226,7 @@ export class SeasonService {
   }
 
   private async alreadyClaimed(userId: string, season: number, step: number, sealOwned: boolean): Promise<SeasonClaimResponse> {
-    const verdict = claimSeasonStep({ season, step, stepsReached: 40, claimed: [], sealOwned });
+    const verdict = claimSeasonStep({ season, step, stepsReached: 40, claimed: [], sealOwned, stepPoints: await this.stepPointsOf(season) });
     if (verdict.allowed === false) throw new GameRefusal('SEASON_STEP_NOT_FOUND');
     return { status: 'already-claimed', step, reward: verdict.reward, seal: verdict.seal, completed: false, gloryGained: 0, score: await this.score(userId) };
   }

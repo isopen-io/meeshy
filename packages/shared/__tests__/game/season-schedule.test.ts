@@ -24,7 +24,7 @@ import {
   seasonStatusOf,
   type SeasonSchedule,
 } from '../../utils/game/season-schedule';
-import { seasonAppEvent, seasonAppEventsYaml, validateAppEvent } from '../../utils/game/season-app-events';
+import { replaceAppEventsBlock, seasonAppEvent, seasonAppEventsYaml, validateAppEvent } from '../../utils/game/season-app-events';
 
 const SEED: SeasonSchedule = {
   revision: 1,
@@ -212,5 +212,28 @@ describe("l'événement in-app App Store d'une saison", () => {
     expect(yaml).toContain('badge: NEW_SEASON');
     expect(yaml).toContain('event_start: 2026-12-21T00:00:00+01:00');
     expect(yaml).toContain('fr-FR:');
+  });
+});
+
+describe("le bloc app_events d'andp.yml", () => {
+  const andp = ['app:', '  name: x', 'store:', '  platform: IOS', '', '  accessibility:', '    IPHONE:', '      dark_interface: true', ''].join('\n');
+  const block = seasonAppEventsYaml([seasonAppEvent(SEED, 1, { dayKey: '2026-10-11', minuteOfDay: 600 })!]);
+
+  it('s’ajoute à la fin de store:, puis se remplace sans doubler ni toucher au reste', () => {
+    const once = replaceAppEventsBlock(andp, block);
+    expect(once.startsWith('app:\n  name: x\nstore:\n  platform: IOS')).toBe(true);
+    expect(once).toContain('      dark_interface: true\n\n  app_events:\n    - key: saison-1');
+    const twice = replaceAppEventsBlock(once, block);
+    expect(twice).toBe(once);
+    const emptied = replaceAppEventsBlock(once, seasonAppEventsYaml([]));
+    expect(emptied).toContain('  app_events: []');
+    expect(emptied).not.toContain('saison-1');
+    expect(emptied).toContain('      dark_interface: true');
+  });
+
+  it('respecte une clé de premier niveau qui suit store:', () => {
+    const out = replaceAppEventsBlock(`${andp}after:\n  k: v\n`, block);
+    expect(out).toContain('- key: saison-1');
+    expect(out.indexOf('after:')).toBeGreaterThan(out.indexOf('- key: saison-1'));
   });
 });
