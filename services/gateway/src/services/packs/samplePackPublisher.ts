@@ -8,7 +8,8 @@
  *
  * Idempotent : un pack déjà publié ne refait rien ; un pack en attente n'est que
  * publié. Refuse toute passerelle qui n'est ni le staging ni une machine locale
- * (« rien de fictif en production »).
+ * (« rien de fictif en production »), et ne suit aucune redirection : les
+ * identifiants ne partent que vers l'hôte vérifié.
  *
  * FAÇADE : `scripts/publish-sample-sticker-pack.ts`.
  */
@@ -59,7 +60,7 @@ export type PublishOutcome = 'already-published' | 'published';
 type Envelope = { readonly success?: boolean; readonly data?: Record<string, unknown>; readonly code?: string; readonly message?: string };
 
 async function call(deps: PublishSamplePackDeps, path: string, init: RequestInit): Promise<{ readonly status: number; readonly body: Envelope }> {
-  const response = await deps.fetch(new URL(`/api/v1${path}`, deps.baseUrl), init);
+  const response = await deps.fetch(new URL(`/api/v1${path}`, deps.baseUrl), { ...init, redirect: 'error' });
   const body = (await response.json().catch(() => ({}))) as Envelope;
   return { status: response.status, body };
 }

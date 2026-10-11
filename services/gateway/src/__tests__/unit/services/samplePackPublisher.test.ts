@@ -106,3 +106,24 @@ describe('la cible : le staging ou une machine locale, jamais la production', ()
     expect(spy).not.toHaveBeenCalled();
   });
 });
+
+describe('une redirection n’emmène jamais les identifiants ailleurs', () => {
+  it('refuse de suivre une redirection : la cible n’est jamais atteinte et la publication échoue', async () => {
+    const elsewhere: FastifyInstance = Fastify({ logger: false, forceCloseConnections: true });
+    const hits: string[] = [];
+    elsewhere.all('/*', async (request) => { hits.push(request.url); return { success: true, data: { token: 'volé' } }; });
+    await elsewhere.listen({ port: 0, host: '127.0.0.1' });
+    const target = elsewhere.server.address();
+    const redirector: FastifyInstance = Fastify({ logger: false, forceCloseConnections: true });
+    redirector.all('/*', async (request, reply) => reply.code(307).header('location', `http://127.0.0.1:${typeof target === 'object' && target !== null ? target.port : 0}${request.url}`).send());
+    await redirector.listen({ port: 0, host: '127.0.0.1' });
+    const address = redirector.server.address();
+    try {
+      await expect(publishSampleStickerPack(deps(`http://127.0.0.1:${typeof address === 'object' && address !== null ? address.port : 0}`))).rejects.toThrow();
+      expect(hits).toEqual([]);
+    } finally {
+      await redirector.close();
+      await elsewhere.close();
+    }
+  });
+});
