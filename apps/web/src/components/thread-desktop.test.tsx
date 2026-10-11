@@ -212,10 +212,10 @@ const ruleIn = (block: string, selector: string): string => {
 };
 
 const WIDE = '(min-width: 1024px)';
-const POINTER = '(hover: hover) and (pointer: fine)';
+const POINTER = '(min-width: 1024px) and (hover: hover) and (pointer: fine)';
 
 describe('la feuille de bureau du fil', () => {
-  test('aucune règle hors de ses deux requêtes : le téléphone et le doigt sont inchangés', () => {
+  test('aucune règle hors de ses deux requêtes, toutes deux bornées à 1024 px : le téléphone est inchangé, souris comprise', () => {
     const outside = [WIDE, POINTER].reduce((rest, query) => rest.replace(mediaBlock(query), ''), sheet);
     expect(outside.trim()).toBe('');
   });

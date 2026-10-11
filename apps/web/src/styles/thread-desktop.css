@@ -17,9 +17,9 @@
  * (22, note « base » de la planche). Le verre reste au site unique
  * (`styles/glass.css`) : c'est `ThreadComposerChrome` qui le pose sur le dock.
  *
- * SOUS 1024 PX ET AU DOIGT, CETTE FEUILLE NE DÉCLARE RIEN — aucune règle hors
- * de ses deux requêtes (`components/thread-desktop.test.tsx`) : le téléphone
- * est exactement celui d'avant. Aucune de ces règles ne touche une hauteur de
+ * SOUS 1024 PX, CETTE FEUILLE NE DÉCLARE RIEN — aucune règle hors de ses
+ * deux requêtes, toutes deux bornées à 1024 px (`components/thread-desktop.test.tsx`) :
+ * le téléphone est exactement celui d'avant, souris comprise. Aucune de ces règles ne touche une hauteur de
  * rangée : le virtualiseur n'a rien à remesurer.
  */
 @media (min-width: 1024px) {
@@ -73,7 +73,10 @@
 }
 
 /*
- * AU POINTEUR FIN, LA RANGÉE PLATE RÉPOND AU SURVOL — un voile d'accent
+ * AU POINTEUR FIN, SUR ORDINATEUR, LA RANGÉE PLATE RÉPOND AU SURVOL — bornée
+ * à 1024 px comme le reste : sous ce seuil, la géométrie des rangées que
+ * mesurent les gates du téléphone (Chromium y a un pointeur fin) ne bouge
+ * pas d'un pixel. Un voile d'accent
  * peint en ombre INTÉRIEURE (le fond de la rangée porte déjà la mise en
  * évidence d'un saut et la sélection, en style posé par le composant : une
  * ombre s'y superpose sans les réécrire), et la colonne méta (heure, accusé)
@@ -81,7 +84,7 @@
  * La rangée ÉLUE garde son tampon : `[data-elected='true'] .focal-meta` y
  * prime. Repeint d'une seule rangée, aucun script.
  */
-@media (hover: hover) and (pointer: fine) {
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
   /* La bordure LIBRE de la rangée accueille l'icône « Répondre » du pointeur
      fin (#8899, `thread-menu.css` : 44 px à 4 px du bord, centrée en
      hauteur). Le contenu lui laisse sa place : l'heure révélée au survol ne
