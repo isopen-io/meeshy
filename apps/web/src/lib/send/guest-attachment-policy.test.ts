@@ -32,7 +32,7 @@ const guestSession = (identity: GuestIdentity): SessionState => ({
 
 const account: SessionState = {
   status: 'authenticated',
-  user: { id: 'u-1', username: 'awa', displayName: 'Awa', avatar: null },
+  user: { id: 'u-1', username: 'awa', displayName: 'Awa', avatar: '' },
   token: 'jwt',
   sessionToken: 'session',
   expiresAt: Date.now() + 3_600_000,
