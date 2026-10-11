@@ -408,11 +408,14 @@ export function ChatJoin({
     /* LA LANGUE CHOISIE EST CELLE DE L'INVITÉ (#9710) : elle vient de passer au
        rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
        son interface. Un COMPTE qui rejoint en anonyme garde la sienne (#8816). */
-    if (heldAccountOf(session) === null) deps.adoptInterfaceLanguage(validated.body.language);
+    const guestOnly = heldAccountOf(session) === null;
+    if (guestOnly) deps.adoptInterfaceLanguage(validated.body.language);
     /* LA LANDING NE FAIT ENTRER QUE DANS WORLD WIDE, qui se lit sur `/world`
        (#10100) : une entrée portée par son jeton y mène, même par l'ancienne
-       adresse de jonction qu'une page de la landing en cache vise encore. */
-    deps.go(handedOff ? href('world') : href('thread', { conversation: result.data.conversationId }), true);
+       adresse de jonction qu'une page de la landing en cache vise encore. Pas
+       un COMPTE entré sous son identité anonyme : `/world` le renverrait à la
+       jonction, il ouvre le fil rejoint, dans son application. */
+    deps.go(handedOff && guestOnly ? href('world') : href('thread', { conversation: result.data.conversationId }), true);
     deps.joined();
   }
 
