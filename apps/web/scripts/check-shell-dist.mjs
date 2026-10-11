@@ -22,7 +22,7 @@
  *      marcheraient dessus ;
  *   3. `viewport-fit=cover` est présent — sans lui la safe-area basse
  *      (défaut 3a) n'est jamais exposée dans le dist réellement embarqué ;
- *   4. le `theme-color` sombre `#0b0c14` est présent — sans lui, un flash
+ *   4. le `theme-color` sombre `#09090b` (la surface, #10005) est présent — sans lui, un flash
  *      blanc précède l'application au démarrage à froid en schéma sombre.
  *
  * Vu ROUGIR sur une valeur falsifiée : un `vite build` SANS `MEESHY_TARGET`
@@ -119,9 +119,9 @@ export function auditShellDist(html, files) {
     );
   }
 
-  if (!html.includes('#0b0c14')) {
+  if (!html.includes('#09090b')) {
     violations.push(
-      'theme-color #0b0c14 absent de index.html — un flash blanc précède l’application au ' +
+      'theme-color #09090b absent de index.html — un flash blanc précède l’application au ' +
         'démarrage à froid en schéma sombre.',
     );
   }
@@ -376,7 +376,7 @@ async function main() {
   console.log(
     `  ${OUT_DIR}/ honore le contrat de la variante B : base root-absolue sans balise <base>, ` +
       'sans service worker, ' +
-      'viewport-fit=cover, theme-color #0b0c14 ; lien profond /c/c-deploiement monte le fil, ' +
+      'viewport-fit=cover, theme-color #09090b ; lien profond /c/c-deploiement monte le fil, ' +
       '/c/zzz-inconnu rend le refus (D-6).',
   );
 }
