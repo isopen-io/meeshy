@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 import { AdminFormActions, AdminFormError, AdminFormStatus, AdminTextArea } from '@/components/admin/form';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { hasIssues, draftOfRow, editBody, validateDraft, type DraftIssues, type SeasonDraft } from '@/lib/admin/game-season-form';
+import { hasIssues, draftOfRow, editBody, validateDraft, type DraftIssues, type SeasonDraft, ADMIN_SEASON_CALENDAR_QUERY_KEY } from '@/lib/admin/game-season-form';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_GAME_SEASONS_QUERY_KEY,
@@ -12,7 +12,6 @@ import {
   type AdminSeasonList,
   type AdminSeasonRow,
 } from '@/lib/api/admin-game-seasons';
-import { seasonCalendarQueryKey } from '@/lib/api/game-season-calendar';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { SeasonFields } from '@/routes/admin-game-seasons-fields';
 import { seasonFailureText } from '@/routes/admin-game-seasons-errors';
@@ -149,7 +148,7 @@ export function SeasonEditor({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ADMIN_GAME_SEASONS_QUERY_KEY }),
       /* Le calendrier que LES JOUEURS lisent : sur ce poste, la copie gardée se relit dès maintenant. */
-      queryClient.invalidateQueries({ queryKey: seasonCalendarQueryKey }),
+      queryClient.invalidateQueries({ queryKey: ADMIN_SEASON_CALENDAR_QUERY_KEY }),
     ]);
   };
 

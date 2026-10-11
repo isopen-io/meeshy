@@ -87,7 +87,6 @@ export const ADMIN_SECTION_TABLE = [
   { id: 'languages', group: 'platform', list: { admin: 'adminLanguages', adm: 'admLanguages' } },
   { id: 'agent', group: 'platform', list: { admin: 'adminAgent', adm: 'admAgent' } },
   { id: 'engagementScale', group: 'platform', list: { admin: 'adminEngagementScale', adm: 'admEngagementScale' } },
-  { id: 'gameSeasons', group: 'platform', list: { admin: 'adminGameSeasons', adm: 'admGameSeasons' } },
   { id: 'settings', group: 'platform', list: { admin: 'adminSettings', adm: 'admSettings' } },
 ] as const;
 

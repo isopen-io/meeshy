@@ -53,8 +53,6 @@ const es = {
   'admin.nav.settings.hint': 'Tu acceso y las preferencias del espacio',
   'admin.nav.engagementScale': 'Baremo de puntos',
   'admin.nav.engagementScale.hint': 'Lo que cada gesto aporta en puntos',
-  'admin.nav.gameSeasons': 'Juego — temporadas',
-  'admin.nav.gameSeasons.hint': 'Programar, aplazar o pausar las temporadas',
   'admin.users.search': 'Buscar una cuenta',
   'admin.users.count': '{count} cuenta(s)',
   'admin.users.unavailable': 'Lista no disponible por ahora.',

@@ -172,3 +172,11 @@ describe('createSeasonCalendarStore', () => {
     expect(scheduledSeasonCalendar(store.get(), 1)?.startDay).toBe('2027-01-04');
   });
 });
+
+describe('la clé du cache du calendrier', () => {
+  test('l’administration invalide la MÊME clé que celle que le Jeu lit', async () => {
+    const { ADMIN_SEASON_CALENDAR_QUERY_KEY } = await import('@/lib/admin/game-season-form');
+    const { seasonCalendarQueryKey } = await import('./game-season-calendar');
+    expect([...ADMIN_SEASON_CALENDAR_QUERY_KEY]).toEqual([...seasonCalendarQueryKey]);
+  });
+});

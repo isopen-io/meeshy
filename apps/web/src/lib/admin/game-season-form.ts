@@ -166,3 +166,11 @@ export function editBody(
     ...(copy !== 'incomplete' && !sameCopy(copy, baseline.copy) ? { copy } : {}),
   };
 }
+
+/**
+ * La clé du calendrier servi dans le cache de requêtes, que l'administration invalide après une écriture. Elle est
+ * RÉPÉTÉE ici, à dessein : l'importer de `lib/api/game-v2-queries` ferait de ce module un chunk partagé entre le Jeu et
+ * l'administration, dont le nom entrerait dans le module d'entrée (`budgets.json › first_paint`). Un témoin
+ * (`game-season-calendar.test.ts`) garde les deux égales.
+ */
+export const ADMIN_SEASON_CALENDAR_QUERY_KEY = ['me', 'game', 'season-calendar'] as const;
