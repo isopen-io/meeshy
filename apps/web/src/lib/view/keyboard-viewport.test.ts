@@ -24,6 +24,7 @@ function fakeHost({
   width = 390,
   height = 844,
   offsetTop = 0,
+  scale = 1,
   scrollHeight = 844,
   withViewport = true,
 }: {
@@ -31,6 +32,7 @@ function fakeHost({
   readonly width?: number;
   readonly height?: number;
   readonly offsetTop?: number;
+  readonly scale?: number;
   readonly scrollHeight?: number;
   readonly withViewport?: boolean;
 } = {}) {
@@ -38,7 +40,7 @@ function fakeHost({
   const properties = new Map<string, string>();
   const attributes = new Map<string, string>();
   const scrolls: Array<readonly [number, number]> = [];
-  const viewport = { width, height, offsetTop };
+  const viewport = { width, height, offsetTop, scale };
   const state = { innerHeight, scrollY: 0, scrollHeight };
   const host: KeyboardViewportHost = {
     get innerHeight() {
@@ -62,6 +64,9 @@ function fakeHost({
           },
           get offsetTop() {
             return viewport.offsetTop;
+          },
+          get scale() {
+            return viewport.scale;
           },
           addEventListener: (type: string, listener: Listener) => {
             const set = listeners.get(type) ?? new Set<Listener>();
@@ -155,6 +160,19 @@ describe('installKeyboardViewport — le clavier lu au visualViewport (#10005)',
     fake.fire('resize');
     fake.viewport.height = 790;
     fake.fire('resize');
+    expect(fake.attributes.has(KEYBOARD_ATTRIBUTE)).toBe(false);
+  });
+
+  test('le zoom au pincement n’est pas un clavier : rien n’est posé, la page zoomée n’est pas ramenée', () => {
+    const fake = fakeHost();
+    installKeyboardViewport(fake.host);
+    fake.viewport.scale = 2;
+    fake.viewport.height = 422;
+    fake.viewport.offsetTop = 300;
+    fake.fire('resize');
+    fake.fire('scroll');
+    expect(fake.scrolls).toEqual([]);
+    expect(fake.properties.has(KEYBOARD_INSET_VAR)).toBe(false);
     expect(fake.attributes.has(KEYBOARD_ATTRIBUTE)).toBe(false);
   });
 
