@@ -437,6 +437,13 @@ final class DeepLinkRouter: ObservableObject {
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
 
+    /// « Entrer dans World Wide » choisi sur l'écran de connexion (#10006).
+    ///
+    /// L'entrée SERVIE par `GET /world` voyage avec le choix : la session
+    /// invitée (portée par `MeeshyApp`) s'ouvre sur la clé qu'elle nomme, sans
+    /// relire le réseau ni écrire d'identifiant en dur.
+    @Published var requestedWorldEntry: WorldEntry?
+
     /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
     /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
     /// visiteur sans compte ne pourrait plus apprendre QUI lui a partagé le

@@ -103,6 +103,8 @@ const HOOK_NAMES = [
   'useDeviceTranslation',
   'useSharedTranslations',
   'useTypistAvatar',
+  // #10003 — ce que le composeur offre : droits du lecteur et familles de l'invité.
+  'useComposerAccess',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [

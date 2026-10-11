@@ -460,6 +460,23 @@ describe('joinLinkAsGuest — POST /api/v1/links/:key/members, corps d’invité
     expect(result.ok ? result.data.mayWrite : null).toBe(false);
   });
 
+  test('les familles de pièces jointes du lien (#10001) voyagent avec la jonction', async () => {
+    const { transport } = fakeTransport(
+      served({ entry: { outcome: 'new', rights: { canSendMessages: true }, allowedAttachmentKinds: ['text', 'audio', 'video'] } }),
+    );
+    const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(result.ok ? result.data.attachmentKinds : 'échec').toEqual(['text', 'audio']);
+  });
+
+  test('un lien qui ne restreint rien sert `null`, et un serveur d’avant le champ ne sert rien', async () => {
+    const unrestricted = fakeTransport(served({ entry: { outcome: 'new', allowedAttachmentKinds: null } }));
+    const restricted = await joinLinkAsGuest({ source: 'gateway', transport: unrestricted.transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(restricted.ok ? restricted.data.attachmentKinds : 'échec').toBeNull();
+    const before = fakeTransport(served());
+    const old = await joinLinkAsGuest({ source: 'gateway', transport: before.transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(old.ok && 'attachmentKinds' in old.data).toBe(false);
+  });
+
   /**
    * La porte est en authentification OPTIONNELLE : un Bearer encore valide dans
    * le transport ferait entrer le COMPTE sous son nom pendant que l'écran croit

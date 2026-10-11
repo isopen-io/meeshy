@@ -24,7 +24,7 @@ export function ThreadWriteLock({
   const restriction = useWriteRestriction({ conversationId, conversation });
   if (restriction === null) return <>{children}</>;
   return (
-    <div className="thread-composer-chrome glass-prominent">
+    <div className="thread-composer-chrome thread-column glass-prominent">
       <WriteRestrictionBand restriction={restriction} language={currentInterfaceLanguage()} />
     </div>
   );

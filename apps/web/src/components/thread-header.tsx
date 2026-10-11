@@ -171,7 +171,7 @@ export function ThreadHeader({
     <header
       className="thread-header glass absolute inset-x-0 top-0 z-30 pt-safe"
     >
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="thread-column flex items-center gap-2 px-4 py-2">
         {/*
           LE RETOUR ET SON COMPTE — SUR LA MÊME LIGNE (#6080, retour porteur).
 
@@ -212,6 +212,7 @@ export function ThreadHeader({
         {preview ? null : (
           <Link
             to="list"
+            data-thread-back=""
             className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
             style={{ color: 'var(--accent)' }}
             aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}

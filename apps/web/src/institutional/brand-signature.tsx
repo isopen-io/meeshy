@@ -1,11 +1,3 @@
-/** @jsxImportSource preact */
-/*
- * PRAGMA OBLIGATOIRE — même raison que `page.tsx` : ce fichier est rendu par
- * `preact-render-to-string` depuis `scripts/prerender-institutional.tsx`, un
- * script bun HORS du pipeline Vite (donc hors de l'alias qui redirige le
- * runtime JSX React vers Preact). Sans elle, le rendu produit une chaîne
- * VIDE sans erreur — le symptôme de #5554, rejoué ici sans la pragma.
- */
 import { BRAND_CREDIT, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '../lib/brand';
 
 /**

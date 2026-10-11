@@ -3,17 +3,7 @@ import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'reac
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useStore } from 'zustand/react';
 
-/**
- * Feuille propre à cet écran (correction de revue #5648, défaut majeur 6) —
- * import STATIQUE mais placé ICI : `thread.tsx` n'est lui-même atteint que
- * par `import('@/routes/thread')` (`route-table.tsx`), donc Vite scinde
- * cette CSS dans le CHUNK du fil, jamais dans la feuille globale chargée
- * par `main.tsx` sur CHAQUE route. Voir le doc-comment du fichier.
- */
-import '@/styles/thread-scene.css';
-import '@/styles/thread-protection.css';
-import '@/styles/thread-menu.css';
-import '@/styles/thread-system.css';
+import '@/routes/thread-styles';
 
 import { Composer } from '@/components/composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
@@ -32,6 +22,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
+import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
@@ -176,10 +167,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
    * rendu final ne montre pas encore le fil réel.
    */
-  const viewerParticipant = useMemo(
-    () => conversation?.participants.find((p) => p.userId === viewer.id),
-    [conversation, viewer.id],
-  );
+  const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
@@ -700,7 +689,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
-      className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
+      className={`thread-root relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
@@ -783,7 +772,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
           désormais le `+16` d'iOS, porté par la loi (`LIST_BOTTOM_BREATH`),
           et la haute est l'encoche.
         */
-        className="scrollbar-none absolute inset-0 flex flex-col overflow-y-auto px-3.5"
+        className="thread-column scrollbar-none absolute inset-0 flex flex-col overflow-y-auto px-3.5"
         /*
           LES COTES DE LA SCÈNE DU FIL (#5648) — la SEULE porte par laquelle
           `reading-mode/metrics.ts::sceneStyleVars()` atteint le CSS,
@@ -928,7 +917,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
         <div
-          className="thread-composer-chrome glass-prominent"
+          className="thread-composer-chrome thread-column glass-prominent"
           onFocus={chrome.onComposerFocus}
           onBlur={chrome.onComposerBlur}
         >
@@ -940,7 +929,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             stickyProtection={compose.stickyProtection}
             /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) — `Composer` ne connaît que la citation PRÉ-ADRESSÉE. */
             onDraftChange={compose.reportComposerDraft}
-            {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
+            {...composerAccess}
             {...(compose.replyTo
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}

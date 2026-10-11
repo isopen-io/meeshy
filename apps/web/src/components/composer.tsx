@@ -19,6 +19,7 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { guestKindsAllowMime, type GuestAttachments } from '@/lib/send/guest-attachment-policy';
 import { pastedContentOf, routePastedContent } from '@/lib/send/paste-route';
 import {
   contactCardFile,
@@ -134,6 +135,7 @@ export const Composer = memo(function Composer({
   stickyProtection,
   onDraftChange,
   maxLength,
+  guestAttachments,
 }: {
   /** LE PRISME DU LECTEUR (#5828) — repli de la langue d'écriture quand
    * aucune détection ne tranche : `useComposeLanguage` lit `preferred[0]`,
@@ -186,6 +188,11 @@ export const Composer = memo(function Composer({
    * tuile du tiroir ne se rend que si son geste a un effet (loi 4). Absent ⇒
    * tout est autorisé (aucun participant chargé encore). */
   rights?: ParticipantPermissions;
+  /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003) — ses familles (World
+   * Wide : `.txt` et audio) décident seules de ce que le composeur offre et
+   * accepte ; `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
+   * les lit sur la session. Absent ⇒ les droits de `rights`, comme avant. */
+  guestAttachments?: GuestAttachments;
   /**
    * LA GRAINE DU BROUILLON RESTAURÉ (#6175) — lue UNE fois au montage
    * (`useState` paresseux ci-dessous), jamais relue après : c'est l'hôte
@@ -368,7 +375,9 @@ export const Composer = memo(function Composer({
    * ancien), la porte ne mène nulle part : la spécification #5668 § 0 dit
    * « le micro n'est PAS rendu ». Les deux gardes sont la MÊME question.
    */
-  const canRecord = recordingSupported() && mayAttach(rights, 'audio/*');
+  const mayAttachHere = (mimeType: string): boolean =>
+    guestAttachments === undefined ? mayAttach(rights, mimeType) : guestKindsAllowMime(guestAttachments.kinds, mimeType);
+  const canRecord = recordingSupported() && mayAttachHere('audio/*');
   /* LA MÊME QUESTION POSÉE À LA POSITION — un navigateur sans
      `navigator.geolocation` (contexte non sécurisé, moteur ancien) n'a
      AUCUNE porte à montrer. Le panneau, lui, existe toujours : la tuile
@@ -542,6 +551,7 @@ export const Composer = memo(function Composer({
       current: draftNow.current.pending,
       files: Array.from(files),
       ...(rights === undefined ? {} : { rights }),
+      ...(guestAttachments === undefined ? {} : { guest: { kinds: guestAttachments.kinds, language: uiLanguage } }),
     });
     setFileRefusal(outcome.refusal ?? null);
     setPending(outcome.list);
@@ -790,7 +800,7 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          {...(mayAttach(rights, 'image/*')
+          {...(mayAttachHere('image/*')
             ? {
                 onOpenStickers: () => {
                   setPanelOpen(false);
@@ -1066,6 +1076,7 @@ export const Composer = memo(function Composer({
             canRecord={canRecord}
             canLocate={canLocate}
             {...(rights === undefined ? {} : { rights })}
+            {...(guestAttachments === undefined ? {} : { guest: guestAttachments })}
           />
         </Suspense>
       ) : null}

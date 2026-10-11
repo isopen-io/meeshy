@@ -13,11 +13,21 @@
  *     l'application ;
  *  4. lire `GET /world` (#10000) : l'effectif, la clé de jonction, ou
  *     l'absence d'entrée ouverte — et masquer alors l'entrée ;
- *  5. faire entrer le nom saisi dans World Wide.
+ *  5. faire entrer dans World Wide en DEUX étapes (#10003, D-186) : le nom,
+ *     puis la langue (celle de l'appareil proposée parmi les sept), avec un
+ *     retour par le bouton, Échap et l'historique ; la langue choisie devient
+ *     celle de l'interface d'un visiteur sans compte. Une soumission sans clé
+ *     RELANCE `GET /world` et dit l'échec s'il se répète (#10067) — jamais un
+ *     bouton inerte ;
+ *  5 bis. proposer « Revenir dans World Wide » à l'invité qui y est déjà ;
+ *  6. rendre la LISTE à l'application INSTALLÉE (`appPath`) : une PWA posée
+ *     avant #10002 garde `start_url: '/'` (iOS ne relit jamais le manifeste),
+ *     et `/` y désignait la liste — elle ne doit pas s'ouvrir sur la landing.
  *
  * LA FONCTION EST AUTONOME, et c'est un contrat : le prérendu l'inline par son
  * TEXTE (`landingBootScript`), elle ne peut donc rien lire hors de ses
- * paramètres — ni import, ni constante de module. La même fonction sert l'écran
+ * paramètres — ni import, ni constante de module —, à UNE exception près :
+ * `isInstalledApp`, inlinée par son texte à côté d'elle. La même fonction sert l'écran
  * `/` de l'application (`routes/home.tsx`), qui l'appelle directement.
  *
  * Deux règles partagées y sont réécrites faute d'import, chacune JUMELLE GARDÉE
@@ -34,6 +44,8 @@ export type LandingBootConfig = {
   readonly sessionKey: string;
   readonly languageKey: string;
   readonly entryTemplate: string;
+  readonly threadTemplate: string;
+  readonly appPath: string;
   readonly presence: string;
 };
 
@@ -41,6 +53,18 @@ export type LandingBootOptions = {
   readonly scope?: ParentNode;
   readonly phase?: 'all' | 'head' | 'body';
 };
+
+/**
+ * L'APPLICATION INSTALLÉE — écran d'accueil (`display-mode: standalone`) ou
+ * Safari iOS (`navigator.standalone`), la même lecture que `client-session.ts`.
+ * `routes/home.tsx` l'appelle avant de peindre ; le prérendu l'inline par son
+ * TEXTE à côté de `landingBoot` (`landingBootScript`), seule fonction que
+ * celle-ci peut nommer hors de ses paramètres.
+ */
+export function isInstalledApp(win: Window & typeof globalThis): boolean {
+  const media = typeof win.matchMedia === 'function' && win.matchMedia('(display-mode: standalone)').matches;
+  return media || Reflect.get(win.navigator ?? {}, 'standalone') === true;
+}
 
 export function landingBoot(win: Window & typeof globalThis, config: LandingBootConfig, options?: LandingBootOptions): void {
   const doc = win.document;
@@ -55,22 +79,33 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     }
   };
 
-  const sessionOf = (raw: string | null): 'member' | 'guest' | 'none' => {
-    if (raw === null) return 'none';
+  const heldOf = (raw: string | null): object | null => {
+    if (raw === null) return null;
     try {
       const held: unknown = JSON.parse(raw);
-      if (typeof held !== 'object' || held === null) return 'none';
+      if (typeof held !== 'object' || held === null) return null;
       const expiresAt = Reflect.get(held, 'expiresAt');
-      if (typeof expiresAt !== 'number' || expiresAt <= Date.now()) return 'none';
-      if (Reflect.get(held, 'kind') === 'guest') return 'guest';
-      return typeof Reflect.get(held, 'token') === 'string' ? 'member' : 'none';
+      return typeof expiresAt === 'number' && expiresAt > Date.now() ? held : null;
     } catch {
-      return 'none';
+      return null;
     }
   };
 
+  const sessionOf = (held: object | null): 'member' | 'guest' | 'none' => {
+    if (held === null) return 'none';
+    if (Reflect.get(held, 'kind') === 'guest') return 'guest';
+    return typeof Reflect.get(held, 'token') === 'string' ? 'member' : 'none';
+  };
+
+  const held = heldOf(read(config.sessionKey));
+  const session = sessionOf(held);
+
   const head = (): void => {
-    doc.documentElement.setAttribute('data-session', sessionOf(read(config.sessionKey)));
+    doc.documentElement.setAttribute('data-session', session);
+    if (isInstalledApp(win)) {
+      win.location.replace(config.appPath);
+      return;
+    }
     if (config.language !== config.rootLanguage) return;
     const chosen = read(config.languageKey);
     const target = chosen === null ? undefined : config.paths[chosen];
@@ -98,6 +133,9 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     status === 404 && typeof raw === 'object' && raw !== null && Reflect.get(raw, 'code') === 'WORLD_UNAVAILABLE';
 
   const all = (selector: string): readonly Element[] => Array.from(scope.querySelectorAll(selector));
+  const flag = (selector: string, shown: boolean): void => {
+    for (const node of all(selector)) node.toggleAttribute('hidden', !shown);
+  };
 
   const body = (): void => {
     const select = scope.querySelector('[data-landing-language]');
@@ -115,53 +153,138 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
       });
     }
 
+    const guest: unknown = session === 'guest' && held !== null ? Reflect.get(held, 'guest') : null;
+    const guestOf = (key: string): unknown => (typeof guest === 'object' && guest !== null ? Reflect.get(guest, key) : null);
+    const conversation = guestOf('conversationId');
+    const offerReturn = (worldLink: string | null): void => {
+      const own = typeof conversation === 'string' && conversation !== '' && (worldLink === null || guestOf('link') === worldLink);
+      for (const anchor of all('[data-world-return]')) {
+        if (own) anchor.setAttribute('href', config.threadTemplate.replace('{conversation}', encodeURIComponent(conversation)));
+        anchor.toggleAttribute('hidden', !own);
+      }
+    };
+    offerReturn(null);
+
     let link: string | null = null;
     let closed = false;
-    const waiting: Array<() => void> = [];
-    const enter = (name: string): void => {
+    let reading = false;
+    let waiting: (() => void) | null = null;
+    let onLanguage = false;
+    let proposed = false;
+    const form = scope.querySelector('[data-world-form]');
+    const field = (): Element | null => scope.querySelector('[data-world-form] input[name="name"]');
+    const radios = (): HTMLInputElement[] =>
+      all('[data-world-form] input[name="language"]').filter((node): node is HTMLInputElement => node instanceof win.HTMLInputElement);
+    const focus = (node: Element | null | undefined): void => {
+      if (node instanceof win.HTMLInputElement) node.focus();
+    };
+
+    const show = (language: boolean): void => {
+      onLanguage = language;
+      flag('[data-world-step="name"]', !language);
+      flag('[data-world-step="language"]', language);
+    };
+    const toName = (): void => {
+      if (!onLanguage) return;
+      show(false);
+      flag('[data-world-error]', false);
+      focus(field());
+    };
+    const toLanguage = (): void => {
+      if (!proposed) {
+        proposed = true;
+        const device: unknown = Reflect.get(win.navigator ?? {}, 'languages');
+        const codes = Array.isArray(device) ? device.map((tag) => String(tag).slice(0, 2).toLowerCase()) : [];
+        const match = codes.map((code) => radios().find((radio) => radio.value === code)).find((radio) => radio !== undefined);
+        if (match !== undefined) match.checked = true;
+      }
+      show(true);
+      try {
+        win.history.pushState({ worldStep: 1 }, '');
+      } catch {
+        /* Historique refusé : « Retour » et Échap suffisent. */
+      }
+      focus(radios().find((radio) => radio.checked));
+    };
+
+    const enter = (name: string, language: string): void => {
       if (link === null) return;
+      if (session !== 'member') {
+        try {
+          win.localStorage.setItem(config.languageKey, language);
+        } catch {
+          /* Stockage refusé : la jonction porte la langue, l'interface suivra. */
+        }
+      }
       win.location.assign(
-        config.entryTemplate.replace('{link}', encodeURIComponent(link)).replace('{name}', encodeURIComponent(name)),
+        config.entryTemplate
+          .replace('{link}', encodeURIComponent(link))
+          .replace('{name}', encodeURIComponent(name))
+          .replace('{language}', encodeURIComponent(language)),
       );
     };
 
-    const form = scope.querySelector('[data-world-form]');
-    if (form instanceof win.HTMLFormElement) {
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const field = form.elements.namedItem('name');
-        const name = field instanceof win.HTMLInputElement ? field.value.trim() : '';
-        if (name === '' || closed) return;
-        if (link === null) waiting.push(() => enter(name));
-        else enter(name);
+    const failed = (): void => {
+      reading = false;
+      if (waiting !== null) flag('[data-world-error]', true);
+      waiting = null;
+    };
+    const readWorld = (): void => {
+      reading = true;
+      void win
+        .fetch(config.apiBase + config.worldPath, { headers: { Accept: 'application/json' } })
+        .then(async (response) => {
+          const raw: unknown = await response.json().catch(() => null);
+          const entry = response.ok ? entryOf(raw) : null;
+          if (entry === null && !unavailable(response.status, raw)) return failed();
+          reading = false;
+          const go = waiting;
+          waiting = null;
+          if (entry === null) {
+            closed = true;
+            flag('[data-world-entry]', false);
+            flag('[data-world-unavailable]', true);
+            return;
+          }
+          link = entry.link;
+          offerReturn(link);
+          for (const slot of all('[data-world-count]')) slot.textContent = config.presence.replace('{count}', entry.count);
+          flag('[data-world-presence]', true);
+          go?.();
+        })
+        .catch(failed);
+    };
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const input = field();
+      const name = input instanceof win.HTMLInputElement ? input.value.trim() : '';
+      if (name === '' || closed) return toName();
+      if (!onLanguage) return toLanguage();
+      const language = radios().find((radio) => radio.checked)?.value ?? config.language;
+      if (link !== null) return enter(name, language);
+      waiting = () => enter(name, language);
+      flag('[data-world-error]', false);
+      if (!reading) readWorld();
+    });
+    form?.addEventListener('keydown', (event) => {
+      if (Reflect.get(event, 'key') === 'Escape') toName();
+    });
+    for (const back of all('[data-world-back]')) {
+      back.addEventListener('click', () => {
+        if (Reflect.get(Object(win.history.state), 'worldStep') === 1) win.history.back();
+        toName();
       });
     }
-
+    win.addEventListener('popstate', toName);
     for (const cta of all('[data-world-cta]')) {
       cta.addEventListener('click', () => {
-        const field = scope.querySelector('[data-world-form] input[name="name"]');
-        if (field instanceof win.HTMLInputElement) field.focus();
+        toName();
+        focus(field());
       });
     }
 
-    void win
-      .fetch(config.apiBase + config.worldPath, { headers: { Accept: 'application/json' } })
-      .then(async (response) => {
-        const raw: unknown = await response.json().catch(() => null);
-        const entry = response.ok ? entryOf(raw) : null;
-        if (entry !== null) {
-          link = entry.link;
-          for (const slot of all('[data-world-count]')) slot.textContent = config.presence.replace('{count}', entry.count);
-          for (const pill of all('[data-world-presence]')) pill.removeAttribute('hidden');
-          waiting.splice(0).forEach((go) => go());
-          return;
-        }
-        if (!unavailable(response.status, raw)) return;
-        closed = true;
-        for (const door of all('[data-world-entry]')) door.setAttribute('hidden', '');
-        for (const note of all('[data-world-unavailable]')) note.removeAttribute('hidden');
-      })
-      .catch(() => undefined);
+    readWorld();
   };
 
   if (phase !== 'body') head();

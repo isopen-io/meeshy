@@ -5074,3 +5074,57 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Kotlin natif** : rien (gel). **iOS** : le parcours invité depuis l'écran de connexion est l'affaire de #10003.
 
 **Témoins.** `landing/landing.test.tsx` (balises par langue, script rejoué par son texte : session, langue, `GET /world` contre `worldEntrySchema`, 404, entrée encodée), `landing/landing-static.test.ts` (sitemap, robots, nginx, service worker, manifeste, images 1200 × 630), `landing/landing-routes.test.ts` et `routes/home.test.tsx` (`/chats`, `/` dans la coque et sur le web), `scripts/check-bascule-recette.mjs` (la recette sert la landing sur `/`).
+
+**Livraison (2026-10-10).** `bun run build` mesure les sept landings entre 8,43 Ko (/en) et 8,77 Ko (/ar) gzip. `landing_page.kb` est posé à 10 Ko (Ko supérieur + 1), à confirmer par le porteur. `first_paint` tient. Le gate complet a trouvé quatre défauts du lot, tous corrigés avant la fusion :
+- l'exemple « Ex. Amina » dans le champ du nom : c'est un nom de fixture, que `check-gateway-build` refuse. Il devient « Ex. Awa » et un témoin garde la copie ;
+- le sélecteur de langue était écrit à 13 px. Safari iOS zoomait au focus (`check-phone-frame`). Il passe à 16 px ;
+- deux visites de gate attendaient encore la liste sur `/` (`check-list-folded-unread`, retour du disque du Flux) ;
+- le témoin institutionnel installait le service worker par `/chats` sur un serveur sans repli. Il passe par `/index.html`.
+
+## D-185 — Sur grand écran, la liste et le fil côte à côte : un CADRE du routeur garde la liste montée, les adresses ne changent pas (2026-10-11, #10073)
+
+**Contexte.** Sur ordinateur, ouvrir une conversation faisait quitter la liste : `/chats` et `/c/:id` sont deux écrans découpés qui se remplacent, et `<Screen key={routeKey}>` démonte l'un pour monter l'autre.
+
+**Décision.** Le routeur accepte une option `frame` (`lib/router.tsx`) : un composant rendu à la MÊME position de l'arbre pour toutes les routes, qui reçoit l'écran routé et `screenOf(clé)` — l'écran découpé d'une autre route, même `lazy`, même chunk. `routes/split-frame.tsx` s'en sert :
+
+- **Quand** : `matchMedia('(min-width: 1024px)')` observé par `useSyncExternalStore` (aucun écouteur `resize`), route `list` ou `thread`, session qui n'est PAS celle d'un invité de lien (World Wide sans compte : pas de liste, fil seul). Sinon le cadre rend l'écran routé tel quel — sous 1024 px rien ne change, coque Android comprise.
+- **Quoi** : la liste à gauche (24rem, filet `--color-ios-hairline`), montée UNE fois sous sa propre limite `Suspense` ; à droite le fil (l'élément routé, avec sa clé — changer de conversation remonte le FIL, jamais la liste) ou, sur `/chats`, l'état « choisissez une conversation » (`split-empty-pane.tsx`, chargé à la demande).
+- **Les adresses ne changent pas** : lien profond, retour arrière et rechargement rendent la même vue, puisqu'elle se DÉDUIT de l'adresse et de la largeur.
+- **La rangée ouverte** porte `aria-current="page"` et `data-active` (peau teintée à l'accent, `lens-row-meta.css`) — par `useIsCurrentPath`, un booléen observé : une navigation ne re-rend que les deux rangées dont la réponse change.
+- **Le défilement de la liste** est gardé par le montage lui-même ; `ScrollportKeyScope` (`use-scrollport-memory.ts`) fixe sa clé de mémoire à `/chats`, sinon un re-rendu sous `/c/:id` lui aurait rendu la position d'une ancienne visite.
+- **La colonne du fil (#10072)** se calcule déjà sur la largeur du VOLET : `100%` y est celle du bloc conteneur. Pas de container query : `container-type` crée un bloc conteneur pour `position: fixed` et aurait enfermé visionneuse, appel et voiles plein écran dans le volet. Dans le volet, le chevron de retour se retire (`thread-column.css`, `[data-split-detail] [data-thread-back]`).
+- **Libellés** : une table synchrone de sept langues dans le chunk du volet vide (discipline `lib/skip-link.ts`) — le catalogue de démarrage n'est pas touché.
+
+**Ce que cela coûte.** `split-frame.tsx` entre dans le chunk de la table des routes (avant le premier pixel) : quelques centaines d'octets gzip, sans dépendance nouvelle (session et routeur y sont déjà). Le volet vide et son glyphe sont à la demande.
+
+**Limites assumées.** Franchir 1024 px pendant la lecture d'un fil remonte le fil (la structure de l'arbre change) — les brouillons persistés n'en souffrent pas. Les menus flottants suivent toujours la route (`showsFloatingMenus`) : présents sur `/chats`, absents sur `/c/:id`, comme au téléphone.
+
+**Kotlin natif** : rien (gel). **iOS** : l'iPad a son `NavigationSplitView` ; rien à reporter.
+
+**Témoins.** `routes/split-frame.test.tsx` (1024 px : liste ET fil, état vide sur `/chats`, liste montée une seule fois au fil des navigations, retour arrière, autre route jamais scindée ; sous 1024 px un seul écran ; bascule au franchissement ; invité ; sept langues ; `aria-current` sur la seule rangée ouverte), `styles/thread-column.test.tsx` (retrait du chevron), `routes/safe-area.test.ts` (exemption motivée du cadre).
+
+## D-186 — On entre dans World Wide depuis la landing : le nom, puis la langue, dans la page prérendue ; la jonction crée l'invité sans autre geste (2026-10-11, #10003, #10067)
+
+**Contexte.** Demande porteur du 2026-10-11 : « implémenter la création et joindre World Wide maintenant à partir de la landing page ». Planche « Onboarding » : nom → glissement → langue principale (celle de l'appareil proposée) → le fil. Jusqu'ici le nom partait vers le formulaire générique de jonction (`/chat/:link?mode=anonymous&name=…`), qui ignorait `name` et redemandait tout. Et un `GET /world` en échec laissait « Rejoindre World Wide » inerte (#10067).
+
+**Décision.**
+- **L'étape de la langue vit DANS la landing**, en HTML prérendu (un `fieldset` caché, sept boutons radio, chaque langue dans son écriture, `lang` et `dir` posés — l'arabe de droite à gauche), conduite par le script inliné (`landing-boot.ts`). C'est la forme la plus fluide : le glissement est instantané, sans attendre le socle de l'application. La langue de l'appareil (`navigator.languages`) est proposée parmi les sept, sinon celle de la page ; un choix fait n'est pas recouvert en revenant au nom. Retour par le bouton, par Échap et par l'historique (`pushState` à l'entrée de l'étape) ; glissement depuis le sens de lecture, coupé sous `prefers-reduced-motion`.
+- **La CRÉATION reste dans l'application.** La landing navigue vers `/chat/{link}?mode=anonymous&name={name}&language={language}` (`world-entry.ts`, confronté à `href('chatJoin')`) ; `ChatJoin` lit cette ENTRÉE (`guestEntryOf`) et appelle `POST /links/:key/members` sans autre geste, puis adopte la session (`X-Session-Token`, persistée) et ouvre `/c/:id` en remplaçant l'entrée d'historique. Pendant ce temps l'invitation n'est pas peinte. Réécrire la création dans le script inliné aurait dupliqué le format de session, l'adoption et les refus. Les refus sont ceux de la jonction, dans les sept langues : nom pris ⇒ formulaire pré-rempli avec la suggestion servie ; lien qui exige plus que le nom et la langue (e-mail, date de naissance) ⇒ rien ne part, le champ manquant est demandé (aucune garde serveur contournée) ; refus du lien ⇒ bandeau.
+- **La langue choisie devient langue d'interface ET de lecture** : la landing l'écrit sous `INTERFACE_LANGUAGE_KEY` avant de partir (l'application s'ouvre déjà dans cette langue, refus compris), la jonction la porte dans l'identité de l'invité (rang 1 de son Prisme, #9710). Un COMPTE qui entre en anonyme garde son interface (#8816).
+- **Revenir.** Une session invité dont le lien est celui de World Wide fait apparaître « Revenir dans World Wide », vers son fil (`WORLD_GUEST_THREAD_TEMPLATE`, confronté à `href('thread')`). Recharger le fil le rend directement (session persistée).
+- **Jamais un bouton inerte (#10067).** Une entrée validée sans clé RELANCE `GET /world` (une seule lecture à la fois) ; un nouvel échec (5xx, réseau) affiche `entryFailed` (`role="alert"`, sept langues) et le geste suivant réessaie.
+- **Le poids.** La landing paie son script à chaque visite : le prérendu le MINIFIE désormais (`scripts/lib/minify-inline-script.ts`, `Bun.build`), ce qui absorbe l'étape ajoutée. Mesure du prérendu sur une feuille compilée hors `vite build` : 9,13 Ko (/en) à 9,52 Ko (/ar) gzip, contre 8,46–8,82 avant, sous le plafond de 10 Ko. Le relevé du build fait foi.
+
+**Coque Android.** Pas de landing (`/` → `/chats`) : l'entrée sans compte y passera par la carte World Wide de l'écran de connexion, qui est l'objet de #10007. **iOS** : même parcours depuis l'écran de connexion (#10006). **Kotlin natif** : rien (gel).
+
+**Témoins.** `landing/landing.test.tsx` (étape langue prérendue dans les sept documents ; nom → langue sans rien envoyer ; nom vide ; langue de l'appareil ; arabe `dir="rtl"` ; entrée encodée et langue d'interface ; compte qui garde la sienne ; retour par bouton, Échap, historique ; relance et échec dit de `GET /world` ; « Revenir dans World Wide » ; script MINIFIÉ rejoué), `routes/chat-join.test.tsx` (`guestEntryOf` ; création sans geste et ordre adoption → interface → fil ; écran en attente ; langue par défaut ; nom pris avec suggestion ; champ exigé non contourné ; lien réservé aux comptes ; une seule tentative).
+
+## D-187 — On entre dans World Wide sans compte par `/world` : nom, glissement, langue principale, puis le fil ; un invité n'y joint que du `.txt` et de l'audio (2026-10-11, #10003)
+
+**Parcours.** `routes/world-entry.tsx` sert `/world` — l'entrée de la coque Android et de l'écran de connexion (#10007), où la landing prérendue n'est pas servie ; la landing, elle, fait le même parcours dans sa page et joint par `/chat/{link}?mode=anonymous&name=&language=` (D-186). Nom → glissement → langue principale (la première langue de l'appareil parmi les sept, groupe radio au clavier, flèches inversées en arabe) → jonction invité par la clé que sert `GET /world` (`worldEndpoints.root`), jamais une clé en dur. La langue choisie devient la langue de lecture (rang 1 du Prisme) et la langue d'interface. Un invité déjà entré retourne directement dans son fil ; un compte suit la jonction par lien. « Retour » ramène de la langue au nom, puis à la page d'avant (lue sur la navigation de l'application, jamais sur `history.length`).
+
+**Pièces jointes de l'invité.** La jonction sert `entry.allowedAttachmentKinds` ; la session le garde comme des NOMS (`string[]`), et `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`) écarte une famille inconnue (fail-closed) et applique le plafond `.txt` + audio à une session World Wide d'avant le champ. Charger la table des familles dans la session la faisait entrer dans la première peinture (90,41 Ko pour un plafond de 90) ; sans elle, 89,96 Ko. Le composeur n'offre que « Fichier texte (.txt) », « Audio » et le vocal, refuse en le nommant ce qui sort des familles, et dit la cause des refus serveur `GUEST_ATTACHMENT_*`. La passerelle reste l'autorité (#10001).
+
+**Budgets relevés sur mesure.** `interface_catalogs_invite` 20 → 22 Ko (20,91 mesurés : 16 clés `invite.world.*` × 7) ; `story_reader` 13 → 14 Ko (13,02 mesurés : le chemin d'envoi partagé porte la règle de l'invité).
+
+**Kotlin natif** : rien (gel). **Reste** : recette navigateur et coque Android (#10075), jumelles sans Zod (#10038), entrée depuis l'écran de connexion (#10007).

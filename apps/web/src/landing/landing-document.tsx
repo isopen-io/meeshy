@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BRAND_LOGO_PATH } from '@/lib/brand';
 
-import { landingBoot, type LandingBootConfig } from './landing-boot';
+import { isInstalledApp, landingBoot, type LandingBootConfig } from './landing-boot';
 import { LANDING_COPY } from './landing-copy';
 import {
   LANDING_LANGUAGES,
@@ -41,8 +41,24 @@ export type LandingDocumentInput = {
   readonly schemeScript: string;
   /** Les deux `theme-color` (sombre, clair) — fournis par le prérendu, comme la feuille. */
   readonly themeColors: { readonly dark: string; readonly light: string };
-  readonly boot: Omit<LandingBootConfig, 'language' | 'rootLanguage' | 'paths' | 'presence'>;
+  readonly boot: LandingBootInput;
+  /** Le script de la page, déjà composé (et minifié par le prérendu,
+   * `scripts/lib/minify-inline-script.ts`) ; sinon composé ici, tel quel. */
+  readonly bootScript?: string;
 };
+
+export type LandingBootInput = Omit<LandingBootConfig, 'language' | 'rootLanguage' | 'paths' | 'presence'>;
+
+/** La configuration COMPLÈTE du script d'une landing — ce qui change d'une langue à l'autre compris. */
+export function landingBootConfig(language: LandingLanguage, boot: LandingBootInput): LandingBootConfig {
+  return {
+    ...boot,
+    language,
+    rootLanguage: ROOT_LANDING_LANGUAGE,
+    paths: landingPaths(),
+    presence: LANDING_COPY[language].presence,
+  };
+}
 
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -51,7 +67,7 @@ const escapeHtml = (value: string): string =>
 const inlineJson = (value: unknown): string => JSON.stringify(value).replace(/</g, '\\u003c');
 
 export function landingBootScript(config: LandingBootConfig): string {
-  return `(${landingBoot.toString()})(window,${inlineJson(config)});`;
+  return `(function(){${isInstalledApp.toString()};(${landingBoot.toString()})(window,${inlineJson(config)});})();`;
 }
 
 export function landingStructuredData(language: LandingLanguage, origin: string): unknown {
@@ -123,13 +139,7 @@ export function landingDocument(input: LandingDocumentInput): string {
   const { language, origin } = input;
   const copy = LANDING_COPY[language];
   const body = renderToStaticMarkup(<LandingPage language={language} copy={copy} />);
-  const boot = landingBootScript({
-    ...input.boot,
-    language,
-    rootLanguage: ROOT_LANDING_LANGUAGE,
-    paths: landingPaths(),
-    presence: copy.presence,
-  });
+  const boot = input.bootScript ?? landingBootScript(landingBootConfig(language, input.boot));
   return `<!doctype html>
 <html lang="${language}" dir="${landingDirection(language)}" class="dark">
 <head>

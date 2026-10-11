@@ -46,6 +46,27 @@ struct GuestAttachmentAllowanceTests {
         #expect(free.offersContactsAndPlaces)
     }
 
+    // MARK: - Le plafond de World Wide (miroir de WORLD_GUEST_ATTACHMENT_KINDS)
+
+    @Test func lePlafondDeWorldWide_estTexteEtAudio() {
+        #expect(GuestAttachmentKind.worldGuestCeiling == [.text, .audio])
+    }
+
+    @Test func desTermesAbsents_prennentLePlafond_jamaisTout() {
+        let capped = GuestAttachmentAllowance.unrestricted.capped(by: GuestAttachmentKind.worldGuestCeiling)
+        #expect(capped == Self.world)
+    }
+
+    @Test func desTermesPlusLarges_sontResserresAuPlafond() {
+        let wide = GuestAttachmentAllowance(kinds: [.text, .audio, .image, .pdf])
+        #expect(wide.capped(by: GuestAttachmentKind.worldGuestCeiling) == Self.world)
+    }
+
+    @Test func desTermesPlusEtroits_restentEtroits() {
+        let narrow = GuestAttachmentAllowance(kinds: [.audio])
+        #expect(narrow.capped(by: GuestAttachmentKind.worldGuestCeiling) == narrow)
+    }
+
     // MARK: - Verdict sur un fichier choisi
 
     @Test func unTxt_estAdmis_dansWorldWide() {

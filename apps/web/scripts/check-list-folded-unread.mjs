@@ -39,7 +39,7 @@ const SUBJECT = 'c-deploiement';
 const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR' });
 const page = await context.newPage();
-await page.goto(`${served.base}/`, { waitUntil: 'load' });
+await page.goto(`${served.base}/chats`, { waitUntil: 'load' });
 await page.waitForSelector(`[data-row="${PINNED_ROW}"]`);
 
 const toggleState = () =>

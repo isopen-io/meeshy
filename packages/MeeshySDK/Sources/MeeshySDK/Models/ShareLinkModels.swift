@@ -173,6 +173,13 @@ public struct JoinedConversation: Decodable {
     public let title: String?
     public let type: String
     public let allowViewHistory: Bool
+    /// Les familles BRUTES qu'un invité de ce lien peut joindre (#10001) —
+    /// absent ou `null` quand le lien ne restreint rien.
+    public let allowedAttachmentKinds: [String]?
+
+    public var attachmentAllowance: GuestAttachmentAllowance {
+        GuestAttachmentAllowance(kinds: GuestAttachmentKind.knownKinds(from: allowedAttachmentKinds))
+    }
 }
 
 // MARK: - Create Share Link Request (POST /links)

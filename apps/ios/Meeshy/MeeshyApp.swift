@@ -221,7 +221,8 @@ struct MeeshyApp: App {
                                 activeGuestSession = GuestSession(
                                     identifier: guestSession.identifier,
                                     context: ctx,
-                                    isDeliberate: guestSession.isDeliberate
+                                    isDeliberate: guestSession.isDeliberate,
+                                    origin: guestSession.origin
                                 )
                             },
                             onAccountRequest: { entry in
@@ -917,6 +918,18 @@ struct MeeshyApp: App {
                         identifier: identifier,
                         context: AnonymousSessionStore.load(linkId: identifier),
                         isDeliberate: true
+                    )
+                }
+                // #10006 — « Entrer dans World Wide » depuis l'écran de
+                // connexion : la session invitée s'ouvre sur la clé SERVIE
+                // par `GET /world`, et reprend celle que cet appareil y a déjà.
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    guard let entry else { return }
+                    deepLinkRouter.requestedWorldEntry = nil
+                    activeGuestSession = GuestSession(
+                        identifier: entry.shareLinkIdentifier,
+                        context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+                        origin: .world(entry)
                     )
                 }
                 // Prisme Linguistique — dès que la langue principale de
