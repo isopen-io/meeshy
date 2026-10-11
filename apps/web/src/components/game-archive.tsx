@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import type { GameUpcomingSeasonBlock } from '@meeshy/shared/types/game';
 import type { GameLeagueWeekArchive, GameLeagueWeekResult, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 import type { LeagueMoment, LeagueZone } from '@meeshy/shared/utils/game/league';
-import { SEASON_STEPS, liveSeasonTense } from '@meeshy/shared/utils/game/season';
+import { SEASON_STEPS, liveSeasonTense, seasonTenseAt } from '@meeshy/shared/utils/game/season';
+import { DEFAULT_SEASON_SCHEDULE, scheduledSeasonCalendar, seasonDefinitionOf, seasonStatusOf, type SeasonSchedule } from '@meeshy/shared/utils/game/season-schedule';
 
 import { localMoment } from '@/lib/game/local-moment';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
@@ -12,7 +13,7 @@ import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { dayLabel, leagueName, seasonThemeName, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 
 import { LeagueGem } from './game/league-gem';
-import { GameSeasonOpened, GameSeasonUpcoming } from './game-season';
+import { GameSeasonOpened, GameSeasonPaused, GameSeasonUpcoming } from './game-season';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 
 /**
@@ -37,12 +38,16 @@ type FocusGame = {
   readonly league?: { readonly weekKey: string } | undefined;
 };
 
+export type PausedSeason = { readonly number: number; readonly themeKey: string };
+
 export type SeasonShown =
   | { readonly kind: 'current' }
   | { readonly kind: 'upcoming'; readonly upcoming: GameUpcomingSeasonBlock }
   /** Ouverte d'après l'horloge locale, mais le bloc gardé ne porte pas encore son parcours (#10131). */
   | { readonly kind: 'opened'; readonly season: GameUpcomingSeasonBlock }
   | { readonly kind: 'past'; readonly season: GameSeasonArchive }
+  /** Mise en pause par l'administration (calendrier servi, #10232) : son thème, aucune date. */
+  | { readonly kind: 'paused'; readonly season: PausedSeason }
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string };
 
@@ -70,22 +75,43 @@ export function seasonShown(
   game: FocusGame | undefined,
   read: ArchiveRead<GameSeasonArchive>,
   moment: LeagueMoment = localMoment(),
+  schedule: SeasonSchedule = DEFAULT_SEASON_SCHEDULE,
 ): SeasonShown {
   if (focus === null) return { kind: 'current' };
+  /* Le calendrier SERVI fait foi sur la pause : une saison future mise en pause (ou derrière une pause) n'a plus de
+     dates, quoi qu'en dise une copie gardée avant la pause. Une saison en cours ou passée ne se met jamais en pause. */
+  const paused = (): SeasonShown | null => {
+    if (seasonStatusOf(schedule, focus) !== 'paused') return null;
+    const definition = seasonDefinitionOf(schedule, focus);
+    return definition === null ? null : { kind: 'paused', season: { number: focus, themeKey: definition.themeKey } };
+  };
   const archive = read.data;
   if (archive !== undefined && archive.number === focus) {
     const dates = { number: archive.number, themeKey: archive.themeKey, startDay: archive.startDay, endDay: archive.endDay };
     const tense = liveSeasonTense({ served: archive.status, startDay: archive.startDay, endDay: archive.endDay }, moment);
     if (tense === 'past') return { kind: 'past', season: archive.status === 'past' ? archive : { ...archive, status: 'past' } };
-    if (tense === 'upcoming') return { kind: 'upcoming', upcoming: dates };
+    if (tense === 'upcoming') return paused() ?? { kind: 'upcoming', upcoming: dates };
     return game?.season?.number === focus ? { kind: 'current' } : { kind: 'opened', season: dates };
   }
   if (game?.season?.number === focus) return { kind: 'current' };
+  const stopped = paused();
+  if (stopped !== null) return stopped;
   const upcoming = game?.seasonUpcoming;
   if (upcoming !== undefined && upcoming !== null && upcoming.number === focus) {
     const tense = liveSeasonTense({ served: 'upcoming', startDay: upcoming.startDay, endDay: upcoming.endDay }, moment);
     if (tense === 'upcoming') return { kind: 'upcoming', upcoming };
     if (tense === 'current') return { kind: 'opened', season: upcoming };
+  }
+  /* Cache froid, calendrier SERVI : une saison future (ou ouverte) se peint depuis lui, sans attendre le réseau.
+     Le repli (révision 0) ne devine rien : la saison attend sa lecture. */
+  if (schedule.revision > 0) {
+    const calendar = scheduledSeasonCalendar(schedule, focus);
+    if (calendar !== null) {
+      const dates = { number: calendar.number, themeKey: calendar.themeKey, startDay: calendar.startDay, endDay: calendar.endDay };
+      const tense = seasonTenseAt(calendar, moment);
+      if (tense === 'upcoming') return { kind: 'upcoming', upcoming: dates };
+      if (tense === 'current') return { kind: 'opened', season: dates };
+    }
   }
   return read.error === null ? { kind: 'loading' } : { kind: 'error', message: read.error };
 }
@@ -104,6 +130,8 @@ export function seasonHeaderCount(shown: SeasonShown, current: { readonly steps:
       return gameText('game.archive.season.upcoming_title', { number: formatCount(shown.upcoming.number) });
     case 'opened':
       return gameText('game.archive.season.current_title', { number: formatCount(shown.season.number) });
+    case 'paused':
+      return gameText('game.archive.season.paused_title', { number: formatCount(shown.season.number) });
     default:
       return null;
   }
@@ -150,6 +178,7 @@ export function GameSeasonArchiveView({
 }) {
   if (shown.kind === 'upcoming') return <GameSeasonUpcoming upcoming={shown.upcoming} moment={moment} />;
   if (shown.kind === 'opened') return <GameSeasonOpened season={shown.season} />;
+  if (shown.kind === 'paused') return <GameSeasonPaused season={shown.season} />;
   if (shown.kind === 'past') return <GameSeasonRecord season={shown.season} />;
   if (shown.kind === 'error') return <GameArchiveRetry id="game-season-archive-error" message={shown.message} onRetry={onRetry} />;
   if (shown.kind === 'loading') return <>{skeleton}</>;

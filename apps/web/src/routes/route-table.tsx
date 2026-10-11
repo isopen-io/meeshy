@@ -118,6 +118,8 @@ const adminLanguagesScreen = () =>
   Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminSettingsScreen = () =>
   Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminGameSeasonsScreen = () =>
+  Promise.all([import('@/routes/admin-game-seasons'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminEngagementScaleScreen = () =>
   Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
@@ -633,6 +635,9 @@ export const ROUTES = {
      Déclaré AUSSI dans `session-guard.ts`. */
   adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
   admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
+  /* LE CALENDRIER DES SAISONS DU JEU (#10232) — deux espaces, comme le reste de l'administration. */
+  adminGameSeasons: { pattern: '/admin/game-seasons', screen: adminGameSeasonsScreen },
+  admGameSeasons: { pattern: '/adm/game-seasons', screen: adminGameSeasonsScreen },
   /* LE PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) — l'adresse du
      `share_target` de la PWA (`lib/share-incoming/share-target.ts`) : le worker
      y redirige après avoir rangé le `POST` du système, la page ouvre la feuille
