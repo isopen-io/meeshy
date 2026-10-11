@@ -1,15 +1,18 @@
 import XCTest
+@testable import Meeshy
 
-/// Source-level localization guard for `BrandSignature` (the version + credit
-/// footer shared by the splash and login screens).
+/// Guard for `BrandSignature` (the version + credit footer shared by the splash,
+/// welcome and login screens).
 ///
 /// The VoiceOver label used to be a hardcoded English `Text(...)` literal
 /// ("Meeshy version …, build …. Made with love by Services CEO."), which Xcode
 /// auto-extracted into the catalog as its own untranslated key — so blind users
-/// on every non-English locale heard English while the visible credit was fully
-/// localized. This locks down the fix: the label must resolve through the stable
-/// `brand.signature.accessibilityLabel` key, and that key must ship exactly the
-/// same languages as the visible credit `brand.signature.credit`.
+/// on every non-English locale heard English. The version line still resolves its
+/// label through the stable `brand.signature.accessibilityLabel` key.
+///
+/// Since #10096 the credit reads « by services.ceo » — a BRAND, identical in every
+/// locale, so it is rendered verbatim and no longer has a catalog key — and it is a
+/// `Link` that opens https://services.ceo, with a localized hint and a 44 pt hit area.
 final class BrandSignatureLocalizationTests: XCTestCase {
 
     private var iosRoot: URL {
@@ -38,16 +41,43 @@ final class BrandSignatureLocalizationTests: XCTestCase {
                 + "it gets auto-extracted as its own untranslated catalog key.")
     }
 
-    func test_credit_isLocalizedNotHardcoded() throws {
+    func test_credit_readsTheBrandVerbatim() {
+        XCTAssertEqual(BrandSignature.credit, "by services.ceo")
+    }
+
+    func test_creditDestination_isThePlatform() {
+        XCTAssertEqual(BrandSignature.creditDestination.absoluteString, "https://services.ceo")
+    }
+
+    /// The credit is a brand: rendered `verbatim`, never through a catalog key —
+    /// a key would be auto-extracted and could drift per locale.
+    func test_credit_isAVerbatimLinkToThePlatform() throws {
         let source = try brandSignatureSource()
         XCTAssertTrue(
-            source.contains("brand.signature.credit"),
-            "The visible credit line must resolve through the localized key "
-                + "brand.signature.credit.")
+            source.contains("Link(destination: Self.creditDestination)"),
+            "Tapping the credit must open https://services.ceo.")
+        XCTAssertTrue(
+            source.contains("Text(verbatim: Self.credit)"),
+            "The credit is a brand — rendered verbatim, never localized.")
         XCTAssertFalse(
-            source.contains(#"Text("By Services CEO")"#)
-                || source.contains(#"Text("Par Services CEO")"#),
-            "The credit must never be a hardcoded literal — it ships in 7 locales.")
+            source.contains("\"brand.signature.credit\""),
+            "The credit no longer resolves through a catalog key.")
+        XCTAssertFalse(
+            source.contains("Services CEO"),
+            "The former credit must not linger in the signature.")
+    }
+
+    /// VoiceOver announces the credit, then where it leads; the hit area reaches
+    /// 44 pt through an outset content shape that gives the layout its space back.
+    func test_creditLink_isNamedHintedAndTouchable() throws {
+        let source = try brandSignatureSource()
+        XCTAssertTrue(source.contains("brand.signature.credit.accessibilityHint"))
+        XCTAssertTrue(source.contains(".accessibilityLabel(Text(verbatim: Self.credit))"))
+        XCTAssertTrue(source.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(source.contains(".padding(-Self.creditHitOutset)"))
+        XCTAssertGreaterThanOrEqual(
+            BrandSignature.creditHitOutset * 2 + 17, 44,
+            "A ~17 pt line plus the outset on both sides must reach the 44 pt HIG minimum.")
     }
 
     /// The version line reads `Meeshy 1.0.0 · 1` — the build number is separated
@@ -59,40 +89,41 @@ final class BrandSignatureLocalizationTests: XCTestCase {
             "The version line must render as `Meeshy <version> · <build>`.")
     }
 
-    func test_catalog_shipsSameLanguagesForCreditAndAccessibilityLabel() throws {
+    func test_catalog_shipsTheSignatureKeysInEveryLocale_andDropsTheCreditKey() throws {
         let url = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
         let data = try Data(contentsOf: url)
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let strings = json?["strings"] as? [String: Any]
 
-        func languages(of key: String) -> Set<String> {
+        func localizations(of key: String) -> [String: String] {
             let entry = strings?[key] as? [String: Any]
-            let localizations = entry?["localizations"] as? [String: Any]
-            return Set(localizations?.keys ?? [:].keys)
+            let localizations = entry?["localizations"] as? [String: Any] ?? [:]
+            return localizations.compactMapValues {
+                (($0 as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
+            }
         }
 
-        let signatureLangs = languages(of: "brand.signature.accessibilityLabel")
-        XCTAssertFalse(
-            signatureLangs.isEmpty,
-            "brand.signature.accessibilityLabel must exist in the catalog.")
+        let shipped: Set<String> = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
+        let label = localizations(of: "brand.signature.accessibilityLabel")
+        let hint = localizations(of: "brand.signature.credit.accessibilityHint")
+        XCTAssertEqual(Set(label.keys), shipped)
+        XCTAssertEqual(Set(hint.keys), shipped)
 
-        let creditLangs = languages(of: "brand.signature.credit")
-        XCTAssertFalse(
-            creditLangs.isEmpty,
-            "brand.signature.credit must exist in the catalog.")
+        XCTAssertTrue(
+            label.values.allSatisfy { !$0.contains("Services CEO") },
+            "The version label no longer carries the credit — the link announces itself.")
+        XCTAssertTrue(
+            hint.values.allSatisfy { $0.contains("services.ceo") },
+            "Every hint names the platform it opens.")
 
-        XCTAssertEqual(
-            creditLangs, signatureLangs,
-            "The signature a11y label and the visible credit must cover the exact "
-                + "same languages. Diff: "
-                + "\(creditLangs.symmetricDifference(signatureLangs).sorted())")
-
+        XCTAssertNil(
+            strings?["brand.signature.credit"],
+            "The credit is a verbatim brand — its catalog key must be gone.")
         XCTAssertNil(
             strings?["Meeshy version %@, build %@. Made with love by Services CEO."],
             "The auto-extracted English literal key must be removed from the catalog.")
         XCTAssertNil(
             strings?["splash.madeWithLove"],
-            "The legacy 'Made with ❤️ by' credit was replaced by "
-                + "brand.signature.credit — the dead key must not linger.")
+            "The legacy 'Made with ❤️ by' credit was replaced — the dead key must not linger.")
     }
 }

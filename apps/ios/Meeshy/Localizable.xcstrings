@@ -49423,90 +49423,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "‏Meeshy الإصدار %1$@، البنية %2$@. من Services CEO."
+            "value": "‏Meeshy الإصدار %1$@، البنية %2$@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy Version %1$@, Build %2$@. Von Services CEO."
+            "value": "Meeshy Version %1$@, Build %2$@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy version %1$@, build %2$@. By Services CEO."
+            "value": "Meeshy version %1$@, build %2$@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versión %1$@, compilación %2$@. Por Services CEO."
+            "value": "Meeshy versión %1$@, compilación %2$@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy version %1$@, build %2$@. Par Services CEO."
+            "value": "Meeshy version %1$@, build %2$@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versione %1$@, build %2$@. Da Services CEO."
+            "value": "Meeshy versione %1$@, build %2$@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versão %1$@, compilação %2$@. Por Services CEO."
+            "value": "Meeshy versão %1$@, compilação %2$@."
           }
         }
       }
     },
-    "brand.signature.credit": {
+    "brand.signature.credit.accessibilityHint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "يفتح منصة services.ceo في المتصفح"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Öffnet die Plattform services.ceo im Browser"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Opens the services.ceo platform in the browser"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Abre la plataforma services.ceo en el navegador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Ouvre la plateforme services.ceo dans le navigateur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Apre la piattaforma services.ceo nel browser"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Abre a plataforma services.ceo no navegador"
           }
         }
       }

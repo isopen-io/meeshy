@@ -5107,6 +5107,8 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 
 **Amendé par D-190 (#10094)** : la création sans geste exige désormais le jeton de passage de la landing ; sans lui, l'adresse ne fait que pré-remplir le formulaire.
 
+**Amendé par D-191 (#10098)** : plus d'étape de langue — la langue se choisit avant « Rejoindre », dans la liste déroulante de l'en-tête, la langue de la page par défaut ; un clic entre.
+
 ---
 
 ## D-187 — On entre dans World Wide sans compte par `/world` : nom, glissement, langue principale, puis le fil ; un invité n'y joint que du `.txt` et de l'audio (2026-10-11, #10003)
@@ -5118,6 +5120,8 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Budgets relevés sur mesure.** `interface_catalogs_invite` 20 → 22 Ko (20,91 mesurés : 16 clés `invite.world.*` × 7) ; `story_reader` 13 → 14 Ko (13,02 mesurés : le chemin d'envoi partagé porte la règle de l'invité).
 
 **Kotlin natif** : rien (gel). **Reste** : recette navigateur et coque Android (#10075), jumelles sans Zod (#10038), entrée depuis l'écran de connexion (#10007).
+
+**Amendé par D-191 (#10098)** : une vue — nom, liste déroulante de la langue (langue d'interface par défaut), « Entrer » ; plus de glissement ni d'étape.
 
 ---
 
@@ -5163,3 +5167,23 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Témoins.** `routes/chat-join.test.tsx` (« une adresse d'entrée FORGÉE ne fait entrer personne sans son geste » : sans jeton ⇒ aucun POST et formulaire pré-rempli, puis le geste fait partir ce qu'il montre ; périmé et effacé ; daté du futur ; réutilisé ; autre lien ; autre nom ou langue ; mal formé ; stockage refusé — et le parcours de la landing, jeton valide ⇒ un POST et le jeton effacé ; l'ancien gabarit ouvre le formulaire), `landing/landing.test.tsx` (le jeton est posé AVANT la navigation, nom rogné, clé servie, instant ; un onglet sans `sessionStorage` navigue quand même).
 
 **Kotlin natif** : rien (gel). **iOS** : non concerné (aucune entrée par adresse qui crée sans geste).
+
+---
+
+## D-191 — On rejoint World Wide en un clic : la langue se choisit dans la liste déroulante de l'en-tête, posée avant « Rejoindre », la langue du site par défaut (2026-10-11, #10098, amende D-186 et D-187)
+
+**Contexte.** Décision porteur du 2026-10-11, précisée deux fois le même jour : d'abord un menu flottant à la place de la grille de sept boutons radio de l'étape « Votre langue », puis UN clic pour entrer (plus d'étape de langue), puis la liste DÉROULANTE de l'en-tête plutôt qu'un menu fait main.
+
+**Décision.**
+- **Une vue, un clic.** La landing comme `/world` montrent le nom, la langue de lecture, puis le bouton ; « Rejoindre World Wide » (« Entrer dans World Wide » sur `/world`) entre avec le nom et la langue montrée. L'étape 2 de D-186 (`fieldset data-world-step="language"`, Retour, Entrer, Échap, `pushState`, glissement) et le glissement de D-187 (indicateur d'étapes, retour matériel de la langue vers le nom) disparaissent.
+- **Le sélecteur est `LanguageSelect` (`landing/site-chrome.tsx`), paramétré** — `purpose: 'reading'` — et non un composant de plus : le `<select>` natif dans sa pastille, dont la liste est celle du navigateur ou du système (flottante, clavier, lecteur d'écran, mobile, droite à gauche) sans une ligne de script pour l'ouvrir, la fermer ou la parcourir. En lecture, il ne change PAS la langue de la page (`data-world-language`, `name="language"`, distinct de `data-landing-language` et `data-download-language`) ; le globe cède la place au drapeau : chaque option commence par le sien (`getLanguageInfo(code).flag`, `packages/shared/utils/languages.ts`, source unique), la pastille montre donc celui de la langue choisie sans script pour le suivre. Les options arabes portent `dir="rtl"` (les deux usages).
+- **Défaut = la langue d'affichage du site** : celle de la landing prérendue (`/` → fr … `/ar` → ar ; le script la repose au démarrage, comme il le fait pour le sélecteur de l'en-tête), celle de l'interface sur `/world` — plus celle de l'appareil (`WorldEntryDeps.deviceLanguages` retiré). Le visiteur reste libre de la changer.
+- **Le chemin d'entrée ne change pas** : `enter(name, language)`, jeton de passage (D-190), langue d'interface d'un visiteur sans compte, compte qui garde la sienne ; sur `/world`, la même jonction invité.
+- **Copies.** La note « Vous choisirez votre langue juste après » devenait fausse : elle dit, dans les sept langues, que tout ce qu'on lira arrivera dans la langue choisie, et décrit le sélecteur (`aria-describedby`). `languageHint`, `back`, `enter` quittent `LandingCopy` ; `world.continue`, `world.step`, `world.language.greeting` quittent le catalogue des invitations, et `world.language.hint` ne dit plus « proposée depuis votre appareil ».
+- **`/world` importe `styles/site-chrome.css`** (comme `/download`), dans son propre morceau : la première peinture ne bouge pas.
+
+**Mesures** (`vite build --outDir dist-recette-menu`, relevé du prérendu) : landings 8,68 Ko (/en) à 9,04 Ko (/ar) gzip, sous le plafond de 10 Ko inchangé ; première peinture 88,87 Ko (plafond 90) ; catalogue des invitations 20,61 Ko. Recette Chromium (Playwright), clair et sombre, 1392 et 390 px, `/`, `/ar` et `/world` : pastille de 52 px de haut, aucun défilement horizontal, flèches au clavier sur la liste fermée, arabe de droite à gauche.
+
+**Kotlin natif** : rien (gel). **iOS** : non concerné par ce lot (l'entrée iOS est #10006).
+
+**Témoins.** `landing/landing.test.tsx` (dans les sept documents : nom → liste → bouton dans le formulaire, aucune étape de langue ni Retour, langue de la page `selected`, un drapeau de la source unique par option, pas de globe ; un clic entre avec la langue du site, jamais celle de l'appareil, sur les sept pages ; un autre choix ne change pas la page et c'est lui qui entre ; nom vide ; jeton de passage ; #10067 ; script MINIFIÉ), `routes/world-entry.test.tsx` (une vue, ordre nom → liste → Entrer, pastille de l'en-tête, langue d'interface par défaut, un clic entre, autre choix, nom vide, nom pris dit sur la même vue, arabe).

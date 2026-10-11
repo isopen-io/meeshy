@@ -228,7 +228,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
         language={language}
         copy={copy}
         onLanding={false}
-        languageControl={<LanguageSelect language={language} copy={copy} onSelect={chooseLanguage} />}
+        languageControl={<LanguageSelect language={language} label={copy.languageLabel} onSelect={chooseLanguage} />}
       />
       <main className="relative mx-auto grid w-full max-w-5xl grow content-start gap-8 px-4 py-10 sm:px-8 md:py-14">
         <header className="grid justify-items-center gap-3 text-center">
