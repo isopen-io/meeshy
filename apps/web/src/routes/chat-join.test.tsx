@@ -925,6 +925,17 @@ describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)
     expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
   });
 
+  /* `/world` ne lit que l'invité SANS compte (#10100) : un compte y est renvoyé
+     à la jonction par lien, qui lui reproposerait d'entrer. Entré sous son
+     identité anonyme (#8816), il rouvre le fil qu'il vient de rejoindre. */
+  test('un COMPTE entré en anonyme par une landing en cache ouvre le fil rejoint, pas /world', async () => {
+    signIn();
+    const { deps, recorded } = fromLanding();
+    await mount(deps, LINK, true, KENJI);
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+  });
+
   test('pendant l’entrée, l’invitation n’est pas peinte : l’écran attend, il ne propose rien', async () => {
     const { deps } = fromLanding({ joinGuest: () => never() });
     const el = await mount(deps, LINK, true, KENJI);
