@@ -49,11 +49,10 @@ const ruleIn = (block: string, selector: string): string => {
 
 const TABLET = '(min-width: 768px)';
 const WIDE = '(min-width: 1280px)';
-const SPLIT = '(min-width: 1024px)';
 
 describe('la feuille de la colonne ne touche pas au téléphone', () => {
   test('aucune règle hors des requêtes média', () => {
-    const outside = [TABLET, WIDE, SPLIT].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
+    const outside = [TABLET, WIDE].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
     expect(outside.trim()).toBe('');
   });
 });

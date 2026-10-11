@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { createRouter, navigate } from '@/lib/router';
 import { floatingMenusHost } from '@/lib/view/floating-gate';
 import { SPLIT_QUERY } from '@/lib/view/split-query';
+import { floatingMenusReady } from '@/test-support/floating-menus-ready';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { DeferredSplitFrame } from './route-table';
@@ -25,7 +26,7 @@ type Listener = (event: { matches: boolean }) => void;
 const media = { wide: true, listeners: new Set<Listener>() };
 let originalMatchMedia: typeof window.matchMedia;
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   originalMatchMedia = window.matchMedia;
@@ -37,6 +38,7 @@ beforeAll(() => {
     addEventListener: (_: string, listener: Listener) => media.listeners.add(listener),
     removeEventListener: (_: string, listener: Listener) => media.listeners.delete(listener),
   })) as unknown as typeof window.matchMedia;
+  await floatingMenusReady();
 });
 
 afterAll(async () => {

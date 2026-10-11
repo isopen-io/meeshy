@@ -3,6 +3,7 @@ import { useStore } from 'zustand/react';
 
 import '@/styles/split-frame.css';
 
+import { LazyFloatingMenus } from '@/components/floating-menus-lazy';
 import { sessionStore } from '@/lib/api/session';
 import type { FrameProps } from '@/lib/router';
 import { isWide, splitPaneOf, subscribeWide } from '@/lib/view/split-query';
@@ -28,6 +29,12 @@ import { SPLIT_LIST_ID, SplitHandle } from './split-handle';
  * état de CE cadre, relu de l'appareil au montage ; pendant le glisser, rien
  * ne se rend. La liste est un élément RETENU (`useMemo`) : valider une largeur
  * re-rend le cadre et son séparateur, jamais la liste ni le fil.
+ *
+ * LES DISQUES FLOTTANTS VIVENT DANS LA COLONNE DE LA LISTE (#10117) : sur
+ * `/chats` comme sur `/c/:id` — ouvrir une conversation ne les retire ni ne
+ * les déplace, et ils ne se posent jamais sur le volet du fil (son en-tête,
+ * son composeur). La coquille ne les pose pas sur la fenêtre tant que ce cadre
+ * est dessiné (`floatingMenusHost`, `lib/view/floating-gate.ts`).
  *
  * Sous 1024 px, et pour l'invité d'un lien (World Wide sans compte, qui n'a pas
  * de liste), il rend l'écran routé TEL QUEL : rien ne change.
@@ -67,6 +74,9 @@ export function SplitFrame({ routeKey, screen, screenOf }: FrameProps): ReactNod
         <ScrollportKeyScope.Provider value="/chats">
           <Suspense fallback={pending}>{list}</Suspense>
         </ScrollportKeyScope.Provider>
+        <Suspense fallback={null}>
+          <LazyFloatingMenus routeKey={routeKey} contained />
+        </Suspense>
       </div>
       <SplitHandle frameRef={frame} preferred={preferred} onCommit={setPreferred} />
       <div data-split-detail="" className="relative h-dvh min-w-0 overflow-hidden">
