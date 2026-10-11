@@ -147,7 +147,7 @@ export function PackShop<P extends ShopPack>({
                   style={
                     pack.installed
                       ? { backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-ink)' }
-                      : { backgroundColor: 'var(--accent)', color: 'var(--color-ios-on-brand)' }
+                      : { backgroundColor: 'var(--accent, var(--color-ios-brand))', color: 'var(--color-ios-on-brand)' }
                   }
                 >
                   {action}

@@ -159,6 +159,13 @@ describe('FramePackShop', () => {
     await until(() => tab(host, 'exemple-savane') === null);
   });
 
+  test('hors d’une conversation (réglages, aucun --accent), « Installer » et l’onglet choisi restent peints : l’accent retombe sur la marque', async () => {
+    const host = await mount(await gateway());
+    await until(() => host.querySelector('[data-shop-toggle="exemple-savane"]') !== null);
+    expect(host.querySelector<HTMLElement>('[data-shop-toggle="exemple-savane"]')?.style.backgroundColor).toContain('var(--color-ios-brand)');
+    expect(host.querySelector<HTMLElement>('[data-frame-shop-tab]')?.style.backgroundColor).toContain('var(--color-ios-brand)');
+  });
+
   test('l’onglet d’un pack montre ses cadres, chacun avec son nom et OÙ il s’utilise', async () => {
     const host = await mount(await gateway({ installed: true }));
     await until(() => tab(host, 'exemple-savane') !== null);

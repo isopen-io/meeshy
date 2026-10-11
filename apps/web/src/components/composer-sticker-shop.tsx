@@ -165,7 +165,7 @@ function SubmissionsFooter({
         data-shop-submit
         onClick={onSubmit}
         className="min-h-11 self-start rounded-full px-4 text-body font-semibold"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)', color: 'var(--color-ios-ink)' }}
+        style={{ backgroundColor: 'color-mix(in srgb, var(--accent, var(--color-ios-brand)) 14%, transparent)', color: 'var(--color-ios-ink)' }}
       >
         {translateStickerPacks(language, 'stickerPacks.submit.open')}
       </button>

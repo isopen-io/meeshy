@@ -351,7 +351,7 @@ function FrameTabBar({
             style={{
               minHeight: 44,
               color: selected ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)',
-              backgroundColor: selected ? 'var(--accent)' : 'var(--color-ios-card)',
+              backgroundColor: selected ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-ios-card)',
             }}
           >
             {label(candidate)}
