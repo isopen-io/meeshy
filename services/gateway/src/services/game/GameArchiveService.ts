@@ -16,8 +16,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameArchiveStatus, GameLeagueWeekArchive, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
-import { LEAGUE_KEYS, leagueWeekOfMoment, type LeagueKey } from '@meeshy/shared/utils/game/league';
-import { seasonAt, seasonCalendar, seasonProgress, type SeasonCalendar } from '@meeshy/shared/utils/game/season';
+import { LEAGUE_KEYS, leagueWeekOfMoment, type LeagueKey, type LeagueMoment } from '@meeshy/shared/utils/game/league';
+import { seasonAt, seasonCalendar, seasonProgress, seasonTenseAt, type SeasonCalendar } from '@meeshy/shared/utils/game/season';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { leagueRetentionHorizon } from './LeagueSettlement';
 
@@ -51,24 +51,30 @@ export class GameArchiveService {
     this.calendar = deps.calendar ?? lawSeasonCalendar;
   }
 
+  /** MON moment, dans mon fuseau. */
+  private async myMoment(userId: string, now: Date): Promise<LeagueMoment> {
+    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
+    return { dayKey: dayKeyOf(now, row?.timezone), minuteOfDay: minuteOfDayInTimezone(now, row?.timezone) };
+  }
+
   /** La semaine de ligue de MON moment : un dimanche passé 20 h appartient à la suivante. */
   private async myWeek(userId: string, now: Date): Promise<string> {
-    const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } });
-    return leagueWeekOfMoment({ dayKey: dayKeyOf(now, row?.timezone), minuteOfDay: minuteOfDayInTimezone(now, row?.timezone) });
+    return leagueWeekOfMoment(await this.myMoment(userId, now));
   }
 
   async season(userId: string, number: number, now: Date = new Date()): Promise<GameSeasonArchive | null> {
     if (!Number.isInteger(number) || number < 1) return null;
     const calendar = await this.calendar.season(number);
     if (calendar === null) return null;
-    const [myWeek, row] = await Promise.all([
-      this.myWeek(userId, now),
+    const [moment, row] = await Promise.all([
+      this.myMoment(userId, now),
       this.prisma.gameSeason.findUnique({
         where: { userId_number: { userId, number: calendar.number } },
         select: { stars: true, claimedSteps: true, sealOwnedAt: true, settledAt: true },
       }),
     ]);
-    const status = statusOf({ firstWeek: calendar.weekKeys[0] ?? calendar.startDay, lastWeek: calendar.weekKeys.at(-1) ?? calendar.startDay, myWeek });
+    // La loi partagée (#10131) : la même que celle qu'un client rejoue sur sa copie hors ligne (`liveSeasonTense`).
+    const status = seasonTenseAt(calendar, moment);
     const progress = row === null || status === 'upcoming' ? null : seasonProgress({ stars: row.stars });
     return {
       number: calendar.number,

@@ -27,7 +27,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .bubble, font: .bubble, color: "#073B4C", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .names, font: .bubble, color: "#EF476F", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fete.comite",
@@ -50,7 +51,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#D6335A"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#EF476F", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fete.groupe",
@@ -73,7 +75,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .bubble, color: "#073B4C", fill: "#FFD166"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#EF476F", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fete.tablee",
@@ -95,7 +98,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#EF476F"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#EF476F", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fanfare.duo",
@@ -117,7 +121,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .ribbon, font: .cartoon, color: "#FFD166", fill: "#073B4C"),
                 title: CallFrameTitle(source: .names, font: .cartoon, color: "#073B4C", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .brush, color: "#B5294E", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fanfare.comite",
@@ -139,7 +144,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .cartoon, color: "#FFD166", fill: "#073B4C"),
                 title: CallFrameTitle(source: .group, font: .cartoon, color: "#073B4C", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fanfare.groupe",
@@ -161,7 +167,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .list, font: .cartoon, color: "#073B4C", fill: nil),
                 title: CallFrameTitle(source: .group, font: .cartoon, color: "#073B4C", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.fanfare.tablee",
@@ -183,7 +190,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .list, font: .cartoon, color: "#073B4C", fill: nil),
                 title: CallFrameTitle(source: .group, font: .cartoon, color: "#073B4C", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.ballons.duo",
@@ -206,7 +214,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .brush, color: "#073B4C", fill: nil),
                 title: CallFrameTitle(source: .names, font: .brush, color: "#118AB2", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .bubble, color: "#B5294E", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.ballons.comite",
@@ -229,7 +238,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .brush, color: "#073B4C", fill: nil),
                 title: CallFrameTitle(source: .group, font: .brush, color: "#118AB2", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.ballons.groupe",
@@ -253,7 +263,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#0B6E8F"),
                 title: CallFrameTitle(source: .group, font: .brush, color: "#118AB2", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "jovial.grimaces.duo",
@@ -275,7 +286,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .cartoon, color: "#073B4C", fill: nil),
                 title: CallFrameTitle(source: .date, font: .cartoon, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

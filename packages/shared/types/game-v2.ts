@@ -40,6 +40,7 @@ import {
   nonNegativeInt,
   writeRequest,
 } from './game-schema-kit.js';
+import { gamePhotoBlockSchema } from './game-photo.js';
 
 const leagueKeys = enumOf(LEAGUE_KEYS);
 const cupKeys = z.enum(['gold', 'silver', 'bronze']);
@@ -211,6 +212,8 @@ export const gameBlockExtensionShape = {
   prestige: gamePrestigeBlockSchema.optional().catch(undefined),
   visibility: gameVisibilitySchema.optional().catch(undefined),
   achievementRarities: gameAchievementRaritiesSchema.optional().catch(undefined),
+  /** Les réglages et le registre des moments photo (#10162). */
+  photo: gamePhotoBlockSchema.optional().catch(undefined),
 };
 
 // --- La ligue ---

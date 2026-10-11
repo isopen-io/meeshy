@@ -276,6 +276,10 @@ services:
       # World Wide (#10000) : le staging seme le salon public ; WORLD_ADMIN_EMAILS designe ses administrateurs par adresse verifiee.
       - WORLD_SEED_ENABLED=${WORLD_SEED_ENABLED:-true}
       - WORLD_ADMIN_EMAILS=${WORLD_ADMIN_EMAILS:-}
+      # Packs d'EXEMPLE (#10157, demande porteur 2026-10-11) : le registre
+      # packages/shared/design/packs/samples/ n'est lu QUE sous la valeur exacte 1.
+      # Staging seulement — JAMAIS en production (rien de fictif devant les utilisateurs).
+      - PACK_SAMPLES=1
       - ADMIN_SYSTEM_LANGUAGE=${ADMIN_SYSTEM_LANGUAGE}
       - ADMIN_REGIONAL_LANGUAGE=${ADMIN_REGIONAL_LANGUAGE}
       - ADMIN_CUSTOM_DESTINATION_LANGUAGE=${ADMIN_CUSTOM_DESTINATION_LANGUAGE}
@@ -380,6 +384,19 @@ services:
       - "traefik.http.routers.frontend-staging-unfurl.service=gateway-staging"
       - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.replacement=/api/v1/links/$$1/og"
+      # #10192 — les mêmes robots qui déplient un lien SUIVI /l/<jeton> reçoivent
+      # l'aperçu de sa cible publique (GET /api/v1/tracking-links/<jeton>/og) : une
+      # adresse web extérieure d'un lien actif les y renvoie, une invitation ouverte
+      # se déplie, tout le reste rend l'aperçu générique. Sans ce routeur, nginx sert
+      # l'aperçu générique de la famille `link` (apps/web/nginx.conf, D-199).
+      - "traefik.http.routers.frontend-staging-track-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/l/[A-Za-z0-9_-]{2,50}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-staging-track-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-track-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-track-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-track-unfurl.middlewares=track-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-track-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
+      - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================

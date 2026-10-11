@@ -397,6 +397,19 @@ services:
       - "traefik.http.routers.frontend-unfurl.service=gateway"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.replacement=/api/v1/links/$$1/og"
+      # #10192 — les mêmes robots qui déplient un lien SUIVI /l/<jeton> reçoivent
+      # l'aperçu de sa cible publique (GET /api/v1/tracking-links/<jeton>/og) : une
+      # adresse web extérieure d'un lien actif les y renvoie, une invitation ouverte
+      # se déplie, tout le reste rend l'aperçu générique. Sans ce routeur, nginx sert
+      # l'aperçu générique de la famille `link` (apps/web/nginx.conf, D-199).
+      - "traefik.http.routers.frontend-track-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/l/[A-Za-z0-9_-]{2,50}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-track-unfurl.priority=100"
+      - "traefik.http.routers.frontend-track-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-track-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-track-unfurl.middlewares=track-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-track-unfurl.service=gateway"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}

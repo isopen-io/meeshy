@@ -39,6 +39,7 @@ const esIdentity = {
   'conversation.details.share.failed': 'No se pudo crear el enlace. Inténtalo de nuevo en un momento.',
   'conversation.details.share.unavailable': 'No se puede compartir aquí. Copia el enlace: {url}',
   'thread.header.active_members': 'Miembros más activos',
+  'thread.header.share': 'Compartir la conversación',
 };
 
 export default esIdentity;

@@ -52,14 +52,28 @@ struct GameSeasonScreen: View {
 
 /// Avant l'ouverture de la saison 1 (lundi 2026-12-21), le serveur sert `seasonUpcoming` : l'écran dit
 /// laquelle vient, quand, et sur quel thème — jamais un vide. Une donnée de calendrier, la même pour tous.
+///
+/// Son état se calcule à l'horloge locale (#10131) : le jour de l'ouverture, la carte gardée hors ligne devient celle
+/// d'une saison OUVERTE (`GameSeasonOpened`), sans attendre le réseau.
 struct GameSeasonUpcoming: View {
     let upcoming: GameUpcomingSeasonBlock
+    var moment: LeagueMoment? = nil
 
     static func line(_ upcoming: GameUpcomingSeasonBlock, locale: Locale = .current) -> String {
         GameText.seasonUpcoming(number: GameCopy.formatCount(upcoming.number), date: GameWave2Format.day(upcoming.startDay, locale: locale))
     }
 
     var body: some View {
+        let tense = GameSeason.liveTense(served: .upcoming, startDay: upcoming.startDay, endDay: upcoming.endDay,
+                                         at: moment ?? .local())
+        if tense == .upcoming {
+            card
+        } else {
+            GameSeasonOpened(season: upcoming)
+        }
+    }
+
+    private var card: some View {
         GameCard(tint: MeeshyColors.brandPrimary, title: GameText.seasonTitle) {
             Text(Self.line(upcoming))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -73,6 +87,28 @@ struct GameSeasonUpcoming: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("game.season.upcoming")
+    }
+}
+
+/// Une saison OUVERTE dont le bloc gardé ne porte pas encore le parcours (#10131) : hors ligne, le jour de son
+/// ouverture. Son numéro, son état, son thème et ses dates ; le parcours se lit au retour du réseau. Miroir de
+/// `GameSeasonOpened` (`apps/web/src/components/game-season.tsx`).
+struct GameSeasonOpened: View {
+    let season: GameUpcomingSeasonBlock
+
+    var body: some View {
+        GameCard(tint: MeeshyColors.brandPrimary, title: GameText.archiveSeasonCurrentTitle(number: GameCopy.formatCount(season.number))) {
+            if let theme = GameWave2Format.seasonTheme(season.themeKey) {
+                Text(GameText.seasonTheme(theme: theme))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+            }
+            GameNote(text: GameText.archiveSeasonDates(start: GameWave2Format.day(season.startDay),
+                                                       end: GameWave2Format.day(season.endDay)))
+            GameNote(text: GameText.archiveSeasonOpenedNote)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game.season.opened")
     }
 }
 

@@ -7,6 +7,7 @@ import android.app.RemoteAction;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.graphics.Bitmap;
 import android.graphics.drawable.Icon;
@@ -14,9 +15,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.GeolocationPermissions;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -26,6 +29,7 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.location.LocationManagerCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -199,6 +203,20 @@ public class MainActivity extends BridgeActivity {
         if (call != null) call.pictureInPictureChanged(active);
     }
 
+    /** #10227 — les reglages de localisation du systeme, comme Chrome a defaut de Play Services. */
+    private void openLocationSettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));
+        } catch (android.content.ActivityNotFoundException missing) {
+            // Aucun ecran de reglages : la page garde son « Reessayer ».
+        }
+    }
+
+    private boolean locationEnabled() {
+        LocationManager manager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        return manager == null || LocationManagerCompat.isLocationEnabled(manager);
+    }
+
     /** #10087 — l'entree recoit toujours une reponse, vide quand rien n'est choisi. */
     private void photosPicked(ActivityResult result) {
         ValueCallback<Uri[]> callback = pickCallback;
@@ -285,6 +303,19 @@ public class MainActivity extends BridgeActivity {
                     return super.onShowFileChooser(webView, callback, params);
                 }
                 return true;
+            }
+
+            /**
+             * #10227 — Capacitor demande la permission, puis la page recoit
+             * sa reponse ; localisation eteinte, la coque ouvre ses reglages
+             * comme Chrome, et « Reessayer » aboutit au retour.
+             */
+            @Override
+            public void onGeolocationPermissionsShowPrompt(String origin, GeolocationPermissions.Callback callback) {
+                super.onGeolocationPermissionsShowPrompt(origin, (requestOrigin, allow, retain) -> {
+                    callback.invoke(requestOrigin, allow, retain);
+                    if (LocationPromptRules.opensLocationSettings(allow, locationEnabled())) openLocationSettings();
+                });
             }
 
             @Override

@@ -29,6 +29,10 @@ def _edge(card, key):
     return g, hi, mid, lo
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def plate(card, title, message=None, y=760, style="or", w=424, kicker=KICK, numero=None, title_size=38,
           ornament="losange", ink=None, accent=None, opacity=0.93, h=None):
     """L'inscription : un panneau émaillé à double filet de métal, sur-titre long, titre, message manuscrit, date."""

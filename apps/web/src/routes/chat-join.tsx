@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { endRevokedSession } from '@/lib/api/account-caches';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
@@ -28,7 +28,7 @@ import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalo
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ANONYMOUS_MODE, joinChoicesOf } from '@/lib/links/invitation-view';
 import { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from '@/lib/links/link-copy';
-import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
+import { shareLinkUrl } from '@/lib/links/web-origin';
 import { useOnline } from '@/lib/net/online';
 import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
@@ -158,7 +158,7 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   expireSession: () => endRevokedSession(sessionStore),
   copyText: (url) => copyLinkText(url, portailDuNavigateur()),
   shareUrl: (data) => partagerLien(data),
-  origin: () => webOriginOf(apiConfig.base, window.location.origin),
+  origin: () => publicWebOrigin(window.location.origin),
   now: () => new Date(),
   handoff: () => window.sessionStorage,
 };

@@ -47,6 +47,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import ts from 'typescript';
 
 const GATEWAY_ROOT = join(__dirname, '../..');
 
@@ -114,7 +115,27 @@ describe('jest.config.json et jest.config.temp.json ne divergent que là où c�
     const temporaire = lireConfig('jest.config.temp.json');
 
     expect(JSON.stringify(temporaire.transform)).toBe(JSON.stringify(principale.transform));
-    expect(JSON.stringify(principale.transform)).toContain('tsconfig.test.json');
+    expect(JSON.stringify(principale.transform)).toContain('tsconfig.jest.json');
+  });
+
+  // #10203 — ts-jest transpile fichier par fichier (`isolatedModules`) : la
+  // suite tombe de 584 s à 268 s. Le tsconfig qu'il lit ÉTEND celui des tests
+  // (les types de Jest, les relâchements de `noUnused*`) et n'ajoute que la
+  // transpilation isolée — la vérification de types des tests est portée par
+  // `tsc -p tsconfig.test.json` (`tsc-never-loaded-tests-ratchet.test.ts`), qui
+  // doit donc rester SANS `isolatedModules` pour que sa mesure ne bouge pas.
+  it('ts-jest transpile en modules isolés, sur le tsconfig des tests et lui seul', () => {
+    const lireTsconfig = (fileName: string): { extends?: string; compilerOptions?: Record<string, unknown> } => {
+      const lu = ts.readConfigFile(join(GATEWAY_ROOT, fileName), ts.sys.readFile);
+      expect(lu.error).toBeUndefined();
+      return lu.config;
+    };
+    const jestTsconfig = lireTsconfig('tsconfig.jest.json');
+    const testTsconfig = lireTsconfig('tsconfig.test.json');
+
+    expect(jestTsconfig.extends).toBe('./tsconfig.test.json');
+    expect(jestTsconfig.compilerOptions).toEqual({ isolatedModules: true });
+    expect(testTsconfig.compilerOptions?.isolatedModules).toBeUndefined();
   });
 
   it('chaque divergence déclarée porte une raison écrite, jamais une simple permission', () => {

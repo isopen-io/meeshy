@@ -213,7 +213,19 @@ describe('ROUTE_TABLE (#4278)', () => {
     // participant de World Wide, réservée aux rôles au-delà de USER), montage
     // autonome. Aucun alias, aucune route retirée ni renommée. Vérifié : le
     // manifeste passe de 656 à 657 routes, soit exactement celle-là.
-    expect(ROUTE_TABLE.length).toBe(78);
+    // 79 : #10148 (LP0) ajoute `packs-glory-frame` — le montage AUTONOME des
+    // packs de cadres de gloire sous `/api/v1/packs/glory-frame`, servi par le
+    // MÊME moteur que `sticker-packs` (un montage par domaine, jamais un
+    // `:domain`). Aucun alias, aucune route retirée ni renommée : les routes de
+    // `/api/v1/sticker-packs` gardent chemins, méthodes et réponses à l'octet.
+    // Vérifié : le manifeste passe de 657 à 662 routes, soit exactement les
+    // cinq neuves (GET /, GET /installed, GET /:slug, PUT et DELETE
+    // /:slug/install).
+    // 80 : #10157 (L5) ajoute `pack-assets` — le magasin PUBLIC adressé par
+    // contenu des packs officiels sous `/api/v1/pack-assets/:file`. Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste gagne
+    // exactement cette route.
+    expect(ROUTE_TABLE.length).toBe(80);
   });
 });
 
@@ -225,13 +237,15 @@ describe('ROUTE_TABLE (#4278)', () => {
  * tsconfig.json retire tout le dossier `__tests__` — voir la note de
  * `services/gateway/CLAUDE.md` § « Un cliquet doit être ATTEIGNABLE par le
  * compilateur »). `tsconfig.test.json`, lui, INCLUT `__tests__` sans
- * exclusion — c'est donc ts-jest, au moment où
- * CE fichier de test est chargé, qui type-vérifie les trois blocs
+ * exclusion — et depuis #10203 (ts-jest transpile en modules isolés, sans
+ * types), c'est `tsc -p tsconfig.test.json`, mesuré par
+ * `tsc-never-loaded-tests-ratchet.test.ts`, qui type-vérifie les trois blocs
  * `@ts-expect-error` ci-dessous. Le code TS2578 (directive `@ts-expect-error`
- * inutilisée) n'est PAS dans `diagnostics.ignoreCodes` de `jest.config.json`
- * — si un champ redevenait optionnel, la ligne se mettrait à COMPILER, la
- * directive deviendrait inutile, et ts-jest ferait ROUGIR ce fichier entier
- * au chargement. C'est la preuve, PROUVÉE rouge sous chacune des trois
+ * inutilisée) n'est PAS l'un des quatre codes muets de ce cliquet — si un
+ * champ redevenait optionnel, la ligne se mettrait à COMPILER, la directive
+ * deviendrait inutile, et le compte du cliquet dépasserait son plafond SERRÉ.
+ * Avant #10203, c'était ts-jest qui faisait ROUGIR ce fichier au chargement,
+ * PROUVÉ rouge sous chacune des trois
  * mutations qu'elle nomme (voir le rapport de la session : mutation
  * `prefix?: string`, `module?: RoutePlugin`, `name?: string` — chacune fait
  * tomber CE fichier avec `TS2578: Unused '@ts-expect-error' directive`).

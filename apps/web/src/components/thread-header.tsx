@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { useStore } from 'zustand/react';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
@@ -10,11 +11,13 @@ import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph } from './glyph';
 import { ReadingModeChip } from './reading-mode-chip';
 import { ThreadCallButton } from './thread-call-button';
+import { ThreadShareButton } from './thread-share-button';
 import { UnreadBadge } from './unread-badge';
 import type { ListConversation } from '@/lib/api/list-preview';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
+import { sessionStore } from '@/lib/api/session';
 import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
@@ -25,7 +28,9 @@ import { useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-con
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
-import { useGuestFocus } from '@/lib/view/guest-focus';
+import { useGuestFocus, useSpeaksAsGuest } from '@/lib/view/guest-focus';
+import { threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { EngagementPill } from './engagement-pill';
@@ -148,13 +153,31 @@ export function ThreadHeader({
      l'indigo « ici » primant (`ActiveMembersStack`). */
   const memberPresence = (memberId: string) =>
     presenceOf(conversation.participants.find((p) => (p.userId ?? p.user?.id ?? p.id) === memberId));
+  /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
+     liste qu'il n'a pas, et la place libérée dit où il est — le nom, comme
+     l'aperçu et l'ordinateur. */
+  const focus = useGuestFocus();
+  /* NI DÉTAILS, NI EFFECTIF, NI PROFILS POUR UN VISITEUR SANS COMPTE (#10205,
+     directive porteur du 2026-10-11) — décidé par son STATUT, jamais par
+     l'absence d'un champ que la passerelle cesse de lui servir. Le partage de
+     la conversation, à côté de l'avatar, prend la place du détail (#10206). */
+  const sessionIsGuest = useSpeaksAsGuest();
+  const details = sessionIsGuest ? undefined : onOpenDetails;
+  const subtitle = threadHeaderSubtitle({ group, guest: sessionIsGuest, memberCount: conversation.memberCount, encryptionMode: conversation.encryptionMode });
+  /* L'APPEL PAR LA LOI PARTAGÉE (#10207, #10114) — `canStartCall`, jamais une
+     réimplémentation : aucun en `global`, en `public` seuls le créateur et les
+     administrateurs le lancent (les autres membres gardent « Rejoindre »). */
+  const sessionUserId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  const platformRole = useServedGlobalRole();
+  const callOffer = threadCallOffer({ conversation, viewerUserId: sessionUserId, viewerPlatformRole: platformRole, viewerIsGuest: sessionIsGuest });
   /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
      d'auteur (#7828) : le pair (profil, story) en direct, et les détails de la
-     conversation partout où l'hôte sait les ouvrir. */
+     conversation partout où l'hôte sait les ouvrir. Un visiteur sans compte
+     n'y trouve aucune fiche (#10205). */
   const identityMenu = avatarMenuEntries({
-    username: peer?.user?.username,
-    storyRing: peerRing,
-    details: onOpenDetails !== undefined,
+    username: sessionIsGuest ? undefined : peer?.user?.username,
+    storyRing: sessionIsGuest ? undefined : peerRing,
+    details: details !== undefined,
   });
   /* SUR ORDINATEUR, L'EN-TÊTE N'A PLUS À CHOISIR (#10101). Le repli est une
      économie de TÉLÉPHONE : à 390 px, l'identité et les actions ne tiennent
@@ -164,10 +187,6 @@ export function ThreadHeader({
      l'aperçu porte déjà (#8821). Déplier y ajoute ce qu'il ajoutait (la
      flamme du jour, les plus actifs), sans plus rien retirer. */
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
-  /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
-     liste qu'il n'a pas, et la place libérée dit où il est — le nom et
-     l'effectif, comme l'aperçu et l'ordinateur. */
-  const focus = useGuestFocus();
   const besideIdentity = preview || wide || focus;
 
   return (
@@ -242,10 +261,10 @@ export function ThreadHeader({
         {besideIdentity || expanded ? (
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h1
-              className={`${group && onOpenDetails !== undefined ? '' : 'truncate '}text-title font-bold`}
+              className={`${group && details !== undefined ? '' : 'truncate '}text-title font-bold`}
               style={{ color: 'var(--color-ios-ink)' }}
             >
-              {group && onOpenDetails !== undefined ? (
+              {group && details !== undefined ? (
                 /* LE TITRE D'UN GROUPE OUVRE SES DÉTAILS (#7829). La marge
                    négative rend au flux ce que le rembourrage ajoute : la cible
                    fait 44 px de haut sans que l'en-tête grandisse. C'est le
@@ -253,7 +272,7 @@ export function ThreadHeader({
                    le titre rognerait la cible à sa hauteur de texte. */
                 <button
                   type="button"
-                  onClick={onOpenDetails}
+                  onClick={details}
                   aria-haspopup="dialog"
                   data-thread-title-details
                   className="block max-w-full truncate text-start"
@@ -262,8 +281,8 @@ export function ThreadHeader({
                   {title}
                 </button>
               ) : (
-                <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
-                  <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />
+                <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
+                  {sessionIsGuest ? title : <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />}
                 </AvatarMenuTrigger>
               )}
             </h1>
@@ -273,10 +292,14 @@ export function ThreadHeader({
                 mesure 3,58:1 — sous la barre AA. `--color-ios-ink` y tient (mesuré par
                 `scripts/lib/glass-contrast.test.ts`), la hiérarchie reste lisible par la
                 taille (`text-mini`) plutôt que par l'opacité. */}
-            <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink)' }}>
-              <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} />
-              {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
-            </p>
+            {/* LE CADENAS NE DIT QUE CE QUI EST VRAI (#10114) : une conversation
+                chiffrée de bout en bout. L'effectif ne se lit qu'en membre (#10205). */}
+            {subtitle.locked || subtitle.label !== null ? (
+              <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink)' }}>
+                {subtitle.locked ? <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} /> : null}
+                {subtitle.label}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {expanded && !preview ? <EngagementPill snapshot={engagement} opensProgression /> : null}
@@ -314,12 +337,12 @@ export function ThreadHeader({
                 jeton GÉNÉRÉ depuis iOS (`--size-header-circle`) — il était
                 écrit ici en `size-7`, juste par accident, et en `size-8` sur
                 l'écran de liste, faux du même accident. */}
-{/* L'APPEL (#6382) — vocal ou vidéo, dans une conversation directe ou de
-                groupe : les deux seuls types que la passerelle appelle
-                (`CallService.initiateCall`, `VIDEO_CALLS_NOT_SUPPORTED` ailleurs). */}
-            {conversation.type === 'direct' || conversation.type === 'group' ? (
-              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} />
-            ) : null}
+{/* L'APPEL (#6382) — vocal ou vidéo, offert par `threadCallOffer`
+                (#10207) : « start » lance, « join-only » ne garde que les portes
+                d'un appel déjà en cours, « none » ne montre rien. */}
+            {callOffer === 'none' ? null : (
+              <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} mayStart={callOffer === 'start'} />
+            )}
             {/* EN APERÇU, « AGRANDIR » PREND LA PLACE DE LA LOUPE (#9031) :
                 l'aperçu ne cherche pas, il ouvre la conversation complète. */}
             {preview ? (
@@ -353,24 +376,27 @@ export function ThreadHeader({
         {/* EN APERÇU AUSSI (#9031, demande porteur 2026-10-01) : la pile des
             plus actifs, chacun avec son point, puis l'avatar du groupe. Le
             titre tronque ; son nom entier reste dans les détails. */}
-        {(expanded || preview) && group && activeMembers !== undefined ? (
+        {(expanded || preview) && group && !sessionIsGuest && activeMembers !== undefined ? (
           <ActiveMembersStack
             members={activeMembers}
             accent={accent}
             storyRingOf={storyRingOf}
-            onOpenDetails={onOpenDetails}
+            onOpenDetails={details}
             presenceOf={memberPresence}
           />
         ) : null}
 
+        {/* PARTAGER LA CONVERSATION, À CÔTÉ DE L'AVATAR (#10206) — l'aperçu
+            garde « Agrandir » comme seule action de sortie. */}
+        {preview ? null : <ThreadShareButton conversation={conversation} title={title} />}
         <div className="relative shrink-0">
-        <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
+        <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
           {/* En APERÇU (#8821), l'en-tête n'a rien à déplier : l'avatar y
               ouvre les détails de la conversation, la porte que le titre
               déplié offre dans le fil. */}
           <button
             type="button"
-            onClick={preview ? (onOpenDetails ?? onToggleExpanded) : onToggleExpanded}
+            onClick={preview ? (details ?? onToggleExpanded) : onToggleExpanded}
             {...(preview ? { 'aria-haspopup': 'dialog' as const } : { 'aria-expanded': expanded })}
             aria-label={preview ? 'Détails de la conversation' : expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
             className="shrink-0"

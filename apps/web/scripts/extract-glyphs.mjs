@@ -360,15 +360,19 @@ emit({
  * `regular/`. Charge avec le chunk du fil (`focal-row.tsx`), jamais dans le
  * socle — un sans-compte reste un cas RARE face au volume d'identites
  * ordinaires que le socle paie a chaque premier pixel.
+ *
+ * `export` (#10206) : « Partager la conversation », a cote de l'avatar de
+ * l'en-tete du fil — miroir `square.and.arrow.up` d'iOS, le meme glyphe que
+ * le partage des liens et des cartes.
  */
-const THREAD_IDENTITY = ['mask-happy'];
+const THREAD_IDENTITY = ['mask-happy', 'export'];
 
 emit({
   ids: THREAD_IDENTITY,
   output: join(HERE, '../src/components/glyphs-thread-identity.ts'),
   constant: 'THREAD_IDENTITY_GLYPHS',
   type: 'ThreadIdentityGlyphName',
-  role: "LE JEU D'ECRAN de l'identite de rangee (#5935) : le masque du sans-compte (theatermasks.fill iOS), charge avec le chunk du fil, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de l'identite de rangee (#5935) : le masque du sans-compte (theatermasks.fill iOS) et le partage de la conversation (#10206), charge avec le chunk du fil, jamais dans le socle.",
 });
 
 /**

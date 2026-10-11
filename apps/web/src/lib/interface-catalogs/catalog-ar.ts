@@ -1103,6 +1103,8 @@ const ar = {
   ...arConversationCard,
   ...arStoriesMine,
   'settings.tools.sounds': 'أصواتي',
+  'settings.section.packs': 'الحزم والتنزيلات',
+  'settings.packs.shop': 'متجر الملصقات والإطارات',
   ...arContactCard,
   ...arQuote,
   ...arCommentRow,

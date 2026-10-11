@@ -53,6 +53,17 @@ const enStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'A text of the maximum length would overflow: enlarge the area or reduce the length',
   'stickerPacks.problem.count': 'A pack has between 3 and 120 stickers',
   'stickerPacks.problem.packField': 'Give the pack a name, a description and a signature',
+  'packs.title': 'Packs and downloads',
+  'packs.segments': 'Pack type',
+  'packs.segment.stickers': 'Stickers',
+  'packs.segment.frames': 'Game frames',
+  'packs.frames.tabs': 'Frame packs',
+  'packs.frames.hint': 'Install the frame packs that capture your game milestones. Each frame says where it can be used.',
+  'packs.frames.empty': 'No frame packs yet.',
+  'packs.frames.update': 'This pack needs a newer version of Meeshy. Update Meeshy to see its frames.',
+  'packs.frames.failed': 'This pack’s frames could not be loaded — try again',
+  'packs.frames.count': '{count} frames',
+  'packs.frames.weight': '{size} to download',
 } satisfies StickerPacksCatalog;
 
 export default enStickerPacks;

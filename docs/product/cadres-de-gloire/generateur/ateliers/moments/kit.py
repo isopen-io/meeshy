@@ -256,6 +256,10 @@ def outer_frame(card, metal, m=12, w=3.5, r=24, name="of", inner_op=0.6, inner_c
 
 # ---------------------------------------------------------------- l'inscription
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, kicker, title, message=None, y=752, metal=("#FFF4C2", "#E8B53C", "#8A5A12"), panel=("#1A1030", "#07050F"),
                 ink="#FFF6E6", accent=None, title_size=40, w=424, date=DATE, msg_color=None, title_font=CINZEL,
                 border=None, panel_op=0.9, shape="rrect", ornaments=True, extra="", title_fill=None, kicker_color=None):

@@ -28,6 +28,10 @@ def prism_frame(c, name="pf"):
             f'<rect x="19" y="19" width="{W - 38}" height="{H - 38}" rx="17" fill="none" stroke="#FFFFFF" stroke-width="0.7" opacity="0.45"/>')
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def mythe_plaque(c, message, y=790, w=430):
     inscription(c, TITLE, message, y=y, style="cosmos", metal=PRISME, panel=("#120C2E", "#04030C"), kicker=kicker(), w=w, title_size=40)
     c.add(numero_badge(c, 270, y, BADGE))

@@ -146,6 +146,34 @@ describe('quand la bannière n’a pas de place', () => {
     expect(band(host)?.getAttribute('data-top-band')).toBe('');
   });
 
+  test('la bannière arrive : sa place est réservée dans la même passe, jamais une tâche où elle recouvre l’en-tête', async () => {
+    const measured = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    HTMLElement.prototype.getBoundingClientRect = function rect(this: HTMLElement): DOMRect {
+      const height = this.matches('[data-top-bars]') && this.querySelector('[data-player-banner]') !== null ? 58 : 0;
+      return { x: 0, y: 8, width: 390, height, top: 8, left: 0, right: 390, bottom: 8 + height, toJSON: () => ({}) } as DOMRect;
+    };
+    try {
+      const insets: number[] = [];
+      const whileShown: number[] = [];
+      const host = await mount(<TopBand routeKey="list" signedIn onInset={(pixels) => insets.push(pixels)} />);
+      const column = band(host);
+      if (column === null) throw new Error('bandeau attendu');
+      const read = (): void => {
+        if (column.querySelector('[data-player-banner]') !== null) whileShown.push(insets.at(-1) ?? 0);
+      };
+      read();
+      const witness = new MutationObserver(read);
+      witness.observe(column, { childList: true, subtree: true });
+      expect(await waitForBanner(host)).not.toBeNull();
+      await settle();
+      witness.disconnect();
+      expect(whileShown.length).toBeGreaterThan(0);
+      expect(whileShown.every((pixels) => pixels === 70)).toBe(true);
+    } finally {
+      if (measured !== undefined) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', measured);
+    }
+  });
+
   test('hors des hubs (le fil), aucune bannière ni réserve', async () => {
     const insets: number[] = [];
     const host = await mount(<TopBand routeKey="thread" signedIn onInset={(pixels) => insets.push(pixels)} />);

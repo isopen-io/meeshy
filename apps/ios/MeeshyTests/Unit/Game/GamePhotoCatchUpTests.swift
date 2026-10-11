@@ -12,7 +12,7 @@ final class GamePhotoCatchUpTests: XCTestCase {
     }
 
     private func photo() -> KeptPhoto {
-        KeptPhoto(story: Data("story".utf8), square: Data("square".utf8), mode: .selfie)
+        KeptPhoto(story: Data("story".utf8), mode: .selfie)
     }
 
     private func keep(_ ids: [String], in notebook: MockGamePhotoNotebook, standing: PhotoCatchUpStanding) async {
@@ -215,15 +215,26 @@ final class GamePhotoCatchUpTests: XCTestCase {
         XCTAssertEqual(Set(sut.kept.map(\.momentId)), ["start", "meesh:1"])
     }
 
-    func test_notebookLoad_withoutAKnownGame_showsNoCatchUp_andKeepsThePending() async {
+    func test_notebookLoad_withoutAKnownGame_showsNoCatchUp_andNeverAPendingTrackStep() async {
         let notebook = MockGamePhotoNotebook()
         _ = await notebook.postpone(GamePhotoMoments.meesh(number: 10, edition: .silver))
+        _ = await notebook.postpone(GamePhotoMoments.achievement(id: "first_message", title: "Premier message"))
         let sut = GameNotebookViewModel(notebook: notebook, currentUserId: "u1", standing: { nil })
 
         await sut.load()
 
         XCTAssertTrue(sut.catchUp.isEmpty)
-        XCTAssertEqual(sut.pending.map(\.momentId), ["meesh:10"])
+        XCTAssertEqual(sut.pending.map(\.momentId), ["achievement:first_message"], "une étape de piste reportée n'apparaît que dans « À rattraper » (#10161)")
+    }
+
+    func test_notebookLoad_publishesThePlaceTheNotebookTakes() async {
+        let notebook = MockGamePhotoNotebook()
+        notebook.bytes = 3_200_000
+        let sut = GameNotebookViewModel(notebook: notebook, currentUserId: "u1", standing: { nil })
+
+        await sut.load()
+
+        XCTAssertEqual(sut.occupiedBytes, 3_200_000)
     }
 
     func test_notebookLoad_aLockedStep_namesTheStepToTakeFirst() async {

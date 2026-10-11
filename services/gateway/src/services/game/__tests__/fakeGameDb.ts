@@ -273,6 +273,8 @@ export type FakeGameDb = {
   readonly communityMember: Model;
   readonly mythicSeat: Model;
   readonly mythicEdition: Model;
+  readonly gamePhotoMoment: Model;
+  readonly userStickerPack: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -280,7 +282,7 @@ export function fakeGameDb(): FakeGameDb {
   const gloryLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const meeshLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0 }), optional: ['completedAt', 'paidPoints', 'rerolledAt', 'startsAt', 'endsAt', 'notifiedAt'] }));
-  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze', 'chestGlory', 'chestBonus', 'chestBonusPoints'] }));
+  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze', 'chestGlory', 'chestBonus', 'chestBonusPoints', 'chestMintBase'] }));
   const engagementCounter = flattenCompound(new Model({ uniques: [['userId', 'axisKey']] }));
   const engagementQuota = flattenCompound(new Model({ uniques: [['userId', 'operationKey', 'bucket']] }));
   const engagementMilestone = flattenCompound(new Model({ uniques: [['userId', 'milestoneType', 'milestoneKey']] }));
@@ -317,6 +319,9 @@ export function fakeGameDb(): FakeGameDb {
   // `_id` dérivé du numéro (`mythicSeatId`, `mythicEditionId`) : l'index `_id` existe toujours, d'où l'unique sur `id`.
   const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId'], ['edition']] }));
   const mythicEdition = flattenCompound(new Model({ uniques: [['id'], ['edition']] }));
+  // `_id` dérivé de (userId, stepId) (`photoMomentId`), plus l'unique posé par la migration du registre.
+  const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt'] }));
+  const userStickerPack = flattenCompound(new Model({ uniques: [['userId', 'packSlug']], optional: ['installedAt'] }));
   const models = {
     user,
     gloryLedger,
@@ -349,6 +354,8 @@ export function fakeGameDb(): FakeGameDb {
     communityMember,
     mythicSeat,
     mythicEdition,
+    gamePhotoMoment,
+    userStickerPack,
   };
 
   /**

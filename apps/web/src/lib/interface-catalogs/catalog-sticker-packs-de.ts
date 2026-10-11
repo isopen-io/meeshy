@@ -53,6 +53,17 @@ const deStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Ein Text maximaler Länge würde überlaufen: vergrößere den Bereich oder verringere die Länge',
   'stickerPacks.problem.count': 'Ein Paket hat 3 bis 120 Sticker',
   'stickerPacks.problem.packField': 'Gib dem Paket einen Namen, eine Beschreibung und eine Signatur',
+  'packs.title': 'Pakete und Downloads',
+  'packs.segments': 'Pakettyp',
+  'packs.segment.stickers': 'Sticker',
+  'packs.segment.frames': 'Spielrahmen',
+  'packs.frames.tabs': 'Rahmenpakete',
+  'packs.frames.hint': 'Installiere die Rahmenpakete, die deine Spieletappen festhalten. Jeder Rahmen zeigt, wo er nutzbar ist.',
+  'packs.frames.empty': 'Noch keine Rahmenpakete.',
+  'packs.frames.update': 'Dieses Paket braucht eine neuere Meeshy-Version. Aktualisiere Meeshy, um seine Rahmen zu sehen.',
+  'packs.frames.failed': 'Die Rahmen dieses Pakets konnten nicht geladen werden — versuche es erneut',
+  'packs.frames.count': '{count} Rahmen',
+  'packs.frames.weight': '{size} zum Herunterladen',
 } satisfies StickerPacksCatalog;
 
 export default deStickerPacks;

@@ -71,6 +71,20 @@ export function publicMediaUrl(value: string, base: string): string {
  * exactement ce que ce lot retire de la donnée. Il vit désormais à côté de la règle
  * qu'il sert, en un seul endroit : un appelant ne nomme plus jamais d'hôte.
  */
+const publicBaseFromEnv = (): string => process.env.API_PUBLIC_URL || 'https://gate.meeshy.me';
+
 export function publicMediaUrlFromEnv(value: string): string {
-  return publicMediaUrl(value, process.env.API_PUBLIC_URL || 'https://gate.meeshy.me');
+  return publicMediaUrl(value, publicBaseFromEnv());
+}
+
+/**
+ * L'adresse de flux d'une clé du volume des téléversements HORS de
+ * l'arborescence datée (`stickers/<userId>/…`, `sticker-packs/<id>/…`), que
+ * `publicMediaUrl` laisse volontairement telle quelle : la route de flux sert
+ * ces clés aussi (c'est ainsi que les clients les composent). Pour l'archive
+ * RGPD, dont le lecteur n'a aucun résolveur (#10151).
+ */
+export function streamedFileUrlFromEnv(key: string): string {
+  const racine = publicBaseFromEnv().replace(/\/$/, '');
+  return `${racine}${ATTACHMENT_STREAM_PATH}/${encodeURIComponent(key)}`;
 }

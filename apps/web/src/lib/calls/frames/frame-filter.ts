@@ -1,3 +1,5 @@
+import { canUseFrame, captureFrameUsage, type FrameUsage, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
+
 import { BUCKET_PEOPLE, FRAME_BUCKETS, FRAME_MOODS, type CaptureFrame, type FrameBucket, type FrameLook, type FrameMood, type FrameMotif } from './frame-spec';
 
 /**
@@ -84,4 +86,26 @@ export function reconcileFrame(frames: readonly CaptureFrame[], selectedId: stri
   if (sibling !== undefined) return sibling;
   const mood = selectedId.split('.')[0];
   return frames.find((frame) => frame.mood === mood && servesPeople(frame, people)) ?? null;
+}
+
+/**
+ * **OÙ UN CADRE SERT** (#10146) — l'usage d'un cadre de capture d'appel est
+ * celui que la loi partagée projette de ses `surfaces` (`captureFrameUsage`) :
+ * `live` ⇒ l'appel vidéo ET la capture ; `capture` seul ⇒ la photo et la vidéo,
+ * jamais l'appel. Aucune autre lecture de `surfaces` ne décide d'une offre.
+ */
+export const frameUsageOf = (frame: Pick<CaptureFrame, 'surfaces'>): FrameUsage => captureFrameUsage(frame.surfaces);
+
+/** L'appel vidéo en direct : seuls les cadres du direct s'y proposent. */
+export const CALL_FRAME_USES: readonly FrameUseContext[] = [{ kind: 'call' }];
+
+/** La capture (mode Montage) : deux tapes PHOTOGRAPHIENT, un appui long FILME — un cadre proposé sert les deux. */
+export const CAPTURE_FRAME_USES: readonly FrameUseContext[] = [
+  { kind: 'capture', media: 'photo' },
+  { kind: 'capture', media: 'video' },
+];
+
+/** Les cadres qu'une surface propose : ceux que la loi autorise dans CHACUN de ses contextes. */
+export function offeredFor(frames: readonly CaptureFrame[], uses: readonly FrameUseContext[]): readonly CaptureFrame[] {
+  return frames.filter((frame) => uses.every((use) => canUseFrame(frameUsageOf(frame), use)));
 }

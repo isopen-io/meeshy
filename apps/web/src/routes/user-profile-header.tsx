@@ -44,8 +44,9 @@ import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-
  * la visionneuse existante, chargée au toucher seulement. Sans image (dégradé,
  * initiales), il n'y a rien à ouvrir : aucun bouton.
  *
- * **LE JEU SE POSE SUR LA BANNIÈRE** (#10092) — `game` est l'emplacement du
- * niveau et du rang (`GameBannerVisitorSlot` / `GameBannerOwnSlot`), à droite.
+ * **LE JEU SE POSE SUR LA BANNIÈRE** (#10092, #10231) — `game` est l'emplacement
+ * du niveau et du rang (`GameBannerVisitorSlot` / `GameBannerOwnSlot`) : le
+ * niveau et ses points au début, le rang à la fin.
  */
 export const ProfileHero = memo(function ProfileHero({
   profile,

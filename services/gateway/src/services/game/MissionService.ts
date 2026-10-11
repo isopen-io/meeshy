@@ -25,7 +25,7 @@ import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import type { GameChestReward, GameMission } from '@meeshy/shared/types/game';
 import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/shared/utils/game/boosts';
-import { dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
 import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
@@ -162,6 +162,9 @@ const CHEST_CLEARED = {
  */
 const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: false } }] };
 const CHEST_UNCLAIMED = { OR: [{ chestClaimedAt: null }, { chestClaimedAt: { isSet: false } }] };
+/** Un cours de prime pas encore gravé (#10219) : absent du document, ou `null`. */
+const MINT_BASE_UNSET = { OR: [{ chestMintBase: null }, { chestMintBase: { isSet: false } }] };
+
 
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -577,8 +580,8 @@ export class MissionService {
    * Ouvre le coffre du jour — réclamable une fois les trois missions faites.
    *
    * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire, une
-   * prime en points au cours de la Meesh du compte (`meeshPrice(frappées + 1)`, lu ICI, au moment de la
-   * réclamation), UN fragment d'étoile une fois sur six et un gel une fois sur vingt. Comme une mission
+   * prime en points au cours de la Meesh du compte FIGÉ au début du jour de jeu (`chestPriceBase`, #10219 : une
+   * frappe du jour ne la fait pas monter), UN fragment d'étoile une fois sur six et un gel une fois sur vingt. Comme une mission
    * (`complete`), la réclamation est un `updateMany` conditionnel, puis la Gloire (idempotente, `chest:<jour>`) et
    * les points (prime comprise) se créditent ; si l'un échoue, le coffre est rendu et un nouvel essai ne paie la
    * Gloire qu'une fois. Le fragment d'étoile est gravé sur la journée DANS la réclamation : rendre le coffre
@@ -597,8 +600,8 @@ export class MissionService {
     if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
-    const { mintedLifetime } = await meeshTotalsFromLedger(this.prisma, userId);
-    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintedLifetime + 1) });
+    const mintBase = await this.chestPriceBase({ userId, now, dayKey });
+    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1) });
     const claimed = await this.prisma.gameDay.updateMany({
       where: { userId, dayKey, ...CHEST_UNCLAIMED },
       data: {
@@ -668,6 +671,37 @@ export class MissionService {
       if (written.count === 1) return;
     }
     throw new Error('chest freeze contended');
+  }
+
+  /**
+   * LE COURS DE LA PRIME DU JOUR (#10219) — les Meeshes frappées AVANT l'ouverture du jour de jeu (le tirage de ses
+   * missions, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` à la première lecture (le bloc `game` ou la
+   * réclamation) et relues ensuite telles quelles : l'affichage d'avant l'ouverture et la réclamation tirent la prime
+   * au MÊME cours, et une frappe du jour n'y change rien. Le compte est UNE requête bornée par l'instant d'ouverture :
+   * une frappe concurrente, postérieure, n'y entre pas ; le fuseau n'y entre pas non plus. La gravure est
+   * conditionnelle (`chestMintBase` absent) : la première gagne. Une journée sans gravure (ouverte avant #10219) se
+   * grave à sa lecture suivante.
+   */
+  async chestPriceBase(params: {
+    readonly userId: string;
+    readonly now?: Date;
+    readonly dayKey?: string;
+  }): Promise<number> {
+    const { userId } = params;
+    const now = params.now ?? new Date();
+    const dayKey = params.dayKey ?? (await this.gameDayKey(userId, (await this.userRow(userId))?.timezone, now));
+
+    const engraved = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    if (typeof engraved === 'number') return engraved;
+
+    const missions = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, select: { createdAt: true } });
+    const cutoff = chestPriceCutoff({ missionsOpenedAt: missions.map((row) => row.createdAt), now });
+    const base = await this.prisma.meeshLedger.count({ where: { userId, reason: 'mint', createdAt: { lt: cutoff } } });
+
+    await this.ensureGameDay(userId, dayKey);
+    await this.prisma.gameDay.updateMany({ where: { userId, dayKey, ...MINT_BASE_UNSET }, data: { chestMintBase: base } });
+    const settled = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    return typeof settled === 'number' ? settled : base;
   }
 
   /** Rejouer rend le contenu GRAVÉ, et le même total : une réclamation rejouée ne compte jamais deux fois. */

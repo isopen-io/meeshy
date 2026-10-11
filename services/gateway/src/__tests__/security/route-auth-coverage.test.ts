@@ -246,20 +246,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       'compte : ce serait un oracle, à rebours de la doctrine de /forgot-password et de ' +
       '/magic-link/request (#4158). Bornée à 20/min par IP, plus un coupe-circuit global.',
   },
-  {
-    method: 'GET',
-    url: '/api/v1/directory/people/:handle',
-    why:
-      "L'ADRESSE canonique d'un profil public (S1 anonyme / S2 connecté, #4161). " +
-      'Un profil se consulte depuis un lien partagé, sans compte — comme le faisaient ' +
-      "déjà GET /u/:username, GET /users/:id et GET /users/id/:id, dont elle est " +
-      "l'implémentation UNIQUE, ces trois-là devenant des alias. Elle sert la " +
-      'projection publique et rien de plus : les trois langues du Prisme, isActive, ' +
-      'deactivatedAt et updatedAt ne sont plus ni chargés ni déclarés. La présence ' +
-      "n'est servie que sur ?expand=presence, et toujours sous la loi du 2026-08-25 ; " +
-      'les quatre compteurs intimes de ?expand=stats ne partent qu\'à soi et à ' +
-      "l'administration. Débit : 60/min par IP pour l'anonyme, 240/min par compte.",
-  },
   // --- Récupération de compte ---
   {
     method: 'POST',
@@ -338,9 +324,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: 'idem (purgeTokenHash) — les trois ne font plus aucune mutation depuis #4183, elles redirigent' },
 
   // --- Profils publics (design produit assumé) ---
-  { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },
-  { method: 'GET', url: '/api/v1/users/:id', why: 'idem, par id' },
-  { method: 'GET', url: '/api/v1/users/id/:id', why: 'idem, lookup par ObjectId opaque' },
   // `/users/email/:email` et `/users/phone/:phone` ont QUITTÉ cette liste : elles
   // sont désormais AUTHENTIFIÉES (#4160). Elles confirmaient sans compte qu'une
   // adresse ou un numéro appartient à un utilisateur Meeshy — et rendaient son
@@ -363,7 +346,15 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // #10000 — l'entrée de World Wide que lit la landing de meeshy.me, servie à
   // des visiteurs SANS compte ni session : identique pour tous, sans identité
   // lue, ni id ni participant ni présence (schéma de réponse fermé).
-  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage et effectif agrégé, aucun id ni identité" },
+  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage, aucun id ni identité ; l'effectif ne part que vers un compte Meeshy (#10205)" },
+  // Les profils (GET /directory/people/:handle et ses trois alias /u/:username,
+  // /users/:id, /users/id/:id) ne sont PLUS publics depuis #10205 (directive
+  // porteur du 2026-10-11) : un lecteur sans compte reçoit 403 ACCOUNT_REQUIRED,
+  // et le témoin ci-dessous le PROUVE en les traitant comme toute route gardée.
+  // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
+  // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
+  // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.
+  { method: 'GET', url: '/api/v1/pack-assets/:file', why: "fichier d'un pack OFFICIEL adressé par son empreinte (<sha16>.<ext>), liste blanche des registres, aucune identité lue ni servie" },
   // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
   // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
   // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).
@@ -380,6 +371,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/og', why: "page d'aperçu des robots (#10192) : 302 vers la cible web publique d'un lien actif (ce que l'ouverture du lien donne à quiconque le tient, sans clic compté), aperçu d'une invitation ouverte et publique, sinon générique sans rien de la cible" },
   { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },

@@ -259,6 +259,10 @@ const it = {
   'game.badge.rung.next': 'Prossima stella · ancora {missing}',
   'game.badge.upcoming_title': 'In arrivo',
   'game.badge.guide_link': 'Capire i badge',
+  'game.notebook.legacy_quarantine': 'Un vecchio quaderno di questo dispositivo non appartiene a nessun account noto: non viene mostrato a nessuno.',
+  'game.notebook.legacy_delete': 'Elimina il vecchio quaderno',
+  'game.notebook.device_only': 'Le tue foto vivono su questo dispositivo.',
+  'game.notebook.size': 'Il quaderno occupa {size}.',
 } as const satisfies GameConceptCatalog;
 
 export default it;

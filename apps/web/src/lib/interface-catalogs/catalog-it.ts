@@ -1106,6 +1106,8 @@ const it = {
   ...itConversationCard,
   ...itStoriesMine,
   'settings.tools.sounds': 'I miei suoni',
+  'settings.section.packs': 'Pacchetti e download',
+  'settings.packs.shop': 'Negozio di sticker e cornici',
   ...itContactCard,
   ...itQuote,
   ...itCommentRow,

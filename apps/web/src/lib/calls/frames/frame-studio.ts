@@ -1,6 +1,8 @@
+import { describeFrameUsage, type FrameUsageLabel, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
+
 import type { Size } from '../call-montage-shapes';
 import { captureFrames } from './frame-catalogue';
-import { framesFor, moodsFor, reconcileFrame } from './frame-filter';
+import { CAPTURE_FRAME_USES, frameUsageOf, framesFor, moodsFor, offeredFor, reconcileFrame } from './frame-filter';
 import { loadFrameFonts } from './frame-fonts';
 import { paintFrame, type FrameFace } from './frame-paint';
 import type { Surface2D } from './frame-paint-kit';
@@ -67,7 +69,10 @@ export type FrameStudio = {
   readonly framesOf: (people: number, mood: FrameMood) => readonly CaptureFrame[];
   /** Le cadre `id` servi à `people` personnes, ou la variante de son motif, ou un cadre de son ambiance ; `null` sinon. */
   readonly reconcile: (id: string, people: number) => CaptureFrame | null;
+  /** Résout sur le catalogue CONNU, jamais filtré : un identifiant reçu se peint même s'il ne se propose pas ici. */
   readonly find: (id: string) => CaptureFrame | null;
+  /** Où ce cadre sert (#10146) : la clé du libellé « Utilisable : … » que sa vignette affiche. */
+  readonly usageLabel: (frame: CaptureFrame) => FrameUsageLabel;
   /** `frameFaces`, remis à qui n'importe pas ce chunk. */
   readonly faces: typeof frameFaces;
   readonly draw: (context: Surface2D, frame: CaptureFrame, shot: FrameShot, tier: FrameTier) => void;
@@ -83,6 +88,8 @@ type StudioOptions = {
   readonly frames?: readonly CaptureFrame[];
   readonly factory?: CanvasFactory;
   readonly fonts?: Pick<FontFaceSet, 'load'> | undefined;
+  /** Les contextes de la surface qui propose (#10146) : la capture par défaut, l'appel vidéo pour le direct. */
+  readonly uses?: readonly FrameUseContext[];
 };
 
 export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
@@ -95,12 +102,14 @@ export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
     caches.preview.clear();
   });
   const byId = new Map(frames.map((frame) => [frame.id, frame]));
+  const offered = offeredFor(frames, options.uses ?? CAPTURE_FRAME_USES);
   return {
     frames,
-    moods: (people) => moodsFor(frames, people),
-    framesOf: (people, mood) => framesFor(frames, people, mood),
-    reconcile: (id, people) => reconcileFrame(frames, id, people),
+    moods: (people) => moodsFor(offered, people),
+    framesOf: (people, mood) => framesFor(offered, people, mood),
+    reconcile: (id, people) => reconcileFrame(offered, id, people),
     find: (id) => byId.get(id) ?? null,
+    usageLabel: (frame) => describeFrameUsage(frameUsageOf(frame)),
     faces: frameFaces,
     draw: (context, frame, shot, tier) => {
       const layers = tier === 'still' ? null : caches[tier].get(frame, shot.people, shot.size, shot.texts);

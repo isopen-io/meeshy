@@ -41,7 +41,9 @@ struct GameContactStrip: View {
     @State private var read: GameVisitorRead?
 
     var body: some View {
-        Group {
+        // Un `ZStack` et son ancre, jamais un `Group` vide : sans enfant, la tâche qui lit ne démarrerait pas (#10093).
+        ZStack(alignment: .leading) {
+            GameLoadAnchor()
             if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     if let standing = shown.standing { GameStandingView(content: standing, compact: true) }

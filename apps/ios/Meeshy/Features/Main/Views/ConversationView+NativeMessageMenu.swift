@@ -41,7 +41,7 @@ extension ConversationView {
             hasCallSummary: msg.callSummary != nil,
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
             canComposeMedia: ComposableAttachment.offers(message: msg),
-            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+            showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
             // `exits` est LOAD-BEARING (#9573) : son défaut laisse tout
             // sortir, et « Copier », « Imager », « Enregistrer » ou
             // « Composer » s'offriraient sur un contenu qui disparaît.

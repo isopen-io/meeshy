@@ -38,11 +38,7 @@ TERRA = "#C8642E"
 GLAZE = "#17110D"
 SAPPHIRE = "#2F7BE0"
 
-_seq = itertools.count(1)
-
-
-def nid(prefix):
-    return f"{prefix}{next(_seq)}"
+from base import nid  # noqa: E402,F401  le compteur des identifiants vit dans Card
 
 
 def T(x, y, s=1.0, r=0.0, flip=False, sy=None):
@@ -287,6 +283,10 @@ def wrap_since(card, n, filt=None, mask=None, op=None):
 
 # ---------------------------------------------------------------- inscription
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, title, message=None, y=752, style="nu", shadow=True, kicker=KICKER, **kw):
     """La plaque de base avec une ombre portée sur le texte, pour qu'elle tienne sur n'importe quel fond."""
     n = len(card.body)

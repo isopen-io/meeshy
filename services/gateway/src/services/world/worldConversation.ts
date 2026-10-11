@@ -10,7 +10,9 @@
  * est `removeWorldSeed` (`world/worldSeedOperations.ts`).
  *
  * Trois écritures, chacune créée UNE fois et relue ensuite :
- *  1. la conversation `world` (type `global`, titre « World Wide ») ;
+ *  1. la conversation `world` (type `global`, titre « World Wide »), avec son
+ *     avatar et sa bannière servis par l'application web (#10204,
+ *     `world/worldBranding.ts`) — posés s'ils MANQUENT, jamais remplacés ;
  *  2. ses membres réservés, désignés par une ADRESSE de configuration et jamais
  *     par un pseudo (`world/worldReservedMembers.ts`) — `meeshy` créateur,
  *     `admin` et les adresses de `WORLD_ADMIN_EMAILS` (le porteur, `jcnm`)
@@ -47,6 +49,7 @@ import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { generateUniqueShareLinkId } from '../../routes/links/utils/link-helpers';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../participantRights';
 import { isShareLinkOpen } from '../conversationCard';
+import { missingWorldBranding, worldBranding, type WorldBranding } from './worldBranding';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import {
   WORLD_CREATOR_DESIGNATION,
@@ -65,6 +68,8 @@ export type WorldSeedDeps = {
   readonly prisma: PrismaClient;
   readonly logger: WorldSeedLogger;
   readonly identities: WorldReservedIdentities;
+  /** L'origine publique du frontend qui sert l'avatar et la bannière — `FRONTEND_URL` par défaut (#10204). */
+  readonly appOrigin?: string;
 };
 
 export type WorldMemberOutcome = 'joined' | 'already-member' | 'left' | 'absent' | 'ineligible';
@@ -138,11 +143,21 @@ async function createOrReread<T>(create: () => Promise<T>, reread: () => Promise
   }
 }
 
-async function ensureConversation(prisma: PrismaClient): Promise<{ id: string; created: boolean }> {
+async function ensureConversation(prisma: PrismaClient, branding: WorldBranding | null): Promise<{ id: string; created: boolean }> {
   const find = () =>
-    prisma.conversation.findFirst({ where: { identifier: WORLD_CONVERSATION_IDENTIFIER }, select: { id: true } });
+    prisma.conversation.findFirst({
+      where: { identifier: WORLD_CONVERSATION_IDENTIFIER },
+      select: { id: true, avatar: true, banner: true },
+    });
   const existing = await find();
-  if (existing) return { id: existing.id, created: false };
+  if (existing) {
+    // #10204 — l'image qui MANQUE se pose ; celle qu'un administrateur a choisie reste.
+    const missing = missingWorldBranding(existing, branding);
+    if (Object.keys(missing).length > 0) {
+      await prisma.conversation.update({ where: { id: existing.id }, data: missing });
+    }
+    return { id: existing.id, created: false };
+  }
 
   const { row, created } = await createOrReread(
     () =>
@@ -153,6 +168,7 @@ async function ensureConversation(prisma: PrismaClient): Promise<{ id: string; c
           description: 'La conversation du monde entier, traduite dans la langue de chacun',
           type: 'global',
           isActive: true,
+          ...(branding ?? {}),
         },
         select: { id: true },
       }),
@@ -269,7 +285,7 @@ async function ensureShareLink(
  */
 export async function ensureWorldConversation(deps: WorldSeedDeps): Promise<WorldSeedReport> {
   const { prisma, logger, identities } = deps;
-  const conversation = await ensureConversation(prisma);
+  const conversation = await ensureConversation(prisma, worldBranding(deps.appOrigin));
   const designated = await designateWorldReservedAccounts(prisma, identities);
 
   const members = await Promise.all(
@@ -306,7 +322,7 @@ export async function ensureWorldConversation(deps: WorldSeedDeps): Promise<Worl
 export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry | null> {
   const conversation = await prisma.conversation.findFirst({
     where: { identifier: WORLD_CONVERSATION_IDENTIFIER, isActive: true },
-    select: { id: true, identifier: true, title: true },
+    select: { id: true, identifier: true, title: true, avatar: true, banner: true },
   });
   if (!conversation) return null;
 
@@ -323,5 +339,7 @@ export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry |
     title: conversation.title || WORLD_CONVERSATION_TITLE,
     shareLinkIdentifier: link.identifier,
     ...presentMemberCount(count),
+    ...(conversation.avatar ? { avatar: conversation.avatar } : {}),
+    ...(conversation.banner ? { banner: conversation.banner } : {}),
   };
 }

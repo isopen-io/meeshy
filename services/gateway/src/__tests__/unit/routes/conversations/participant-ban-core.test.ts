@@ -53,7 +53,7 @@ function fabriquerSocket() {
   const ordre: string[] = [];
 
   const chaine = (rooms: string[]) => ({
-    to: (room: string) => chaine([...rooms, room]),
+    to: (room: string) => chaine([...rooms, room]), except: () => chaine(rooms),
     emit: (event: string, payload: unknown) => {
       emissions.push({ rooms, event, payload });
       ordre.push(`emit:${event}`);

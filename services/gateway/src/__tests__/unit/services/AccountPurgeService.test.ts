@@ -14,6 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 
 jest.mock('../../../utils/password-hash', () => ({
   hashPassword: jest.fn(async () => '$2b$12$hash-de-test'),
@@ -40,35 +41,44 @@ function fakePrisma(overrides: Record<string, any> = {}) {
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
     ),
     user: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
+    ...packTables(fakePackDb({})),
     ...overrides,
   } as any;
 }
 
+function packTables(db: ReturnType<typeof fakePackDb>) {
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem };
+}
+
+const NO_FILES = { packFiles: fakeFileStore([]).store };
+
 describe('purgeAccountIsolatedData', () => {
   it('deletes every UserSession row for the account', async () => {
     const prisma = fakePrisma({ userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 3 }) } });
-    const summary = await purgeAccountIsolatedData(prisma, USER_ID);
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.sessionsDeleted).toBe(3);
   });
 
   it('deletes the UserVoiceModel row for the account', async () => {
     const prisma = fakePrisma({ userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) } });
-    const summary = await purgeAccountIsolatedData(prisma, USER_ID);
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.voiceProfileDeleted).toBe(1);
   });
 
   it('deletes share links CREATED by the account, not links it merely used to join', async () => {
     const prisma = fakePrisma({ conversationShareLink: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) } });
-    const summary = await purgeAccountIsolatedData(prisma, USER_ID);
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: USER_ID } });
     expect(summary.shareLinksDeleted).toBe(2);
   });
 
   it('runs every deletion even when every table is already empty (idempotent)', async () => {
     const prisma = fakePrisma();
-    const summary = await purgeAccountIsolatedData(prisma, USER_ID);
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(summary).toMatchObject({
       sessionsDeleted: 0,
       voiceProfileDeleted: 0,
@@ -87,6 +97,28 @@ function fakeUserPrisma(overrides: Record<string, any> = {}) {
     ...overrides,
   } as any;
 }
+
+describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
+  it('efface ses choix, sa bibliothèque et ses fichiers, et le dit dans son bilan', async () => {
+    const VOISIN = '507f1f77bcf86cd799439022';
+    const db = fakePackDb({
+      userStickerPack: [
+        { id: 'c1', userId: USER_ID, packSlug: 'glory-frame.afrique', installedAt: new Date(), updatedAt: new Date() },
+        { id: 'c2', userId: VOISIN, packSlug: 'mee', installedAt: new Date(), updatedAt: new Date() },
+      ],
+      userSticker: [{ id: 's1', userId: USER_ID, filePath: `stickers/${USER_ID}/a.webp` }],
+    });
+    const files = fakeFileStore([`stickers/${USER_ID}/a.webp`, `stickers/${VOISIN}/b.webp`]);
+    const prisma = fakePrisma(packTables(db));
+
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, { packFiles: files.store });
+
+    expect(db.tables.userStickerPack.rows.map((row) => row.id)).toEqual(['c2']);
+    expect(db.tables.userSticker.rows).toEqual([]);
+    expect([...files.files]).toEqual([`stickers/${VOISIN}/b.webp`]);
+    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1 });
+  });
+});
 
 describe('anonymizeUserIdentity', () => {
   it('derives username/email from the account id, never a shared constant', async () => {

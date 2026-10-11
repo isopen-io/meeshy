@@ -3,7 +3,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { GameLeagueWeekArchive, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
-import { leagueShown, needsLeagueWeekArchive, needsSeasonArchive, seasonShown } from '@/components/game-archive';
+import { QueryClient, QueryClientProvider, QueryObserver, onlineManager } from '@tanstack/react-query';
+
+import { leagueShown, needsLeagueWeekArchive, needsSeasonArchive, seasonHeaderCount, seasonShown } from '@/components/game-archive';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY } from '@/lib/api/engagement';
+import { seasonArchiveQuery, seasonArchiveQueryKey } from '@/lib/api/game-archive';
+import type { HttpTransport } from '@/lib/api/http';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
@@ -12,7 +17,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import type { GameV2Actions } from './game-v2-actions';
 import { LigueWeekFocus } from './progression-ligue';
-import { SaisonFocusBody } from './progression-saison';
+import { ProgressionSaisonPage, SaisonFocusBody } from './progression-saison';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const { mount, unmountAll, click } = createActMounter();
@@ -69,6 +74,14 @@ const week = (patch: Partial<GameLeagueWeekArchive> = {}): GameLeagueWeekArchive
 
 const none = { data: undefined, error: null } as const;
 
+const waitUntil = async (done: () => boolean, timeoutMs = 2000): Promise<void> => {
+  const start = Date.now();
+  while (!done()) {
+    if (Date.now() - start > timeoutMs) throw new Error('condition jamais atteinte');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+};
+
 describe('la page Saison sous un lien (#10018)', () => {
   test('la saison en cours, ou sans lien : la page d’avant, sans aucune lecture', async () => {
     expect(needsSeasonArchive(null, game)).toBe(false);
@@ -110,8 +123,13 @@ describe('la page Saison sous un lien (#10018)', () => {
     expect(seasonShown(1, waiting, none)).toEqual({ kind: 'upcoming', upcoming });
   });
 
-  test('servie « en cours » par la passerelle : la page d’avant', () => {
-    expect(seasonShown(currentSeason + 1, game, { data: season({ status: 'current' }), error: null })).toEqual({ kind: 'current' });
+  test('servie « en cours » par la passerelle, et le bloc la porte : la page d’avant', () => {
+    expect(seasonShown(currentSeason, game, { data: season({ number: currentSeason, status: 'current' }), error: null })).toEqual({ kind: 'current' });
+  });
+
+  test('servie « en cours » quand le bloc gardé en porte une autre : la saison ouverte, jamais le parcours d’une autre (#10131)', () => {
+    const shown = seasonShown(currentSeason + 1, game, { data: season({ status: 'current' }), error: null }, { dayKey: '2027-02-20', minuteOfDay: 600 });
+    expect(shown).toEqual({ kind: 'opened', season: { number: currentSeason + 1, themeKey: 'language:es', startDay: '2027-02-15', endDay: '2027-04-11' } });
   });
 
   test('hors ligne, cache froid : l’échec dit et propose de relire', async () => {
@@ -132,6 +150,113 @@ describe('la page Saison sous un lien (#10018)', () => {
 
   test('la copie d’une AUTRE saison ne se montre jamais sous ce lien', () => {
     expect(seasonShown(currentSeason + 2, game, { data: season(), error: null })).toEqual({ kind: 'loading' });
+  });
+});
+
+/**
+ * UNE SAISON « À VENIR » GARDÉE HORS LIGNE BASCULE D'ELLE-MÊME LE JOUR DE SON OUVERTURE (#10131) — l'état se calcule
+ * sur les dates servies et l'horloge locale (`liveSeasonTense`), la copie se relit au retour du réseau.
+ */
+describe('la saison à venir gardée hors ligne, le jour J (#10131)', () => {
+  const upcomingCopy = () => season({ status: 'upcoming', progress: null });
+  const EVE = { dayKey: '2027-02-14', minuteOfDay: 19 * 60 + 59 };
+  const OPENING = { dayKey: '2027-02-15', minuteOfDay: 9 * 60 };
+
+  test('la veille, avant la fermeture de 20 h : encore à venir', () => {
+    expect(seasonShown(currentSeason + 1, game, { data: upcomingCopy(), error: null }, EVE).kind).toBe('upcoming');
+  });
+
+  test('le jour J, sans réseau : la copie bascule sur « en cours »', async () => {
+    const shown = seasonShown(currentSeason + 1, game, { data: upcomingCopy(), error: null }, OPENING);
+    expect(shown.kind).toBe('opened');
+    const host = await mount(
+      <SaisonFocusBody progress={progress()} focus={currentSeason + 1} read={{ data: upcomingCopy(), error: null }} onRetry={() => undefined} actions={actions()} online={false} moment={OPENING} />,
+    );
+    expect(host.querySelector('#game-season-opened')).not.toBeNull();
+    expect(host.textContent).toContain(`Saison ${currentSeason + 1} · en cours`);
+    expect(host.querySelector('[data-game-season-upcoming]')).toBeNull();
+  });
+
+  test('la saison à venir que le BLOC gardé porte bascule aussi, sur la page sans lien comme sous le lien', async () => {
+    const upcoming = { number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' };
+    const waiting = { ...game, season: null, seasonUpcoming: upcoming };
+    const opening = { dayKey: '2026-12-21', minuteOfDay: 600 };
+    expect(seasonShown(1, waiting, none, opening)).toEqual({ kind: 'opened', season: upcoming });
+    const host = await mount(<SaisonFocusBody progress={progress(waiting)} focus={null} read={none} onRetry={() => undefined} actions={actions()} online={false} moment={opening} />);
+    expect(host.querySelector('#game-season-opened')).not.toBeNull();
+    expect(host.querySelector('[data-game-season-upcoming]')).toBeNull();
+  });
+
+  test('la copie se RELIT au retour du réseau', async () => {
+    let reads = 0;
+    const transport = {
+      request: async () => {
+        reads += 1;
+        return { ok: true, status: 200, data: upcomingCopy() };
+      },
+    } as unknown as HttpTransport;
+    const client = new QueryClient();
+    // Monté comme l'application le monte : c'est `mount` qui abonne le cache au retour du réseau.
+    client.mount();
+    const observer = new QueryObserver(client, seasonArchiveQuery({ number: currentSeason + 1, enabled: true, deps: { source: 'gateway', transport } }));
+    const stop = observer.subscribe(() => undefined);
+    try {
+      // La première lecture est ARRIVÉE (une lecture en vol ne se relance pas) : la copie est en cache.
+      await waitUntil(() => observer.getCurrentResult().status === 'success' && observer.getCurrentResult().fetchStatus === 'idle');
+      expect(reads).toBe(1);
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+      await waitUntil(() => reads === 2);
+      expect(reads).toBe(2);
+    } finally {
+      stop();
+      client.unmount();
+      client.clear();
+    }
+  });
+});
+
+/**
+ * L'EN-TÊTE D'UNE ARCHIVE MONTRE LA SAISON DU LIEN (#10132) — son numéro et son état, comme iOS ; jamais le compteur
+ * de la saison en cours sous le lien d'une autre.
+ */
+describe('l’en-tête de la page Saison sous un lien (#10132)', () => {
+  const page = async (focus: number | null, data: GameSeasonArchive | undefined, moment = { dayKey: '2026-10-11', minuteOfDay: 600 }) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, progress());
+    if (focus !== null && data !== undefined) client.setQueryData(seasonArchiveQueryKey(focus), data);
+    const host = await mount(
+      <QueryClientProvider client={client}>
+        <ProgressionSaisonPage focus={focus} moment={moment} />
+      </QueryClientProvider>,
+    );
+    return host.querySelector('header')?.textContent ?? host.textContent ?? '';
+  };
+
+  test('une saison passée : « Saison n · terminée », pas le compteur de la saison en cours', async () => {
+    const header = await page(currentSeason + 1, season());
+    expect(header).toContain(`Saison ${currentSeason + 1} · terminée`);
+    expect(header).not.toContain(`${game.season?.steps ?? 0} / ${game.season?.stepsTotal ?? 40}`);
+  });
+
+  test('une saison future : « Saison n · à venir »', async () => {
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }))).toContain(`Saison ${currentSeason + 1} · à venir`);
+  });
+
+  test('une saison future gardée hors ligne, le jour J : « Saison n · en cours »', async () => {
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }), { dayKey: '2027-02-15', minuteOfDay: 600 })).toContain(`Saison ${currentSeason + 1} · en cours`);
+  });
+
+  test('sans lien, ou sur la saison en cours : le compteur d’étapes d’avant', async () => {
+    const counter = `${game.season?.steps ?? 0} / ${game.season?.stepsTotal ?? 40}`;
+    expect(await page(null, undefined)).toContain(counter);
+    expect(await page(currentSeason, undefined)).toContain(counter);
+  });
+
+  test('le compte pur : chaque état de la saison du lien a sa ligne', () => {
+    const current = game.season ?? null;
+    expect(seasonHeaderCount({ kind: 'past', season: season() }, current)).toBe(`Saison ${currentSeason + 1} · terminée`);
+    expect(seasonHeaderCount({ kind: 'loading' }, current)).toBeNull();
   });
 });
 

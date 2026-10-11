@@ -32,6 +32,7 @@ import {
   linkMemberSchema,
   linkAnonymousParticipantSchema
 } from './types';
+import { isGuestViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 
 export async function registerRetrievalRoutes(fastify: FastifyInstance) {
   const authOptional = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -341,7 +342,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           { onMissingEntry: anonymousPresence }
         ));
 
-      const stats = {
+      // #10205 — un lecteur sans compte Meeshy ne lit ni les membres, ni les
+      // autres invités, ni aucun effectif : seuls les messages et leurs auteurs.
+      const viewerIsGuest = isGuestViewer(request.authContext);
+      const stats = viewerIsGuest ? { totalMessages, hasMore: totalMessages > offset + messages.length } : {
         totalMessages,
         totalMembers: participantCounts.totalMembers,
         totalAnonymousParticipants: participantCounts.totalAnonymousParticipants,
@@ -386,7 +390,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           }),
           messages: formattedMessages.reverse(),
           stats,
-          members: members.map(member => ({
+          members: (viewerIsGuest ? [] : members).map(member => ({
             id: member.id,
             role: member.role,
             joinedAt: member.joinedAt,
@@ -415,7 +419,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           // `isOnline` ET `lastActiveAt` sont gatés ci-dessus
           // (`gatedAnonymousParticipants`) — `false` / `null` sauf pour un
           // viewer ADMIN/BIGBOSS.
-          anonymousParticipants: gatedAnonymousParticipants,
+          anonymousParticipants: membersServedToViewer(gatedAnonymousParticipants, request.authContext),
           currentUser
         });
 

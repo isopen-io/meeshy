@@ -32,6 +32,7 @@ import {
   servedOnline,
   loadMostActiveParticipants
 } from './participants-presence';
+import { isGuestViewer, sendAccountRequired } from '../../services/guests/guestMemberVisibility';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantReadRoutes' });
 
 /**
@@ -133,6 +134,10 @@ export function registerParticipantReadRoutes(
       const { id } = request.params;
       const { onlineOnly, role, search, limit, cursor } = request.query;
       const authRequest = request as UnifiedAuthRequest;
+      // #10205 — un invité (session sans compte) ne lit pas la liste des membres.
+      if (authRequest.authContext?.isAuthenticated && isGuestViewer(authRequest.authContext)) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see the members of this conversation');
+      }
 
       const conversationId = await ouvrirConversationLisible({
         prisma,
@@ -419,6 +424,13 @@ export function registerParticipantReadRoutes(
     try {
       const { id, participantId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
+      // #10205 — un invité ne lit que SA fiche, jamais celle d'un autre.
+      const guestReadsAnother = authRequest.authContext?.isAuthenticated
+        && isGuestViewer(authRequest.authContext)
+        && participantId !== authRequest.authContext.participantId;
+      if (guestReadsAnother) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see the profile of a participant');
+      }
 
       const conversationId = await ouvrirConversationLisible({
         prisma,

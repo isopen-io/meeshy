@@ -39,6 +39,7 @@ const ptIdentity = {
   'conversation.details.share.failed': 'Não foi possível criar o link — tente novamente em instantes.',
   'conversation.details.share.unavailable': 'Não é possível compartilhar aqui — copie o link: {url}',
   'thread.header.active_members': 'Membros mais ativos',
+  'thread.header.share': 'Compartilhar a conversa',
 };
 
 export default ptIdentity;

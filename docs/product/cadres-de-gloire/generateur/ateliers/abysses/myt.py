@@ -35,6 +35,10 @@ def myth_crest(card, cy=150, s=0.86):
     return crest(card, 270, cy, s, "prism", None, ink="#FFFFFF")
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def myth_plaque(card, message=None):
     return inscription(card, TITLE, message, style="cosmos", metal=("#FFFFFF", "#D9CCFF", "#6A5CC4"), accent="#CFC2FF",
                        panel=("#120A30", "#04030E"), numero=NUM, y=756)

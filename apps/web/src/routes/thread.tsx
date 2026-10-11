@@ -11,8 +11,7 @@ import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { WorldParticipantCardHost } from '@/components/world-participant-card-host';
-import { apiConfig } from '@/lib/api/config';
-import { webOriginOf } from '@/lib/links/web-origin';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
 import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
 import { ThreadWriteLock } from '@/components/thread-write-lock';
@@ -969,7 +968,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         viewerId={viewer.id ?? ''}
         storyRingOf={storyRingOf}
         deps={apiDeps}
-        origin={webOriginOf(apiConfig.base, window.location.origin)}
+        origin={publicWebOrigin(window.location.origin)}
         onClose={() => setDetailsOpen(false)}
         onJumpToMessage={(messageId) => {
           setDetailsOpen(false);

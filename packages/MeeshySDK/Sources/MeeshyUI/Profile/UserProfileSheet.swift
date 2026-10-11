@@ -61,9 +61,9 @@ public struct UserProfileSheet: View {
     @Environment(\.profileGameSection) var gameSection
     @Environment(\.dismiss) var dismiss
     @State var selectedTab: ProfileTab = .details
-    @State private var showFullscreenImage = false
-    @State private var fullscreenImageURL: String? = nil
-    @State private var fullscreenImageFallback: String = ""
+    /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
+    /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
+    @State private var fullscreenImage: ProfileFullscreenImage?
     @State var showReportSheet = false
     /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
     /// while scrolling content down. Updated by the iOS 16-17 preference path
@@ -140,18 +140,9 @@ public struct UserProfileSheet: View {
             } else {
                 collapsibleLayout
             }
-
-            if showFullscreenImage {
-                FullscreenImageView(
-                    imageURL: fullscreenImageURL,
-                    fallbackText: fullscreenImageFallback,
-                    accentColor: resolvedAccent,
-                    onClose: closeFullscreenImage
-                )
-                .transition(.opacity)
-                .zIndex(100)
-                .onTapGesture(perform: closeFullscreenImage)
-            }
+        }
+        .fullScreenCover(item: $fullscreenImage) { image in
+            FullscreenImageView(imageURL: image.url, fallbackText: image.fallbackText, accentColor: resolvedAccent)
         }
         .task {
             await resolveInitialState()
@@ -163,8 +154,6 @@ public struct UserProfileSheet: View {
             guard let repainted = Self.repaintedProfile(loader.profile, with: event) else { return }
             loader.repaint(repainted)
         }
-        // Le glissement qui referme le plein écran ne doit pas emporter la feuille avec lui.
-        .interactiveDismissDisabled(showFullscreenImage)
         .adaptiveWideSheet()
     }
 
@@ -639,18 +628,9 @@ public struct UserProfileSheet: View {
         date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
     }
 
+    /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.
     func openFullscreenImage(url: String?, fallback: String) {
-        fullscreenImageURL = url
-        fullscreenImageFallback = fallback
-        withAnimation(.easeIn(duration: 0.2)) {
-            showFullscreenImage = true
-        }
-    }
-
-    func closeFullscreenImage() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            showFullscreenImage = false
-        }
+        fullscreenImage = ProfileFullscreenImage.opening(url, fallbackText: fallback)
     }
 }
 

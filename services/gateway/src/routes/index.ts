@@ -14,7 +14,8 @@
  * est ici un champ REQUIS (pas de `?`) : une entrée qui l'omet ne COMPILE
  * PAS. Voir `src/__tests__/unit/routes/route-registration-table.test.ts`
  * pour la preuve — un `@ts-expect-error` qui devient inutilisé, donc rouge
- * sous ts-jest, dès que `prefix` (ou `module`, ou `name`) redevient
+ * au cliquet de types des tests (`tsc-never-loaded-tests-ratchet.test.ts`,
+ * depuis #10203), dès que `prefix` (ou `module`, ou `name`) redevient
  * optionnel.
  *
  * ## Une SEULE convention d'adressage — jamais trois
@@ -137,6 +138,8 @@ import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
+import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { packAssetsRoutes } from './pack-assets';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -338,6 +341,15 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // Les packs de stickers (#9141) — boutique, installation, proposition par
   // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
   { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
+  // Les packs de cadres de gloire (#10148, LP0) — le MÊME moteur que les
+  // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
+  // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
+  { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
+  // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
+  // lecture de base, seau de débit propre. Préfixe distinct de `/packs/` pour
+  // ne jamais croiser un segment `:slug`.
+  { name: 'pack-assets', prefix: `${API_PREFIX}/pack-assets`, module: packAssetsRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

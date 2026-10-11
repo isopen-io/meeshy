@@ -234,13 +234,25 @@ describe('read-status routes — un participant sans compte', () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it('le statut de lecture d\'un message reste lisible par le participant sans compte', async () => {
+  // #10205 (audit adversarial du 2026-10-11) : ce statut liste nominativement
+  // receivedBy / readBy / notSeenBy — tous les membres sauf l'expéditeur. Servi
+  // à un invité, il rendait le roster que `/participants` lui refuse.
+  it('le statut NOMINATIF de lecture d\'un message est refusé au participant sans compte (403), avant toute lecture', async () => {
+    mockGetMessageReadStatus.mockResolvedValue({
+      totalMembers: 3,
+      readBy: [],
+      receivedBy: [],
+      notSeenBy: [{ participantId: 'p-autre', displayName: 'Autre', avatarURL: null }],
+    });
     const response = await app.inject({
       method: 'GET',
       url: `/messages/${MESSAGE_ID}/read-status`
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ success: false, code: 'ACCOUNT_REQUIRED' });
+    expect(response.body).not.toContain('p-autre');
+    expect(mockGetMessageReadStatus).not.toHaveBeenCalled();
   });
 
   it('les préférences de confidentialité d\'un anonyme sont demandées EN TANT QU\'anonyme', async () => {

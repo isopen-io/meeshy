@@ -564,9 +564,9 @@ describe('ensureWorldConversation — idempotence', () => {
 });
 
 describe('loadWorldEntry — ce que la landing reçoit', () => {
-  it('sert l’identifiant du lien et l’effectif, sans aucun id', async () => {
+  it('sert l’identifiant du lien, l’effectif, l’avatar et la bannière (#10204), sans aucun id', async () => {
     const prisma = makeDb();
-    await seed(prisma);
+    await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES, appOrigin: 'https://meeshy.me' });
 
     const entry = await loadWorldEntry(prisma as never);
 
@@ -575,6 +575,8 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
       title: WORLD_CONVERSATION_TITLE,
       shareLinkIdentifier: WORLD_SHARE_LINK_IDENTIFIER,
       memberCount: 3,
+      avatar: 'https://meeshy.me/brand/world-wide/avatar.png',
+      banner: 'https://meeshy.me/brand/world-wide/banner.png',
     });
   });
 
@@ -759,5 +761,92 @@ describe('removeWorldSeed — le retrait documenté du seed (audit #10000)', () 
     const report = await removeWorldSeed(makeDb() as never, { mode: 'purge', apply: true });
 
     expect(report.outcome).toBe('nothing-to-do');
+  });
+});
+
+/**
+ * #10204 — World Wide a un avatar et une bannière, servis par l'application web
+ * à `/brand/world-wide/{avatar,banner}.png`. La conversation porte leurs adresses
+ * ABSOLUES, composées depuis l'origine publique du frontend (`FRONTEND_URL`).
+ * Le seed pose ce qui MANQUE et ne remplace jamais une image posée à la main.
+ */
+describe('World Wide porte son avatar et sa bannière (#10204)', () => {
+  const ORIGIN = 'https://staging.meeshy.me';
+  const AVATAR = `${ORIGIN}/brand/world-wide/avatar.png`;
+  const BANNER = `${ORIGIN}/brand/world-wide/banner.png`;
+
+  const seedAt = (prisma: ReturnType<typeof makeDb>, appOrigin = ORIGIN) =>
+    ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES, appOrigin });
+
+  it('une conversation semée naît avec les deux adresses absolues', async () => {
+    const prisma = makeDb();
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({ avatar: AVATAR, banner: BANNER });
+  });
+
+  it('une conversation existante sans image reçoit les deux', async () => {
+    const prisma = makeDb({
+      conversations: [{ id: 'conv-world', identifier: WORLD_CONVERSATION_IDENTIFIER, type: 'global', title: 'World Wide', isActive: true }],
+    });
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({ avatar: AVATAR, banner: BANNER });
+  });
+
+  it('une image posée à la main n’est jamais remplacée — seule la manquante est posée', async () => {
+    const prisma = makeDb({
+      conversations: [{
+        id: 'conv-world', identifier: WORLD_CONVERSATION_IDENTIFIER, type: 'global', title: 'World Wide', isActive: true,
+        avatar: 'https://static.meeshy.me/choisi-a-la-main.png', banner: null,
+      }],
+    });
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({
+      avatar: 'https://static.meeshy.me/choisi-a-la-main.png',
+      banner: BANNER,
+    });
+  });
+
+  it('un second démarrage n’écrit plus rien sur la conversation', async () => {
+    const prisma = makeDb();
+    await seedAt(prisma);
+    prisma.conversation.update.mockClear();
+    prisma.conversation.create.mockClear();
+
+    await seedAt(prisma);
+
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('sans origine configurée (ni appOrigin, ni FRONTEND_URL), ne pose AUCUNE image — jamais une adresse localhost gravée', async () => {
+    const saved = process.env.FRONTEND_URL;
+    delete process.env.FRONTEND_URL;
+    try {
+      const prisma = makeDb();
+
+      await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES });
+
+      expect(worldConversation(prisma)[0].avatar).toBeUndefined();
+      expect(worldConversation(prisma)[0].banner).toBeUndefined();
+    } finally {
+      if (saved !== undefined) process.env.FRONTEND_URL = saved;
+    }
+  });
+
+  it('l’origine se lit sans chemin ni barre finale', async () => {
+    const prisma = makeDb();
+
+    await seedAt(prisma, 'https://meeshy.me/');
+
+    expect(worldConversation(prisma)[0]).toMatchObject({
+      avatar: 'https://meeshy.me/brand/world-wide/avatar.png',
+      banner: 'https://meeshy.me/brand/world-wide/banner.png',
+    });
   });
 });

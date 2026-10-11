@@ -460,7 +460,24 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 293 -> 291 (2026-10-11) : les deux mouvements ci-dessus, partis chacun de 292, se sont
 // croisés sur dev — #10018 (−2) et #10102 (+1) donnent 291, et non 293. Valeur MESURÉE
 // le 2026-10-11 sur dev 33e24c995c (CI run 38133983531 rouge sur 293).
-const BASELINE_DEAD_ENTRIES = 291;
+//
+// 291 -> 295 (#10200, 2026-10-11) : `PacksEndpoint.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP2 #10150 (« iOS installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`PackServiceProviding`)
+// et ramènera la référence à 291. Valeur MESURÉE le 2026-10-11 sur dev 8a68ca00fe (CI run
+// 38147814970 rouge sur 295).
+// 295 -> 296 (#10157, 2026-10-11) : `PackAssetsEndpoint.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP2 #10150 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 296 -> 290 (2026-10-11) : LP2 (6046fcc6cd, la Boutique des cadres dans Réglages ›
+// Packs et téléchargements) donne leur appelant aux entrées de packs prématurées
+// ci-dessus ; trois relèvements partis de bases différentes s'étaient croisés sur dev.
+// Valeur MESURÉE le 2026-10-11 sur dev efee739ae5 (CI run 38160460790 rouge sur 296).
+// 290 -> 293 (#10162, 2026-10-11) : `MeEndpoint.gameFramesAtmosphere`, `.gamePhotoMomentsInvitations` et
+// `.gamePhotoMomentsPresented` (L10a), générées depuis le manifeste — PRÉMATURÉES : iOS les appellera par
+// `GameRoutes.swift` et ses lots (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+const BASELINE_DEAD_ENTRIES = 293;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

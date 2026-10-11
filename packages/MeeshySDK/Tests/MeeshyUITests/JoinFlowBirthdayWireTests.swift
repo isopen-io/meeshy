@@ -19,3 +19,17 @@ final class JoinFlowBirthdayWireTests: XCTestCase {
         XCTAssertNil(JoinFlowViewModel.birthdayField(Self.naissance, required: false))
     }
 }
+
+/// #10216 — la page d'invitation ne montre jamais « 0 personnes » : un
+/// effectif tu ou neutre (visiteur sans compte) retire sa tuile.
+@MainActor
+final class InviteGroupFactsShownCountTests: XCTestCase {
+
+    func test_shownCount_zero_isNotShown() {
+        XCTAssertNil(InviteGroupFacts.shownCount(0))
+    }
+
+    func test_shownCount_positive_isShown() {
+        XCTAssertEqual(InviteGroupFacts.shownCount(16), 16)
+    }
+}

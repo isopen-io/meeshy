@@ -72,8 +72,13 @@ describe('l’extension du format des cadres', () => {
   });
 
   test('un cadre sans les nouvelles clés est proposé en capture seulement', () => {
-    const frame = captureFrames()[0];
+    const { surfaces: _declared, ...undeclared } = GALA;
+    const [frame] = expandMotif(FrameMotifSchema.parse(undeclared) as FrameMotif);
     expect(frame === undefined ? null : servedSurfaces(frame)).toEqual(['capture']);
+  });
+
+  test('chaque cadre du catalogue déclare ses surfaces, la capture toujours (#10195)', () => {
+    expect(captureFrames().filter((frame) => frame.surfaces === undefined || !frame.surfaces.includes('capture'))).toEqual([]);
   });
 
   test('les clés du motif voyagent jusqu’au cadre déplié', () => {

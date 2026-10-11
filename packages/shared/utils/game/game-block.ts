@@ -59,6 +59,11 @@ export type GameBlockFacts = {
   readonly mythic: boolean;
   readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
+  /**
+   * Les Meeshes frappées AVANT l'ouverture du jour de jeu (#10219, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` : le
+   * cours de la prime du coffre. Absent ou `null` : `mintedLifetime`, le calcul d'avant.
+   */
+  readonly chestMintBase?: number | null;
   /** Missions du jour accomplies à vie, comptées jusqu'à `LEVEL_STEP_MISSIONS_COUNTED` (#9706). */
   readonly missionsDone: number;
   /** La plus longue Flamme, en jours — le record que jugent les étapes 40 et 90 (#9706). */
@@ -196,9 +201,9 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       odds: { ...CHEST_ODDS },
       reward: chestStatus === 'claimed' ? facts.chestReward : null,
       // Le contenu CERTAIN et les primes possibles, dits avant l'ouverture (#10011) : l'effort des missions du
-      // jour tirées, et le cours de la prochaine Meesh du compte.
+      // jour tirées, et le cours de la prochaine Meesh du compte, figé au début du jour de jeu (#10219).
       today:
-        facts.missions.length === 0 ? null : chestContentForEffort(dayEffort(facts.missions), meeshPrice(facts.mintedLifetime + 1)),
+        facts.missions.length === 0 ? null : chestContentForEffort(dayEffort(facts.missions), meeshPrice((facts.chestMintBase ?? facts.mintedLifetime) + 1)),
     },
     flame: {
       days,

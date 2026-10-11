@@ -26,6 +26,7 @@ describe('decodeWorldEntry — jumelle zod/mini de worldEntrySchema', () => {
     { ...SERVED, memberCount: 1.5 },
     { ...SERVED, shareLinkIdentifier: '' },
     { ...SERVED, memberCountCapped: false },
+    { identifier: 'world', title: 'World Wide', shareLinkIdentifier: 'mshy_world' },
     { identifier: 'world' },
     null,
     'world',

@@ -66,13 +66,15 @@ export function ContactGameStripConnected({ userId, enabled }: { readonly userId
 }
 
 /**
- * LE JEU SUR LA BANNIÈRE (#10092) — le niveau et le rang, rien d'autre. Cache
+ * LE JEU SUR LA BANNIÈRE (#10092, #10231) — le niveau et ses points, le rang. Cache
  * d'abord (mêmes clés que le hub et que le jeu d'un autre), puis relu À CHAQUE
  * ouverture de la fiche : le niveau bouge sous ses propres gestes.
  *
- * Sur SA fiche : sa progression, quels que soient ses réglages (ils disent ce
- * que les AUTRES voient), sauf « Jeu masqué ». Sur celle d'un autre : ce que
- * `GET /users/:userId/game` sert — le serveur applique SON réglage « rang » ;
+ * Sur SA fiche : sa progression, ses points et ce qu'il lui reste — les
+ * nombres de la barre du joueur —, quels que soient ses réglages (ils disent
+ * ce que les AUTRES voient), sauf « Jeu masqué ». Sur celle d'un autre : ce que
+ * `GET /users/:userId/game` sert — jamais sa progression, ses points aux amis
+ * seulement ; le serveur applique SON réglage « rang » ;
  * fermé, rien ne se dessine (jamais un « fermé » qui apprendrait qu'un jeu existe).
  */
 export function GameBannerOwnConnected({ enabled }: { readonly enabled: boolean }) {
@@ -91,7 +93,16 @@ export function GameBannerOwnConnected({ enabled }: { readonly enabled: boolean 
   const game = query.data?.game;
   if (prefs.hidden || game === undefined) return null;
   const level = shownLevelOf(game.level);
-  const standing: BannerStanding = { level: level.level, tier: level.tier, prestige: level.prestige, ...shownRank(game.glory) };
+  const atTop = level.nextThreshold === null;
+  const standing: BannerStanding = {
+    level: level.level,
+    tier: level.tier,
+    prestige: level.prestige,
+    progress: atTop ? 1 : level.progress,
+    points: level.score > 0 ? level.score : null,
+    pointsToNext: atTop ? null : level.pointsToNext,
+    ...shownRank(game.glory),
+  };
   return <GameProfileBanner standing={standing} />;
 }
 
@@ -100,6 +111,14 @@ export function GameBannerVisitorConnected({ userId, enabled }: { readonly userI
   const game = useUserGame(userId, enabled, 'always');
   const served = game.data?.visible === true ? shownStanding(game.data.standing) : null;
   if (served === null) return null;
-  const standing: BannerStanding = { level: served.level, tier: served.tier, prestige: served.prestige, ...shownRank(served) };
+  const standing: BannerStanding = {
+    level: served.level,
+    tier: served.tier,
+    prestige: served.prestige,
+    progress: null,
+    points: served.points === undefined || served.points === 0 ? null : served.points,
+    pointsToNext: null,
+    ...shownRank(served),
+  };
   return <GameProfileBanner standing={standing} />;
 }

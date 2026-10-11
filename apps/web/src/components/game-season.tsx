@@ -1,11 +1,13 @@
 import type { GameSeasonBlock, GameUpcomingSeasonBlock } from '@meeshy/shared/types/game';
-import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepReward } from '@meeshy/shared/utils/game/season';
+import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
+import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, liveSeasonTense, seasonStepReward } from '@meeshy/shared/utils/game/season';
 
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { dayLabel, seasonThemeName } from '@/lib/view/game-copy-v2';
 import { sealDetail, stepDetail } from '@/lib/view/game-detail';
+import { localMoment } from '@/lib/game/local-moment';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -32,6 +34,8 @@ export type GameSeasonProps = {
   readonly season: GameSeasonBlock | null;
   /** La saison à venir, servie tant qu'aucune n'est ouverte (#10014). */
   readonly upcoming?: GameUpcomingSeasonBlock | null | undefined;
+  /** L'instant qui juge la saison à venir (#10131) — l'horloge locale par défaut. */
+  readonly moment?: LeagueMoment | undefined;
   readonly held: number;
   readonly online: boolean;
   readonly claimingStep: number | null;
@@ -93,7 +97,44 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
 }
 
 /** La saison à venir (#10014) — et toute saison FUTURE qu'un lien ouvre (#10018) : son numéro, sa date d'ouverture, son thème. */
-export function GameSeasonUpcoming({ upcoming }: { readonly upcoming: GameUpcomingSeasonBlock }) {
+/**
+ * Une saison OUVERTE dont le bloc gardé ne porte pas encore le parcours (#10131) : hors ligne, le jour de son
+ * ouverture. Son numéro, son état, son thème et ses dates ; le parcours se lit au retour du réseau.
+ */
+export function GameSeasonOpened({ season }: { readonly season: GameUpcomingSeasonBlock }) {
+  const language = currentInterfaceLanguage();
+  const theme = seasonThemeName(season.themeKey, language);
+  return (
+    <GameCard id="game-season-opened" labelledBy="game-season-opened-title" tint={GAME_BRAND}>
+      <h2 id="game-season-opened-title" data-game-season-opened={season.startDay} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.archive.season.current_title', { number: formatCount(season.number) })}
+      </h2>
+      {theme === null ? null : (
+        <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+          {gameText('game.season.theme', { theme })}
+        </p>
+      )}
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.archive.season.dates', { start: dayLabel(season.startDay, language), end: dayLabel(season.endDay, language) })}
+      </p>
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.archive.season.opened_note')}
+      </p>
+    </GameCard>
+  );
+}
+
+/**
+ * La saison À VENIR (#10014). Son état se calcule à l'horloge locale (#10131) : le jour de son ouverture, la carte
+ * gardée hors ligne devient celle d'une saison ouverte, sans attendre le réseau.
+ */
+export function GameSeasonUpcoming({ upcoming, moment }: { readonly upcoming: GameUpcomingSeasonBlock; readonly moment?: LeagueMoment | undefined }) {
+  const tense = liveSeasonTense({ served: 'upcoming', startDay: upcoming.startDay, endDay: upcoming.endDay }, moment ?? localMoment());
+  if (tense !== 'upcoming') return <GameSeasonOpened season={upcoming} />;
+  return <GameSeasonUpcomingCard upcoming={upcoming} />;
+}
+
+function GameSeasonUpcomingCard({ upcoming }: { readonly upcoming: GameUpcomingSeasonBlock }) {
   const language = currentInterfaceLanguage();
   const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
   return (
@@ -117,7 +158,7 @@ export function GameSeason(props: GameSeasonProps) {
   const { season, held, online, claimingStep, buyingSeal, errors, onClaim, onBuySeal } = props;
   const language = currentInterfaceLanguage();
 
-  if (season === null && props.upcoming) return <GameSeasonUpcoming upcoming={props.upcoming} />;
+  if (season === null && props.upcoming) return <GameSeasonUpcoming upcoming={props.upcoming} moment={props.moment} />;
 
   if (season === null) {
     return (

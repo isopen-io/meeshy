@@ -18,6 +18,10 @@ def lean_left(peak=-0.55, width=1.15):
     return lambda u: max(0.0, 1 - abs((u - peak) / width) ** 1.8)
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def gold_cartouche(card, x0, y0, x1, y1, key="gc", panel="#140A02", op=0.86):
     """Un cartouche d'or : panneau sombre, double filet biseauté, volutes aux extrémités."""
     d = rrect(x0, y0, x1, y1, 22)

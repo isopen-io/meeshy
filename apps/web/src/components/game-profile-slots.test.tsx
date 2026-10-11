@@ -62,6 +62,13 @@ describe('mon profil', () => {
     expect(host.querySelector('[data-profile-banner-game]') !== null).toBe(true);
   });
 
+  test('sur ma fiche : mes points et ce qu’il me reste, au début de la bannière (#10231)', async () => {
+    const host = await mount(<GameBannerOwnSlot enabled />);
+    await settle();
+    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-points]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') !== null).toBe(true);
+  });
+
   test('« Jeu masqué » : le jeu ne se dessine pas sur le profil', async () => {
     /* Le serveur fait foi (#9481) : le réglage du COMPTE, lu, règle la copie de l'appareil. */
     appQueryClient.setQueryData(GAME_SETTINGS_QUERY_KEY, { gameHidden: true, friendsLeagueOptOut: false, visibility: { showcase: 'friends', rank: 'friends', treasury: 'friends', atlas: 'me' } });
@@ -83,6 +90,8 @@ describe('le profil d’un autre et la carte de contact', () => {
     await settle();
     expect(host.querySelector('[data-profile-banner-game] [data-game-level]') !== null).toBe(true);
     expect(host.querySelector('[data-profile-banner-game] [data-game-rank]') !== null).toBe(true);
+    /* Sa progression n'est jamais servie : aucun « encore » sur la fiche d'un autre. */
+    expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
   });
 
   test('ses réglages ferment son rang : rien ne se dessine, pas même « fermé »', async () => {

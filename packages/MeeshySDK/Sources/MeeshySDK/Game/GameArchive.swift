@@ -84,6 +84,13 @@ public struct GameSeasonArchive: Codable, Sendable, Equatable {
 }
 
 /// MON résultat gravé d'une semaine de ligue.
+extension GameSeasonArchive {
+    /// L'état de cette copie au moment donné (#10131) : servi, puis avancé par l'horloge locale.
+    public func liveStatus(at moment: LeagueMoment = .local()) -> GameArchiveStatus {
+        GameSeason.liveTense(served: status, startDay: startDay, endDay: endDay, at: moment)
+    }
+}
+
 public struct GameLeagueWeekResult: Codable, Sendable, Equatable {
     public let league: LeagueKey
     public let finalRank: Int?

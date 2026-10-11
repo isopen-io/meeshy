@@ -10,6 +10,7 @@ import { browserFaceDetector } from '@/lib/calls/face-tracker';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
+import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
@@ -35,7 +36,10 @@ import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type Frame
  * ambiances qui ont un cadre pour les PERSONNES de l'appel, moi compris.
  * Une puce change le carrousel dans la même image ; une arrivée ou un
  * départ réconcilie le cadre choisi (la variante de son motif, sinon un
- * cadre de son ambiance, sinon les classiques). L'aperçu, la photo et la
+ * cadre de son ambiance, sinon les classiques). La capture propose les
+ * cadres de capture seule ET ceux du direct (#10146 : l'atelier par
+ * défaut, `CAPTURE_FRAME_USES`), et chaque vignette dit où elle sert
+ * (`describeFrameUsage`). L'aperçu, la photo et la
  * vidéo d'un cadre passent par son peintre : couches en cache, visages
  * repeints à chaque image, jamais en miroir ; ses vignettes ne se rendent
  * que pour la fenêtre visible du carrousel (± 3). Pendant une vidéo, les
@@ -47,7 +51,7 @@ import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type Frame
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language)]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -252,11 +256,12 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
       label: t(language, `callStudio.montage.${option}`),
       visual: <canvas ref={thumbRef(option)} aria-hidden width={thumbSize.width} height={thumbSize.height} className="size-full object-cover" data-call-capture-thumb={option} />,
     }));
-  const frameItems = (offered: readonly CaptureFrame[]): readonly CarouselItem[] => {
+  const frameItems = (atelier: FrameStudio, offered: readonly CaptureFrame[]): readonly CarouselItem[] => {
     const at = Math.max(0, offered.findIndex((option) => option.id === chosenId));
     return offered.map((option, index) => ({
       id: option.id,
       label: option.name,
+      detail: frameUsageText(language, atelier.usageLabel(option)),
       visual:
         Math.abs(index - at) <= FRAME_THUMB_WINDOW ? (
           <canvas ref={thumbRef(option.id)} aria-hidden width={frameThumbSize.width} height={frameThumbSize.height} className="size-full object-cover" data-call-frame-thumb={option.id} />
@@ -265,7 +270,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         ),
     }));
   };
-  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames.framesOf(people, shelf));
+  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames, frames.framesOf(people, shelf));
   const moods = frames === null ? [] : frames.moods(people);
   const chips = [{ id: CLASSICS, label: t(language, 'callStudio.frames.mood.classics') }, ...moods.map((mood) => ({ id: mood, label: t(language, `callStudio.frames.mood.${mood}`) }))];
 

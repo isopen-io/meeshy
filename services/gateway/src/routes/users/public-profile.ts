@@ -4,6 +4,7 @@ import { sendNotFound } from '../../utils/response';
 import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { gateProfilePresence } from './presence-gate';
 import { targetHasBlockedViewer } from './profile-block-gate';
+import { isGuestViewer, sendAccountRequired, type GuestViewerContext } from '../../services/guests/guestMemberVisibility';
 
 /**
  * LA forme publique d'un profil — projection, schéma, composition, lecture.
@@ -253,6 +254,11 @@ export async function servirProfilPublic(
   handle: string,
   fields: FieldSet = null
 ): Promise<Record<string, unknown> | null> {
+  // #10205 — un lecteur sans compte Meeshy ne lit AUCUN profil, avant toute lecture.
+  if (isGuestViewer((request as FastifyRequest & { authContext?: GuestViewerContext }).authContext)) {
+    sendAccountRequired(reply, 'A Meeshy account is required to see a user profile');
+    return null;
+  }
   const user = await fastify.prisma.user.findFirst({
     where: isValidObjectId(handle)
       ? { id: handle }

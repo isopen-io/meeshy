@@ -119,7 +119,7 @@ function makeSocketRecorder() {
   // socket. `room` retenu ci-dessous reste la PREMIÈRE room de la chaîne (le
   // fil), et `rooms` porte la chaîne entière.
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: any) => {
       order.push(`emit:${event}`);
       emits.push({ room: rooms[0], rooms, event, payload });
@@ -241,7 +241,9 @@ describe('PATCH ban — success with socket events', () => {
     await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`, payload: {} });
 
     expect(socket.leftRooms).toEqual(['conversation:conv-resolved-id']);
+    // Deux chaînes (#10205) : l'effectif aux comptes restants, la copie sans effectif au fil.
     expect(socket.order).toEqual([
+      'emit:conversation:participant-banned',
       'emit:conversation:participant-banned',
       'leave:conversation:conv-resolved-id',
     ]);
@@ -363,6 +365,7 @@ describe('PATCH unban — restores live room membership', () => {
     expect(socket.order).toEqual([
       'join:conversation:conv-resolved-id',
       'emit:conversation:participant-unbanned',
+      'emit:conversation:participant-unbanned',
     ]);
     await app.close();
   });
@@ -374,7 +377,7 @@ describe('PATCH unban — restores live room membership', () => {
     const res = await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(socket.emits.map(e => e.event)).toEqual(['conversation:participant-unbanned']);
+    expect([...new Set(socket.emits.map(e => e.event))]).toEqual(['conversation:participant-unbanned']);
     await app.close();
   });
 });

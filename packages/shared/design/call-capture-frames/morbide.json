@@ -5,6 +5,10 @@
       "id": "morbide.faire-part",
       "mood": "morbide",
       "name": "Faire-part",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -136,6 +140,10 @@
       "id": "morbide.memento",
       "mood": "morbide",
       "name": "Memento",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -334,6 +342,10 @@
       "id": "morbide.crypte",
       "mood": "morbide",
       "name": "Crypte",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -504,6 +516,10 @@
       "id": "morbide.veillee",
       "mood": "morbide",
       "name": "Veillée",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "diagonal",

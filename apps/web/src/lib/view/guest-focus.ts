@@ -29,3 +29,20 @@ export function useFocusGuest(): GuestIdentity | null {
 export function useGuestFocus(): boolean {
   return useStore(sessionStore, (state) => focusGuestOf(state.session) !== null);
 }
+
+/**
+ * **QUI PARLE À LA PASSERELLE EN INVITÉ** (#10205) — toute session `guest`,
+ * compte tenu à côté ou non : le transport ne présente alors que le jeton
+ * d'invité (`credentialFromSession`), et la passerelle lui refuse la liste des
+ * membres, les accusés par personne et les profils (403 `ACCOUNT_REQUIRED`).
+ * Ce qui DÉPEND de ces routes — détails, fiches, mentions suggérées, accusés —
+ * se lit ici, jamais au focus (qui ne décide que de la STRUCTURE de l'écran).
+ */
+export function speaksAsGuest(session: SessionState): boolean {
+  return session.status === 'guest';
+}
+
+/** `speaksAsGuest` au rendu. */
+export function useSpeaksAsGuest(): boolean {
+  return useStore(sessionStore, (state) => speaksAsGuest(state.session));
+}

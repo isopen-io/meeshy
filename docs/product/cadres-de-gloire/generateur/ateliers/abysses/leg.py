@@ -20,6 +20,10 @@ def leg_crest(card, division, cy=146, halo_col="#B9A7FF", halo_op=0.42):
     return crest_block(card, 270, cy, 0.86, "obsidian", division, gem="#7FF6FF", halo_col=halo_col, halo_op=halo_op, ink="#9FF4FF")
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def leg_plaque(card, title, message=None, accent="#BFA8FF"):
     return inscription(card, title, message, style="abysse", metal=LEG, accent=accent, panel=("#120E2E", "#05040F"))
 

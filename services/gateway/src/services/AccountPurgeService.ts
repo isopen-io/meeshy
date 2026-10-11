@@ -5,6 +5,7 @@ import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
+import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -17,6 +18,12 @@ export type AccountPurgeSummary = {
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
   readonly game: GamePurgeSummary;
+  readonly packs: PackPurgeSummary;
+};
+
+export type AccountPurgeOptions = {
+  /** Le volume des téléversements vu par la purge des packs ; le disque réel par défaut. */
+  readonly packFiles?: PackFileStore;
 };
 
 /**
@@ -48,6 +55,11 @@ export type AccountPurgeSummary = {
  *    `reclaimPostMediaBytes`) qu'un lot dédié doit réutiliser, jamais dupliquer
  *    (#5690, livré).
  *
+ * Les PACKS (#10151, LP3, suivi distinct de #9141 avec sa propre revue) :
+ * choix d'installation, bibliothèque de stickers et ses fichiers, propositions
+ * non publiées — le périmètre et ses raisons vivent dans
+ * `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs.
+ *
  * L'anonymisation de l'IDENTITÉ (`User.username`/`email`/`displayName`/…) est
  * livrée par `anonymizeUserIdentity`, ci-dessous — voir son doc-comment pour la
  * décision produit sur `Participant.displayName` (#5691, partagée avec #5689).
@@ -57,16 +69,19 @@ export async function purgeAccountIsolatedData(
     PrismaClient,
     'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
   > &
-    Parameters<typeof purgeGameData>[0],
+    Parameters<typeof purgeGameData>[0] &
+    Parameters<typeof purgePackData>[0],
   userId: string,
+  options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, game] = await Promise.all([
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, game, packs] = await Promise.all([
     prisma.userSession.deleteMany({ where: { userId } }),
     prisma.userVoiceModel.deleteMany({ where: { userId } }),
     prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
     prisma.notification.deleteMany({ where: { userId } }),
     eraseAddressBookOf(prisma, userId),
     purgeGameData(prisma, userId),
+    purgePackData(prisma, userId, { files: options.packFiles }),
   ]);
 
   const summary: AccountPurgeSummary = {
@@ -78,13 +93,16 @@ export async function purgeAccountIsolatedData(
     contactJoinNoticesDeleted: addressBook.joinNoticesDeleted,
     arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
     game,
+    packs,
   };
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
-      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} gameDuos=${summary.game.duosDeleted}`
+      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} gameDuos=${summary.game.duosDeleted} ` +
+      `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted}`
   );
 
   return summary;
@@ -98,8 +116,11 @@ export type AccountIdentityAnonymizeSummary = {
 /** Préfixe des valeurs de repli — jamais une constante seule (collision `@unique`). */
 const ANONYMIZED_MARKER = 'compte-supprime';
 
+/** Le préfixe du `username` d'un compte anonymisé — ce par quoi un rattrapage retrouve les comptes déjà purgés. */
+export const ANONYMIZED_USERNAME_PREFIX = `${ANONYMIZED_MARKER}-`;
+
 function anonymizedUsername(userId: string): string {
-  return `${ANONYMIZED_MARKER}-${userId}`;
+  return `${ANONYMIZED_USERNAME_PREFIX}${userId}`;
 }
 
 function anonymizedEmail(userId: string): string {

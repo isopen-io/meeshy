@@ -12,6 +12,16 @@ extension GameText {
         String(localized: "game2.archive.season.past_title", defaultValue: "Saison \(number) · terminée", bundle: .main)
     }
 
+    /// Une saison ouverte que le bloc gardé ne porte pas encore (#10131).
+    static func archiveSeasonCurrentTitle(number: String) -> String {
+        String(localized: "game2.archive.season.current_title", defaultValue: "Saison \(number) · en cours", bundle: .main)
+    }
+
+    static var archiveSeasonOpenedNote: String {
+        String(localized: "game2.archive.season.opened_note",
+               defaultValue: "La saison est ouverte : ton parcours s’affiche dès qu’elle est relue.", bundle: .main)
+    }
+
     static func archiveSeasonDates(start: String, end: String) -> String {
         String(localized: "game2.archive.season.dates", defaultValue: "Du \(start) au \(end)", bundle: .main)
     }

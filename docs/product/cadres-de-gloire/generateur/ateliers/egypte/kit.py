@@ -240,6 +240,10 @@ def cornice_band(card, name, x0, x1, y, h, cols=(LAPIS, GOLD, TURQ, GOLD, CARN, 
     return "".join(out)
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, kicker, title, message=None, y=750, style="cartouche", metal=GOLD3, panel=("#1D0F08", "#070302"),
                 ink="#FFF4DC", accent=None, title_size=38, w=424, date=DATE, msg_color=None, title_font=CINZEL, extra="",
                 cornice_cols=None, badge=None):

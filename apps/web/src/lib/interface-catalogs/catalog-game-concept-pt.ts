@@ -259,6 +259,10 @@ const pt = {
   'game.badge.rung.next': 'Próxima estrela · faltam {missing}',
   'game.badge.upcoming_title': 'A seguir',
   'game.badge.guide_link': 'Entender os emblemas',
+  'game.notebook.legacy_quarantine': 'Um caderno antigo deste aparelho não pertence a nenhuma conta conhecida: não é mostrado a ninguém.',
+  'game.notebook.legacy_delete': 'Apagar o caderno antigo',
+  'game.notebook.device_only': 'Suas fotos ficam neste aparelho.',
+  'game.notebook.size': 'O caderno ocupa {size}.',
 } as const satisfies GameConceptCatalog;
 
 export default pt;

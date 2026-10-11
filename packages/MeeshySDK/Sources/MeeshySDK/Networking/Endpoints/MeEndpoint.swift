@@ -31,6 +31,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameDuoInvite
     case gameFlameFreezes
     case gameFlameRelight
+    case gameFramesAtmosphere
     case gameGuideSeen
     case gameLeagueConsent
     case gameLeagueFriends
@@ -38,6 +39,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameLeagueWeek
     case gameLeagueWeeksByWeekKey(weekKey: String)
     case gameMissionsByMissionIdReroll(missionId: String)
+    case gamePhotoMomentsInvitations
+    case gamePhotoMomentsPresented
     case gamePrestige
     case gamePrivacy
     case gameSeasonsByNumber(number: String)
@@ -90,6 +93,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameDuoInvite: return "/api/v1/me/game/duo/invite"
         case .gameFlameFreezes: return "/api/v1/me/game/flame/freezes"
         case .gameFlameRelight: return "/api/v1/me/game/flame/relight"
+        case .gameFramesAtmosphere: return "/api/v1/me/game/frames/atmosphere"
         case .gameGuideSeen: return "/api/v1/me/game/guide/seen"
         case .gameLeagueConsent: return "/api/v1/me/game/league/consent"
         case .gameLeagueFriends: return "/api/v1/me/game/league/friends"
@@ -97,6 +101,8 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameLeagueWeek: return "/api/v1/me/game/league/week"
         case .gameLeagueWeeksByWeekKey(let weekKey): return "/api/v1/me/game/league/weeks/\(weekKey)"
         case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
+        case .gamePhotoMomentsInvitations: return "/api/v1/me/game/photo-moments/invitations"
+        case .gamePhotoMomentsPresented: return "/api/v1/me/game/photo-moments/presented"
         case .gamePrestige: return "/api/v1/me/game/prestige"
         case .gamePrivacy: return "/api/v1/me/game/privacy"
         case .gameSeasonsByNumber(let number): return "/api/v1/me/game/seasons/\(number)"

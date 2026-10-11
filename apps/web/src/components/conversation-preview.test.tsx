@@ -141,7 +141,7 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
       <ThreadHeader
         title="Kwame"
         accent="#4455ff"
-        conversation={RICH_TEXT_DIRECT}
+        conversation={{ ...RICH_TEXT_DIRECT, encryptionMode: 'e2ee' }}
         viewerId="u-viewer"
         group={false}
         otherUnread={3}

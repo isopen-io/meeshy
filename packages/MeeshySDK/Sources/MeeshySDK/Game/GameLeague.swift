@@ -68,6 +68,13 @@ public struct LeagueMoment: Sendable, Equatable {
         self.dayKey = dayKey
         self.minuteOfDay = minuteOfDay
     }
+
+    /// L'instant de l'horloge LOCALE (#10131) : le jour civil et la minute depuis minuit dans le calendrier donné.
+    public static func local(_ date: Date = Date(), calendar: Calendar = .current) -> LeagueMoment {
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let dayKey = String(format: "%04d-%02d-%02d", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
+        return LeagueMoment(dayKey: dayKey, minuteOfDay: (parts.hour ?? 0) * 60 + (parts.minute ?? 0))
+    }
 }
 
 public struct LeagueGain: Sendable, Equatable {

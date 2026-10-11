@@ -18,7 +18,7 @@ import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
-import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
+import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -279,6 +279,16 @@ const prerenderLanding = (): Plugin => {
             `Le prérendu de la landing a échoué (code ${r.status}). La construction s'arrête : ` +
               'sans `landing.html`, nginx ne servirait rien sur / et les robots ne liraient aucune balise.',
           );
+        }
+        /* LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192) — même horloge,
+           même variante : nginx sert ces copies de la coquille aux adresses
+           de l'application, et la coque n'a pas de nginx. */
+        const previews = spawnSync('bun', ['run', 'scripts/prerender-share-previews.ts', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (previews.status !== 0) {
+          throw new Error(`Le prérendu des aperçus d'adresse a échoué (code ${previews.status}). La construction s'arrête.`);
         }
       },
     },
@@ -702,6 +712,20 @@ export default defineConfig({
                    ~7 documents à chaque installation. `/` reste servie par la
                    coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
                 ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
+                /* LES APERÇUS D'ADRESSE (#10192) — des copies de la coquille
+                   pour les robots de messagerie, que nginx sert au premier
+                   chargement ; le précache garde la coquille nue. */
+                'shell-og/**',
+                /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
+                   démarrage du conteneur, donc JAMAIS précachée : son
+                   empreinte de build est celle du fichier par défaut, pas de
+                   celui que le conteneur sert. Elle a son seau (ci-dessous). */
+                'config.js',
+                /* L'AVATAR ET LA BANNIÈRE DE WORLD WIDE (#10204) — servis par
+                   adresse ABSOLUE dans la conversation et lus par le réseau
+                   comme n'importe quelle photo de conversation : ni leurs
+                   sources SVG ni leurs PNG n'ont à peser sur l'installation. */
+                'brand/world-wide/**',
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
@@ -759,6 +783,28 @@ export default defineConfig({
                * « Offline Graceful Degradation »).
                */
               runtimeCaching: [
+                {
+                  /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) en
+                     StaleWhileRevalidate : un démarrage sous service worker la
+                     lit dans son seau sans attendre le réseau (le script est
+                     bloquant), hors ligne compris, et la relit en fond — une
+                     origine changée au redémarrage du conteneur s'applique au
+                     lancement suivant. Fonction AUTONOME : Workbox la
+                     stringifie dans `dist/sw.js`.
+                     `index.html` la charge en script CLASSIQUE et bloquant
+                     (`<script src="/config.js">`, sans commentaire : chaque
+                     octet du document compte dans la première peinture) parce
+                     que `src/lib/api/config.ts` la lit à l'évaluation du
+                     module ; le défaut `public/config.js` est vide, et
+                     l'entrypoint du conteneur (`docker/runtime-config.sh`) le
+                     réécrit. */
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
+                  handler: 'StaleWhileRevalidate',
+                  options: {
+                    cacheName: SW_DEPLOYMENT_CONFIG_CACHE,
+                    expiration: { maxEntries: 1 },
+                  },
+                },
                 {
                   /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
                      (#6973) : le routeur de Workbox retient la PREMIÈRE route

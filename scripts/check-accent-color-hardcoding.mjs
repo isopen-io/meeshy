@@ -332,7 +332,19 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 //   la teinte d'attente de la pièce servie par l'API, une couleur de donnée,
 //   même motif que les 32 `thumbnailColor` déjà comptés.
 // Valeur MESURÉE le 2026-10-10 (CI 38045575542).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 456;
+//
+// 2026-10-11 (#10220) — variables inconnues 456 → 458 :
+// - `ConversationGuestHeaderBar.swift` (1, #10206) — `Color(hex: secondaryColor)`,
+//   second membre du dégradé du bouton « Partager » d'un invité sans compte ;
+//   l'hexa est REÇU en paramètre (comme `accentColor`, juste à côté, qui lui
+//   matche déjà la liste admise), même nature que les entrées #9907 ;
+// - `PacksSettingsView.swift` (1, #10150, LP2 « Cadres de gloire ») —
+//   `Color(hex: MeeshyColors.brandPrimaryHex)`, la teinte de la flèche de
+//   retour d'un écran de réglages statique : couleur SÉMANTIQUE (brand
+//   primary) hors du contexte conversation que vise CLAUDE.md § Conversation
+//   Accent Color.
+// Valeur MESURÉE le 2026-10-11 (CI 38162549528).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 458;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

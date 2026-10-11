@@ -2,6 +2,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
+import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { modalLayersOpen } from '@/lib/view/modal-layers';
@@ -94,6 +95,23 @@ describe('MessageDetailSheet — la garde de « Infos du message »', () => {
   test('message ENVOYÉ mais encore OPTIMISTE (`cid_…`) ⇒ aucune section', async () => {
     const host = await mountSheet('sent', 'cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18');
     expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+  });
+
+  test('un INVITÉ ne demande pas les accusés par personne, que la passerelle lui refuse (#10205)', async () => {
+    sessionStore.setState({
+      session: {
+        status: 'guest',
+        sessionToken: 'anon',
+        guest: { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-deploiement', link: 'mshy_world', mayWrite: true },
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      },
+    });
+    try {
+      const host = await mountSheet('sent');
+      expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+    } finally {
+      sessionStore.setState({ session: { status: 'anonymous' } });
+    }
   });
 });
 

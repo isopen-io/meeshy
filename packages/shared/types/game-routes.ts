@@ -65,6 +65,25 @@ export const GAME_INTEGRATION_ROUTES = {
 
 export const GAME_INTEGRATION_ROUTE_METHODS = { settings: 'GET', userGame: 'GET' } as const satisfies Record<keyof typeof GAME_INTEGRATION_ROUTES, 'GET'>;
 
+/**
+ * LES MOMENTS PHOTO ET LES CADRES (#10162, L10a) : une table À PART, comme `GAME_INTEGRATION_ROUTES` —
+ * `GameRoutesTests.swift` compte les entrées de `GAME_ROUTES`, et ces routes n'y changent rien.
+ */
+export const GAME_PHOTO_ROUTES = {
+  /** Choisir son atmosphère de cadres, qui INSTALLE aussi son pack. PUT. */
+  frameAtmosphere: '/me/game/frames/atmosphere',
+  /** « Me proposer d'immortaliser » : chaque étape, les grands moments, jamais. PUT. */
+  photoInvitations: '/me/game/photo-moments/invitations',
+  /** Accuser la présentation d'étapes (au plus 64), idempotent. POST. */
+  photoPresented: '/me/game/photo-moments/presented',
+} as const;
+
+export const GAME_PHOTO_ROUTE_METHODS = {
+  frameAtmosphere: 'PUT',
+  photoInvitations: 'PUT',
+  photoPresented: 'POST',
+} as const satisfies Record<keyof typeof GAME_PHOTO_ROUTES, 'PUT' | 'POST'>;
+
 export type GameRouteKey = keyof typeof GAME_ROUTES;
 
 /** La méthode HTTP de chaque route NOUVELLE — les anciennes gardent la leur. */

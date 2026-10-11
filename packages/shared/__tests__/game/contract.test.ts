@@ -236,6 +236,14 @@ describe('le bloc game', () => {
     expect(block({ missions: [] }).chest.today).toBeNull();
   });
 
+  it('dit la prime au cours FIGÉ au début du jour quand la passerelle le sert, et au cours d\'avant sinon (#10219)', () => {
+    const missions = missionRecords(34);
+    // 12 frappées à vie, 9 avant le jour : le prix de la 10e (1 221), pas celui de la 13e.
+    expect(block({ missions, mintedLifetime: 12, chestMintBase: 9 }).chest.today).toMatchObject({ bonusWhole: 1221 });
+    expect(block({ missions, mintedLifetime: 12 }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+    expect(block({ missions, mintedLifetime: 12, chestMintBase: null }).chest.today).toEqual(chestContentForEffort(dayEffort(missions), meeshPrice(13)));
+  });
+
   it('sert les fragments d\'étoile collectés quand la passerelle les connaît, et pas sinon — aucune frappe par fragments', () => {
     const served = block({ starFragments: 7 });
     expect(served.starFragments).toEqual({ collected: 7 });

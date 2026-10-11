@@ -53,6 +53,17 @@ const arStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'نص بالطول الأقصى سيتجاوز المنطقة: كبّر المنطقة أو قلّل الطول',
   'stickerPacks.problem.count': 'تضم الحزمة من 3 إلى 120 ملصقًا',
   'stickerPacks.problem.packField': 'امنح الحزمة اسمًا ووصفًا وتوقيعًا',
+  'packs.title': 'الحزم والتنزيلات',
+  'packs.segments': 'نوع الحزمة',
+  'packs.segment.stickers': 'الملصقات',
+  'packs.segment.frames': 'إطارات اللعبة',
+  'packs.frames.tabs': 'حزم الإطارات',
+  'packs.frames.hint': 'ثبّت حزم الإطارات التي تخلّد مراحلك في اللعبة. يوضح كل إطار أين يمكن استخدامه.',
+  'packs.frames.empty': 'لا توجد حزم إطارات بعد.',
+  'packs.frames.update': 'تتطلب هذه الحزمة إصدارًا أحدث من Meeshy. حدّث Meeshy لرؤية إطاراتها.',
+  'packs.frames.failed': 'تعذّر تحميل إطارات هذه الحزمة — أعد المحاولة',
+  'packs.frames.count': '{count} إطارات',
+  'packs.frames.weight': '{size} للتنزيل',
 } satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

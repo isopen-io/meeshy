@@ -53,6 +53,17 @@ const esStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Un texto de longitud máxima desbordaría: amplía la zona o reduce la longitud',
   'stickerPacks.problem.count': 'Un paquete tiene entre 3 y 120 stickers',
   'stickerPacks.problem.packField': 'Dale al paquete un nombre, una descripción y una firma',
+  'packs.title': 'Paquetes y descargas',
+  'packs.segments': 'Tipo de paquete',
+  'packs.segment.stickers': 'Stickers',
+  'packs.segment.frames': 'Marcos del juego',
+  'packs.frames.tabs': 'Paquetes de marcos',
+  'packs.frames.hint': 'Instala los paquetes de marcos que inmortalizan tus etapas del juego. Cada marco indica dónde se puede usar.',
+  'packs.frames.empty': 'Todavía no hay paquetes de marcos.',
+  'packs.frames.update': 'Este paquete requiere una versión más reciente de Meeshy. Actualiza Meeshy para ver sus marcos.',
+  'packs.frames.failed': 'No se pudieron cargar los marcos de este paquete — inténtalo de nuevo',
+  'packs.frames.count': '{count} marcos',
+  'packs.frames.weight': '{size} para descargar',
 } satisfies StickerPacksCatalog;
 
 export default esStickerPacks;

@@ -3,6 +3,7 @@ import { GAME_ARCHIVE_RETENTIONS, GAME_ARCHIVE_STATUSES, gameLeagueWeekArchivePa
 import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
 import { SEASON_STEPS, SEASON_WEEKS, seasonAt, seasonCalendar } from '@meeshy/shared/utils/game/season';
 
+import { unwrap } from './client';
 import type { DataSource } from './config';
 import { isBool, isInt, isOneOf, isText, orNull, shape } from './game-guards';
 import { GAME_V2_QUERY_PREFIX } from './game-v2-queries';
@@ -26,6 +27,24 @@ import type { ApiResult, HttpTransport } from './http';
  */
 
 export const seasonArchiveQueryKey = (number: number) => [...GAME_V2_QUERY_PREFIX, 'archive', 'season', number] as const;
+
+/**
+ * LA LECTURE D'UNE SAISON N, telle que la page la monte (#10131) : cache-first, et RELUE dès que le réseau revient
+ * (`refetchOnReconnect: 'always'`, même une copie fraîche) — la copie gardée hors ligne a pu basculer d'elle-même
+ * le jour de l'ouverture, le serveur la confirme.
+ */
+export const seasonArchiveQuery = (params: {
+  readonly number: number;
+  readonly enabled: boolean;
+  readonly deps: { readonly source: DataSource; readonly transport: HttpTransport };
+}) => ({
+  queryKey: seasonArchiveQueryKey(params.number),
+  enabled: params.enabled,
+  refetchOnReconnect: 'always' as const,
+  queryFn: async ({ signal }: { readonly signal: AbortSignal }): Promise<GameSeasonArchive> => {
+    return unwrap(await loadSeasonArchive({ ...params.deps, signal, number: params.number }));
+  },
+});
 export const leagueWeekArchiveQueryKey = (weekKey: string) => [...GAME_V2_QUERY_PREFIX, 'archive', 'league-week', weekKey] as const;
 
 const API_PREFIX = '/api/v1';

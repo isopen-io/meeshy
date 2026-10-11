@@ -29,7 +29,7 @@ extension UserProfileSheet {
         VStack(spacing: 0) {
             bannerSection
                 .frame(height: bannerHeight)
-                .overlay(alignment: .topTrailing) {
+                .overlay(alignment: .top) {
                     bannerGameBadge
                         .opacity(1 - Double(progress))
                 }
@@ -79,14 +79,17 @@ extension UserProfileSheet {
         }
     }
 
-    /// #10093 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce que SA
-    /// visibilité autorise, rien sinon. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
+    /// #10093, #10231 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce
+    /// que SA visibilité autorise, rien sinon. L'app occupe toute la largeur — le niveau et ses points au début (après
+    /// le bouton Fermer), le rang à la fin. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
     @ViewBuilder
     var bannerGameBadge: some View {
         if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
             gameSection.build(userId, displayUser.displayName ?? displayUser.username)
                 .allowsHitTesting(false)
                 .padding(.top, MeeshySpacing.mdPlus)
+                // Le bouton Fermer tient le coin de DÉBUT (`closeButton`) : le niveau commence après lui.
+                .padding(.leading, MeeshySpacing.lg + MeeshyControlSize.regular + MeeshySpacing.sm)
                 .padding(.trailing, MeeshySpacing.lg)
         }
     }
@@ -115,16 +118,9 @@ extension UserProfileSheet {
             .accessibilityHidden(true)
         )
         .clipped()
-        .onTapGesture {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
-        // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-        .accessibilityElement()
-        .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
+        // #10093 — un dégradé n'est pas une image : sans bannière, rien ne s'ouvre en plein écran. Décoratif, il se
+        // tait aussi pour VoiceOver.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Identity
@@ -136,9 +132,9 @@ extension UserProfileSheet {
                 .onTapGesture {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
-                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't).
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module))
+                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
+                .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
+                .accessibilityHint(hasAvatarPhoto ? String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module) : "")
                 .accessibilityAction {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
@@ -164,6 +160,11 @@ extension UserProfileSheet {
         // Gate the expanded identity from VoiceOver once the compact pinned bar
         // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
         .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
+    }
+
+    /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).
+    var hasAvatarPhoto: Bool {
+        ProfileFullscreenImage.opening(displayUser.avatarURL, fallbackText: "") != nil
     }
 
     @ViewBuilder

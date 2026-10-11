@@ -13,7 +13,7 @@ import { PullIndicator } from '@/components/pull-indicator';
 import { useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
 import { setCategoryExpanded, useConversationCategories } from '@/lib/api/conversation-categories';
@@ -36,7 +36,6 @@ import { useSectionFolds } from '@/lib/view/use-section-folds';
 import { pinWorldWide } from '@/lib/lens/world-pin';
 import { useOnline } from '@/lib/net/online';
 import { navigate } from '@/lib/router';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
@@ -160,7 +159,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
  */
 const lienDeParrainage = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
-  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await loadShareableReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
@@ -422,8 +421,9 @@ export default function ConversationsScreen() {
   const { visible, emptiness, sections, world } = useMemo(() => {
     const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
-    /* WORLD WIDE SORT DES SECTIONS ET SE POSE EN CARTE AU-DESSUS D'ELLES
-       (#10004) — seulement si le filtre et la recherche la gardent. */
+    /* WORLD WIDE SORT DES SECTIONS ET SE POSE AU-DESSUS D'ELLES (#10004), en
+       rangée ordinaire (#10191) — seulement si le filtre et la recherche la
+       gardent. */
     const pinned = pinWorldWide(kept);
     return {
       visible: ordered,
@@ -483,12 +483,12 @@ export default function ConversationsScreen() {
     onReach: () => void list.fetchNextPage(),
   });
 
-  /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par la carte
-     World Wide épinglée en tête (#10004) : mêmes signaux, même scène. */
-  const lensRowOf = (c: (typeof conversations)[number], card = false) => (
+  /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
+     épinglée en tête (#10004) : mêmes signaux, même scène, même peau (#10191). */
+  const lensRowOf = (c: (typeof conversations)[number], pinnedAtHead = false) => (
     <LensRow
       key={c.id}
-      card={card}
+      pinnedAtHead={pinnedAtHead}
       conversation={c}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
