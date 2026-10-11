@@ -241,15 +241,19 @@
 }
 
 /* LE TÉLÉPHONE ÉTROIT (320–480 px) : la barre tient en DEUX rangées — la
- * marque et la langue, puis les deux portes côte à côte, à parts égales —
+ * marque et la langue, puis les deux portes côte à côte —
  * plutôt que trois, qui mangeaient un cinquième de l'écran sous un en-tête
- * collant. */
+ * collant. Chaque porte tient sur UNE ligne (#10124) : elle prend la largeur
+ * de son libellé, l'espace qui reste se partage. À parts égales, « Join
+ * without an account » passait sur deux lignes à 390 px pendant que « Sign
+ * in » laissait la moitié de la sienne vide. */
 @media (max-width: 480px) {
   .ld-bar {
     gap: 8px;
   }
   .ld-bar > .ld-btn {
-    flex: 1 1 40%;
+    flex: 1 1 auto;
+    white-space: nowrap;
     padding-inline: 8px;
     font-size: 14px;
     line-height: 1.2;
