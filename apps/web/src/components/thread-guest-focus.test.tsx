@@ -143,6 +143,10 @@ describe('l’en-tête du fil d’un invité', () => {
     asGuest();
     const shared: string[] = [];
     const el = mount(header());
+    await act(async () => {
+      await import('./thread-share-control');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     const button = el.querySelector<HTMLButtonElement>('[data-thread-share]');
     expect(button).not.toBeNull();
     expect(button?.getAttribute('aria-label')).toBe('Partager la conversation');

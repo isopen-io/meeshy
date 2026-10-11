@@ -17,7 +17,7 @@
  * @see schema.prisma Participant.role, User.role, Conversation.type
  */
 
-import { CALL_ERROR_CODES } from '../types/call-error-codes.js';
+import type { CALL_ERROR_CODES } from '../types/call-error-codes.js';
 import { isGlobalAdmin, isMemberAdmin, isMemberCreator } from '../types/role-types.js';
 
 export type CallStartContext = {
@@ -30,7 +30,10 @@ export type CallStartContext = {
 
 const OPEN_CALL_TYPES: ReadonlySet<string> = new Set(['direct', 'group']);
 
-export const CALL_NOT_ALLOWED_CODE = CALL_ERROR_CODES.CALL_NOT_ALLOWED;
+/* Un LITTÉRAL typé par la table, jamais une lecture de `CALL_ERROR_CODES` :
+   les clients qui consomment `canStartCall` (l'en-tête du fil web) n'ont pas à
+   embarquer toute la table des codes d'appel (#10207). */
+export const CALL_NOT_ALLOWED_CODE: (typeof CALL_ERROR_CODES)['CALL_NOT_ALLOWED'] = 'CALL_NOT_ALLOWED';
 
 function holdsPublicCallRight(context: CallStartContext): boolean {
   if (context.viewerIsCreator) return true;
