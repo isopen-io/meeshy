@@ -25,7 +25,7 @@ function fichiersXml(dossier: string): string[] {
 describe('les ressources XML de la coque se compilent (#10088)', () => {
   test('aucun commentaire ne contient « -- »', () => {
     const fautifs = fichiersXml(RES).filter((chemin) =>
-      [...readFileSync(chemin, 'utf8').matchAll(/<!--([\s\S]*?)-->/g)].some(([, corps]) => corps.includes('--')),
+      [...readFileSync(chemin, 'utf8').matchAll(/<!--([\s\S]*?)-->/g)].some(([, corps]) => (corps ?? '').includes('--')),
     );
     expect(fautifs.map((chemin) => chemin.slice(RES.length + 1))).toEqual([]);
   });
