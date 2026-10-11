@@ -24,7 +24,7 @@ const CONFORME =
   '<!doctype html><html><head>' +
   '<meta charset="utf-8" />' +
   '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />' +
-  '<meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)" />' +
+  '<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />' +
   '<script type="module" crossorigin src="/assets/index-abc.js"></script>' +
   '<link rel="stylesheet" href="/assets/index-abc.css">' +
   '</head><body><div id="root"></div></body></html>';
@@ -61,8 +61,8 @@ describe('auditShellDist — les quatre clauses du contrat de la variante B', ()
     expect(violations[0].includes('viewport-fit=cover')).toBe(true);
   });
 
-  test('theme-color #0b0c14 absent est refusé — un flash blanc au démarrage à froid', () => {
-    const fautif = CONFORME.replace('#0b0c14', '#ffffff');
+  test('theme-color #09090b absent est refusé — un flash blanc au démarrage à froid', () => {
+    const fautif = CONFORME.replace('#09090b', '#ffffff');
     const violations = auditShellDist(fautif, FICHIERS_CONFORMES);
     expect(violations.length).toBe(1);
     expect(violations[0].includes('theme-color')).toBe(true);
