@@ -39,7 +39,7 @@ afterEach(() => {
 
 const WORLD: GuestAttachments = { kinds: ['text', 'audio'], title: 'World Wide' };
 
-function mount(options: { readonly guest?: GuestAttachments; readonly picked?: Array<FileList | null> } = {}): HTMLDivElement {
+function mount(options: { readonly guest?: GuestAttachments; readonly picked?: Array<FileList | null>; readonly canLocate?: boolean } = {}): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -56,7 +56,7 @@ function mount(options: { readonly guest?: GuestAttachments; readonly picked?: A
         contact={{ source: 'file', onRequest: () => undefined, onPickFile: () => undefined }}
         onStartVoice={() => undefined}
         canRecord
-        canLocate={false}
+        canLocate={options.canLocate ?? false}
         rights={{ ...DEFAULT_USER_PERMISSIONS, canSendFiles: false, canSendImages: false }}
         {...(options.guest === undefined ? {} : { guest: options.guest })}
       />,
@@ -71,6 +71,13 @@ const sources = (el: HTMLElement): readonly string[] =>
 describe('le panneau d’un invité de World Wide', () => {
   test('n’offre que le texte, l’audio, le vocal et l’emoji', () => {
     const el = mount({ guest: WORLD });
+    expect(sources(el)).toEqual(['guest-text', 'guest-audio', 'voice', 'emoji']);
+  });
+
+  /* La planche « Attach » ne montre que les deux familles : partager sa
+     position dans un fil public, sans compte, n'est pas ce qu'elle ouvre. */
+  test('ne propose pas la position, même là où le navigateur sait la lire', () => {
+    const el = mount({ guest: WORLD, canLocate: true });
     expect(sources(el)).toEqual(['guest-text', 'guest-audio', 'voice', 'emoji']);
   });
 
@@ -102,6 +109,10 @@ describe('le panneau d’un invité de World Wide', () => {
 });
 
 describe('le panneau d’un compte reste complet', () => {
+  test('la position reste offerte à un compte', () => {
+    expect(sources(mount({ canLocate: true }))).toContain('location');
+  });
+
   test('aucune note d’invité, les portes gardées par les droits', () => {
     const el = mount();
     expect(el.querySelector('[data-composer-guest-note]')).toBeNull();

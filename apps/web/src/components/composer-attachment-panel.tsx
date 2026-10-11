@@ -369,7 +369,7 @@ export function ComposerAttachmentPanel({
           )
         ) : null}
 
-        {canLocate ? (
+        {canLocate && guest === undefined ? (
           <GestureSource
             id="location"
             label={translate(language, 'composer.attach.location')}
