@@ -667,6 +667,15 @@ extension ConversationView {
                     // par clientMessageId côté gateway évite tout doublon).
                     _ = try? await viewModel.messagePersistence.applyEvent(
                         localId: send.tempId, event: .sendFailed(error))
+                    // #10006 — le refus d'une pièce d'INVITÉ est définitif :
+                    // l'outbox le rejouerait en vain. La bulle dit pourquoi.
+                    if let refusal = error as? GuestAttachmentRefusal {
+                        await viewModel.markOptimisticMediaFailed(
+                            tempId: send.tempId,
+                            reason: GuestAttachmentCopy.serverRefusal(refusal, kinds: anonymousSession?.allowedAttachmentKinds)
+                        )
+                        continue
+                    }
                     var requeued = false
                     if send.group.kind == .audio {
                         let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }

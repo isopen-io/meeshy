@@ -2,6 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// D'où vient une session invitée : un lien de partage, ou l'entrée World
+/// Wide de l'écran de connexion (#10006), qui sait déjà ce que `GET /world` a
+/// servi.
+enum GuestSessionOrigin: Equatable {
+    case shareLink
+    case world(WorldEntry)
+}
+
 struct GuestSession {
     let identifier: String
     var context: AnonymousSessionContext?
@@ -14,6 +22,39 @@ struct GuestSession {
     /// Distinguer l'intention de l'accident permet de garder cette protection
     /// tout en autorisant le choix délibéré.
     var isDeliberate: Bool = false
+    var origin: GuestSessionOrigin = .shareLink
+
+    /// La session que le fil reçoit. World Wide plafonne les familles de ses
+    /// invités (#10001) : des termes qui ne les disent pas — ancien serveur,
+    /// session enregistrée avant le champ — n'ouvrent pas le sélecteur en
+    /// grand, ils prennent le plafond (#10055).
+    func effectiveContext(_ context: AnonymousSessionContext) -> AnonymousSessionContext {
+        guard case .world = origin else { return context }
+        var capped = context
+        capped.allowedAttachmentKinds = context.attachmentAllowance
+            .capped(by: GuestAttachmentKind.worldGuestCeiling)
+            .kinds
+        return capped
+    }
+
+    /// La conversation que le fil ouvre une fois la session obtenue. World
+    /// Wide s'annonce par ce que le serveur a servi — son type global, son
+    /// titre, son effectif — avant que le détail ne revienne du réseau.
+    func conversationShell(for context: AnonymousSessionContext) -> Conversation {
+        switch origin {
+        case .shareLink:
+            return Conversation(id: context.conversationId, identifier: identifier, type: .group)
+        case .world(let entry):
+            return Conversation(
+                id: context.conversationId,
+                identifier: entry.identifier,
+                type: .global,
+                title: entry.title,
+                memberCount: entry.memberCount,
+                memberCountCapped: entry.memberCountCapped == true
+            )
+        }
+    }
 }
 
 struct GuestConversationContainer: View {
@@ -23,17 +64,17 @@ struct GuestConversationContainer: View {
     let onAccountRequest: (InviteLandingChoice) -> Void
 
     var body: some View {
-        if let context = session.context {
+        if let stored = session.context {
+            let context = session.effectiveContext(stored)
             ConversationView(
-                conversation: Conversation(
-                    id: context.conversationId,
-                    identifier: session.identifier,
-                    type: .group
-                ),
+                conversation: session.conversationShell(for: context),
                 anonymousSession: context,
                 showsOwnConnectionBanner: true
             )
             .reportsConversationViewing(context.conversationId)
+        } else if case .world(let entry) = session.origin {
+            // #10006 — nom → langue → fil, depuis l'écran de connexion.
+            WorldGuestEntryView(entry: entry, onEntered: onSessionCreated)
         } else {
             // Une entrée DÉLIBÉRÉE a déjà vu la page d'invitation (#7795) et y a
             // choisi l'anonymat : le formulaire s'ouvre directement.
