@@ -151,6 +151,18 @@ describe('le registre des packs officiels, fail-closed par entrée', () => {
     ).toEqual([]);
   });
 
+  it('un pack de GLOIRE ne déclare jamais un usage libre, un pack de CAPTURE jamais un usage du jeu — pack et collections', () => {
+    const capture = (over: Record<string, unknown>) => entry({ domain: 'capture-frame', atmosphere: undefined, ...over });
+    expect(parsePackIndex([entry({ usage: { kind: 'free', surfaces: ['call', 'photo', 'video'] } })]).entries).toEqual([]);
+    expect(parsePackIndex([entry({ collections: [{ slug: 'libres', usage: { kind: 'free', surfaces: ['photo'] } }] })]).entries).toEqual([]);
+    expect(parsePackIndex([capture({ usage: { kind: 'prestige' } })]).entries).toEqual([]);
+    expect(
+      parsePackIndex([capture({ usage: { kind: 'free', surfaces: ['photo', 'video'] }, collections: [{ slug: 'succes', usage: { kind: 'achievement' } }] })]).entries,
+    ).toEqual([]);
+    expect(parsePackIndex([capture({ usage: { kind: 'free', surfaces: ['call', 'photo', 'video'] } })]).entries).toHaveLength(1);
+    expect(parsePackIndex([entry({ collections: [{ slug: 'prestige', usage: { kind: 'prestige' } }] })]).entries).toHaveLength(1);
+  });
+
   it('un pack non retirable est installé par défaut', () => {
     expect(parsePackIndex([entry({ removable: false })]).entries).toEqual([]);
   });

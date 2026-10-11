@@ -35,7 +35,9 @@ export type FrameMomentFamily = (typeof FRAME_MOMENT_FAMILIES)[number];
 export const CAPTURE_FRAME_SURFACES = ['capture', 'live'] as const;
 export type CaptureFrameSurface = (typeof CAPTURE_FRAME_SURFACES)[number];
 
-const RANK_KEYS: readonly GloryRankOrMythic[] = [...GLORY_RANKS.map((rank) => rank.key), 'mythe'];
+/** Le Mythe n'a pas de division : un cadre ou un contexte de Mythe qui en déclare une est illisible. */
+const MYTHIC_RANK = 'mythe' satisfies GloryRankOrMythic;
+const RANK_KEYS: readonly GloryRankOrMythic[] = [...GLORY_RANKS.map((rank) => rank.key), MYTHIC_RANK];
 
 const rankSchema = z.enum(RANK_KEYS as unknown as readonly [GloryRankOrMythic, ...GloryRankOrMythic[]]);
 const divisionSchema = z.literal(GLORY_DIVISIONS);
@@ -66,7 +68,9 @@ export const FrameUsageSchema = z.discriminatedUnion('kind', [
       z.refine((surfaces) => new Set(surfaces).size === surfaces.length),
     ),
   }),
-  z.object({ kind: z.literal('rank'), rank: rankSchema, division: z.optional(divisionSchema) }),
+  z
+    .object({ kind: z.literal('rank'), rank: rankSchema, division: z.optional(divisionSchema) })
+    .check(z.refine((usage) => usage.rank !== MYTHIC_RANK || usage.division === undefined)),
   z.object({ kind: z.literal('prestige') }),
   z.object({ kind: z.literal('achievement'), rarity: z.optional(raritySchema) }),
   z.object({ kind: z.literal('moment'), family: familySchema }),
@@ -75,7 +79,9 @@ export const FrameUsageSchema = z.discriminatedUnion('kind', [
 export const FrameUseContextSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('call') }),
   z.object({ kind: z.literal('capture'), media: z.enum(['photo', 'video']) }),
-  z.object({ kind: z.literal('rank'), rank: rankSchema, division: z.nullable(divisionSchema) }),
+  z
+    .object({ kind: z.literal('rank'), rank: rankSchema, division: z.nullable(divisionSchema) })
+    .check(z.refine((context) => (context.rank === MYTHIC_RANK) === (context.division === null))),
   z.object({ kind: z.literal('prestige') }),
   z.object({ kind: z.literal('achievement'), rarity: z.optional(raritySchema) }),
   z.object({ kind: z.literal('moment'), family: familySchema }),

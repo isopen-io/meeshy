@@ -127,6 +127,17 @@ struct FrameUsageVectorTests {
         }
     }
 
+    @Test("un contexte illisible ne se décode pas — le Mythe sans division, tout autre rang avec")
+    func invalidContextsAreRejected() throws {
+        let root = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: Self.vectorsURL)) as? [String: Any])
+        let invalid = try #require(root["invalidContexts"] as? [Any])
+        #expect(invalid.count >= 3)
+        for context in invalid {
+            let data = try JSONSerialization.data(withJSONObject: context)
+            #expect(throws: (any Error).self, "\(context)") { try JSONDecoder().decode(FrameUseContext.self, from: data) }
+        }
+    }
+
     @Test("un usage s'encode et se relit à l'identique")
     func usageRoundTrips() throws {
         let usages: [FrameUsage] = [

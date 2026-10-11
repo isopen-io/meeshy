@@ -37,6 +37,15 @@ const collectionSchema = z.object({
   usage: z.optional(FrameUsageSchema),
 });
 
+type DeclaredUsages = { readonly usage?: FrameUsage; readonly collections?: readonly { readonly usage?: FrameUsage }[] };
+
+const declaredUsages = (entry: DeclaredUsages): readonly FrameUsage[] =>
+  [entry.usage, ...(entry.collections ?? []).map((collection) => collection.usage)].filter((usage): usage is FrameUsage => usage !== undefined);
+
+/** Un cadre de gloire récompense le jeu, jamais une capture libre ; un cadre de capture est libre, jamais une récompense du jeu. */
+const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean =>
+  entry.domain === 'sticker' || declaredUsages(entry).every((usage) => (usage.kind === 'free') === (entry.domain === 'capture-frame'));
+
 /**
  * L'entrée de registre d'un pack officiel ou intégré. Un pack de CADRES porte
  * l'usage de ses cadres (`usage`, et par collection), que la loi d'usage lit :
@@ -66,6 +75,7 @@ export const PackIndexEntrySchema = z
   })
   .check(
     z.refine((entry) => (entry.domain === 'sticker' ? entry.usage === undefined : entry.usage !== undefined)),
+    z.refine(usageFitsDomain),
     z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
     z.refine((entry) => entry.removable || entry.installedByDefault),
     z.refine((entry) => entry.names.fr !== undefined),

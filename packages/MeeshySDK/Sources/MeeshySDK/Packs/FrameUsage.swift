@@ -175,6 +175,8 @@ public enum FrameUsageLaw {
 public enum FrameUsageDecodingError: Error, Equatable {
     case emptySurfaces
     case duplicateSurfaces
+    /// Le Mythe n'a pas de division, et tout autre rang en a une dans un contexte.
+    case divisionMismatch
 }
 
 private enum FrameUsageCodingKeys: String, CodingKey {
@@ -193,10 +195,10 @@ extension FrameUsage: Codable {
             guard Set(surfaces).count == surfaces.count else { throw FrameUsageDecodingError.duplicateSurfaces }
             self = .free(surfaces: surfaces)
         case "rank":
-            self = .rank(
-                try container.decode(GloryRank.self, forKey: .rank),
-                division: try container.decodeIfPresent(GloryDivision5.self, forKey: .division)
-            )
+            let rank = try container.decode(GloryRank.self, forKey: .rank)
+            let division = try container.decodeIfPresent(GloryDivision5.self, forKey: .division)
+            guard rank != .mythe || division == nil else { throw FrameUsageDecodingError.divisionMismatch }
+            self = .rank(rank, division: division)
         case "prestige":
             self = .prestige
         case "achievement":
@@ -245,6 +247,7 @@ extension FrameUseContext: Codable {
             let division: GloryDivision5? = try container.decodeNil(forKey: .division)
                 ? nil
                 : try container.decode(GloryDivision5.self, forKey: .division)
+            guard (rank == .mythe) == (division == nil) else { throw FrameUsageDecodingError.divisionMismatch }
             self = .rank(rank, division: division)
         case "prestige":
             self = .prestige

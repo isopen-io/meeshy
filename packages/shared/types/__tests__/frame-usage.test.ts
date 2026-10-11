@@ -20,6 +20,7 @@ type Vectors = {
   readonly labels: readonly { readonly usage: unknown; readonly key: string; readonly params: Record<string, string> }[];
   readonly captureProjection: readonly { readonly surfaces: CaptureFrameSurface[] | null; readonly usage: FrameUsage }[];
   readonly invalidUsages: readonly unknown[];
+  readonly invalidContexts: readonly unknown[];
 };
 
 const vectors = JSON.parse(readFileSync(resolve(__dirname, '../../design/packs/frame-usage-vectors.json'), 'utf8')) as Vectors;
@@ -107,6 +108,10 @@ describe('les vecteurs croisés (rejoués aussi par le miroir Swift)', () => {
 
   it.each(vectors.invalidUsages.map((v) => [JSON.stringify(v), v] as const))('usage illisible %s ⇒ null', (_label, v) => {
     expect(parseFrameUsage(v)).toBeNull();
+  });
+
+  it.each(vectors.invalidContexts.map((v) => [JSON.stringify(v), v] as const))('contexte illisible %s ⇒ refusé', (_label, v) => {
+    expect(FrameUseContextSchema.safeParse(v).success).toBe(false);
   });
 });
 

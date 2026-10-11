@@ -213,6 +213,14 @@
     {"kind": "achievement", "rarity": "divine"},
     {"kind": "moment", "family": "prestige"},
     {"kind": "sticker"},
-    {}
+    {},
+    {"kind": "rank", "rank": "mythe", "division": 1}
+  ],
+  "invalidContexts": [
+    {"kind": "rank", "rank": "mythe", "division": 2},
+    {"kind": "rank", "rank": "ambassadeur", "division": null},
+    {"kind": "rank", "rank": "ambassadeur"},
+    {"kind": "capture", "media": "audio"},
+    {"kind": "free"}
   ]
 }
