@@ -74,6 +74,9 @@ export const leagueWeekClose = (weekKey: string): LeagueMoment => ({
   minuteOfDay: LEAGUE_CLOSE_MINUTE,
 });
 
+/** La prochaine fermeture de semaine (#10225) — squelette. */
+export const nextLeagueWeekClose = (moment: LeagueMoment): LeagueMoment => moment;
+
 /** La semaine à laquelle un moment appartient : passé la fermeture, c'est la suivante. */
 export function leagueWeekOfMoment(moment: LeagueMoment): string {
   const week = leagueWeekKey(moment.dayKey);
