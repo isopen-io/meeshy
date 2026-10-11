@@ -12,13 +12,28 @@ public struct WorldEntry: Decodable, Sendable, Equatable {
     public let shareLinkIdentifier: String
     public let memberCount: Int
     public let memberCountCapped: Bool?
+    /// L'avatar et la bannière de World Wide (#10204), en adresses absolues.
+    /// Optionnels : un serveur qui ne les sert pas laisse les initiales et le
+    /// dégradé, jamais une erreur de décodage.
+    public let avatar: String?
+    public let banner: String?
 
-    public init(identifier: String, title: String, shareLinkIdentifier: String, memberCount: Int, memberCountCapped: Bool? = nil) {
+    public init(
+        identifier: String,
+        title: String,
+        shareLinkIdentifier: String,
+        memberCount: Int,
+        memberCountCapped: Bool? = nil,
+        avatar: String? = nil,
+        banner: String? = nil
+    ) {
         self.identifier = identifier
         self.title = title
         self.shareLinkIdentifier = shareLinkIdentifier
         self.memberCount = memberCount
         self.memberCountCapped = memberCountCapped
+        self.avatar = avatar
+        self.banner = banner
     }
 
     /// `formatMemberCount(count, capped)` : « 199+ » au-delà du plafond.

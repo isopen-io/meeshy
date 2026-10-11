@@ -36,6 +36,19 @@ final class WorldServiceTests: XCTestCase {
         XCTAssertEqual(entry.formattedMemberCount, "42")
     }
 
+    func test_worldEntry_withoutAvatarOrBanner_decodesThemAsAbsent() throws {
+        let entry = try decode(WorldEntry.self, #"{"identifier":"world","title":"World Wide","shareLinkIdentifier":"k","memberCount":1}"#)
+        XCTAssertNil(entry.avatar)
+        XCTAssertNil(entry.banner)
+    }
+
+    func test_worldEntry_decodesItsAbsoluteAvatarAndBanner() throws {
+        let entry = try decode(WorldEntry.self, #"{"identifier":"world","title":"World Wide","shareLinkIdentifier":"k","memberCount":1,"avatar":"https://staging.meeshy.me/brand/world-wide/avatar.png","banner":"https://staging.meeshy.me/brand/world-wide/banner.png"}"#)
+        XCTAssertEqual(entry.avatar, "https://staging.meeshy.me/brand/world-wide/avatar.png")
+        XCTAssertEqual(entry.banner, "https://staging.meeshy.me/brand/world-wide/banner.png")
+        XCTAssertEqual(entry.avatar.flatMap { MeeshyConfig.resolveMediaURL($0) }?.absoluteString, entry.avatar)
+    }
+
     func test_formattedMemberCount_capped_appendsPlus() {
         let entry = WorldEntry(identifier: "world", title: "World Wide", shareLinkIdentifier: "k", memberCount: 199, memberCountCapped: true)
         XCTAssertEqual(entry.formattedMemberCount, "199+")
