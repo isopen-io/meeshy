@@ -1,7 +1,6 @@
-/** @jsxImportSource preact */
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup as render } from 'react-dom/server';
 
 import {
   INSTITUTIONAL_PATTERN,
@@ -140,11 +139,12 @@ describe('le contenu des deux pages est RÉEL', () => {
   test('les deux traversent le rendu partagé et en ressortent avec leur contenu', () => {
     for (const page of [PAGE_HELP, PAGE_FAQ]) {
       const html = render(<InstitutionalPage page={page} version="2.0.10" />);
-      expect(html).toContain(page.title);
+      // `react-dom/server` échappe les entités comme le préchauffage : on
+      // cherche donc chaque titre tel qu'il SORT, pas tel qu'il est écrit.
+      const served = (text: string): string => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;');
+      expect(html).toContain(served(page.title));
       for (const section of page.sections) {
-        // `preact-render-to-string` échappe les entités comme le préchauffage :
-        // on cherche donc le titre tel qu'il SORT, pas tel qu'il est écrit.
-        expect(html).toContain(section.title.replace(/&/g, '&amp;').replace(/'/g, '&#39;'));
+        expect(html).toContain(served(section.title));
       }
     }
   });

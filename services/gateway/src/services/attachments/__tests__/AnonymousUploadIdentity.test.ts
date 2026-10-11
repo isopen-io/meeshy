@@ -79,7 +79,7 @@ describe('fetchShareLinkAnonymousFlags', () => {
     expect(flags).toEqual({ allowAnonymousFiles: false, allowAnonymousImages: true });
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'sharelink-1' },
-      select: { allowAnonymousFiles: true, allowAnonymousImages: true },
+      select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
     });
   });
 

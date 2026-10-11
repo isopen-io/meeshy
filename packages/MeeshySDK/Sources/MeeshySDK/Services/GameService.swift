@@ -202,3 +202,27 @@ extension GameService: GameIntegrationServiceProviding {
         return response.data
     }
 }
+
+// MARK: - Ce qu'un lien du Jeu ouvre (#9947, #10018)
+//
+// Un TROISIÈME protocole, pour la même raison que le second : les doubles de test
+// existants n'ont pas à connaître ces lectures. Un serveur antérieur à #9947 ne les
+// sert pas — l'écran retombe alors sur la saison et la semaine EN COURS.
+public protocol GameArchiveServiceProviding: Sendable {
+    /// Une saison par son numéro : calendrier, thème, état, et MA progression si j'y ai joué.
+    func fetchSeasonArchive(number: Int) async throws -> GameSeasonArchive
+    /// Une semaine de ligue par son lundi : MON résultat gravé, ou la purge.
+    func fetchLeagueWeekArchive(weekKey: String) async throws -> GameLeagueWeekArchive
+}
+
+extension GameService: GameArchiveServiceProviding {
+    public func fetchSeasonArchive(number: Int) async throws -> GameSeasonArchive {
+        let response: APIResponse<GameSeasonArchive> = try await api.request(MeEndpoint.gameSeasonArchive(number: number))
+        return response.data
+    }
+
+    public func fetchLeagueWeekArchive(weekKey: String) async throws -> GameLeagueWeekArchive {
+        let response: APIResponse<GameLeagueWeekArchive> = try await api.request(MeEndpoint.gameLeagueWeekArchive(weekKey: weekKey))
+        return response.data
+    }
+}

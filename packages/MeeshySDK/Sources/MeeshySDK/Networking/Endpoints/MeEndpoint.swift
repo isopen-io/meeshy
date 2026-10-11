@@ -13,6 +13,7 @@ import Foundation
 
 public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case accountDeletion
+    case birthDate
     case categories
     case categoriesByCategoryId(categoryId: String)
     case categoriesReorder
@@ -35,9 +36,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gameLeagueFriends
     case gameLeaguePseudonym
     case gameLeagueWeek
+    case gameLeagueWeeksByWeekKey(weekKey: String)
     case gameMissionsByMissionIdReroll(missionId: String)
     case gamePrestige
     case gamePrivacy
+    case gameSeasonsByNumber(number: String)
     case gameSeasonSeal
     case gameSeasonStepsByStepClaim(step: String)
     case gameShowcaseOrder
@@ -69,6 +72,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     public var path: String {
         switch self {
         case .accountDeletion: return "/api/v1/me/account/deletion"
+        case .birthDate: return "/api/v1/me/birth-date"
         case .categories: return "/api/v1/me/categories"
         case .categoriesByCategoryId(let categoryId): return "/api/v1/me/categories/\(categoryId)"
         case .categoriesReorder: return "/api/v1/me/categories/reorder"
@@ -91,9 +95,11 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gameLeagueFriends: return "/api/v1/me/game/league/friends"
         case .gameLeaguePseudonym: return "/api/v1/me/game/league/pseudonym"
         case .gameLeagueWeek: return "/api/v1/me/game/league/week"
+        case .gameLeagueWeeksByWeekKey(let weekKey): return "/api/v1/me/game/league/weeks/\(weekKey)"
         case .gameMissionsByMissionIdReroll(let missionId): return "/api/v1/me/game/missions/\(missionId)/reroll"
         case .gamePrestige: return "/api/v1/me/game/prestige"
         case .gamePrivacy: return "/api/v1/me/game/privacy"
+        case .gameSeasonsByNumber(let number): return "/api/v1/me/game/seasons/\(number)"
         case .gameSeasonSeal: return "/api/v1/me/game/season/seal"
         case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
         case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"

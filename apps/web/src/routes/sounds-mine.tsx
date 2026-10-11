@@ -19,6 +19,7 @@ import {
   type MySoundsDeps,
 } from '@/lib/api/my-sounds';
 import { translate } from '@/lib/i18n-catalog';
+import { isSoundsMineCatalogLoaded, loadSoundsMineCatalog, translateSoundsMine } from '@/lib/i18n-sounds-mine-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { useOnline } from '@/lib/net/online';
@@ -46,22 +47,27 @@ import { Link } from '@/routes/route-table';
  * **HORS LIGNE, « RETIRER » S'ÉTEINT ET L'ÉCRAN LE DIT AVANT LE GESTE** — même
  * règle que « Mes stories » (D-83) : un retrait qu'aucun réseau ne confirmerait
  * ne se joue pas en optimiste.
+ *
+ * **SES LIBELLÉS VOYAGENT AVEC LUI** (`i18n-sounds-mine-catalog.ts`) : le
+ * catalogue d'interface et la première peinture sont à leur plafond, donc
+ * l'écran attend son catalogue avant son premier rendu (`SoundsMineScreen`),
+ * sans rien ajouter à la table des routes.
  */
 
 const HEADER_HEIGHT = 64;
 const SOUND_ROW_HEIGHT_ESTIMATE = 72;
 
 export function soundRowTitle(sound: MySound, language: InterfaceLanguage): string {
-  return sound.title.trim() === '' ? translate(language, 'soundsMine.untitled') : sound.title;
+  return sound.title.trim() === '' ? translateSoundsMine(language, 'soundsMine.untitled') : sound.title;
 }
 
 export function soundPostCountLabel(count: number, language: InterfaceLanguage): string {
-  return translate(language, count === 1 ? 'soundsMine.posts.one' : 'soundsMine.posts.other', { count: String(count) });
+  return translateSoundsMine(language, count === 1 ? 'soundsMine.posts.one' : 'soundsMine.posts.other', { count: String(count) });
 }
 
 export function soundRemovalBody(postCount: number, language: InterfaceLanguage): string {
-  if (postCount <= 0) return translate(language, 'soundsMine.remove.body.unused');
-  return translate(language, postCount === 1 ? 'soundsMine.remove.body.one' : 'soundsMine.remove.body.other', {
+  if (postCount <= 0) return translateSoundsMine(language, 'soundsMine.remove.body.unused');
+  return translateSoundsMine(language, postCount === 1 ? 'soundsMine.remove.body.one' : 'soundsMine.remove.body.other', {
     count: String(postCount),
   });
 }
@@ -77,7 +83,7 @@ function SoundsMineHeader({
     <header className="flex shrink-0 items-center gap-2 px-3" style={{ height: HEADER_HEIGHT }}>
       <Link
         to="settings"
-        aria-label={translate(language, 'soundsMine.back')}
+        aria-label={translateSoundsMine(language, 'soundsMine.back')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
@@ -89,7 +95,7 @@ function SoundsMineHeader({
         className="min-w-0 flex-1 truncate text-screen font-bold focus:outline-none"
         style={{ color: 'var(--color-ios-ink)' }}
       >
-        {translate(language, 'soundsMine.title')}
+        {translateSoundsMine(language, 'soundsMine.title')}
       </h1>
     </header>
   );
@@ -138,7 +144,7 @@ export function MySoundRow({
         type="button"
         onClick={() => onRequestRemove(sound)}
         disabled={removeDisabled}
-        aria-label={translate(language, 'soundsMine.action.remove')}
+        aria-label={translateSoundsMine(language, 'soundsMine.action.remove')}
         data-my-sound-remove
         className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2 disabled:opacity-40"
         style={{ minWidth: 44, minHeight: 44, color: 'var(--color-error)', outlineColor: 'var(--color-error)' }}
@@ -156,10 +162,10 @@ function SoundsMineEmpty({ language }: { readonly language: InterfaceLanguage })
         <GlyphSvg glyph={FEED_GLYPHS.musicNote} size={44} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(language, 'soundsMine.empty.title')}
+        {translateSoundsMine(language, 'soundsMine.empty.title')}
       </p>
       <p className="max-w-xs text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'soundsMine.empty.subtitle')}
+        {translateSoundsMine(language, 'soundsMine.empty.subtitle')}
       </p>
     </li>
   );
@@ -172,7 +178,7 @@ function SoundsMineError({ language, online, onRetry }: { readonly language: Int
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {translate(language, online ? 'soundsMine.error.title' : 'feed.offline.title')}
+        {online ? translateSoundsMine(language, 'soundsMine.error.title') : translate(language, 'feed.offline.title')}
       </p>
       <button
         type="button"
@@ -222,7 +228,7 @@ export function SoundsMineView({ transport }: { readonly transport?: HttpTranspo
     setFocusTitleTick((tick) => tick + 1);
     void performRemoveSound({ sound, deps: { ...deps, queryClient, isOnline: () => online } }).then((outcome) => {
       announce(
-        translate(language, outcome === 'done' ? 'soundsMine.remove.success' : 'soundsMine.remove.failure'),
+        translateSoundsMine(language, outcome === 'done' ? 'soundsMine.remove.success' : 'soundsMine.remove.failure'),
         outcome === 'done' ? 'neutral' : 'error',
       );
     });
@@ -243,7 +249,7 @@ export function SoundsMineView({ transport }: { readonly transport?: HttpTranspo
 
       {online ? null : (
         <p role="status" data-my-sounds-offline className="px-4 pb-2 text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {translate(language, 'soundsMine.offline')}
+          {translateSoundsMine(language, 'soundsMine.offline')}
         </p>
       )}
 
@@ -281,10 +287,10 @@ export function SoundsMineView({ transport }: { readonly transport?: HttpTranspo
       {pending === null ? null : (
         <ConfirmDialog
           name="my-sound-remove"
-          title={translate(language, 'soundsMine.remove.title')}
+          title={translateSoundsMine(language, 'soundsMine.remove.title')}
           body={soundRemovalBody(pending.postCount, language)}
           cancelLabel={translate(language, 'common.cancel')}
-          confirmLabel={translate(language, 'soundsMine.remove.confirm')}
+          confirmLabel={translateSoundsMine(language, 'soundsMine.remove.confirm')}
           tone="destructive"
           onConfirm={confirmRemove}
           onCancel={cancelRemove}
@@ -297,5 +303,20 @@ export function SoundsMineView({ transport }: { readonly transport?: HttpTranspo
 }
 
 export default function SoundsMineScreen() {
-  return <SoundsMineView />;
+  const language = currentInterfaceLanguage();
+  const [ready, setReady] = useState(() => isSoundsMineCatalogLoaded(language));
+  useEffect(() => {
+    if (ready) return undefined;
+    let live = true;
+    loadSoundsMineCatalog(language).then(
+      () => {
+        if (live) setReady(true);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language, ready]);
+  return ready ? <SoundsMineView /> : null;
 }

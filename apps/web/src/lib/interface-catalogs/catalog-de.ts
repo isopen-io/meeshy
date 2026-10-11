@@ -28,9 +28,9 @@ import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
+import deWriteRestriction from './catalog-de-write-restriction';
 import deConversationCard from './catalog-de-conversation-card';
 import deStoriesMine from './catalog-de-stories-mine';
-import deSoundsMine from './catalog-de-sounds-mine';
 import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
@@ -38,6 +38,7 @@ import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
+import dePublicEntry from './catalog-de-public-entry';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -51,16 +52,6 @@ const de = {
   'message.excerpt.protected': 'geschützter Inhalt',
   'a11y.message.menu.subject': 'Aktionen für die Nachricht von {author}: {excerpt}',
 
-  'selection.toolbar': 'Nachrichtenauswahl',
-  'selection.cancel': 'Abbrechen',
-  'selection.count': '{count} ausgewählt',
-  'forward.title': 'Weiterleiten an…',
-  'forward.empty': 'Keine Unterhaltung',
-  'forward.search.label': 'Unterhaltung suchen',
-  'forward.search.placeholder': 'Suchen',
-  'forward.announce.sent': 'Nachricht weitergeleitet',
-  'forward.announce.sentMany': '{count} Nachrichten weitergeleitet',
-  'forward.announce.failed': 'Weiterleiten fehlgeschlagen',
   'forward.refusal.viewOnce': 'Eine Einmal-Nachricht kann nicht weitergeleitet werden',
   'forward.refusal.unavailable': 'Die ursprüngliche Nachricht ist nicht mehr verfügbar: nichts zum Weiterleiten',
 
@@ -260,7 +251,6 @@ const de = {
   'feed.gesture.pending': 'Aktion nicht bestätigt — offline',
   'feed.share.error': 'Fehler beim Teilen des Beitrags',
   'feed.share.copied': 'Link kopiert — einfach einfügen.',
-  'feed.share.text': 'Ein Beitrag auf Meeshy',
 
   'root.menu.feed': 'Feed',
   'root.menu.links': 'Meine Links',
@@ -411,6 +401,8 @@ const de = {
   'profile.avatar.updated': 'Profilfoto aktualisiert',
   'profile.avatar.error': 'Profilfoto konnte nicht aktualisiert werden',
   'profile.banner.edit': 'Banner bearbeiten',
+  'profile.avatar.view': 'Profilbild im Vollbild ansehen',
+  'profile.banner.view': 'Banner im Vollbild ansehen',
   'profile.banner.updated': 'Banner aktualisiert',
   'profile.banner.error': 'Banner konnte nicht aktualisiert werden',
   'profile.image.uploading': 'Wird hochgeladen',
@@ -641,7 +633,6 @@ const de = {
   'discover.blocked.empty.title': 'Keine blockierten Nutzer',
   'discover.blocked.empty.subtitle': 'Personen, die du blockierst, erscheinen hier.',
   'discover.unknown': 'Unbekannt',
-  'discover.loading': 'Wird geladen',
   'discover.allLoaded': 'Die ganze Liste ist geladen',
   'discover.error.title': 'Diese Liste konnte nicht geladen werden',
   'discover.error.body': 'Prüfe deine Verbindung und versuche es erneut.',
@@ -696,8 +687,6 @@ const de = {
   'links.detail.disable': 'Deaktivieren',
   'links.detail.activate': 'Aktivieren',
   'links.detail.stats': 'Statistiken',
-  'links.detail.stats.uses': 'Nutzungen',
-  'links.detail.stats.max': 'Maximum',
   'links.detail.info': 'Informationen',
   'links.detail.identifier': 'Kennung',
   'links.detail.createdAt': 'Erstellt am',
@@ -771,8 +760,6 @@ const de = {
   'feed.scene.mosaic.more': 'Szene {index}, und {count} weitere',
   'feed.scene.mosaic.video': 'Szene {index}, Video',
   'feed.scene.shared_by': 'Szene geteilt von {author}',
-  'feed.scene.open.fullscreen': 'Doppelt tippen für Vollbild',
-  'feed.scene.open.post': 'Doppelt tippen, um den Beitrag zu öffnen',
   'feed.scene.sound.muted': 'Ton stumm',
   'feed.scene.count': '{count} Szenen',
   'scene.fullscreen.play': 'Alles fortsetzen',
@@ -788,7 +775,6 @@ const de = {
      als CanvasV3 wie unter iOS. */
   'story.studio.title': 'Neue Story',
   'story.studio.cancel': 'Abbrechen',
-  'story.studio.publish': 'Veröffentlichen',
   'story.studio.publishing': 'Wird veröffentlicht…',
   'story.studio.publish.waiting': 'Warte auf Netzwerk…',
   'story.studio.publishing.progress': 'Veröffentliche {current}/{total}…',
@@ -819,7 +805,6 @@ const de = {
   'story.studio.text.label': 'Story-Text',
   'story.studio.text.placeholder': 'Text hinzufügen',
   'story.studio.hint.duration': 'Eine Story bleibt zwanzig Stunden sichtbar.',
-  'story.studio.error.upload': 'Die Datei konnte nicht gesendet werden.',
   'story.studio.error.publish': 'Die Story konnte nicht veröffentlicht werden.',
   'story.studio.refusal.title': 'Zum Erstellen einer Story ist ein Konto erforderlich.',
   'story.studio.refusal.login': 'Anmelden',
@@ -840,8 +825,6 @@ const de = {
   'story.studio.text.add': 'Text hinzufügen',
   'story.studio.object.text': 'Text {index}',
   'story.studio.object.overlay': 'Ebene',
-  'story.studio.object.select': '{name} auswählen',
-  'story.studio.objects.label': 'Objekte der Szene',
   'story.studio.overlay.add': 'Ein Bild auf die Szene legen',
   'story.studio.overlay.label': 'Ebene',
   'story.studio.overlay.remove': 'Ebene entfernen',
@@ -911,8 +894,6 @@ const de = {
   'story.studio.pose.rotateLeft': 'Nach links drehen',
   'story.studio.pose.rotateRight': 'Nach rechts drehen',
   'story.studio.pose.reset': 'Zentrieren',
-  'story.studio.pose.handle': '{name} verschieben — Pfeile zum Verschieben, + und − für die Größe, [ und ] zum Drehen',
-  'story.studio.pose.grip': '{name} skalieren und drehen',
 
   /* DIE ZIELGRUPPEN-AUSWAHL DES STUDIOS (#7683) — die sechs PostVisibility,
      Spiegel von PostVisibility.swift (packages/MeeshySDK). */
@@ -1004,7 +985,6 @@ const de = {
   'comment.refused.session': 'Sitzung abgelaufen — bitte neu anmelden.',
   'comment.refused.right': 'Diese Aktion steht dir nicht offen.',
   'comment.like.limit': 'Höchstens fünf Reaktionen pro Person.',
-  'feed.action.comment': 'Kommentieren',
 
   'admin.title': 'Verwaltung',
 
@@ -1120,16 +1100,18 @@ const de = {
   ...deMentions,
   ...deStudioChrome,
   ...deEphemeral,
+  ...deWriteRestriction,
   ...deGallery,
   ...deMessageCard,
   ...deConversationCard,
   ...deStoriesMine,
-  ...deSoundsMine,
+  'settings.tools.sounds': 'Meine Sounds',
   ...deContactCard,
   ...deQuote,
   ...deCommentRow,
   ...deContactDiscovery,
   ...deUserProfile,
+  ...dePublicEntry,
 } satisfies InterfaceCatalog;
 
 export default de;

@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { flag, languageName } from '@/lib/languages';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { translate } from '@/lib/i18n-catalog';
+import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { projectMessagePreview } from '@/lib/view/message-preview';
+import { piecePreviewBox, type PieceActionId, type PieceMenuItem } from '@/lib/view/message-piece';
+import type { PieceMenuData } from '@/lib/view/use-piece-menu';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
@@ -37,6 +40,7 @@ import {
 
 import { GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
+import { MessageMenuPieces } from './message-menu-pieces';
 
 /**
  * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -67,6 +71,29 @@ export type MessageMenuTarget = {
   readonly element: HTMLElement;
   readonly isMine: boolean;
 };
+
+/**
+ * LA PIÈCE VISÉE (#9907, #9908) — présente quand l'appui long a touché une
+ * tuile d'un message à plusieurs pièces : l'aperçu montre cette pièce seule
+ * (`MessageMenuPieces`), la liste offre les actions de la pièce, et « Tout le
+ * message » rend le menu du message entier sans fermer le cluster.
+ */
+export type MessageMenuPiece = {
+  readonly data: PieceMenuData;
+  readonly onIndex: (index: number) => void;
+  readonly onWholeMessage: () => void;
+  readonly onAction: (id: Exclude<PieceActionId, 'wholeMessage'>) => void;
+};
+
+type ListItem = MessageMenuItem | PieceMenuItem;
+
+/** Le libellé d'une entrée — celles d'une pièce vivent dans leur propre catalogue (`i18n-message-pieces-catalog`). */
+const PIECE_ACTION_IDS: ReadonlySet<string> = new Set<PieceActionId>(['pieceReply', 'pieceSave', 'pieceForward', 'pieceDelete', 'wholeMessage']);
+const isPieceItem = (item: ListItem): item is PieceMenuItem => PIECE_ACTION_IDS.has(item.id);
+const labelOf = (language: InterfaceLanguage, item: ListItem): string =>
+  isPieceItem(item) ? translateMessagePieces(language, item.labelKey) : translate(language, item.labelKey);
+
+const isRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
 
 function stripPreviewIdentity(root: HTMLElement): void {
   const strip = (el: Element) => {
@@ -111,8 +138,10 @@ export function MessageMenu({
   onAction,
   onPickLanguage,
   forwardItems = [],
+  piece,
 }: {
   readonly target: MessageMenuTarget;
+  readonly piece?: MessageMenuPiece;
   readonly items: readonly MessageMenuItem[];
   readonly choices: readonly TranslationChoice[];
   /**
@@ -138,15 +167,41 @@ export function MessageMenu({
      (`currentInterfaceLanguage()`), jamais une seconde résolution. */
   const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
-  const listItems = panel === 'forward' ? forwardItems : items;
-  const listRows = panel === 'translate' ? choices.length : listItems.length;
+  const listItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
+  const listRows = panel === 'translate' && piece === undefined ? choices.length : listItems.length;
+  /* LA BOÎTE D'UNE PIÈCE (#9907) — stable pour tout le défilement, centrée. */
+  const pieceBox =
+    piece === undefined || typeof window === 'undefined'
+      ? null
+      : piecePreviewBox({ pieces: piece.data.pieces, viewport: { width: window.innerWidth, height: window.innerHeight }, sidePadding: SIDE_PADDING });
+  /**
+   * LA HAUTEUR RÉELLE DE L'APERÇU (#9907) — le clone déplie une grille en
+   * colonne (`projectMessagePreview`), il est donc PLUS HAUT que la rangée
+   * pressée. L'échelle se calculait sur la rangée, avant le dépliage, et
+   * l'aperçu débordait de l'écran. Elle se calcule désormais sur le clone
+   * mesuré (`useLayoutEffect` ci-dessous, avant la première peinture).
+   */
+  const [cloneHeight, setCloneHeight] = useState<number | null>(null);
 
   const computePlacement = (rows: number) => {
     const rect = target.element.getBoundingClientRect();
     const safe = safeAreaInsets();
     const menuHeight = menuListHeight(rows);
+    const anchor =
+      pieceBox !== null
+        ? {
+            top: rect.top,
+            bottom: rect.top + pieceBox.height,
+            left: (window.innerWidth - pieceBox.width) / 2,
+            right: (window.innerWidth + pieceBox.width) / 2,
+            width: pieceBox.width,
+            height: pieceBox.height,
+          }
+        : ((height: number) => ({ top: rect.top, bottom: rect.top + height, left: rect.left, right: rect.right, width: rect.width, height }))(
+            cloneHeight ?? rect.height,
+          );
     return placeMessageMenuCluster({
-      anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
+      anchor,
       viewport: { width: window.innerWidth, height: window.innerHeight },
       safe,
       menuHeight,
@@ -176,10 +231,11 @@ export function MessageMenu({
    */
   const [placement, setPlacement] = useState(() => computePlacement(listRows));
   const [railEmojis] = useState(() => topEmojis({ count: QUICK_REACTIONS.length, defaults: EXTENDED_REACTIONS }));
-  useEffect(() => {
+  const pieceMode = piece !== undefined;
+  useLayoutEffect(() => {
     setPlacement(computePlacement(listRows));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel]);
+  }, [panel, pieceMode, cloneHeight, listRows]);
 
   /**
    * GLISSER VERS LE HAUT RÉDUIT L'APERÇU (#9043, `lib/view/message-menu-reveal.ts`).
@@ -269,10 +325,18 @@ export function MessageMenu({
    * FOCALISABLE, c'est à elle qu'Échap rend le focus — et `closeAndFocusButton`
    * la focalise AVANT que ce nettoyage ne s'exécute.
    */
-  useEffect(() => {
-    const host = previewHostRef.current;
-    if (host === null) return;
+  useLayoutEffect(() => {
     const source = target.element;
+    const previousOpacity = source.style.opacity;
+    source.style.opacity = '0';
+    const host = previewHostRef.current;
+    /* EN MODE PIÈCE (#9907), l'aperçu est le défilement des pièces, rendu par
+       React : aucun clone, et la rangée reste effacée. */
+    if (host === null || pieceMode) {
+      return () => {
+        source.style.opacity = previousOpacity;
+      };
+    }
     const clone = source.cloneNode(true) as HTMLElement;
     stripPreviewIdentity(clone);
     /* LA FORME PROTÉGÉE ET LA PROPORTION D'ORIGINE (#8008) : le clone ne
@@ -281,13 +345,16 @@ export function MessageMenu({
     projectMessagePreview(clone);
     clone.setAttribute('data-message-preview', '');
     host.replaceChildren(clone);
-    const previousOpacity = source.style.opacity;
-    source.style.opacity = '0';
+    /* `offsetHeight` ignore la mise à l'échelle de l'hôte : c'est la hauteur
+       du clone à la largeur de la rangée, celle que la loi de placement doit
+       faire tenir. Une mesure nulle (aucune mise en page) garde la rangée. */
+    const measured = host.offsetHeight;
+    setCloneHeight(measured > 0 ? measured : null);
     return () => {
       host.replaceChildren();
       source.style.opacity = previousOpacity;
     };
-  }, [target.element]);
+  }, [target.element, pieceMode]);
 
   const onTranslateChosen = (code: string) => {
     onPickLanguage(code);
@@ -303,7 +370,17 @@ export function MessageMenu({
     });
   };
 
-  const onListItemChosen = (item: MessageMenuItem) => {
+  const onListItemChosen = (item: ListItem) => {
+    if (isPieceItem(item)) {
+      if (piece === undefined) return;
+      if (item.id === 'wholeMessage') {
+        piece.onWholeMessage();
+        return;
+      }
+      piece.onAction(item.id);
+      onClose();
+      return;
+    }
     if (item.id === 'translate') {
       showPanel('translate');
       return;
@@ -351,6 +428,15 @@ export function MessageMenu({
       if (roving.handleKey(event.key === 'ArrowRight' ? 'ArrowDown' : 'ArrowUp')) event.preventDefault();
       return;
     }
+    /* LES FLÈCHES DÉFILENT LES PIÈCES (#9907) depuis la liste — le sens suit
+       la lecture : en arabe, la flèche gauche mène à la pièce SUIVANTE. */
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && piece !== undefined) {
+      const forward = (event.key === 'ArrowRight') !== isRtl();
+      const next = piece.data.index + (forward ? 1 : -1);
+      if (next >= 0 && next < piece.data.pieces.length) piece.onIndex(next);
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Tab') {
       if (roving.handleKey(event.shiftKey ? 'ArrowUp' : 'ArrowDown')) event.preventDefault();
       return;
@@ -390,7 +476,8 @@ export function MessageMenu({
 
   /* LA RÉDUCTION (#9043) — la hauteur VISIBLE de l'aperçu au repos est ce qui
      se réduit ; ce que la liste perd sous le bas utile, ce qu'il faut dégager. */
-  const shrinkableHeight = anchorRect.height * placement.previewScale;
+  const previewHeight = pieceBox?.height ?? cloneHeight ?? anchorRect.height;
+  const shrinkableHeight = previewHeight * placement.previewScale;
   const floor = revealFloor({ hiddenHeight: placement.menuHiddenHeight, shrinkableHeight });
   const committed = Math.min(1, Math.max(floor, committedReveal ?? revealRestingFactor({ floor, assistiveReveal: false })));
   const previewTransform = (factor: number) => `scale(${placement.previewScale * factor})`;
@@ -440,7 +527,7 @@ export function MessageMenu({
         ref={roving.menuRef}
         role="menu"
         aria-modal="true"
-        aria-label={subjectLabel}
+        aria-label={piece === undefined ? subjectLabel : `${piece.data.positionLabel}, ${subjectLabel}`}
         className="message-menu-cluster"
         onKeyDown={onClusterKeyDown}
         style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
@@ -512,6 +599,36 @@ export function MessageMenu({
           })}
         </div>
 
+        {piece !== undefined && pieceBox !== null ? (
+          <div
+            ref={previewHostRef}
+            data-message-menu-preview-host
+            data-message-menu-piece-host
+            style={{
+              position: 'fixed',
+              top: placement.previewTop,
+              left: (window.innerWidth - pieceBox.width) / 2,
+              width: pieceBox.width,
+              height: pieceBox.height,
+              transform: previewTransform(committed),
+              transformOrigin: 'top center',
+              pointerEvents: 'auto',
+              borderRadius: 14,
+              overflow: 'hidden',
+              backgroundColor: 'var(--color-media-backdrop)',
+              filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px color-mix(in srgb, var(--color-scrim-soft) 65%, transparent))`,
+            }}
+          >
+            <MessageMenuPieces
+              pieces={piece.data.pieces}
+              index={piece.data.index}
+              onIndex={piece.onIndex}
+              positionLabel={piece.data.positionLabel}
+              language={language}
+              rtl={isRtl()}
+            />
+          </div>
+        ) : (
         <div
           ref={previewHostRef}
           aria-hidden
@@ -563,6 +680,7 @@ export function MessageMenu({
               : {}),
           }}
         />
+        )}
 
         {panel !== 'translate' ? (
           <div
@@ -596,7 +714,7 @@ export function MessageMenu({
                   onClick={() => onListItemChosen(item)}
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
-                  <span className="flex-1">{translate(language, item.labelKey)}</span>
+                  <span className="flex-1">{labelOf(language, item)}</span>
                   {item.id === 'more' || (item.id === 'forward' && panel === 'actions' && forwardItems.length > 1) ? (
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}

@@ -80,6 +80,8 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   onCloseMenu: () => {},
   onMenuReact: () => {},
   onMenuAction: () => {},
+  onPieceChange: () => {},
+  onPieceAction: () => {},
   onPickLanguage: () => {},
   reactionSheetFor: null,
   setReactionSheetFor: () => {},

@@ -9,6 +9,8 @@ const de = {
   'game.meeshes.none': 'Keine Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meeshes',
+  'game.star_fragments.one': '{count} Sternfragment',
+  'game.star_fragments.other': '{count} Sternfragmente',
   'game.tier.etincelle': 'Funke',
   'game.tier.lueur': 'Schimmer',
   'game.tier.lumiere': 'Licht',

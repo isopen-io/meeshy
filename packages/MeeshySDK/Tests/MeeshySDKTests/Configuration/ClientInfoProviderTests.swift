@@ -156,6 +156,27 @@ final class ClientInfoProviderTests: XCTestCase {
         XCTAssertNotNil(headers["X-Device-Locale"])
     }
 
+    // MARK: - Capacités nommées (#9929)
+
+    /// La passerelle ne sert l'étape `age` et `viewerWriteRestriction` dans
+    /// `/me/onboarding` qu'au client qui déclare `onboarding-age` : sans
+    /// l'en-tête, la carte « âge » ne naît jamais.
+    func test_buildHeaders_declaresTheOnboardingAgeCapability() async {
+        let headers = await ClientInfoProvider.shared.buildHeaders()
+        let declared = headers["X-Meeshy-Capabilities"]?.split(separator: ",").map(String.init) ?? []
+        XCTAssertTrue(declared.contains("onboarding-age"))
+    }
+
+    func test_identityHeaders_declareTheSameCapabilitiesForExtensions() {
+        XCTAssertEqual(ClientInfoProvider.identityHeaders()["X-Meeshy-Capabilities"], ClientCapabilities.headerValue())
+    }
+
+    func test_headerValue_joinsCapabilitiesWithCommas() {
+        XCTAssertEqual(ClientCapabilities.headerName, "X-Meeshy-Capabilities")
+        XCTAssertEqual(ClientCapabilities.headerValue([.onboardingAge]), "onboarding-age")
+        XCTAssertEqual(ClientCapabilities.headerValue([]), "")
+    }
+
     func test_identityHeaders_neLisentJamaisLaGeolocalisation() {
         let headers = ClientInfoProvider.identityHeaders()
         XCTAssertNil(headers["X-Meeshy-City"])

@@ -1,3 +1,4 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
@@ -148,7 +149,8 @@ export function Bubble({
    */
   revealable?: boolean;
   /** Saute au message cité (#5566 défaut 10 : le bouton de citation ne faisait rien). */
-  onJumpToMessage: (messageId: string) => void;
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
   /** Ouvre la story citée (#5936) — voir `focal-row.tsx`, même contrat. */
   onOpenStory?: (messageId: string) => void;
   /** Mis en évidence brièvement après un saut de citation. */
@@ -327,7 +329,7 @@ export function Bubble({
           quote={message.replyTo}
           isMine={isMine}
           languages={languages}
-          onJump={() => onJumpToMessage(message.replyTo!.id)}
+          onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
           citingId={message.id}
           now={new Date(nowMs)}
         />
@@ -458,7 +460,7 @@ export function Bubble({
       style={{ marginBottom: tail ? 6 : 2 }}
     >
       <div
-        className="relative max-w-[70%] min-w-0"
+        className="thread-bubble-measure relative max-w-[70%] min-w-0"
         style={{ marginInlineStart: isMine ? 50 : 0, marginInlineEnd: isMine ? 0 : 50 }}
       >
         {/* LA COCHE DE SÉLECTION (#5814, question 5) — DANS la gouttière de
@@ -616,6 +618,7 @@ export function Bubble({
               {showsIdentity ? (
                 <AuthorAvatar
                   authorId={hereKeyOf(message.sender)}
+                  participant={{ id: message.senderId, name: message.sender?.displayName ?? '' }}
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
                   size={32}
@@ -650,6 +653,7 @@ export function Bubble({
                   <PersonName
                     name={message.sender?.displayName ?? ''}
                     username={message.sender?.user?.username}
+                    participantId={message.senderId}
                     {...(senderStoryRing === undefined ? {} : { storyRing: senderStoryRing })}
                     className="text-title font-semibold"
                     style={{ color: 'var(--color-ios-ink)' }}

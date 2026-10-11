@@ -45,6 +45,8 @@ struct StoryComposerBarView: View {
     @Binding var composerFocusTrigger: Bool
     @Binding var storyDrafts: [String: StoryDraft]
     @Binding var replyingToStoryComment: FeedComment?
+    /// Une prise vocale est en cours : la bulle repliée la signale (#9893).
+    @Binding var isRecordingVoice: Bool
 
     /// Le repli ⌄ que le lecteur confie à la barre, posé DANS la plaque (#8642).
     var foldControl: ComposerFoldControl? = nil
@@ -272,6 +274,7 @@ struct StoryComposerBarView: View {
             }
         )
         .adaptiveOnChange(of: holdsStory) { _, holds in hasComposerContent = holds }
+        .adaptiveOnChange(of: audioRecorder.isRecording) { _, recording in isRecordingVoice = recording }
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,

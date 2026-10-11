@@ -353,6 +353,26 @@ export const MESSAGE_ATTACHMENT_ORDER: Prisma.MessageAttachmentOrderByWithRelati
   { id: 'asc' },
 ];
 
+/**
+ * #9915 — le nombre de TUILES (photos et vidéos) du message CITÉ, compté en
+ * base à côté des quatre pièces que la citation sert (`take: 4`). À étaler
+ * dans le `select`/`include` du `replyTo` (ou son `_count.select` quand il en
+ * a déjà un) : `servedQuotedMessage` le sert en `visualAttachmentCount`, que
+ * les clients lisent pour le « +N » de la citation du message entier.
+ */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT = {
+  _count: {
+    select: {
+      attachments: {
+        where: { OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }] },
+      },
+    },
+  },
+} satisfies { _count: { select: Prisma.MessageCountOutputTypeSelect } };
+
+/** Le même compte, pour un `replyTo` qui a déjà son propre `_count.select`. */
+export const QUOTED_VISUAL_ATTACHMENT_COUNT_SELECT = QUOTED_VISUAL_ATTACHMENT_COUNT._count.select;
+
 // ============================================================================
 // Derived payload types — consumers get fully-typed Prisma results, no casts.
 // ============================================================================

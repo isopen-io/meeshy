@@ -18,3 +18,28 @@ export function safeAreaInsets(): SafeAreaInsets {
   const bottom = Number.parseFloat(style.getPropertyValue('--safe-bottom')) || 0;
   return { top, bottom };
 }
+
+/**
+ * **UNE COTE COMPTÉE DEPUIS LE HAUT DE L'ÉCRAN, ÉCRITE UNE SEULE FOIS**
+ * (#9942, #9517) — pour un `top` ou un `padding-top` de chrome `fixed`.
+ *
+ * Le haut RÉSERVÉ de l'écran n'est pas l'encoche : sur les hubs, la coquille
+ * ajoute la hauteur du bandeau du haut à `--safe-top` quand la bannière du
+ * joueur l'occupe (#9494), et tout écran qui lit `pt-safe` descend d'autant.
+ * Un chrome qui lit `env(safe-area-inset-top)` seul reste, pendant que l'écran
+ * descend — mesuré en #9517 : le disque du menu recouvrait « Créer une story »
+ * et la pastille hors ligne retombait au milieu d'un rail.
+ *
+ * Le repli `env()` est dans la formule et n'en sort pas : `--safe-top` est
+ * posée sur `:root` par `styles/thread-menu.css`, mais un `calc` dont la
+ * variable est absente SANS repli est invalide, donc la propriété entière
+ * tombe en silence — la forme de défaut que `styles/declared-tokens.test.ts`
+ * a pour rôle d'empêcher.
+ *
+ * Ce qui reste HORS de cette cote, et pourquoi : la pile du haut elle-même, la
+ * bannière de mise à jour et le toast de notification se posent sur l'encoche
+ * réelle — ils SONT le haut de la fenêtre, pas un chrome de l'écran.
+ */
+export function belowScreenTop(pixels: number): string {
+  return `calc(var(--safe-top, env(safe-area-inset-top, 0px)) + ${pixels}px)`;
+}

@@ -35,6 +35,8 @@ const contextWith = (client?: ClientSessionInfo): RequestContext => ({
 const sessionDb = () => {
   const rows: Array<Record<string, unknown>> = [];
   const prisma = {
+    // #9927 — `createSession` lit la date de naissance (porte de l'âge minimal).
+    user: { findUnique: jest.fn(async () => ({ birthDate: null })) },
     userSession: {
       create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
         const row = { id: `s-${rows.length + 1}`, createdAt: new Date(), ...data };

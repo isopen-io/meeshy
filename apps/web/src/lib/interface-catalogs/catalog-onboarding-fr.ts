@@ -39,6 +39,12 @@ const fr = {
   'onboarding.email.sent': 'Lien envoyé. Ouvre-le, puis reviens ici.',
   'onboarding.email.failed': 'Le lien n’est pas parti. Réessaie.',
 
+  'onboarding.age.title': 'Ta date de naissance',
+  'onboarding.age.body': 'Pour te proposer les bons espaces. Tu peux passer.',
+  'onboarding.age.skip': 'Passer',
+  'onboarding.age.check': 'Vérifie ta date de naissance.',
+  'onboarding.age.failed': 'Ta date n’a pas été enregistrée. Réessaie.',
+
   'onboarding.global.title': 'Dis salut au monde',
   'onboarding.global.body': 'Meeshy Global, c’est le salon où tout le monde traîne. Balance un salut, sans pression.',
   'onboarding.global.field': 'Ton salut, modifiable',

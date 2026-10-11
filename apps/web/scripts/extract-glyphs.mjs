@@ -333,6 +333,14 @@ const THREAD_MENU = [
   'pencil-simple',
   'image-square',
   'lightning',
+  // Le menu d'une PIÈCE (#9908) : répondre à elle, l'enregistrer, la
+  // supprimer, revenir au message entier ; les flèches du défilement (#9907).
+  'arrow-u-up-left',
+  'download-simple',
+  'trash',
+  'chat-text',
+  'caret-left',
+  'caret-right',
 ];
 
 emit({

@@ -34,3 +34,20 @@ describe('la langue de l’application dans la coque Android (#9749)', () => {
     expect(enregistrement).toBeLessThan(activite.indexOf('super.onCreate(savedInstanceState);'));
   });
 });
+
+describe('sous Android 12, les services de la coque suivent aussi la langue choisie (#9841)', () => {
+  test('le plugin garde le choix pour les services, que l’activité soit là ou non', () => {
+    const plugin = lire('MeeshyLocalePlugin.java');
+    expect(plugin).toContain('ShellLocale.store(');
+    const locale = lire('ShellLocale.java');
+    expect(locale).toContain('AppLocaleRules.serviceLocale(Build.VERSION.SDK_INT');
+    expect(locale).toContain('createConfigurationContext(');
+  });
+
+  test('chaque service et chaque canal résout ses textes par un contexte localisé', () => {
+    for (const service of ['CallForegroundService.java', 'PlaybackForegroundService.java', 'RecordingForegroundService.java', 'MeeshyMessagingService.java']) {
+      expect(lire(service)).toMatch(/protected void attachBaseContext\(Context \w+\)\s*\{\s*super\.attachBaseContext\(ShellLocale\.wrap\(\w+\)\);/);
+    }
+    expect(lire('MainActivity.java')).toContain('SilentNotificationChannel.ensure(ShellLocale.wrap(this))');
+  });
+});

@@ -5,10 +5,14 @@ import Foundation
 // MIROIR de `packages/shared/utils/game/mint.ts` — le prix monte avec le nombre
 // de Meeshes déjà frappées :
 //
-//     prix(n) = round(1221 × 1,06 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 4 884
+//     prix(n) = round(1221 × 1,3 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 16 556
 //
-// 1 221 reste la BASE (le prix des dix premières) et celui que les anciens
-// clients croient encore : le serveur recalcule et refuse SANS débit.
+// +30 % toutes les dix frappes (#10011) : le plafond tombe à la 101e. 1 221
+// reste la BASE (le prix des dix premières) et celui que les anciens clients
+// croient encore : le serveur recalcule et refuse SANS débit.
+//
+// Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun
+// autre chemin n'existe — ni fragment, ni frappe gratuite (porteur, 2026-10-10).
 
 /// Argent ; or à chaque centième ; prisme à chaque millième. Aucun avantage de jeu.
 public enum MeeshEdition: String, CaseIterable, Codable, Sendable, Hashable {
@@ -76,9 +80,9 @@ public enum GameMint {
     /// Le prix des dix premières Meeshes.
     public static let basePrice = 1221
     public static let priceStepEvery = 10
-    public static let priceGrowth = 1.06
-    /// Quatre fois la base.
-    public static let priceCap = basePrice * 4
+    public static let priceGrowth = 1.3
+    /// Le plafond (porteur, 2026-10-10) : atteint à la 101e frappe.
+    public static let priceCap = 16_556
 
     /// Le prix de la n-ième Meesh frappée (n commence à 1 ; une valeur < 1 vaut 1).
     ///

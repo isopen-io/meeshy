@@ -9,7 +9,6 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types';
-import { ErrorCode } from '@meeshy/shared/types';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { MessageReadStatusService } from '../MessageReadStatusService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -30,10 +29,19 @@ import { admitStoryReply } from './storyReplyAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
-  describeConversationWriteRefusal
+  describeConversationWriteRefusal,
+  writeRefusalCode
 } from './conversationWriteAdmission';
 import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
-import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { resolveParticipantRights, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
+import {
+  attachmentSendRefusal,
+  carriesAttachments,
+  loadCarriedAttachmentMimeTypes,
+  loadGuestAttachmentKinds
+} from './attachmentKindAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -136,7 +144,7 @@ export class MessagingService {
             where: { id: participantId },
             select: {
               id: true, conversationId: true, isActive: true,
-              permissions: true, anonymousSession: { select: { rights: true } }
+              permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
             }
           });
           if (!p || p.conversationId !== conversationId) {
@@ -145,7 +153,7 @@ export class MessagingService {
               where: { userId: participantId, conversationId, isActive: true },
               select: {
                 id: true, conversationId: true, isActive: true,
-                permissions: true, anonymousSession: { select: { rights: true } }
+                permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
               }
             });
           }
@@ -185,6 +193,7 @@ export class MessagingService {
                 select: {
                   id: true, displayName: true, avatar: true, type: true,
                   nickname: true, userId: true,
+                  ...ANONYMOUS_SENDER_NAME_SELECT,
                   user: {
                     select: {
                       id: true, username: true, displayName: true,
@@ -256,13 +265,11 @@ export class MessagingService {
           ...corr, conversationId, reason: conversationAdmission.reason,
           retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
-        return conversationAdmission.reason === 'newcomer-slow-mode'
-          ? this.createErrorResponse(
-              describeConversationWriteRefusal(conversationAdmission),
-              ErrorCode.NEWCOMER_SLOW_MODE,
-              conversationAdmission.retryAfterSeconds
-            )
-          : this.createErrorResponse(describeConversationWriteRefusal(conversationAdmission));
+        return this.createErrorResponse(
+          describeConversationWriteRefusal(conversationAdmission),
+          writeRefusalCode(conversationAdmission),
+          conversationAdmission.reason === 'newcomer-slow-mode' ? conversationAdmission.retryAfterSeconds : undefined
+        );
       }
       releaseReservation = conversationAdmission.releaseReservation;
 
@@ -305,20 +312,33 @@ export class MessagingService {
       //      dépend du TYPE de chaque pièce (`attachmentSendRightForMimeType`,
       //      même table que `senderRights` ci-dessus) — d'où la lecture
       //      supplémentaire, minimale (id + mimeType uniquement).
-      if (senderRights && request.attachmentIds && request.attachmentIds.length > 0) {
-        const attachments = await this.prisma.messageAttachment.findMany({
-          where: { id: { in: [...request.attachmentIds] } },
-          select: { mimeType: true }
+      //
+      //      #10001 — un INVITÉ dont le lien liste ses familles (World Wide)
+      //      relève d'un autre régime : la famille de chaque pièce, jamais
+      //      l'instantané du join (`attachmentKindAdmission.ts`).
+      //
+      //      #10051 — un TRANSFERT ou une DIFFUSION recopie les pièces de sa
+      //      source avec l'invité pour auteur : pour un invité, elles passent
+      //      la même garde que les pièces rattachées. Un compte n'est pas
+      //      concerné (la règle de #5151 ne visait que le rattachement).
+      const guestShareLinkId = participant.anonymousSession?.shareLinkId;
+      const carried = guestShareLinkId
+        ? request
+        : { attachmentIds: request.attachmentIds };
+      if ((senderRights || guestShareLinkId) && carriesAttachments(carried)) {
+        const mimeTypes = await loadCarriedAttachmentMimeTypes(this.prisma, carried);
+        const guestKinds = guestShareLinkId
+          ? await loadGuestAttachmentKinds(this.prisma, { shareLinkId: guestShareLinkId, conversationId })
+          : null;
+        const refusal = attachmentSendRefusal({
+          mimeTypes,
+          guestKinds,
+          senderRights,
+          hostOverride: participant.anonymousSession?.rights
         });
-        const deniedRight = attachments
-          .map(a => attachmentSendRightForMimeType(a.mimeType))
-          .find(right => senderRights![right] === false);
-        if (deniedRight) {
-          logger.info('participant attachment right denied', { ...corr, conversationId, right: deniedRight });
-          return this.createErrorResponse(
-            'Vous n\'êtes pas autorisé à envoyer ce type de pièce jointe',
-            'ATTACHMENT_RIGHT_NOT_PERMITTED'
-          );
+        if (refusal) {
+          logger.info('participant attachment refused', { ...corr, conversationId, code: refusal.code });
+          return this.createErrorResponse(refusal.message, refusal.code);
         }
       }
 
@@ -360,31 +380,29 @@ export class MessagingService {
               )
             : 'fr');
 
-      // 4.4. Admission de la CITATION (#6601) — `replyToId` doit désigner un
-      //      message VIVANT de CETTE conversation. Posé ICI pour la même
-      //      raison que l'admission du transfert juste en dessous : les trois
-      //      transports d'envoi (REST, socket texte, socket pièces jointes)
-      //      convergent sur `handleMessage`, seul site qui voit
-      //      `conversationId` déjà résolu sans jamais faire confiance au
-      //      client. Un garde par transport aurait fait grossir
-      //      `MessageHandler.ts` — déjà hors budget (#4426) — pour une règle
-      //      qui n'a besoin de vivre qu'une fois.
+      // 4.4. Admission de la CITATION (#6601) et de sa PIÈCE NOMMÉE (#9909)
+      //      — `replyToId` doit désigner un message VIVANT de CETTE
+      //      conversation, et une pièce citée en plus doit appartenir à ce
+      //      message. Posé ICI parce que les trois transports d'envoi (REST,
+      //      socket texte, socket pièces jointes) convergent sur
+      //      `handleMessage`, seul site qui voit `conversationId` déjà résolu
+      //      sans jamais faire confiance au client.
       //
-      //      La route REST relit la MÊME garde plus tôt (`messages-send.ts`),
-      //      avec la pièce jointe nommée en plus : elle a besoin de
-      //      l'instantané `{attachmentId, kind}` qu'`admitAttachmentReply`
-      //      rend, pour le graver dans `metadata.attachmentReplyTo`. Ici on ne
-      //      revérifie que le lien message-cité → conversation — gratuit pour
-      //      un envoi qui ne cite personne, et redondant mais inoffensif pour
-      //      la route REST qui l'a déjà fait (une lecture par identifiant).
+      //      La requête est ensuite RÉÉCRITE avec l'instantané ADMIS : ce que
+      //      le transport a reçu (nature déclarée comprise) n'atteint jamais
+      //      `metadata.attachmentReplyTo`, seule la nature relue du MIME y
+      //      entre. La route REST relit la même garde plus tôt pour répondre
+      //      en 400 ; la seconde lecture est redondante mais inoffensive.
       const citation = await admitAttachmentReply(this.prisma, {
         conversationId,
-        replyToId: request.replyToId
+        replyToId: request.replyToId,
+        attachmentReplyTo: request.attachmentReplyTo
       });
       if (!citation.ok) {
         logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
         return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
       }
+      request = { ...request, attachmentReplyTo: citation.snapshot ?? undefined };
 
       // 4.4 bis. Admission de la STORY citée (#7882) — la jumelle de #6601 sur
       //      le second champ de citation. `storyReplyToId` gèle l'instantané du
@@ -721,6 +739,9 @@ export class MessagingService {
       success: true,
       data: {
         ...message,
+        // #10120 — l'auteur tel que la liste le sert : un invité y porte son
+        // nom donné, son pseudo en handle, jamais son profil de session.
+        ...(senderObj ? { sender: servedMessageSender(senderObj) } : {}),
         senderId: resolvedSenderId,
         senderParticipantId: message.senderId,
         timestamp: message.createdAt
@@ -769,7 +790,7 @@ export class MessagingService {
     conversationId: string;
     isActive: boolean;
     permissions: ParticipantPermissions;
-    anonymousSession: { rights: AnonymousRightsOverride | null } | null;
+    anonymousSession: { rights: AnonymousRightsOverride | null; shareLinkId: string } | null;
   } | null> {
     try {
       const user = await this.prisma.user.findUnique({
@@ -837,7 +858,7 @@ export class MessagingService {
         },
         select: {
           id: true, conversationId: true, isActive: true,
-          permissions: true, anonymousSession: { select: { rights: true } }
+          permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
         }
       });
 

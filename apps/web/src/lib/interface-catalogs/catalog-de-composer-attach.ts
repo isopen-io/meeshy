@@ -3,13 +3,13 @@ import type { ComposerAttachCatalogSlice } from './catalog-fr-composer-attach';
 /** The composer's attachment drawer and « Mes stickers » (#7938) — see `catalog-fr-composer-attach.ts`. */
 const deComposerAttach = {
   'composer.attach.group': 'Anhangstypen',
-  'composer.attach.handle': 'Bedienleiste',
   'composer.attach.photo': 'Fotos',
   'composer.attach.photo.action': 'Fotos auswählen',
   'composer.attach.camera': 'Kamera',
   'composer.attach.camera.action': 'Foto aufnehmen',
   'composer.attach.file': 'Datei',
   'composer.attach.file.action': 'Datei auswählen',
+  'composer.drop.veil': 'Zum Anhängen loslassen',
   'composer.attach.contact': 'Kontakt',
   'composer.attach.contact.action': 'Kontakt teilen',
   'composer.contact.failed': 'Dieser Kontakt kann nicht geteilt werden',
@@ -28,7 +28,6 @@ const deComposerAttach = {
   'composer.mic.unavailable': 'Mikrofon auf diesem Gerät nicht verfügbar',
   'composer.openSettings': 'Einstellungen',
   'composer.location.chip': 'ORT',
-  'composer.location.unknown': 'Unbekannter Ort',
   'composer.location.remove': 'Standort entfernen',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Sticker senden',
@@ -90,6 +89,20 @@ const deComposerAttach = {
   'composer.effects.entrance': 'Eingangsanimation',
   'composer.effects.permanent': 'Dauerhafter Effekt',
   'composer.effects.clearAll': 'Alles löschen',
+  'composer.guest.kind.text': 'Textdatei (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Bild',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'Textdateien (.txt)',
+  'composer.guest.inline.audio': 'Audio',
+  'composer.guest.inline.image': 'Bilder',
+  'composer.guest.inline.pdf': 'PDFs',
+  'composer.guest.note': 'Ohne Konto nimmt {title} deine Nachrichten, deine Sprachnachrichten und außerdem {kinds} an.',
+  'composer.guest.createAccount': 'Erstelle ein Konto, um alles andere zu teilen.',
+  'composer.guest.refused.kind': '„{name}“ wird hier nicht angenommen: nur {kinds} gehen durch.',
+  'composer.guest.refused.size': '„{name}“ ist zu groß: höchstens {max}.',
+  'send.failure.guestKind': 'Diese Datei wird hier nicht angenommen',
+  'send.failure.guestTooLarge': 'Diese Datei ist hier zu groß (höchstens {max})',
 } satisfies ComposerAttachCatalogSlice;
 
 export default deComposerAttach;

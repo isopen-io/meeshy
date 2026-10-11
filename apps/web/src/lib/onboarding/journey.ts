@@ -1,6 +1,4 @@
-import type { OnboardingState, OnboardingStepId } from '@meeshy/shared/types/onboarding';
-
-import { ONBOARDING_COMPLETION_STEPS, ONBOARDING_STEPS } from '@/lib/api/onboarding';
+import { ONBOARDING_COMPLETION_STEPS, ONBOARDING_STEPS, type OnboardingState, type OnboardingStepId } from '@/lib/api/onboarding';
 
 /**
  * **LA LOI DU PARCOURS D'ACCUEIL** (#7729) — pure : elle décide quelle carte
@@ -85,9 +83,17 @@ const isSettled = (step: OnboardingStepId, context: JourneyContext): boolean =>
  * Une étape est-elle PROPOSÉE à ce compte ? Les notifications, seulement si
  * quelque chose appelle une réponse ; le courriel (#7907), seulement si le
  * serveur dit l'adresse NON vérifiée — un serveur muet ne la propose pas.
+ *
+ * L'âge (#9928), seulement si le serveur SERT `viewerWriteRestriction` (même
+ * `null`) : c'est la preuve qu'il sait recevoir une date — une passerelle
+ * antérieure ne le sert pas, et la carte n'y demanderait rien qu'elle puisse
+ * garder. Meeshy Global, jamais à un compte que la passerelle y dit fermé en
+ * écriture : le salut y serait refusé.
  */
 export const isOffered = (step: OnboardingStepId, context: Pick<JourneyContext, 'state' | 'progress' | 'notificationsAskable'>): boolean => {
   if (step === 'email') return context.state.emailVerified === false;
+  if (step === 'age') return context.state.viewerWriteRestriction !== undefined;
+  if (step === 'global') return context.state.viewerWriteRestriction !== 'minor-global';
   if (step === 'notifications') return context.notificationsAskable && producedSomething(context);
   return true;
 };
@@ -124,9 +130,12 @@ export function replayServedState(input: {
   const closed = !state.eligible || state.completedAt !== null;
   const closedHere = ownSteps.size > 0 && ONBOARDING_COMPLETION_STEPS.every((id) => state.seenSteps.includes(id));
   if (closed) return closedHere ? 'stay' : 'closed';
-  const settledElsewhere =
-    (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ownSteps.has(step) && !context.progress.done.includes(step);
-  return settledElsewhere ? nextStepAfter(step, context) : 'stay';
+  const ours = ownSteps.has(step) || context.progress.done.includes(step);
+  const settledElsewhere = (state.seenSteps.includes(step) || state.prefilledSteps.includes(step)) && !ours;
+  /* Une étape qui n'est PLUS proposée (Meeshy Global fermée à un compte dont
+     l'âge vient d'être appris, #9928) cède aussi : son geste serait refusé. */
+  const withdrawn = !isOffered(step, context) && !ours;
+  return settledElsewhere || withdrawn ? nextStepAfter(step, context) : 'stay';
 }
 
 /**

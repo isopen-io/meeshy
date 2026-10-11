@@ -64,6 +64,10 @@ struct LinksHubView: View {
             }
         }
         .navigationBarHidden(true)
+        #if DEBUG
+        // La vitrine (#9904) : le hub prête son routeur, la scène y ouvre l'affiliation comme le toucher de sa carte.
+        .onAppear { VitrineRendu.shared.liensAffiches { router.push($0) } }
+        #endif
         // Sheets de création rapide
         .sheet(isPresented: $showCreateShareLink) {
             CreateShareLinkView { _ in }

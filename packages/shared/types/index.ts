@@ -31,6 +31,8 @@ export {
 export * from './conversation.js';
 export * from './conversation-preview.js';
 export * from './conversation-card.js';
+export * from './world.js';
+export * from './guest-attachment-kinds.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -317,6 +319,7 @@ export type UserRoleEnum = GlobalUserRole;
 
 // Importation des types de messages consolidés
 import type { Message as ConsolidatedMessage, MessageWithTranslations as ConsolidatedMessageWithTranslations } from './conversation.js';
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
 
 // Alias pour rétrocompatibilité
 export type Message = ConsolidatedMessage;
@@ -580,6 +583,8 @@ export interface ConversationLink {
   readonly allowAnonymousMessages: boolean;
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
+  /** Familles ouvertes aux invités (#10001) — `null`/absent : aucune restriction par famille. @see guest-attachment-kinds.ts */
+  readonly allowedAttachmentKinds?: readonly GuestAttachmentKind[] | null;
   readonly allowViewHistory: boolean;
   readonly requireNickname: boolean;
   readonly requireEmail: boolean;

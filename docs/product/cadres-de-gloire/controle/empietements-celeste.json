@@ -1,0 +1,179 @@
+[
+ {
+  "file": "celeste-ambassadeur-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 127236
+ },
+ {
+  "file": "celeste-ambassadeur-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 135526
+ },
+ {
+  "file": "celeste-ambassadeur-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134492
+ },
+ {
+  "file": "celeste-ambassadeur-4",
+  "overlap": 4,
+  "face": 0,
+  "depth": 1,
+  "bbox": [
+   102,
+   693,
+   103,
+   695
+  ],
+  "windowPx": 136839
+ },
+ {
+  "file": "celeste-ambassadeur-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 128866
+ },
+ {
+  "file": "celeste-legende-1",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 125941
+ },
+ {
+  "file": "celeste-legende-2",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 130261
+ },
+ {
+  "file": "celeste-legende-3",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134876
+ },
+ {
+  "file": "celeste-legende-4",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 133485
+ },
+ {
+  "file": "celeste-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 128921
+ },
+ {
+  "file": "celeste-mythe-a",
+  "overlap": 136,
+  "face": 0,
+  "depth": 1,
+  "bbox": [
+   79,
+   711,
+   460,
+   771
+  ],
+  "windowPx": 126237
+ },
+ {
+  "file": "celeste-mythe-b",
+  "overlap": 176,
+  "face": 0,
+  "depth": 1,
+  "bbox": [
+   113,
+   710,
+   429,
+   773
+  ],
+  "windowPx": 122154
+ },
+ {
+  "file": "celeste-mythe-c",
+  "overlap": 116,
+  "face": 0,
+  "depth": 1,
+  "bbox": [
+   69,
+   771,
+   470,
+   783
+  ],
+  "windowPx": 91140
+ },
+ {
+  "file": "celeste-oracle-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134032
+ },
+ {
+  "file": "celeste-oracle-b",
+  "overlap": 8,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   104,
+   672,
+   107,
+   675
+  ],
+  "windowPx": 152233
+ },
+ {
+  "file": "celeste-oracle-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 138361
+ },
+ {
+  "file": "celeste-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 140615
+ },
+ {
+  "file": "celeste-orateur-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 126331
+ },
+ {
+  "file": "celeste-orateur-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 126006
+ }
+]

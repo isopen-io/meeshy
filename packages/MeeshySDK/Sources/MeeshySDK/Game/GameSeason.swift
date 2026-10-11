@@ -6,8 +6,12 @@ import Foundation
 // quarante étapes gratuites.
 //
 // Le calendrier est DONNÉ, pas lu sur une horloge : la saison 1 ouvre le lundi
-// 2026-10-12, les saisons s'enchaînent sans trou de 56 jours. Les semaines de
-// saison sont celles des ligues (lundi local, fermeture dimanche 20 h).
+// 2026-12-21 et ferme le dimanche 2027-02-14 à 20 h, puis les saisons
+// s'enchaînent sans trou de 56 jours. Elle devait ouvrir le lundi 2026-10-12 :
+// le porteur l'a repoussée le 2026-10-10 (#10014), lundi 21 plutôt que dimanche
+// 20, parce qu'une saison commence avec une semaine de ligue. Avant cette date,
+// `season(at:)` rend `nil` et `upcoming(of:)` dit la saison à venir. Les semaines
+// de saison sont celles des ligues (lundi local, fermeture dimanche 20 h).
 //
 // Les ÉTOILES se gagnent par missions (1 facile ou moyenne, 2 difficile, 3 d'Or,
 // 5 pour le duo) ; quatre étoiles font une étape. Le parcours gratuit compte 40
@@ -115,7 +119,7 @@ public struct SeasonSettlement: Sendable, Equatable {
 }
 
 public enum GameSeason {
-    public static let oneStart = "2026-10-12"
+    public static let oneStart = "2026-12-21"
     public static let weeks = 8
     public static let days = weeks * 7
     public static let steps = 40
@@ -162,6 +166,12 @@ public enum GameSeason {
         self.season(at: dayKey) == season
     }
 
+    /// La saison À VENIR (#10014) : la saison 1 tant qu'aucune n'est ouverte, `nil` ensuite
+    /// (les saisons s'enchaînent sans trou). Une donnée de calendrier, la même pour tous.
+    public static func upcoming(of moment: LeagueMoment) -> SeasonCalendar? {
+        season(of: moment) == nil ? calendar(number: 1) : nil
+    }
+
     public static func stars(for source: SeasonStarSource) -> Int {
         switch source {
         case .easy, .medium: 1
@@ -185,7 +195,7 @@ public enum GameSeason {
         )
     }
 
-    /// La récompense GRATUITE d'une étape : des points ; un fragment de cosmétique
+    /// La récompense GRATUITE d'une étape : des points ; UN fragment d'étoile (`GameStarFragments`)
     /// toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
     public static func stepReward(_ step: Int) -> SeasonReward? {
         guard (1...steps).contains(step) else { return nil }

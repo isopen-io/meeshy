@@ -135,7 +135,7 @@ describe('le coffre', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
     expect(page).toMatch(/Faites \d \/ 3/);
-    expect(page).toMatch(/60 à 200 points/);
+    expect(page).toMatch(/500 à 10 000 points/);
     expect(page).toContain('1 chance sur 6');
     expect(page).toContain('1 chance sur 20');
   });
@@ -165,6 +165,36 @@ describe('le coffre', () => {
     expect(html.match(/data-game-reward/g)).toHaveLength(3);
     expect(text(html)).toContain('+120 points');
     expect(html).not.toContain('data-game-chest-open');
+  });
+
+  test('dit son contenu CERTAIN et sa prime possible avant l’ouverture : l’effort du jour, le cours de la Meesh (#10011)', () => {
+    const html = renderToStaticMarkup(<GameMissions {...props()} />);
+    expect(html).toContain('data-game-chest-today');
+    expect(html).toContain('data-game-chest-bonus');
+    const page = text(html);
+    expect(page).toMatch(/Gloire/);
+    expect(page).toMatch(/Prime : 1 chance sur 20 de [\d  ]+ points, sinon 1 chance sur 6 de [\d  ]+ points/);
+    expect(page).toContain('fragment d’étoile');
+    expect(page).not.toMatch(/fragments? de Meesh/);
+  });
+
+  test('ouvert après #10011 : les points, la Gloire, la prime, le fragment d’étoile et le gel montent un à un', () => {
+    const html = renderToStaticMarkup(
+      <GameMissions {...done({ chestClaimed: true, chestReward: { points: 2083 + 244, fragment: true, freeze: true, glory: 208, bonus: 'fifth', bonusPoints: 244 } })} />,
+    );
+    expect(html.match(/data-game-reward/g)).toHaveLength(5);
+    const page = text(html);
+    expect(page).toContain('+208 Gloire');
+    expect(page).toMatch(/\+2[  ]?083 points/);
+    expect(page).toMatch(/Prime\s:\s\+244\spoints, un cinquième de Meesh/);
+    expect(page).toContain('Un fragment d’étoile');
+    expect(html).not.toContain('data-game-chest-today');
+  });
+
+  test('dit le total de fragments d’étoile collectés, quand la passerelle le sert', () => {
+    const page = text(renderToStaticMarkup(<GameMissions {...props()} starFragments={3} />));
+    expect(page).toContain('3 fragments d’étoile');
+    expect(renderToStaticMarkup(<GameMissions {...props()} />)).not.toContain('data-game-star-fragments');
   });
 
   test('en cours d’ouverture : le coffre s’ouvre déjà, le contenu est attendu', () => {

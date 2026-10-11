@@ -329,6 +329,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// « 🔥 série · N (M) » du lecteur (#8906) — `viewerEngagement` de la liste
     /// et du détail. Gardé en cache : la pastille s'affiche avant le réseau.
     public var viewerEngagement: ConversationEngagementSnapshot? = nil
+    /// Ce que le lecteur ne peut pas écrire ici (#9929) — servi par la liste et
+    /// le détail, gardé en cache pour que le bandeau précède le réseau.
+    public var viewerWriteRestriction: ConversationWriteRestriction? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -740,7 +743,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageSenderName, lastMessageSenderUserId, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
         case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
-        case viewerEngagement
+        case viewerEngagement, viewerWriteRestriction
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
@@ -804,6 +807,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.listRankAt = (try? c.decodeIfPresent(Date.self, forKey: .listRankAt)) ?? nil
         self.activeCall = (try? c.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
         self.viewerEngagement = (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement))
+        self.viewerWriteRestriction = (try? c.decodeIfPresent(ConversationWriteRestriction.self, forKey: .viewerWriteRestriction)) ?? nil
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
         // Tolérance dans les DEUX sens, même patron que `callSummary` /
@@ -908,6 +912,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(listRankAt, forKey: .listRankAt)
         try c.encodeIfPresent(activeCall, forKey: .activeCall)
         try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
+        try c.encodeIfPresent(viewerWriteRestriction, forKey: .viewerWriteRestriction)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
         try c.encodeIfPresent(bridge, forKey: .bridge)

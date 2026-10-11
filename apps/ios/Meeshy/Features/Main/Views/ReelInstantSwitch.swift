@@ -1,4 +1,5 @@
 import Foundation
+import MetricKit
 import QuartzCore
 import os
 import MeeshySDK
@@ -157,11 +158,19 @@ enum ReelSwitchSignpost {
     private static let log = Logger(subsystem: "me.meeshy.app", category: "reels-perf")
     private static var meter = ReelSwitchMeter()
     private static var interval: OSSignpostIntervalState?
+    private static let metricLog = MXMetricManager.makeLogHandle(category: "ReelSwitch")
+    private static var metricInterval: OSSignpostID?
 
     static func elected(_ id: String, trigger: String) {
         if let interval {
             signposter.endInterval("ReelSwitch", interval, "abandoned")
         }
+        if let metricInterval {
+            mxSignpost(.end, log: metricLog, name: "ReelSwitch", signpostID: metricInterval)
+        }
+        let metricID = OSSignpostID(log: metricLog)
+        mxSignpost(.begin, log: metricLog, name: "ReelSwitch", signpostID: metricID)
+        metricInterval = metricID
         meter.elect(id, at: CACurrentMediaTime())
         interval = signposter.beginInterval("ReelSwitch", id: signposter.makeSignpostID(),
                                             "\(trigger, privacy: .public) \(id, privacy: .public)")
@@ -176,6 +185,10 @@ enum ReelSwitchSignpost {
         if let interval {
             signposter.endInterval("ReelSwitch", interval, "\(kind, privacy: .public) \(ms) ms")
             self.interval = nil
+        }
+        if let metricInterval {
+            mxSignpost(.end, log: metricLog, name: "ReelSwitch", signpostID: metricInterval)
+            self.metricInterval = nil
         }
         log.info("reel-switch \(kind, privacy: .public) \(ms, privacy: .public) ms id=\(id, privacy: .public)")
     }

@@ -1,3 +1,4 @@
+import { quotedPieceIdOf } from '@/lib/view/quoted-preview';
 import { memo, useRef } from 'react';
 
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
@@ -31,6 +32,9 @@ import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
+import { authorInkStyle } from '@/lib/view/author-ink';
+import { authorLanguageChip } from '@/lib/view/author-language-chip';
+import '@/styles/conversation-look.css';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -142,8 +146,11 @@ export const FocalRow = memo(function FocalRow({
   onOpenDetail,
   selected,
   onToggleSelect,
+  group = false,
 }: {
   mode: FlatRowMode;
+  /** Une conversation de GROUPE (#10004) : le nom d'un autre auteur y prend SA teinte. */
+  group?: boolean;
   place: PlacedMessage;
   languages: readonly string[];
   viewerId: string;
@@ -205,7 +212,8 @@ export const FocalRow = memo(function FocalRow({
    */
   revealable?: boolean;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
-  onJumpToMessage: (messageId: string) => void;
+  /** `pieceId` (#9911) — la pièce que la citation nomme : le saut met sa tuile en évidence. */
+  onJumpToMessage: (messageId: string, pieceId?: string) => void;
   /**
    * Ouvre la story citée (#5936) — `undefined` ⇒ la carte se rend quand même
    * (« la citation qui subsiste »), mais AUCUN geste ne s'arme (loi 4,
@@ -385,6 +393,10 @@ export const FocalRow = memo(function FocalRow({
     fallbackLanguage: message.originalLanguage,
   });
 
+  /* LA PASTILLE DE LANGUE SUR L'AVATAR DE 22 PX (#10004) — la langue SERVIE
+     est celle que la rangée vient de résoudre, jamais une seconde descente. */
+  const languageChip = authorLanguageChip({ originalLanguage: message.originalLanguage, servedLanguage: activeLanguage, isMine });
+
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
     preferredLanguages: languages,
@@ -436,6 +448,12 @@ export const FocalRow = memo(function FocalRow({
    * CIBLE (famille #5681-#5683), pas une dérivation qui invente une
    * couleur : issue compagnon ouverte côté iOS, pas ici. */
   const senderNameColor = isMine ? 'var(--color-self-name-ink)' : 'var(--color-ios-ink)';
+  /* LE NOM TEINTÉ PAR PERSONNE, EN GROUPE (#10004) — l'identifiant d'abord,
+     le nom en repli (`authorAccentColor`) ; la feuille choisit le schéma. */
+  const tintsName = group && !isMine;
+  const senderNameStyle = tintsName
+    ? authorInkStyle({ authorId: message.sender?.userId ?? message.senderId, name: senderAvatarName })
+    : { color: senderNameColor };
   /* SANS COMPTE (#5774, travail 2/3 ; glyphe #5935) — miroir
    * `FocalIdentityHeader.swift:99-161` : un visiteur entré par lien porte un
    * marqueur AVANT son nom. Le fantôme `theatermasks.fill` d'iOS est
@@ -531,7 +549,7 @@ export const FocalRow = memo(function FocalRow({
             quote={message.replyTo}
             isMine={false}
             languages={languages}
-            onJump={() => onJumpToMessage(message.replyTo!.id)}
+            onJump={() => onJumpToMessage(message.replyTo!.id, quotedPieceIdOf(message.replyTo!))}
             citingId={message.id}
             now={new Date(nowMs)}
           />
@@ -686,8 +704,9 @@ export const FocalRow = memo(function FocalRow({
             <span className="offscreen">Sélectionner ce message</span>
           </button>
         ) : head ? (
+          <span className="relative inline-flex">
           <AuthorAvatar
-            {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), participant: { id: message.senderId, name: senderAvatarName } })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
@@ -706,6 +725,12 @@ export const FocalRow = memo(function FocalRow({
               : {})}
             presence={presenceOf(message.sender, nowMs)}
           />
+          {languageChip === null ? null : (
+            <span aria-hidden data-author-language={languageChip} className={`author-language-chip${tintsName ? ' author-ink' : ''}`} style={tintsName ? senderNameStyle : { color: 'var(--color-ios-ink-2)' }}>
+              {languageChip}
+            </span>
+          )}
+          </span>
         ) : null}
       </div>
 
@@ -731,6 +756,7 @@ export const FocalRow = memo(function FocalRow({
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             username={senderHandle}
             {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+            {...(isMine ? {} : { participantId: message.senderId })}
           />
         ) : null}
 
@@ -784,10 +810,11 @@ export const FocalRow = memo(function FocalRow({
             <PersonName
               name={senderName}
               username={senderHandle}
+              {...(isMine ? {} : { participantId: message.senderId })}
               {...(senderRing === undefined ? {} : { storyRing: senderRing })}
               redundant
-              className="text-title font-extrabold"
-              style={{ color: senderNameColor }}
+              className={`text-title font-extrabold${tintsName ? ' author-ink' : ''}`}
+              style={senderNameStyle}
             >
               {senderName}
             </PersonName>
@@ -799,7 +826,7 @@ export const FocalRow = memo(function FocalRow({
             DERNIÈRE ligne du bloc — `items-end` fait ce que
             `HStack(alignment:.bottom)` fait côté iOS. */}
         <div data-row-content className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
+          <div data-row-body className="min-w-0 flex-1">
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
                 protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}

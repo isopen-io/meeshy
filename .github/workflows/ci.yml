@@ -549,6 +549,14 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
+      # staging faisait tirer et garder une image figée sous un déploiement
+      # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout
+      # service recréé qui ne tourne pas `:staging` ; son auto-test rejoue
+      # l'état réel du run 38105794544.
+      - name: Staging deploy verdict self-test
+        run: node infrastructure/scripts/staging-deploy-verdict.mjs --self-test
+
       # #9668 — la sauvegarde nocturne publie son verdict (etat.json) en succès
       # ET en échec, y compris hors de tout `|| fail` ; la dernière réussite
       # survit à un échec ; ni chemin d'hôte ni secret. `docker`, `df`, `flock`
@@ -1372,7 +1380,11 @@ jobs:
   # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
   # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
   # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
-  # le budget historique.
+  # le budget historique. RELEVÉ À 35/40 le 2026-10-11 (#10058) : même
+  # arbre, 30 616 tests verts, 894 s sur un runner et 1 457 s sur un autre
+  # (chaque suite ~1,6× plus lente — le RUNNER, pas une suite bloquée) ; les
+  # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
+  # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
@@ -1390,8 +1402,8 @@ jobs:
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
-            timeoutMinutes: 30
-            testTimeoutMinutes: 25
+            timeoutMinutes: 40
+            testTimeoutMinutes: 35
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
@@ -2206,6 +2218,15 @@ jobs:
   security:
     name: Security
     runs-on: ubuntu-latest
+    # Sans `security-events: write`, l'envoi du SARIF échoue sur les pushes de
+    # dev (« Resource not accessible by integration », masqué par
+    # continue-on-error) : dev n'a alors AUCUNE analyse Trivy de référence, et
+    # le check « Trivy » d'une PR qui touche bun.lock compte toutes les alertes
+    # déjà présentes comme introduites par elle.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7

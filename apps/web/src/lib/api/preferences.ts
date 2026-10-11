@@ -36,6 +36,12 @@ export type ConversationFlags = {
   readonly isPinned: boolean;
   readonly isMuted: boolean;
   readonly isArchived: boolean;
+  /**
+   * L'archive est IMPOSÉE par la passerelle (#9928) — Meeshy Global fermée en
+   * écriture à un mineur : elle vit aux archives jusqu'à ses 18 ans, et le
+   * menu ne propose pas de l'en sortir. Absent = aucune contrainte.
+   */
+  readonly archiveLocked?: boolean;
 };
 
 const NO_FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchived: false };
@@ -61,6 +67,14 @@ export function flagsOf(conversation: Conversation): ConversationFlags {
     isMuted: boolOf(entry, 'isMuted'),
     isArchived: boolOf(entry, 'isArchived'),
   };
+}
+
+/** La catégorie où le lecteur a rangé la conversation (#10103) — `undefined`
+ * pour toute forme qui n'est pas un identifiant : la conversation tombe alors
+ * dans les sections par date, jamais dans une section fantôme. */
+export function categoryIdOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['categoryId'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 export function customNameOf(conversation: Conversation): string | undefined {

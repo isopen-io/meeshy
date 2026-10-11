@@ -73,6 +73,7 @@ public extension ReplyReference {
         copy.quotedExpiresAt = quotedExpiresAt
         copy.quotedExitNature = quotedExitNature
         copy.quotedAudioTracks = quotedAudioTracks
+        copy.quotedPieceCount = quotedPieceCount
         return copy
     }
 

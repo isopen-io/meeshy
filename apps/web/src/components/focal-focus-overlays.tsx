@@ -69,8 +69,13 @@ export function FocusIdentity({
   src,
   username,
   storyRing,
+  participantId,
   continuation = false,
 }: {
+  /** Le participant de la rangée élue (`message.senderId`) : quand le fil ouvre
+   * les fiches de World Wide à l'équipe (#10102), la puce les ouvre aussi —
+   * elle recouvre l'identité de tête, le doigt la touche, elle. */
+  readonly participantId?: string | undefined;
   /** Suite de groupe : la pastille se pose au-dessus de la première ligne (#8506). */
   readonly continuation?: boolean;
   readonly initials: string;
@@ -109,6 +114,7 @@ export function FocusIdentity({
         {...(src === undefined ? {} : { src })}
         {...(typeof username === 'string' && username !== '' ? { profileUsername: username, name } : {})}
         {...(storyRing === undefined ? {} : { storyRing, name })}
+        {...(participantId === undefined ? {} : { participant: { id: participantId, name } })}
         redundant
       />
       {/* `IDENTITY_NAME_SIZE` (13,5) est une cote GÉOMÉTRIQUE dérivée de
@@ -121,6 +127,7 @@ export function FocusIdentity({
         name={name}
         username={username}
         {...(storyRing === undefined ? {} : { storyRing })}
+        {...(participantId === undefined ? {} : { participantId })}
         redundant
         className="font-semibold"
         style={{ color: 'var(--color-ios-ink)', fontSize: IDENTITY_NAME_SIZE }}

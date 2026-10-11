@@ -168,6 +168,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
+        // #9896 — le code pays de la puce de langue du composer (7 pt gras sous
+        // le drapeau) : CADRE FIXE, la puce garde la hauteur de la barre. La
+        // taille vient d'un `@ScaledMetric` plafonné à `.xLarge` ; `relative(7)`
+        // la porterait à 11 pt et ferait déborder la puce. Le drapeau, emoji
+        // seul, passe par `MeeshyFont.emoji`.
+        "Features/Main/Components/UniversalComposerBar+Toolbar.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés

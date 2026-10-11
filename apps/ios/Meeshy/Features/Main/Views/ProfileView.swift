@@ -39,6 +39,8 @@ struct ProfileView: View {
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
     @State private var scrollRelay = ScrollOffsetRelay()
+    /// #10093 — la bannière ou la photo ouverte en plein écran (son URL).
+    @State private var fullscreenImage: IdentifiedString?
 
     private let accentColor = MeeshyColors.purple500Hex
 
@@ -80,24 +82,28 @@ struct ProfileView: View {
         }
         .onAppear { loadUserData() }
         .task {
+            // #10093 — le cache se peint, puis la page se synchronise dès l'ouverture, cache frais compris ; un échec
+            // garde ce qui est affiché.
             let userId = authManager.currentUser?.id ?? ""
-            let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
-            switch cacheResult {
-            case .fresh(let cached, _):
+            switch await CacheCoordinator.shared.stats.load(for: userId) {
+            case .fresh(let cached, _), .stale(let cached, _):
                 stats = cached.first
-            case .stale(let cached, _):
-                stats = cached.first
-                if let fresh = try? await StatsService.shared.fetchStats() {
-                    stats = fresh
-                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
-                }
             case .expired, .empty:
-                if let fresh = try? await StatsService.shared.fetchStats() {
-                    stats = fresh
-                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
-                }
+                break
             }
             pendingRequestCount = FriendshipCache.shared.pendingReceivedCount
+            Task { await authManager.refreshCurrentUserProfile() }
+            if let fresh = try? await StatsService.shared.fetchStats() {
+                stats = fresh
+                try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
+            }
+        }
+        .fullScreenCover(item: $fullscreenImage) { image in
+            FullscreenImageView(
+                imageURL: image.value,
+                fallbackText: user?.displayName ?? user?.username ?? "",
+                accentColor: accentColor
+            )
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -239,6 +245,20 @@ struct ProfileView: View {
                 bannerImage
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                    .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                    .onTapGesture { openFullscreen(user?.banner) }
+                    .accessibilityElement()
+                    .accessibilityLabel(ProfileImageCopy.bannerLabel)
+                    .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
+                    .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
+                    .accessibilityAction { openFullscreen(user?.banner) }
+                    .overlay(alignment: .topTrailing) {
+                        if !isEditing, let userId = user?.id {
+                            GameBannerBadge(userId: userId)
+                                .allowsHitTesting(false)
+                                .padding(MeeshySpacing.sm)
+                        }
+                    }
 
                 if isEditing {
                     PhotosPicker(selection: $bannerItem, matching: .images) {
@@ -273,6 +293,10 @@ struct ProfileView: View {
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)
                 )
+                .onTapGesture { openFullscreen(user?.avatar) }
+                .accessibilityHint(opensFullscreen(user?.avatar) ? ProfileImageCopy.openFullscreenHint : "")
+                .accessibilityAddTraits(opensFullscreen(user?.avatar) ? .isButton : [])
+                .accessibilityAction { openFullscreen(user?.avatar) }
 
                 if isEditing {
                     let textPrimary = theme.textPrimary
@@ -510,15 +534,20 @@ struct ProfileView: View {
     /// dans son propre fichier : `ProfileView` est déjà au-delà du seuil de
     /// découpage (1 000 lignes, directive 2026-09-02) — on n'y ajoute que la
     /// ligne qui la monte.
+    /// #10093 — plus de carte de jeu sur le profil : le niveau et le rang vivent sur la bannière.
     private var progressionEntry: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            // #9481 — le jeu sur SON profil : l'anneau, le rang, la vitrine, les médailles.
-            GameProfileOwnCard(
-                onOpenProgression: { router.push(.progression) },
-                onOpenShowcase: { router.openGame(at: .gamePage(.showcase)) }
-            )
-            ProfileProgressionEntry { router.push(.progression) }
-        }
+        ProfileProgressionEntry { router.push(.progression) }
+    }
+
+    /// Ouvre la bannière ou la photo en plein écran — hors édition, où toucher l'image sert à la changer.
+    private func opensFullscreen(_ url: String?) -> Bool {
+        !isEditing && !(url ?? "").isEmpty
+    }
+
+    private func openFullscreen(_ url: String?) {
+        guard opensFullscreen(url), let url else { return }
+        HapticFeedback.light()
+        fullscreenImage = IdentifiedString(url)
     }
 
     // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans

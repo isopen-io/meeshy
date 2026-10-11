@@ -33,7 +33,9 @@ import { useOnline } from '@/lib/net/online';
 import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { defaultGuestLanguage, GuestForm, GuestSubmit } from '@/routes/chat-join-guest';
+import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
+import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
+import { focusGuestOf } from '@/lib/view/guest-focus';
 import {
   GroupCard,
   INK,
@@ -127,6 +129,9 @@ export type ChatJoinDeps = {
    * l'origine virtuelle d'une coque. */
   readonly origin: () => string;
   readonly now: () => Date;
+  /** L'onglet où la landing pose son jeton de passage (#10094) — `sessionStorage`,
+   * dont l'accès peut LEVER (navigation privée) : la jonction le lit sous garde. */
+  readonly handoff: () => HandoffStorage;
 };
 
 const DEFAULT_DEPS: ChatJoinDeps = {
@@ -155,6 +160,7 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   shareUrl: (data) => partagerLien(data),
   origin: () => webOriginOf(apiConfig.base, window.location.origin),
   now: () => new Date(),
+  handoff: () => window.sessionStorage,
 };
 
 type LoadState =
@@ -186,7 +192,7 @@ const PASSING_REFUSALS: ReadonlySet<LinkRefusal> = new Set<LinkRefusal>(['rate-l
 export default function ChatJoinScreen() {
   const { link } = useParams<'/chat/$link'>();
   const [search] = useSearch();
-  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} />;
+  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} entry={guestEntryOf(search)} />;
 }
 
 const MISSING_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.missing.${GuestField}`>>> = {
@@ -212,11 +218,14 @@ const PAGE_BACKGROUND =
 export function ChatJoin({
   link,
   anonymousRequested = false,
+  entry = null,
   deps = DEFAULT_DEPS,
 }: {
   readonly link: string;
   /** `?mode=anonymous` (#8816) — un compte connecté a choisi « Anonyme ». */
   readonly anonymousRequested?: boolean;
+  /** Le nom et la langue choisis sur la landing (#10003, `guestEntryOf`). */
+  readonly entry?: GuestEntry | null;
   readonly deps?: ChatJoinDeps;
 }) {
   const language = currentInterfaceLanguage();
@@ -231,6 +240,23 @@ export function ChatJoin({
   const [draft, setDraft] = useState<GuestDraft>(EMPTY_DRAFT);
   const [focused, setFocused] = useState<GuestField | null>(null);
   const [input, setInput] = useState<InputRefusal | null>(null);
+  /* L'ENTRÉE de la landing est lue UNE fois, au montage : l'adresse qui la
+     porte ne change pas, et une revalidation ne doit jamais la rejouer. Son
+     JETON DE PASSAGE aussi (#10094) — lu et effacé au montage, une seule fois :
+     sans lui, l'adresse ne fait que PRÉ-REMPLIR le formulaire. */
+  const [arrival] = useState(entry);
+  const [handedOff] = useState(() => arrival !== null && takeLandingHandoff({ storage: deps.handoff, link, entry: arrival, now: deps.now().getTime() }));
+  const [entering, setEntering] = useState(arrival !== null);
+  /* L'INVITÉ DÉJÀ ENTRÉ PAR CE LIEN (#10100) — un ancien lien rouvert ne lui
+     repropose pas d'entrer : il rouvre son fil, en focus. Lu au montage : une
+     jonction réussie ici navigue d'elle-même. */
+  const [returning] = useState(() => {
+    const held = focusGuestOf(sessionStore.getState().session);
+    return held !== null && held.link === link ? held.conversationId : null;
+  });
+  useEffect(() => {
+    if (returning !== null) deps.go(href('thread', { conversation: returning }), true);
+  }, [deps, returning]);
 
   /**
    * LA LECTURE — relancée au retour du réseau.
@@ -275,6 +301,38 @@ export function ChatJoin({
   }, [load, language]);
 
   const isAccount = session.status === 'authenticated';
+
+  /**
+   * L'ENTRÉE DEPUIS LA LANDING (#10003, D-186) — le nom et la langue y sont
+   * déjà choisis : l'invité est CRÉÉ sans autre geste, et l'invitation n'est
+   * pas peinte entre-temps. Un lien qui exige plus (e-mail, date de naissance),
+   * un nom refusé ou un refus du lien rendent la main au formulaire, PRÉ-REMPLI,
+   * avec la cause dite — jamais une garde contournée.
+   *
+   * SANS JETON DE PASSAGE (#10094) — adresse forgée, ancien gabarit, autre
+   * onglet, jeton périmé ou stockage refusé — rien ne part : le formulaire
+   * s'ouvre PRÉ-REMPLI du nom et de la langue de l'adresse, et attend le geste.
+   */
+  useEffect(() => {
+    if (!entering || arrival === null || load.kind === 'loading') return;
+    const guestDoor = joinChoicesOf({ signedIn: isAccount, guestAllowed: load.kind === 'ready' && load.invitation.guest.allowed, anonymousRequested }).guest;
+    if (load.kind !== 'ready' || !guestDoor || !online) {
+      setDraft((current) => (current.nickname === '' ? { ...current, nickname: arrival.nickname } : current));
+      setEntering(false);
+      return;
+    }
+    const terms = load.invitation.guest;
+    const chosen = arrival.language !== null && guestLanguageOptions(terms).includes(arrival.language) ? arrival.language : defaultGuestLanguage(terms, language);
+    const seeded: GuestDraft = { ...EMPTY_DRAFT, nickname: arrival.nickname, language: chosen };
+    setDraft(seeded);
+    if (!handedOff) {
+      setEntering(false);
+      return;
+    }
+    void handleGuestJoin(seeded).finally(() => setEntering(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- l'entrée part une fois, quand l'invitation arrive
+  }, [load]);
+
   const accountLanguage = session.status === 'authenticated' ? (session.user.systemLanguage ?? null) : null;
 
   async function handleJoin() {
@@ -296,10 +354,10 @@ export function ChatJoin({
     deps.joined();
   }
 
-  async function handleGuestJoin() {
+  async function handleGuestJoin(submitted: GuestDraft = draft) {
     if (load.kind !== 'ready' || join.kind === 'joining' || join.kind === 'joined' || !online) return;
 
-    const validated = validateGuestDraft(draft, load.invitation.guest);
+    const validated = validateGuestDraft(submitted, load.invitation.guest);
     if (!validated.ok) {
       setInput({ field: validated.field, message: translateInvite(language, MISSING_KEY[validated.field]) });
       /* Le bouton vit dans la barre collée, loin des champs : un formulaire
@@ -345,12 +403,19 @@ export function ChatJoin({
       link,
       mayWrite: result.data.mayWrite,
       language: validated.body.language,
+      ...(result.data.attachmentKinds === undefined ? {} : { attachmentKinds: result.data.attachmentKinds }),
     });
     /* LA LANGUE CHOISIE EST CELLE DE L'INVITÉ (#9710) : elle vient de passer au
        rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
        son interface. Un COMPTE qui rejoint en anonyme garde la sienne (#8816). */
-    if (heldAccountOf(session) === null) deps.adoptInterfaceLanguage(validated.body.language);
-    deps.go(href('thread', { conversation: result.data.conversationId }), true);
+    const guestOnly = heldAccountOf(session) === null;
+    if (guestOnly) deps.adoptInterfaceLanguage(validated.body.language);
+    /* LA LANDING NE FAIT ENTRER QUE DANS WORLD WIDE, qui se lit sur `/world`
+       (#10100) : une entrée portée par son jeton y mène, même par l'ancienne
+       adresse de jonction qu'une page de la landing en cache vise encore. Pas
+       un COMPTE entré sous son identité anonyme : `/world` le renverrait à la
+       jonction, il ouvre le fil rejoint, dans son application. */
+    deps.go(handedOff && guestOnly ? href('world') : href('thread', { conversation: result.data.conversationId }), true);
     deps.joined();
   }
 
@@ -409,11 +474,13 @@ export function ChatJoin({
       <GuestExits language={language} next={next} withSeparator={false} accountRequired />
     ) : null;
 
+  if (returning !== null) return <InvitationPending language={language} />;
+
   return (
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <InviteHeader language={language} next={isAccount ? null : next} />
       <main id="contenu" className="mx-auto grid w-full max-w-[1280px] flex-1 content-start px-4 md:px-12 md:pb-12">
-        {load.kind === 'loading' ? <InvitationPending language={language} /> : null}
+        {load.kind === 'loading' || (entering && load.kind === 'ready') ? <InvitationPending language={language} /> : null}
 
         {load.kind === 'refused' ? (
           <div className="mx-auto grid w-full max-w-md content-center py-8">
@@ -421,7 +488,7 @@ export function ChatJoin({
           </div>
         ) : null}
 
-        {invitation === null ? null : (
+        {invitation === null || entering ? null : (
           <div
             data-invite-layout
             className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"

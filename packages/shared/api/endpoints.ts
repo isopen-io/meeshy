@@ -79,6 +79,7 @@ import * as userGroup from './endpoints/user.js';
 import * as userPreferencesGroup from './endpoints/user-preferences.js';
 import * as usersGroup from './endpoints/users.js';
 import * as voiceGroup from './endpoints/voice.js';
+import * as worldGroup from './endpoints/world.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -136,6 +137,7 @@ export const API_ENDPOINTS = {
   userPreferences: userPreferencesGroup,
   users: usersGroup,
   voice: voiceGroup,
+  world: worldGroup,
 } as const;
 
 /** Les 419 (au 2026-08-29) chemins uniques du manifeste — dédupliqués par verbe. */
@@ -443,6 +445,7 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/links/stats',
   '/api/v1/me',
   '/api/v1/me/account/deletion',
+  '/api/v1/me/birth-date',
   '/api/v1/me/categories',
   '/api/v1/me/categories/:categoryId',
   '/api/v1/me/categories/reorder',
@@ -465,11 +468,13 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/me/game/league/friends',
   '/api/v1/me/game/league/pseudonym',
   '/api/v1/me/game/league/week',
+  '/api/v1/me/game/league/weeks/:weekKey',
   '/api/v1/me/game/missions/:missionId/reroll',
   '/api/v1/me/game/prestige',
   '/api/v1/me/game/privacy',
   '/api/v1/me/game/season/seal',
   '/api/v1/me/game/season/steps/:step/claim',
+  '/api/v1/me/game/seasons/:number',
   '/api/v1/me/game/showcase/order',
   '/api/v1/me/game/visibility',
   '/api/v1/me/meesh/mint',
@@ -660,6 +665,8 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/voice/transcribe',
   '/api/v1/voice/translate',
   '/api/v1/voice/translate/async',
+  '/api/v1/world',
+  '/api/v1/world/participants/:participantId',
   '/attachments/:attachmentId/analysis',
   '/attachments/batch/analysis',
   '/health',
@@ -974,6 +981,7 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/links/stats': ['GET'],
   '/api/v1/me': ['GET'],
   '/api/v1/me/account/deletion': ['GET', 'POST'],
+  '/api/v1/me/birth-date': ['PUT'],
   '/api/v1/me/categories': ['GET', 'POST'],
   '/api/v1/me/categories/:categoryId': ['PATCH', 'DELETE'],
   '/api/v1/me/categories/reorder': ['POST'],
@@ -996,11 +1004,13 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/me/game/league/friends': ['GET'],
   '/api/v1/me/game/league/pseudonym': ['PUT'],
   '/api/v1/me/game/league/week': ['GET'],
+  '/api/v1/me/game/league/weeks/:weekKey': ['GET'],
   '/api/v1/me/game/missions/:missionId/reroll': ['POST'],
   '/api/v1/me/game/prestige': ['POST'],
   '/api/v1/me/game/privacy': ['GET', 'PUT'],
   '/api/v1/me/game/season/seal': ['POST'],
   '/api/v1/me/game/season/steps/:step/claim': ['POST'],
+  '/api/v1/me/game/seasons/:number': ['GET'],
   '/api/v1/me/game/showcase/order': ['PUT'],
   '/api/v1/me/game/visibility': ['PUT'],
   '/api/v1/me/meesh/mint': ['POST'],
@@ -1191,6 +1201,8 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/voice/transcribe': ['POST'],
   '/api/v1/voice/translate': ['POST'],
   '/api/v1/voice/translate/async': ['POST'],
+  '/api/v1/world': ['GET'],
+  '/api/v1/world/participants/:participantId': ['GET'],
   '/attachments/:attachmentId/analysis': ['GET', 'POST'],
   '/attachments/batch/analysis': ['POST'],
   '/health': ['GET'],

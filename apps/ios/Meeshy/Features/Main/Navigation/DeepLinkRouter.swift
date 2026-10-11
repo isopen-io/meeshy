@@ -51,6 +51,8 @@ enum DeepLinkDestination: Equatable {
     /// l'inscription, pas un lieu de l'app.
     case referral(code: String)
     case call(conversationId: String, isVideo: Bool)
+    /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
+    case game(GameLink)
     case external(URL)
 }
 
@@ -243,7 +245,8 @@ enum DeepLinkParser {
         guard let head = components.first else { return nil }
         let id = identifier(components, 1)
         switch head {
-        case "me": return .ownProfile
+        // `/me/progression/saison|ligue[/…]` (#9947) est le Jeu ; le reste de `/me` reste le profil.
+        case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
         case "auth": return authLink(id: id, components: components, url: url)
@@ -366,6 +369,8 @@ enum DeepLink: Equatable {
     case ownProfile
     case userLinks
     case hashtag(tag: String)
+    /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
+    case game(GameLink)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
     /// (Safari) — il ne la rejoint pas.
@@ -394,7 +399,7 @@ enum DeepLink: Equatable {
         case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
-             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag:
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game:
             return true
         }
     }
@@ -431,6 +436,13 @@ final class DeepLinkRouter: ObservableObject {
     /// à résoudre, celui-là une IDENTITÉ déjà choisie. Les confondre ferait
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
+
+    /// « Entrer dans World Wide » choisi sur l'écran de connexion (#10006).
+    ///
+    /// L'entrée SERVIE par `GET /world` voyage avec le choix : la session
+    /// invitée (portée par `MeeshyApp`) s'ouvre sur la clé qu'elle nomme, sans
+    /// relire le réseau ni écrire d'identifiant en dur.
+    @Published var requestedWorldEntry: WorldEntry?
 
     /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
     /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
@@ -594,6 +606,7 @@ final class DeepLinkRouter: ObservableObject {
         case .ownProfile:                 return .ownProfile
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)
+        case .game(let link):             return .game(link)
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)

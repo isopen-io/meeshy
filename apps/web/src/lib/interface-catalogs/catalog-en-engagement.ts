@@ -11,8 +11,6 @@ const enEngagement = {
   'engagement.pill.total.one': '{total} point earned in this conversation',
   'engagement.pill.total.other': '{total} points earned in this conversation',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.pill.open': 'Open my progress',
-  'engagement.flame.label': '{count} points today — tap to hide the flame',
   'engagement.post.points.one': 'This post earned you {count} point',
   'engagement.post.points.other': 'This post earned you {count} points',
 } as const;

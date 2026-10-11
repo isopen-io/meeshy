@@ -144,10 +144,10 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                                // #9481 — la vitrine de trophées d'un AUTRE membre, dans son profil : ce que SA
+                                // #9481, #10093 — le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA
                                 // visibilité autorise, rien sinon. Une seule injection, toutes les feuilles de profil la reçoivent.
-                                .environment(\.profileGameSection, ProfileGameSection { userId, name in
-                                    AnyView(GameProfileVisitorCard(userId: userId, name: name))
+                                .environment(\.profileGameSection, ProfileGameSection { userId, _ in
+                                    AnyView(GameBannerBadge(userId: userId))
                                 })
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
@@ -221,7 +221,8 @@ struct MeeshyApp: App {
                                 activeGuestSession = GuestSession(
                                     identifier: guestSession.identifier,
                                     context: ctx,
-                                    isDeliberate: guestSession.isDeliberate
+                                    isDeliberate: guestSession.isDeliberate,
+                                    origin: guestSession.origin
                                 )
                             },
                             onAccountRequest: { entry in
@@ -247,6 +248,7 @@ struct MeeshyApp: App {
                 // invisible. La forme n'a pas changé ; sa PLACE peut désormais
                 // se répéter sans se recopier.
                 .feedbackToastOverlay()
+                .ageGateOverlay()
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -916,6 +918,18 @@ struct MeeshyApp: App {
                         identifier: identifier,
                         context: AnonymousSessionStore.load(linkId: identifier),
                         isDeliberate: true
+                    )
+                }
+                // #10006 — « Entrer dans World Wide » depuis l'écran de
+                // connexion : la session invitée s'ouvre sur la clé SERVIE
+                // par `GET /world`, et reprend celle que cet appareil y a déjà.
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    guard let entry else { return }
+                    deepLinkRouter.requestedWorldEntry = nil
+                    activeGuestSession = GuestSession(
+                        identifier: entry.shareLinkIdentifier,
+                        context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+                        origin: .world(entry)
                     )
                 }
                 // Prisme Linguistique — dès que la langue principale de

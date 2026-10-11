@@ -423,6 +423,43 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // d'audit L2-4) est PRÉMATURÉE : les écrans Sécurité iOS et web ne l'appellent
 // pas encore ; #9651 la branche et fera redescendre la référence d'un cran.
 // Valeur MESURÉE le 2026-10-08.
+// 291 -> 292 (#9927, 2026-10-10) : `MeEndpoint.birthDate` (`PUT /me/birth-date`),
+// GÉNÉRÉE depuis `route-manifest.json` avec la route — PRÉMATURÉE : l'étape d'âge de
+// l'onboarding iOS l'appellera avec #9929, qui ramène la référence à 291. Valeur
+// MESURÉE le 2026-10-10.
+//
+// 292 -> 291 (#9929, 2026-10-10) : l'étape d'âge de l'onboarding iOS appelle
+// désormais `MeEndpoint.birthDate` (`BirthDateService.setBirthDate`) — l'entrée
+// n'est plus morte, comme annoncé ci-dessus. Valeur MESURÉE sur l'arbre fusionné
+// avec `dev` du 2026-10-10.
+// 291 -> 292 (#10000, 2026-10-10) : `WorldEndpoint.root` (`GET /api/v1/world`),
+// GÉNÉRÉE depuis `route-manifest.json` par `916e564ac9` sans relever cette
+// référence — la jumelle Swift de `world.root`. PRÉMATURÉE : aucune vue iOS ne
+// lit encore l'entrée publique de World Wide. Valeur MESURÉE le 2026-10-10.
+//
+// 292 -> 294 (#9947, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` (`GET /me/game/seasons/:number`)
+// et `MeEndpoint.gameLeagueWeeksByWeekKey` (`GET /me/game/league/weeks/:weekKey`), GÉNÉRÉES avec
+// leurs routes — PRÉMATURÉES : les écrans iOS d'une saison passée ou future et d'une semaine
+// passée les appelleront avec #10018, qui ramène la référence à 292. Valeur MESURÉE le 2026-10-11.
+//
+// 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
+// l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
+// dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
+//
+// 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
+// `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
+// `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11.
+//
+// 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
+// (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
+// Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
+// en touchant un auteur est #10125, qui ramène la référence à 292. Valeur MESURÉE le
+// 2026-10-11.
+//
+// 293 -> 291 (2026-10-11) : les deux mouvements ci-dessus, partis chacun de 292, se sont
+// croisés sur dev — #10018 (−2) et #10102 (+1) donnent 291, et non 293. Valeur MESURÉE
+// le 2026-10-11 sur dev 33e24c995c (CI run 38133983531 rouge sur 293).
 const BASELINE_DEAD_ENTRIES = 291;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;

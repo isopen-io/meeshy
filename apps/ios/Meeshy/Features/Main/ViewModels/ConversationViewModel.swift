@@ -288,6 +288,9 @@ class ConversationViewModel: ObservableObject {
 
     /// True when the conversation has been closed (no more messages can be sent)
     @Published var isConversationClosed = false
+    /// Restriction d'écriture APPRISE à l'envoi (#9929) : un 403 `GLOBAL_ADULTS_ONLY`.
+    /// Celle que la liste SERT vit sur la conversation ; la vue lit les deux.
+    @Published var learnedWriteRestriction: ConversationWriteRestriction?
 
     /// True when the server has revoked access to this conversation (user
     /// removed from the participants list, group disbanded, etc.). The

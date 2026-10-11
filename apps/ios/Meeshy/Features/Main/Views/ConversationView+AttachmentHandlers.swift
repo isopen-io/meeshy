@@ -173,6 +173,7 @@ extension ConversationView {
         }
 
         let route = outgoingReplyRoute
+        let replyAnchor = outgoingAttachmentAnchor
         let replyId = route.replyToId
         let storyReplyId = route.storyReplyToId
         let storyRef = route.storyReference
@@ -230,7 +231,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place)
+                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place, attachmentReplyTo: replyAnchor)
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -648,7 +649,8 @@ extension ConversationView {
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         protection: protection,
                         originalLanguage: lang,
-                        existingTempId: send.tempId
+                        existingTempId: send.tempId,
+                        attachmentReplyTo: send.group.carriesReply ? replyAnchor : nil
                     )
                     anySuccess = anySuccess || ok
                 } catch {
@@ -665,6 +667,15 @@ extension ConversationView {
                     // par clientMessageId côté gateway évite tout doublon).
                     _ = try? await viewModel.messagePersistence.applyEvent(
                         localId: send.tempId, event: .sendFailed(error))
+                    // #10006 — le refus d'une pièce d'INVITÉ est définitif :
+                    // l'outbox le rejouerait en vain. La bulle dit pourquoi.
+                    if let refusal = error as? GuestAttachmentRefusal {
+                        await viewModel.markOptimisticMediaFailed(
+                            tempId: send.tempId,
+                            reason: GuestAttachmentCopy.serverRefusal(refusal, kinds: anonymousSession?.allowedAttachmentKinds)
+                        )
+                        continue
+                    }
                     var requeued = false
                     if send.group.kind == .audio {
                         let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
@@ -737,7 +748,8 @@ extension ConversationView {
                     protection: protection,
                     originalLanguage: lang,
                     existingTempId: textTempId,
-                    location: place
+                    location: place,
+                    attachmentReplyTo: textGroup.carriesReply ? replyAnchor : nil
                 )
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok

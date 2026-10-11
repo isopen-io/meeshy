@@ -74,7 +74,7 @@ describe('/signup?next= — un compte DÉJÀ connecté repart vers `next`', () =
   test('`next` hostile : la liste', () => {
     signIn();
     mountAt('/signup?next=%2F%2Fevil.com');
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 });
 

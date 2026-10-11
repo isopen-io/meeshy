@@ -25,6 +25,7 @@ import { GameBlockService } from '../../services/game/GameBlockService';
 import { MissionService } from '../../services/game/MissionService';
 import { PersonalMissionService } from '../../services/game/PersonalMissionService';
 import { gameRateLimitConfig, okResponse, refusalResponse, requestIdSchema, runGameWrite, writeBody } from './game-shared';
+import { meGameArchiveRoutes } from './game-archive';
 import { meGameWave2Routes } from './game-wave2';
 
 export type GameRoutesOptions = {
@@ -146,4 +147,6 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     creditPoints,
     grantFreeze: (userId) => missions.grantFreeze(userId),
   });
+  // Ce qu'un lien du jeu ouvre (#9947) : une saison n, une semaine de ligue — en lecture.
+  await fastify.register(meGameArchiveRoutes);
 }

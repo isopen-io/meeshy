@@ -45,6 +45,7 @@ function createMockPrisma() {
       update: jest.fn(),
       deleteMany: jest.fn(),
     },
+    user: { findUnique: jest.fn().mockResolvedValue(null) },
     postView: { deleteMany: jest.fn() },
     postReaction: { deleteMany: jest.fn() },
     postImpression: { deleteMany: jest.fn() },

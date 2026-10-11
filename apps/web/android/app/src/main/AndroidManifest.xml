@@ -50,6 +50,8 @@
                 <data android:pathPrefix="/story/" />
                 <data android:pathPrefix="/reel/" />
                 <data android:pathPrefix="/communities/" />
+                <!-- #10100 — World Wide, l'entrée sans compte et le fil de l'invité en focus. -->
+                <data android:path="/world" />
                 <!-- #9468 — le lien d'invitation, réclamé par l'AASA depuis #8075 :
                      ouvert dans la coque, le code est retenu par l'app qui inscrira. -->
                 <data android:pathPrefix="/signup/affiliate/" />
@@ -62,6 +64,10 @@
                 <data android:path="/me" />
                 <data android:path="/links" />
                 <data android:path="/reels" />
+                <!-- #9947 — une saison ou une semaine de ligue nommée (événements in-app),
+                     comme l'AASA : /me/progression/saison[/n], /me/progression/ligue[/lundi]. -->
+                <data android:pathPrefix="/me/progression/saison" />
+                <data android:pathPrefix="/me/progression/ligue" />
             </intent-filter>
 
             <!-- Le schéma court, miroir de CFBundleURLSchemes = meeshy côté iOS. -->

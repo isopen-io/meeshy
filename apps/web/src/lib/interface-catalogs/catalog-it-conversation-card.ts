@@ -8,7 +8,6 @@ const itConversationCard = {
   'conversation.card.messages.one': '{count} messaggio',
   'conversation.card.messages.other': '{count} messaggi',
   'conversation.card.languages': 'Lingue parlate',
-  'conversation.card.join': 'Unisciti',
   'conversation.card.joinAnonymously': 'Unisciti in anonimo',
   'conversation.card.open': 'Apri',
   'conversation.card.leave': 'Esci',

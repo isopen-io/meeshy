@@ -625,6 +625,25 @@ describe('GET /links/:identifier — join requirements exposed to the client', (
   });
 });
 
+describe('GET /links/:identifier — les termes du lien portent les familles des invités (#10001)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue({
+      ...mockShareLink,
+      allowedAttachmentKinds: [],
+      conversation: { ...mockShareLink.conversation, identifier: 'world' },
+    });
+    app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('World Wide : texte et audio, même quand le lien ne liste rien — le plafond est sur la conversation', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.link.allowedAttachmentKinds).toEqual(['text', 'audio']);
+  });
+});
+
 describe('GET /links/:identifier — meeshy conversation (all users have access)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

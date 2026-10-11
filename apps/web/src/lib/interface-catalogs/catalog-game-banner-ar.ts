@@ -9,6 +9,8 @@ const ar = {
   'game.meeshes.none': 'لا Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meesh',
+  'game.star_fragments.one': '{count} شظية نجم',
+  'game.star_fragments.other': '{count} شظايا نجم',
   'game.tier.etincelle': 'شرارة',
   'game.tier.lueur': 'وميض',
   'game.tier.lumiere': 'نور',

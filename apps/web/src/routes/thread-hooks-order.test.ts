@@ -96,6 +96,8 @@ const HOOK_NAMES = [
   'useThreadReadingMode',
   'useThreadCompose',
   'useThreadJump',
+  // #10003 — ce que le composeur offre : droits du lecteur et familles de l'invité.
+  'useComposerAccess',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [

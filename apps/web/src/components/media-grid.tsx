@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useContext, useState } from 'react';
 
 
 import type { Attachment } from '@/lib/api/types';
@@ -16,6 +16,7 @@ import {
   type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
+import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
 import { PIECE_RATIO_ATTRIBUTE, pieceAspectRatio } from '@/lib/view/message-preview';
 import { READER_LOCALE } from '@/lib/reader';
 
@@ -164,6 +165,7 @@ export const MediaGrid = memo(function MediaGrid({
   readonly maskedTap?: 'open' | 'reveal' | 'none';
 }) {
   const maskedAttachment = useAttachmentMasked();
+  const highlighted = useContext(HighlightedPieceContext);
   /* UNE CASE MASQUÉE S'OUVRE SI ELLE A QUELQUE CHOSE À OUVRIR (#8008) — la
      même règle qu'`ImageTile` : sans URL (la lecture souveraine retient le
      fichier au serveur, #6862), aucun bouton, faute de quoi le toucher
@@ -204,10 +206,22 @@ export const MediaGrid = memo(function MediaGrid({
      la paire et la case gauche du triplet, et laissait le quadruple — deux
      rangées `1fr 1fr`, le seul mécanisme dont la hauteur de rangée dépend
      désormais de la largeur servie — sans aucun témoin de forme. */
+  /* LA CASE SE NOMME (#9907) — `data-piece` est ce que l'appui long lit pour
+     viser la pièce, et la case qui porte la pièce citée s'éclaire au saut
+     (#9911) ; une pièce au-delà de la quatrième s'éclaire sur la case « +N ». */
+  const highlightedIndex = highlighted === null ? -1 : items.findIndex((a) => a.id === highlighted);
+  const litIndex = highlightedIndex === -1 ? -1 : Math.min(highlightedIndex, visible.length - 1);
+  const pieceMark = (index: number) => ({
+    'data-piece': items[index]!.id,
+    ...(index === litIndex
+      ? { 'data-piece-highlighted': '', style: { outline: '3px solid var(--accent)', outlineOffset: -3, zIndex: 1 } }
+      : {}),
+  });
   const cellShape = (index: number) => ({
     'data-slot-width': cellSizes[index]!.width,
     'data-slot-height': cellSizes[index]!.height,
     [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(items[index]!),
+    ...pieceMark(index),
   });
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
@@ -217,7 +231,7 @@ export const MediaGrid = memo(function MediaGrid({
          sur ELLE, et la visionneuse reçoit la pièce en clair (`Attachments`,
          `revealedAttachment`). */
       return (
-        <div key={attachment.id} className={CELL_CLASS[frame]} {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}>
+        <div key={attachment.id} className={CELL_CLASS[frame]} {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }} {...pieceMark(index)}>
           <MaskedAttachment attachment={attachment} fill tap={tap} {...openable(attachment, index)} />
         </div>
       );

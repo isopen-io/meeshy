@@ -57,6 +57,9 @@ const mintBodySchema = {
   properties: {
     // Borné : un identifiant d'idempotence est un UUID, pas un champ libre.
     requestId: { type: 'string', minLength: 8, maxLength: 64 },
+    // Une Meesh ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : tout autre moyen est refusé en 400, AVANT
+    // toute écriture — jamais ignoré en silence (une frappe en points que le client n'a pas demandée).
+    payWith: { type: 'string', enum: ['points'] },
   },
   additionalProperties: false,
 } as const;

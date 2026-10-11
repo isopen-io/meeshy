@@ -34,6 +34,8 @@ struct ConversationContextMenuView: View {
     let canInvite: Bool
     let isLocked: Bool
     let isArchived: Bool
+    /// Faux pour Global d'un mineur, rangée d'office aux archives (#9929).
+    var canToggleArchive = true
     let isBlockableDM: Bool
     let isBlocked: Bool
     /// Renommable = conversation de groupe/communauté (pas un DM).
@@ -262,12 +264,14 @@ struct ConversationContextMenuView: View {
 
             separator
 
-            actionRow(
-                icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
-                label: isArchived
-                    ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
-                    : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main)
-            ) { onArchive(); onDismiss() }
+            if canToggleArchive {
+                actionRow(
+                    icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
+                    label: isArchived
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
+                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main)
+                ) { onArchive(); onDismiss() }
+            }
 
             if isBlockableDM {
                 divider

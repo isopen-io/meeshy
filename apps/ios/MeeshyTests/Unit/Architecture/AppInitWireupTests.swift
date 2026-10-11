@@ -437,6 +437,15 @@ final class AppInitWireupTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    func test_reelSwitchIntervals_reachMetricKit() throws {
+        let source = try appSource("Meeshy/Features/Main/Views/ReelInstantSwitch.swift")
+
+        XCTAssertTrue(source.contains("MXMetricManager.makeLogHandle(category: \"ReelSwitch\")"))
+        XCTAssertTrue(source.contains("mxSignpost(.begin"))
+        XCTAssertTrue(source.contains("mxSignpost(.end"))
+        XCTAssertTrue(MeeshyMetricsSubscriber.mediaCategories.contains("ReelSwitch"))
+    }
+
     // MARK: - Helpers
 
     /// Extrait une portion de `apps/ios/meeshy.sh`, commentaires `#` retirés :

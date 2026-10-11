@@ -37,6 +37,9 @@ import { deferAfterResponse, type AfterResponse } from '../utils/after-response'
 import { recordShareLinkVisit } from '../services/conversations/shareLinkVisits';
 import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/link-visitor';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
+import { extractUserAgent } from '../services/GeoIPService';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -159,7 +162,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                     id: { type: 'string' },
                     title: { type: 'string' },
                     type: { type: 'string', enum: ['direct', 'group'] },
-                    allowViewHistory: { type: 'boolean' }
+                    allowViewHistory: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema
                   }
                 },
                 linkId: { type: 'string', description: 'Original link ID' },
@@ -233,6 +237,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         key: linkId,
         authContext: undefined,
         requestIp: resolveClientIp(request),
+        requestUserAgent: extractUserAgent(request),
         profile: {
           firstName: body.firstName,
           lastName: body.lastName,
@@ -331,7 +336,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                     id: { type: 'string' },
                     title: { type: 'string' },
                     type: { type: 'string', enum: ['direct', 'group'] },
-                    allowViewHistory: { type: 'boolean' }
+                    allowViewHistory: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema
                   }
                 }
               }
@@ -497,6 +503,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
                 allowAnonymousFiles: { type: 'boolean', description: 'Guests may send files' },
                 allowAnonymousImages: { type: 'boolean', description: 'Guests may send images' },
                 allowViewHistory: { type: 'boolean', description: 'Guests may read messages posted before they joined' },
+                // #10001 — les familles qu'un invité peut joindre (null : pas de restriction par famille).
+                allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                 // #7794 — logo et bannière du groupe, et les types RÉELS
                 // (le schéma ne connaissait que `direct`/`group`). Rien qui
                 // identifie un membre : l'invité ne voit personne avant
@@ -587,9 +595,11 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         allowAnonymousFiles: true,
         allowAnonymousImages: true,
         allowViewHistory: true,
+        allowedAttachmentKinds: true,
         conversation: {
           select: {
             id: true,
+            identifier: true,
             title: true,
             description: true,
             type: true,
@@ -754,6 +764,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           allowAnonymousFiles: shareLink.allowAnonymousFiles,
           allowAnonymousImages: shareLink.allowAnonymousImages,
           allowViewHistory: shareLink.allowViewHistory,
+          allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
           conversation: shareLink.conversation,
           creator: shareLink.creator,
           // Nouvelles statistiques

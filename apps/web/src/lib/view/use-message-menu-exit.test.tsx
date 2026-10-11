@@ -68,7 +68,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       readerLocale: 'fr-FR',
       viewerId: 'u-viewer',
       canStar: false,
-      onReply: () => {},
+      reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });
     return null;

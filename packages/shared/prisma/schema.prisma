@@ -63,7 +63,23 @@ type AnonymousSessionDetails {
   sessionTokenHash  String
   country           String?
   deviceFingerprint String?
+  /// Le poste RÉDUIT relevé à l'entrée par lien (#10102) — absent sur toute
+  /// session antérieure, et sans User-Agent lisible. Voir `AnonymousClientDescriptor`.
+  client            AnonymousClientDescriptor?
   connectedAt       DateTime
+}
+
+/// Le poste d'un invité, RÉDUIT (#10102) : un nom et une version MAJEURE pour le
+/// navigateur et le système, la famille d'appareil. Jamais la chaîne User-Agent,
+/// ni le modèle, ni le fabricant (`describeGuestClient`,
+/// services/gateway/src/services/conversations/guestClient.ts). Lu par la seule
+/// fiche de modération de World Wide (`GET /world/participants/:participantId`).
+type AnonymousClientDescriptor {
+  browser        String?
+  browserVersion String?
+  os             String?
+  osVersion      String?
+  deviceType     String?
 }
 
 /// Profile info captured for an anonymous participant
@@ -796,6 +812,14 @@ model ConversationShareLink {
   allowAnonymousFiles    Boolean   @default(false)
   allowAnonymousImages   Boolean   @default(true)
   allowViewHistory       Boolean   @default(true)
+  /// Familles de pièces jointes ouvertes aux INVITÉS (anonymes) de ce lien (#10001) :
+  /// `text`, `audio`, `image`, `pdf` (`types/guest-attachment-kinds.ts`). Vide — la
+  /// valeur de toute ligne écrite avant la colonne — = aucune restriction par famille,
+  /// `allowAnonymousFiles` / `allowAnonymousImages` s'appliquent comme avant. Non vide :
+  /// elle seule décide, sur la signature et le décodage du contenu ENTIER, à
+  /// l'upload (tus, REST) comme à l'envoi (REST, socket). Les comptes ne sont jamais
+  /// concernés. World Wide est plafonnée à `text` + `audio` par sa conversation.
+  allowedAttachmentKinds String[]  @default([])
   /// Si true, seuls les utilisateurs avec compte peuvent rejoindre (bloque l'accès anonyme)
   requireAccount         Boolean   @default(false)
   requireNickname        Boolean   @default(true)
@@ -5203,7 +5227,7 @@ model GloryLedger {
   userId    String   @db.ObjectId
   /// Jamais zéro ; négatif seulement pour une correction.
   delta     Int
-  /// "mint" | "level" | "flame-record" | "mission-gold" | "achievement" | "league" | "season" | "prestige" | "correction"
+  /// "mint" | "level" | "flame-record" | "mission-gold" | "achievement" | "league" | "season" | "prestige" | "chest" | "correction"
   reason    String
   actorId   String?  @db.ObjectId
   /// L'IDEMPOTENCE : `mint:<requestId>`, `level:<n>`, `flame-record:<jours>`…
@@ -5255,15 +5279,24 @@ model DailyMission {
 /// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de
 /// mission consommés et coffre du jour.
 model GameDay {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String    @db.ObjectId
-  dayKey         String
-  rerollCount    Int       @default(0)
-  chestClaimedAt DateTime?
-  chestPoints    Int?
-  chestFragment  Boolean?
-  chestFreeze    Boolean?
-  createdAt      DateTime  @default(now())
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String    @db.ObjectId
+  dayKey           String
+  rerollCount      Int       @default(0)
+  chestClaimedAt   DateTime?
+  /// Le TOTAL crédité, prime comprise.
+  chestPoints      Int?
+  /// UN fragment d'étoile trouvé (une chance sur six) — compté dans le total collecté du compte
+  /// (`star-fragments.ts`, lu, jamais incrémenté).
+  chestFragment    Boolean?
+  chestFreeze      Boolean?
+  /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
+  chestGlory       Int?
+  /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
+  /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
+  chestBonus       String?
+  chestBonusPoints Int?
+  createdAt        DateTime  @default(now())
 
   @@unique([userId, dayKey])
 }

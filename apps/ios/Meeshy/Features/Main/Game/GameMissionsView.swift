@@ -118,7 +118,7 @@ struct GameMissionsView: View {
                 }
                 GameChestCard(
                     chest: game.chest, opening: chestOpening, online: online, error: errors.chest,
-                    haptics: haptics, onClaim: onClaim, missions: missions
+                    haptics: haptics, onClaim: onClaim, missions: missions, starFragments: game.starFragments
                 )
             }
         }
@@ -281,13 +281,16 @@ private struct GameChestCard: View {
     let onClaim: () -> Void
     /// Les missions du jour : ce que le coffre attend, dit dans ses précisions.
     let missions: GameBlock.Missions
+    /// Les fragments d'étoile collectés (#10011) — `nil` devant un serveur antérieur.
+    let starFragments: StarFragmentsTotal?
 
     @State private var play = 0
     @State private var rewarded: Bool
 
     init(chest: GameBlock.Chest, opening: Bool, online: Bool, error: String?, haptics: GameHapticsProviding,
-         onClaim: @escaping () -> Void, missions: GameBlock.Missions) {
+         onClaim: @escaping () -> Void, missions: GameBlock.Missions, starFragments: StarFragmentsTotal? = nil) {
         self.missions = missions
+        self.starFragments = starFragments
         self.chest = chest
         self.opening = opening
         self.online = online
@@ -344,8 +347,25 @@ private struct GameChestCard: View {
             case .claimed:
                 GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Reviens demain pour le prochain.", bundle: .main))
             }
+            // Le contenu CERTAIN et la prime possible, dits avant l'ouverture (#10011) : l'effort des missions du
+            // jour, et le cours de la prochaine Meesh du compte.
+            if phase == .locked || phase == .ready, let today = chest.today {
+                GameNote(text: GameCopy.chestToday(today))
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("game.chest.today")
+                if let bonusLine = GameCopy.chestBonusOdds(today, odds: chest.odds) {
+                    GameNote(text: bonusLine)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("game.chest.bonus")
+                }
+            }
             GameNote(text: oddsLine)
                 .multilineTextAlignment(.center)
+            if let starFragments {
+                GameNote(text: GameCopy.starFragments(starFragments.collected))
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("game.starFragments")
+            }
             if !opening {
                 GameErrorLine(message: error, identifier: "game.chest.error")
             }
@@ -363,15 +383,17 @@ private struct GameChestCard: View {
             guard !rewarded else { return }
             rewarded = true
             play += 1
-            haptics.play(GameHapticPattern.chest(rewards: 1 + (reward.fragment ? 1 : 0) + (reward.freeze ? 1 : 0)))
+            haptics.play(GameHapticPattern.chest(rewards: GameChestLines.of(reward).count))
         }
     }
 
+    /// Les bornes et les deux tirages, avant l'ouverture : les points suivent les missions, le fragment d'étoile et
+    /// le gel ont leur chance dite (#10011).
     private var oddsLine: String {
         let odds = chest.odds
         return String(
             localized: "game.chest.odds",
-            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) · \(GameCopy.chance(odds.fragment)) d’un fragment · \(GameCopy.chance(odds.freeze)) d’un gel",
+            defaultValue: "\(GameCopy.formatCount(odds.minPoints)) à \(GameCopy.points(odds.maxPoints)) selon tes missions · \(GameCopy.chance(odds.fragment)) d’un fragment d’étoile · \(GameCopy.chance(odds.freeze)) d’un gel",
             bundle: .main
         )
     }

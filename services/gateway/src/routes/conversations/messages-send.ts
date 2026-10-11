@@ -34,6 +34,8 @@ import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
 import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withQuoteServedToReader } from './ephemeralReaderDeadlines';
@@ -438,6 +440,16 @@ export function registerSendMessageRoute(
             code: ErrorCode.NEWCOMER_SLOW_MODE,
             details: { retryAfter }
           });
+        }
+        // #9927 — un mineur déclaré dans Meeshy Global : définitif, donc 403,
+        // avec le code que les clients récents lisent.
+        if (result.code === GLOBAL_ADULTS_ONLY_CODE) {
+          return sendForbidden(reply, result.error || MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
+        }
+        // #10001 — la famille d'une pièce fermée aux invités de ce lien : 403,
+        // avec le code stable que les clients localisent.
+        if (result.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) {
+          return sendForbidden(reply, result.error, { code: result.code });
         }
         if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
           return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages');

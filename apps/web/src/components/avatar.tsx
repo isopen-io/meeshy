@@ -351,7 +351,7 @@ export function Avatar({
     <Link
       to="userProfile"
       params={{ username: cible.username }}
-      onClick={peekProfileOnClick(cible.username)}
+      onClick={peekProfileOnClick(cible.username, { displayName: name ?? null, avatar: src ?? null })}
       className="avatar-profile-link"
       style={sizeVar}
       aria-label={nomme('a11y.avatar.profile')}

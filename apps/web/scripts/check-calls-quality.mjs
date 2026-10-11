@@ -117,7 +117,7 @@ const whileAudioFlows = async (page, waitFor, timeout) => {
 };
 
 const startConnectedVideoCall = async (page) => {
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row] a');
   const first = await page.$eval('[data-row]', (el) => el.getAttribute('data-row'));
   await page.click(`[data-row="${first}"] a`);

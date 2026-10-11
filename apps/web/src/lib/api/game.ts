@@ -4,6 +4,7 @@ import type {
   FlameFreezeResponse,
   FlameRelightResponse,
   GameBlock,
+  GameChestReward,
   GameMission,
   GuideSeenResponse,
   MissionRerollResponse,
@@ -137,8 +138,29 @@ const isMissions = (value: unknown): boolean =>
     rerollAvailable: isBool,
   });
 
+/**
+ * Le contenu du coffre (#10011) : `points` (total crédité, prime comprise), `fragment` (UN fragment d'étoile) et
+ * `freeze` sont ceux d'hier ; la Gloire et la prime S'AJOUTENT — un coffre d'avant elles n'en porte pas.
+ */
 const isChestReward = (value: unknown): boolean =>
-  shape(value, { points: (v) => isInt(v), fragment: isBool, freeze: isBool });
+  shape(value, {
+    points: (v) => isInt(v),
+    fragment: isBool,
+    freeze: isBool,
+    glory: optional((v) => isInt(v)),
+  });
+
+const CHEST_BONUSES = ['none', 'fifth', 'whole'] as const;
+
+const isChestContent = (value: unknown): boolean =>
+  shape(value, {
+    points: (v) => isInt(v),
+    glory: (v) => isInt(v),
+    bonusWhole: optional((v) => isInt(v)),
+    bonusFifth: optional((v) => isInt(v)),
+  });
+
+const isStarFragments = (value: unknown): boolean => shape(value, { collected: (v) => isInt(v) });
 
 const isChest = (value: unknown): boolean =>
   shape(value, {
@@ -149,9 +171,39 @@ const isChest = (value: unknown): boolean =>
         maxPoints: (n) => isInt(n),
         fragment: isFraction,
         freeze: isFraction,
+        minGlory: optional((n) => isInt(n)),
+        maxGlory: optional((n) => isInt(n)),
+        bonusWhole: optional(isFraction),
+        bonusFifth: optional(isFraction),
       }),
     reward: orNull(isChestReward),
   });
+
+/** La prime d'un coffre ouvert : illisible, elle tombe seule (comme le contrat Zod, `.catch(undefined)`). */
+const readableReward = <R extends GameChestReward>(reward: R): R => {
+  const { bonus, bonusPoints, ...rest } = reward;
+  const bonusOk = bonus !== undefined && (CHEST_BONUSES as readonly string[]).includes(bonus);
+  const pointsOk = bonusPoints !== undefined && isInt(bonusPoints);
+  return { ...rest, ...(bonusOk ? { bonus } : {}), ...(pointsOk ? { bonusPoints } : {}) } as R;
+};
+
+/**
+ * Le contenu du jour, la prime et les fragments d'étoile collectés (#10011) sont des APPOINTS : illisibles, ils
+ * tombent seuls (comme le contrat Zod, `.catch(undefined)`), sans faire refuser le bloc.
+ */
+const withReadableAppoints = (block: GameBlock): GameBlock => {
+  const { today, reward, ...chest } = block.chest;
+  const { starFragments, ...rest } = block;
+  return {
+    ...rest,
+    ...(starFragments !== undefined && isStarFragments(starFragments) ? { starFragments } : {}),
+    chest: {
+      ...chest,
+      reward: reward === null ? null : readableReward(reward),
+      ...(today === null || (today !== undefined && isChestContent(today)) ? { today } : {}),
+    },
+  };
+};
 
 const isFlame = (value: unknown): boolean =>
   shape(value, {
@@ -198,7 +250,7 @@ const isGameBlock = (value: unknown): value is GameBlock =>
  * `readGameExtensions` : une extension illisible tombe, le bloc survit (#9526).
  */
 export const readGameBlock = (value: unknown): GameBlockV2 | null =>
-  isGameBlock(value) ? { ...withoutExtensions(value), ...readGameExtensions(value) } : null;
+  isGameBlock(value) ? { ...withoutExtensions(withReadableAppoints(value)), ...readGameExtensions(value) } : null;
 
 const API_PREFIX = '/api/v1';
 
@@ -235,6 +287,7 @@ const isChestResponse = (data: unknown): data is ChestClaimResponse =>
     status: isOneOf(['claimed', 'already-claimed']),
     reward: isChestReward,
     score: (v) => isInt(v),
+    starFragments: optional(isStarFragments),
   });
 
 const isFreezeResponse = (data: unknown): data is FlameFreezeResponse =>

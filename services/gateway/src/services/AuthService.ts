@@ -27,7 +27,7 @@ import {
   clearFailedLoginAttempts,
   lockIsVisibleTo
 } from './LoginAttemptService';
-import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../errors/custom-errors';
 import type { GlobalMembershipSocketManager } from './conversations/ensureGlobalConversationMembership';
 import { servedUserPermissions } from './admin/served-permissions';
 import {
@@ -282,22 +282,6 @@ export class AuthService {
         };
       }
 
-      // No 2FA - proceed with normal login
-      // Mettre à jour la dernière connexion avec contexte
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: {
-          isOnline: true,
-          lastActiveAt: new Date(),
-          // Login tracking (updated on each login)
-          lastLoginAt: new Date(),
-          lastLoginIp: requestContext?.ip || user.lastLoginIp,
-          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
-          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
-          // Update timezone if detected and user hasn't set one
-          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
-        }
-      });
 
       // Plus aucun code renvoyé à la connexion (#8238) : pendant le délai de
       // grâce rien n'est demandé (`quiet`), puis les clients invitent
@@ -315,11 +299,32 @@ export class AuthService {
         deviceInfo: null
       };
 
+      // #9927 — la session NAÎT avant la trace de connexion : `createSession`
+      // porte le refus de l'âge minimal (403 AGE_BELOW_MINIMUM), posé ainsi
+      // APRÈS toute preuve d'identité (mot de passe, verrou, délai de grâce,
+      // second facteur), et un compte refusé ne passe jamais « en ligne ».
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
         requestContext: requestContext || defaultContext,
         loginMethod: 'password'
+      });
+
+      // No 2FA - proceed with normal login
+      // Mettre à jour la dernière connexion avec contexte
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          isOnline: true,
+          lastActiveAt: new Date(),
+          // Login tracking (updated on each login)
+          lastLoginAt: new Date(),
+          lastLoginIp: requestContext?.ip || user.lastLoginIp,
+          lastLoginLocation: requestContext?.geoData?.location || user.lastLoginLocation,
+          lastLoginDevice: requestContext?.userAgent || user.lastLoginDevice,
+          // Update timezone if detected and user hasn't set one
+          ...(requestContext?.geoData?.timezone && !user.timezone ? { timezone: requestContext.geoData.timezone } : {})
+        }
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Session créée pour: ${user.username} - ID session.id=${session.id}`);
@@ -341,6 +346,11 @@ export class AuthService {
       // Un compte SANS mot de passe non plus (#6424) : même raison, autre
       // décision — la porte existe, elle est ailleurs.
       if (error instanceof PasswordNotSetError || error instanceof ActivationRequiresEmailProofError) {
+        throw error;
+      }
+      // #9927 — le refus de l'âge minimal (levé par `createSession`, porte de
+      // toutes les connexions) est une décision, pas une panne.
+      if (error instanceof AgeBelowMinimumError) {
         throw error;
       }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
@@ -471,6 +481,26 @@ export class AuthService {
 
       logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);
 
+
+      // Create full session
+      const socketIOUser = this.userToSocketIOUser(user);
+      const sessionToken = generateSessionToken();
+      const defaultContext: RequestContext = {
+        ip: '127.0.0.1',
+        userAgent: null,
+        geoData: null,
+        deviceInfo: null
+      };
+
+      // #9927 — même ordre que le mot de passe : la session (et son refus de
+      // l'âge minimal) vient APRÈS un second facteur valide, la trace de
+      // connexion après la session.
+      const session = await createSession({
+        userId: user.id,
+        token: sessionToken,
+        requestContext: requestContext || defaultContext,
+        loginMethod: 'two_factor'
+      });
       // Clear the temporary token and complete login
       await this.prisma.user.update({
         where: { id: user.id },
@@ -486,23 +516,6 @@ export class AuthService {
         }
       });
 
-      // Create full session
-      const socketIOUser = this.userToSocketIOUser(user);
-      const sessionToken = generateSessionToken();
-      const defaultContext: RequestContext = {
-        ip: '127.0.0.1',
-        userAgent: null,
-        geoData: null,
-        deviceInfo: null
-      };
-
-      const session = await createSession({
-        userId: user.id,
-        token: sessionToken,
-        requestContext: requestContext || defaultContext,
-        loginMethod: 'two_factor'
-      });
-
       logger.info(`[AUTH_SERVICE] ✅ Session 2FA créée pour: ${user.username} - ID: ${session.id}`);
 
       return {
@@ -514,6 +527,7 @@ export class AuthService {
       };
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('[AUTH_SERVICE] ❌ Erreur dans completeAuthWith2FA', error);
       return { success: false, error: 'Erreur lors de la vérification 2FA' };
     }

@@ -147,6 +147,17 @@
  * `saveMessage`, et une rafale simultanée d'un compte jetable lisait « rien »
  * à chaque envoi — c'est précisément le scénario que la règle doit arrêter.
  *
+ * ═══ RÈGLE 5 — GLOBAL EN LECTURE SEULE POUR UN MINEUR DÉCLARÉ (#9927) ══════
+ *
+ * Un compte dont la date de naissance déclarée donne 13 à 17 ans révolus lit
+ * le salon global sans y écrire (`minor-global`, 403 `GLOBAL_ADULTS_ONLY`).
+ * Calculée à chaque envoi depuis `User.birthDate`, sur la lecture que la
+ * règle 4 faisait déjà ; un âge non déclaré ne restreint rien. Refus DÉFINITIF
+ * (jusqu'aux 18 ans), tranché avant le débit. L'édition (`messageEditAdmission`)
+ * et la position partagée (`LocationHandler`) posent la même règle ; le
+ * transfert VERS Global passe par ce point de convergence, les réactions ne
+ * sont pas des écritures de message et restent permises.
+ *
  * ═══ CE QUE LA DÉCISION RETIENT ════════════════════════════════════════════
  *
  * - **L'état terminal ne connaît AUCUNE dispense** — ni la conversation
@@ -187,6 +198,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { isDeclaredMinor } from '@meeshy/shared/utils/age';
 import {
   isSendReservationRefused,
   newcomerSendReservationKey,
@@ -256,6 +268,16 @@ export const GLOBAL_NEWCOMER_WINDOW_HOURS = 24;
 /** Règle 4 — l'intervalle minimal entre deux messages d'un nouveau compte, en secondes. */
 export const GLOBAL_NEWCOMER_SLOW_MODE_SECONDS = 30;
 
+/**
+ * Règle 5 — le code et la phrase d'un refus `minor-global`, en UN exemplaire
+ * pour les trois transports d'envoi, l'édition et la position partagée. La
+ * phrase est celle d'`ErrorMessages[GLOBAL_ADULTS_ONLY].fr` : un client
+ * antérieur qui ignore le code affiche ce `message` tel quel.
+ */
+export const GLOBAL_ADULTS_ONLY_CODE = 'GLOBAL_ADULTS_ONLY' as const;
+export const MINOR_GLOBAL_REFUSAL_MESSAGE =
+  'Meeshy Global est en lecture seule jusqu’à vos 18 ans : vous pouvez la lire et réagir, pas y écrire.';
+
 /** Rôles `User.role` qui écrivent partout, quel que soit leur rang local. */
 const PLATFORM_STAFF_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'BIGBOSS', 'MODERATOR']);
 
@@ -278,6 +300,22 @@ export type ConversationTerminalStateRow = Pick<
   ConversationWriteStateRow,
   'isActive' | 'closedAt'
 >;
+
+/**
+ * Ce que la décision lit du COMPTE de l'expéditeur — en une seule lecture,
+ * jointe à son rang de conversation. `birthDate` (#9927) n'est demandée que
+ * par la branche Global (règle 5) ; les autres branches s'en tiennent au rôle
+ * et à l'ancienneté.
+ */
+type SenderUserSelect =
+  | { role: true; createdAt: true }
+  | { role: true; createdAt: true; birthDate: true };
+
+type SenderUserRow = {
+  role?: string | null;
+  createdAt?: Date | null;
+  birthDate?: Date | null;
+};
 
 /**
  * Les deux lectures que la décision demande, en structural.
@@ -307,8 +345,8 @@ export interface ConversationWriteReader {
   participant: {
     findUnique(args: {
       where: { id: string };
-      select: { role: true; user: { select: { role: true; createdAt: true } } };
-    }): Promise<{ role?: string | null; user?: { role?: string | null; createdAt?: Date | null } | null } | null>;
+      select: { role: true; user: { select: SenderUserSelect } };
+    }): Promise<{ role?: string | null; user?: SenderUserRow | null } | null>;
   };
   /**
    * Le dernier envoi de l'expéditeur DANS la fenêtre du mode lent.
@@ -340,7 +378,9 @@ export type ConversationWriteRefusal =
   /** L'expéditeur a écrit trop récemment pour le mode lent du conteneur. */
   | 'slow-mode-active'
   /** Règle 4 — un compte de moins de 24 h a écrit dans le salon global il y a moins de 30 s. */
-  | 'newcomer-slow-mode';
+  | 'newcomer-slow-mode'
+  /** Règle 5 — un mineur déclaré (13-17 ans) n'écrit pas dans le salon global (#9927). */
+  | 'minor-global';
 
 export type ConversationWriteAdmission =
   | {
@@ -358,7 +398,7 @@ export type ConversationWriteAdmission =
       readonly reason: ConversationWriteRefusal;
       /**
        * Secondes à attendre avant que l'envoi passe — porté par les SEULS refus
-       * temporaires (`slow-mode-active`, `newcomer-slow-mode`). Les deux autres
+       * temporaires (`slow-mode-active`, `newcomer-slow-mode`). Les autres
        * sont des refus définitifs, et annoncer une attente y ferait patienter
        * pour rien.
        */
@@ -395,6 +435,8 @@ export const describeConversationWriteRefusal = (refusal: ConversationWriteRefus
       return `Mode lent actif : réessayez dans ${refusal.retryAfterSeconds ?? 1} s`;
     case 'newcomer-slow-mode':
       return `Bienvenue ! Les nouveaux comptes écrivent un message toutes les ${GLOBAL_NEWCOMER_SLOW_MODE_SECONDS} s ici : réessayez dans ${refusal.retryAfterSeconds ?? 1} s`;
+    case 'minor-global':
+      return MINOR_GLOBAL_REFUSAL_MESSAGE;
     case 'write-role-insufficient':
     default:
       return 'Vous n’avez pas le droit d’écrire dans cette conversation';
@@ -403,6 +445,7 @@ export const describeConversationWriteRefusal = (refusal: ConversationWriteRefus
 
 export type WriteRefusalHttpResponse =
   | { readonly status: 410 | 403 }
+  | { readonly status: 403; readonly code: typeof GLOBAL_ADULTS_ONLY_CODE }
   | {
       readonly status: 429;
       readonly code: 'SLOW_MODE_ACTIVE' | 'NEWCOMER_SLOW_MODE';
@@ -427,6 +470,8 @@ export const writeRefusalHttpResponse = (refusal: ConversationWriteRefused): Wri
       return { status: 410 };
     case 'write-role-insufficient':
       return { status: 403 };
+    case 'minor-global':
+      return { status: 403, code: GLOBAL_ADULTS_ONLY_CODE };
     case 'slow-mode-active':
       return { status: 429, code: 'SLOW_MODE_ACTIVE', retryAfterSeconds: refusal.retryAfterSeconds ?? 1 };
     case 'newcomer-slow-mode':
@@ -434,6 +479,20 @@ export const writeRefusalHttpResponse = (refusal: ConversationWriteRefused): Wri
     default:
       return assertNever(reason);
   }
+};
+
+/**
+ * Le code que le point de convergence pose sur un refus — celui que les
+ * clients lisent pour distinguer « pas encore » (`NEWCOMER_SLOW_MODE`) de
+ * « pas avant tes 18 ans » (`GLOBAL_ADULTS_ONLY`). Les autres refus n'ont
+ * jamais porté de code sur ce chemin, et n'en gagnent pas.
+ */
+export const writeRefusalCode = (
+  refusal: ConversationWriteRefused
+): 'NEWCOMER_SLOW_MODE' | typeof GLOBAL_ADULTS_ONLY_CODE | undefined => {
+  if (refusal.reason === 'newcomer-slow-mode') return 'NEWCOMER_SLOW_MODE';
+  if (refusal.reason === 'minor-global') return GLOBAL_ADULTS_ONLY_CODE;
+  return undefined;
 };
 
 const ADMITTED: ConversationWriteAdmission = { admitted: true };
@@ -532,7 +591,7 @@ export async function admitConversationWriteFor(
   if (isConversationClosed(conversation)) return REFUSED('conversation-closed');
   if (!conversation) return ADMITTED;
   if (conversation.type === NEWCOMER_THROTTLED_TYPE) {
-    return admitGlobalNewcomer(prisma, { conversationId, senderParticipantId, reservations, sendId, now });
+    return admitGlobalWrite(prisma, { conversationId, senderParticipantId, reservations, sendId, now });
   }
   if (!hasWriteHierarchy(conversation)) return ADMITTED;
 
@@ -616,17 +675,27 @@ const waitSeconds = (remainingMs: number, windowSeconds: number): number =>
   Math.min(windowSeconds, Math.max(1, Math.ceil(remainingMs / 1000)));
 
 /**
- * Règle 4 — le salon global ne connaît ni rang ni mode lent configuré, mais il
- * ralentit les comptes de moins de 24 h. Une lecture (rang + rôle plateforme +
- * date de création du compte) ; la fenêtre de débit n'est lue que pour un
- * nouveau compte. Une date de création absente ne fabrique pas un « nouveau ».
+ * Règles 5 puis 4 — le salon global ne connaît ni rang ni mode lent configuré,
+ * mais il se ferme aux mineurs déclarés et ralentit les comptes de moins de
+ * 24 h. Une lecture (rang + rôle plateforme + date de création + date de
+ * naissance du compte) ; la fenêtre de débit n'est lue que pour un nouveau
+ * compte. Une date de création absente ne fabrique pas un « nouveau », une
+ * date de naissance absente ne fabrique pas un mineur.
+ *
+ * RÈGLE 5 (#9927) — de 13 à 17 ans révolus, Global se lit sans s'écrire. La
+ * règle est CALCULÉE à chaque envoi depuis `User.birthDate` (aucun état
+ * stocké : elle tombe d'elle-même le jour des 18 ans), et elle passe AVANT le
+ * mode lent : un refus définitif ne s'annonce jamais comme une attente. Aucun
+ * rôle n'en dispense — ni le staff plateforme, ni un modérateur du salon :
+ * c'est une protection du mineur, pas une police d'écriture. Un participant
+ * sans compte (anonyme) n'a pas de date de naissance, donc pas de mineur.
  *
  * Lire la base ne suffit PAS à trancher : la ligne n'existe qu'après
  * `saveMessage`, et une rafale simultanée lisait « rien » à chaque envoi. La
  * base écarte ce qui est déjà écrit ; la RÉSERVATION atomique départage les
  * envois en vol — un seul la prend, les autres attendent ce qu'elle a d'âge.
  */
-async function admitGlobalNewcomer(
+async function admitGlobalWrite(
   prisma: Pick<ConversationWriteReader, 'participant' | 'message'>,
   params: {
     readonly conversationId: string;
@@ -638,8 +707,9 @@ async function admitGlobalNewcomer(
 ): Promise<ConversationWriteAdmission> {
   const sender = await prisma.participant.findUnique({
     where: { id: params.senderParticipantId },
-    select: { role: true, user: { select: { role: true, createdAt: true } } }
+    select: { role: true, user: { select: { role: true, createdAt: true, birthDate: true } } }
   });
+  if (isDeclaredMinor(sender?.user?.birthDate, new Date(params.now))) return REFUSED('minor-global');
   const accountCreatedAt = sender?.user?.createdAt;
   if (!sender || accountCreatedAt == null) return ADMITTED;
 

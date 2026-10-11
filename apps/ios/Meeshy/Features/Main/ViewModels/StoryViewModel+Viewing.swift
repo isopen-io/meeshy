@@ -143,6 +143,9 @@ extension StoryViewModel {
     }
 
     func markViewed(storyId: String) {
+        #if DEBUG
+        VitrineRendu.shared.signaler(.story)
+        #endif
         // Fire & forget : l'état « vu » local est posé optimistiquement (local-first).
         // L'échec réseau ne déclenche PAS de toast (marquer-vu est un effet de bord de
         // fond, pas une action utilisateur attendant un feedback — un toast serait du

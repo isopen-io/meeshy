@@ -50,6 +50,11 @@ final class OnboardingViewModel: ObservableObject {
     @Published private(set) var storyReward: Int?
     /// La proposition « retrouver tes amis » de la carte 4 (#8105).
     @Published private(set) var contactsPhase: OnboardingContactsPhase = .unavailable
+    /// La carte « âge » (#9929) : la date affichée par la roue, si elle a été
+    /// CHOISIE (la confirmation l'attend), et l'état de la déclaration.
+    @Published private(set) var ageBirthDate = OnboardingAgeRules.initialBirthDate(now: Date())
+    @Published private(set) var ageDatePicked = false
+    @Published private(set) var ageState: OnboardingAgeState = .idle
 
     private(set) var storyDefaultVisibility: OnboardingStoryVisibility = .friends
     private(set) var globalConversationId: String?
@@ -70,6 +75,8 @@ final class OnboardingViewModel: ObservableObject {
     private let pause: @MainActor (Duration) async -> Void
     private let contacts: any ContactSyncProviding
     private let directory: any ContactDirectoryServiceProviding
+    private let birthDates: any BirthDateServiceProviding
+    private let signOut: @MainActor () async -> Void
 
     private var queue: [OnboardingStepId] = []
     private var producedSomething = false
@@ -109,7 +116,9 @@ final class OnboardingViewModel: ObservableObject {
         auth: any AuthServiceProviding = AuthService.shared,
         pause: (@MainActor (Duration) async -> Void)? = nil,
         contacts: any ContactSyncProviding = ContactSyncService.shared,
-        directory: any ContactDirectoryServiceProviding = ContactDirectoryService.shared
+        directory: any ContactDirectoryServiceProviding = ContactDirectoryService.shared,
+        birthDates: any BirthDateServiceProviding = BirthDateService.shared,
+        signOut: (@MainActor () async -> Void)? = nil
     ) {
         self.service = service
         self.messages = messages
@@ -124,6 +133,8 @@ final class OnboardingViewModel: ObservableObject {
         self.pause = pause ?? { try? await Task.sleep(for: $0) }
         self.contacts = contacts
         self.directory = directory
+        self.birthDates = birthDates
+        self.signOut = signOut ?? { await AuthManager.shared.logout() }
     }
 
     // MARK: - Lecture
@@ -438,6 +449,72 @@ final class OnboardingViewModel: ObservableObject {
         plannedSteps.removeAll { $0 == .email }
     }
 
+    // MARK: - Carte « âge » (#9929)
+
+    /// La roue a tourné : la date est CHOISIE, la confirmation s'ouvre.
+    func pickBirthDate(_ date: Date) {
+        ageBirthDate = date
+        ageDatePicked = true
+        if ageState == .invalid || ageState == .failed { ageState = .idle }
+    }
+
+    /// « Confirmer » : la passerelle écrit la date UNE fois et dit ce qu'elle
+    /// ferme. Un 13-17 ans perd la carte du salut dans Global, qu'il lira sans
+    /// pouvoir y écrire.
+    func declareBirthDate() async {
+        guard card == .step(.age), ageDatePicked, ageState != .sending, ageState != .refused else { return }
+        ageState = .sending
+        do {
+            let declaration = try await birthDates.setBirthDate(ageBirthDate)
+            ageState = .idle
+            if declaration.viewerWriteRestrictionGlobal { closeGlobalGreeting() }
+            await showNext()
+            await record(.age, .done)
+        } catch {
+            await ageDeclarationFailed(error as? BirthDateDeclarationError ?? .unavailable)
+        }
+    }
+
+    private func ageDeclarationFailed(_ failure: BirthDateDeclarationError) async {
+        Self.logger.info("onboarding birth date refused: \(String(describing: failure), privacy: .public)")
+        switch failure {
+        case .belowMinimumAge:
+            ageState = .refused
+        case .alreadySet:
+            // La date est déjà connue (autre appareil) : l'étape est faite, et
+            // l'état relu dit si Global reste ouverte en écriture.
+            ageState = .idle
+            if let state = try? await service.fetchState(), state.viewerWriteRestriction?.closesComposer == true {
+                closeGlobalGreeting()
+            }
+            await showNext()
+            await record(.age, .done)
+        case .unsupported:
+            ageState = .idle
+            await showNext()
+        case .invalidDate:
+            ageState = .invalid
+        case .unavailable:
+            ageState = .failed
+        }
+    }
+
+    private func closeGlobalGreeting() {
+        queue.removeAll { $0 == .global }
+        plannedSteps.removeAll { $0 == .global }
+    }
+
+    /// « J'ai compris » sous l'écran de refus : Meeshy n'est pas ouvert sous
+    /// 13 ans, la session se ferme. Le parcours n'est pas RÉGLÉ — rien n'a été
+    /// écrit, et la passerelle refusera de nouveau.
+    func acknowledgeAgeRefusal() async {
+        guard ageState == .refused else { return }
+        isPresented = false
+        awaitsRoute = false
+        card = nil
+        await signOut()
+    }
+
     // MARK: - Carte 2 — salut dans Meeshy Global
 
     func sendGreeting() async {
@@ -462,7 +539,15 @@ final class OnboardingViewModel: ObservableObject {
             await record(.global, .done)
         } catch {
             Self.logger.error("onboarding greeting failed: \(error.localizedDescription, privacy: .public)")
-            greetingState = .failed
+            // Un compte de 13 à 17 ans lit Global sans y écrire (#9929) : la
+            // carte s'efface au lieu de proposer un « réessayer » sans issue.
+            guard ConversationWriteRestriction(refusal: error)?.closesComposer == true else {
+                greetingState = .failed
+                return
+            }
+            greetingState = .idle
+            await showNext()
+            await record(.global, .skipped)
         }
     }
 

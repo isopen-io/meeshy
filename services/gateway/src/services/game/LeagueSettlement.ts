@@ -36,6 +36,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { addDays } from '@meeshy/shared/utils/game/day-prng';
 import {
+  isLeagueWeekPlaceable,
   leagueSnapshotDay,
   leagueWeekClose,
   leagueWeekKey,
@@ -65,6 +66,16 @@ const ACTIVITY_WEEKS = 3;
 const PAGE = 500;
 /** La conservation : 4 semaines après la fin de la saison. */
 export const LEAGUE_RETENTION_DAYS = 28;
+
+/**
+ * L'horizon de la purge (#9947) : les semaines d'avant ce lundi n'ont plus ni
+ * groupe, ni appartenance, ni points. `null` tant que rien n'est à purger. La
+ * purge et la lecture d'une semaine passée (`GameArchiveService`) le partagent.
+ */
+export function leagueRetentionHorizon(now: Date): string | null {
+  const season = seasonAt(addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS));
+  return season === null ? null : seasonCalendar(season)?.startDay ?? null;
+}
 /** Combien de temps, après sa fermeture, un groupe non réglé retient le placement de la semaine suivante. */
 export const SETTLEMENT_GRACE_MS = 6 * 3_600_000;
 
@@ -264,7 +275,9 @@ export class LeagueSettlement {
   }
 
   async placeWeek(weekKey: string, now: Date = new Date()): Promise<number> {
-    if (seasonAt(weekKey) === null) return 0;
+    // Les ligues ont leur propre première semaine (2026-10-12), indépendante de
+    // l'ouverture des saisons (repoussée au 2026-12-21, #10014).
+    if (!isLeagueWeekPlaceable(weekKey)) return 0;
     if ((await this.prisma.leagueGroupWeek.count({ where: { weekKey } })) > 0) return 0;
     // On attend les groupes pas encore fermés, et ceux qu'on vient de fermer le temps
     // de les régler ; un groupe dont le règlement échoue encore `SETTLEMENT_GRACE_MS`
@@ -405,12 +418,13 @@ export class LeagueSettlement {
   /**
    * Supprime groupes, appartenances et points de semaine des saisons terminées
    * depuis plus de `LEAGUE_RETENTION_DAYS` jours (conformité A-9). Les trophées
-   * gardés ne portent ni pseudonyme ni total d'un autre.
+   * gardés ne portent ni pseudonyme ni total d'un autre. Les semaines de ligue
+   * d'AVANT la saison 1 (du 2026-10-12 au 2026-12-20, #10014) forment une
+   * pré-saison qui finit avec elle : elles partent 4 semaines après le
+   * 2026-12-20, avec le premier horizon de saison.
    */
   async purgeOld(now: Date = new Date()): Promise<number> {
-    const cutoffDay = addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS);
-    const season = seasonAt(cutoffDay);
-    const horizon = season === null ? null : seasonCalendar(season)?.startDay ?? null;
+    const horizon = leagueRetentionHorizon(now);
     if (horizon === null) return 0;
     const where = { weekKey: { lt: horizon } };
     const [groups, memberships, points] = await Promise.all([

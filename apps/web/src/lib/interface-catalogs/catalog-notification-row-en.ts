@@ -12,6 +12,7 @@ const enNotificationRow = {
   'notifications.row.media.video': '🎥 Video',
   'notifications.row.media.audio': '🎵 Audio',
   'notifications.row.expired': 'expired',
+  'notifications.row.directMessage': 'Private message',
   'notifications.row.milestone.level': 'Level {level}',
   'notifications.row.milestone.streak': '{days} days in a row',
   'notifications.row.milestone.badgeReason': 'Badge unlocked · milestone {threshold}',

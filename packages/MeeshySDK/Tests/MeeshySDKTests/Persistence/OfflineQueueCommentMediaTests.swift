@@ -32,8 +32,20 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
 
     override func tearDown() async throws {
         await queue.clearAll()
+        let liveBase = try Self.liveDetachedBase()
+        await OfflineQueue.shared.configure(pool: liveBase)
         try? FileManager.default.removeItem(at: scratch)
         pool = nil
+    }
+
+    /// La file est un singleton : laissée sur la base d'Alice, dont le dossier
+    /// part au démontage, elle ferait lire à la suite suivante un fichier
+    /// effacé — « disk I/O error », puis l'assertion GRDB « unbalanced
+    /// endReadOnly() » qui tue le processus (CI 38097324923, tranche 5).
+    private static func liveDetachedBase() throws -> DatabaseQueue {
+        let base = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: base)
+        return base
     }
 
     private func source(_ name: String, _ contents: String) throws -> URL {
@@ -719,6 +731,18 @@ final class OfflineQueueCommentMediaTests: XCTestCase {
         let listed = await queue.unsentComments(postId: "post-1", ownerId: alice)
         XCTAssertTrue(listed.isEmpty, "Sans fichier, rien ne prouve à qui est la base.")
         await OfflineQueue.shared.configure(pool: pool)
+    }
+
+    // MARK: - La suite rend la file partagée sur une base vivante
+
+    func test_afterTearDown_theSharedQueueReadsALiveBase_notTheErasedFileOfAlice() async throws {
+        try await tearDown()
+
+        let configured = await OfflineQueue.shared.outboxPoolForTesting
+        let shared = try XCTUnwrap(configured)
+        let rows = try await shared.read { db in try OutboxRecord.fetchCount(db) }
+
+        XCTAssertEqual(rows, 0, "La suite suivante hérite d'une file qui lit une base vivante, jamais le fichier effacé d'Alice.")
     }
 
     // MARK: - Annuler et relancer : l'auteur seul

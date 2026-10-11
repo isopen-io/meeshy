@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react';
+
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { ActiveMembersStack } from './active-members-stack';
@@ -22,6 +24,8 @@ import { useAuthorMood } from '@/lib/view/use-author-moods';
 import { useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-conversation-viewing';
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
+import { isWide, subscribeWide } from '@/lib/view/split-query';
+import { useGuestFocus } from '@/lib/view/guest-focus';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { EngagementPill } from './engagement-pill';
@@ -152,6 +156,19 @@ export function ThreadHeader({
     storyRing: peerRing,
     details: onOpenDetails !== undefined,
   });
+  /* SUR ORDINATEUR, L'EN-TÊTE N'A PLUS À CHOISIR (#10101). Le repli est une
+     économie de TÉLÉPHONE : à 390 px, l'identité et les actions ne tiennent
+     pas ensemble. Dès 1024 px (la règle du cadre côte à côte), la bande en
+     laissait 900 vides et la conversation n'était nommée nulle part : le
+     titre et son sous-titre restent, à côté des actions — la disposition que
+     l'aperçu porte déjà (#8821). Déplier y ajoute ce qu'il ajoutait (la
+     flamme du jour, les plus actifs), sans plus rien retirer. */
+  const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
+  /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
+     liste qu'il n'a pas, et la place libérée dit où il est — le nom et
+     l'effectif, comme l'aperçu et l'ordinateur. */
+  const focus = useGuestFocus();
+  const besideIdentity = preview || wide || focus;
 
   return (
     /*
@@ -171,7 +188,7 @@ export function ThreadHeader({
     <header
       className="thread-header glass absolute inset-x-0 top-0 z-30 pt-safe"
     >
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="thread-column flex items-center gap-2 px-4 py-2">
         {/*
           LE RETOUR ET SON COMPTE — SUR LA MÊME LIGNE (#6080, retour porteur).
 
@@ -209,9 +226,10 @@ export function ThreadHeader({
           Centré dans ses 44, il aurait sauté de 11 px d'une conversation à
           l'autre — un repère de navigation qui se déplace tout seul.
         */}
-        {preview ? null : (
+        {preview || focus ? null : (
           <Link
             to="list"
+            data-thread-back=""
             className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
             style={{ color: 'var(--accent)' }}
             aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
@@ -221,7 +239,7 @@ export function ThreadHeader({
           </Link>
         )}
 
-        {preview || expanded ? (
+        {besideIdentity || expanded ? (
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h1
               className={`${group && onOpenDetails !== undefined ? '' : 'truncate '}text-title font-bold`}
@@ -262,7 +280,7 @@ export function ThreadHeader({
           </div>
         ) : null}
         {expanded && !preview ? <EngagementPill snapshot={engagement} opensProgression /> : null}
-        {preview || !expanded ? (
+        {besideIdentity || !expanded ? (
           /* GRAPPE D'ACTIONS (#5774, travail 3/3) — c'est ELLE seule qui
              s'efface en mode Bulles pendant le geste
              (`[data-chrome-header="actions"] .thread-header-actions`,
@@ -270,8 +288,8 @@ export function ThreadHeader({
              qui part (`> header`), cette classe n'y ajoute rien de plus.
              En APERÇU (#8821), elle suit l'identité au lieu de la remplacer :
              c'est le titre qui prend la place, pas un espaceur. */
-          <div className={`thread-header-actions flex ${preview ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
-            {preview ? null : <span className="flex-1" />}
+          <div className={`thread-header-actions flex ${besideIdentity ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
+            {besideIdentity ? null : <span className="flex-1" />}
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il

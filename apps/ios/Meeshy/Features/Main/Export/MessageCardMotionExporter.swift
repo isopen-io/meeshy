@@ -141,6 +141,7 @@ nonisolated enum MessageCardMotionExporter {
     ) async throws -> URL {
         let url = temporaryURL(.video)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+        writer.shouldOptimizeForNetworkUse = true
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: pixels.width,
@@ -238,6 +239,7 @@ nonisolated enum MessageCardMotionExporter {
         let url = temporaryURL(.video)
         session.outputURL = url
         session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
         await session.export()
         guard session.status == .completed else { throw Failure.mux(session.error) }
         try? FileManager.default.removeItem(at: video)

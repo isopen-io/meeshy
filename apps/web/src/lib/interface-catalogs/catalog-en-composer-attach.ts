@@ -3,13 +3,13 @@ import type { ComposerAttachCatalogSlice } from './catalog-fr-composer-attach';
 /** The composer's attachment drawer and « Mes stickers » (#7938) — see `catalog-fr-composer-attach.ts`. */
 const enComposerAttach = {
   'composer.attach.group': 'Attachment types',
-  'composer.attach.handle': 'Panel handle',
   'composer.attach.photo': 'Photos',
   'composer.attach.photo.action': 'Choose photos',
   'composer.attach.camera': 'Camera',
   'composer.attach.camera.action': 'Take a photo',
   'composer.attach.file': 'File',
   'composer.attach.file.action': 'Choose a file',
+  'composer.drop.veil': 'Drop to attach',
   'composer.attach.contact': 'Contact',
   'composer.attach.contact.action': 'Share a contact',
   'composer.contact.failed': "This contact can't be shared",
@@ -28,7 +28,6 @@ const enComposerAttach = {
   'composer.mic.unavailable': 'Microphone unavailable on this device',
   'composer.openSettings': 'Settings',
   'composer.location.chip': 'PLACE',
-  'composer.location.unknown': 'Unknown place',
   'composer.location.remove': 'Remove the location',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Send a sticker',
@@ -90,6 +89,20 @@ const enComposerAttach = {
   'composer.effects.entrance': 'Entrance animation',
   'composer.effects.permanent': 'Permanent effect',
   'composer.effects.clearAll': 'Clear all',
+  'composer.guest.kind.text': 'Text file (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Image',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'text files (.txt)',
+  'composer.guest.inline.audio': 'audio',
+  'composer.guest.inline.image': 'images',
+  'composer.guest.inline.pdf': 'PDFs',
+  'composer.guest.note': 'Without an account, {title} accepts your messages, your voice notes, plus {kinds}.',
+  'composer.guest.createAccount': 'Create an account to share everything else.',
+  'composer.guest.refused.kind': '“{name}” isn’t accepted here: only {kinds} go through.',
+  'composer.guest.refused.size': '“{name}” is too large: {max} at most.',
+  'send.failure.guestKind': 'this file isn’t accepted here',
+  'send.failure.guestTooLarge': 'this file is too large here ({max} at most)',
 } satisfies ComposerAttachCatalogSlice;
 
 export default enComposerAttach;

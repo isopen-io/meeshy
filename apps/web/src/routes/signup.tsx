@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
+import { AuthCloseChip, AuthColumn } from '@/components/auth-column';
+import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { EmailTakenActions } from '@/components/email-taken-actions';
@@ -29,7 +30,6 @@ import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type 
 import type { ApiResult } from '@/lib/api/http';
 import { type Country } from '@/lib/countries';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { forgetPendingVerification } from '@/lib/pending-verification';
@@ -60,7 +60,7 @@ import {
 } from '@/lib/view/signup-phases';
 import { placeSignupFailure, usernameRefusalMessage, type SignupFeedback, type SignupField } from '@/lib/view/auth-feedback';
 import { forgetReferralCode } from '@/lib/view/referral-memory';
-import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
+import { landingAfterSession, safeNextPath, sessionNextPath } from '@/lib/session-guard';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -117,7 +117,7 @@ type FocusedField = SignupField | 'referral' | null;
  * de grâce (#8238) — l'écran du code n'est plus une étape.
  */
 export function landingAfterRegistration(input: { readonly next: string | null }): string {
-  return safeNextPath(input.next) ?? href('onboarding');
+  return sessionNextPath(input.next) ?? href('onboarding');
 }
 
 /** `next` lu sur l'ADRESSE plutôt que par `useSearch()` : l'écran est monté
@@ -287,7 +287,7 @@ export default function SignupScreen({
     setVerification(awaitingCode(result.data, form.email.trim().toLowerCase()));
   }
 
-  const interfaceLanguage = currentInterfaceLanguage();
+  const interfaceLanguage = useInterfaceLanguage();
   const isEmailTaken = feedback.showSignIn && takenEmail === form.email;
   const emailError = isEmailTaken
     ? translate(interfaceLanguage, 'signup.emailTaken.message')
@@ -312,7 +312,7 @@ export default function SignupScreen({
   if (signInLinkEmail !== null) {
     return (
       <AuthColumn className="min-h-0">
-        <AuthColumnBar to="login" search={loginSearch} />
+        <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
           next={next}
@@ -326,7 +326,7 @@ export default function SignupScreen({
 
   return (
     <AuthColumn className="min-h-0">
-      <AuthColumnBar to="login" search={loginSearch} />
+      <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6" data-signup-phase={phase}>
         <form id="signup-form" onSubmit={handlePrimary} noValidate>

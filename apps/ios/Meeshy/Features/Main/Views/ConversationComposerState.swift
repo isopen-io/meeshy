@@ -72,6 +72,9 @@ struct ConversationComposerState {
     var showPhotoPicker = false
     var showCamera = false
     var showFilePicker = false
+    /// #10006 — la feuille « Partager dans … » d'un invité dont le lien
+    /// restreint les familles : elle remplace le sélecteur de fichiers libre.
+    var showGuestAttachmentSheet = false
     var selectedPhotoItems: [PhotosPickerItem] = []
     /// True while `selectedPhotoItems` is being primed with the recent-media
     /// strip's multi-selection before presenting the PhotosPicker. Priming
@@ -103,6 +106,10 @@ struct ConversationComposerState {
 
     // Reply & Edit
     var pendingReplyReference: ReplyReference? = nil
+    /// **La pièce que la réponse en attente cite** (#9908) — posée par
+    /// « Répondre » du menu d'une pièce. Elle ne voyage que tant que la citation
+    /// la NOMME encore (`MessagePieceTarget.replyAnchor`).
+    var pendingReplyPieceId: String? = nil
     /// **La porte de focus du composer** (#6003), liée à
     /// `UniversalComposerBar.focusTrigger`. Levée par `requestReplyFocus`,
     /// remise à `false` par la barre dès qu'elle a pris le focus.

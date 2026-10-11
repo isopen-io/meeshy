@@ -129,6 +129,11 @@ public actor ClientInfoProvider {
             // ne sert qu'aux clients qui les déclarent — les autres lisent les cinq
             // paliers d'origine. Un NIVEAU, comme `X-Canvas-Caps`, jamais un booléen.
             GameRoutes.versionHeader: String(GameRoutes.waveVersion),
+            // Les capacités NOMMÉES de ce binaire (#9929) — l'étape `age` de
+            // l'onboarding n'est servie qu'à qui la déclare. Ici, comme les deux
+            // niveaux ci-dessus : le seul point par lequel passent les deux
+            // funnels et l'extension de notification.
+            ClientCapabilities.headerName: ClientCapabilities.headerValue(),
             // Porte de version cliente (C4a/C4b, spec §C3). Le gateway lit
             // `x-app-version` pour juger le binaire face à `MIN_APP_VERSION`
             // (`services/gateway/src/utils/appVersion.ts`) et `x-app-platform`

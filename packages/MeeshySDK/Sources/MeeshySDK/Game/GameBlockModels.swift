@@ -247,11 +247,28 @@ public struct GameBlock: Codable, Sendable, Equatable {
         public let odds: ChestOdds
         /// Révélé une fois ouvert ; `nil` avant.
         public let reward: DailyChest?
+        /// Le contenu CERTAIN du jour (#10011) — points, Gloire, primes possibles en points — dit avant
+        /// l'ouverture. `nil` devant un serveur antérieur, avant le tirage des missions, ou s'il est illisible (il
+        /// tombe seul).
+        public let today: ChestContent?
 
-        public init(status: Status, odds: ChestOdds, reward: DailyChest?) {
+        public init(status: Status, odds: ChestOdds, reward: DailyChest?, today: ChestContent? = nil) {
             self.status = status
             self.odds = odds
             self.reward = reward
+            self.today = today
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case status, odds, reward, today
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            status = try container.decode(Status.self, forKey: .status)
+            odds = try container.decode(ChestOdds.self, forKey: .odds)
+            reward = try container.decodeIfPresent(DailyChest.self, forKey: .reward)
+            today = (try? container.decodeIfPresent(ChestContent.self, forKey: .today)) ?? nil
         }
     }
 
@@ -317,6 +334,9 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public let boosts: Boosts
     /// Clés de guide déjà vues (moments et étapes d'intégration).
     public let guideSeen: [String]
+    /// Les fragments d'étoile collectés (#10011), toutes sources confondues — `nil` devant un serveur antérieur
+    /// ou s'il est illisible (il tombe seul). Le serveur seul le tient.
+    public let starFragments: StarFragmentsTotal?
     /// Les sept extensions de la vague 2 (ligue, duo, saison, trophées, Atlas, Prestige,
     /// visibilité) — chacune lue SEULE, `nil` quand le serveur ne la sert pas (#9384 à #9392).
     public let wave2: GameWave2
@@ -324,6 +344,8 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public var league: GameLeagueBlock? { wave2.league }
     public var duo: GameDuoBlock? { wave2.duo }
     public var season: GameSeasonBlock? { wave2.season }
+    /// La saison à venir tant qu'aucune n'est ouverte (#10014).
+    public var seasonUpcoming: GameUpcomingSeasonBlock? { wave2.seasonUpcoming }
     public var trophies: GameTrophiesBlock? { wave2.trophies }
     public var atlas: GameAtlasBlock? { wave2.atlas }
     public var prestige: GamePrestigeBlock? { wave2.prestige }
@@ -331,7 +353,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
 
     public init(level: Level, glory: Glory, treasury: TreasuryStanding, mint: GameMintPreview,
                 missions: Missions, chest: Chest, flame: Flame, boosts: Boosts, guideSeen: [String],
-                wave2: GameWave2 = .empty) {
+                starFragments: StarFragmentsTotal? = nil, wave2: GameWave2 = .empty) {
         self.level = level
         self.glory = glory
         self.treasury = treasury
@@ -341,11 +363,12 @@ public struct GameBlock: Codable, Sendable, Equatable {
         self.flame = flame
         self.boosts = boosts
         self.guideSeen = guideSeen
+        self.starFragments = starFragments
         self.wave2 = wave2
     }
 
     private enum CodingKeys: String, CodingKey {
-        case level, glory, treasury, mint, missions, chest, flame, boosts, guideSeen
+        case level, glory, treasury, mint, missions, chest, flame, boosts, guideSeen, starFragments
     }
 
     public init(from decoder: Decoder) throws {
@@ -359,6 +382,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
         flame = try container.decode(Flame.self, forKey: .flame)
         boosts = try container.decode(Boosts.self, forKey: .boosts)
         guideSeen = try container.decode([String].self, forKey: .guideSeen)
+        starFragments = (try? container.decodeIfPresent(StarFragmentsTotal.self, forKey: .starFragments)) ?? nil
         wave2 = GameWave2(from: decoder)
     }
 
@@ -373,6 +397,7 @@ public struct GameBlock: Codable, Sendable, Equatable {
         try container.encode(flame, forKey: .flame)
         try container.encode(boosts, forKey: .boosts)
         try container.encode(guideSeen, forKey: .guideSeen)
+        try container.encodeIfPresent(starFragments, forKey: .starFragments)
         try wave2.encode(into: encoder)
     }
 

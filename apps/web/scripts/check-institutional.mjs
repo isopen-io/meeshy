@@ -109,7 +109,7 @@ const constate = (ok, what) => {
 
 // --- Visite 1 : froide. Elle installe le service worker et son précache.
 const p1 = await context.newPage();
-await p1.goto(`${BASE}/`, { waitUntil: 'load' });
+await p1.goto(`${BASE}/index.html`, { waitUntil: 'load' });
 await p1.waitForFunction(() => navigator.serviceWorker.controller !== null, null, {
   timeout: 20_000,
 });

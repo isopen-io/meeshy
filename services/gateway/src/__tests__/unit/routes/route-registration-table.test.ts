@@ -201,7 +201,19 @@ describe('ROUTE_TABLE (#4278)', () => {
     // `/api/v1/users`. Les douze autres routes de la vague 2 du jeu rejoignent
     // `me-game` (même préfixe) : aucune entrée de plus pour elles. Aucun alias,
     // aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(75);
+    // 76 : #9927 ajoute `me-birth-date` — l'adresse NEUVE `PUT
+    // /api/v1/me/birth-date` (la date de naissance, déclarée une fois),
+    // montage autonome. Aucun alias, aucune route retirée ni renommée.
+    // 77 : #10000 ajoute `world` — l'adresse NEUVE et PUBLIQUE `GET
+    // /api/v1/world` (l'entrée de World Wide que lit la landing de
+    // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
+    // renommée.
+    // 78 : #10102 ajoute `world-participant-card` — l'adresse NEUVE `GET
+    // /api/v1/world/participants/:participantId` (la fiche de modération d'un
+    // participant de World Wide, réservée aux rôles au-delà de USER), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée. Vérifié : le
+    // manifeste passe de 656 à 657 routes, soit exactement celle-là.
+    expect(ROUTE_TABLE.length).toBe(78);
   });
 });
 

@@ -20,6 +20,7 @@ public enum StoryExportSequence {
             guard let session = AVAssetExportSession(asset: composition, presetName: preset) else { continue }
             session.outputURL = output
             session.outputFileType = .mp4
+            session.shouldOptimizeForNetworkUse = true
             // `export()` sans argument — même piège que `StoryExportOutro` avec
             // le `export(to:as:)` d'iOS 18.
             await session.export()

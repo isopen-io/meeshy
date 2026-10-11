@@ -81,4 +81,24 @@ extension MessageListViewController {
             scrollToMessage(localId: localId)
         }
     }
+
+    /// **Le saut vers le message cité** — zone 3 d'une citation (#9911). La
+    /// cellule qui porte la citation remet SA référence : si elle nomme une
+    /// pièce, la tuile s'allumera quand le saut se posera (`flashCell`).
+    func followQuote(_ reference: ReplyReference?, to targetId: String) {
+        pendingPieceSpotlight = QuotedPieceSpotlight.pieceId(of: reference, jumpingTo: targetId)
+            .map { (localId: resolveLocalId(targetId), pieceId: $0) }
+        scrollToMessage(localId: targetId)
+    }
+
+    /// Le saut s'est posé sur `indexPath` : la pièce citée s'allume, une fois.
+    func releasePieceSpotlight(at indexPath: IndexPath) {
+        guard let pending = pendingPieceSpotlight,
+              dataSource?.itemIdentifier(for: indexPath) == .message(localId: pending.localId) else { return }
+        pendingPieceSpotlight = nil
+        let pieceId = pending.pieceId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.pieceSpotlight.send(pieceId)
+        }
+    }
 }

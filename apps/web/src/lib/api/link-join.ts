@@ -3,6 +3,8 @@ import type { ConversationType } from '@meeshy/shared/types/conversation';
 import * as anonymousEndpoints from '@meeshy/shared/api/endpoints/anonymous';
 import * as linksEndpoints from '@meeshy/shared/api/endpoints/links';
 
+import { isGuestKind, type GuestKind } from '../send/guest-attachment-kinds';
+
 import type { DataSource } from './config';
 import type { ApiFailure, ApiResult, HttpTransport } from './http';
 
@@ -107,6 +109,10 @@ export type GuestTerms = {
    * tu pourras » (#7796). Absents : refusés, comme toute permission. */
   readonly mayImages: boolean;
   readonly mayFiles: boolean;
+  /** `allowedAttachmentKinds` (#10001, #10121) — les familles que le lien ouvre
+   * à l'invité : un tableau décide SEUL, `null` ne restreint rien, ABSENT d'un
+   * serveur d'avant le champ. Une famille inconnue est écartée. */
+  readonly attachmentKinds?: readonly GuestKind[] | null;
 };
 
 export type LinkInvitation = {
@@ -182,6 +188,7 @@ const WireInvitation = z.object({
   allowAnonymousMessages: optionalFlag,
   allowAnonymousImages: optionalFlag,
   allowAnonymousFiles: optionalFlag,
+  allowedAttachmentKinds: z.optional(z.nullable(z.array(z.string()))),
   allowedLanguages: z.optional(z.nullable(z.array(z.string()))),
   conversation: z.object({
     title: optionalText,
@@ -303,6 +310,7 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
       mayWrite: wire.allowAnonymousMessages === true,
       mayImages: wire.allowAnonymousImages === true,
       mayFiles: wire.allowAnonymousFiles === true,
+      ...servedAttachmentKinds(wire.allowedAttachmentKinds),
     },
   };
 }
@@ -455,6 +463,11 @@ export type LinkGuestJoined = {
   readonly sessionToken: string;
   readonly readsHistory: boolean;
   readonly mayWrite: boolean;
+  /** `entry.allowedAttachmentKinds` (#10001) — les familles que le lien ouvre
+   * à l'invité, `null` quand il ne restreint rien, ABSENT d'un serveur
+   * d'avant le champ. Une famille inconnue est écartée : une liste qui n'en
+   * porte que d'inconnues n'ouvre rien. */
+  readonly attachmentKinds?: readonly GuestKind[] | null;
 };
 
 const WireGuestJoined = z.object({
@@ -466,10 +479,16 @@ const WireGuestJoined = z.object({
       z.object({
         canViewHistory: optionalFlag,
         rights: z.optional(z.nullable(z.object({ canSendMessages: optionalFlag }))),
+        allowedAttachmentKinds: z.optional(z.nullable(z.array(z.string()))),
       }),
     ),
   ),
 });
+
+function servedAttachmentKinds(served: readonly string[] | null | undefined): { readonly attachmentKinds?: readonly GuestKind[] | null } {
+  if (served === undefined) return {};
+  return { attachmentKinds: served === null ? null : served.filter(isGuestKind) };
+}
 
 const UNREADABLE_GUEST_JOIN = 'UNREADABLE_GUEST_JOIN';
 const MEMBER_NOT_GUEST = 'MEMBER_NOT_GUEST';
@@ -524,6 +543,7 @@ export async function joinLinkAsGuest(
       sessionToken: wire.sessionToken,
       readsHistory: wire.entry?.canViewHistory === true,
       mayWrite: wire.entry?.rights?.canSendMessages === true,
+      ...servedAttachmentKinds(wire.entry?.allowedAttachmentKinds),
     },
   };
 }

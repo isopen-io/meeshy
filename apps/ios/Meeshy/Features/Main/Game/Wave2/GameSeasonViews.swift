@@ -11,11 +11,16 @@ import MeeshyUI
 /// seulement par la couleur. Toucher une étape à réclamer la réclame ; le bouton nomme la prochaine.
 ///
 /// Aucune saison ouverte (`season` absente) est une VALEUR, pas une panne : la prochaine commence bientôt.
+///
+/// `focus` : la saison qu'un lien du Jeu nomme (#9947). Passée, elle montre mon palmarès ; future, son thème et sa
+/// date d'ouverture ; en cours, l'écran ci-dessous, inchangé (`GameSeasonFocusScreen`, #10018).
 struct GameSeasonPage: View {
+    var focus: GamePageFocus? = nil
+
     var body: some View {
         GamePageShell(title: GameText.seasonTitle, identifier: "game.season.page") {
             GameWave2Host { model, game in
-                GameSeasonScreen(model: model, game: game)
+                GameSeasonFocusScreen(model: model, game: game, focus: focus?.seasonNumber)
             }
         }
     }
@@ -31,6 +36,8 @@ struct GameSeasonScreen: View {
                 GameSeasonHeader(season: season)
                 GameSeasonPath(model: model, season: season)
                 GameSeasonSeal(model: model, season: season, held: game.treasury.held)
+            } else if let upcoming = game.seasonUpcoming {
+                GameSeasonUpcoming(upcoming: upcoming)
             } else {
                 GameCard(title: GameText.seasonTitle) {
                     GameNote(text: GameText.seasonNone)
@@ -38,6 +45,34 @@ struct GameSeasonScreen: View {
                 .accessibilityIdentifier("game.season.none")
             }
         }
+    }
+}
+
+// MARK: - La saison à venir (#10014)
+
+/// Avant l'ouverture de la saison 1 (lundi 2026-12-21), le serveur sert `seasonUpcoming` : l'écran dit
+/// laquelle vient, quand, et sur quel thème — jamais un vide. Une donnée de calendrier, la même pour tous.
+struct GameSeasonUpcoming: View {
+    let upcoming: GameUpcomingSeasonBlock
+
+    static func line(_ upcoming: GameUpcomingSeasonBlock, locale: Locale = .current) -> String {
+        GameText.seasonUpcoming(number: GameCopy.formatCount(upcoming.number), date: GameWave2Format.day(upcoming.startDay, locale: locale))
+    }
+
+    var body: some View {
+        GameCard(tint: MeeshyColors.brandPrimary, title: GameText.seasonTitle) {
+            Text(Self.line(upcoming))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                .foregroundColor(ThemeManager.shared.textPrimary)
+            if let theme = GameWave2Format.seasonTheme(upcoming.themeKey) {
+                Text(GameText.seasonTheme(theme: theme))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+            }
+            GameNote(text: GameText.seasonHow(per: GameCopy.formatCount(GameSeason.starsPerStep)))
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game.season.upcoming")
     }
 }
 

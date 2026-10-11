@@ -16,7 +16,6 @@ const itIdentity = {
   'avatar.menu.view_story': 'Vedi la storia',
   'avatar.menu.conversation_details': 'Dettagli della conversazione',
   'conversation.details.title': 'Dettagli della conversazione',
-  'conversation.details.open': 'Vedi i dettagli di {name}',
   'conversation.details.type.direct': 'Chat privata',
   'conversation.details.type.group': 'Gruppo',
   'conversation.details.type.public': 'Conversazione pubblica',

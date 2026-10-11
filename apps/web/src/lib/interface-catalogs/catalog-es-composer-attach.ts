@@ -3,13 +3,13 @@ import type { ComposerAttachCatalogSlice } from './catalog-fr-composer-attach';
 /** The composer's attachment drawer and « Mes stickers » (#7938) — see `catalog-fr-composer-attach.ts`. */
 const esComposerAttach = {
   'composer.attach.group': 'Tipos de adjuntos',
-  'composer.attach.handle': 'Tirador del panel',
   'composer.attach.photo': 'Fotos',
   'composer.attach.photo.action': 'Elegir fotos',
   'composer.attach.camera': 'Cámara',
   'composer.attach.camera.action': 'Hacer una foto',
   'composer.attach.file': 'Archivo',
   'composer.attach.file.action': 'Elegir un archivo',
+  'composer.drop.veil': 'Suelta para adjuntar',
   'composer.attach.contact': 'Contacto',
   'composer.attach.contact.action': 'Compartir un contacto',
   'composer.contact.failed': 'Este contacto no se puede compartir',
@@ -28,7 +28,6 @@ const esComposerAttach = {
   'composer.mic.unavailable': 'Micrófono no disponible en este dispositivo',
   'composer.openSettings': 'Ajustes',
   'composer.location.chip': 'LUGAR',
-  'composer.location.unknown': 'Lugar desconocido',
   'composer.location.remove': 'Quitar la ubicación',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Enviar un sticker',
@@ -90,6 +89,20 @@ const esComposerAttach = {
   'composer.effects.entrance': 'Animación de entrada',
   'composer.effects.permanent': 'Efecto permanente',
   'composer.effects.clearAll': 'Borrar todo',
+  'composer.guest.kind.text': 'Archivo de texto (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Imagen',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'archivos de texto (.txt)',
+  'composer.guest.inline.audio': 'audio',
+  'composer.guest.inline.image': 'imágenes',
+  'composer.guest.inline.pdf': 'PDF',
+  'composer.guest.note': 'Sin cuenta, {title} acepta tus mensajes, tus notas de voz y también {kinds}.',
+  'composer.guest.createAccount': 'Crea una cuenta para compartir el resto.',
+  'composer.guest.refused.kind': '«{name}» no se acepta aquí: solo pasan {kinds}.',
+  'composer.guest.refused.size': '«{name}» es demasiado grande: {max} como máximo.',
+  'send.failure.guestKind': 'este archivo no se acepta aquí',
+  'send.failure.guestTooLarge': 'este archivo es demasiado grande aquí ({max} como máximo)',
 } satisfies ComposerAttachCatalogSlice;
 
 export default esComposerAttach;

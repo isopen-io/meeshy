@@ -3,13 +3,13 @@ import type { ComposerAttachCatalogSlice } from './catalog-fr-composer-attach';
 /** The composer's attachment drawer and « Mes stickers » (#7938) — see `catalog-fr-composer-attach.ts`. */
 const arComposerAttach = {
   'composer.attach.group': 'أنواع المرفقات',
-  'composer.attach.handle': 'مقبض اللوحة',
   'composer.attach.photo': 'الصور',
   'composer.attach.photo.action': 'اختيار صور',
   'composer.attach.camera': 'الكاميرا',
   'composer.attach.camera.action': 'التقاط صورة',
   'composer.attach.file': 'ملف',
   'composer.attach.file.action': 'اختيار ملف',
+  'composer.drop.veil': 'أفلِت للإرفاق',
   'composer.attach.contact': 'جهة اتصال',
   'composer.attach.contact.action': 'مشاركة جهة اتصال',
   'composer.contact.failed': 'لا يمكن مشاركة جهة الاتصال هذه',
@@ -28,7 +28,6 @@ const arComposerAttach = {
   'composer.mic.unavailable': 'الميكروفون غير متاح على هذا الجهاز',
   'composer.openSettings': 'الإعدادات',
   'composer.location.chip': 'موقع',
-  'composer.location.unknown': 'مكان غير معروف',
   'composer.location.remove': 'إزالة الموقع',
   'composer.attach.sticker': 'ملصق',
   'composer.attach.sticker.action': 'إرسال ملصق',
@@ -90,6 +89,20 @@ const arComposerAttach = {
   'composer.effects.entrance': 'حركة الدخول',
   'composer.effects.permanent': 'تأثير دائم',
   'composer.effects.clearAll': 'مسح الكل',
+  'composer.guest.kind.text': 'ملف نصي (.txt)',
+  'composer.guest.kind.audio': 'صوت',
+  'composer.guest.kind.image': 'صورة',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'ملفات نصية (.txt)',
+  'composer.guest.inline.audio': 'ملفات صوتية',
+  'composer.guest.inline.image': 'صور',
+  'composer.guest.inline.pdf': 'ملفات PDF',
+  'composer.guest.note': 'بدون حساب، يقبل {title} رسائلك ورسائلك الصوتية وأيضًا {kinds}.',
+  'composer.guest.createAccount': 'أنشئ حسابًا لمشاركة الباقي.',
+  'composer.guest.refused.kind': '«{name}» غير مقبول هنا: لا يمر إلا {kinds}.',
+  'composer.guest.refused.size': '«{name}» كبير جدًا: {max} كحد أقصى.',
+  'send.failure.guestKind': 'هذا الملف غير مقبول هنا',
+  'send.failure.guestTooLarge': 'هذا الملف كبير جدًا هنا ({max} كحد أقصى)',
 } satisfies ComposerAttachCatalogSlice;
 
 export default arComposerAttach;

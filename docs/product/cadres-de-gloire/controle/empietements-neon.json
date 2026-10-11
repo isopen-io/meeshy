@@ -1,0 +1,244 @@
+[
+ {
+  "file": "neon-ambassadeur-1",
+  "overlap": 5795,
+  "face": 0,
+  "depth": 60,
+  "bbox": [
+   88,
+   635,
+   451,
+   715
+  ],
+  "windowPx": 167291
+ },
+ {
+  "file": "neon-ambassadeur-2",
+  "overlap": 4655,
+  "face": 0,
+  "depth": 62,
+  "bbox": [
+   86,
+   643,
+   453,
+   715
+  ],
+  "windowPx": 164259
+ },
+ {
+  "file": "neon-ambassadeur-3",
+  "overlap": 6258,
+  "face": 0,
+  "depth": 58,
+  "bbox": [
+   35,
+   636,
+   501,
+   756
+  ],
+  "windowPx": 175514
+ },
+ {
+  "file": "neon-ambassadeur-4",
+  "overlap": 67,
+  "face": 0,
+  "depth": 7,
+  "bbox": [
+   92,
+   700,
+   101,
+   709
+  ],
+  "windowPx": 160097
+ },
+ {
+  "file": "neon-ambassadeur-5",
+  "overlap": 10216,
+  "face": 0,
+  "depth": 45,
+  "bbox": [
+   63,
+   643,
+   476,
+   754
+  ],
+  "windowPx": 186522
+ },
+ {
+  "file": "neon-legende-1",
+  "overlap": 7368,
+  "face": 0,
+  "depth": 44,
+  "bbox": [
+   57,
+   641,
+   508,
+   755
+  ],
+  "windowPx": 172907
+ },
+ {
+  "file": "neon-legende-2",
+  "overlap": 2847,
+  "face": 0,
+  "depth": 54,
+  "bbox": [
+   93,
+   644,
+   432,
+   706
+  ],
+  "windowPx": 156114
+ },
+ {
+  "file": "neon-legende-3",
+  "overlap": 5033,
+  "face": 0,
+  "depth": 58,
+  "bbox": [
+   54,
+   646,
+   471,
+   757
+  ],
+  "windowPx": 171488
+ },
+ {
+  "file": "neon-legende-4",
+  "overlap": 2116,
+  "face": 0,
+  "depth": 37,
+  "bbox": [
+   369,
+   635,
+   500,
+   722
+  ],
+  "windowPx": 160984
+ },
+ {
+  "file": "neon-legende-5",
+  "overlap": 6981,
+  "face": 0,
+  "depth": 51,
+  "bbox": [
+   48,
+   638,
+   475,
+   754
+  ],
+  "windowPx": 175298
+ },
+ {
+  "file": "neon-mythe-a",
+  "overlap": 6166,
+  "face": 0,
+  "depth": 76,
+  "bbox": [
+   50,
+   631,
+   204,
+   710
+  ],
+  "windowPx": 156681
+ },
+ {
+  "file": "neon-mythe-b",
+  "overlap": 6488,
+  "face": 0,
+  "depth": 56,
+  "bbox": [
+   72,
+   644,
+   466,
+   757
+  ],
+  "windowPx": 163669
+ },
+ {
+  "file": "neon-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 148455
+ },
+ {
+  "file": "neon-oracle-a",
+  "overlap": 2615,
+  "face": 0,
+  "depth": 59,
+  "bbox": [
+   91,
+   638,
+   447,
+   705
+  ],
+  "windowPx": 156327
+ },
+ {
+  "file": "neon-oracle-b",
+  "overlap": 3186,
+  "face": 0,
+  "depth": 47,
+  "bbox": [
+   395,
+   647,
+   537,
+   719
+  ],
+  "windowPx": 163713
+ },
+ {
+  "file": "neon-oracle-c",
+  "overlap": 4875,
+  "face": 0,
+  "depth": 60,
+  "bbox": [
+   86,
+   647,
+   453,
+   713
+  ],
+  "windowPx": 166377
+ },
+ {
+  "file": "neon-orateur-a",
+  "overlap": 3093,
+  "face": 0,
+  "depth": 35,
+  "bbox": [
+   32,
+   550,
+   487,
+   657
+  ],
+  "windowPx": 167016
+ },
+ {
+  "file": "neon-orateur-b",
+  "overlap": 2980,
+  "face": 0,
+  "depth": 50,
+  "bbox": [
+   86,
+   637,
+   453,
+   713
+  ],
+  "windowPx": 158771
+ },
+ {
+  "file": "neon-orateur-c",
+  "overlap": 1388,
+  "face": 0,
+  "depth": 53,
+  "bbox": [
+   100,
+   643,
+   439,
+   698
+  ],
+  "windowPx": 159617
+ }
+]

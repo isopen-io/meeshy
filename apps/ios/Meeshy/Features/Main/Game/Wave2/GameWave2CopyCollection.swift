@@ -45,7 +45,7 @@ extension GameText {
 
     static var seasonStepLocked: String { String(localized: "game2.season.step.locked", defaultValue: "à venir", bundle: .main) }
 
-    static var seasonRewardFragment: String { String(localized: "game2.season.reward.fragment", defaultValue: "Un fragment", bundle: .main) }
+    static var seasonRewardFragment: String { String(localized: "game2.season.reward.fragment", defaultValue: "Un fragment d’étoile", bundle: .main) }
 
     static var seasonRewardFreeze: String { String(localized: "game2.season.reward.freeze", defaultValue: "Un gel de Flamme", bundle: .main) }
 
@@ -62,6 +62,11 @@ extension GameText {
     }
 
     static var seasonNone: String { String(localized: "game2.season.none", defaultValue: "Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.", bundle: .main) }
+
+    /// « La saison 1 ouvre le 21 décembre 2026. » — la saison à venir (#10014), plutôt qu'un vide.
+    static func seasonUpcoming(number: String, date: String) -> String {
+        String(localized: "game2.season.upcoming", defaultValue: "La saison \(number) ouvre le \(date).", bundle: .main)
+    }
 
     static var seasonSealTitle: String { String(localized: "game2.season.seal.title", defaultValue: "Rangée Sceau", bundle: .main) }
 

@@ -5,6 +5,12 @@ import { Link } from '@/routes/route-table';
 import { AuthAmbient } from './auth-chrome';
 import { Glyph } from './glyph';
 
+/* L'écran des moins de 13 ans (#9928) voyage avec la géométrie des pages
+   d'accès : seules ces pages le montrent, et passer par ce module le range
+   dans leur chunk commun au lieu d'en ouvrir un de plus, dont le nom
+   pèserait sur la première peinture (budgets.json › first_paint). */
+export { AgeBlocked, isAgeBelowMinimum } from './age-blocked';
+
 /**
  * LA GÉOMÉTRIE DES PAGES D'ACCÈS — celle de la connexion, écrite UNE fois
  * (#6643, D-72).
@@ -77,21 +83,35 @@ export function AuthColumnBar({
 }) {
   return (
     <div className="flex shrink-0 items-center px-2 pt-1">
-      <Link
-        to={to}
-        {...(search === undefined ? {} : { search })}
-        replace
-        className="grid place-items-center rounded-chip"
-        style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-        aria-label="Fermer"
-      >
-        <Glyph name="x" size={20} />
-      </Link>
+      <AuthCloseChip to={to} {...(search === undefined ? {} : { search })} />
       {title === undefined ? null : (
         <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
           {title}
         </h1>
       )}
     </div>
+  );
+}
+
+/** LA CROIX QUI REFERME (D-72) — celle de la barre, aussi posée en tête de
+ * l'en-tête public de l'inscription (#10007). */
+export function AuthCloseChip({
+  to,
+  search,
+}: {
+  readonly to: 'login' | 'list';
+  readonly search?: Readonly<Record<string, string | undefined>>;
+}) {
+  return (
+    <Link
+      to={to}
+      {...(search === undefined ? {} : { search })}
+      replace
+      className="grid place-items-center rounded-chip"
+      style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
+      aria-label="Fermer"
+    >
+      <Glyph name="x" size={20} />
+    </Link>
   );
 }

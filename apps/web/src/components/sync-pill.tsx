@@ -6,6 +6,7 @@ import { outboxStore } from '@/lib/send/outbox-store';
 import { useOnline } from '@/lib/net/online';
 import { useRoute } from '@/lib/router';
 import { nextSyncPillExpiry, resolveSyncPill, syncPillLabel } from '@/lib/view/sync-pill';
+import { belowScreenTop } from '@/lib/view/safe-area';
 import { syncPillTop } from '@/lib/view/sync-pill-offset';
 import { pillAnnouncesOffline } from '@/lib/view/sync-pill-voice';
 
@@ -101,7 +102,7 @@ export function SyncPill() {
   return (
     <div
       className="sync-pill pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
-      style={{ top: `calc(var(--safe-top, env(safe-area-inset-top, 0px)) + ${top}px)` }}
+      style={{ top: belowScreenTop(top) }}
       role="status"
       aria-live="polite"
     >

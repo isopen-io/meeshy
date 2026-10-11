@@ -171,8 +171,8 @@ struct ConversationMediaGalleryView: View {
     var composableMedia: ((MessageAttachment) -> Bool)?
 
     /// **« Réagir » existe-t-il sur CETTE pièce ?** (#8095) `nil` ⇒ sur toutes.
-    /// Une pièce dont le porteur n'est pas chargé ne peut pas refléter sa
-    /// réaction : le bouton n'y existe pas (loi 4).
+    /// Une pièce dont le porteur est inconnu ne peut pas refléter sa réaction :
+    /// le bouton n'y existe pas (loi 4). Hors fenêtre, l'index la repeint (#9910).
     var reactableMedia: ((MessageAttachment) -> Bool)?
 
     /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce

@@ -188,7 +188,8 @@ public actor ConversationStore {
 
     // MARK: - Hydration
 
-    public func hydrate(_ conv: MeeshyConversation) {
+    public func hydrate(_ incoming: MeeshyConversation) {
+        let conv = incoming.imposingServedArchive()
         conversations[conv.id] = conv
         // Seed or refresh the per-conv subject and the list snapshot.
         if let existing = subjects.subject(for: conv.id, initial: { conv }) {
@@ -198,7 +199,7 @@ public actor ConversationStore {
     }
 
     public func hydrateList(_ convs: [MeeshyConversation]) {
-        for conv in convs {
+        for conv in convs.map({ $0.imposingServedArchive() }) {
             conversations[conv.id] = conv
             if let existing = subjects.subject(for: conv.id, initial: { conv }) {
                 existing.send(conv)
@@ -252,7 +253,7 @@ public actor ConversationStore {
             // moteur pour un résultat identique.
             merged = ConversationSyncEngine.reconcileUnread(
                 incoming: merged, local: existing, openConversationId: nil
-            )
+            ).imposingServedArchive()
             conversations[merged.id] = merged
             if let subject = subjects.subject(for: merged.id, initial: { merged }) {
                 subject.send(merged)
@@ -287,6 +288,9 @@ public actor ConversationStore {
         guard var conv = conversations[convId] else {
             throw ConversationStoreError.unknownConversation(convId)
         }
+        // Global d'un mineur ne sort pas des archives (#9929) : aucun geste
+        // optimiste, aucune écriture en file — la passerelle l'ignorerait.
+        if case .setArchived(false) = mutation, conv.isArchiveImposed { return }
         let snapshot = conv.userState
 
         // 1. Optimistic mutation + candidate version bump.
@@ -891,7 +895,8 @@ public actor ConversationStore {
         return s
     }
 
-    private func commit(_ conv: MeeshyConversation) {
+    private func commit(_ candidate: MeeshyConversation) {
+        let conv = candidate.imposingServedArchive()
         conversations[conv.id] = conv
         subjects.send(conv)
         publishList()

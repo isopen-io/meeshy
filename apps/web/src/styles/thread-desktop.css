@@ -1,0 +1,116 @@
+/*
+ * LE FIL SUR ORDINATEUR, PLUS VIVANT SANS ÊTRE CHARGÉ (#10101) — retour
+ * porteur du 2026-10-11, en compte comme en invité. Mesuré sur les captures
+ * d'avant (1280 et 1600 px, deux schémas), ce qui rendait le fil terne :
+ *
+ * - la bande pleine largeur du composeur recouvrait la lueur d'accent de
+ *   #10004 et se lisait comme une dalle, sombre ou blanche ;
+ * - aucune rangée ne répondait au pointeur, et l'heure ne se montrait qu'au
+ *   défilement — une habitude de doigt, pas de souris ;
+ * - le vocal, le fichier et la citation couraient sur toute la colonne (une
+ *   onde de 780 px pour douze secondes) ;
+ * - un séparateur de jour isolé au milieu d'une colonne de 900 px ne
+ *   structurait plus rien.
+ *
+ * Rien de neuf dans la matière : l'accent de la conversation (`--accent`,
+ * `lib/accent.ts`), les encres et filets des jetons iOS, le rayon du composeur
+ * (22, note « base » de la planche). Le verre reste au site unique
+ * (`styles/glass.css`) : c'est `ThreadComposerChrome` qui le pose sur le dock.
+ *
+ * SOUS 1024 PX, CETTE FEUILLE NE DÉCLARE RIEN — aucune règle hors de ses
+ * deux requêtes, toutes deux bornées à 1024 px
+ * (`components/thread-desktop.test.tsx`) : le téléphone est exactement celui
+ * d'avant, souris comprise. Les largeurs bornées se mesurent au montage de la
+ * rangée, comme le reste ; aucune règle ne change une hauteur APRÈS lui (ni au
+ * survol, ni pendant le geste) : le virtualiseur n'a rien à remesurer en
+ * cours de lecture.
+ */
+@media (min-width: 1024px) {
+  /* LE DOCK DU COMPOSEUR — le verre posé sur la colonne seule, au rayon du
+     composeur, coiffé d'un filet et d'une lueur à l'accent qui le détache du
+     fil au lieu d'une arête dure. Au ras du bord bas : rien ne passe dessous
+     sans s'y flouter. */
+  .thread-composer-dock {
+    border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+    border-block-end: 0;
+    border-start-start-radius: 22px;
+    border-start-end-radius: 22px;
+    box-shadow: 0 -12px 32px -16px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+
+  /* LA LIGNE D'UNE RANGÉE PLATE SE RELIT SANS PERDRE LE RETOUR — 42rem,
+     environ 85 caractères, au lieu des 790 px qu'offrait une colonne de 56rem
+     (115 caractères). Le corps seul se borne : la colonne méta le suit, et le
+     verre de l'élue garde la largeur de la rangée. */
+  [data-reading-mode] [data-row-body] {
+    max-width: 42rem;
+  }
+
+  /* LES CARTES GARDENT UNE LARGEUR DE CARTE — celles de la planche « Thread »
+     (vocal et fichier en `inline-flex`), plutôt que toute la colonne. DANS
+     UNE RANGÉE DE MESSAGE seulement (`[data-message]`, plate ou bulle) : la
+     feuille vaut pour tout le document une fois le chunk du fil chargé, et la
+     médiathèque de la conversation rend les mêmes cartes en rangées de liste. */
+  [data-message] .voice-card {
+    max-width: 28rem;
+  }
+  [data-message] .file-card {
+    max-width: 24rem;
+  }
+  [data-reading-mode] [data-quote-card] {
+    max-width: 32rem;
+  }
+
+  /* LES SÉPARATEURS TIRENT UN FILET de part et d'autre de leur pilule : le
+     jour en encre discrète, le premier non-lu en couleur primaire (D-L3, la
+     même que sa pilule). Des pseudo-éléments d'un pixel, centrés : la
+     hauteur de la rangée ne change pas. */
+  [data-day-separator],
+  [data-unread-separator] {
+    align-items: center;
+    gap: 12px;
+  }
+  [data-day-separator]::before,
+  [data-day-separator]::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-ios-hairline);
+  }
+  [data-unread-separator]::before,
+  [data-unread-separator]::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: color-mix(in srgb, var(--color-ios-brand) 45%, transparent);
+  }
+}
+
+/*
+ * AU POINTEUR FIN, SUR ORDINATEUR, LA RANGÉE PLATE RÉPOND AU SURVOL — bornée
+ * à 1024 px comme le reste : sous ce seuil, la géométrie des rangées que
+ * mesurent les gates du téléphone (Chromium y a un pointeur fin) ne bouge pas
+ * d'un pixel. Un voile d'accent peint en ombre INTÉRIEURE (le fond de la
+ * rangée porte déjà la mise en évidence d'un saut et la sélection, en style
+ * posé par le composant : une ombre s'y superpose sans les réécrire), et la
+ * colonne méta (heure, accusé) se révèle comme pendant le geste
+ * (`thread-scene.css`, `main[data-revealed]`). La rangée ÉLUE garde son
+ * tampon : `[data-elected='true'] .focal-meta` y prime. Repeint d'une seule
+ * rangée, aucun script.
+ */
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  /* La bordure LIBRE de la rangée accueille l'icône « Répondre » du pointeur
+     fin (#8899, `thread-menu.css` : 44 px à 4 px du bord, centrée en
+     hauteur). Le contenu lui laisse sa place : l'heure révélée au survol ne
+     passe plus sous le disque, et rien ne bouge au survol. */
+  [data-reading-mode] [data-row-content] {
+    padding-inline-end: 36px;
+  }
+  [data-reading-mode]:hover {
+    box-shadow: inset 0 0 0 100vmax color-mix(in srgb, var(--accent) 7%, transparent);
+  }
+  [data-reading-mode]:hover .focal-meta {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

@@ -1,4 +1,5 @@
 import { Glyph } from '@/components/glyph';
+import { useGuestFocus } from '@/lib/view/guest-focus';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -15,12 +16,15 @@ import { Link } from '@/routes/route-table';
  * d'écran d'où revenir : aucun chevron, aucune porte « Retour aux
  * conversations » (la feuille a sa croix), et l'état remplit la feuille au lieu
  * du viewport.
+ *
+ * L'INVITÉ SANS COMPTE (#10100) n'a pas de liste non plus : ni chevron, ni
+ * « Retour aux conversations » — deux portes vers la connexion.
  */
 
 type PreviewProp = { readonly preview?: boolean | undefined };
 
 const rootClass = (preview: boolean | undefined) =>
-  `flex ${preview === true ? 'h-full' : 'h-dvh'} flex-col overflow-hidden pt-safe`;
+  `thread-root flex ${preview === true ? 'h-full' : 'h-app'} flex-col overflow-hidden pt-safe`;
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -31,16 +35,17 @@ const rootClass = (preview: boolean | undefined) =>
  * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
  */
 function MinimalHeader({ preview }: PreviewProp) {
+  const focus = useGuestFocus();
   return (
     <header className="glass z-10 shrink-0">
-      <div className="flex items-center gap-2 px-4 py-2" style={preview === true ? { minHeight: 60 } : undefined}>
+      <div className="thread-column flex items-center gap-2 px-4 py-2" style={preview === true ? { minHeight: 60 } : undefined}>
         {/* `--color-ios-ink`, jamais `--color-ios-brand` (#6367) : le chevron
             posé sur cette bande de verre, pire cas (flou désactivé, D-51),
             mesure 2,78:1 en clair / 2,53:1 en sombre avec l'indigo nu —
             sous la barre AA non-texte (3:1). `--color-ios-ink` y tient
             (même ton, même densité que `thread-header.tsx`, mesuré par
             `scripts/lib/glass-contrast.test.ts`). */}
-        {preview === true ? null : (
+        {preview === true || focus ? null : (
           <Link
             to="list"
             className="grid size-11 shrink-0 place-items-center rounded-chip"
@@ -58,6 +63,7 @@ function MinimalHeader({ preview }: PreviewProp) {
 /** `status === 'refused'` (D-6) — 403/404 confondus : « elle n'existe pas,
  * ou vous n'en êtes pas membre », jamais l'un ou l'autre distingué. */
 export function ThreadRefused({ preview }: PreviewProp = {}) {
+  const focus = useGuestFocus();
   return (
     <div className={rootClass(preview)}>
       <MinimalHeader preview={preview} />
@@ -71,7 +77,7 @@ export function ThreadRefused({ preview }: PreviewProp = {}) {
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           Elle n’existe pas, ou vous n’en êtes pas membre.
         </p>
-        {preview === true ? null : (
+        {preview === true || focus ? null : (
           <Link
             to="list"
             className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
@@ -121,7 +127,7 @@ export function ThreadSkeleton({ preview }: PreviewProp = {}) {
   return (
     <div className={rootClass(preview)}>
       <MinimalHeader preview={preview} />
-      <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2" aria-busy="true" aria-label="Chargement du fil">
+      <div className="thread-column flex flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2" aria-busy="true" aria-label="Chargement du fil">
         {SKELETON_ROWS.map((i) => (
           <div key={i} className="flex items-end gap-2" style={{ height: SKELETON_ROW_HEIGHT, flexShrink: 0 }}>
             <div className="shrink-0 rounded-full" style={{ width: 28, height: 28, backgroundColor: 'var(--color-ios-card)' }} />

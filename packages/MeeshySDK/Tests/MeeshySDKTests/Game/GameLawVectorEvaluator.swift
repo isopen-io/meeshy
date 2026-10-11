@@ -153,6 +153,7 @@ enum GameLawVectorEvaluator {
         case "missions-draw": return missionsDraw(input)
         case "mission-reroll": return missionReroll(input)
         case "chest": return chest(input)
+        case "star-fragments": return starFragments(input)
         case "guide": return try guide(input)
         default: return try evaluateWave2(law: law, input: input)
         }
@@ -402,8 +403,17 @@ enum GameLawVectorEvaluator {
     }
 
     private static func chest(_ input: GameJSON) -> GameJSON {
-        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"))
-        return object(["points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze)])
+        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"), effort: int(input, "effort"),
+                                    nextMeeshPrice: int(input, "nextMeeshPrice"))
+        return object([
+            "points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze),
+            "glory": .int(chest.glory), "bonus": .string((chest.bonus ?? .noBonus).rawValue), "bonusPoints": .int(chest.bonusPoints),
+        ])
+    }
+
+    private static func starFragments(_ input: GameJSON) -> GameJSON {
+        let seasons = input["seasons"].arrayValue.map { $0.arrayValue.compactMap(\.intValue) }
+        return object(["collected": .int(GameStarFragments.collected(chestDays: int(input, "chestDays"), seasons: seasons))])
     }
 
     // MARK: Guide

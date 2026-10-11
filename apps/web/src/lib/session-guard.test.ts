@@ -20,7 +20,9 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'conversationsNew',
   'progression',
   'progressionLigue',
+  'progressionLigueSemaine',
   'progressionSaison',
+  'progressionSaisonNumero',
   'progressionVitrine',
   'progressionAtlas',
   'progressionPrestige',
@@ -500,4 +502,12 @@ describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', ()
     expect(landingAfterSession('//evil.com', '/')).toBe('/');
     expect(landingAfterSession('https://evil.com', '/accueil')).toBe('/accueil');
   });
+});
+
+describe('/world est ouvert à tous : l’entrée ET le fil de l’invité y vivent (#10100)', () => {
+  for (const sessionStatus of ['anonymous', 'guest', 'authenticated'] as const) {
+    test(`${sessionStatus} ⇒ allow`, () => {
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'world' })).toBe('allow');
+    });
+  }
 });

@@ -31,6 +31,12 @@ const ar = {
   'onboarding.email.sent': 'أُرسل الرابط. افتحه، ثم عد إلى هنا.',
   'onboarding.email.failed': 'لم يُرسَل الرابط. حاول مجددًا.',
 
+  'onboarding.age.title': 'تاريخ ميلادك',
+  'onboarding.age.body': 'لنقترح عليك المساحات المناسبة. يمكنك التخطي.',
+  'onboarding.age.skip': 'تخطٍّ',
+  'onboarding.age.check': 'تحقّق من تاريخ ميلادك.',
+  'onboarding.age.failed': 'لم يُحفظ تاريخك. حاول مجددًا.',
+
   'onboarding.global.title': 'قل مرحبًا للعالم',
   'onboarding.global.body': 'Meeshy Global هو الصالون الذي يلتقي فيه الجميع. ألقِ التحية بلا ضغط.',
   'onboarding.global.field': 'تحيتك، قابلة للتعديل',

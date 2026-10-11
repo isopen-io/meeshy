@@ -10,8 +10,7 @@
  * Pur : `today` (clé de jour dans le fuseau de l'utilisateur) est un paramètre.
  */
 
-import type { DailyChest } from './chest.js';
-import { CHEST_ODDS } from './chest.js';
+import { CHEST_ODDS, chestContentForEffort, dayEffort } from './chest.js';
 import { prismHourWindow, PRISM_HOUR_MULTIPLIER, tailwindFactor } from './boosts.js';
 import {
   FLAME_FREEZE_MAX,
@@ -24,13 +23,13 @@ import {
 } from './flame.js';
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
 import type { LevelStepFacts } from './level-steps.js';
-import { previewMint } from './mint.js';
+import { meeshPrice, previewMint } from './mint.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
 import { treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
-import type { GameBlock, GameMission } from '../../types/game.js';
+import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
 /** Une mission telle que la passerelle la persiste. */
 export type GameMissionRecord = GameMission;
@@ -94,7 +93,13 @@ export type GameBlockFacts = {
   } | null;
   readonly rerollsUsedToday: number;
   readonly chestClaimed: boolean;
-  readonly chestReward: DailyChest | null;
+  /** Le contenu servi du coffre ouvert — un jour d'avant #10011 n'a ni Gloire ni prime. */
+  readonly chestReward: GameChestReward | null;
+  /**
+   * Les fragments d'étoile collectés à vie, toutes sources confondues (#10011, `star-fragments.ts`) — LUS par la
+   * passerelle. Absent : elle ne les sert pas.
+   */
+  readonly starFragments?: number;
   readonly guideSeen: readonly string[];
   /**
    * Les faits de la VAGUE 2 (ligues, duo, saison, trophées, Atlas, Prestige,
@@ -190,6 +195,10 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       status: chestStatus,
       odds: { ...CHEST_ODDS },
       reward: chestStatus === 'claimed' ? facts.chestReward : null,
+      // Le contenu CERTAIN et les primes possibles, dits avant l'ouverture (#10011) : l'effort des missions du
+      // jour tirées, et le cours de la prochaine Meesh du compte.
+      today:
+        facts.missions.length === 0 ? null : chestContentForEffort(dayEffort(facts.missions), meeshPrice(facts.mintedLifetime + 1)),
     },
     flame: {
       days,
@@ -207,6 +216,7 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],
+    ...(facts.starFragments === undefined ? {} : { starFragments: { collected: Math.max(0, Math.trunc(facts.starFragments)) } }),
     ...(facts.extras === undefined ? {} : buildGameBlockExtras(facts.extras)),
   };
 }

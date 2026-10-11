@@ -2,11 +2,20 @@
  * LA RARETÉ CROISSANTE DES MEESHES (#9373) — le prix monte avec le nombre de
  * Meeshes déjà frappées. `docs/product/jeu-meeshy-conception.html` § II.3.
  *
- *     prix(n) = round(1221 × 1,06 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 4 884
+ *     prix(n) = round(1221 × 1,3 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 16 556
+ *
+ * +30 % toutes les dix frappes (porteur, 2026-10-10, #10011) : 1 221 pour les dix premières, 1 587 de la 11e à
+ * la 20e, 12 948 pour la 100e (or), et le plafond de 16 556 dès la 101e. L'ancienne loi (+6 %, plafond 4 884)
+ * aurait mis 451 frappes à l'atteindre.
+ *
+ * Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun autre chemin n'existe — ni
+ * fragment, ni frappe gratuite (porteur, 2026-10-10, #10011 ; `no-money-invariants.test.ts`).
  *
  * `MEESH_MINT_COST` (`utils/meesh.ts`) reste la BASE — le prix des dix
- * premières — et le défaut de `computeMeeshMintPlan`. Un ancien client qui croit
- * encore au prix de 1 221 est refusé SANS débit par le serveur, qui recalcule.
+ * premières — et le défaut de `computeMeeshMintPlan`. Le prix d'une frappe est
+ * RECALCULÉ par le serveur (`MeeshService.mint`) : aucun client ne l'envoie, un
+ * ancien client qui croit encore à l'ancien prix est refusé SANS débit quand ses
+ * points ne couvrent pas le nouveau.
  */
 
 import { MEESH_MINT_COST } from '../meesh.js';
@@ -15,9 +24,9 @@ import { levelStepGate, type LevelStepFacts } from './level-steps.js';
 import { levelFromScore, tighterLevelCap, type LevelCap } from './levels.js';
 
 export const MEESH_PRICE_STEP_EVERY = 10;
-export const MEESH_PRICE_GROWTH = 1.06;
-/** Quatre fois la base. */
-export const MEESH_PRICE_CAP = MEESH_MINT_COST * 4;
+export const MEESH_PRICE_GROWTH = 1.3;
+/** Le plafond du prix (porteur, 2026-10-10) : atteint à la 101e frappe. */
+export const MEESH_PRICE_CAP = 16_556;
 
 export type MeeshEdition = 'silver' | 'gold' | 'prism';
 

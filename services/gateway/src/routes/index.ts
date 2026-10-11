@@ -98,6 +98,8 @@ import { linksRoutes } from './links';
 import { syncRoutes } from './sync';
 import { trackingLinksRoutes } from './tracking-links';
 import { anonymousRoutes } from './anonymous';
+import { worldRoutes } from './world';
+import { worldParticipantCardRoutes } from './world-participant-card';
 import { communityRoutes } from './communities';
 import { adminMePermissionsRoutes } from './admin/me-permissions';
 import { dashboardRoutes } from './admin/dashboard';
@@ -131,6 +133,7 @@ import { meMeeshRoutes } from './me/meesh';
 import { meGameRoutes } from './me/game';
 import { userGameShowcaseRoutes } from './users/game-showcase';
 import { meOnboardingRoutes } from './me/onboarding';
+import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
@@ -248,6 +251,12 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'sync', prefix: API_PREFIX, module: syncRoutes },
   { name: 'tracking-links', prefix: API_PREFIX, module: trackingLinksRoutes },
   { name: 'anonymous-participation', prefix: API_PREFIX, module: anonymousRoutes },
+  // L'entrée PUBLIQUE de World Wide (#10000) — ce que la landing lit pour
+  // faire entrer un visiteur sans compte par le lien `mshy_world`.
+  { name: 'world', prefix: API_PREFIX, module: worldRoutes },
+  // La fiche de MODÉRATION d'un participant de World Wide (#10102) — réservée
+  // aux comptes dont le rôle global est au-delà de USER, chaque lecture tracée.
+  { name: 'world-participant-card', prefix: API_PREFIX, module: worldParticipantCardRoutes },
   { name: 'communities', prefix: API_PREFIX, module: communityRoutes },
 
   // ── Administration ────────────────────────────────────────────────────
@@ -317,6 +326,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'onboarding post-inscription (#7729) — état du parcours et étapes vues.
   // Montage AUTONOME, même patron que `me-engagement` juste au-dessus.
   { name: 'me-onboarding', prefix: `${API_PREFIX}/me`, module: meOnboardingRoutes },
+  { name: 'me-birth-date', prefix: `${API_PREFIX}/me`, module: meBirthDateRoutes },
   // Le favori de message (#7377) — l'étoile PERSONNELLE d'un lecteur, sa
   // liste et sa pose/son retrait. Montage AUTONOME, même patron que
   // `me-engagement` juste au-dessus.

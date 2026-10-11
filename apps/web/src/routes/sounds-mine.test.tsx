@@ -6,6 +6,7 @@ import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { MY_SOUNDS_QUERY_KEY, type MySound, type MySoundsData } from '@/lib/api/my-sounds';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadSoundsMineCatalog } from '@/lib/i18n-sounds-mine-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { scriptedTransport } from '@/test-support/scripted-transport';
@@ -23,7 +24,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  await Promise.all([loadInterfaceCatalog('fr'), loadSoundsMineCatalog('fr')]);
 });
 
 afterAll(async () => {

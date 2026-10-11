@@ -377,7 +377,7 @@ private struct MyStoryButton: View {
         // expirée — route le tap et le menu contextuel vers la gestion
         // plutôt que de forcer la création quand tout est expiré.
         let hasAnyStory = viewModel.hasStories(forUserId: userId)
-        let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let userName = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
 
@@ -900,7 +900,7 @@ struct PinnedStoryTrailBand: View {
         let uid = currentUserId
         let hasAnyStory = viewModel.hasStories(forUserId: uid)
         return MeeshyAvatar(
-            name: currentUser?.displayName ?? currentUser?.username ?? "Moi",
+            name: currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main),
             context: .storyTrayCompact,
             accentColor: DynamicColorGenerator.colorForName(currentUser?.username ?? ""),
             avatarURL: currentUser?.avatar,

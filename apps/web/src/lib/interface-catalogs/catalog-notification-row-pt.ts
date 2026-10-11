@@ -12,6 +12,7 @@ const ptNotificationRow = {
   'notifications.row.media.video': '🎥 Vídeo',
   'notifications.row.media.audio': '🎵 Áudio',
   'notifications.row.expired': 'expirada',
+  'notifications.row.directMessage': 'Mensagem privada',
   'notifications.row.milestone.level': 'Nível {level}',
   'notifications.row.milestone.streak': '{days} dias seguidos',
   'notifications.row.milestone.badgeReason': 'Emblema desbloqueado · nível {threshold}',

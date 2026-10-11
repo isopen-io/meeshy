@@ -83,7 +83,7 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
 
   test('chaque capture porte un texte alternatif, sa taille, et la page nomme ses deux galeries', () => {
     const html = renderToStaticMarkup(<DownloadPage language="fr" />);
-    const images = html.match(/<img [^>]*>/g) ?? [];
+    const images = (html.match(/<img [^>]*>/g) ?? []).filter((image) => image.includes('/store-shots/'));
     expect(images.length).toBe(9);
     for (const image of images) {
       expect(image).toMatch(/alt="[^"]{8,}"/);
@@ -94,11 +94,30 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(html).toContain('Captures de Meeshy sur Android');
   });
 
-  test('les liens vers les pages institutionnelles sont au pied de la page', () => {
+  test('les liens vers les pages institutionnelles sont au pied PARTAGÉ de meeshy.me (#10071)', () => {
     const html = renderToStaticMarkup(<DownloadPage language="fr" />);
+    expect(html).toContain('class="ld-footer"');
     for (const page of ['about', 'help', 'faq', 'contact', 'privacy', 'terms']) {
       expect(html).toContain(`href="/${page}"`);
     }
+  });
+
+  test('l’en-tête est celui de la landing, dans la langue du lecteur : se connecter, entrer sans compte (#10071)', () => {
+    const fr = renderToStaticMarkup(<DownloadPage language="fr" />);
+    expect(fr).toContain('class="ld-header"');
+    expect(fr).toContain('<span class="ld-wordmark">Meeshy</span>');
+    expect(fr).toMatch(/<a href="\/login"[^>]*>Se connecter<\/a>/);
+    expect(fr).toMatch(/<a href="\/#rejoindre"[^>]*>Entrer sans compte<\/a>/);
+    const en = renderToStaticMarkup(<DownloadPage language="en" />);
+    expect(en).toMatch(/<a href="\/login"[^>]*>Sign in<\/a>/);
+    expect(en).toMatch(/<a href="\/en#rejoindre"[^>]*>/);
+  });
+
+  test('le sélecteur de langue de l’en-tête change la langue de LA PAGE — elle est traduite, elle ne renvoie pas ailleurs', () => {
+    const html = renderToStaticMarkup(<DownloadPage language="es" />);
+    expect(html).toMatch(/<select[^>]*data-download-language/);
+    expect(html).not.toContain('data-landing-language');
+    expect(html).toMatch(/<option value="es"[^>]*selected/);
   });
 
   test('en : la page parle anglais — le destinataire n’a pas choisi le français', () => {

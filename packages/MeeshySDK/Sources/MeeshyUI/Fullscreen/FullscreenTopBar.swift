@@ -3,21 +3,25 @@ import SwiftUI
 /// **La barre haute du plein écran — la même géographie pour tous** (#8878).
 ///
 /// `[✕] [identité] ··· [actions de fin]` : la porte de sortie au bord de DÉBUT de
-/// lecture, l'identité de l'auteur juste après elle quand la surface la place en haut
+/// lecture — une croix pour un plein écran posé sur l'écran, un retour (‹) pour une
+/// navigation qu'on quitte aussi par le bord, comme le lecteur de réels (#9931) —, l'identité de l'auteur juste après elle quand la surface la place en haut
 /// (story), le menu « ⋯ » au bord de FIN. La barre respecte la zone sûre ; le voile
 /// (`FullscreenScrims`) et le média, eux, l'ignorent.
 public struct FullscreenTopBar<Leading: View, Trailing: View>: View {
 
     private let tone: FullscreenChromeTone
+    private let exit: FullscreenExitStyle
     private let onClose: () -> Void
     private let leading: Leading
     private let trailing: Trailing
 
     public init(tone: FullscreenChromeTone = .onMedia,
+                exit: FullscreenExitStyle = .close,
                 onClose: @escaping () -> Void,
                 @ViewBuilder leading: () -> Leading,
                 @ViewBuilder trailing: () -> Trailing) {
         self.tone = tone
+        self.exit = exit
         self.onClose = onClose
         self.leading = leading()
         self.trailing = trailing()
@@ -25,7 +29,7 @@ public struct FullscreenTopBar<Leading: View, Trailing: View>: View {
 
     public var body: some View {
         HStack(spacing: FullscreenChromeMetrics.barSpacing) {
-            FullscreenCloseButton(tone: tone, action: onClose)
+            FullscreenCloseButton(tone: tone, exit: exit, action: onClose)
             leading
             Spacer(minLength: 0)
             trailing
@@ -37,15 +41,18 @@ public struct FullscreenTopBar<Leading: View, Trailing: View>: View {
 
 public extension FullscreenTopBar where Leading == EmptyView {
     init(tone: FullscreenChromeTone = .onMedia,
+         exit: FullscreenExitStyle = .close,
          onClose: @escaping () -> Void,
          @ViewBuilder trailing: () -> Trailing) {
-        self.init(tone: tone, onClose: onClose, leading: { EmptyView() }, trailing: trailing)
+        self.init(tone: tone, exit: exit, onClose: onClose, leading: { EmptyView() }, trailing: trailing)
     }
 }
 
 public extension FullscreenTopBar where Leading == EmptyView, Trailing == EmptyView {
-    init(tone: FullscreenChromeTone = .onMedia, onClose: @escaping () -> Void) {
-        self.init(tone: tone, onClose: onClose, leading: { EmptyView() }, trailing: { EmptyView() })
+    init(tone: FullscreenChromeTone = .onMedia,
+         exit: FullscreenExitStyle = .close,
+         onClose: @escaping () -> Void) {
+        self.init(tone: tone, exit: exit, onClose: onClose, leading: { EmptyView() }, trailing: { EmptyView() })
     }
 }
 

@@ -62,6 +62,13 @@ describe('sendFailureReason', () => {
     );
   });
 
+  /* #9928 — un mineur qui écrit dans Global (état périmé) : la cause dit
+     quand Global s'ouvrira, jamais un refus générique. */
+  test('GLOBAL_ADULTS_ONLY dit que Global s’ouvre à l’écriture à 18 ans', () => {
+    expect(sendFailureReason(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }))).toBe('Global s’ouvre à l’écriture à tes 18 ans');
+    expect(sendFailureReasonIn(failure(403, { code: 'GLOBAL_ADULTS_ONLY' }), 'en')).toBe('Global opens for writing when you turn 18');
+  });
+
   /* #7740 — le mode lent des nouveaux comptes dans Meeshy Global : un refus
      TEMPORAIRE, qui dit pourquoi et combien de temps, jamais « trop de
      messages » (le nouveau venu n'a rien fait de trop). */
@@ -108,6 +115,19 @@ describe('sendFailureReason — dans la langue d’interface', () => {
     }
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(sendFailureReasonIn(failure(429, { code: 'NEWCOMER_SLOW_MODE', retryAfter: 18 }), language)).toContain('18');
+    }
+  });
+});
+
+describe('sendFailureReason — une pièce jointe d’invité refusée sur son contenu (#10001, #10003)', () => {
+  test('la famille refusée se dit, jamais « envoi refusé »', () => {
+    expect(sendFailureReason(failure(403, { code: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED' }))).toBe('ce fichier n’est pas accepté ici');
+  });
+
+  test('le fichier trop lourd dit le plafond, dans chaque langue', () => {
+    expect(sendFailureReason(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }))).toContain('25');
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      expect(sendFailureReasonIn(failure(413, { code: 'GUEST_ATTACHMENT_TOO_LARGE' }), language)).not.toContain('{');
     }
   });
 });

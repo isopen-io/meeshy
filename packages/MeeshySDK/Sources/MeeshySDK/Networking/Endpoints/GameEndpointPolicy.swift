@@ -21,9 +21,14 @@ import Foundation
 //    depuis le jeu — aucun appelant n'a à y penser.
 
 /// Les écritures du jeu sont un 409 d'ÉTAT : la requête est bien formée, c'est le compte qui la refuse.
+/// La date de naissance (#9929) partage cette redéfinition — `MeEndpoint` n'en
+/// a qu'une : son contrat documente `BIRTH_DATE_ALREADY_SET` (409) et
+/// `AGE_BELOW_MINIMUM` (422), que l'onboarding doit LIRE pour dire pourquoi.
 public extension MeEndpoint {
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
+        case .birthDate:
+            return .structured
         case .gameChestClaim, .gameDuoByDuoIdAbandon, .gameDuoByDuoIdAccept, .gameDuoInvite,
              .gameFlameFreezes, .gameFlameRelight, .gameGuideSeen, .gameLeagueConsent,
              .gameLeagueFriends, .gameLeaguePseudonym, .gameLeagueWeek,
@@ -77,6 +82,16 @@ public extension MeEndpoint {
     /// Réclamer la récompense d'une étape de la saison (un entier, jamais une chaîne libre).
     static func gameSeasonClaim(step: Int) -> MeEndpoint {
         MeEndpoint.gameSeasonStepsByStepClaim(step: String(step))
+    }
+
+    /// Une saison par son numéro, passée, en cours ou future (#10018). Un entier, jamais une chaîne libre.
+    static func gameSeasonArchive(number: Int) -> MeEndpoint {
+        MeEndpoint.gameSeasonsByNumber(number: String(number))
+    }
+
+    /// Une semaine de ligue par son lundi (#10018). La clé vient d'un lien : encodée.
+    static func gameLeagueWeekArchive(weekKey: String) -> MeEndpoint {
+        MeEndpoint.gameLeagueWeeksByWeekKey(weekKey: GamePathSegment.encoded(weekKey))
     }
 }
 

@@ -38,7 +38,7 @@ const richAccount = (db: FakeGameDb, params: { score: number; debitable?: number
 };
 
 describe('MeeshService.mint — le prix monte avec les Meeshes déjà frappées', () => {
-  it('la 11e Meesh coûte 1 294 points, débités au score et au compteur', async () => {
+  it('la 11e Meesh coûte 1 587 points (+30 % toutes les dix, #10011), débités au score et au compteur', async () => {
     const db = fakeGameDb();
     richAccount(db, { score: 5000 });
     withMints(db, 10);
@@ -46,8 +46,8 @@ describe('MeeshService.mint — le prix monte avec les Meeshes déjà frappées'
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-0011');
 
     expect(issue.status).toBe('minted');
-    expect(db.user.rows[0]?.engagementScore).toBe(5000 - 1294);
-    expect(db.engagementCounter.rows[0]?.points).toBe(5000 - 1294);
+    expect(db.user.rows[0]?.engagementScore).toBe(5000 - 1587);
+    expect(db.engagementCounter.rows[0]?.points).toBe(5000 - 1587);
   });
 
   it('refuse SANS débit quand les points débitables ne couvrent pas le prix du jour', async () => {

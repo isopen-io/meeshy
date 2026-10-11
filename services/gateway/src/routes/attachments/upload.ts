@@ -24,9 +24,16 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentKindsOf,
+  type AnonymousAttachmentVerdict,
+} from '../../services/attachments/ContentSignature.js';
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { normalizeContactCardMimeType } from '@meeshy/shared/utils/vcard';
 import { admittedUploadMimeType } from '../../services/attachments/uploadMimeType';
+import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
+import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
 
 /**
  * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
@@ -48,6 +55,17 @@ import { admittedUploadMimeType } from '../../services/attachments/uploadMimeTyp
  * romans en texte brut) tout en abaissant réellement le plafond effectif.
  */
 export const MAX_TEXT_ATTACHMENT_LENGTH = 10 * 1024 * 1024;
+
+/**
+ * Le refus d'une pièce jointe d'invité : 413 pour un fichier trop lourd, 403
+ * sinon, et le code stable de la garde (#10001) quand elle en rend un.
+ */
+function sendGuestAttachmentRefusal(reply: FastifyReply, verdict: Extract<AnonymousAttachmentVerdict, { allowed: false }>): void {
+  if (verdict.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE) {
+    return sendPayloadTooLarge(reply, verdict.reason, { code: verdict.code });
+  }
+  return sendForbidden(reply, verdict.reason, verdict.code ? { code: verdict.code } : undefined);
+}
 
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
@@ -185,6 +203,8 @@ export async function registerUploadRoutes(
             select: {
               allowAnonymousFiles: true,
               allowAnonymousImages: true,
+              allowedAttachmentKinds: true,
+              conversation: { select: { identifier: true } },
             },
           });
 
@@ -204,10 +224,14 @@ export async function registerUploadRoutes(
           // `classifyAnonymousAttachment` est la décision UNIQUE, partagée
           // avec `routes/uploads/tus-handler.ts`, pour que les deux chemins
           // d'upload ne puissent pas diverger (round 2, Critical 1).
+          //
+          // #10001 — quand le lien liste ses familles (ou que sa conversation
+          // les plafonne, World Wide), la décision lit le fichier ENTIER et son
+          // NOM, et rend un code stable que les clients localisent.
           for (const file of files) {
-            const verdict = classifyAnonymousAttachment(file.mimeType, file.buffer, shareLink);
+            const verdict = classifyAnonymousAttachment(file.mimeType, file.buffer, shareLink, { fileName: file.filename });
             if (verdict.allowed === false) {
-              return sendForbidden(reply, verdict.reason);
+              return sendGuestAttachmentRefusal(reply, verdict);
             }
           }
         }
@@ -360,7 +384,7 @@ export async function registerUploadRoutes(
         if (isAnonymous && authContext.participantId) {
           const shareLink = await prisma.conversationShareLink.findUnique({
             where: { id: authContext.anonymousUser?.shareLinkId },
-            select: { allowAnonymousFiles: true },
+            select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
           });
 
           if (!shareLink) {
@@ -369,8 +393,35 @@ export async function registerUploadRoutes(
             return sendNotFound(reply, 'Share link not found');
           }
 
-          if (!shareLink.allowAnonymousFiles) {
+          // #10001 — un lien qui liste ses familles décide seul : le texte
+          // déposé ici est un `.txt`, et passe la même garde que s'il avait
+          // été téléversé (UTF-8, aucun caractère de contrôle).
+          if (guestAttachmentKindsOf(shareLink) !== null) {
+            const verdict = classifyAnonymousAttachment('text/plain', Buffer.from(content, 'utf-8'), shareLink, { fileName: 'text.txt' });
+            if (verdict.allowed === false) {
+              return sendGuestAttachmentRefusal(reply, verdict);
+            }
+          } else if (!shareLink.allowAnonymousFiles) {
             return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
+          }
+        }
+
+        // #9927 — un fichier rattaché à un message EXISTANT paraît dans sa
+        // conversation : dans Meeshy Global, un mineur déclaré ne l'y ajoute
+        // pas. Sans `messageId`, le fichier n'entre dans aucune conversation
+        // tant qu'un envoi ne l'y porte, et l'envoi a sa propre garde.
+        if (messageId && !isAnonymous) {
+          const target = await prisma.message.findFirst({
+            where: { id: messageId },
+            select: { conversation: { select: { type: true } } },
+          });
+          const minorInGlobal = await refusesMinorInConversationOfType(prisma, {
+            conversationType: target?.conversation?.type,
+            userId,
+            now: new Date(),
+          });
+          if (minorInGlobal) {
+            return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
           }
         }
 

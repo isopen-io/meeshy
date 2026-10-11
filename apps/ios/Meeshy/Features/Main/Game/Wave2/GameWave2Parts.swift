@@ -223,11 +223,12 @@ struct GameSwitchRow: View {
 /// La page que `Route.gamePage` pousse.
 struct GamePageView: View {
     let page: GamePage
+    var focus: GamePageFocus? = nil
 
     var body: some View {
         switch page {
-        case .league: GameLeaguePage()
-        case .season: GameSeasonPage()
+        case .league: GameLeaguePage(focus: focus)
+        case .season: GameSeasonPage(focus: focus)
         case .showcase: GameShowcasePage()
         case .atlas: GameAtlasPage()
         case .prestige: GamePrestigePage()

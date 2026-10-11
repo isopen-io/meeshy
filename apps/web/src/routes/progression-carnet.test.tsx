@@ -1,8 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { gameBlockFixture } from '@/lib/api/game-fixture';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { flameMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { flameMoment, meeshMoment, rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 import type { Notebook, NotebookEntry } from '@/lib/game-photo/notebook';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -193,5 +194,85 @@ describe('les moments en attente', () => {
     await settle();
     expect(by(host, 'data-carnet-share')).toBeNull();
     expect(host.querySelector('img')).toBeNull();
+  });
+});
+
+/**
+ * LE RATTRAPAGE (#9961, #9962) — chaque étape déjà franchie sans photo se
+ * photographie, DANS L'ORDRE : la première de chaque piste est ouverte, les
+ * suivantes l'attendent. Les étapes se lisent dans le bloc du jeu déjà en
+ * cache ; sans lui, la section se tait.
+ */
+describe('à rattraper', () => {
+  const game = gameBlockFixture({ mintedLifetime: 21, flameRecord: 8, streak: 6 });
+  const keptStart = kept(startMoment(), '2026-09-01T10:00:00.000Z');
+  const keptFirst = kept(meeshMoment({ number: 1, edition: 'silver' }), '2026-09-02T10:00:00.000Z');
+  const catchUp = (host: ParentNode) => Array.from(host.querySelectorAll('[data-carnet-catch-up]')).map((e) => e.getAttribute('data-carnet-catch-up'));
+
+  test('sans bloc du jeu en cache : aucune section', async () => {
+    const { env } = bench([keptStart]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.textContent).not.toContain('À rattraper');
+    expect(catchUp(host)).toEqual([]);
+  });
+
+  test('les étapes franchies sans photo gardée, jamais celles déjà gardées', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    expect(host.textContent).toContain('À rattraper');
+    const ids = catchUp(host);
+    expect(ids).toContain('meesh:10');
+    expect(ids).toContain('meesh:20');
+    expect(ids).toContain('flame:7');
+    expect(ids).not.toContain('start');
+    expect(ids).not.toContain('meesh:1');
+  });
+
+  test('une étape ouverte se photographie : le même déroulé que les autres', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    await click(host.querySelector<HTMLElement>('[data-carnet-catch-up="meesh:10"] [data-carnet-catch-up-take]'));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Photo : Meesh n° 10');
+  });
+
+  test('une étape fermée dit laquelle prendre d’abord, sans bouton, et le dit au lecteur d’écran', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    const locked = host.querySelector<HTMLElement>('[data-carnet-catch-up="meesh:20"]');
+    expect(locked?.hasAttribute('data-carnet-catch-up-locked')).toBe(true);
+    expect(locked?.textContent).toContain('Prends d’abord : Meesh n° 10');
+    expect(locked?.querySelector('button')).toBeNull();
+    expect(locked?.getAttribute('aria-label')).toBe('Meesh n° 20 — verrouillée. Prends d’abord : Meesh n° 10');
+  });
+
+  test('les étapes se rangent par piste, chacune sous son nom', async () => {
+    const { env } = bench([keptStart, keptFirst]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    const tracks = Array.from(host.querySelectorAll('[data-carnet-track]')).map((e) => e.getAttribute('data-carnet-track'));
+    expect(tracks).toContain('meesh');
+    expect(tracks).toContain('flame');
+    expect(host.querySelector('[data-carnet-track="meesh"]')?.textContent).toContain('Meeshes');
+    expect(host.querySelector('[data-carnet-track="meesh"] [data-carnet-catch-up="flame:7"]')).toBeNull();
+  });
+
+  test('un moment en attente qui est une étape ne paraît qu’une fois : dans le rattrapage', async () => {
+    const { env } = bench([keptStart, keptFirst, pending(flameMoment(7), '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} game={game} />);
+    await settle();
+    expect(host.querySelectorAll('[data-carnet-entry="flame:7"]')).toHaveLength(0);
+    expect(catchUp(host).filter((id) => id === 'flame:7')).toHaveLength(1);
+    expect(host.textContent).not.toContain('En attente');
+  });
+
+  test('un carnet à jour : aucune section', async () => {
+    const { env } = bench([keptStart]);
+    const host = await mount(<CarnetBody env={env} game={gameBlockFixture({ mintedLifetime: 0, glory: 0, levelRecord: 1, score: 0, flameRecord: 0, streak: 0, balance: 0 })} />);
+    await settle();
+    expect(host.textContent).not.toContain('À rattraper');
   });
 });

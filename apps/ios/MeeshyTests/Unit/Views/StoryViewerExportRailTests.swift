@@ -3,13 +3,11 @@ import XCTest
 
 // MARK: - StoryViewerExportRailTests
 //
-// Task 10 — revue Task 7 : le rail du reader avait perdu tout accès au
-// partage externe (WhatsApp, AirDrop, Messages) quand l'ancien bouton
-// « Exporter » a été fait passer par `StoryPhotoSaveService`. Le rail porte
-// désormais DEUX actions distinctes (Partager / Enregistrer), et l'anneau de
-// progression ne concerne QUE Enregistrer — Partager doit rester au premier
-// plan pendant tout un job de sauvegarde, sinon la share sheet système
-// surgirait après coup, une fois l'utilisateur déjà reparti ailleurs.
+// Le rail de l'auteur porte « Enregistrer », que l'anneau de progression
+// remplace pendant un job de sauvegarde. Son bouton « Partager » (export vidéo)
+// est parti (#9953) : le menu « … » offre « Partager ▸ Exporter en vidéo » à
+// TOUT lecteur, la même feuille au choix de la langue. « Envoyer » reste au
+// rail, pour tous.
 //
 // `StoryExportRailButtons.resolve` est un résolveur PUR extrait de
 // `StoryActionSidebarView.sidebarContent` précisément pour être testé sans
@@ -18,39 +16,31 @@ final class StoryViewerExportRailTests: XCTestCase {
 
     // MARK: - Story de l'auteur
 
-    func test_authorStory_noSaveInFlight_showsShareAndSaveButton() {
+    func test_authorStory_noSaveInFlight_showsSaveButton() {
         let buttons = StoryExportRailButtons.resolve(showsExport: true, saveProgress: nil)
 
-        XCTAssertTrue(buttons.showsShareButton)
         XCTAssertTrue(buttons.showsSaveButton)
         XCTAssertFalse(buttons.showsSaveProgressRing)
     }
 
     // MARK: - Story qui n'est pas de l'auteur
 
-    func test_notAuthorStory_hidesShareAndSave_regardlessOfSaveProgress() {
+    func test_notAuthorStory_hidesSave_regardlessOfSaveProgress() {
         let idle = StoryExportRailButtons.resolve(showsExport: false, saveProgress: nil)
-        XCTAssertFalse(idle.showsShareButton)
         XCTAssertFalse(idle.showsSaveButton)
         XCTAssertFalse(idle.showsSaveProgressRing)
 
-        // Un job de sauvegarde ne peut normalement pas être en vol pour une
-        // story qui n'est pas de l'auteur, mais le résolveur doit rester sûr
-        // même sur cette entrée incohérente : `showsExport` reste le SEUL
-        // déterminant, jamais `saveProgress` seul.
+        // `showsExport` reste le SEUL déterminant, jamais `saveProgress` seul.
         let withStaleProgress = StoryExportRailButtons.resolve(showsExport: false, saveProgress: 0.5)
-        XCTAssertFalse(withStaleProgress.showsShareButton)
         XCTAssertFalse(withStaleProgress.showsSaveButton)
         XCTAssertFalse(withStaleProgress.showsSaveProgressRing)
     }
 
     // MARK: - Job de sauvegarde en vol
 
-    func test_authorStory_saveInFlight_replacesSaveButtonWithRing_keepsShareButton() {
+    func test_authorStory_saveInFlight_replacesSaveButtonWithRing() {
         let buttons = StoryExportRailButtons.resolve(showsExport: true, saveProgress: 0.42)
 
-        XCTAssertTrue(buttons.showsShareButton,
-                      "Partager doit rester atteignable même pendant un job de sauvegarde en vol")
         XCTAssertFalse(buttons.showsSaveButton,
                        "Enregistrer est remplacé par l'anneau de progression tant que le job tourne")
         XCTAssertTrue(buttons.showsSaveProgressRing)
@@ -65,5 +55,28 @@ final class StoryViewerExportRailTests: XCTestCase {
         let atEnd = StoryExportRailButtons.resolve(showsExport: true, saveProgress: 1)
         XCTAssertTrue(atEnd.showsSaveProgressRing)
         XCTAssertFalse(atEnd.showsSaveButton)
+    }
+
+    // MARK: - #9953 : plus de « Partager » au rail de l'auteur, « Envoyer » reste
+
+    private func sidebar() throws -> String {
+        try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+    }
+
+    func test_theAuthorRail_noLongerCarriesTheShareButton() throws {
+        let rail = try sidebar()
+        XCTAssertFalse(rail.contains("showExportShareSheet"), "Le rail n'ouvre plus la feuille d'export.")
+        XCTAssertFalse(rail.contains("story.viewer.action.share"), "Plus de bouton « Partager » au rail.")
+        XCTAssertFalse(rail.contains("square.and.arrow.up.fill"))
+    }
+
+    func test_send_staysOnTheRail_forEveryReader() throws {
+        XCTAssertTrue(try sidebar().contains("story.viewer.action.send"))
+        let plan = StoryActionRailPlan.resolve(isOwnStory: true, canReply: false, isPublicStory: false,
+                                               hasAudibleSound: false, commentCount: 0, hasTranslatableContent: false)
+        XCTAssertTrue(plan.showsForward, "« Envoyer » transfère n'importe où dans l'app — auteur compris.")
+        let other = StoryActionRailPlan.resolve(isOwnStory: false, canReply: true, isPublicStory: false,
+                                                hasAudibleSound: false, commentCount: 0, hasTranslatableContent: false)
+        XCTAssertTrue(other.showsForward)
     }
 }

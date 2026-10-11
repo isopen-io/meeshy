@@ -1,6 +1,6 @@
 import XCTest
 import GRDB
-@_spi(AccountStore) import MeeshySDK
+@_spi(AccountStore) @testable import MeeshySDK
 @testable import Meeshy
 
 /// **Le rejeu d'un commentaire avec pièces, EXÉCUTÉ** (#9743, audit constat 6).
@@ -482,14 +482,23 @@ final class CommentOfflineFirstSendTests: XCTestCase {
     private let bob = "66f0a1b2c3d4e5f6000000b0"
     private var scratch: URL!
     private var savedToken: String?
+    /// La base que la file tenait avant : rendue au démontage, car le dossier de
+    /// la base d'Alice est effacé — une file laissée dessus refuse toute écriture
+    /// aux suites suivantes (CI 38043332830 : le blocage d'un profil se défaisait).
+    private var savedOutbox: (any DatabaseWriter)?
 
     override func setUp() async throws {
         scratch = FileManager.default.temporaryDirectory.appendingPathComponent("first-send-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         savedToken = APIClient.shared.authToken
+        savedOutbox = await OfflineQueue.shared.outboxPool
     }
 
     override func tearDown() async throws {
+        if let savedOutbox {
+            await OfflineQueue.shared.configure(pool: savedOutbox)
+        }
+        savedOutbox = nil
         APIClient.shared.authToken = savedToken
         OfflineQueue.purgePendingCommentMedia(ownerId: alice)
         try? FileManager.default.removeItem(at: scratch)

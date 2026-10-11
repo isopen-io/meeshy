@@ -6,13 +6,13 @@
  */
 const frComposerAttach = {
   'composer.attach.group': 'Types de pièces jointes',
-  'composer.attach.handle': 'Poignée du panneau',
   'composer.attach.photo': 'Photos',
   'composer.attach.photo.action': 'Choisir des photos',
   'composer.attach.camera': 'Caméra',
   'composer.attach.camera.action': 'Prendre une photo',
   'composer.attach.file': 'Fichier',
   'composer.attach.file.action': 'Choisir un fichier',
+  'composer.drop.veil': 'Déposer pour joindre',
   'composer.attach.contact': 'Contact',
   'composer.attach.contact.action': 'Partager un contact',
   'composer.contact.failed': 'Ce contact ne peut pas être partagé',
@@ -31,7 +31,6 @@ const frComposerAttach = {
   'composer.mic.unavailable': 'Micro indisponible sur cet appareil',
   'composer.openSettings': 'Réglages',
   'composer.location.chip': 'LIEU',
-  'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
   'composer.attach.sticker': 'Sticker',
   'composer.attach.sticker.action': 'Envoyer un sticker',
@@ -93,6 +92,20 @@ const frComposerAttach = {
   'composer.effects.entrance': "Animation d'entrée",
   'composer.effects.permanent': 'Effet permanent',
   'composer.effects.clearAll': 'Tout effacer',
+  'composer.guest.kind.text': 'Fichier texte (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Image',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'fichiers texte (.txt)',
+  'composer.guest.inline.audio': 'audio',
+  'composer.guest.inline.image': 'images',
+  'composer.guest.inline.pdf': 'PDF',
+  'composer.guest.note': 'Sans compte, {title} accepte vos messages, vos vocaux, des {kinds}.',
+  'composer.guest.createAccount': 'Créez un compte pour partager le reste.',
+  'composer.guest.refused.kind': '« {name} » n’est pas accepté ici : seuls les {kinds} passent.',
+  'composer.guest.refused.size': '« {name} » est trop lourd : {max} au plus.',
+  'send.failure.guestKind': 'ce fichier n’est pas accepté ici',
+  'send.failure.guestTooLarge': 'ce fichier est trop lourd ici ({max} au plus)',
 } as const;
 
 export type ComposerAttachCatalogSlice = Readonly<Record<keyof typeof frComposerAttach, string>>;

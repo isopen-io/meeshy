@@ -20,7 +20,7 @@ import {
   createAuthGlobalRateLimiter,
   createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
-import { ActivationRequiresEmailProofError, PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
+import { ActivationRequiresEmailProofError, AgeBelowMinimumError, PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -308,6 +308,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (error instanceof PasswordNotSetError) {
         throw error;
       }
+      // #9927 — 403 AGE_BELOW_MINIMUM, rendu par le gestionnaire global.
+      if (error instanceof AgeBelowMinimumError) {
+        throw error;
+      }
       logger.error('Erreur serveur lors de la connexion', error as Error);
       return sendInternalError(reply, 'Erreur lors de la connexion');
     }
@@ -439,6 +443,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      if (error instanceof AgeBelowMinimumError) throw error;
       logger.error('Erreur 2FA', error as Error);
       return sendInternalError(reply, 'Erreur lors de la vérification 2FA');
     }

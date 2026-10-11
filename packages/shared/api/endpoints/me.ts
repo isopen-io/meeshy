@@ -15,6 +15,9 @@
 /** GET · POST /api/v1/me/account/deletion */
 export const accountDeletion = '/api/v1/me/account/deletion';
 
+/** PUT /api/v1/me/birth-date */
+export const birthDate = '/api/v1/me/birth-date';
+
 /** GET · POST /api/v1/me/categories */
 export const categories = '/api/v1/me/categories';
 
@@ -82,6 +85,9 @@ export const gameLeaguePseudonym = '/api/v1/me/game/league/pseudonym';
 /** GET /api/v1/me/game/league/week */
 export const gameLeagueWeek = '/api/v1/me/game/league/week';
 
+/** GET /api/v1/me/game/league/weeks/:weekKey */
+export const gameLeagueWeeksByWeekKey = (weekKey: string): string => `/api/v1/me/game/league/weeks/${encodeURIComponent(weekKey)}`;
+
 /** POST /api/v1/me/game/missions/:missionId/reroll */
 export const gameMissionsByMissionIdReroll = (missionId: string): string => `/api/v1/me/game/missions/${encodeURIComponent(missionId)}/reroll`;
 
@@ -90,6 +96,9 @@ export const gamePrestige = '/api/v1/me/game/prestige';
 
 /** GET · PUT /api/v1/me/game/privacy */
 export const gamePrivacy = '/api/v1/me/game/privacy';
+
+/** GET /api/v1/me/game/seasons/:number */
+export const gameSeasonsByNumber = (number: string): string => `/api/v1/me/game/seasons/${encodeURIComponent(number)}`;
 
 /** POST /api/v1/me/game/season/seal */
 export const gameSeasonSeal = '/api/v1/me/game/season/seal';

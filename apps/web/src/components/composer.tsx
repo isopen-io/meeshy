@@ -19,6 +19,7 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { guestKindsAllowMime, type GuestAttachments } from '@/lib/send/guest-attachment-policy';
 import { pastedContentOf, routePastedContent } from '@/lib/send/paste-route';
 import {
   contactCardFile,
@@ -53,6 +54,8 @@ import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { useWindowFileDrop } from '@/lib/view/use-window-file-drop';
+import { ComposerDropVeil } from './composer-drop-veil';
 
 /**
  * LE PANNEAU D'EFFETS, CHARGÉ À LA DEMANDE (#6175, panneau inline depuis
@@ -132,6 +135,7 @@ export const Composer = memo(function Composer({
   stickyProtection,
   onDraftChange,
   maxLength,
+  guestAttachments,
 }: {
   /** LE PRISME DU LECTEUR (#5828) — repli de la langue d'écriture quand
    * aucune détection ne tranche : `useComposeLanguage` lit `preferred[0]`,
@@ -173,7 +177,7 @@ export const Composer = memo(function Composer({
    * pas ANNONCÉ à qui l'affiche. `bubble.tsx:180` et `focal-row.tsx:263`
    * posent déjà `lang={rendered.language}` pour la même raison.
    */
-  replyTo?: { author: string; excerpt: string; language?: string };
+  replyTo?: { author: string; excerpt: string; language?: string; more?: number };
   onCancelReply?: () => void;
   /** CE QUE LE MESSAGE CITÉ IMPOSE À LA RÉPONSE (#8557) — `imposedReplyProtection`
    * de `@meeshy/shared`, calculé par l'hôte (`useThreadCompose`). Il RECOUVRE
@@ -184,6 +188,11 @@ export const Composer = memo(function Composer({
    * tuile du tiroir ne se rend que si son geste a un effet (loi 4). Absent ⇒
    * tout est autorisé (aucun participant chargé encore). */
   rights?: ParticipantPermissions;
+  /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003) — ses familles (World
+   * Wide : `.txt` et audio) décident seules de ce que le composeur offre et
+   * accepte ; `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
+   * les lit sur la session. Absent ⇒ les droits de `rights`, comme avant. */
+  guestAttachments?: GuestAttachments;
   /**
    * LA GRAINE DU BROUILLON RESTAURÉ (#6175) — lue UNE fois au montage
    * (`useState` paresseux ci-dessous), jamais relue après : c'est l'hôte
@@ -366,7 +375,9 @@ export const Composer = memo(function Composer({
    * ancien), la porte ne mène nulle part : la spécification #5668 § 0 dit
    * « le micro n'est PAS rendu ». Les deux gardes sont la MÊME question.
    */
-  const canRecord = recordingSupported() && mayAttach(rights, 'audio/*');
+  const mayAttachHere = (mimeType: string): boolean =>
+    guestAttachments === undefined ? mayAttach(rights, mimeType) : guestKindsAllowMime(guestAttachments.kinds, mimeType);
+  const canRecord = recordingSupported() && mayAttachHere('audio/*');
   /* LA MÊME QUESTION POSÉE À LA POSITION — un navigateur sans
      `navigator.geolocation` (contexte non sécurisé, moteur ancien) n'a
      AUCUNE porte à montrer. Le panneau, lui, existe toujours : la tuile
@@ -540,11 +551,14 @@ export const Composer = memo(function Composer({
       current: draftNow.current.pending,
       files: Array.from(files),
       ...(rights === undefined ? {} : { rights }),
+      ...(guestAttachments === undefined ? {} : { guest: { kinds: guestAttachments.kinds, language: uiLanguage } }),
     });
     setFileRefusal(outcome.refusal ?? null);
     setPending(outcome.list);
     setPanelOpen(false);
   };
+
+  const fileHovering = useWindowFileDrop(addFiles);
 
   /**
    * LA TUILE « CONTACT » (#8242) — la fiche CHOISIE devient une carte
@@ -692,6 +706,11 @@ export const Composer = memo(function Composer({
             >
               {replyTo.excerpt}
             </span>
+            {replyTo.more !== undefined && replyTo.more > 0 ? (
+              <span data-composer-reply-more={replyTo.more} aria-hidden className="ms-1 font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+                +{replyTo.more}
+              </span>
+            ) : null}
           </span>
           <button
             type="button"
@@ -781,7 +800,7 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          {...(mayAttach(rights, 'image/*')
+          {...(mayAttachHere('image/*')
             ? {
                 onOpenStickers: () => {
                   setPanelOpen(false);
@@ -828,6 +847,8 @@ export const Composer = memo(function Composer({
           <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
+
+      {fileHovering ? <ComposerDropVeil language={uiLanguage} /> : null}
 
       {capturing
         ? createPortal(
@@ -1055,6 +1076,7 @@ export const Composer = memo(function Composer({
             canRecord={canRecord}
             canLocate={canLocate}
             {...(rights === undefined ? {} : { rights })}
+            {...(guestAttachments === undefined ? {} : { guest: guestAttachments })}
           />
         </Suspense>
       ) : null}

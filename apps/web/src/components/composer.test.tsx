@@ -37,6 +37,17 @@ describe('Composer — la citation porte la langue dans laquelle elle est SERVIE
     expect(html).toContain('Do you confirm the mockup?');
   });
 
+  test('« +N » (#9911) — la bande dit combien d’autres pièces porte le message cité', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Photo', more: 6 }} />);
+    expect(html).toContain('data-composer-reply-more="6"');
+    expect(html).toContain('+6');
+  });
+
+  test('sans autre pièce, aucun « +N »', () => {
+    const html = renderToStaticMarkup(<Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Photo' }} />);
+    expect(html).not.toContain('data-composer-reply-more');
+  });
+
   test('sans langue servie, aucun lang n’est posé — jamais un « fr » fabriqué', () => {
     const html = renderToStaticMarkup(
       <Composer onSend={() => {}} replyTo={{ author: 'Amina', excerpt: 'Tu valides la maquette ?' }} />,

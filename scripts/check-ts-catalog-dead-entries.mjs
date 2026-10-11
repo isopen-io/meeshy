@@ -421,7 +421,27 @@ export const callersIn = (contents, nsNames) => {
 // `06aa6144f2` — `attachments.signedByTokenByWildcard` (#9600 : l'adresse signée est
 // SERVIE dans les charges, aucun client ne la compose) et `me.securityEvents`
 // (prématurée : ses écrans viennent par #9651). Valeur MESURÉE le 2026-10-08.
-const BASELINE_DEAD_ENTRIES = 277;
+// 275 → 274 (2026-10-10, #9945) : une entrée morte de moins, consommée par les lots
+// #9906-#9911 (pièce visée). Valeur MESURÉE le 2026-10-10.
+// 274 → 275 (#10000, 2026-10-10) : `world.root` (`GET /api/v1/world`), GÉNÉRÉE
+// depuis `route-manifest.json` par `916e564ac9` sans relever cette référence —
+// PRÉMATURÉE : l'entrée publique de World Wide sera lue par la landing et la
+// connexion web (#10003, #10007), qui la feront redescendre. Valeur MESURÉE le
+// 2026-10-10.
+// 275 → 277 (2026-10-11, #9947) : `me.gameSeasonsByNumber` et `me.gameLeagueWeeksByWeekKey` —
+// comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
+// (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
+// Valeur MESURÉE le 2026-10-11.
+// 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
+// l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
+// 276 → 275 (2026-10-11, #10103) : `me.categories` et `me.categoriesByCategoryId` ont leur
+// appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
+// Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
+// Valeur MESURÉE le 2026-10-11.
+// 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
+// la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
+// ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 274;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

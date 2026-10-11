@@ -21,6 +21,12 @@ const mongoId = z
   .string()
   .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
+// #9909 — la pièce NOMMÉE d'une citation, la même que `POST /messages`.
+// Déclarée ici sans quoi `z.object` la strippe en silence ; son lien au
+// message cité est ADMIS au point de convergence des trois transports
+// (`MessagingService.handleMessage` → `admitAttachmentReply`), jamais ici.
+const attachmentReplyToSchema = z.object({ attachmentId: mongoId });
+
 const clientMessageIdSchema = z
   .string()
   .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)');
@@ -41,6 +47,7 @@ export const SocketMessageSendSchema = z.object({
   originalLanguage: z.string().optional(),
   messageType: z.string().optional(),
   replyToId: mongoId.optional(),
+  attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
   // Forward references — validated as ObjectIds so malformed strings are
@@ -98,6 +105,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   originalLanguage: z.string().optional(),
   attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENTS_PER_MESSAGE),
   replyToId: mongoId.optional(),
+  attachmentReplyTo: attachmentReplyToSchema.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).

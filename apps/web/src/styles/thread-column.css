@@ -1,0 +1,68 @@
+/*
+ * LA COLONNE DE LECTURE DU FIL (#10072) — la conversation est la vue que tout
+ * le monde voit, avec ou sans compte (World Wide, /chat-join). Sur ordinateur
+ * elle s'étirait sur toute la fenêtre : des bulles à 1 000 px, un composeur
+ * d'un bord à l'autre, un en-tête dont le retour et l'avatar se perdaient aux
+ * deux extrémités du regard.
+ *
+ * SOUS 768 px CETTE FEUILLE NE DÉCLARE RIEN — aucune règle hors des deux
+ * requêtes média (le témoin `thread-column.test.tsx` le mesure) : le téléphone
+ * est exactement celui d'avant.
+ *
+ * LE DÉFILEUR GARDE LA FENÊTRE, LE CONTENU SE BORNE. `<main>` reste
+ * `absolute inset-0` : la molette défile le fil même pointeur hors de la
+ * colonne. Ce sont ses marges INTÉRIEURES qui grandissent, depuis UNE variable
+ * posée sur la racine de l'écran (`.thread-root`) — chaque porteur
+ * (`.thread-column`) la lit, aucun ne recopie de largeur. Même loi pour les
+ * deux bandes de verre : leur FOND reste pleine largeur, leur rangée s'aligne
+ * sur la colonne.
+ *
+ * `100%` se résout au site qui CONSOMME la variable (une variable est
+ * substituée en texte) : la largeur du bloc conteneur de chaque porteur, qui
+ * est la largeur de l'écran du fil — ou de la feuille d'aperçu (#8821), où la
+ * colonne ne mord simplement jamais.
+ *
+ * `--thread-gutter` rend à chaque porteur sa gouttière de téléphone tant que
+ * la colonne ne mord pas (fenêtre à peine plus large que 768 px) : ces règles
+ * hors couche passent devant les utilitaires Tailwind (`px-3.5`, `px-4`), il
+ * faut donc les redire ici.
+ */
+@media (min-width: 768px) {
+  .thread-root {
+    --thread-column: 48rem;
+  }
+
+  .thread-column {
+    padding-inline: max(var(--thread-gutter, 0px), calc((100% - var(--thread-column)) / 2));
+  }
+
+  main.thread-column {
+    --thread-gutter: 0.875rem;
+  }
+
+  header > .thread-column {
+    --thread-gutter: 1rem;
+  }
+
+  .thread-column[aria-busy] {
+    --thread-gutter: 0.875rem;
+  }
+
+  .thread-scroll-to-bottom {
+    inset-inline-end: max(1rem, calc((100% - var(--thread-column)) / 2 + 1rem));
+  }
+
+  /* La bulle : 70 % de la colonne au téléphone comme au bureau, mais jamais
+     au-delà d'une ligne qu'on relit sans perdre le retour (~70 caractères).
+     Les médias sont déjà bornés à 300 px (`MEDIA_GRID_MAX_WIDTH`), les cartes
+     de lien et les citations vivent DANS la bulle. */
+  .thread-bubble-measure {
+    max-width: min(70%, 34rem);
+  }
+}
+
+@media (min-width: 1280px) {
+  .thread-root {
+    --thread-column: 56rem;
+  }
+}

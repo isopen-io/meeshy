@@ -2,12 +2,11 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { shownLevelOf } from '@/lib/game/ladder';
 import { medalOfAxis } from '@/lib/game/medal';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, daysLabel, medalLabel, shownRank } from '@/lib/view/game-copy';
+import { formatCount, gameText, levelTierName, meeshCount, rankName, standingLabel, treasuryName, medalLabel, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige, trophyView } from '@/lib/view/game-copy-v2';
 import { Link } from '@/routes/route-table';
 import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
-import { Flame } from './game/flame';
 import { GameMedal } from './game/medal';
 import { LevelRing } from './game/level-ring';
 import { RankBlason } from './game/rank-blason';
@@ -18,8 +17,8 @@ import { shelfOrder } from './game-trophy-shelf';
 /**
  * LE JEU SUR SON PROFIL (#9481) — ce que la personne montre d'elle-même : l'anneau
  * de niveau (emblème du palier, chiffre romain, étoiles de Prestige), le blason de
- * son rang et sa division, le trésor, la Flamme, la vitrine de trophées, ses
- * meilleures médailles, et la porte vers Progression. Une carte, pas un écran :
+ * son rang et sa division, le trésor, la vitrine de trophées, ses
+ * meilleures médailles (la Flamme ne se montre pas sur une fiche, #10092), et la porte vers Progression. Une carte, pas un écran :
  * le profil reste le profil.
  *
  * C'est SA vue : il montre tout, quels que soient ses réglages de visibilité (ils
@@ -34,7 +33,7 @@ export function GameProfileOwn({ progress }: { readonly progress: EngagementWith
   const game = progress.game;
   if (game === undefined) return null;
   const language = currentInterfaceLanguage();
-  const { glory, treasury, flame } = game;
+  const { glory, treasury } = game;
   const level = shownLevelOf(game.level);
 
   const shelf = game.trophies === undefined ? [] : shelfOrder(game.trophies).flatMap((key) => {
@@ -71,10 +70,6 @@ export function GameProfileOwn({ progress }: { readonly progress: EngagementWith
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption" style={{ color: GAME_INK }} data-game-profile-stats="">
         <li>
           {treasury.tier === null ? meeshCount(treasury.held) : gameText('game.profile.treasury', { meeshes: meeshCount(treasury.held), tier: treasuryName(treasury.tier) })}
-        </li>
-        <li className="flex items-center gap-1">
-          <Flame form={flame.form ?? 'braise'} size={18} />
-          {gameText('game.profile.flame', { days: daysLabel(flame.days) })}
         </li>
       </ul>
 

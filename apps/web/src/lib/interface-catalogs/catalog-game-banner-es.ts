@@ -9,6 +9,8 @@ const es = {
   'game.meeshes.none': 'Ninguna Meesh',
   'game.meeshes.one': '{count} Meesh',
   'game.meeshes.other': '{count} Meeshes',
+  'game.star_fragments.one': '{count} fragmento de estrella',
+  'game.star_fragments.other': '{count} fragmentos de estrella',
   'game.tier.etincelle': 'Chispa',
   'game.tier.lueur': 'Destello',
   'game.tier.lumiere': 'Luz',

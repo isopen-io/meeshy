@@ -6,6 +6,7 @@ import XCTest
 final class JoinFlowViewModelVitrineTests: XCTestCase {
     override func tearDown() {
         JoinFlowViewModel.debugOnPreviewShown = nil
+        JoinFlowViewModel.debugOnPreviewServed = nil
         ShareLinkService.debugLinkInfoOverride = nil
         super.tearDown()
     }
@@ -37,6 +38,22 @@ final class JoinFlowViewModelVitrineTests: XCTestCase {
         XCTAssertEqual(annonces.nombre, 0)
     }
 
+    /// L'en-tête de la fiche (#9904) : la vitrine reçoit le parcours lui-même, pour y faire le choix « sans compte ».
+    @MainActor
+    func test_loadLinkInfo_handsTheServedJourneyToTheVitrine() async throws {
+        let info = try Self.info(linkId: "lisboa-2026")
+        ShareLinkService.debugLinkInfoOverride = { $0 == "lisboa-2026" ? info : nil }
+        let recu = Recu()
+        JoinFlowViewModel.debugOnPreviewServed = { recu.parcours = $0 }
+
+        let viewModel = JoinFlowViewModel(identifier: "lisboa-2026")
+        await viewModel.loadLinkInfo()
+        recu.parcours?.proceedToForm()
+
+        XCTAssertTrue(recu.parcours === viewModel)
+        XCTAssertEqual(viewModel.phase, .form)
+    }
+
     private static func info(linkId: String) throws -> ShareLinkInfo {
         let json = #"{"id":"l1","linkId":"LINK","conversation":{"id":"c1","type":"group","createdAt":"2026-09-30T12:00:00.000Z"},"creator":{"id":"u1","username":"aiko.t"},"stats":{"totalParticipants":6,"memberCount":6,"anonymousCount":0,"languageCount":5,"spokenLanguages":["ja","pt","en","ko","es"]}}"#
             .replacingOccurrences(of: "LINK", with: linkId)
@@ -49,4 +66,11 @@ private final class Annonces {
     nonisolated deinit {}
 
     var nombre = 0
+}
+
+@MainActor
+private final class Recu {
+    nonisolated deinit {}
+
+    var parcours: JoinFlowViewModel?
 }

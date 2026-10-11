@@ -43,7 +43,8 @@ struct MessageActionsMenu: View {
     }
 
     private func row(_ action: PrimaryAction) -> some View {
-        let tint = accent
+        // Le destructif en rouge, isolé du reste de la liste (#9908).
+        let tint = action == .deletePiece ? MeeshyColors.error : accent
         return Button {
             HapticFeedback.light()
             onSelect(action)
@@ -101,6 +102,9 @@ struct MessageActionsMenu: View {
         case .select: return "checkmark.circle"
         case .exportImage: return MessageCardExportMenu.imageSymbol
         case .exportQuick: return MessageCardExportMenu.quickSymbol
+        case .wholeMessage: return "text.bubble"
+        case .replyToPiece: return "arrowshape.turn.up.left"
+        case .deletePiece: return "trash"
         }
     }
 
@@ -116,6 +120,9 @@ struct MessageActionsMenu: View {
         case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         case .exportImage: return MessageCardExportMenu.imageLabel
         case .exportQuick: return MessageCardExportMenu.quickLabel
+        case .wholeMessage: return String(localized: "message.piece.wholeMessage", defaultValue: "Tout le message", bundle: .main)
+        case .replyToPiece: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
+        case .deletePiece: return String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main)
         }
     }
 }

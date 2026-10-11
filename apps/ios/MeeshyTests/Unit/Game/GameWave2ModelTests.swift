@@ -401,13 +401,15 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertNotNil(GameStandingContent.of(UserGameProfileResponse(visible: true, standing: nil, treasury: GameShownTreasury(tier: .bourse))))
     }
 
-    func test_standingContent_isReadAsOneSentence_levelRankFlameAndTreasury() throws {
+    /// #10093 — la Flamme n'a aucun réglage de visibilité : son propriétaire ne peut pas choisir de la montrer, elle
+    /// n'est donc jamais lue, même quand le serveur sert sa forme.
+    func test_standingContent_isReadAsOneSentence_levelRankAndTreasury_neverTheFlame() throws {
         let content = try XCTUnwrap(GameStandingContent.of(otherGame()))
 
         let label = content.accessibilityLabel
         XCTAssertTrue(label.contains(GameCopy.tierName(.eclat)), label)
         XCTAssertTrue(label.contains(GameCopy.rankLabel(.voix, division: .ii)), label)
-        XCTAssertTrue(label.contains(GameCopy.flameFormName(.brasier)), label)
+        XCTAssertFalse(label.contains(GameCopy.flameFormName(.brasier)), label)
         XCTAssertTrue(label.contains(GameCopy.treasuryName(.coffre)), label)
     }
 

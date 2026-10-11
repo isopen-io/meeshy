@@ -1,5 +1,6 @@
 import type { ConversationsPage } from './conversations-pages';
 import { amina, bruno, conversationDefaults, dayAt, fatou, kwame, message, viewer } from './fixtures-base';
+import { FIXTURE_PROCHES_CATEGORY_ID, FIXTURE_TRAVAIL_CATEGORY_ID } from './fixtures-categories';
 import type { Conversation } from './types';
 
 /**
@@ -24,6 +25,15 @@ const PAGINATION_TITLES: readonly string[] = [
 ];
 
 const PAGINATION_POOL = [amina, kwame, fatou, bruno] as const;
+
+/** Les trois premières sont RANGÉES (#10103) — « Travail » puis « Proches »
+ * (`fixtures-categories.ts`) : une catégorie peut porter des conversations
+ * anciennes, qui quittent alors « Plus ancien ». */
+const CATEGORY_OF: Readonly<Record<number, string>> = {
+  0: FIXTURE_TRAVAIL_CATEGORY_ID,
+  1: FIXTURE_PROCHES_CATEGORY_ID,
+  2: FIXTURE_PROCHES_CATEGORY_ID,
+};
 
 export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ length: 34 }, (_, i) => {
   const n = String(i + 1).padStart(2, '0');
@@ -50,6 +60,9 @@ export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ le
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
     lastMessageOriginalLanguage: 'fr',
+    ...(CATEGORY_OF[i] === undefined
+      ? {}
+      : { userPreferences: [{ isPinned: false, isMuted: false, isArchived: false, categoryId: CATEGORY_OF[i] }] }),
   };
 });
 

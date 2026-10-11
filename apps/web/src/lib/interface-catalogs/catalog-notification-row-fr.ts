@@ -18,6 +18,7 @@ const frNotificationRow = {
   'notifications.row.media.video': '🎥 Vidéo',
   'notifications.row.media.audio': '🎵 Audio',
   'notifications.row.expired': 'expirée',
+  'notifications.row.directMessage': 'Message privé',
   'notifications.row.milestone.level': 'Niveau {level}',
   'notifications.row.milestone.streak': '{days} jours d’affilée',
   'notifications.row.milestone.badgeReason': 'Badge débloqué · palier {threshold}',
