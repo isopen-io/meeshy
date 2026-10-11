@@ -121,20 +121,29 @@ public enum GamePhotoCatchUpLaw {
 
     private static func count(_ value: Int) -> Int { max(0, value) }
 
-    /// Toutes les étapes franchies, piste après piste, chacune dans son ordre.
-    public static func stepsReached(_ standing: PhotoCatchUpStanding) -> [PhotoLawStep] {
-        [PhotoLawStep(track: .start, id: "start", emblem: .start)]
-            + rankSteps(standing)
-            + tierSteps(standing)
-            + summitSteps(standing)
-            + meeshSteps(standing)
-            + treasurySteps(standing)
-            + flameSteps(standing)
+    /// Toutes les étapes franchies que la politique photographie, piste après piste, chacune dans son ordre :
+    /// une étape non photographiable ne verrouille pas sa piste.
+    public static func stepsReached(_ standing: PhotoCatchUpStanding, policy: PhotoAlertPolicy = .standard) -> [PhotoLawStep] {
+        let tracks: [[PhotoLawStep]] = [
+            [PhotoLawStep(track: .start, id: "start", emblem: .start)],
+            rankSteps(standing),
+            tierSteps(standing),
+            summitSteps(standing),
+            meeshSteps(standing),
+            treasurySteps(standing),
+            flameSteps(standing),
+        ]
+        return tracks.flatMap { $0 }.filter { isPhotographed($0, policy: policy) }
+    }
+
+    private static func isPhotographed(_ step: PhotoLawStep, policy: PhotoAlertPolicy) -> Bool {
+        guard policy.photographs == .rankPassage, case .rank(_, let division) = step.emblem else { return true }
+        return division == nil || division == .v
     }
 
     /// Les étapes franchies sans photo gardée : la première de chaque piste est ouverte, les suivantes l'attendent.
-    public static func catchUp(_ standing: PhotoCatchUpStanding, kept: Set<String>) -> [PhotoLawEntry] {
-        let missing = stepsReached(standing).filter { !kept.contains($0.id) }
+    public static func catchUp(_ standing: PhotoCatchUpStanding, kept: Set<String>, policy: PhotoAlertPolicy = .standard) -> [PhotoLawEntry] {
+        let missing = stepsReached(standing, policy: policy).filter { !kept.contains($0.id) }
         return missing.map { step in
             guard let first = missing.first(where: { $0.track == step.track }), first.id != step.id else {
                 return PhotoLawEntry(step: step, isOpen: true, blockedBy: nil)
@@ -159,8 +168,10 @@ public enum GamePhotoCatchUpLaw {
 
     /// LA proposition d'une transition : chaque moment d'une piste est remplacé par l'étape OUVERTE de sa
     /// piste (aucune si la piste est à jour), puis le plus marquant l'emporte. `nil` : rien à proposer.
-    public static func offer(for ids: [String], standing: PhotoCatchUpStanding, kept: Set<String>) -> String? {
-        let open = catchUp(standing, kept: kept).filter(\.isOpen)
+    public static func offer(
+        for ids: [String], standing: PhotoCatchUpStanding, kept: Set<String>, policy: PhotoAlertPolicy = .standard
+    ) -> String? {
+        let open = catchUp(standing, kept: kept, policy: policy).filter(\.isOpen)
         let candidates = ids.compactMap { id -> String? in
             guard let lane = track(of: id) else { return id }
             return open.first { $0.track == lane }?.id
@@ -172,7 +183,8 @@ public enum GamePhotoCatchUpLaw {
         }?.element
     }
 
-    private static func priority(_ momentId: String) -> Int {
+    /// Le rang de préséance d'une identité : sa piste dans `offerPriority`, une identité hors piste en dernier.
+    public static func priority(_ momentId: String) -> Int {
         guard let lane = track(of: momentId) else { return offerPriority.count }
         return offerPriority.firstIndex(of: lane) ?? offerPriority.count
     }

@@ -32,3 +32,4 @@ export * from './personal-mission-copy.js';
 export * from './spend.js';
 export * from './level-steps.js';
 export * from './photo-catch-up.js';
+export * from './photo-alerts.js';

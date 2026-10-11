@@ -21005,6 +21005,1991 @@
         "treasuryTier": "reserve",
         "flameRecord": 23
       }
+    },
+    {
+      "_label": "alerte — ligne de base sans alerte",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:murmure:4"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": null,
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — une étape par transition",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "meesh:10",
+          "tier:lueur",
+          "rank:murmure:4"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 4,
+          "levelRecord": 10,
+          "prestige": 0,
+          "minted": 10,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:murmure:4",
+          "propose": "rank:murmure:4",
+          "reached": [
+            "meesh:10",
+            "tier:lueur",
+            "rank:murmure:4"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — l’étape ouverte remplace celle qui saute",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "meesh:50"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 50,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "meesh:1",
+          "meesh:10",
+          "meesh:20",
+          "meesh:30"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 49,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "meesh:50",
+          "propose": "meesh:40",
+          "reached": [
+            "meesh:50"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — Légende II sans photo de rang (D20 a)",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:legende:2"
+        ],
+        "standing": {
+          "rank": "legende",
+          "division": 2,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "legende",
+          "division": 3,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:legende:2",
+          "propose": "rank:murmure:4",
+          "reached": [
+            "rank:legende:2"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — Légende II sans photo de rang (D20 b)",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:legende:2"
+        ],
+        "standing": {
+          "rank": "legende",
+          "division": 2,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "legende",
+          "division": 3,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "apart",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:legende:2",
+          "propose": "rank:legende:2",
+          "reached": [
+            "rank:legende:2"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — déjà franchie à la ligne de base",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:4"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "voix",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — présentée, jamais reproposée",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:4"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [
+          "rank:voix:4"
+        ],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — déjà photographiée",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "meesh:1"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — le départ",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "start"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — « rang seul » : Oracle III",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:oracle:3"
+        ],
+        "standing": {
+          "rank": "oracle",
+          "division": 3,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "rank-passage",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — « rang seul » : Voix V propose Écho V",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:5"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "rank-passage",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:voix:5",
+          "propose": "rank:echo:5",
+          "reached": [
+            "rank:voix:5"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — « grands moments » : une division",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:4"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "big-moments",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — « grands moments » : un passage de rang",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:5"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "big-moments",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:voix:5",
+          "propose": "rank:murmure:4",
+          "reached": [
+            "rank:voix:5"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — « jamais »",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:voix:5"
+        ],
+        "standing": {
+          "rank": "voix",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "never",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — trésor au plus haut palier",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "treasury:coffret"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": "bourse",
+          "flameRecord": 0
+        },
+        "kept": [
+          "treasury:bourse",
+          "treasury:escarcelle"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": "coffret",
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "treasury:coffret",
+          "propose": "treasury:coffret",
+          "reached": [
+            "treasury:coffret"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — trésor au palier courant",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "treasury:coffret"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": "bourse",
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — réalisation du jour",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "day:2026-10-11"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "day:2026-10-11",
+          "propose": "day:2026-10-11",
+          "reached": [
+            "day:2026-10-11"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — réalisation du jour déjà présentée",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "day:2026-10-11"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [
+          "day:2026-10-11"
+        ],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — deux réalisations du jour : la plus récente",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "day:2026-10-10",
+          "day:2026-10-11"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "day:2026-10-11",
+          "propose": "day:2026-10-11",
+          "reached": [
+            "day:2026-10-11"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — une étape de piste avant la réalisation du jour",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "day:2026-10-11",
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "meesh:1",
+          "propose": "meesh:1",
+          "reached": [
+            "day:2026-10-11",
+            "meesh:1"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — deux divisions d’une transition : la plus haute",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "rank:murmure:3",
+          "rank:murmure:2"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 2,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "rank:murmure:4",
+          "rank:murmure:3"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "rank:murmure:2",
+          "propose": "rank:murmure:2",
+          "reached": [
+            "rank:murmure:2"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — un moment hors piste seul",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "trophy:trophy.flame.100",
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "meesh:1"
+        ],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": null
+      },
+      "expected": {
+        "alert": {
+          "announce": "trophy:trophy.flame.100",
+          "propose": "trophy:trophy.flame.100",
+          "reached": [
+            "trophy:trophy.flame.100"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "alerte — hors rythme : plafond du jour",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": [
+            {
+              "at": 1791705600000,
+              "dayKey": "2026-10-11"
+            }
+          ]
+        }
+      },
+      "expected": {
+        "alert": null
+      }
+    },
+    {
+      "_label": "alerte — dans le rythme",
+      "input": {
+        "law": "photo-alert",
+        "kind": "alert",
+        "reached": [
+          "meesh:1"
+        ],
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 1,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [],
+        "presented": [],
+        "baseline": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        },
+        "treasuryPeak": null,
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": []
+        }
+      },
+      "expected": {
+        "alert": {
+          "announce": "meesh:1",
+          "propose": "meesh:1",
+          "reached": [
+            "meesh:1"
+          ]
+        }
+      }
+    },
+    {
+      "_label": "rythme — plafond du jour atteint",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": [
+            {
+              "at": 1791705600000,
+              "dayKey": "2026-10-11"
+            }
+          ]
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "silent"
+      }
+    },
+    {
+      "_label": "rythme — la veille ne compte pas",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": [
+            {
+              "at": 1791619200000,
+              "dayKey": "2026-10-10"
+            }
+          ]
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "allowed"
+      }
+    },
+    {
+      "_label": "rythme — écart de 3 h 59",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": [
+            {
+              "at": 1791727260000,
+              "dayKey": "2026-10-11"
+            }
+          ]
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 2,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "silent"
+      }
+    },
+    {
+      "_label": "rythme — écart de 4 h",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791741600000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": [
+            {
+              "at": 1791727200000,
+              "dayKey": "2026-10-11"
+            }
+          ]
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 2,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "allowed"
+      }
+    },
+    {
+      "_label": "rythme — délai de grâce, passive à 9 min",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791706140000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": []
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "wait"
+      }
+    },
+    {
+      "_label": "rythme — délai de grâce, passive à 10 min",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791706200000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "passive",
+          "shown": []
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "allowed"
+      }
+    },
+    {
+      "_label": "rythme — délai de grâce, geste à 1 min",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791705660000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": 1791705600000,
+          "surface": "gesture",
+          "shown": []
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "allowed"
+      }
+    },
+    {
+      "_label": "rythme — session inconnue",
+      "input": {
+        "law": "photo-alert",
+        "kind": "pacing",
+        "pacing": {
+          "now": 1791705660000,
+          "dayKey": "2026-10-11",
+          "sessionStartedAt": null,
+          "surface": "passive",
+          "shown": []
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "pace": "allowed"
+      }
+    },
+    {
+      "_label": "étapes photographiées — « rang seul », Oracle III",
+      "input": {
+        "law": "photo-alert",
+        "kind": "steps",
+        "standing": {
+          "rank": "oracle",
+          "division": 3,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 12,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "rank-passage",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "ids": [
+          "start",
+          "rank:echo:5",
+          "rank:voix:5",
+          "rank:conteur:5",
+          "rank:passeur:5",
+          "rank:polyglotte:5",
+          "rank:ambassadeur:5",
+          "rank:orateur:5",
+          "rank:oracle:5",
+          "meesh:1",
+          "meesh:10"
+        ]
+      }
+    },
+    {
+      "_label": "étapes photographiées — « rang seul », le Mythe",
+      "input": {
+        "law": "photo-alert",
+        "kind": "steps",
+        "standing": {
+          "rank": "mythe",
+          "division": null,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "rank-passage",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "ids": [
+          "start",
+          "rank:echo:5",
+          "rank:voix:5",
+          "rank:conteur:5",
+          "rank:passeur:5",
+          "rank:polyglotte:5",
+          "rank:ambassadeur:5",
+          "rank:orateur:5",
+          "rank:oracle:5",
+          "rank:legende:5",
+          "rank:mythe:0"
+        ]
+      }
+    },
+    {
+      "_label": "étapes photographiées — chaque étape, Voix IV",
+      "input": {
+        "law": "photo-alert",
+        "kind": "steps",
+        "standing": {
+          "rank": "voix",
+          "division": 4,
+          "levelRecord": 1,
+          "prestige": 0,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "policy": {
+          "photographs": "every-step",
+          "invitations": "every-step",
+          "backlog": "locks",
+          "inApp": {
+            "perDay": 1,
+            "minGapMinutes": 240,
+            "sessionGraceMinutes": 10
+          },
+          "push": {
+            "perDay": 1,
+            "delayMinutes": 60,
+            "nightFromHour": 21,
+            "nightToHour": 9
+          }
+        }
+      },
+      "expected": {
+        "ids": [
+          "start",
+          "rank:murmure:4",
+          "rank:murmure:3",
+          "rank:murmure:2",
+          "rank:murmure:1",
+          "rank:echo:5",
+          "rank:echo:4",
+          "rank:echo:3",
+          "rank:echo:2",
+          "rank:echo:1",
+          "rank:voix:5",
+          "rank:voix:4"
+        ]
+      }
+    },
+    {
+      "_label": "résumé du push, cas 1",
+      "input": {
+        "law": "photo-alert",
+        "kind": "digest",
+        "moments": [
+          {
+            "stepId": "rank:voix:5",
+            "presentedAt": null,
+            "notifiedAt": null
+          },
+          {
+            "stepId": "meesh:10",
+            "presentedAt": "2026-10-11T08:00:00.000Z",
+            "notifiedAt": null
+          },
+          {
+            "stepId": "tier:lueur",
+            "presentedAt": null,
+            "notifiedAt": "2026-10-11T08:00:00.000Z"
+          },
+          {
+            "stepId": "flame:7",
+            "presentedAt": null,
+            "notifiedAt": null
+          },
+          {
+            "stepId": "start",
+            "presentedAt": null,
+            "notifiedAt": null
+          },
+          {
+            "stepId": "day:2026-10-11",
+            "presentedAt": null,
+            "notifiedAt": null
+          },
+          {
+            "stepId": "flame:7",
+            "presentedAt": null,
+            "notifiedAt": null
+          }
+        ]
+      },
+      "expected": {
+        "digest": {
+          "stepIds": [
+            "rank:voix:5",
+            "flame:7"
+          ],
+          "count": 2
+        }
+      }
+    },
+    {
+      "_label": "résumé du push, cas 2",
+      "input": {
+        "law": "photo-alert",
+        "kind": "digest",
+        "moments": [
+          {
+            "stepId": "meesh:10",
+            "presentedAt": "2026-10-11T08:00:00.000Z",
+            "notifiedAt": null
+          }
+        ]
+      },
+      "expected": {
+        "digest": null
+      }
+    },
+    {
+      "_label": "résumé du push, cas 3",
+      "input": {
+        "law": "photo-alert",
+        "kind": "digest",
+        "moments": []
+      },
+      "expected": {
+        "digest": null
+      }
+    },
+    {
+      "_label": "les grands moments",
+      "input": {
+        "law": "photo-alert",
+        "kind": "big",
+        "ids": [
+          "rank:echo:5",
+          "rank:mythe:0",
+          "level-100:0",
+          "prestige:2",
+          "meesh:100",
+          "meesh:1000",
+          "flame:100",
+          "flame:365",
+          "rank:echo:4",
+          "tier:lueur",
+          "meesh:10",
+          "meesh:1",
+          "meesh:0",
+          "flame:30",
+          "treasury:bourse",
+          "start",
+          "day:2026-10-11",
+          "prestige",
+          "rank:Echo:5"
+        ]
+      },
+      "expected": {
+        "big": [
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          true,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false,
+          false
+        ]
+      }
+    },
+    {
+      "_label": "la politique par défaut",
+      "input": {
+        "law": "photo-alert",
+        "kind": "policy"
+      },
+      "expected": {
+        "photographs": "every-step",
+        "invitations": "every-step",
+        "backlog": "locks",
+        "inApp": {
+          "perDay": 1,
+          "minGapMinutes": 240,
+          "sessionGraceMinutes": 10
+        },
+        "push": {
+          "perDay": 1,
+          "delayMinutes": 60,
+          "nightFromHour": 21,
+          "nightToHour": 9
+        }
+      }
+    },
+    {
+      "_label": "réalisation du jour « 2026-10-11 »",
+      "input": {
+        "law": "photo-moment",
+        "dayKey": "2026-10-11"
+      },
+      "expected": {
+        "id": "day:2026-10-11",
+        "day": "2026-10-11"
+      }
+    },
+    {
+      "_label": "réalisation du jour « 2026-02-29 »",
+      "input": {
+        "law": "photo-moment",
+        "dayKey": "2026-02-29"
+      },
+      "expected": {
+        "id": "day:2026-02-29",
+        "day": "2026-02-29"
+      }
+    },
+    {
+      "_label": "réalisation du jour « 2026-13-01 »",
+      "input": {
+        "law": "photo-moment",
+        "dayKey": "2026-13-01"
+      },
+      "expected": {
+        "id": null,
+        "day": null
+      }
+    },
+    {
+      "_label": "réalisation du jour « 11/10/2026 »",
+      "input": {
+        "law": "photo-moment",
+        "dayKey": "11/10/2026"
+      },
+      "expected": {
+        "id": null,
+        "day": null
+      }
+    },
+    {
+      "_label": "réalisation du jour «  »",
+      "input": {
+        "law": "photo-moment",
+        "dayKey": ""
+      },
+      "expected": {
+        "id": null,
+        "day": null
+      }
     }
   ]
 }

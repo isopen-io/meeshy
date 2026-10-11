@@ -8,38 +8,21 @@ import MeeshySDK
 // Pendant Swift de `packages/shared/__tests__/game/game-vectors-law-photo.ts`
 // (`evaluateGameVectorPhoto`) : `photo-catch-up`, `photo-offer` et
 // `photo-standing` rendent, dans la MÊME forme JSON que la loi TypeScript, la
-// sortie de `GamePhotoCatchUpLaw`. Sur divergence, c'est le TypeScript qui a raison.
+// sortie de `GamePhotoCatchUpLaw` ; `photo-alert` celle de `GamePhotoAlerts`
+// (#10173). Sur divergence, c'est le TypeScript qui a raison.
 
 extension GameLawVectorEvaluator {
 
-    static let photoLaws: [String] = ["photo-catch-up", "photo-offer", "photo-standing"]
+    static let photoLaws: [String] = ["photo-catch-up", "photo-offer", "photo-standing", "photo-alert"]
 
     static func evaluatePhoto(law: String, input: GameJSON) throws -> GameJSON {
         switch law {
         case "photo-catch-up": return try photoCatchUp(input)
         case "photo-offer": return try photoOffer(input)
         case "photo-standing": return try photoStanding(input)
+        case "photo-alert": return try photoAlert(input)
         default: throw GameLawVectorError.unknownLaw(law)
         }
-    }
-
-    private static func photoStandingOf(_ json: GameJSON) throws -> PhotoCatchUpStanding {
-        guard let rank = GloryRank(rawValue: string(json, "rank")) else {
-            throw GameLawVectorError.malformed("rang inconnu « \(string(json, "rank")) »")
-        }
-        let tier = optionalString(json, "treasuryTier")
-        return PhotoCatchUpStanding(
-            rank: rank,
-            division: optionalInt(json, "division").flatMap(GloryDivision5.init(rawValue:)),
-            levelRecord: int(json, "levelRecord"),
-            prestige: int(json, "prestige"),
-            minted: int(json, "minted"),
-            treasuryTier: try tier.map { key in
-                guard let tier = TreasuryTierKey(rawValue: key) else { throw GameLawVectorError.malformed("palier inconnu « \(key) »") }
-                return tier
-            },
-            flameRecord: int(json, "flameRecord")
-        )
     }
 
     private static func kept(_ input: GameJSON) -> Set<String> {
@@ -68,7 +51,7 @@ extension GameLawVectorEvaluator {
     }
 
     private static func photoCatchUp(_ input: GameJSON) throws -> GameJSON {
-        let standing = try photoStandingOf(input["standing"])
+        let standing = try photoStanding(of: input["standing"])
         let steps = GamePhotoCatchUpLaw.stepsReached(standing).map { step in
             object(["track": .string(step.track.rawValue), "id": .string(step.id), "emblem": photoEmblemJSON(step.emblem)])
         }
@@ -85,7 +68,7 @@ extension GameLawVectorEvaluator {
 
     private static func photoOffer(_ input: GameJSON) throws -> GameJSON {
         let ids = input["momentIds"].arrayValue.compactMap(\.stringValue)
-        let offer = GamePhotoCatchUpLaw.offer(for: ids, standing: try photoStandingOf(input["standing"]), kept: kept(input))
+        let offer = GamePhotoCatchUpLaw.offer(for: ids, standing: try photoStanding(of: input["standing"]), kept: kept(input))
         return object([
             "offer": .optionalString(offer),
             "tracks": .array(ids.map { .optionalString(GamePhotoCatchUpLaw.track(of: $0)?.rawValue) }),

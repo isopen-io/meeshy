@@ -1,6 +1,7 @@
 /**
  * LA LOI DU CARNET, MISE EN VECTEURS (#10155) — le rattrapage (`photo-catch-up`), la proposition d'une
- * transition (`photo-offer`) et la situation lue dans le bloc `game` (`photo-standing`).
+ * transition (`photo-offer`), la situation lue dans le bloc `game` (`photo-standing`) ; et la loi des alertes
+ * d'immortalisation (`photo-alert`, #10173), avec l'identité de la réalisation du jour (`photo-moment`).
  *
  * Même contrat que `game-vectors-law-v2.ts`, qui les déclare et les assemble : chaque cas porte `input.law`,
  * `expected` est la sortie de la loi TS, rejouée par iOS (`GameLawVectorEvaluatorPhoto.swift`) sur le miroir
@@ -14,6 +15,18 @@
  */
 
 import type { GameBlock } from '../../types/game.js';
+import {
+  PHOTO_ALERT_POLICY,
+  isBigPhotoMoment,
+  photoAlertDigest,
+  photoAlertFor,
+  photoAlertPacing,
+  type PhotoAlertPacing,
+  type PhotoAlertPolicy,
+  type PhotoMomentRecord,
+} from '../../utils/game/photo-alerts.js';
+import { photoDayMomentId, photoDayOfMomentId } from '../../utils/game/photo-moments.js';
+import type { TreasuryTierKey } from '../../utils/game/treasury.js';
 import { drawDailyMissions } from '../../utils/game/missions.js';
 import { buildGameBlock, type GameBlockFacts } from '../../utils/game/game-block.js';
 import {
@@ -34,9 +47,62 @@ export type GameVectorInputPhoto =
       readonly standing: PhotoCatchUpStanding;
       readonly kept: readonly string[];
     }
-  | { readonly law: 'photo-standing'; readonly game: PhotoStandingSource };
+  | { readonly law: 'photo-standing'; readonly game: PhotoStandingSource }
+  | {
+      readonly law: 'photo-alert';
+      readonly kind: 'alert';
+      readonly reached: readonly string[];
+      readonly standing: PhotoCatchUpStanding;
+      readonly kept: readonly string[];
+      readonly presented: readonly string[];
+      readonly baseline: PhotoCatchUpStanding | null;
+      readonly policy: PhotoAlertPolicy;
+      readonly treasuryPeak: TreasuryTierKey | null;
+      readonly pacing: PhotoAlertPacing | null;
+    }
+  | { readonly law: 'photo-alert'; readonly kind: 'pacing'; readonly pacing: PhotoAlertPacing; readonly policy: PhotoAlertPolicy }
+  | { readonly law: 'photo-alert'; readonly kind: 'steps'; readonly standing: PhotoCatchUpStanding; readonly policy: PhotoAlertPolicy }
+  | { readonly law: 'photo-alert'; readonly kind: 'digest'; readonly moments: readonly PhotoMomentRecord[] }
+  | { readonly law: 'photo-alert'; readonly kind: 'big'; readonly ids: readonly string[] }
+  | { readonly law: 'photo-alert'; readonly kind: 'policy' };
 
-export const GAME_VECTOR_LAWS_PHOTO = ['photo-catch-up', 'photo-offer', 'photo-standing'] as const;
+/** La réalisation du jour rejoint la loi `photo-moment` (déclarée par la vague 2) par une entrée à part. */
+export type GameVectorInputPhotoDay = { readonly law: 'photo-moment'; readonly dayKey: string };
+
+export const GAME_VECTOR_LAWS_PHOTO = ['photo-catch-up', 'photo-offer', 'photo-standing', 'photo-alert'] as const;
+
+export const evaluatePhotoDayVector = (input: GameVectorInputPhotoDay): unknown => {
+  const id = photoDayMomentId(input.dayKey);
+  return { id, day: photoDayOfMomentId(`day:${input.dayKey}`) };
+};
+
+const evaluatePhotoAlert = (input: Extract<GameVectorInputPhoto, { readonly law: 'photo-alert' }>): unknown => {
+  switch (input.kind) {
+    case 'alert':
+      return {
+        alert: photoAlertFor({
+          reached: input.reached,
+          standing: input.standing,
+          kept: input.kept,
+          presented: input.presented,
+          baseline: input.baseline,
+          policy: input.policy,
+          treasuryPeak: input.treasuryPeak,
+          ...(input.pacing === null ? {} : { pacing: input.pacing }),
+        }),
+      };
+    case 'pacing':
+      return { pace: photoAlertPacing(input.pacing, input.policy) };
+    case 'steps':
+      return { ids: photoStepsReached(input.standing, input.policy).map((step) => step.id) };
+    case 'digest':
+      return { digest: photoAlertDigest(input.moments) };
+    case 'big':
+      return { big: input.ids.map(isBigPhotoMoment) };
+    case 'policy':
+      return PHOTO_ALERT_POLICY;
+  }
+};
 
 export function evaluateGameVectorPhoto(input: GameVectorInputPhoto): unknown {
   switch (input.law) {
@@ -52,6 +118,8 @@ export function evaluateGameVectorPhoto(input: GameVectorInputPhoto): unknown {
       };
     case 'photo-standing':
       return catchUpStandingOf(input.game);
+    case 'photo-alert':
+      return evaluatePhotoAlert(input);
   }
 }
 
@@ -166,5 +234,127 @@ export function buildGameVectorsPhoto() {
     ] as const
   ).map(([label, game]) => vector(`situation — ${label}`, { law: 'photo-standing', game: source(game) }));
 
-  return [...catchUps, ...offers, ...standings];
+  return [...catchUps, ...offers, ...standings, ...buildPhotoAlertVectors(), ...buildPhotoDayVectors()];
+}
+
+const policy = (over: Partial<PhotoAlertPolicy> = {}): PhotoAlertPolicy => ({ ...PHOTO_ALERT_POLICY, ...over });
+
+const MINUTE = 60_000;
+const at = (minutes: number): number => Date.UTC(2026, 9, 11, 8, 0) + minutes * MINUTE;
+const pacing = (over: Partial<PhotoAlertPacing> = {}): PhotoAlertPacing => ({
+  now: at(600),
+  dayKey: '2026-10-11',
+  sessionStartedAt: at(0),
+  surface: 'passive',
+  shown: [],
+  ...over,
+});
+
+type AlertCase = {
+  readonly reached: readonly string[];
+  readonly standing: PhotoCatchUpStanding;
+  readonly kept?: readonly string[];
+  readonly presented?: readonly string[];
+  readonly baseline?: PhotoCatchUpStanding | null;
+  readonly policy?: PhotoAlertPolicy;
+  readonly treasuryPeak?: TreasuryTierKey | null;
+  readonly pacing?: PhotoAlertPacing | null;
+};
+
+const NEW_ACCOUNT = standing();
+const RANK_PASSAGE = policy({ photographs: 'rank-passage' });
+
+function buildPhotoAlertVectors() {
+  const alerts = (
+    [
+      ['ligne de base sans alerte', { reached: ['rank:murmure:4'], standing: standing({ division: 4 }), baseline: null }],
+      ['une étape par transition', { reached: ['meesh:10', 'tier:lueur', 'rank:murmure:4'], standing: standing({ division: 4, levelRecord: 10, minted: 10 }), kept: ['start', 'meesh:1'] }],
+      ['l’étape ouverte remplace celle qui saute', { reached: ['meesh:50'], standing: standing({ minted: 50 }), kept: MEESH_UP_TO_30, baseline: standing({ minted: 49 }) }],
+      ['Légende II sans photo de rang (D20 a)', { reached: ['rank:legende:2'], standing: standing({ rank: 'legende', division: 2 }), kept: ['start'], baseline: standing({ rank: 'legende', division: 3 }) }],
+      ['Légende II sans photo de rang (D20 b)', { reached: ['rank:legende:2'], standing: standing({ rank: 'legende', division: 2 }), kept: ['start'], baseline: standing({ rank: 'legende', division: 3 }), policy: policy({ backlog: 'apart' }) }],
+      ['déjà franchie à la ligne de base', { reached: ['rank:voix:4'], standing: standing({ rank: 'voix', division: 4 }), baseline: standing({ rank: 'voix', division: 4 }) }],
+      ['présentée, jamais reproposée', { reached: ['rank:voix:4'], standing: standing({ rank: 'voix', division: 4 }), presented: ['rank:voix:4'] }],
+      ['déjà photographiée', { reached: ['meesh:1'], standing: standing({ minted: 1 }), kept: ['meesh:1'] }],
+      ['le départ', { reached: ['start'], standing: NEW_ACCOUNT }],
+      ['« rang seul » : Oracle III', { reached: ['rank:oracle:3'], standing: standing({ rank: 'oracle', division: 3 }), policy: RANK_PASSAGE }],
+      ['« rang seul » : Voix V propose Écho V', { reached: ['rank:voix:5'], standing: standing({ rank: 'voix', division: 5 }), kept: ['start'], policy: RANK_PASSAGE }],
+      ['« grands moments » : une division', { reached: ['rank:voix:4'], standing: standing({ rank: 'voix', division: 4 }), policy: policy({ invitations: 'big-moments' }) }],
+      ['« grands moments » : un passage de rang', { reached: ['rank:voix:5'], standing: standing({ rank: 'voix', division: 5 }), policy: policy({ invitations: 'big-moments' }) }],
+      ['« jamais »', { reached: ['rank:voix:5'], standing: standing({ rank: 'voix', division: 5 }), policy: policy({ invitations: 'never' }) }],
+      ['trésor au plus haut palier', { reached: ['treasury:coffret'], standing: standing({ treasuryTier: 'bourse' }), treasuryPeak: 'coffret', kept: ['treasury:bourse', 'treasury:escarcelle'] }],
+      ['trésor au palier courant', { reached: ['treasury:coffret'], standing: standing({ treasuryTier: 'bourse' }) }],
+      ['réalisation du jour', { reached: ['day:2026-10-11'], standing: NEW_ACCOUNT }],
+      ['réalisation du jour déjà présentée', { reached: ['day:2026-10-11'], standing: NEW_ACCOUNT, presented: ['day:2026-10-11'] }],
+      ['deux réalisations du jour : la plus récente', { reached: ['day:2026-10-10', 'day:2026-10-11'], standing: NEW_ACCOUNT }],
+      ['une étape de piste avant la réalisation du jour', { reached: ['day:2026-10-11', 'meesh:1'], standing: standing({ minted: 1 }) }],
+      ['deux divisions d’une transition : la plus haute', { reached: ['rank:murmure:3', 'rank:murmure:2'], standing: standing({ division: 2 }), kept: ['rank:murmure:4', 'rank:murmure:3'] }],
+      ['un moment hors piste seul', { reached: ['trophy:trophy.flame.100', 'meesh:1'], standing: standing({ minted: 1 }), kept: ['meesh:1'] }],
+      ['hors rythme : plafond du jour', { reached: ['meesh:1'], standing: standing({ minted: 1 }), pacing: pacing({ shown: [{ at: at(0), dayKey: '2026-10-11' }] }) }],
+      ['dans le rythme', { reached: ['meesh:1'], standing: standing({ minted: 1 }), pacing: pacing() }],
+    ] as const satisfies readonly (readonly [string, AlertCase])[]
+  ).map(([label, c]) =>
+    vector(`alerte — ${label}`, {
+      law: 'photo-alert',
+      kind: 'alert',
+      reached: c.reached,
+      standing: c.standing,
+      kept: 'kept' in c ? c.kept : [],
+      presented: 'presented' in c ? c.presented : [],
+      baseline: 'baseline' in c ? c.baseline : NEW_ACCOUNT,
+      policy: 'policy' in c ? c.policy : PHOTO_ALERT_POLICY,
+      treasuryPeak: 'treasuryPeak' in c ? c.treasuryPeak : null,
+      pacing: 'pacing' in c ? c.pacing : null,
+    }),
+  );
+
+  const twoPerDay = policy({ inApp: { ...PHOTO_ALERT_POLICY.inApp, perDay: 2 } });
+  const paces = (
+    [
+      ['plafond du jour atteint', pacing({ shown: [{ at: at(0), dayKey: '2026-10-11' }] }), PHOTO_ALERT_POLICY],
+      ['la veille ne compte pas', pacing({ shown: [{ at: at(-1440), dayKey: '2026-10-10' }] }), PHOTO_ALERT_POLICY],
+      ['écart de 3 h 59', pacing({ shown: [{ at: at(361), dayKey: '2026-10-11' }] }), twoPerDay],
+      ['écart de 4 h', pacing({ shown: [{ at: at(360), dayKey: '2026-10-11' }] }), twoPerDay],
+      ['délai de grâce, passive à 9 min', pacing({ now: at(9) }), PHOTO_ALERT_POLICY],
+      ['délai de grâce, passive à 10 min', pacing({ now: at(10) }), PHOTO_ALERT_POLICY],
+      ['délai de grâce, geste à 1 min', pacing({ now: at(1), surface: 'gesture' }), PHOTO_ALERT_POLICY],
+      ['session inconnue', pacing({ now: at(1), sessionStartedAt: null }), PHOTO_ALERT_POLICY],
+    ] as const
+  ).map(([label, p, pol]) => vector(`rythme — ${label}`, { law: 'photo-alert', kind: 'pacing', pacing: p, policy: pol }));
+
+  const stepsUnder = (
+    [
+      ['« rang seul », Oracle III', standing({ rank: 'oracle', division: 3, minted: 12 }), RANK_PASSAGE],
+      ['« rang seul », le Mythe', standing({ rank: 'mythe', division: null }), RANK_PASSAGE],
+      ['chaque étape, Voix IV', standing({ rank: 'voix', division: 4 }), PHOTO_ALERT_POLICY],
+    ] as const
+  ).map(([label, s, pol]) => vector(`étapes photographiées — ${label}`, { law: 'photo-alert', kind: 'steps', standing: s, policy: pol }));
+
+  const digests = [
+    [
+      { stepId: 'rank:voix:5', presentedAt: null, notifiedAt: null },
+      { stepId: 'meesh:10', presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null },
+      { stepId: 'tier:lueur', presentedAt: null, notifiedAt: '2026-10-11T08:00:00.000Z' },
+      { stepId: 'flame:7', presentedAt: null, notifiedAt: null },
+      { stepId: 'start', presentedAt: null, notifiedAt: null },
+      { stepId: 'day:2026-10-11', presentedAt: null, notifiedAt: null },
+      { stepId: 'flame:7', presentedAt: null, notifiedAt: null },
+    ],
+    [{ stepId: 'meesh:10', presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null }],
+    [],
+  ].map((moments, i) => vector(`résumé du push, cas ${i + 1}`, { law: 'photo-alert', kind: 'digest', moments }));
+
+  const big = vector('les grands moments', {
+    law: 'photo-alert',
+    kind: 'big',
+    ids: ['rank:echo:5', 'rank:mythe:0', 'level-100:0', 'prestige:2', 'meesh:100', 'meesh:1000', 'flame:100', 'flame:365',
+      'rank:echo:4', 'tier:lueur', 'meesh:10', 'meesh:1', 'meesh:0', 'flame:30', 'treasury:bourse', 'start', 'day:2026-10-11', 'prestige', 'rank:Echo:5'],
+  });
+
+  return [...alerts, ...paces, ...stepsUnder, ...digests, big, vector('la politique par défaut', { law: 'photo-alert', kind: 'policy' })];
+}
+
+function buildPhotoDayVectors() {
+  return ['2026-10-11', '2026-02-29', '2026-13-01', '11/10/2026', ''].map((dayKey) =>
+    ({ _label: `réalisation du jour « ${dayKey} »`, input: { law: 'photo-moment', dayKey } as GameVectorInputPhotoDay, expected: evaluatePhotoDayVector({ law: 'photo-moment', dayKey }) }),
+  );
 }

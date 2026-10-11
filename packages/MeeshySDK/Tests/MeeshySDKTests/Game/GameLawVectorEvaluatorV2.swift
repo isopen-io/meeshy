@@ -78,7 +78,7 @@ extension GameLawVectorEvaluator {
         case "trophy-visitor-key":
             return object(["key": .optionalString(GameTrophies.visitorKey(key: string(input, "key"), awardedMonth: string(input, "awardedMonth")))])
         case "showcase-visitor": return showcaseVisitor(input)
-        case "photo-catch-up", "photo-offer", "photo-standing": return try evaluatePhoto(law: law, input: input)
+        case "photo-catch-up", "photo-offer", "photo-standing", "photo-alert": return try evaluatePhoto(law: law, input: input)
         default: throw GameLawVectorError.unknownLaw(law)
         }
     }
@@ -607,6 +607,7 @@ extension GameLawVectorEvaluator {
     }
 
     private static func photoMoment(_ input: GameJSON) throws -> GameJSON {
+        if let dayKey = input["dayKey"].stringValue { return photoDayMoment(dayKey) }
         guard let emblem = GamePhotoMomentsV2.emblem(of: try guideEventV2(input["event"])) else {
             return object(["emblem": .null, "id": .null])
         }

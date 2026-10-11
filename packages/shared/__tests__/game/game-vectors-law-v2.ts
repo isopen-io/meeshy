@@ -60,7 +60,9 @@ import {
   GAME_VECTOR_LAWS_PHOTO,
   buildGameVectorsPhoto,
   evaluateGameVectorPhoto,
+  evaluatePhotoDayVector,
   type GameVectorInputPhoto,
+  type GameVectorInputPhotoDay,
 } from './game-vectors-law-photo.js';
 import { prestigeTransition } from '../../utils/game/prestige.js';
 import {
@@ -176,7 +178,8 @@ export type GameVectorInputV2 =
   | { readonly law: 'trophy-visitor-key'; readonly key: string; readonly awardedMonth: string }
   | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }
   | { readonly law: 'season-tense'; readonly startDay: string; readonly endDay: string; readonly served: SeasonTense; readonly dayKey: string; readonly minuteOfDay: number }
-  | GameVectorInputPhoto;
+  | GameVectorInputPhoto
+  | GameVectorInputPhotoDay;
 
 export const GAME_VECTOR_LAWS_V2 = [
   'league-week',
@@ -382,6 +385,7 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
       return { key: chosen === null ? null : chosen.key, presentation: chosen === null ? null : chosen.presentation };
     }
     case 'photo-moment': {
+      if ('dayKey' in input) return evaluatePhotoDayVector(input);
       const emblem = photoMomentOfGuideEvent(input.event);
       return { emblem, id: emblem === null ? null : photoMomentId(emblem) };
     }
@@ -394,6 +398,7 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
     case 'photo-catch-up':
     case 'photo-offer':
     case 'photo-standing':
+    case 'photo-alert':
       return evaluateGameVectorPhoto(input);
   }
 }
