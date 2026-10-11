@@ -196,7 +196,7 @@ function CardSection({ title, rows }: { readonly title: string; readonly rows: r
             key={row.id}
             data-world-card-row={row.id}
             className="flex items-start gap-3 px-3.5 py-2.5"
-            style={{ minHeight: 44, borderTop: index === 0 ? undefined : '0.5px solid var(--color-ios-separator)' }}
+            style={{ minHeight: 44, borderTop: index === 0 ? undefined : '0.5px solid var(--color-ios-hairline)' }}
           >
             <dt className="shrink-0 pt-px text-caption" style={{ color: 'var(--color-ios-ink-2)', maxWidth: '45%' }}>
               {row.label}
