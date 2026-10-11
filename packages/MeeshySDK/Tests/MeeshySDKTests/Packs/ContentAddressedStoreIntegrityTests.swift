@@ -41,14 +41,14 @@ struct ContentAddressedStoreIntegrityTests {
         let loose = try #require(PackAssetFile(name: "\(prefix).webp"))
         let strict = try #require(PackAssetFile(name: "\(prefix).webp", sha256: claimed))
 
-        async let first = store.data(for: loose)
+        let first = Task { try await store.data(for: loose) }
         try await Task.sleep(nanoseconds: 50_000_000)
-        async let second: Data = store.data(for: strict)
+        let second = Task { try await store.data(for: strict) }
         try await Task.sleep(nanoseconds: 50_000_000)
         await fetcher.release()
 
-        #expect(try await first == served)
-        await #expect(throws: ContentAddressedStoreError.digestMismatch) { try await second }
+        #expect(try await first.value == served)
+        await #expect(throws: ContentAddressedStoreError.digestMismatch) { try await second.value }
         #expect(await fetcher.count() == 1)
     }
 }
