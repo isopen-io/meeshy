@@ -62,16 +62,31 @@ const frameWidthOf = (frame: HTMLElement | null): number =>
 const isRtl = (element: Element): boolean =>
   getComputedStyle(element).direction === 'rtl' || element.closest('[dir="rtl"]') !== null;
 
-const percent = (language: InterfaceLanguage, share: number): string =>
-  new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 }).format(share / 100);
+/* Un formateur par langue, construit une fois : l'annonce suit le pointeur à
+   chaque image du glisser, et construire un `Intl.NumberFormat` n'est pas
+   gratuit. */
+const percentFormats = new Map<InterfaceLanguage, Intl.NumberFormat>();
+const percent = (language: InterfaceLanguage, share: number): string => {
+  const known = percentFormats.get(language);
+  const format = known ?? new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 0 });
+  if (known === undefined) percentFormats.set(language, format);
+  return format.format(share / 100);
+};
+
+/** Un attribut ne s'écrit que s'il change : rien ne s'invalide pour rien pendant le glisser. */
+const announce = (element: HTMLElement, name: string, value: string): void => {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+};
 
 type Drag = {
   readonly pointerId: number;
   readonly startX: number;
+  /** La largeur posée à l'appui — `null` : celle par défaut, rendue telle quelle si le geste revient à son départ. */
+  readonly initial: number | null;
   readonly startWidth: number;
   readonly bounds: SplitBounds;
   readonly rtl: boolean;
-  width: number;
+  readonly width: number;
 };
 
 export function SplitHandle({
@@ -102,10 +117,10 @@ export function SplitHandle({
     const handle = handleRef.current;
     if (handle === null) return;
     const share = shareOf(effectiveWidth(width, bounds), bounds.frame);
-    handle.setAttribute('aria-valuemin', String(shareOf(bounds.min, bounds.frame)));
-    handle.setAttribute('aria-valuemax', String(shareOf(bounds.max, bounds.frame)));
-    handle.setAttribute('aria-valuenow', String(share));
-    handle.setAttribute('aria-valuetext', percent(currentInterfaceLanguage(), share));
+    announce(handle, 'aria-valuemin', String(shareOf(bounds.min, bounds.frame)));
+    announce(handle, 'aria-valuemax', String(shareOf(bounds.max, bounds.frame)));
+    announce(handle, 'aria-valuenow', String(share));
+    announce(handle, 'aria-valuetext', percent(currentInterfaceLanguage(), share));
   };
 
   /** Valide une largeur : l'état du cadre, puis la préférence de l'appareil. */
@@ -135,9 +150,12 @@ export function SplitHandle({
     if (event.currentTarget.hasPointerCapture?.(event.pointerId) === true) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    /* Un appui sans déplacement (le premier temps d'un double-clic) ne crée
-       aucune préférence : la largeur par défaut reste la largeur par défaut. */
-    if (current.width !== current.startWidth) commit(current.width, current.bounds);
+    /* Un appui sans déplacement (le premier temps d'un double-clic), ou un
+       geste revenu à son départ, ne crée aucune préférence : la largeur posée
+       avant l'appui revient telle quelle — la largeur par défaut reste la
+       largeur par défaut. */
+    if (current.width === current.startWidth) show(current.initial, current.bounds);
+    else commit(current.width, current.bounds);
   };
 
   const bounds = boundsNow();
@@ -161,13 +179,15 @@ export function SplitHandle({
         if (event.button !== 0 || drag.current !== null) return;
         event.preventDefault();
         const now = boundsNow();
+        const startWidth = effectiveWidth(shown.current, now);
         drag.current = {
           pointerId: event.pointerId,
           startX: event.clientX,
-          startWidth: effectiveWidth(shown.current, now),
+          initial: shown.current,
+          startWidth,
           bounds: now,
           rtl: isRtl(event.currentTarget),
-          width: effectiveWidth(shown.current, now),
+          width: startWidth,
         };
         event.currentTarget.setPointerCapture?.(event.pointerId);
         event.currentTarget.setAttribute('data-dragging', '');
@@ -177,7 +197,7 @@ export function SplitHandle({
         if (current === null || event.pointerId !== current.pointerId) return;
         const width = widthAfterDrag({ startWidth: current.startWidth, dx: event.clientX - current.startX, bounds: current.bounds, rtl: current.rtl });
         if (width === current.width) return;
-        current.width = width;
+        drag.current = { ...current, width };
         show(width, current.bounds);
       }}
       onPointerUp={end}

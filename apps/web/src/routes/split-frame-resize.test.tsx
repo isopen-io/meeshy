@@ -238,6 +238,18 @@ describe('au glisser, souris ou doigt', () => {
     expect(window.localStorage.getItem(SPLIT_WIDTH_STORAGE_KEY)).toBe('320');
   });
 
+  test('un geste revenu à son point de départ ne crée aucune préférence : la largeur par défaut reste celle par défaut', () => {
+    const el = mount();
+    const handle = handleOf(el);
+    pointer(handle, 'pointerdown', 384);
+    pointer(handle, 'pointermove', 450);
+    pointer(handle, 'pointermove', 384);
+    pointer(handle, 'pointerup', 384);
+    expect(listWidthOf(el)).toBe('');
+    expect(window.localStorage.getItem(SPLIT_WIDTH_STORAGE_KEY)).toBeNull();
+    expect(handle.getAttribute('aria-valuenow')).toBe('30');
+  });
+
   test('un déplacement sans appui préalable ne déplace rien', () => {
     const el = mount();
     pointer(handleOf(el), 'pointermove', 500);
