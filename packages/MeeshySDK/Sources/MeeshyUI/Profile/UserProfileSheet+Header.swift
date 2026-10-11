@@ -115,16 +115,9 @@ extension UserProfileSheet {
             .accessibilityHidden(true)
         )
         .clipped()
-        .onTapGesture {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
-        // Expose the banner tap to VoiceOver (raw onTapGesture isn't).
-        .accessibilityElement()
-        .accessibilityLabel(String(localized: "profile.banner.label", defaultValue: "Bannière de profil", bundle: .module))
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
+        // #10093 — un dégradé n'est pas une image : sans bannière, rien ne s'ouvre en plein écran. Décoratif, il se
+        // tait aussi pour VoiceOver.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Identity
@@ -136,9 +129,9 @@ extension UserProfileSheet {
                 .onTapGesture {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
-                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't).
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint(String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module))
+                // Expose the avatar tap to VoiceOver (a raw onTapGesture isn't) — seulement quand une photo s'ouvre.
+                .accessibilityAddTraits(hasAvatarPhoto ? .isButton : [])
+                .accessibilityHint(hasAvatarPhoto ? String(localized: "profile.avatar.viewFullscreen.hint", defaultValue: "Ouvre la photo en plein écran", bundle: .module) : "")
                 .accessibilityAction {
                     openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
                 }
@@ -164,6 +157,11 @@ extension UserProfileSheet {
         // Gate the expanded identity from VoiceOver once the compact pinned bar
         // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
         .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
+    }
+
+    /// Une photo à ouvrir en plein écran — sans elle, toucher l'avatar à initiales n'ouvre rien (#10093).
+    var hasAvatarPhoto: Bool {
+        ProfileFullscreenImage.opening(displayUser.avatarURL, fallbackText: "") != nil
     }
 
     @ViewBuilder

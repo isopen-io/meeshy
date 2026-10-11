@@ -74,6 +74,7 @@ public struct FullscreenImageView: View {
             .opacity(dismissDrag > 0 ? 0 : 1)
         }
         .statusBar(hidden: true)
+        .modifier(SeeThroughPresentation())
     }
 
     /// Agrandie, l'image se déplace sous le doigt ; à sa taille, le doigt la tire vers la sortie.
@@ -118,6 +119,18 @@ public struct FullscreenImageView: View {
     }
 }
 
+/// Présentée (`fullScreenCover`), la visionneuse laisse voir l'écran qu'elle couvre quand le glissement éclaircit
+/// son fond — sans quoi le fond système, blanc ou noir, apparaîtrait sous l'image en plein geste.
+private struct SeeThroughPresentation: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationBackground(.clear)
+        } else {
+            content
+        }
+    }
+}
+
 // MARK: - Le glissement qui referme (#10093)
 
 /// Le plein écran d'une bannière ou d'une photo se referme d'un glissement vers le bas, PROGRESSIF et ANNULABLE :
@@ -152,7 +165,13 @@ public struct ProfileFullscreenImage: Identifiable, Equatable {
     public let fallbackText: String
     public var id: String { url }
 
+    public init(url: String, fallbackText: String) {
+        self.url = url
+        self.fallbackText = fallbackText
+    }
+
     public static func opening(_ url: String?, fallbackText: String) -> ProfileFullscreenImage? {
-        nil
+        guard let url, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return ProfileFullscreenImage(url: url, fallbackText: fallbackText)
     }
 }

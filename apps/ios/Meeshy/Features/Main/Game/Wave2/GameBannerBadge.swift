@@ -47,7 +47,11 @@ struct GameBannerBadge: View {
     @State private var model: GameBannerBadgeModel?
 
     var body: some View {
-        Group {
+        // Un `ZStack`, jamais un `Group` : un `Group` distribue ses modificateurs à ses enfants, et tant que rien n'est
+        // chargé il n'en a aucun — la tâche qui devait charger ne démarrait donc jamais (recette 2026-10-11). L'ancre
+        // invisible garantit au `ZStack` un enfant, donc une apparition, cache vide compris.
+        ZStack {
+            GameLoadAnchor()
             if !prefs.prefs.hidden, let model, model.userId == userId {
                 GameBannerBadgeView(model: model)
                     .transition(.opacity)
@@ -107,5 +111,15 @@ struct GameBannerBadgeView: View {
             .foregroundColor(.white)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
+    }
+}
+
+/// Un point sans taille ni voix : l'enfant qui garantit qu'une vue dont tout le contenu attend une lecture APPARAÎT —
+/// et démarre donc la tâche qui lit (#10093).
+struct GameLoadAnchor: View {
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .accessibilityHidden(true)
     }
 }
