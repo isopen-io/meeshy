@@ -35,6 +35,14 @@
     box-shadow: 0 -12px 32px -16px color-mix(in srgb, var(--accent) 45%, transparent);
   }
 
+  /* LA LIGNE D'UNE RANGÉE PLATE SE RELIT SANS PERDRE LE RETOUR — 42rem,
+     environ 85 caractères, au lieu des 790 px qu'offrait une colonne de 56rem
+     (115 caractères). Le corps seul se borne : la colonne méta le suit, et le
+     verre de l'élue garde la largeur de la rangée. */
+  [data-reading-mode] [data-row-body] {
+    max-width: 42rem;
+  }
+
   /* LES CARTES GARDENT UNE LARGEUR DE CARTE — celles de la planche « Thread »
      (vocal et fichier en `inline-flex`), plutôt que toute la colonne. */
   .voice-card {
