@@ -80,15 +80,17 @@ extension UserProfileSheet {
     }
 
     /// #10093, #10231 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce
-    /// que SA visibilité autorise, rien sinon. L'app occupe toute la largeur — le niveau et ses points au début, le
-    /// rang à la fin. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
+    /// que SA visibilité autorise, rien sinon. L'app occupe toute la largeur — le niveau et ses points au début (après
+    /// le bouton Fermer), le rang à la fin. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
     @ViewBuilder
     var bannerGameBadge: some View {
         if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
             gameSection.build(userId, displayUser.displayName ?? displayUser.username)
                 .allowsHitTesting(false)
                 .padding(.top, MeeshySpacing.mdPlus)
-                .padding(.horizontal, MeeshySpacing.lg)
+                // Le bouton Fermer tient le coin de DÉBUT (`closeButton`) : le niveau commence après lui.
+                .padding(.leading, MeeshySpacing.lg + MeeshyControlSize.regular + MeeshySpacing.sm)
+                .padding(.trailing, MeeshySpacing.lg)
         }
     }
 
