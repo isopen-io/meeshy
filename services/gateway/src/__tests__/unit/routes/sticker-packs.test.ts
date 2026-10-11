@@ -9,7 +9,6 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
 import sharp from 'sharp';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: { child: () => ({ info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn() }), error: jest.fn() },
@@ -19,86 +18,11 @@ import { stickerPacksRoutes } from '../../../routes/sticker-packs';
 import { StickerPacks } from '../../../services/stickers/StickerPacks';
 import type { StickerFileStore } from '../../../services/stickers/StickerLibrary';
 import type { StickerImageOutcome } from '../../../services/stickers/stickerImage';
+import { memoryPrisma } from './sticker-packs.harness';
 
 const ALICE = '68b0000000000000000000a1';
 const BOB = '68b0000000000000000000b2';
 const MODO = '68b0000000000000000000c3';
-
-type Row = Record<string, unknown> & { id: string };
-
-function memoryPrisma() {
-  const packs: Row[] = [];
-  const items: Row[] = [];
-  const choices: Row[] = [];
-  let seq = 0;
-  const nextId = () => `68b00000000000000000${String((seq += 1)).padStart(4, '0')}`;
-
-  const matches = (row: Row, where: Record<string, unknown> = {}) =>
-    Object.entries(where).every(([k, v]) =>
-      v !== null && typeof v === 'object' && 'in' in (v as object) ? ((v as { in: unknown[] }).in).includes(row[k]) : row[k] === v,
-    );
-  const withItems = (pack: Row) => ({
-    ...pack,
-    items: items.filter((i) => i.packId === pack.id).sort((a, b) => (a.position as number) - (b.position as number)),
-  });
-  const sortBy = (rows: Row[], orderBy?: Record<string, 'asc' | 'desc'>) => {
-    if (!orderBy) return rows;
-    const [[key, dir]] = Object.entries(orderBy) as [[string, 'asc' | 'desc']];
-    const value = (r: Row) => (r[key] instanceof Date ? (r[key] as Date).getTime() : (r[key] as number));
-    return [...rows].sort((a, b) => (dir === 'asc' ? value(a) - value(b) : value(b) - value(a)));
-  };
-
-  const stickerPack = {
-    findMany: async ({ where, orderBy }: { where?: Record<string, unknown>; orderBy?: Record<string, 'asc' | 'desc'> }) =>
-      sortBy(packs.filter((p) => matches(p, where)), orderBy).map(withItems),
-    findUnique: async ({ where }: { where: Record<string, unknown> }) => {
-      const found = packs.find((p) => matches(p, where));
-      return found ? withItems(found) : null;
-    },
-    count: async ({ where }: { where: Record<string, unknown> }) => packs.filter((p) => matches(p, where)).length,
-    create: async ({ data }: { data: Record<string, unknown> & { items: { create: Record<string, unknown>[] } } }) => {
-      if (packs.some((p) => p.slug === data.slug)) throw Object.assign(new Error('unique'), { code: 'P2002' });
-      const { items: nested, ...rest } = data;
-      const pack: Row = { reviewNote: null, installCount: 0, ...rest, id: nextId() };
-      packs.push(pack);
-      nested.create.forEach((item) => items.push({ zones: null, ...item, id: nextId(), packId: pack.id }));
-      return withItems(pack);
-    },
-    update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
-      const i = packs.findIndex((p) => p.id === where.id);
-      const patch = Object.fromEntries(
-        Object.entries(data).map(([k, v]) =>
-          v !== null && typeof v === 'object' && 'increment' in (v as object) ? [k, (packs[i][k] as number) + (v as { increment: number }).increment] : [k, v],
-        ),
-      );
-      packs[i] = { ...packs[i], ...patch } as Row;
-      return withItems(packs[i]);
-    },
-    delete: async ({ where }: { where: { id: string } }) => {
-      const i = packs.findIndex((p) => p.id === where.id);
-      const [removed] = packs.splice(i, 1);
-      items.splice(0, items.length, ...items.filter((it) => it.packId !== where.id));
-      return removed;
-    },
-  };
-
-  const userStickerPack = {
-    findMany: async ({ where }: { where: Record<string, unknown> }) => choices.filter((c) => matches(c, where)),
-    upsert: async ({ where, create, update }: { where: { userId_packSlug: { userId: string; packSlug: string } }; create: Row; update: Row }) => {
-      const key = where.userId_packSlug;
-      const i = choices.findIndex((c) => c.userId === key.userId && c.packSlug === key.packSlug);
-      if (i === -1) {
-        const row = { ...create, id: nextId() } as Row;
-        choices.push(row);
-        return row;
-      }
-      choices[i] = { ...choices[i], ...update } as Row;
-      return choices[i];
-    },
-  };
-
-  return { prisma: { stickerPack, userStickerPack } as unknown as PrismaClient, packs, items, choices };
-}
 
 /** Un double de normalisation : les octets qui commencent par « A » sont animés, « X » n'est pas une image. */
 const fakeNormalize = async (bytes: Buffer): Promise<StickerImageOutcome> => {
