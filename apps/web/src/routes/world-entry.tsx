@@ -13,6 +13,7 @@ import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { resolveInterfaceLanguageCode, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { useSearch } from '@/lib/router';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { INK, INK_2, INVITE_ACTION_BACKGROUND, INVITE_ACTION_FLOOR, isolated, RefusalBanner } from '@/routes/chat-join-parts';
@@ -51,6 +52,11 @@ export type WorldEntryDeps = {
   readonly deviceLanguages: () => readonly string[];
   readonly go: (url: string, replace: boolean) => void;
   readonly joined: () => void;
+  /** Une page de Meeshy précède-t-elle celle-ci ? `history.length` ne le sait
+   * pas : il compte les pages des autres sites et l'entrée que pose l'étape de
+   * la langue pour le retour matériel (`lib/reels/exit.ts`). */
+  readonly canGoBack: () => boolean;
+  readonly back: () => void;
 };
 
 const DEFAULT_DEPS: WorldEntryDeps = {
@@ -71,6 +77,8 @@ const DEFAULT_DEPS: WorldEntryDeps = {
   joined: () => {
     void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   },
+  canGoBack: () => reelsExitOf(currentHistory()) === 'back',
+  back: () => window.history.back(),
 };
 
 type Step = 'name' | 'language';
@@ -391,7 +399,7 @@ export function WorldGuestEntry({ initialName, deps = DEFAULT_DEPS }: { readonly
 /** Quitter depuis le nom : la page d'avant (la landing, l'écran de connexion),
  * ou l'accueil quand l'adresse a été ouverte seule. */
 function leave(deps: WorldEntryDeps): void {
-  if (typeof window !== 'undefined' && window.history.length > 1) window.history.back();
+  if (deps.canGoBack()) deps.back();
   else deps.go(href('home'), true);
 }
 
