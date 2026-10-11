@@ -81,3 +81,26 @@
 [data-split-handle][data-dragging]::after {
   opacity: 1;
 }
+
+/*
+ * LE VOLET VIDE (« choisissez une conversation », `split-empty-pane.tsx`) —
+ * une lueur radiale de marque derrière son repère, celle des boutons
+ * d'entrée de la landing (note « base » de la planche) : le volet a l'air
+ * d'attendre quelque chose, plus d'être éteint. Le disque passe du gris de
+ * remplissage à la marque teintée, cerné d'un anneau d'air.
+ */
+[data-split-empty] {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--color-ios-brand) 16%, transparent),
+    transparent
+  )
+    center / min(36rem, 90%) min(36rem, 90%) no-repeat;
+}
+:root.light [data-split-empty] {
+  background-image: radial-gradient(closest-side, color-mix(in srgb, var(--color-ios-brand) 10%, transparent), transparent);
+}
+[data-split-empty-mark] {
+  background-color: color-mix(in srgb, var(--color-ios-brand) 14%, transparent);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-ios-brand) 6%, transparent);
+}

@@ -33,11 +33,8 @@ export default function SplitEmptyPane() {
   return (
     <section data-split-empty="" aria-labelledby="split-empty-title" className="grid h-dvh place-items-center p-8 pt-safe text-center">
       <div className="grid max-w-[22rem] justify-items-center gap-3">
-        <span
-          className="grid size-16 place-items-center rounded-full"
-          style={{ backgroundColor: 'var(--color-ios-fill)', color: 'var(--color-ios-brand)' }}
-        >
-          <GlyphSvg glyph={COMMUNITIES_GLYPHS.chatsCircle} size={32} />
+        <span data-split-empty-mark="" className="grid size-18 place-items-center rounded-full" style={{ color: 'var(--color-ios-brand)' }}>
+          <GlyphSvg glyph={COMMUNITIES_GLYPHS.chatsCircle} size={34} />
         </span>
         <h2 id="split-empty-title" className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {title}
