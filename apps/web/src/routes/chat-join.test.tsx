@@ -921,7 +921,7 @@ describe('un visiteur ENTRE depuis la landing avec son nom et sa langue (#10003)
     await mount(deps, LINK, true, KENJI);
     expect(recorded.guestJoins).toEqual([[LINK, { language: 'ar', nickname: 'Kenji' }]]);
     expect(recorded.adopted.map(([, guest]) => [guest.nickname, guest.language])).toEqual([['Kenji', 'ar']]);
-    expect(recorded.order).toEqual(['adopt', 'interface ar', 'go /c/c-deploiement replace', 'joined']);
+    expect(recorded.order).toEqual(['adopt', 'interface ar', 'go /world replace', 'joined']);
     expect(tab.removed).toEqual([WORLD_ENTRY_HANDOFF_KEY]);
   });
 
@@ -1075,5 +1075,36 @@ describe('une adresse d’entrée FORGÉE ne fait entrer personne sans son geste
     expect(recorded.guestJoins).toEqual([]);
     expect(guestForm(el)).not.toBeNull();
     expect(nicknameField(el)?.value).toBe('Kenji');
+  });
+});
+
+/**
+ * UN INVITÉ N'A QUE SON FIL, EN FOCUS (#10100) — un ancien lien de jonction
+ * rouvert par l'invité qui y est déjà entré ne lui repropose pas d'entrer : il
+ * rouvre son fil. L'entrée qui vient de la landing (jeton de passage) est celle
+ * de World Wide, qui se lit désormais sur `/world`.
+ */
+describe('un invité déjà entré par ce lien rouvre son fil (#10100)', () => {
+  const held = (link: string): GuestIdentity => ({ participantId: 'p-kenji', nickname: 'Kenji', conversationId: 'c-tenue', link, mayWrite: true });
+  const asGuest = (link: string) =>
+    act(() => {
+      sessionStore.getState().establishGuest({ sessionToken: 'anon_kenji', guest: held(link) });
+    });
+
+  test('son propre lien le ramène à son fil, sans formulaire ni nouvelle jonction', async () => {
+    asGuest(LINK);
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual(['go /c/c-tenue replace']);
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).toBeNull();
+  });
+
+  test('le lien d’une AUTRE conversation lui est proposé normalement', async () => {
+    asGuest('mshy_autre');
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    expect(recorded.order).toEqual([]);
+    expect(el.querySelector('[data-invite-layout]')).not.toBeNull();
   });
 });

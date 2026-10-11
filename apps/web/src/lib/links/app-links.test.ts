@@ -76,6 +76,12 @@ describe('App Links de la coque Android', () => {
     expect(cheminDuLienEntrant('https://meeshy.me/signup?ref=aff_1-ab', isAppPath)).toBe('/signup?ref=aff_1-ab');
   });
 
+  test('World Wide (/world) ouvre la coque installée, comme le web : l’entrée, puis le fil en focus (#10100)', () => {
+    expect(cheminsReclames()).toContain('/world');
+    expect(cheminDuLienEntrant('https://meeshy.me/world', isAppPath)).toBe('/world');
+    expect(cheminDuLienEntrant('meeshy://world', isAppPath)).toBe('/world');
+  });
+
   test('le schéma court meeshy:// est déclaré, sans vérification (aucun domaine à prouver)', () => {
     expect(schemaCourt?.corps).toContain('android.intent.action.VIEW');
     expect(schemaCourt?.attributs ?? '').not.toContain('autoVerify');
