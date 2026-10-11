@@ -79,6 +79,7 @@ class Card:
         self._n = 0
         self._slots = {esc(DATE_TEXT): "date"}
         self._decor_texts = 0
+        self._decor_keys = {}
         self.motifs = set()
         Card.current = self
 
@@ -124,8 +125,11 @@ class Card:
                     counter[0] += 1
                     key = f"plate.{counter[0]}"
                 else:
-                    self._decor_texts += 1
-                    key = f"decor.{self._decor_texts}"
+                    where = (TAG_RE.sub("", inner).strip(), *re.findall(r'\s(?:x|y|transform)="([^"]*)"', attrs))
+                    if where not in self._decor_keys:
+                        self._decor_texts += 1
+                        self._decor_keys[where] = f"decor.{self._decor_texts}"
+                    key = self._decor_keys[where]
             return f'<text data-slot="{key}"{attrs}>{inner}</text>'
 
         return TEXT_RE.sub(tag, markup)
