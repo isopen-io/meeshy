@@ -17,6 +17,7 @@ export type KeyboardViewportHost = {
         readonly width: number;
         readonly height: number;
         readonly offsetTop: number;
+        readonly scale: number;
         addEventListener(type: ViewportEvents, listener: () => void): void;
         removeEventListener(type: ViewportEvents, listener: () => void): void;
       }
@@ -50,6 +51,10 @@ export type KeyboardViewportHost = {
  *
  * La loi du clavier est celle de la feuille de commentaires (#9894,
  * `virtualKeyboardOf`) : la même mesure, un seul seuil.
+ *
+ * Un zoom au pincement (`scale` > 1) rétrécit aussi la vue visible et la
+ * décale : ce n'est pas un clavier. Pendant qu'il dure, rien n'est mesuré ni
+ * ramené — sinon l'écran rapetissait et la page zoomée sautait en haut.
  */
 export function installKeyboardViewport(host: KeyboardViewportHost): () => void {
   const viewport = host.visualViewport;
@@ -76,6 +81,7 @@ export function installKeyboardViewport(host: KeyboardViewportHost): () => void 
     (viewport.offsetTop > 0 || host.scrollY > 0) && root.scrollHeight <= host.innerHeight;
 
   const read = () => {
+    if (viewport.scale > 1) return;
     const first = measure();
     if (!first.open) {
       clear();
