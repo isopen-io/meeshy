@@ -36,8 +36,10 @@ describe('robots.txt', () => {
   const disallowed = (group: string): readonly string[] =>
     [...group.matchAll(/^Disallow: (\S+)$/gm)].map((m) => m[1] ?? '');
 
-  test('la liste des conversations (/chats) est fermée à tous les robots', () => {
-    for (const group of groups) expect(disallowed(group)).toContain('/chats');
+  test('la liste des conversations (/chats) est fermée à tous les robots qui indexent', () => {
+    const indexing = groups.filter((group) => /User-Agent: \*/i.test(group));
+    expect(indexing).toHaveLength(1);
+    for (const group of indexing) expect(disallowed(group)).toContain('/chats');
   });
 
   test('aucune landing n’est fermée par un préfixe', () => {

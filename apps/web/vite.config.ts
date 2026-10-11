@@ -280,6 +280,16 @@ const prerenderLanding = (): Plugin => {
               'sans `landing.html`, nginx ne servirait rien sur / et les robots ne liraient aucune balise.',
           );
         }
+        /* LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192) — même horloge,
+           même variante : nginx sert ces copies de la coquille aux adresses
+           de l'application, et la coque n'a pas de nginx. */
+        const previews = spawnSync('bun', ['run', 'scripts/prerender-share-previews.ts', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (previews.status !== 0) {
+          throw new Error(`Le prérendu des aperçus d'adresse a échoué (code ${previews.status}). La construction s'arrête.`);
+        }
       },
     },
   };
@@ -702,6 +712,10 @@ export default defineConfig({
                    ~7 documents à chaque installation. `/` reste servie par la
                    coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
                 ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
+                /* LES APERÇUS D'ADRESSE (#10192) — des copies de la coquille
+                   pour les robots de messagerie, que nginx sert au premier
+                   chargement ; le précache garde la coquille nue. */
+                'shell-og/**',
                 /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
                    démarrage du conteneur, donc JAMAIS précachée : son
                    empreinte de build est celle du fichier par défaut, pas de
