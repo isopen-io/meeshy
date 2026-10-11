@@ -83,8 +83,8 @@ export type PageLocation = {
 
 export type ResolveOptions = {
   readonly shell: boolean;
-  readonly runtime?: RuntimeConfig;
-  readonly page?: PageLocation;
+  readonly runtime?: RuntimeConfig | undefined;
+  readonly page?: PageLocation | undefined;
 };
 
 /**
