@@ -34,6 +34,7 @@ import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
+import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
 import {
   GroupCard,
   INK,
@@ -127,6 +128,9 @@ export type ChatJoinDeps = {
    * l'origine virtuelle d'une coque. */
   readonly origin: () => string;
   readonly now: () => Date;
+  /** L'onglet où la landing pose son jeton de passage (#10094) — `sessionStorage`,
+   * dont l'accès peut LEVER (navigation privée) : la jonction le lit sous garde. */
+  readonly handoff: () => HandoffStorage;
 };
 
 const DEFAULT_DEPS: ChatJoinDeps = {
@@ -155,6 +159,7 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   shareUrl: (data) => partagerLien(data),
   origin: () => webOriginOf(apiConfig.base, window.location.origin),
   now: () => new Date(),
+  handoff: () => window.sessionStorage,
 };
 
 type LoadState =
@@ -235,8 +240,11 @@ export function ChatJoin({
   const [focused, setFocused] = useState<GuestField | null>(null);
   const [input, setInput] = useState<InputRefusal | null>(null);
   /* L'ENTRÉE de la landing est lue UNE fois, au montage : l'adresse qui la
-     porte ne change pas, et une revalidation ne doit jamais la rejouer. */
+     porte ne change pas, et une revalidation ne doit jamais la rejouer. Son
+     JETON DE PASSAGE aussi (#10094) — lu et effacé au montage, une seule fois :
+     sans lui, l'adresse ne fait que PRÉ-REMPLIR le formulaire. */
   const [arrival] = useState(entry);
+  const [handedOff] = useState(() => arrival !== null && takeLandingHandoff({ storage: deps.handoff, link, entry: arrival, now: deps.now().getTime() }));
   const [entering, setEntering] = useState(arrival !== null);
 
   /**
@@ -289,6 +297,10 @@ export function ChatJoin({
    * pas peinte entre-temps. Un lien qui exige plus (e-mail, date de naissance),
    * un nom refusé ou un refus du lien rendent la main au formulaire, PRÉ-REMPLI,
    * avec la cause dite — jamais une garde contournée.
+   *
+   * SANS JETON DE PASSAGE (#10094) — adresse forgée, ancien gabarit, autre
+   * onglet, jeton périmé ou stockage refusé — rien ne part : le formulaire
+   * s'ouvre PRÉ-REMPLI du nom et de la langue de l'adresse, et attend le geste.
    */
   useEffect(() => {
     if (!entering || arrival === null || load.kind === 'loading') return;
@@ -302,6 +314,10 @@ export function ChatJoin({
     const chosen = arrival.language !== null && guestLanguageOptions(terms).includes(arrival.language) ? arrival.language : defaultGuestLanguage(terms, language);
     const seeded: GuestDraft = { ...EMPTY_DRAFT, nickname: arrival.nickname, language: chosen };
     setDraft(seeded);
+    if (!handedOff) {
+      setEntering(false);
+      return;
+    }
     void handleGuestJoin(seeded).finally(() => setEntering(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- l'entrée part une fois, quand l'invitation arrive
   }, [load]);

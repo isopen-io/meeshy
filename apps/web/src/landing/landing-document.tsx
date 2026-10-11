@@ -4,6 +4,7 @@ import { BRAND_LOGO_PATH } from '@/lib/brand';
 
 import { isInstalledApp, landingBoot, type LandingBootConfig } from './landing-boot';
 import { LANDING_COPY } from './landing-copy';
+import { WORLD_ENTRY_HANDOFF_KEY } from './world-entry';
 import {
   LANDING_LANGUAGES,
   OG_LOCALES,
@@ -47,7 +48,7 @@ export type LandingDocumentInput = {
   readonly bootScript?: string;
 };
 
-export type LandingBootInput = Omit<LandingBootConfig, 'language' | 'rootLanguage' | 'paths' | 'presence'>;
+export type LandingBootInput = Omit<LandingBootConfig, 'language' | 'rootLanguage' | 'paths' | 'presence' | 'handoffKey'>;
 
 /** La configuration COMPLÈTE du script d'une landing — ce qui change d'une langue à l'autre compris. */
 export function landingBootConfig(language: LandingLanguage, boot: LandingBootInput): LandingBootConfig {
@@ -57,6 +58,7 @@ export function landingBootConfig(language: LandingLanguage, boot: LandingBootIn
     rootLanguage: ROOT_LANDING_LANGUAGE,
     paths: landingPaths(),
     presence: LANDING_COPY[language].presence,
+    handoffKey: WORLD_ENTRY_HANDOFF_KEY,
   };
 }
 
