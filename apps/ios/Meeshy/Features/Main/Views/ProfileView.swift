@@ -252,7 +252,7 @@ struct ProfileView: View {
                     .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
                     .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
                     .accessibilityAction { openFullscreen(user?.banner) }
-                    .overlay(alignment: .topTrailing) {
+                    .overlay(alignment: .top) {
                         if !isEditing, let userId = user?.id {
                             GameBannerBadge(userId: userId)
                                 .allowsHitTesting(false)

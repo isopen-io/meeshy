@@ -29,12 +29,56 @@ final class GameBannerBadgeModelTests: XCTestCase {
         XCTAssertNil(GameBannerBadgeModel.of(nil, userId: "u1"))
     }
 
-    func test_accessibilityLabel_saysLevelAndRank_neverTheFlame() throws {
+    func test_accessibilityLabels_oneForTheLevelOneForTheRank_neverTheFlame() throws {
         let model = try XCTUnwrap(GameBannerBadgeModel.of(GameStandingContent(standing: standing(flame: .brasier), treasuryTier: nil), userId: "u1"))
 
-        XCTAssertTrue(model.accessibilityLabel.contains(GameCopy.rankLabel(standing())))
-        XCTAssertTrue(model.accessibilityLabel.contains(GameCopy.levelRingAccessibility(level: 42, tier: .eclat)))
-        XCTAssertFalse(model.accessibilityLabel.contains(GameCopy.flameFormName(.brasier)))
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.levelRingAccessibility(level: 42, tier: .eclat)))
+        XCTAssertFalse(model.levelAccessibilityLabel.contains(GameCopy.rankLabel(standing())))
+        XCTAssertTrue(model.rankAccessibilityLabel.contains(GameCopy.rankLabel(standing())))
+        XCTAssertFalse((model.levelAccessibilityLabel + model.rankAccessibilityLabel).contains(GameCopy.flameFormName(.brasier)))
+    }
+
+    // MARK: - #10231 — les points à gauche : acquis, et ce qu'il reste vers le niveau suivant
+
+    /// Niveau 3 (seuil 900), 976 points : le niveau 4 s'ouvre à 1 600 — encore 624.
+    private func pointed(points: Int?, level: Int = 3) -> GameBannerBadgeModel? {
+        let served = GameStanding(level: level, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii,
+                                  division5: .v, ladder: GameStandingLadder(level: level, tier: .etincelle), points: points)
+        return GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")
+    }
+
+    func test_of_servedPoints_saysThePointsAndWhatRemainsToTheNextLevel() throws {
+        let model = try XCTUnwrap(pointed(points: 976))
+
+        XCTAssertEqual(model.points, 976)
+        XCTAssertEqual(model.pointsToNext, 624)
+        XCTAssertEqual(model.pointsText, GameText.bannerPoints(points: GameCopy.formatCount(976)))
+        XCTAssertEqual(model.missingText, GameText.bannerMissing(points: GameCopy.formatCount(624)))
+        XCTAssertEqual(model.levelProgress, Double(976 - 900) / Double(1600 - 900), accuracy: 0.0001)
+    }
+
+    func test_of_noPointsServed_saysNoPoints_andTheRingStaysFull() throws {
+        let model = try XCTUnwrap(pointed(points: nil))
+
+        XCTAssertNil(model.pointsText)
+        XCTAssertNil(model.missingText)
+        XCTAssertEqual(model.levelProgress, 1)
+    }
+
+    func test_of_levelHeldByRankOrStep_saysThePointsWithoutAMissingCount() throws {
+        let model = try XCTUnwrap(pointed(points: 2_000))
+
+        XCTAssertNotNil(model.pointsText)
+        XCTAssertNil(model.pointsToNext, "un niveau retenu ne dit pas « encore 0 »")
+        XCTAssertNil(model.missingText)
+        XCTAssertEqual(model.levelProgress, 1)
+    }
+
+    func test_levelAccessibilityLabel_readsThePointsAndTheNextLevel() throws {
+        let model = try XCTUnwrap(pointed(points: 976))
+
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.points(976)))
+        XCTAssertTrue(model.levelAccessibilityLabel.contains(GameCopy.levelToNext(remaining: 624, nextLevel: 4)))
     }
 
     func test_standingAccessibilityLabel_servedFlame_isNeverRead() {

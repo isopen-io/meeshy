@@ -47,9 +47,12 @@ public struct GameStanding: Codable, Sendable, Equatable {
     public let mythic: MythicSeatRef?
     /// Le niveau et le palier ouverts par le rang (#9688) — `level` / `tier` gardent l'ancienne loi sur le fil.
     public let ladder: GameStandingLadder?
+    /// Ses points — servis à soi, à ses amis et aux administrateurs seulement (#9541) ; `nil` pour tout autre lecteur.
+    public let points: Int?
 
     public init(level: Int, tier: LevelTierKey, prestige: Int, flame: FlameFormKey?, rank: GloryRank, division: GloryDivision?,
-                division5: GloryDivision5? = nil, mythic: MythicSeatRef? = nil, ladder: GameStandingLadder? = nil) {
+                division5: GloryDivision5? = nil, mythic: MythicSeatRef? = nil, ladder: GameStandingLadder? = nil,
+                points: Int? = nil) {
         self.level = level
         self.tier = tier
         self.prestige = prestige
@@ -59,10 +62,11 @@ public struct GameStanding: Codable, Sendable, Equatable {
         self.division5 = division5
         self.mythic = mythic
         self.ladder = ladder
+        self.points = points
     }
 
     private enum CodingKeys: String, CodingKey {
-        case level, tier, prestige, flame, rank, division, division5, mythic, ladder
+        case level, tier, prestige, flame, rank, division, division5, mythic, ladder, points
     }
 
     public init(from decoder: Decoder) throws {
@@ -77,6 +81,7 @@ public struct GameStanding: Codable, Sendable, Equatable {
         division5 = (try? container.decodeIfPresent(GloryDivision5.self, forKey: .division5)) ?? nil
         mythic = ((try? container.decodeIfPresent(MythicSeatRef.self, forKey: .mythic)) ?? nil).flatMap { $0.isValid ? $0 : nil }
         ladder = (try? container.decodeIfPresent(GameStandingLadder.self, forKey: .ladder)) ?? nil
+        points = ((try? container.decodeIfPresent(Int.self, forKey: .points)) ?? nil).flatMap { $0 >= 0 ? $0 : nil }
     }
 
     /// Le niveau que l'écran montre : celui ouvert par le rang, ou celui d'hier devant un serveur antérieur.

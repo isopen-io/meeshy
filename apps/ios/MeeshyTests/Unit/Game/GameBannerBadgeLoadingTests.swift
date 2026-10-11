@@ -55,7 +55,8 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
             GameBannerBadge(userId: userId, loader: loader)
         })
 
-        XCTAssertNotNil(ecran?.frame(of: "profile.banner.game", borne: 5), "le badge ne s'est jamais posé sur la bannière")
+        XCTAssertNotNil(ecran?.frame(of: "profile.banner.game.level", borne: 5), "le badge ne s'est jamais posé sur la bannière")
+        XCTAssertNotNil(ecran?.frame(of: "profile.banner.game.rank", borne: 5), "le rang ne s'est jamais posé sur la bannière")
         XCTAssertEqual(service.userGameIds, [userId])
     }
 
@@ -75,5 +76,42 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
 
         XCTAssertNotNil(ecran?.frame(of: "game.contact.strip", borne: 5), "la bande du jeu ne s'est jamais posée")
         XCTAssertEqual(service.userGameIds, [userId])
+    }
+
+    // MARK: - #10231 — le niveau et ses points au DÉBUT de la bannière, le rang à la FIN
+
+    private func badge(points: Int?) -> GameBannerBadgeView {
+        let served = GameStanding(level: 3, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii,
+                                  division5: .v, ladder: GameStandingLadder(level: 3, tier: .etincelle), points: points)
+        return GameBannerBadgeView(model: GameBannerBadgeModel.of(GameStandingContent(standing: served, treasuryTier: nil), userId: "u1")!)
+    }
+
+    func test_badge_leftToRight_levelAtTheStart_rankAtTheEnd() throws {
+        ecran = RenderedScreen(badge(points: 976).frame(width: 360), size: CGSize(width: 360, height: 200))
+
+        let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
+        let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
+        XCTAssertLessThan(level.maxX, 180, "le niveau et ses points se posent à GAUCHE de la bannière")
+        XCTAssertGreaterThan(rank.minX, 180, "le rang se pose à DROITE de la bannière")
+    }
+
+    func test_badge_rightToLeft_mirrorsTheTwoGroups() throws {
+        ecran = RenderedScreen(
+            badge(points: 976).frame(width: 360).environment(\.layoutDirection, .rightToLeft),
+            size: CGSize(width: 360, height: 200)
+        )
+
+        let level = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.level", borne: 5))
+        let rank = try XCTUnwrap(ecran?.frame(of: "profile.banner.game.rank", borne: 5))
+        XCTAssertGreaterThan(level.minX, 180)
+        XCTAssertLessThan(rank.maxX, 180)
+    }
+
+    func test_badge_levelGroupSaysItsPoints() throws {
+        ecran = RenderedScreen(badge(points: 976).frame(width: 360), size: CGSize(width: 360, height: 200))
+
+        XCTAssertNotNil(ecran?.frame(of: "profile.banner.game.level", borne: 5))
+        let label = try XCTUnwrap(ecran?.node("profile.banner.game.level")?.label)
+        XCTAssertTrue(label.contains(GameCopy.points(976)), label)
     }
 }
