@@ -128,8 +128,24 @@ export function WorldParticipantCardSheet({
   );
 }
 
+/**
+ * LA PASTILLE DE NATURE SE LIT (WCAG 1.4.3) — la teinte (violet du masque pour
+ * un anonyme, accent du fil sinon) colore le FOND et le glyphe ; le texte est
+ * à l'encre. Teinte sur sa propre teinte à 14 %, il tombait à 3,2:1 en clair
+ * (violet) et 3,6:1 (indigo), sous le 4,5:1 d'un libellé de 12 px.
+ */
+export function worldCardKindChipColors(kind: WorldParticipantCardView['header']['kind']): {
+  readonly ink: string;
+  readonly tint: string;
+  readonly ground: string;
+} {
+  const tint = kind === 'anonymous' ? 'var(--ios-purple-500)' : 'var(--accent, var(--color-ios-brand))';
+  return { ink: 'var(--color-ios-ink)', tint, ground: `color-mix(in srgb, ${tint} 14%, transparent)` };
+}
+
 function CardBody({ view, purpose }: { readonly view: WorldParticipantCardView; readonly purpose: string }) {
   const { header } = view;
+  const chip = worldCardKindChipColors(header.kind);
   return (
     <div className="grid gap-5">
       <div
@@ -145,12 +161,9 @@ function CardBody({ view, purpose }: { readonly view: WorldParticipantCardView; 
             <span
               data-world-card-kind={header.kind}
               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold"
-              style={{
-                color: header.kind === 'anonymous' ? 'var(--ios-purple-500)' : 'var(--accent, var(--color-ios-brand))',
-                backgroundColor: `color-mix(in srgb, ${header.kind === 'anonymous' ? 'var(--ios-purple-500)' : 'var(--accent, var(--color-ios-brand))'} 14%, transparent)`,
-              }}
+              style={{ color: chip.ink, backgroundColor: chip.ground }}
             >
-              {header.kind === 'anonymous' ? <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} /> : null}
+              {header.kind === 'anonymous' ? <GlyphSvg glyph={THREAD_IDENTITY_GLYPHS.maskHappy} size={13} style={{ color: chip.tint }} /> : null}
               {header.kindLabel}
             </span>
             {header.handle === null ? null : (

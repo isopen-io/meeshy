@@ -14,9 +14,12 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { WorldParticipantCardContext, type WorldParticipantCardOpener } from '@/lib/view/world-participant-card-context';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { loadColorAliasMap, loadIosSchemes, resolveColor, wcagContrastRatio } from '../../scripts/lib/glass-contrast.mjs';
+
 import { Bubble } from './bubble';
 import { FocalRow } from './focal-row';
 import { WorldParticipantCardHost } from './world-participant-card-host';
+import { worldCardKindChipColors } from './world-participant-card-sheet';
 
 /**
  * DANS WORLD WIDE, L'ÉQUIPE TOUCHE UN AUTEUR ET LIT SA FICHE (#10102, partie
@@ -348,5 +351,43 @@ describe('la feuille : ce que le contrat sert, et rien sur un refus', () => {
     click(container?.querySelector('[data-probe]') as HTMLElement);
     await settle(() => (sheet()?.textContent ?? '').includes('World Wide'));
     expect(sheet()?.textContent ?? '').toContain('n’est plus dans World Wide');
+  });
+});
+
+describe('la feuille : la pastille de nature se lit (WCAG 1.4.3)', () => {
+  const aliases = loadColorAliasMap() as Record<string, string>;
+  const schemes = loadIosSchemes() as { readonly light: Record<string, string>; readonly dark: Record<string, string> };
+  type Rgba = { readonly r: number; readonly g: number; readonly b: number; readonly a: number };
+  const varsOf = (scheme: 'light' | 'dark'): Record<string, string> => ({
+    ...schemes[scheme],
+    ...Object.fromEntries(Object.entries(aliases).map(([alias, token]) => [alias, `var(${token})`])),
+  });
+  const over = (top: Rgba, bottom: Rgba): Rgba => ({
+    r: top.r * top.a + bottom.r * (1 - top.a),
+    g: top.g * top.a + bottom.g * (1 - top.a),
+    b: top.b * top.a + bottom.b * (1 - top.a),
+    a: 1,
+  });
+
+  for (const kind of ['anonymous', 'account', 'bot'] as const) {
+    test(`« ${kind} » : l’encre tient 4,5:1 sur le fond teinté de la pastille, en clair comme en sombre`, () => {
+      const chip = worldCardKindChipColors(kind);
+      for (const scheme of ['light', 'dark'] as const) {
+        const vars = varsOf(scheme);
+        const card = resolveColor('var(--color-ios-card)', vars) as Rgba;
+        const ink = over(resolveColor(chip.ink, vars) as Rgba, card);
+        const ground = over(resolveColor(chip.ground, vars) as Rgba, card);
+        expect({ scheme, passes: wcagContrastRatio(ink, ground) >= 4.5 }).toEqual({ scheme, passes: true });
+      }
+    });
+  }
+
+  test('la feuille peint la pastille avec ces couleurs-là', async () => {
+    mountHost({ identifier: 'world', role: 'MODERATOR' });
+    await settle(() => probe() === 'open');
+    click(container?.querySelector('[data-probe]') as HTMLElement);
+    await settle(() => sheet()?.querySelector('[data-world-card-kind]') != null);
+    const chip = sheet()?.querySelector<HTMLElement>('[data-world-card-kind]');
+    expect(chip?.style.color).toBe(worldCardKindChipColors('anonymous').ink);
   });
 });
