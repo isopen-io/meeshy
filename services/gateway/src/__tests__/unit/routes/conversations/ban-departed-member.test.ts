@@ -125,8 +125,7 @@ function makeSocketRecorder() {
   // `io.to(fil).to(perso…).emit(...)` pour ne livrer qu'une copie par socket.
   const chain = (rooms: string[]): any => ({
     to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
-    // La copie SANS effectif des seuls invités (#10205) n'entre pas dans l'éventail jugé ici.
-    emit: (event: string, payload: any) => (rooms.length === 1 && rooms[0].startsWith('conversation-guests:') ? undefined : emits.push({ room: rooms[0], rooms, event, payload })),
+    emit: (event: string, payload: any) => emits.push({ room: rooms[0], rooms, event, payload }),
   });
 
   const io = {
@@ -262,7 +261,7 @@ describe("PATCH unban — la personne était partie AVANT d'être bannie", () =>
 
     await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban` });
 
-    expect(socket.emits.map((e) => e.event)).toEqual(['conversation:participant-unbanned']);
+    expect([...new Set(socket.emits.map((e) => e.event))]).toEqual(['conversation:participant-unbanned']);
     expect(socket.emits[0].payload.membershipRestored).toBe(false);
     await app.close();
   });

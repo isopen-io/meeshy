@@ -17,7 +17,6 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { bridgeComputed } from '../unreadBridgeField.js';
-import { conversationGuestsRoom } from '../conversationGuestsRoom';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -208,8 +207,6 @@ export class ConversationHandler {
 
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
-      // #10205 — une socket invitée rejoint aussi la room des invités.
-      if (connectedUser.isAnonymous) await socket.join(conversationGuestsRoom(normalizedId));
 
       // Rattrapage AVANT les accusés ci-dessous, et hors du gate
       // `participationId` : l'appartenance vient d'être contrôlée, et un invité

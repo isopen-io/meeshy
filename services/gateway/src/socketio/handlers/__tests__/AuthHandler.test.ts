@@ -171,8 +171,8 @@ describe('AuthHandler', () => {
 
       await authHandler.handleTokenAuthentication(mockSocket);
 
-      // Joins the personal room every emitter addresses, and the guest room (#10205)…
-      expect((mockSocket.join as jest.Mock).mock.calls.flat()).toEqual(expect.arrayContaining(['user:anon-123', 'conversation-guests:conv-123']));
+      // Joins the personal room every emitter addresses…
+      expect(mockSocket.join).toHaveBeenCalledWith('user:anon-123');
       // …and NOT the bare participantId room, which no emitter ever targets.
       expect(mockSocket.join).not.toHaveBeenCalledWith('anon-123');
     });

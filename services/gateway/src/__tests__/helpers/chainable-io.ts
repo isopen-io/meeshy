@@ -21,7 +21,6 @@ import { jest } from '@jest/globals';
  */
 export function makeChainableIO(options: { sockets?: Array<{ leave: (room: string) => void }> } = {}) {
   const sent: Array<{ rooms: string[]; excepts: string[]; event: string; payload: unknown }> = [];
-  const guestCopies: Array<{ rooms: string[]; excepts: string[]; event: string; payload: unknown }> = [];
   const leave = jest.fn<any>();
   const fetchSockets = jest.fn<any>().mockResolvedValue(options.sockets ?? [{ leave }]);
   const emit = jest.fn<any>();
@@ -35,13 +34,6 @@ export function makeChainableIO(options: { sockets?: Array<{ leave: (room: strin
     except: (room: string | string[]) =>
       chain(rooms, [...excepts, ...(Array.isArray(room) ? room : [room])]),
     emit: (event: string, payload: unknown) => {
-      // La copie SANS effectif adressée aux seules sockets invitées (#10205,
-      // `emitConversationMemberCountEvent`) se range à part : les témoins de
-      // ce double jugent l'éventail des MEMBRES ; `_guestCopies` la garde.
-      if (rooms.length === 1 && rooms[0].startsWith('conversation-guests:')) {
-        guestCopies.push({ rooms, excepts, event, payload });
-        return;
-      }
       sent.push({ rooms, excepts, event, payload });
       emit(event, payload);
     },
@@ -54,7 +46,6 @@ export function makeChainableIO(options: { sockets?: Array<{ leave: (room: strin
     _leave: leave,
     _fetchSockets: fetchSockets,
     _sent: sent,
-    _guestCopies: guestCopies,
     /** Toutes les rooms des chaînes qui ont émis cet événement. */
     _roomsFor: (event: string) => sent.filter((s) => s.event === event).flatMap((s) => s.rooms),
     /** Toutes les rooms EXCLUES des chaînes qui ont émis cet événement. */
