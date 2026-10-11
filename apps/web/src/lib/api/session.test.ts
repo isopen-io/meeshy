@@ -148,7 +148,21 @@ describe('createSessionStore — establishGuest() (#5561)', () => {
     expect(storage.raw.has('meeshy.session')).toBe(false);
   });
 
+  test('les familles de pièces jointes du lien (#10003) se persistent et se restaurent avec l’invité', () => {
+    const storage = fakeStorage();
+    createSessionStore({ storage, now: () => FIXED_NOW })
+      .getState()
+      .establishGuest({ sessionToken: 'anon_abc', guest: { ...GUEST, attachmentKinds: ['text', 'audio'] } });
+    const reloaded = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    reloaded.getState().restoreSession();
+
+    const session = reloaded.getState().session;
+    expect(session.status === 'guest' ? session.guest.attachmentKinds : 'perdue').toEqual(['text', 'audio']);
+  });
+
   const CORROMPUS: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+    ['aux familles inconnues', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, attachmentKinds: ['exe'] }, expiresAt: FIXED_NOW + 1_000 }],
     ['jeton vide', { kind: 'guest', sessionToken: '', guest: GUEST, expiresAt: FIXED_NOW + 1_000 }],
     ['sans conversation', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, conversationId: '' }, expiresAt: FIXED_NOW + 1_000 }],
     ['sans lien', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, link: '' }, expiresAt: FIXED_NOW + 1_000 }],

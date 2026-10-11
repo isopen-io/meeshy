@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { User } from '@meeshy/shared/types/user';
 
+import { isGuestKind, type GuestKind } from '../send/guest-attachment-kinds';
 import { safeLocalStorage } from '../storage';
 
 import { claimLegacySession } from './legacy-session';
@@ -100,6 +101,15 @@ export type GuestIdentity = {
    * persistée d'avant ce lot ne la porte pas, et reste valide.
    */
   readonly language?: string;
+  /**
+   * LES FAMILLES DE PIÈCES JOINTES QUE LE LIEN OUVRE À L'INVITÉ (#10001,
+   * #10003) — `entry.allowedAttachmentKinds`, servi à la jonction. Un tableau
+   * fait foi (World Wide : `['text', 'audio']`) ; `null` = le lien ne
+   * restreint rien par famille. ABSENT sur une session enregistrée avant le
+   * champ : `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`)
+   * y applique le plafond de la conversation quand il en existe un.
+   */
+  readonly attachmentKinds?: readonly GuestKind[] | null;
 };
 
 export type AuthenticatedSession = {
@@ -310,6 +320,9 @@ function pickGuest(guest: GuestIdentity): GuestIdentity {
     link: guest.link,
     mayWrite: guest.mayWrite,
     ...(guest.language === undefined ? {} : { language: guest.language }),
+    ...(guest.attachmentKinds === undefined
+      ? {}
+      : { attachmentKinds: guest.attachmentKinds === null ? null : [...guest.attachmentKinds] }),
   };
 }
 
@@ -341,7 +354,14 @@ function isGuestIdentity(value: unknown): value is GuestIdentity {
   if (typeof g.link !== 'string' || g.link === '') return false;
   if (typeof g.mayWrite !== 'boolean') return false;
   if (g.language !== undefined && typeof g.language !== 'string') return false;
+  if (!isStoredAttachmentKinds(g.attachmentKinds)) return false;
   return g.participantId === null || typeof g.participantId === 'string';
+}
+
+/** Absent (session d'avant #10003), `null`, ou un tableau de familles CONNUES. */
+function isStoredAttachmentKinds(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  return Array.isArray(value) && value.every(isGuestKind);
 }
 
 function isPersistedSession(value: unknown): value is PersistedSession {
