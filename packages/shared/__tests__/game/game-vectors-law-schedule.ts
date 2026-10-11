@@ -106,7 +106,7 @@ export function buildGameVectorsSchedule() {
     ['refuse un chevauchement', seed, { number: 2, startDay: '2027-02-08' }, now],
     ['refuse une date commencée', { revision: 0, seasons: [] }, { number: 1, startDay: '2026-10-05' }, { dayKey: '2026-10-11', minuteOfDay: 600 }],
     ['met en pause la saison 2', seed, { number: 2, status: 'paused' }, now],
-    ['refuse derrière une pause', paused, { number: 3, startDay: '2027-06-07' }, now],
+    ['programme derrière une pause, sans dates', paused, { number: 3, startDay: '2027-06-07' }, now],
     ['reprend la saison 2', paused, { number: 2, status: 'scheduled', startDay: '2027-03-08' }, now],
     ['refuse des récompenses hors bornes', seed, { number: 2, stepPoints: 250 }, now],
     ['accepte des récompenses bornées', seed, { number: 2, stepPoints: 50 }, now],

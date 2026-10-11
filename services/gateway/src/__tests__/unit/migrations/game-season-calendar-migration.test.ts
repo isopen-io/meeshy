@@ -31,7 +31,7 @@ function fakeDatabase(seed: Readonly<Record<string, Doc[]>> = {}) {
         indexes.push(opts.name);
         return opts.name;
       },
-      findOne: (filter: Doc) => docs.find((d) => matches(d, filter)) ?? null,
+      findOne: (filter: Doc = {}) => docs.find((d) => matches(d, filter)) ?? null,
       updateOne: (filter: Doc, update: { $setOnInsert?: Doc }, opts: { upsert?: boolean }) => {
         const found = docs.find((d) => matches(d, filter));
         if (found) return { matchedCount: 1, upsertedCount: 0 };
@@ -100,5 +100,11 @@ describe('migration du calendrier des saisons', () => {
 
   it('ROLLBACK=1 sans seed : rien à retirer', () => {
     expect(run(fakeDatabase(), { ROLLBACK: '1' })).toContain('rien à retirer');
+  });
+
+  it('n’écrase pas une programmation antérieure : pas de seed (révision 1 en double évitée)', () => {
+    const database = fakeDatabase({ GameSeasonDefinition: [{ number: 2, startDay: '2027-03-01', status: 'scheduled', themeKey: 'language:ja', stepPoints: 100, copy: null, revision: 1 }] });
+    expect(run(database, { APPLY: '1' })).toContain('seed inutile');
+    expect(database.data.GameSeasonDefinition).toHaveLength(1);
   });
 });

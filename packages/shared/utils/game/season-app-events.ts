@@ -17,6 +17,7 @@ import type { LeagueMoment } from './league.js';
 import {
   SEASON_COPY_LIMITS,
   SEASON_COPY_LOCALES,
+  SEASON_EDIT_FREEZE_DAYS,
   scheduledSeasonCalendar,
   seasonDefinitionOf,
   type SeasonCopy,
@@ -25,7 +26,8 @@ import {
 } from './season-schedule.js';
 
 export const APP_EVENT_TIME_ZONE = 'Europe/Paris';
-export const APP_EVENT_PUBLISH_DAYS_BEFORE = 7;
+/** La même que `SEASON_EDIT_FREEZE_DAYS` : une saison annoncée ne se décale plus. */
+export const APP_EVENT_PUBLISH_DAYS_BEFORE = SEASON_EDIT_FREEZE_DAYS;
 /** Le dimanche 20 h de la 4e semaine : 27 jours et 20 heures après l'ouverture. */
 export const APP_EVENT_SEASON_WEEKS = 4;
 export const APP_EVENT_MAX_DAYS = 31;

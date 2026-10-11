@@ -17,7 +17,7 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 import { gameSeasonsAdminRoutes, type SeasonProposer } from '../../../../routes/admin/game-seasons';
 import { meGameSeasonCalendarRoutes } from '../../../../routes/me/game-season-calendar';
-import { invalidateSeasonSchedule } from '../../../../services/game/SeasonScheduleService';
+import { invalidateSeasonSchedule, resetScheduleIndexesForTests } from '../../../../services/game/SeasonScheduleService';
 
 const ADMIN = '507f1f77bcf86cd799439011';
 const PROPOSAL_ID = '507f1f77bcf86cd7994390aa';
@@ -26,13 +26,17 @@ const NOW = new Date('2027-01-05T10:00:00Z');
 
 type Row = Record<string, any>;
 
-function fakeDb(options: { auditFails?: boolean } = {}) {
+function fakeDb(options: { auditFails?: boolean; indexesFail?: boolean } = {}) {
   const definitions: Row[] = [];
   const proposals: Row[] = [];
   const audit: Row[] = [];
   let seq = 0;
   const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
   const prisma = {
+    $runCommandRaw: jest.fn(async () => {
+      if (options.indexesFail) throw new Error('not authorized');
+      return { ok: 1 };
+    }),
     gameSeasonDefinition: {
       findMany: jest.fn(async () => [...definitions].sort((a, b) => a.number - b.number)),
       findUnique: jest.fn(async ({ where }: any) => definitions.find((d) => d.number === where.number) ?? null),
@@ -105,7 +109,10 @@ async function build(db: ReturnType<typeof fakeDb>, role: string | null = 'ADMIN
 const call = (app: FastifyInstance, method: 'GET' | 'PUT' | 'POST', url: string, payload?: object) =>
   app.inject({ method, url: `/api/v1${url}`, ...(payload ? { payload } : {}) });
 
-beforeEach(() => invalidateSeasonSchedule());
+beforeEach(() => {
+  invalidateSeasonSchedule();
+  resetScheduleIndexesForTests();
+});
 
 describe('le rôle est requis sur chaque route', () => {
   it.each(['USER', 'MODERATOR', 'AUDIT', 'ANALYST'])('%s est refusé (403), rien ne s’écrit ni ne se propose', async (role) => {
@@ -310,6 +317,56 @@ describe('export store.app_events', () => {
     expect(res.body).toContain('app_events:');
     expect(res.body).toContain('- key: saison-2');
     expect(res.body).toContain('deep_link: https://meeshy.me/me/progression/saison/2');
+    await app.close();
+  });
+});
+
+describe('les cas de l’audit adversarial', () => {
+  it('sans index uniques garantis, aucune écriture (503)', async () => {
+    const db = fakeDb({ indexesFail: true });
+    const app = await build(db);
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, startDay: '2027-03-01' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toBe('schedule-indexes-unavailable');
+    expect(db.definitions).toHaveLength(0);
+    await app.close();
+  });
+
+  it('valider une proposition ne défait pas le décalage d’un collègue fait entre-temps', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    const { id } = (await call(app, 'POST', '/admin/game/seasons/2/proposals', {})).json().data;
+    expect((await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, startDay: '2027-03-01' })).statusCode).toBe(200);
+    const ok = await call(app, 'POST', `/admin/game/seasons/proposals/${id}/approve`, { expectedRevision: 1 });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().data.season).toMatchObject({ startDay: '2027-03-01', themeKey: 'language:ja' });
+    expect(ok.json().data.proposal).toMatchObject({ status: 'approved', startDay: '2027-03-01' });
+    await app.close();
+  });
+
+  it('la réponse d’une écriture porte la révision ÉCRITE, et le journal l’état d’avant', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    await call(app, 'GET', '/me/game/seasons/calendar');
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, startDay: '2027-03-01' });
+    expect(res.json().data.revision).toBe(1);
+    expect(JSON.parse(db.audit[0]!.changes)).toMatchObject({ before: { number: 2, startDay: '2027-02-15' }, edit: { startDay: '2027-03-01' } });
+    expect((await call(app, 'PUT', '/admin/game/seasons/3', { expectedRevision: 1, stepPoints: 150 })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('une saison annoncée (J-7) ne se décale plus (422)', async () => {
+    const db = fakeDb();
+    const app = await Fastify({ logger: false });
+    app.decorate('prisma', db.prisma as never);
+    app.decorate('authenticate', async (request: FastifyRequest) => {
+      (request as any).authContext = { isAuthenticated: true, isAnonymous: false, userId: ADMIN, registeredUser: { id: ADMIN, role: 'ADMIN' } };
+    });
+    await app.register(gameSeasonsAdminRoutes, { prefix: '/api/v1/admin/game', proposer: null, clock: () => new Date('2027-02-10T12:00:00Z') });
+    await app.ready();
+    const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, status: 'paused' });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toBe('season-announced');
     await app.close();
   });
 });
