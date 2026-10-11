@@ -56,6 +56,17 @@ const frStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Un texte de la longueur maximale déborderait : agrandissez la zone ou réduisez la longueur',
   'stickerPacks.problem.count': 'Un pack compte entre 3 et 120 stickers',
   'stickerPacks.problem.packField': 'Donnez au pack un nom, une description et une signature',
+  'packs.title': 'Packs et téléchargements',
+  'packs.segments': 'Type de pack',
+  'packs.segment.stickers': 'Stickers',
+  'packs.segment.frames': 'Cadres du jeu',
+  'packs.frames.tabs': 'Packs de cadres',
+  'packs.frames.hint': 'Installez les packs de cadres qui immortalisent vos étapes du jeu. Chaque cadre dit où il s’utilise.',
+  'packs.frames.empty': 'Aucun pack de cadres pour le moment.',
+  'packs.frames.update': 'Ce pack demande une version plus récente de Meeshy. Mettez à jour Meeshy pour voir ses cadres.',
+  'packs.frames.failed': 'Les cadres de ce pack n’ont pas pu être chargés — réessayez',
+  'packs.frames.count': '{count} cadres',
+  'packs.frames.weight': '{size} à télécharger',
 } as const;
 
 export default frStickerPacks;

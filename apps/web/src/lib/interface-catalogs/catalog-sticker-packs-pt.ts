@@ -53,6 +53,17 @@ const ptStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Um texto de comprimento máximo transbordaria: aumente a área ou reduza o comprimento',
   'stickerPacks.problem.count': 'Um pacote tem entre 3 e 120 figurinhas',
   'stickerPacks.problem.packField': 'Dê ao pacote um nome, uma descrição e uma assinatura',
+  'packs.title': 'Pacotes e downloads',
+  'packs.segments': 'Tipo de pacote',
+  'packs.segment.stickers': 'Figurinhas',
+  'packs.segment.frames': 'Molduras do jogo',
+  'packs.frames.tabs': 'Pacotes de molduras',
+  'packs.frames.hint': 'Instale os pacotes de molduras que eternizam as suas etapas do jogo. Cada moldura diz onde pode ser usada.',
+  'packs.frames.empty': 'Ainda não há pacotes de molduras.',
+  'packs.frames.update': 'Este pacote exige uma versão mais recente do Meeshy. Atualize o Meeshy para ver as molduras.',
+  'packs.frames.failed': 'Não foi possível carregar as molduras deste pacote — tente novamente',
+  'packs.frames.count': '{count} molduras',
+  'packs.frames.weight': '{size} para baixar',
 } satisfies StickerPacksCatalog;
 
 export default ptStickerPacks;

@@ -1110,6 +1110,8 @@ const pt = {
   ...ptConversationCard,
   ...ptStoriesMine,
   'settings.tools.sounds': 'Meus sons',
+  'settings.section.packs': 'Pacotes e downloads',
+  'settings.packs.shop': 'Loja de figurinhas e molduras',
   ...ptContactCard,
   ...ptQuote,
   ...ptCommentRow,

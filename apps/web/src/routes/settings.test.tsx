@@ -15,6 +15,7 @@ import {
   DataSection,
   LogoutButton,
   NotificationsSection,
+  PacksSection,
   PrivacySection,
   ProfileCard,
   SETTINGS_HEADER_HEIGHT,
@@ -287,6 +288,18 @@ describe('les données — seul l’export reste offert', () => {
     expect(host.textContent).not.toContain('Médias');
     expect(host.textContent).not.toContain('Messages');
     expect(host.querySelectorAll('a')).toHaveLength(1);
+  });
+});
+
+describe('les packs et téléchargements (#10149)', () => {
+  /* Demande porteur 2026-10-11 : la Boutique des stickers ET celle des cadres
+     du jeu. Un volet des réglages, sans route neuve (première peinture). */
+  test('la rangée ouvre le volet des packs des réglages', () => {
+    const host = dom(<PacksSection language="fr" />);
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
+    expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
+    expect(row?.textContent).toContain('Boutique des stickers et des cadres');
+    expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
   });
 });
 

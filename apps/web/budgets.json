@@ -894,9 +894,9 @@
       "pattern": "^assets/catalog-sticker-packs-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 10,
-        "status": "CIBLE -- MESUREE PAR #9141, NON ARBITREE",
-        "source": "Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 8,25 Ko pour les SEPT catalogues des packs de stickers (cles `stickerPacks.*` : boutique, onglet d un pack de tiers, editeur de proposition et ses refus motives), de 1,06 Ko (en) a 1,30 Ko (ar). Charges avec la feuille de stickers seulement (`composer.tsx`, `i18n-sticker-packs-catalog`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : ces cles portaient `interface_catalogs` a 183,54 Ko, au-dela de son plafond de 177. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+        "value": 11,
+        "status": "CIBLE -- MESUREE PAR #9141 PUIS #10149, NON ARBITREE",
+        "source": "#10149 (2026-10-11) : 9,75 Ko apres l ajout des cles `packs.*` (volet Packs et telechargements, segments Stickers / Cadres du jeu, boutique des cadres : vide, Mettre a jour Meeshy, poids, nombre de cadres) dans les sept langues ; plafond porte a 11 (Ko SUPERIEUR 10 + 1 Ko de marge). Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 8,25 Ko pour les SEPT catalogues des packs de stickers (cles `stickerPacks.*` : boutique, onglet d un pack de tiers, editeur de proposition et ses refus motives), de 1,06 Ko (en) a 1,30 Ko (ar). Charges avec la feuille de stickers seulement (`composer.tsx`, `i18n-sticker-packs-catalog`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : ces cles portaient `interface_catalogs` a 183,54 Ko, au-dela de son plafond de 177. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
       }
     },
     "interface_catalogs_send_sheet": {
@@ -942,6 +942,24 @@
         "value": 3,
         "status": "CIBLE -- MESUREE PAR #9907, NON ARBITREE",
         "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,77 Ko gzip -9 pour les SEPT catalogues du menu d une piece (cles `message.piece.*` : repondre a la piece, l enregistrer, la transferer, la supprimer, « Tout le message », son defilement « Photo 3 sur 7 »). Charges avec le fil (`useMessageMenu`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Hors du catalogue d interface, deja au-dessus de son plafond sur dev (183,9 Ko) avant ce lot. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge. La premiere peinture ne bouge pas (90 Ko sur dev, 89,98 apres)."
+      }
+    },
+    "pack_shop": {
+      "pattern": "^assets/pack-shop-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 3,
+        "status": "CIBLE -- MESUREE PAR #10149, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 1,17 Ko pour la boutique GENERIQUE des packs (`components/pack-shop.tsx` : liste, Installer/Retirer optimiste, un geste en vol par pack, retour arriere sur refus), partagee par la Boutique des stickers (`composer-sticker-shop.tsx`) et la Boutique des cadres (`frame-pack-shop.tsx`), chacune par un import() — jamais un import statique. La premiere peinture ne bouge pas : 90,33 Ko avant, 90,31 Ko apres (meme arbre, sans puis avec le lot ; le depassement de 90 est anterieur au lot). Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge."
+      }
+    },
+    "packs_store": {
+      "pattern": "^assets/pack-asset-store-[A-Za-z0-9_-]{7}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 2,
+        "status": "CIBLE -- MESUREE PAR #10149, NON ARBITREE",
+        "source": "Mesure du 2026-10-11 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9) : 0,83 Ko pour le magasin des fichiers de packs (`lib/packs/pack-asset-store.ts` : lecture CORS de `/api/v1/pack-assets/<sha16>.<ext>`, verification SHA-256, seau Cache Storage `meeshy-pack-assets`), charge par import() depuis l onglet d un pack de cadres seulement. Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
     "interface_catalogs_frame_usage": {

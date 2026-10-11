@@ -1125,6 +1125,8 @@ const fr = {
 
   ...frStoriesMine,
   'settings.tools.sounds': 'Mes sons',
+  'settings.section.packs': 'Packs et téléchargements',
+  'settings.packs.shop': 'Boutique des stickers et des cadres',
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,

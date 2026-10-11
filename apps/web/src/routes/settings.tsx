@@ -34,6 +34,8 @@ import {
   DataSection,
   LogoutButton,
   NotificationsSection,
+  PACKS_PANEL,
+  PacksSection,
   SECURITY_PANEL,
   SECURITY_PANEL_PARAM,
   PrivacySection,
@@ -81,6 +83,18 @@ const SettingsSecurity = lazy(() =>
   }),
 );
 
+/**
+ * LE VOLET DES PACKS (#10149) — la Boutique des stickers et celle des cadres
+ * du jeu, chargées à la demande AVEC leurs libellés.
+ */
+const SettingsPacks = lazy(() =>
+  import('@/routes/settings-packs').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareSettingsPacks(language);
+    return { default: () => <module.SettingsPacksScreen language={language} /> };
+  }),
+);
+
 const THEME_MODE: Readonly<Record<ThemePreference, ThemeMode>> = { system: 'auto', light: 'light', dark: 'dark' };
 
 const actionDeps = (): PreferenceActionDeps => ({
@@ -120,14 +134,21 @@ function useGalleryToggle(): GalleryToggle | undefined {
  * chunk à la liste que l'entrée précharge pour cet écran (première peinture,
  * mesurée le 2026-10-08).
  */
-const securityPanelOpen = (): boolean =>
-  typeof location === 'object' && new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) === SECURITY_PANEL;
+const panelOf = (): string | null => (typeof location === 'object' ? new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) : null);
 
 export default function SettingsScreen() {
-  if (securityPanelOpen()) {
+  const panel = panelOf();
+  if (panel === SECURITY_PANEL) {
     return (
       <Suspense fallback={null}>
         <SettingsSecurity />
+      </Suspense>
+    );
+  }
+  if (panel === PACKS_PANEL) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsPacks />
       </Suspense>
     );
   }
@@ -232,6 +253,7 @@ function SettingsHome() {
             onRetry={() => void query.refetch()}
           />
           <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} />
+          <PacksSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           {sessionUser === null ? null : <SwitchAccountButton language={language} onPress={() => setSwitchingAccount(true)} />}
