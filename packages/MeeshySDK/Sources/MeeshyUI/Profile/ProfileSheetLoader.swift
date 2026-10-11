@@ -32,6 +32,9 @@ final class ProfileSheetLoader: ObservableObject {
         self.data = data ?? LiveProfileSheetData()
     }
 
+    /// Une deinit isolée au MainActor tue xctest au démontage sur iOS 18.4+/26 (#9694).
+    nonisolated deinit {}
+
     /// Ce que le cache garde, peint sans attendre le réseau.
     func paintFromCache(userId: String?, username: String) async {
         let userId = Self.known(userId)
@@ -111,6 +114,8 @@ final class ProfileSheetLoader: ObservableObject {
 
 @MainActor
 final class LiveProfileSheetData: ProfileSheetDataProviding {
+
+    nonisolated deinit {}
 
     func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> {
         let result = await CacheCoordinator.shared.profiles.load(for: key)
