@@ -46,7 +46,7 @@ export class GameBlockService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly deps: {
-      readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'>;
+      readonly missions: Pick<MissionService, 'ensureToday' | 'gameDay'> & Partial<Pick<MissionService, 'chestPriceBase'>>;
       /** Les sept extensions de la vague 2 ; remplaçable en test. */
       readonly extras?: Pick<GameBlockExtrasService, 'build'>;
       /** Les places du Mythe (#9636) ; remplaçable en test. */
@@ -79,6 +79,12 @@ export class GameBlockService {
       starFragmentsOf(this.prisma, userId).catch(() => undefined),
     ]);
     const day = await this.deps.missions.ensureToday(userId, now);
+    // Le cours de la prime du coffre, figé au début du jour de jeu et gravé à cette lecture (#10219). Un appoint :
+    // une lecture qui tombe rend le cours d'avant (`mintedLifetime`), jamais le bloc entier.
+    const chestMintBase = await this.deps.missions.chestPriceBase?.({ userId, now, dayKey: day.dayKey, timezone: user?.timezone }).catch((error: unknown) => {
+      log.warn('chest price base unavailable, bonus served at the current price', { userId, error: error instanceof Error ? error.message : String(error) });
+      return null;
+    });
     const gameDay = await this.deps.missions.gameDay(userId, day.dayKey);
     // Un tirage personnel qui échoue ne retient pas le bloc : la mission personnelle est un APPOINT.
     const personal = await this.deps.personal?.ensure(userId, now, day).catch((error: unknown) => {
@@ -112,6 +118,7 @@ export class GameBlockService {
       mythic: mythicSeat !== null,
       mythicSeat,
       mintedLifetime: totals.mintedLifetime,
+      chestMintBase: chestMintBase ?? null,
       missionsDone,
       flameRecord: facts.longest,
       debitablePoints: plan.debitablePoints,

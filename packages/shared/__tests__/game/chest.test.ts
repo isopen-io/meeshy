@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   CHEST_ODDS,
   chestBonusAmounts,
+  chestPriceMints,
   chestContentForEffort,
   chestPointsForEffort,
   dailyChest,
@@ -210,5 +211,28 @@ describe('le coffre donne au moins 500 points (porteur, 2026-10-10, 3e précisio
     expect(CHEST_ODDS.minPoints).toBe(500);
     expect(CHEST_ODDS.minGlory).toBe(50);
     expect(CHEST_ODDS.maxGlory).toBe(1000);
+  });
+});
+
+describe('le cours de la prime, figé au début du jour de jeu (#10219)', () => {
+  it('ne compte que les frappes des jours ANTÉRIEURS au jour de jeu', () => {
+    expect(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-04', '2026-10-05'] })).toBe(9);
+    expect(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-03', '2026-10-04'] })).toBe(10);
+  });
+
+  it('une frappe d’un jour POSTÉRIEUR (fuseau, jour de jeu prolongé) ne compte pas non plus', () => {
+    expect(chestPriceMints({ mintedLifetime: 3, dayKey: '2026-10-05', recentMintDays: ['2026-10-06', '2026-10-05'] })).toBe(1);
+  });
+
+  it('ne descend jamais sous zéro, et rend un entier', () => {
+    expect(chestPriceMints({ mintedLifetime: 1, dayKey: '2026-10-05', recentMintDays: ['2026-10-05', '2026-10-05'] })).toBe(0);
+    expect(chestPriceMints({ mintedLifetime: Number.NaN, dayKey: '2026-10-05', recentMintDays: [] })).toBe(0);
+  });
+
+  it('une frappe du jour ne change pas la prime : le cours reste celui de la veille', () => {
+    const before = chestContentForEffort(1000, meeshPrice(chestPriceMints({ mintedLifetime: 9, dayKey: '2026-10-05', recentMintDays: [] }) + 1));
+    const after = chestContentForEffort(1000, meeshPrice(chestPriceMints({ mintedLifetime: 10, dayKey: '2026-10-05', recentMintDays: ['2026-10-05'] }) + 1));
+    expect(after).toEqual(before);
+    expect(before.bonusWhole).toBe(1221);
   });
 });
