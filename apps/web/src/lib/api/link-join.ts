@@ -109,6 +109,10 @@ export type GuestTerms = {
    * tu pourras » (#7796). Absents : refusés, comme toute permission. */
   readonly mayImages: boolean;
   readonly mayFiles: boolean;
+  /** `allowedAttachmentKinds` (#10001, #10121) — les familles que le lien ouvre
+   * à l'invité : un tableau décide SEUL, `null` ne restreint rien, ABSENT d'un
+   * serveur d'avant le champ. Une famille inconnue est écartée. */
+  readonly attachmentKinds?: readonly GuestKind[] | null;
 };
 
 export type LinkInvitation = {
@@ -184,6 +188,7 @@ const WireInvitation = z.object({
   allowAnonymousMessages: optionalFlag,
   allowAnonymousImages: optionalFlag,
   allowAnonymousFiles: optionalFlag,
+  allowedAttachmentKinds: z.optional(z.nullable(z.array(z.string()))),
   allowedLanguages: z.optional(z.nullable(z.array(z.string()))),
   conversation: z.object({
     title: optionalText,
@@ -305,6 +310,7 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
       mayWrite: wire.allowAnonymousMessages === true,
       mayImages: wire.allowAnonymousImages === true,
       mayFiles: wire.allowAnonymousFiles === true,
+      ...servedAttachmentKinds(wire.allowedAttachmentKinds),
     },
   };
 }

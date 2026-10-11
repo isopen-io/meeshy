@@ -47,6 +47,27 @@ describe('anonymousRightsOf — les quatre droits, dans l’ordre de la carte', 
   });
 });
 
+describe('anonymousRightsOf — les familles que le lien ouvre (#10121)', () => {
+  test('World Wide (texte et audio, ni images ni fichiers au sens ancien) : les fichiers sont cochés, avec leurs familles', () => {
+    expect(anonymousRightsOf(terms({ mayImages: false, mayFiles: false, attachmentKinds: ['text', 'audio'] }), true)).toEqual([
+      { right: 'messages', granted: true },
+      { right: 'images', granted: false },
+      { right: 'files', granted: true, kinds: ['text', 'audio'] },
+      { right: 'history', granted: true },
+    ]);
+  });
+
+  test('la liste des familles décide seule : une image ouverte coche les images, un lien sans fichier les barre', () => {
+    const rights = anonymousRightsOf(terms({ mayImages: false, mayFiles: true, attachmentKinds: ['image'] }), false);
+    expect(rights.find((row) => row.right === 'images')).toEqual({ right: 'images', granted: true });
+    expect(rights.find((row) => row.right === 'files')).toEqual({ right: 'files', granted: false });
+  });
+
+  test('sans liste servie (null ou serveur d’avant le champ), les drapeaux du lien décident comme avant', () => {
+    expect(anonymousRightsOf(terms({ attachmentKinds: null }), true)).toEqual(anonymousRightsOf(terms(), true));
+  });
+});
+
 describe('askedFieldsOf — ce qu’on demandera à l’arrivée', () => {
   test('dans l’ordre prénom, e-mail, date de naissance, et seulement ce que le lien exige', () => {
     expect(askedFieldsOf(terms())).toEqual(['nickname']);

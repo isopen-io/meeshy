@@ -346,6 +346,15 @@ describe('la page d’accueil d’invitation (#7796) — dans l’ordre de la ma
     expect(text(el.querySelector('[data-invite-right="files"]'))).toContain('non autorisé');
   });
 
+  test('d. World Wide dit ce qu’un invité peut joindre : des fichiers texte (.txt) et audio (#10121)', async () => {
+    const { deps } = depsWith(withInvitation({ guest: { ...OPEN_TERMS, mayImages: false, attachmentKinds: ['text', 'audio'] } }));
+    const el = await mount(deps);
+    const files = el.querySelector('[data-invite-right="files"]');
+    expect(files?.getAttribute('data-granted')).toBe('true');
+    expect(text(files)).toContain('Envoyer des fichiers texte (.txt) et audio');
+    expect(el.querySelector('[data-invite-right="images"]')?.getAttribute('data-granted')).toBe('false');
+  });
+
   test('d. ce qu’on demandera, les langues acceptées, la validité et les places restantes', async () => {
     const { deps } = depsWith();
     const el = await mount(deps);
