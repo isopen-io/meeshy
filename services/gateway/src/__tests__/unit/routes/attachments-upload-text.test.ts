@@ -16,24 +16,6 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  // `error`/`message`/`code` déclarés (comme le vrai `errorResponseSchema`,
-  // #4884) — un schéma sans `properties` EFFACE via fast-json-stringify
-  // (`additionalProperties: false` par défaut) : sans eux, un témoin de
-  // comportement qui inspecte le CORPS d'une erreur (#6604) passerait sur un
-  // faux vide plutôt que sur ce que la route sert réellement.
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
 const mockUploadMultiple = jest.fn<any>();
 const mockCreateTextAttachment = jest.fn<any>();
 // #6604 — la route valide chaque fichier AVANT l'upload ; le défaut « valide »

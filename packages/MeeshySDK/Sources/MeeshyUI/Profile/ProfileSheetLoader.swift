@@ -40,10 +40,10 @@ final class ProfileSheetLoader: ObservableObject {
         let userId = Self.known(userId)
         let key = Self.lookupKey(userId: userId, username: username)
         guard !key.isEmpty else { return }
-        if let cached = Self.cachedValue(await data.cachedProfile(for: key)) {
+        if let cached = CacheFirst.paintable(await data.cachedProfile(for: key)) {
             profile = cached
         }
-        if let id = userId ?? profile?.id, let cached = Self.cachedValue(await data.cachedStats(for: id)) {
+        if let id = userId ?? profile?.id, let cached = CacheFirst.paintable(await data.cachedStats(for: id)) {
             stats = cached
         }
         isLoadingProfile = profile == nil
@@ -100,13 +100,6 @@ final class ProfileSheetLoader: ObservableObject {
 
     private static func lookupKey(userId: String?, username: String) -> String {
         userId ?? username
-    }
-
-    private static func cachedValue<T>(_ result: CacheResult<[T]>) -> T? {
-        switch result {
-        case .fresh(let items, _), .stale(let items, _): return items.first
-        case .expired, .empty: return nil
-        }
     }
 }
 
