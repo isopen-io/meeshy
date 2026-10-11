@@ -16,6 +16,7 @@ import { isEmailValid } from '@/lib/signup-form';
 import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
+import { useShortViewport } from '@/lib/view/short-viewport';
 import { Link, href, navigate } from '@/routes/route-table';
 import { PasswordInput } from '@/components/password-input';
 import { DeviceAccountList } from '@/components/device-account-list';
@@ -196,6 +197,7 @@ export function LoginDoors({
   const [ageBlocked, setAgeBlocked] = useState(ageBlockedAtArrival);
 
   const language = useInterfaceLanguage();
+  const shortViewport = useShortViewport();
   const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
   /** Proposée au compte SUPPLÉMENTAIRE seulement : le premier est gardé sans
    * question. Lue au montage — la liste ne change pas sous la saisie. */
@@ -326,7 +328,13 @@ export function LoginDoors({
             adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
             quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
             plus de prop `heading` : plus personne ne le taisait. */}
-        {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
+        {/* SUR UN TÉLÉPHONE COURT, LE BLASON CÈDE À WORLD WIDE (#10007).
+            La carte et « ou avec votre compte » ajoutent ~120 px à la porte du
+            mot de passe : à 375×667 elle défilait de 163 px. Sous 700 px de
+            haut, le blason se tait — la signature de pied nomme encore
+            Meeshy — et l'écran tient entier (`check-phone-frame.mjs`). Le
+            second facteur, sans carte, le garde. */}
+        {requires2FA || (method === 'password' && !shortViewport) ? <AuthTitle gradient="login" /> : null}
 
         {requires2FA ? null : (
           <Suspense fallback={null}>

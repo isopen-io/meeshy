@@ -76,7 +76,7 @@ export function LoginWorldEntry({
       <Link
         to="world"
         data-login-world
-        className="flex w-full items-center gap-3 rounded-card p-3.5"
+        className="flex w-full items-center gap-3 rounded-card p-3"
         style={{ background: CARD_BACKGROUND, border: CARD_BORDER, color: 'var(--color-ios-ink)', minHeight: 72 }}
       >
         <span
@@ -88,7 +88,7 @@ export function LoginWorldEntry({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-body font-extrabold">{translate(language, 'login.world.title', { title: door.title })}</span>
-          <span className="block text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <span className="block truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
             {translate(language, 'login.world.subtitle')}
           </span>
         </span>
