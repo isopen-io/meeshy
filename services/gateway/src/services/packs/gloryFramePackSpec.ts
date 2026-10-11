@@ -37,7 +37,7 @@ export type FramePackDetail = FramePackSummary & {
   readonly collections: readonly { readonly slug: string; readonly usage: FrameUsage | null }[];
 };
 
-export function framePackDetail(entry: PackIndexEntry, installed: boolean): FramePackDetail {
+export function framePackDetail(entry: PackIndexEntry, installed: boolean, itemCount = 0): FramePackDetail {
   const fr = entry.names.fr;
   return {
     slug: entry.slug,
@@ -46,7 +46,7 @@ export function framePackDetail(entry: PackIndexEntry, installed: boolean): Fram
     author: STICKER_PACK_AUTHOR_MEESHY,
     builtin: entry.origin === 'builtin',
     status: 'approved',
-    itemCount: 0,
+    itemCount,
     coverUrl: `${PACK_ASSET_PATH}/${entry.cover.src}`,
     installed,
     installCount: 0,
@@ -68,13 +68,13 @@ export function framePackDetail(entry: PackIndexEntry, installed: boolean): Fram
 export const framePackSummary = ({ contractSchema: _schema, contract: _contract, strings: _strings, collections: _collections, ...summary }: FramePackDetail): FramePackSummary =>
   summary;
 
-const registryOf = (entries: readonly PackIndexEntry[]): readonly RegistryPack<FramePackDetail>[] =>
-  entries.map((entry) => ({
+const registryOf = (index: PackIndex): readonly RegistryPack<FramePackDetail>[] =>
+  index.entries('glory-frame').map((entry) => ({
     slug: entry.slug,
     installedByDefault: entry.installedByDefault,
     removable: entry.removable,
     hidden: entry.hidden,
-    project: (installed: boolean) => framePackDetail(entry, installed),
+    project: (installed: boolean) => framePackDetail(entry, installed, index.itemCount(entry)),
   }));
 
 export type GloryFramePackSpecOptions = {
@@ -85,7 +85,7 @@ export type GloryFramePackSpecOptions = {
 export function gloryFramePackSpec(options: GloryFramePackSpecOptions): PackDomainSpec<FramePackSummary, FramePackDetail> {
   return {
     domain: 'glory-frame',
-    registry: registryOf(options.index.entries('glory-frame')),
+    registry: registryOf(options.index),
     community: null,
     removalGuard: options.removalGuard ?? null,
     toSummary: framePackSummary,

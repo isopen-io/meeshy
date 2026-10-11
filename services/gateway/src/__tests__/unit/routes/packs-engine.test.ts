@@ -199,6 +199,20 @@ describe('/packs/glory-frame — un registre FIXTURE', () => {
     expect(index.isServedAsset('0000000000000000.webp')).toBe(false);
   });
 
+  it('sert le nombre de cadres que le contrat lu déclare, dans la boutique comme dans le détail (#10221)', async () => {
+    const counts: Record<string, number> = { afrique: 38, moments: 16 };
+    const index = buildPackIndex({ registries: [FIXTURE_REGISTRY], retained: [], contractItemCount: (e) => counts[e.slug] ?? 0 });
+    const { app } = await frameApp({ index });
+    const shop = (await app.inject({ method: 'GET', url: '/' })).json().data as Record<string, unknown>[];
+    expect(shop.map((p) => [p.slug, p.itemCount])).toEqual([
+      ['afrique', 38],
+      ['moments', 16],
+      ['succes', 0],
+    ]);
+    const detail = (await app.inject({ method: 'GET', url: '/afrique' })).json().data as Record<string, unknown>;
+    expect(detail.itemCount).toBe(38);
+  });
+
   it('sert la boutique dans l’ordre éditorial, sans les packs masqués, avec l’usage de chaque pack', async () => {
     const { app } = await frameApp();
     const data = (await app.inject({ method: 'GET', url: '/' })).json().data as Record<string, unknown>[];

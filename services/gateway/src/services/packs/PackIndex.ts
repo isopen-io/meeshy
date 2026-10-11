@@ -37,6 +37,8 @@ export type PackIndex = {
   readonly entries: (domain: PackDomain) => readonly PackIndexEntry[];
   /** Le magasin peut-il servir ce fichier ? `<sha16>.<ext>`, référencé par un registre ou retenu. */
   readonly isServedAsset: (src: string) => boolean;
+  /** Le nombre de cadres que le contrat lu et vérifié d'un pack déclare (0 s'il n'a pas été lu). */
+  readonly itemCount: (entry: PackIndexEntry) => number;
   /** Ce qui n'a pas été lu : entrées refusées et fichiers illisibles — à journaliser au démarrage. */
   readonly rejected: number;
 };
@@ -48,6 +50,8 @@ export type PackIndexSources = {
   readonly retained: unknown;
   /** Les fichiers qu'un contrat de pack référence (vignettes, couches), lus et vérifiés par l'appelant. */
   readonly contractRefs?: (entry: PackIndexEntry) => readonly PackAssetRef[];
+  /** Le nombre de cadres du contrat d'un pack, lu et vérifié par l'appelant. */
+  readonly contractItemCount?: (entry: PackIndexEntry) => number;
 };
 
 const ASSET_SRC = /^[0-9a-f]{16}\.(?:webp|png|json|woff2)$/;
@@ -79,9 +83,12 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
   const contractRefs = sources.contractRefs ?? (() => []);
   const served = new Set<string>([...entries.flatMap((entry) => [...refsOf(entry), ...contractRefs(entry)].map((ref) => ref.src)), ...retained]);
   const byDomain = (domain: PackDomain) => entries.filter((entry) => entry.domain === domain).sort((a, b) => a.order - b.order);
+  const countOf = sources.contractItemCount ?? (() => 0);
+  const counts = new Map(entries.map((entry) => [`${entry.domain}.${entry.slug}`, countOf(entry)]));
   return {
     entries: byDomain,
     isServedAsset: (src) => ASSET_SRC.test(src) && served.has(src),
+    itemCount: (entry) => counts.get(`${entry.domain}.${entry.slug}`) ?? 0,
     rejected: parsed.reduce((sum, { rejected }) => sum + rejected, 0) + (all.length - entries.length),
   };
 }
@@ -123,8 +130,8 @@ function readJson(path: string): ReadResult {
   }
 }
 
-/** Le contrat d'un pack de cadres, lu dans le magasin et vérifié contre son empreinte ; sinon rien. */
-function frameContractRefs(assetsDir: string, entry: PackIndexEntry): readonly PackAssetRef[] {
+/** Les vignettes du contrat d'un pack de cadres, lu dans le magasin et vérifié contre son empreinte ; sinon rien. */
+function frameContractThumbs(assetsDir: string, entry: PackIndexEntry): readonly PackAssetRef[] {
   if (entry.domain !== 'glory-frame' || !ASSET_SRC.test(entry.contract.src)) return [];
   const path = join(assetsDir, entry.contract.src);
   if (!existsSync(path)) return [];
@@ -154,7 +161,8 @@ export function loadPackIndex(
   const index = buildPackIndex({
     registries: registries.map(({ value }) => value),
     retained: retained.value,
-    contractRefs: (entry) => frameContractRefs(assetsDir, entry),
+    contractRefs: (entry) => frameContractThumbs(assetsDir, entry),
+    contractItemCount: (entry) => frameContractThumbs(assetsDir, entry).length,
   });
   const unreadable = [...registries, retained].filter((result) => result.unreadable).length;
   return { ...index, rejected: index.rejected + unreadable };
