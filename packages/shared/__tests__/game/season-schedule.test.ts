@@ -28,7 +28,7 @@ import { seasonAppEvent, seasonAppEventsYaml, validateAppEvent } from '../../uti
 
 const SEED: SeasonSchedule = {
   revision: 1,
-  seasons: [{ number: 1, startDay: '2026-12-21', status: 'scheduled', themeKey: 'language:fr', stepPoints: 100, copy: null, appEvent: null }],
+  seasons: [{ number: 1, startDay: '2026-12-21', status: 'scheduled', themeKey: 'language:fr', stepPoints: 100, copy: null }],
 };
 
 const before = { dayKey: '2026-10-11', minuteOfDay: 22 * 60 };
@@ -59,7 +59,7 @@ describe('le calendrier par défaut rend la constante', () => {
 describe('une saison décalée', () => {
   const shifted: SeasonSchedule = {
     revision: 2,
-    seasons: [...SEED.seasons, { number: 2, startDay: '2027-03-01', status: 'scheduled', themeKey: 'language:ja', stepPoints: 120, copy: null, appEvent: null }],
+    seasons: [...SEED.seasons, { number: 2, startDay: '2027-03-01', status: 'scheduled', themeKey: 'language:ja', stepPoints: 120, copy: null }],
   };
 
   it('ouvre au lundi programmé, laisse un intervalle, et décale les suivantes', () => {
@@ -86,7 +86,7 @@ describe('une saison décalée', () => {
 describe('une saison en pause', () => {
   const paused: SeasonSchedule = {
     revision: 2,
-    seasons: [...SEED.seasons, { number: 2, startDay: '2027-02-15', status: 'paused', themeKey: 'language:es', stepPoints: 100, copy: null, appEvent: null }],
+    seasons: [...SEED.seasons, { number: 2, startDay: '2027-02-15', status: 'paused', themeKey: 'language:es', stepPoints: 100, copy: null }],
   };
 
   it("n'a pas de dates, ni elle ni les suivantes", () => {
@@ -162,9 +162,9 @@ describe('la programmation (admin) : futur seulement, un lundi, sans chevaucheme
   });
 
   it('refuse des textes trop longs ou une langue manquante', () => {
-    const copy = Object.fromEntries(SEASON_COPY_LOCALES.map((l) => [l, { title: 'Saison', tagline: 'Huit semaines' }]));
+    const copy = Object.fromEntries(SEASON_COPY_LOCALES.map((l) => [l, { title: 'Saison', tagline: 'Huit semaines', description: 'Une étoile par jour' }]));
     expect(applySeasonEdit(SEED, { number: 2, copy }, now).ok).toBe(true);
-    expect(applySeasonEdit(SEED, { number: 2, copy: { ...copy, fr: { title: 'x'.repeat(41), tagline: 'y' } } }, now)).toEqual({ ok: false, reason: 'copy-invalid' });
+    expect(applySeasonEdit(SEED, { number: 2, copy: { ...copy, fr: { title: 'x'.repeat(31), tagline: 'y', description: 'z' } } }, now)).toEqual({ ok: false, reason: 'copy-invalid' });
     const { ar: _ar, ...missing } = copy;
     expect(applySeasonEdit(SEED, { number: 2, copy: missing }, now)).toEqual({ ok: false, reason: 'copy-invalid' });
   });

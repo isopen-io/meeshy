@@ -15,6 +15,8 @@ export * from './badge-guide.js';
 export * from './league.js';
 export * from './duo.js';
 export * from './season.js';
+export * from './season-schedule.js';
+export * from './season-app-events.js';
 export * from './star-fragments.js';
 export * from './trophies.js';
 export * from './atlas.js';
