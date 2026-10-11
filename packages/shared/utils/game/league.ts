@@ -74,8 +74,12 @@ export const leagueWeekClose = (weekKey: string): LeagueMoment => ({
   minuteOfDay: LEAGUE_CLOSE_MINUTE,
 });
 
-/** La prochaine fermeture de semaine (#10225) — squelette. */
-export const nextLeagueWeekClose = (moment: LeagueMoment): LeagueMoment => moment;
+/**
+ * La prochaine fermeture de semaine (#10225) : le dimanche 20 h de la semaine du moment, toujours STRICTEMENT après
+ * lui (passé la fermeture, le moment appartient déjà à la semaine suivante). C'est le seul instant où l'état d'une
+ * saison ou d'une semaine de ligue change : une page restée ouverte s'y repeint.
+ */
+export const nextLeagueWeekClose = (moment: LeagueMoment): LeagueMoment => leagueWeekClose(leagueWeekOfMoment(moment));
 
 /** La semaine à laquelle un moment appartient : passé la fermeture, c'est la suivante. */
 export function leagueWeekOfMoment(moment: LeagueMoment): string {

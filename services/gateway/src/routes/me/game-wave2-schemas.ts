@@ -102,6 +102,7 @@ export const userShowcaseResponse = envelope(
     visible: { type: 'boolean' },
     items: { type: 'array', items: strict({ key: { type: 'string' }, awardedMonth: { type: 'string' }, count: { type: 'number' } }) },
     order: { type: 'array', items: { type: 'string' } },
+    constellation: strict({ stars: { type: 'number' } }),
   }),
 );
 

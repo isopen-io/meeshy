@@ -27,8 +27,10 @@ import {
   type TrophyRecord,
   type TrophySpec,
 } from '@meeshy/shared/utils/game/trophies';
+import { constellationOf } from '@meeshy/shared/utils/game/constellation';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { GameProfileService } from './GameProfileService';
+import { starFragmentsOf } from './StarFragments';
 
 /** Un compte ne porte jamais plus de trophées que le contrat ne sert. */
 export const TROPHY_LIST_MAX = 500;
@@ -79,15 +81,21 @@ export class TrophyService {
     const allowed = await this.profile.facetVisibleTo({ viewer: params.viewer, targetId: params.targetId, facet: 'showcase' });
     if (!allowed) return { visible: false, items: [], order: [] };
 
-    const [owned, settings] = await Promise.all([this.list(params.targetId), this.profile.settings(params.targetId)]);
+    const [owned, settings, fragments] = await Promise.all([
+      this.list(params.targetId),
+      this.profile.settings(params.targetId),
+      starFragmentsOf(this.prisma, params.targetId),
+    ]);
+    // La constellation (#10053) suit le réglage de la vitrine et ne dit que ses étoiles, jamais le total.
+    const constellation = { stars: constellationOf(fragments).stars };
     if (params.viewer?.userId !== params.targetId) {
       const view = visitorShowcase({ owned, order: settings.showcaseOrder });
-      return { visible: true, items: [...view.items], order: [...view.order] };
+      return { visible: true, items: [...view.items], order: [...view.order], constellation };
     }
     const items = owned.flatMap((trophy) => {
       const awardedMonth = visitorAwardedMonth(trophy.awardedAt);
       return awardedMonth === null ? [] : [{ key: trophy.key, awardedMonth }];
     });
-    return { visible: true, items, order: [...orderShowcase({ owned, order: settings.showcaseOrder })] };
+    return { visible: true, items, order: [...orderShowcase({ owned, order: settings.showcaseOrder })], constellation };
   }
 }

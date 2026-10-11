@@ -335,6 +335,12 @@ export const userShowcaseResponseSchema = z.object({
   visible: z.boolean(),
   items: z.array(gameVisitorTrophyItemSchema).max(500),
   order: z.array(trophyKeySchema).max(500),
+  /**
+   * La constellation du membre (#10053) — servie avec une vitrine VISIBLE, absente d'un refus (et d'un ancien
+   * serveur). Ses seules étoiles allumées : jamais le total de fragments, qui avancerait d'un coffre du jour et
+   * dirait les journées de présence. Les cosmétiques se déduisent des étoiles (`constellationStarCosmetic`).
+   */
+  constellation: z.object({ stars: z.number().int().min(0).max(1_000_000) }).optional(),
 });
 
 // --- « Jeu masqué » et l'opposition à la ligue Amis ---
