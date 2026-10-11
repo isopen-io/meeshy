@@ -57,6 +57,21 @@ export function memberCountServedToViewer(
   return isGuestViewer(context) ? {} : presented;
 }
 
+/**
+ * RÉTROCOMPATIBILITÉ (#9223) — un client NATIF publié décode certains effectifs
+ * en champs OBLIGATOIRES (SDK iOS : `WorldEntry.memberCount`, `ShareLinkStats`).
+ * Seul iOS pose `X-App-Version` / `X-Meeshy-Version` ; à lui, une forme
+ * DÉCODABLE aux valeurs NEUTRES — jamais le vrai chiffre. Le web, qui lit ces
+ * champs en optionnels, reçoit la forme sans clé.
+ */
+export function clientDecodesLegacyCounts(headers: Readonly<Record<string, unknown>>): boolean {
+  const present = (name: string): boolean => typeof headers[name] === 'string' && (headers[name] as string).length > 0;
+  return present('x-app-version') || present('x-meeshy-version');
+}
+
+/** Les en-têtes qui font varier la forme d'une réponse publique (`Vary`). */
+export const LEGACY_COUNTS_VARY = 'X-App-Version, X-Meeshy-Version';
+
 export function sendAccountRequired(reply: FastifyReply, message: string) {
   return sendForbidden(reply, 'Account required', { code: ACCOUNT_REQUIRED_CODE, message });
 }

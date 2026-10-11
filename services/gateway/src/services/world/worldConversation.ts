@@ -143,7 +143,7 @@ async function createOrReread<T>(create: () => Promise<T>, reread: () => Promise
   }
 }
 
-async function ensureConversation(prisma: PrismaClient, branding: WorldBranding): Promise<{ id: string; created: boolean }> {
+async function ensureConversation(prisma: PrismaClient, branding: WorldBranding | null): Promise<{ id: string; created: boolean }> {
   const find = () =>
     prisma.conversation.findFirst({
       where: { identifier: WORLD_CONVERSATION_IDENTIFIER },
@@ -168,8 +168,7 @@ async function ensureConversation(prisma: PrismaClient, branding: WorldBranding)
           description: 'La conversation du monde entier, traduite dans la langue de chacun',
           type: 'global',
           isActive: true,
-          avatar: branding.avatar,
-          banner: branding.banner,
+          ...(branding ?? {}),
         },
         select: { id: true },
       }),
@@ -323,7 +322,7 @@ export async function ensureWorldConversation(deps: WorldSeedDeps): Promise<Worl
 export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry | null> {
   const conversation = await prisma.conversation.findFirst({
     where: { identifier: WORLD_CONVERSATION_IDENTIFIER, isActive: true },
-    select: { id: true, identifier: true, title: true },
+    select: { id: true, identifier: true, title: true, avatar: true, banner: true },
   });
   if (!conversation) return null;
 
@@ -340,5 +339,7 @@ export async function loadWorldEntry(prisma: PrismaClient): Promise<WorldEntry |
     title: conversation.title || WORLD_CONVERSATION_TITLE,
     shareLinkIdentifier: link.identifier,
     ...presentMemberCount(count),
+    ...(conversation.avatar ? { avatar: conversation.avatar } : {}),
+    ...(conversation.banner ? { banner: conversation.banner } : {}),
   };
 }

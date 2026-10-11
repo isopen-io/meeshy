@@ -564,9 +564,9 @@ describe('ensureWorldConversation — idempotence', () => {
 });
 
 describe('loadWorldEntry — ce que la landing reçoit', () => {
-  it('sert l’identifiant du lien et l’effectif, sans aucun id', async () => {
+  it('sert l’identifiant du lien, l’effectif, l’avatar et la bannière (#10204), sans aucun id', async () => {
     const prisma = makeDb();
-    await seed(prisma);
+    await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES, appOrigin: 'https://meeshy.me' });
 
     const entry = await loadWorldEntry(prisma as never);
 
@@ -575,6 +575,8 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
       title: WORLD_CONVERSATION_TITLE,
       shareLinkIdentifier: WORLD_SHARE_LINK_IDENTIFIER,
       memberCount: 3,
+      avatar: 'https://meeshy.me/brand/world-wide/avatar.png',
+      banner: 'https://meeshy.me/brand/world-wide/banner.png',
     });
   });
 
@@ -820,6 +822,21 @@ describe('World Wide porte son avatar et sa bannière (#10204)', () => {
 
     expect(prisma.conversation.update).not.toHaveBeenCalled();
     expect(prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('sans origine configurée (ni appOrigin, ni FRONTEND_URL), ne pose AUCUNE image — jamais une adresse localhost gravée', async () => {
+    const saved = process.env.FRONTEND_URL;
+    delete process.env.FRONTEND_URL;
+    try {
+      const prisma = makeDb();
+
+      await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES });
+
+      expect(worldConversation(prisma)[0].avatar).toBeUndefined();
+      expect(worldConversation(prisma)[0].banner).toBeUndefined();
+    } finally {
+      if (saved !== undefined) process.env.FRONTEND_URL = saved;
+    }
   });
 
   it('l’origine se lit sans chemin ni barre finale', async () => {

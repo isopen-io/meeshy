@@ -16,7 +16,13 @@ export const WORLD_BANNER_PATH = '/brand/world-wide/banner.png';
 
 export type WorldBranding = { readonly avatar: string; readonly banner: string };
 
-export function worldBranding(appOrigin: string = publicAppOrigin()): WorldBranding {
+/**
+ * `null` quand AUCUNE origine n'est configurée (ni `appOrigin`, ni
+ * `FRONTEND_URL`) : `publicAppOrigin` retomberait sur `http://localhost:3100`,
+ * et une image posée n'étant jamais remplacée, cette adresse resterait gravée.
+ */
+export function worldBranding(appOrigin: string | undefined = process.env.FRONTEND_URL): WorldBranding | null {
+  if (!appOrigin) return null;
   const origin = publicAppOrigin(appOrigin);
   return { avatar: `${origin}${WORLD_AVATAR_PATH}`, banner: `${origin}${WORLD_BANNER_PATH}` };
 }
@@ -24,8 +30,9 @@ export function worldBranding(appOrigin: string = publicAppOrigin()): WorldBrand
 /** Ce qui MANQUE à la ligne, et seulement ça : une image posée à la main n'est jamais remplacée. */
 export function missingWorldBranding(
   row: { readonly avatar?: string | null; readonly banner?: string | null },
-  branding: WorldBranding,
+  branding: WorldBranding | null,
 ): Partial<WorldBranding> {
+  if (!branding) return {};
   return {
     ...(row.avatar ? {} : { avatar: branding.avatar }),
     ...(row.banner ? {} : { banner: branding.banner }),

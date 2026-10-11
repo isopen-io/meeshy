@@ -26,22 +26,31 @@
  * - Compteurs passés par `Number()` (pas de concaténation d'un `Long`).
  *
  * Exécution — staging d'abord, production ensuite (feu vert porteur pour la
- * production, après sauvegarde de la collection), depuis la racine du dépôt :
+ * production). La base est AUTHENTIFIÉE : chaque commande passe le compte
+ * d'écriture (`ops`, mot de passe par l'environnement de l'hôte, jamais en
+ * clair dans un historique). Depuis la racine du dépôt :
  *
  *   F=packages/shared/prisma/migrations/2026-10-11-world-wide-avatar-banner.mongodb.js
  *   B=/opt/meeshy/backups/2026-10-11-world-wide-avatar-banner
+ *   A='-u ops -p "$MONGO_OPS_PASSWORD" --authenticationDatabase admin'
  *
- *   # staging
- *   ssh root@meeshy.me "mkdir -p $B && docker exec meeshy-database-staging mongodump --db meeshy --collection Conversation --archive --gzip > $B/staging-Conversation.archive.gz"
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://staging.meeshy.me meeshy-database-staging mongosh meeshy --quiet' < $F
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://staging.meeshy.me -e APPLY=1 meeshy-database-staging mongosh meeshy --quiet' < $F
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://staging.meeshy.me meeshy-database-staging mongosh meeshy --quiet' < $F   # attendu : 0 à poser
+ *   # 0. Les deux images répondent 200 sur l'origine visée (sinon : ne pas appliquer)
+ *   curl -fsSI https://staging.meeshy.me/brand/world-wide/avatar.png && curl -fsSI https://staging.meeshy.me/brand/world-wide/banner.png
  *
- *   # production
- *   ssh root@meeshy.me "mkdir -p $B && docker exec meeshy-database mongodump --db meeshy --collection Conversation --archive --gzip > $B/production-Conversation.archive.gz"
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://meeshy.me meeshy-database mongosh meeshy --quiet' < $F
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://meeshy.me -e APPLY=1 meeshy-database mongosh meeshy --quiet' < $F
- *   ssh root@meeshy.me 'docker exec -i -e APP_ORIGIN=https://meeshy.me meeshy-database mongosh meeshy --quiet' < $F           # attendu : 0 à poser
+ *   # 1. Sauvegarde VÉRIFIÉE (l'archive doit compter autant de documents que la collection)
+ *   ssh root@meeshy.me "mkdir -p $B && docker exec meeshy-database-staging mongodump $A --db meeshy --collection Conversation --archive --gzip > $B/staging-Conversation.archive.gz"
+ *   ssh root@meeshy.me "docker exec -i meeshy-database-staging mongorestore $A --dryRun --archive --gzip --nsInclude meeshy.Conversation -v < $B/staging-Conversation.archive.gz 2>&1 | grep -i 'document'"
+ *   ssh root@meeshy.me "docker exec meeshy-database-staging mongosh $A meeshy --quiet --eval 'db.Conversation.countDocuments()'"
+ *
+ *   # 2. À blanc, écriture, contrôle (attendu : 0 à poser)
+ *   ssh root@meeshy.me "docker exec -i -e APP_ORIGIN=https://staging.meeshy.me meeshy-database-staging mongosh $A meeshy --quiet" < $F
+ *   ssh root@meeshy.me "docker exec -i -e APP_ORIGIN=https://staging.meeshy.me -e APPLY=1 meeshy-database-staging mongosh $A meeshy --quiet" < $F
+ *   ssh root@meeshy.me "docker exec -i -e APP_ORIGIN=https://staging.meeshy.me meeshy-database-staging mongosh $A meeshy --quiet" < $F
+ *
+ *   # production : mêmes étapes avec le conteneur `meeshy-database`, les
+ *   # sauvegardes `production-…` et APP_ORIGIN=https://meeshy.me — JAMAIS
+ *   # l'origine staging sur la base de production (le script ne peut pas le
+ *   # deviner : l'origine imprimée en tête du rapport à blanc se relit avant APPLY=1).
  *
  * Témoin : `services/gateway/src/__tests__/unit/migrations/world-wide-avatar-banner-migration.test.ts`.
  */

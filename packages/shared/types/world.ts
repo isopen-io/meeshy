@@ -60,6 +60,9 @@ export const worldEntrySchema = z.object({
   shareLinkIdentifier: z.string().min(1),
   memberCount: z.number().int().nonnegative().optional(),
   memberCountCapped: z.literal(true).optional(),
+  /** Avatar et bannière de World Wide (#10204), adresses absolues — absents tant que la conversation n'en porte pas. */
+  avatar: z.string().min(1).optional(),
+  banner: z.string().min(1).optional(),
 });
 
 export type WorldEntry = z.infer<typeof worldEntrySchema>;

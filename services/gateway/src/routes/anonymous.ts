@@ -40,7 +40,7 @@ import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/li
 import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
 import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
 import { extractUserAgent } from '../services/GeoIPService';
-import { isGuestViewer } from '../services/guests/guestMemberVisibility';
+import { clientDecodesLegacyCounts, isGuestViewer } from '../services/guests/guestMemberVisibility';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -749,12 +749,23 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       // #10205 — un lecteur sans compte Meeshy ne lit ni le nombre de
       // participants (effectifs, compteurs d'usage) ni la fiche de l'hôte :
       // de lui ne restent que le nom affiché, le pseudo et l'avatar.
+      // RÉTROCOMPATIBILITÉ (#9223) : le SDK iOS publié décode `creator.id` et les
+      // trois effectifs en champs OBLIGATOIRES — à un client natif, une forme
+      // décodable aux effectifs NEUTRES (0), jamais le vrai chiffre.
       const viewerIsGuest = isGuestViewer((request as UnifiedAuthRequest).authContext);
-      const creator = viewerIsGuest && shareLink.creator
-        ? { username: shareLink.creator.username, displayName: shareLink.creator.displayName, avatar: shareLink.creator.avatar }
-        : shareLink.creator;
+      const legacyCounts = clientDecodesLegacyCounts(request.headers);
+      const guestCreator = shareLink.creator && {
+        ...(legacyCounts ? { id: shareLink.creator.id } : {}),
+        username: shareLink.creator.username,
+        displayName: shareLink.creator.displayName,
+        avatar: shareLink.creator.avatar,
+      };
+      const creator = viewerIsGuest ? guestCreator : shareLink.creator;
+      const guestStats = legacyCounts
+        ? { totalParticipants: 0, memberCount: 0, anonymousCount: 0, languageCount, spokenLanguages }
+        : { languageCount, spokenLanguages };
       const stats = viewerIsGuest
-        ? { languageCount, spokenLanguages }
+        ? guestStats
         : { totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages };
 
       return sendSuccess(reply, {

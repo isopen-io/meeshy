@@ -5252,11 +5252,9 @@
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S0",
-        "S1",
-        "S2",
-        "S3"
+        "S1"
       ],
-      "securityBasisKey": "optional-identity",
+      "securityBasisKey": "no-standard-auth-hook",
       "hierarchyGated": false,
       "adminPrefixed": false
     },

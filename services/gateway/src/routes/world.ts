@@ -12,7 +12,7 @@
  *
  * Ce qui ne sort JAMAIS : un id de conversation, de lien ou d'utilisateur, une
  * liste de personnes, la présence de qui que ce soit. Le schéma de réponse est
- * FERMÉ sur les cinq clés du contrat (`@meeshy/shared/types/world`) : une clé de
+ * FERMÉ sur les sept clés du contrat (`@meeshy/shared/types/world`) : une clé de
  * plus portée par le chargeur est retirée par le sérialiseur.
  */
 
@@ -26,7 +26,12 @@ import { computeETag, ifNoneMatchMatches } from '../utils/etag';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { sendNotFound, sendSuccess } from '../utils/response';
 import { getOptionalAuth } from './users/presence-gate';
-import { isGuestViewer, type GuestViewerContext } from '../services/guests/guestMemberVisibility';
+import {
+  LEGACY_COUNTS_VARY,
+  clientDecodesLegacyCounts,
+  isGuestViewer,
+  type GuestViewerContext,
+} from '../services/guests/guestMemberVisibility';
 
 const logger = enhancedLogger.child({ module: 'WorldRoutes' });
 
@@ -40,11 +45,15 @@ const MEMBER_CACHE_CONTROL = `private, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}`
 
 type WorldAuthenticate = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
-/** L'entrée telle qu'un lecteur la reçoit : l'effectif est réservé aux comptes Meeshy. */
-function servedEntry(entry: WorldEntry, viewerIsGuest: boolean): WorldEntry {
-  if (!viewerIsGuest) return entry;
+/**
+ * L'entrée telle qu'un lecteur la reçoit : l'effectif est réservé aux comptes
+ * Meeshy. Un client natif sans compte, dont le SDK publié exige le champ
+ * (`clientDecodesLegacyCounts`), reçoit un effectif NEUTRE — jamais le vrai.
+ */
+function servedEntry(entry: WorldEntry, viewer: { readonly isGuest: boolean; readonly legacyCounts: boolean }): WorldEntry {
+  if (!viewer.isGuest) return entry;
   const { memberCount: _memberCount, memberCountCapped: _memberCountCapped, ...withoutCount } = entry;
-  return withoutCount;
+  return viewer.legacyCounts ? { ...withoutCount, memberCount: 0 } : withoutCount;
 }
 
 export type WorldRoutesOptions = {
@@ -67,6 +76,8 @@ const worldEntryResponseSchema = {
         shareLinkIdentifier: { type: 'string', description: 'Clé de jonction du lien de partage (POST /links/:key/members)' },
         memberCount: { type: 'integer', description: 'Effectif, servi à un compte Meeshy seulement (#10205), plafonné à 199' },
         memberCountCapped: { type: 'boolean', description: 'Présent et vrai quand memberCount est plafonné (« 199+ »)' },
+        avatar: { type: 'string', description: 'Avatar de World Wide, adresse absolue (#10204)' },
+        banner: { type: 'string', description: 'Bannière de World Wide, adresse absolue (#10204)' },
       },
     },
   },
@@ -115,6 +126,13 @@ export async function worldRoutes(fastify: FastifyInstance, options: WorldRoutes
   const cache = options.cache ?? getCacheStore();
   const loadEntry = options.loadEntry ?? loadWorldEntry;
   const authenticate = options.authenticate ?? (getOptionalAuth(prisma) as unknown as WorldAuthenticate);
+  // Seul un JETON de compte ouvre l'effectif : sans `Authorization`, aucune
+  // identité n'est résolue — une session invitée, même révoquée (410 ailleurs),
+  // ne change rien à cette route publique, et la landing ne paie aucune lecture.
+  const identify: WorldAuthenticate = async (request, reply) => {
+    if (!request.headers.authorization) return;
+    await authenticate(request, reply);
+  };
 
   fastify.get(
     '/world',
@@ -129,7 +147,7 @@ export async function worldRoutes(fastify: FastifyInstance, options: WorldRoutes
           404: errorResponseSchema,
         },
       },
-      preValidation: [authenticate],
+      preValidation: [identify],
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const loaded = await resolveEntry(prisma, cache, loadEntry);
@@ -141,11 +159,11 @@ export async function worldRoutes(fastify: FastifyInstance, options: WorldRoutes
       }
 
       const viewerIsGuest = isGuestViewer((request as FastifyRequest & { authContext?: GuestViewerContext }).authContext);
-      const entry = servedEntry(loaded, viewerIsGuest);
+      const entry = servedEntry(loaded, { isGuest: viewerIsGuest, legacyCounts: clientDecodesLegacyCounts(request.headers) });
       const etag = computeETag(entry);
       reply.header('ETag', etag);
       reply.header('Cache-Control', viewerIsGuest ? CACHE_CONTROL : MEMBER_CACHE_CONTROL);
-      reply.header('Vary', 'Authorization');
+      reply.header('Vary', `Authorization, ${LEGACY_COUNTS_VARY}`);
       if (ifNoneMatchMatches(request.headers['if-none-match'], etag)) {
         return reply.code(304).send();
       }

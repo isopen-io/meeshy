@@ -49,13 +49,15 @@ async function buildApp(options: {
   const cache = options.cache ?? memoryCache();
   const app = Fastify();
   app.decorate('prisma', {});
-  const authenticate = async (request: any) => {
+  const authenticate = jest.fn(async (request: any) => {
     request.authContext = options.viewer ?? ANONYMOUS_CONTEXT;
-  };
+  });
   await app.register(worldRoutes, { prefix: '/api/v1', cache, loadEntry, authenticate });
   await app.ready();
-  return { app, loadEntry, cache };
+  return { app, loadEntry, cache, authenticate };
 }
+
+const BEARER = { authorization: 'Bearer jeton' };
 
 describe('GET /api/v1/world', () => {
   it('sert l’entrée — identifiant, titre, lien — sans authentification, SANS effectif (#10205)', async () => {
@@ -80,10 +82,39 @@ describe('GET /api/v1/world', () => {
     await app.close();
   });
 
+  // RÉTROCOMPATIBILITÉ (#9223) : `WorldEntry.memberCount` est un `Int` OBLIGATOIRE
+  // du SDK iOS publié — sans lui, la carte « Entrer dans World Wide » disparaît.
+  // Un client natif (seul iOS pose `X-App-Version`) sans compte reçoit un effectif
+  // NEUTRE, jamais le vrai chiffre.
+  it('sert à un client natif sans compte un effectif NEUTRE (0), jamais le vrai', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: { 'x-app-version': '1.1.2' } });
+
+    expect(JSON.parse(res.body).data).toEqual({ ...ENTRY_WITHOUT_COUNT, memberCount: 0 });
+    expect(String(res.headers.vary)).toContain('X-App-Version');
+    await app.close();
+  });
+
+  // Sans jeton de compte, aucune identité n'est résolue : une session invitée
+  // (même révoquée — 410 ailleurs) ne change rien à une route publique, et la
+  // landing ne paie pas une lecture d'identité par visite (audit 2026-10-11).
+  it('ne résout aucune identité sans en-tête Authorization, même avec une session invitée', async () => {
+    const guest = { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: 'p1', participantId: 'p1' };
+    const { app, authenticate } = await buildApp({ viewer: guest });
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: { 'x-session-token': 'revoque' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(JSON.parse(res.body).data).toEqual(ENTRY_WITHOUT_COUNT);
+    await app.close();
+  });
+
   it('sert l’effectif à un compte Meeshy, en cache PRIVÉ', async () => {
     const { app } = await buildApp({ viewer: MEMBER_CONTEXT });
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: BEARER });
 
     expect(JSON.parse(res.body).data).toEqual(ENTRY);
     expect(res.headers['cache-control']).toBe(`private, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}`);
@@ -91,11 +122,21 @@ describe('GET /api/v1/world', () => {
     await app.close();
   });
 
+  it('sert l’avatar et la bannière de World Wide à tous (#10204)', async () => {
+    const branded: WorldEntry = { ...ENTRY, avatar: 'https://meeshy.me/brand/world-wide/avatar.png', banner: 'https://meeshy.me/brand/world-wide/banner.png' };
+    const { app } = await buildApp({ entry: branded });
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
+
+    expect(JSON.parse(res.body).data).toMatchObject({ avatar: branded.avatar, banner: branded.banner });
+    await app.close();
+  });
+
   it('conserve le drapeau de plafond « 199+ » à travers la sérialisation, pour un compte', async () => {
     const capped: WorldEntry = { ...ENTRY, memberCount: 199, memberCountCapped: true };
     const { app } = await buildApp({ entry: capped, viewer: MEMBER_CONTEXT });
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: BEARER });
 
     expect(JSON.parse(res.body).data).toEqual(capped);
     await app.close();
