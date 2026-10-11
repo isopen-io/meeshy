@@ -441,7 +441,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // et `MeEndpoint.gameLeagueWeeksByWeekKey` (`GET /me/game/league/weeks/:weekKey`), GÉNÉRÉES avec
 // leurs routes — PRÉMATURÉES : les écrans iOS d'une saison passée ou future et d'une semaine
 // passée les appelleront avec #10018, qui ramène la référence à 292. Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 294;
+//
+// 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
+// l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
+// dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
+const BASELINE_DEAD_ENTRIES = 292;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
