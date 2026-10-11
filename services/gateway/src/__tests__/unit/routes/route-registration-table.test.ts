@@ -208,7 +208,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // /api/v1/world` (l'entrée de World Wide que lit la landing de
     // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
     // renommée.
-    expect(ROUTE_TABLE.length).toBe(77);
+    // 78 : #10102 ajoute `world-participant-card` — l'adresse NEUVE `GET
+    // /api/v1/world/participants/:participantId` (la fiche de modération d'un
+    // participant de World Wide, réservée à l'équipe), montage autonome. Aucun
+    // alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(78);
   });
 });
 
