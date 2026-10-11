@@ -31,12 +31,11 @@ export function GameProfileBanner({ standing }: { readonly standing: BannerStand
   return (
     <div
       data-profile-banner-game=""
-      className="pointer-events-none absolute flex items-center gap-2 rounded-card px-2 py-1"
+      className="glass pointer-events-none absolute flex items-center gap-2 rounded-card px-2 py-1"
       style={{
         insetInlineEnd: 8,
         bottom: 8,
         color: INK,
-        backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 82%, transparent)',
       }}
     >
       <span className="flex flex-col items-center">
