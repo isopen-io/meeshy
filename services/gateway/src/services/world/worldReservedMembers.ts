@@ -30,7 +30,6 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
-import { RECIPIENT_LANG_SELECT } from '../../utils/recipient-language';
 import { sameEmailAddress, seedAccountEmail } from '../seed-accounts';
 
 export type WorldReservedIdentities = {
@@ -57,10 +56,6 @@ export type WorldReservedAccount = {
   readonly isActive: boolean;
   readonly deletedAt: Date | null;
   readonly emailVerifiedAt: Date | null;
-  readonly systemLanguage: string | null;
-  readonly regionalLanguage: string | null;
-  readonly customDestinationLanguage: string | null;
-  readonly deviceLocale: string | null;
 };
 
 export type DesignatedAccount =
@@ -127,7 +122,6 @@ export async function designateWorldReservedAccounts(
       isActive: true,
       deletedAt: true,
       emailVerifiedAt: true,
-      ...RECIPIENT_LANG_SELECT,
     },
   });
 
