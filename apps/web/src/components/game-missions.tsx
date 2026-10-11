@@ -11,7 +11,7 @@ import { timerLabel } from '@/lib/view/game-copy-v2';
 import { Chest, useChoreography } from '@/components/game';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
-import { chestRewardLines, chestTodayLine, meeshFragmentsProgressLine } from '@/lib/view/game-chest-copy';
+import { chestBonusOddsLine, chestRewardLines, chestTodayLine, starFragmentsLabel } from '@/lib/view/game-chest-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
@@ -22,9 +22,9 @@ import { GameFactChips, GameRequirementLine, GameSpendLine, GameTouch } from './
  * un changement par jour (1 Meesh), et le coffre qui s'ouvre quand tout est
  * fait (conception, partie II « Missions du jour »).
  *
- * Le coffre dit son contenu AVANT l'ouverture (#10011 : ses points — 100 à
- * 10 000 selon les missions du jour —, sa Gloire et ses fragments de Meesh
- * certains, puis une chance sur six d'un fragment en prime et une sur vingt
+ * Le coffre dit son contenu AVANT l'ouverture (#10011 : ses points — 500 à
+ * 10 000 selon les missions du jour —, sa Gloire, sa prime possible en points au
+ * cours de la Meesh, une chance sur six d'un fragment d'étoile et une sur vingt
  * d'un gel) : un tirage dont on ignore les chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-
  * DESSUS de lui (`data-game-reward`) — c'est la cible de la chorégraphie
  * « chest », que ce composant joue quand le contenu servi arrive.
@@ -41,6 +41,8 @@ type PrismHour = NonNullable<GameBlock['boosts']['prismHour']>;
 export type GameMissionsProps = {
   readonly missions: GameMissionsBlock;
   readonly chest: GameChest;
+  /** Les fragments d'étoile collectés (#10011) — absent devant un serveur antérieur. */
+  readonly starFragments?: number | undefined;
   /** Meeshes gardées : de quoi payer un changement. */
   readonly held: number;
   readonly level: number;
@@ -237,8 +239,10 @@ function ChestCard({
   online,
   onClaim,
   error,
+  starFragments,
 }: {
   readonly chest: GameChest;
+  readonly starFragments: number | undefined;
   /** Les missions du jour faites, sur celles du jour : ce que le coffre attend. */
   readonly done: { readonly count: number; readonly total: number };
   readonly opening: boolean;
@@ -311,6 +315,11 @@ function ChestCard({
           {chestTodayLine(chest.today)}
         </p>
       ) : null}
+      {(state === 'locked' || state === 'ready') && chest.today != null && chestBonusOddsLine(chest.today, odds) !== null ? (
+        <p data-game-chest-bonus="" className="text-center text-caption" style={{ color: GAME_INK }}>
+          {chestBonusOddsLine(chest.today, odds)}
+        </p>
+      ) : null}
       <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
         {gameText('game.chest.odds', {
           min: formatCount(odds.minPoints),
@@ -319,9 +328,9 @@ function ChestCard({
           freeze: chance(odds.freeze),
         })}
       </p>
-      {chest.meeshFragments === undefined ? null : (
-        <p data-game-chest-fragments="" className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-          {meeshFragmentsProgressLine(chest.meeshFragments)}
+      {starFragments === undefined ? null : (
+        <p data-game-star-fragments="" className="text-center text-caption" style={{ color: GAME_INK_2 }}>
+          {starFragmentsLabel(starFragments)}
         </p>
       )}
       {error === undefined || opening ? null : (
@@ -344,7 +353,7 @@ function lastWindowEnd(missions: GameMissionsBlock): number {
 }
 
 export function GameMissions(props: GameMissionsProps) {
-  const { missions, chest, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
+  const { missions, chest, starFragments, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
   const now = useClockNow(props.now, missions.unlocked ? lastWindowEnd(missions) : 0);
 
   if (!missions.unlocked) {
@@ -417,7 +426,7 @@ export function GameMissions(props: GameMissionsProps) {
           {gameText('game.missions.offline')}
         </p>
       )}
-      <ChestCard chest={chest} done={done} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} />
+      <ChestCard chest={chest} done={done} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} starFragments={starFragments} />
     </GameCard>
   );
 }
