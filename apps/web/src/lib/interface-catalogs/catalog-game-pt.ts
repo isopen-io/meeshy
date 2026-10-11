@@ -703,15 +703,11 @@ const pt = {
   'game.constellation.title': 'Constelação',
   'game.constellation.stars.one': '{count} estrela acesa',
   'game.constellation.stars.other': '{count} estrelas acesas',
-  'game.constellation.next.one': 'Falta {count} fragmento de estrela para a próxima estrela',
-  'game.constellation.next.other': 'Faltam {count} fragmentos de estrela para a próxima estrela',
-  'game.constellation.how': 'Uma estrela se acende a cada dez fragmentos de estrela coletados. Cada uma desbloqueia um cosmético de perfil, sem vantagem de jogo.',
   'game.constellation.cosmetics': 'Cosméticos desbloqueados',
   'game.constellation.cosmetic': '{kind} · estrela {star}',
   'game.constellation.kind.halo': 'Halo',
   'game.constellation.kind.frame': 'Moldura',
   'game.constellation.kind.sparkle': 'Brilho',
-  'game.constellation.visibility': 'Sua constelação e seus cosméticos aparecem conforme o ajuste da sua vitrine.',
 } as const satisfies GameCoreCatalog;
 
 export default pt;

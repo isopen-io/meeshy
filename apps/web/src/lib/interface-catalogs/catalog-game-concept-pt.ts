@@ -263,6 +263,10 @@ const pt = {
   'game.notebook.legacy_delete': 'Apagar o caderno antigo',
   'game.notebook.device_only': 'Suas fotos ficam neste aparelho.',
   'game.notebook.size': 'O caderno ocupa {size}.',
+  'game.constellation.next.one': 'Falta {count} fragmento de estrela para a próxima estrela',
+  'game.constellation.next.other': 'Faltam {count} fragmentos de estrela para a próxima estrela',
+  'game.constellation.how': 'Uma estrela se acende a cada dez fragmentos de estrela coletados. Cada uma desbloqueia um cosmético de perfil, sem vantagem de jogo.',
+  'game.constellation.visibility': 'Sua constelação e seus cosméticos aparecem conforme o ajuste da sua vitrine.',
 } as const satisfies GameConceptCatalog;
 
 export default pt;

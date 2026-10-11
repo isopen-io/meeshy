@@ -1,6 +1,6 @@
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 
-import { GameConstellation } from '@/components/game-constellation';
+import { GameConstellationOwn } from '@/components/game-constellation-own';
 import { GameShowcase } from '@/components/game-showcase';
 import { GAME_BRAND, GAME_CARD, GAME_INK_2 } from '@/components/game-surface';
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -30,7 +30,7 @@ export function VitrineBody({ progress, actions, online }: { readonly progress: 
   return (
     <>
       {/* La constellation (#10053) : le total collecté, servi par le bloc `game` — un ancien serveur n'en sert pas. */}
-      {game.starFragments === undefined ? null : <GameConstellation collected={game.starFragments.collected} />}
+      {game.starFragments === undefined ? null : <GameConstellationOwn collected={game.starFragments.collected} />}
       <GameShowcase
         trophies={game.trophies}
         visibility={game.visibility?.showcase ?? SHOWCASE_DEFAULT_VISIBILITY}

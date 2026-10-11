@@ -263,6 +263,10 @@ const it = {
   'game.notebook.legacy_delete': 'Elimina il vecchio quaderno',
   'game.notebook.device_only': 'Le tue foto vivono su questo dispositivo.',
   'game.notebook.size': 'Il quaderno occupa {size}.',
+  'game.constellation.next.one': 'Ancora {count} frammento di stella per la prossima stella',
+  'game.constellation.next.other': 'Ancora {count} frammenti di stella per la prossima stella',
+  'game.constellation.how': 'Si accende una stella ogni dieci frammenti di stella raccolti. Ognuna sblocca un cosmetico del profilo, senza vantaggi di gioco.',
+  'game.constellation.visibility': 'La tua costellazione e i suoi cosmetici si mostrano secondo l’impostazione della vetrina.',
 } as const satisfies GameConceptCatalog;
 
 export default it;

@@ -703,15 +703,11 @@ const de = {
   'game.constellation.title': 'Sternbild',
   'game.constellation.stars.one': '{count} Stern leuchtet',
   'game.constellation.stars.other': '{count} Sterne leuchten',
-  'game.constellation.next.one': 'Noch {count} Sternfragment bis zum nächsten Stern',
-  'game.constellation.next.other': 'Noch {count} Sternfragmente bis zum nächsten Stern',
-  'game.constellation.how': 'Je zehn gesammelte Sternfragmente lassen einen Stern aufleuchten. Jeder schaltet ein Profil-Kosmetikum frei, ohne Spielvorteil.',
   'game.constellation.cosmetics': 'Freigeschaltete Kosmetik',
   'game.constellation.cosmetic': '{kind} · Stern {star}',
   'game.constellation.kind.halo': 'Halo',
   'game.constellation.kind.frame': 'Rahmen',
   'game.constellation.kind.sparkle': 'Funkeln',
-  'game.constellation.visibility': 'Dein Sternbild und seine Kosmetik sind so sichtbar, wie du deine Vitrine eingestellt hast.',
 } as const satisfies GameCoreCatalog;
 
 export default de;

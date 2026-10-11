@@ -8,7 +8,8 @@ import { SUPPORTED_INTERFACE_LANGUAGES as INTERFACE_LANGUAGES } from '@/lib/inli
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { GameConstellation, visitorConstellation } from './game-constellation';
+import { visitorConstellation } from './game-constellation';
+import { GameConstellationOwn as GameConstellation } from './game-constellation-own';
 import { GameProfileVisitor } from './game-profile-visitor';
 
 /**
