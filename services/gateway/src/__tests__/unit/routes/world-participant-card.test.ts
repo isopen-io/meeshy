@@ -69,7 +69,7 @@ const guestRow = () => ({
   },
 });
 
-const memberRow = () => ({
+const memberRow = (joinCountry: string | null = null) => ({
   id: MEMBER_ID,
   conversationId: WORLD_ID,
   type: 'user',
@@ -87,18 +87,18 @@ const memberRow = () => ({
   bannedAt: null,
   sessionTokenHash: null,
   shareLinkId: null,
-  joinCountry: null,
+  joinCountry,
   anonymousSession: null,
 });
 
 const elsewhereRow = () => ({ ...guestRow(), id: ELSEWHERE_ID, conversationId: OTHER_CONV_ID });
 
-const memberUser = () => ({
+const memberUser = (role = 'USER') => ({
   id: MEMBER_USER_ID,
   username: 'awa',
   email: 'awa@example.com',
   phoneNumber: '+221770000000',
-  role: 'USER',
+  role,
   systemLanguage: 'fr',
   regionalLanguage: 'wo',
   customDestinationLanguage: null,
@@ -133,8 +133,19 @@ const shareLinkRow = () => ({ id: LINK_ID, linkId: 'mshy_abc123', identifier: 'm
 
 type ReaderHeader = 'none' | 'guest' | string;
 
-function fakePrisma(options: { readonly world?: boolean; readonly auditFails?: boolean } = {}) {
-  const rows = [guestRow(), memberRow(), elsewhereRow()];
+type FixtureOptions = {
+  readonly world?: boolean;
+  readonly auditFails?: boolean;
+  /** Le rôle GLOBAL du compte lu — `USER` par défaut. */
+  readonly memberRole?: string;
+  /** Le pays d'arrivée par lien du compte lu — `null` par défaut. */
+  readonly memberJoinCountry?: string | null;
+  /** L'identifiant du LECTEUR — `READER_ID` par défaut. */
+  readonly readerId?: string;
+};
+
+function fakePrisma(options: FixtureOptions = {}) {
+  const rows = [guestRow(), memberRow(options.memberJoinCountry ?? null), elsewhereRow()];
   return {
     conversation: {
       findFirst: jest.fn(async ({ where }: { where: { identifier?: string } }) =>
@@ -144,7 +155,10 @@ function fakePrisma(options: { readonly world?: boolean; readonly auditFails?: b
       findFirst: jest.fn(async ({ where }: { where: { id?: string; conversationId?: string } }) =>
         rows.find((row) => row.id === where.id && row.conversationId === where.conversationId) ?? null),
     },
-    user: { findUnique: jest.fn(async ({ where }: { where: { id: string } }) => (where.id === MEMBER_USER_ID ? memberUser() : null)) },
+    user: {
+      findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
+        (where.id === MEMBER_USER_ID ? memberUser(options.memberRole) : null)),
+    },
     userSession: {
       findFirst: jest.fn(async ({ where }: { where: { userId: string } }) => (where.userId === MEMBER_USER_ID ? memberSession() : null)),
     },
@@ -165,14 +179,15 @@ async function authenticateStub(request: FastifyRequest, reply: FastifyReply): P
   if (header === 'none') {
     return reply.status(401).send({ success: false, error: 'Authentication required', code: 'AUTH_REQUIRED' });
   }
+  const readerId = (request.headers['x-test-reader-id'] as string | undefined) ?? READER_ID;
   const authContext = header === 'guest'
     ? { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: GUEST_ID, participantId: GUEST_ID }
-    : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: READER_ID, registeredUser: { id: READER_ID, role: header } };
+    : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: readerId, registeredUser: { id: readerId, role: header } };
   (request as FastifyRequest & { authContext: unknown }).authContext = authContext;
   return undefined;
 }
 
-async function buildApp(options: { readonly world?: boolean; readonly auditFails?: boolean } = {}) {
+async function buildApp(options: FixtureOptions = {}) {
   const prisma = fakePrisma(options);
   const app = Fastify();
   app.decorate('prisma', prisma as never);
@@ -181,12 +196,16 @@ async function buildApp(options: { readonly world?: boolean; readonly auditFails
   return { app, prisma };
 }
 
-async function read(participantId: string, reader: ReaderHeader, options: { readonly world?: boolean; readonly auditFails?: boolean } = {}) {
+async function read(participantId: string, reader: ReaderHeader, options: FixtureOptions = {}) {
   const { app, prisma } = await buildApp(options);
   const res = await app.inject({
     method: 'GET',
     url: participantsByParticipantId(participantId),
-    headers: { 'x-test-reader': reader, 'user-agent': 'moderator-browser/1.0' },
+    headers: {
+      'x-test-reader': reader,
+      'user-agent': 'moderator-browser/1.0',
+      ...(options.readerId ? { 'x-test-reader-id': options.readerId } : {}),
+    },
   });
   await app.close();
   return { res, body: JSON.parse(res.body || '{}'), prisma };
@@ -281,6 +300,7 @@ describe('ce que la fiche dit', () => {
       joinedAt: '2026-10-11T07:30:00.000Z',
       shareLink: { identifier: 'mshy_world', linkId: 'mshy_abc123', name: 'World Wide' },
       status: 'active',
+      accountDetailsWithheld: false,
     });
   });
 
@@ -300,6 +320,7 @@ describe('ce que la fiche dit', () => {
       joinedAt: '2026-10-01T10:00:00.000Z',
       shareLink: null,
       status: 'left',
+      accountDetailsWithheld: false,
     });
   });
 
@@ -335,7 +356,12 @@ describe('la trace — aucune fiche ne sort sans elle', () => {
       entity: 'Participant',
       entityId: GUEST_ID,
     });
-    expect(JSON.parse(data.metadata as string)).toEqual({ conversationId: WORLD_ID, participantType: 'anonymous', readerRole: 'AUDIT' });
+    expect(JSON.parse(data.metadata as string)).toEqual({
+      conversationId: WORLD_ID,
+      participantType: 'anonymous',
+      readerRole: 'AUDIT',
+      accountDetailsWithheld: false,
+    });
   });
 
   it('la trace d’un compte lu porte son User.id', async () => {
@@ -351,5 +377,87 @@ describe('la trace — aucune fiche ne sort sans elle', () => {
     expect(body.code).toBe(WORLD_PARTICIPANT_CARD_ERRORS.auditUnavailable);
     expect(body.data).toBeUndefined();
     expect(res.body).not.toContain('nova_anon');
+  });
+});
+
+describe('la hiérarchie — un lecteur ne lit le COMPTE que de qui il SURCLASSE (la règle de requireHierarchy)', () => {
+  const WITHHELD = {
+    accountRole: null,
+    languages: { conversation: 'fr', system: null, regional: null, customDestination: null, deviceLocale: null },
+    country: null,
+    client: null,
+    accountDetailsWithheld: true,
+  };
+
+  it.each([
+    ['ANALYST', 'BIGBOSS'],
+    ['AUDIT', 'BIGBOSS'],
+    ['MODERATOR', 'BIGBOSS'],
+    ['MODERATOR', 'ADMIN'],
+    ['ANALYST', 'AUDIT'],
+    ['ADMIN', 'BIGBOSS'],
+  ])('%s sur un compte %s : ni rôle global, ni rangs du Prisme, ni poste, ni pays de session — et la session n’est pas lue', async (reader, target) => {
+    const { res, body, prisma } = await read(MEMBER_ID, reader, { memberRole: target });
+
+    expect(res.statusCode).toBe(200);
+    expect(body.data).toMatchObject({ participantId: MEMBER_ID, displayName: 'Awa', conversationRole: 'moderator', ...WITHHELD });
+    expect(prisma.userSession.findFirst).not.toHaveBeenCalled();
+    for (const leak of [target, 'Chrome', 'macOS', '2.0.14', '"SN"', '"wo"']) {
+      expect(res.body).not.toContain(leak);
+    }
+  });
+
+  it('à rang ÉGAL, rien du compte non plus — surclasser est strict', async () => {
+    const { body, prisma } = await read(MEMBER_ID, 'ADMIN', { memberRole: 'ADMIN' });
+
+    expect(body.data).toMatchObject(WITHHELD);
+    expect(prisma.userSession.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('un rôle cible INCONNU ne se laisse pas comparer : retenu, même pour BIGBOSS (fail-closed)', async () => {
+    const { body, prisma } = await read(MEMBER_ID, 'BIGBOSS', { memberRole: 'SUPERUSER' });
+
+    expect(body.data).toMatchObject(WITHHELD);
+    expect(prisma.userSession.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('BIGBOSS sur un compte ADMIN : tout le compte, poste et pays de session compris', async () => {
+    const { body } = await read(MEMBER_ID, 'BIGBOSS', { memberRole: 'ADMIN' });
+
+    expect(body.data).toMatchObject({
+      accountRole: 'ADMIN',
+      languages: { conversation: 'fr', system: 'fr', regional: 'wo', customDestination: null, deviceLocale: 'en' },
+      country: 'SN',
+      client: { browser: 'Chrome', browserVersion: '129', os: 'macOS', osVersion: '14', deviceType: 'desktop', platform: 'web', appVersion: '2.0.14' },
+      accountDetailsWithheld: false,
+    });
+  });
+
+  it('sa PROPRE fiche se lit en entier, quel que soit le rang', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberRole: 'ANALYST', readerId: MEMBER_USER_ID });
+
+    expect(body.data).toMatchObject({ accountRole: 'ANALYST', country: 'SN', accountDetailsWithheld: false });
+    expect(body.data.client).not.toBeNull();
+  });
+
+  it('le pays d’ARRIVÉE par lien reste dit : il vient de l’entrée, pas de la session', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberRole: 'BIGBOSS', memberJoinCountry: 'CI' });
+
+    expect(body.data).toMatchObject({ country: 'CI', client: null, accountRole: null, accountDetailsWithheld: true });
+  });
+
+  it('la trace dit que le compte a été RETENU', async () => {
+    const { prisma } = await read(MEMBER_ID, 'ANALYST', { memberRole: 'BIGBOSS' });
+
+    expect(JSON.parse(prisma.adminAuditLog.create.mock.calls[0][0].data.metadata as string)).toMatchObject({
+      readerRole: 'ANALYST',
+      accountDetailsWithheld: true,
+    });
+  });
+
+  it('le contrat partagé décrit la fiche retenue', async () => {
+    const { body } = await read(MEMBER_ID, 'ANALYST', { memberRole: 'BIGBOSS' });
+
+    expect(worldParticipantCardSchema.parse(body.data).accountDetailsWithheld).toBe(true);
   });
 });
