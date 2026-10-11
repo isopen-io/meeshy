@@ -28,7 +28,7 @@ import { useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-con
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
-import { useGuestFocus } from '@/lib/view/guest-focus';
+import { useGuestFocus, useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -161,13 +161,13 @@ export function ThreadHeader({
      directive porteur du 2026-10-11) — décidé par son STATUT, jamais par
      l'absence d'un champ que la passerelle cesse de lui servir. Le partage de
      la conversation, à côté de l'avatar, prend la place du détail (#10206). */
-  const details = focus ? undefined : onOpenDetails;
-  const subtitle = threadHeaderSubtitle({ group, guest: focus, memberCount: conversation.memberCount, encryptionMode: conversation.encryptionMode });
+  const sessionIsGuest = useSpeaksAsGuest();
+  const details = sessionIsGuest ? undefined : onOpenDetails;
+  const subtitle = threadHeaderSubtitle({ group, guest: sessionIsGuest, memberCount: conversation.memberCount, encryptionMode: conversation.encryptionMode });
   /* L'APPEL PAR LA LOI PARTAGÉE (#10207, #10114) — `canStartCall`, jamais une
      réimplémentation : aucun en `global`, en `public` seuls le créateur et les
      administrateurs le lancent (les autres membres gardent « Rejoindre »). */
   const sessionUserId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
-  const sessionIsGuest = useStore(sessionStore, (state) => state.session.status === 'guest');
   const platformRole = useServedGlobalRole();
   const callOffer = threadCallOffer({ conversation, viewerUserId: sessionUserId, viewerPlatformRole: platformRole, viewerIsGuest: sessionIsGuest });
   /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
@@ -175,8 +175,8 @@ export function ThreadHeader({
      conversation partout où l'hôte sait les ouvrir. Un visiteur sans compte
      n'y trouve aucune fiche (#10205). */
   const identityMenu = avatarMenuEntries({
-    username: focus ? undefined : peer?.user?.username,
-    storyRing: focus ? undefined : peerRing,
+    username: sessionIsGuest ? undefined : peer?.user?.username,
+    storyRing: sessionIsGuest ? undefined : peerRing,
     details: details !== undefined,
   });
   /* SUR ORDINATEUR, L'EN-TÊTE N'A PLUS À CHOISIR (#10101). Le repli est une
@@ -282,7 +282,7 @@ export function ThreadHeader({
                 </button>
               ) : (
                 <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
-                  {focus ? title : <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />}
+                  {sessionIsGuest ? title : <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />}
                 </AvatarMenuTrigger>
               )}
             </h1>
@@ -376,7 +376,7 @@ export function ThreadHeader({
         {/* EN APERÇU AUSSI (#9031, demande porteur 2026-10-01) : la pile des
             plus actifs, chacun avec son point, puis l'avatar du groupe. Le
             titre tronque ; son nom entier reste dans les détails. */}
-        {(expanded || preview) && group && !focus && activeMembers !== undefined ? (
+        {(expanded || preview) && group && !sessionIsGuest && activeMembers !== undefined ? (
           <ActiveMembersStack
             members={activeMembers}
             accent={accent}

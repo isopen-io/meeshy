@@ -1,7 +1,7 @@
 import { useContext, type ComponentProps, type CSSProperties } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
-import { useGuestFocus } from '@/lib/view/guest-focus';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { useAuthorMood } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
@@ -40,7 +40,7 @@ export function AuthorAvatar({
   const mood = useAuthorMood(authorId);
   const openDetails = useContext(ConversationDetailsContext);
   const worldCard = useContext(WorldParticipantCardContext);
-  const guestFocus = useGuestFocus();
+  const guestFocus = useSpeaksAsGuest();
   const entries = avatarMenuEntries({
     username: props.profileUsername,
     storyRing: props.storyRing,

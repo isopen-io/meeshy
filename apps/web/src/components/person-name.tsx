@@ -3,7 +3,7 @@ import { useContext, type CSSProperties, type ReactNode } from 'react';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
-import { useGuestFocus } from '@/lib/view/guest-focus';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { identityTarget } from '@/lib/view/identity-target';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
@@ -74,7 +74,7 @@ export function PersonName({
   const worldCard = useContext(WorldParticipantCardContext);
   /* UN VISITEUR SANS COMPTE N'OUVRE AUCUNE FICHE (#10205) : le nom reste du
      texte, comme l'avatar à côté de lui (`AuthorAvatar`). */
-  const guestFocus = useGuestFocus();
+  const guestFocus = useSpeaksAsGuest();
   const cible = guestFocus ? null : identityTarget({ ...(username === undefined ? {} : { username }), ...(storyRing === undefined ? {} : { storyRing }) });
   const contenu = children ?? name;
 

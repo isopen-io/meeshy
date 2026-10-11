@@ -7,6 +7,7 @@ import { segmentText, type EmphasisStyle } from '@meeshy/shared/utils/text-segme
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { displaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { isAppPath } from '@/routes/app-paths';
@@ -259,6 +260,8 @@ function blockNode(
   }
 }
 
+const NO_MENTION_LINKS: readonly string[] = [];
+
 export function RichText({
   text,
   className,
@@ -295,16 +298,21 @@ export function RichText({
   readonly claimsGesture?: boolean;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
   const blocks = useMemo(() => (hasBlockSyntax(text) ? parseBlocks(text) : null), [text]);
+  /* UN INVITÉ N'OUVRE AUCUN PROFIL (#10205) : la passerelle les lui refuse
+     (403 ACCOUNT_REQUIRED) — une @mention reste du texte, comme un pseudo
+     que le serveur n'a pas validé. */
+  const speaksAsGuest = useSpeaksAsGuest();
+  const linkedMentions = speaksAsGuest ? NO_MENTION_LINKS : mentions;
   const render = useMemo(() => {
     const options = {
       hashtags,
-      ...(mentions === undefined ? {} : { mentions }),
+      ...(linkedMentions === undefined ? {} : { mentions: linkedMentions }),
       ...(trackingLinks === undefined ? {} : { trackingLinks }),
     };
     const linkAttributes = claimsGesture ? CLAIMED_LINK : UNMARKED_LINK;
     return (content: string) =>
       segmentNodes(displaySegments(segmentText(content, options), trackingLinks), { linkColor, plainTextHidden, linkAttributes });
-  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden, claimsGesture]);
+  }, [hashtags, linkedMentions, trackingLinks, linkColor, plainTextHidden, claimsGesture]);
   if (blocks === null) {
     return (
       <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>
