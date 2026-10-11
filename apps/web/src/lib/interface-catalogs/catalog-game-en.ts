@@ -679,6 +679,22 @@ const en = {
   'game.settings.notifications.title': 'Game notifications',
   'game.settings.notifications.body': 'A duo mission invitation, a league result, a season step: at most one game notification a day. This setting applies to your account, on all your devices.',
   'game.settings.notifications.switch': 'Receive game notifications',
+  'game.archive.season.past_title': 'Season {number} · ended',
+  'game.archive.season.dates': 'From {start} to {end}',
+  'game.archive.season.rewards.one': '{count} reward claimed',
+  'game.archive.season.rewards.other': '{count} rewards claimed',
+  'game.archive.season.cup_won': 'Path completed: the season cup is yours.',
+  'game.archive.season.cup_missed': 'Path not completed: the season cup was not won.',
+  'game.archive.season.seal_owned': 'Season Seal obtained.',
+  'game.archive.season.not_played': 'You didn’t play this season.',
+  'game.archive.week.rank': 'Final rank: {rank}',
+  'game.archive.week.points': 'Week total: {points}',
+  'game.archive.week.no_cup': 'No cup that week.',
+  'game.archive.week.unsettled': 'The result is engraved when the week closes.',
+  'game.archive.week.not_placed': 'You had no place in a league that week.',
+  'game.archive.week.purged': 'This week is too old: its result was erased, as planned.',
+  'game.archive.week.upcoming': 'This week hasn’t started yet.',
+  'game.archive.week.privacy': 'Only your result is kept: the other members of the group can’t be looked up again.',
 } as const satisfies GameCoreCatalog;
 
 export default en;

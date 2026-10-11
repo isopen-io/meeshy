@@ -12,15 +12,15 @@ import MeeshyUI
 ///
 /// Aucune saison ouverte (`season` absente) est une VALEUR, pas une panne : la prochaine commence bientôt.
 ///
-/// `focus` : la saison qu'un lien du Jeu nomme (#9947). L'écran d'une saison passée ou future (#10018) la lira ;
-/// d'ici là, la page montre la saison en cours.
+/// `focus` : la saison qu'un lien du Jeu nomme (#9947). Passée, elle montre mon palmarès ; future, son thème et sa
+/// date d'ouverture ; en cours, l'écran ci-dessous, inchangé (`GameSeasonFocusScreen`, #10018).
 struct GameSeasonPage: View {
     var focus: GamePageFocus? = nil
 
     var body: some View {
         GamePageShell(title: GameText.seasonTitle, identifier: "game.season.page") {
             GameWave2Host { model, game in
-                GameSeasonScreen(model: model, game: game)
+                GameSeasonFocusScreen(model: model, game: game, focus: focus?.seasonNumber)
             }
         }
     }

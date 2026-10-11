@@ -92,29 +92,32 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
   );
 }
 
+/** La saison à venir (#10014) — et toute saison FUTURE qu'un lien ouvre (#10018) : son numéro, sa date d'ouverture, son thème. */
+export function GameSeasonUpcoming({ upcoming }: { readonly upcoming: GameUpcomingSeasonBlock }) {
+  const language = currentInterfaceLanguage();
+  const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
+  return (
+    <GameCard id="game-season-upcoming" labelledBy="game-season-upcoming-title" tint={GAME_BRAND}>
+      <h2 id="game-season-upcoming-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.season.title')}
+      </h2>
+      <p data-game-season-upcoming={upcoming.startDay} className="text-body font-semibold" style={{ color: GAME_INK }}>
+        {gameText('game.season.upcoming', { number: formatCount(upcoming.number), date: dayLabel(upcoming.startDay, language) })}
+      </p>
+      {upcomingTheme === null ? null : (
+        <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+          {gameText('game.season.theme', { theme: upcomingTheme })}
+        </p>
+      )}
+    </GameCard>
+  );
+}
+
 export function GameSeason(props: GameSeasonProps) {
   const { season, held, online, claimingStep, buyingSeal, errors, onClaim, onBuySeal } = props;
   const language = currentInterfaceLanguage();
 
-  if (season === null && props.upcoming) {
-    const upcoming = props.upcoming;
-    const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
-    return (
-      <GameCard id="game-season-upcoming" labelledBy="game-season-upcoming-title" tint={GAME_BRAND}>
-        <h2 id="game-season-upcoming-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.season.title')}
-        </h2>
-        <p data-game-season-upcoming={upcoming.startDay} className="text-body font-semibold" style={{ color: GAME_INK }}>
-          {gameText('game.season.upcoming', { number: formatCount(upcoming.number), date: dayLabel(upcoming.startDay, language) })}
-        </p>
-        {upcomingTheme === null ? null : (
-          <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
-            {gameText('game.season.theme', { theme: upcomingTheme })}
-          </p>
-        )}
-      </GameCard>
-    );
-  }
+  if (season === null && props.upcoming) return <GameSeasonUpcoming upcoming={props.upcoming} />;
 
   if (season === null) {
     return (
