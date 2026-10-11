@@ -462,7 +462,7 @@ struct GameLawTests {
         }
         #expect(GameChest.odds.fragment == 1.0 / 6.0)
         #expect(GameChest.odds.maxPoints == 10_000)
-        #expect(GameChest.odds.meeshFragmentsPerMeesh == 10)
+        #expect(GameChest.odds.meeshFragmentsPerMeesh == 5)
     }
 
     @Test("les points du coffre suivent l'effort sur une droite, de 100 à 10 000 (#10011)")
