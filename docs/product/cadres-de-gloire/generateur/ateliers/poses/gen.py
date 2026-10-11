@@ -55,23 +55,25 @@ def rake_top(x):
 # ---------------------------------------------------------------- la photo à trois
 
 def photo3(c, top="#3A2A1E", bottom="#120C08", rim="#FFC27A", glow=0.22):
-    c.add(f'<rect width="{W}" height="{H}" fill="{c.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
-    c.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{c.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
-    rnd = random.Random(7)
-    bokeh = "".join(
-        f'<circle cx="{f(rnd.uniform(60, 480))}" cy="{f(rnd.uniform(260, 700))}" r="{f(rnd.uniform(8, 26))}" fill="{rim}" opacity="{f(rnd.uniform(0.05, 0.16))}"/>'
-        for _ in range(16)
-    )
-    c.add(f'<g filter="{c.blur("ph-bokeh", 3)}">{bokeh}</g>')
-    figs = [(168, 488, 50, 76, 258), (380, 494, 48, 290, 470), (272, 446, 58, 172, 372)]
-    for cx, cy, r, x0, x1 in figs:
-        body = f"M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78} Q{x1 - 8} {cy + 88} {x1} 760 Z"
-        c.add(
-            f'<g><circle cx="{cx}" cy="{cy}" r="{r}" fill="#0C0806" opacity="0.62"/>'
-            f'<path d="{body}" fill="#0C0806" opacity="0.62"/>'
-            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{rim}" stroke-width="2.5" opacity="0.55"/>'
-            f'<path d="M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78}" fill="none" stroke="{rim}" stroke-width="2" opacity="0.45"/></g>'
+    with c.layer("photo-bg"):
+        c.add(f'<rect width="{W}" height="{H}" fill="{c.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
+        c.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{c.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
+    with c.layer("photo"):
+        rnd = random.Random(7)
+        bokeh = "".join(
+            f'<circle cx="{f(rnd.uniform(60, 480))}" cy="{f(rnd.uniform(260, 700))}" r="{f(rnd.uniform(8, 26))}" fill="{rim}" opacity="{f(rnd.uniform(0.05, 0.16))}"/>'
+            for _ in range(16)
         )
+        c.add(f'<g filter="{c.blur("ph-bokeh", 3)}">{bokeh}</g>')
+        figs = [(168, 488, 50, 76, 258), (380, 494, 48, 290, 470), (272, 446, 58, 172, 372)]
+        for cx, cy, r, x0, x1 in figs:
+            body = f"M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78} Q{x1 - 8} {cy + 88} {x1} 760 Z"
+            c.add(
+                f'<g><circle cx="{cx}" cy="{cy}" r="{r}" fill="#0C0806" opacity="0.62"/>'
+                f'<path d="{body}" fill="#0C0806" opacity="0.62"/>'
+                f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{rim}" stroke-width="2.5" opacity="0.55"/>'
+                f'<path d="M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78}" fill="none" stroke="{rim}" stroke-width="2" opacity="0.45"/></g>'
+            )
 
 
 # ---------------------------------------------------------------- le ciel de l'aube
@@ -487,6 +489,10 @@ def frame(c, people=2):
 
 # ---------------------------------------------------------------- inscriptions
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def text_block(c, y_kicker, y_title, y_msg, y_date, message, ink, accent, title_fill, msg_fill, halo=None, size=40):
     if halo:
         c.add(f'<text x="270" y="{y_title}" text-anchor="middle" font-family="{CINZEL}" font-weight="700" font-size="{size}" fill="none" stroke="{halo}" stroke-width="5" opacity="0.55" filter="{c.blur("txt-h", 2)}">{esc(TITLE)}</text>')
@@ -508,9 +514,6 @@ def ansa(x0, y, h, m):
     outer = f"M{P(0, 0.33)} Q{P(18, 0.27)} {P(44, 0.06)} Q{P(33, 0.5)} {P(44, 0.94)} Q{P(18, 0.73)} {P(0, 0.67)} Z"
     inner = f"M{P(4, 0.38)} Q{P(19, 0.33)} {P(37, 0.17)} Q{P(28, 0.5)} {P(37, 0.83)} Q{P(19, 0.67)} {P(4, 0.62)} Z"
     return outer, inner
-
-
-from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
 
 
 @plate_layer
