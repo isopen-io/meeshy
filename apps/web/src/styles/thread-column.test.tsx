@@ -24,6 +24,7 @@ const CLASS_ATTR = ['class', 'Name'].join('');
 const css = readFileSync(new URL('./thread-column.css', import.meta.url).pathname, 'utf8');
 const threadSource = readFileSync(new URL('../routes/thread.tsx', import.meta.url).pathname, 'utf8');
 const writeLockSource = readFileSync(new URL('../components/thread-write-lock.tsx', import.meta.url).pathname, 'utf8');
+const chromeSource = readFileSync(new URL('../components/thread-composer-chrome.tsx', import.meta.url).pathname, 'utf8');
 
 const withoutComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -98,11 +99,15 @@ describe('qui porte la colonne', () => {
   test('l’écran du fil : la racine, le défileur et la bande du composeur', () => {
     expect(threadSource).toContain(`${CLASS_ATTR}={\`thread-root relative `);
     expect(threadSource).toContain(`${CLASS_ATTR}="thread-column scrollbar-none absolute inset-0`);
-    expect(threadSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
+    expect(threadSource).toContain('<ThreadComposerChrome');
   });
 
+  /* LA BANDE BASSE A UN SEUL SITE depuis #10101 (`thread-composer-chrome.tsx`) :
+     au téléphone elle porte le verre, sur ordinateur le dock de la colonne —
+     `components/thread-desktop.test.tsx` rend les deux gabarits. */
   test('le bandeau qui remplace le composeur', () => {
-    expect(writeLockSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
+    expect(writeLockSource).toContain('<ThreadComposerChrome');
+    expect(chromeSource).toContain(`'thread-composer-chrome thread-column glass-prominent'`);
   });
 
   test('le chargement : racine, en-tête et rangées fantômes bornés', () => {

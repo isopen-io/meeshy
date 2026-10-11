@@ -445,7 +445,13 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
 // l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
 // dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
-const BASELINE_DEAD_ENTRIES = 292;
+//
+// 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
+// (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
+// Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
+// en touchant un auteur est #10125, qui ramène la référence à 292. Valeur MESURÉE le
+// 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 293;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

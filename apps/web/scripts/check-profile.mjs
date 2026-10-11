@@ -427,8 +427,8 @@ try {
 
       const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        JSON.stringify(publicSections) === JSON.stringify(['Le jeu de Kwame Mensah', 'CONNEXION', 'STATISTIQUES']),
-        `${label} : /u/ — Détails porte la connexion et les compteurs, d'un coup (${JSON.stringify(publicSections)})`,
+        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'STATISTIQUES']),
+        `${label} : /u/ — Détails porte la connexion et les compteurs, d'un coup, sans bloc du jeu (#10092 : niveau et rang vivent sur la bannière) (${JSON.stringify(publicSections)})`,
       );
       /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
          compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */

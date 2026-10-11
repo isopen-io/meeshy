@@ -96,6 +96,7 @@ export const AUDIT_ACTIONS = {
   ADMIN_CONVERSATION_UPDATED: entry('conversations', 'pencilSimple', 'neutral'),
   ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED: entry('conversations', 'shieldCheck', 'brand'),
   ADMIN_CONVERSATION_MEMBER_REMOVED: entry('conversations', 'userMinus', 'danger'),
+  WORLD_PARTICIPANT_CARD_VIEWED: entry('conversations', 'eye', 'info', true),
   ADMIN_SHARE_LINK_REVEALED: entry('links', 'eye', 'info', true),
   ADMIN_SHARE_LINK_CLOSED: entry('links', 'linkBreak', 'warning'),
   ADMIN_SHARE_LINK_REOPENED: entry('links', 'linkSimple', 'success'),

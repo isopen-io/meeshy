@@ -146,6 +146,8 @@ final class MockProfileSheetData: ProfileSheetDataProviding {
     private(set) var storedProfileLookupKeys: [String] = []
     private(set) var storedStatsUserIds: [String] = []
 
+    nonisolated deinit {}
+
     func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> { cachedProfileResult }
 
     func fetchProfile(handle: String) async throws -> MeeshyUser {

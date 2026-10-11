@@ -149,6 +149,8 @@ const f = {
   'admin.audit.action.ADMIN_COMMUNITY_UPDATED.explain': 'L’activation ou la visibilité d’une communauté a été modifiée par un administrateur.',
   'admin.audit.action.DELETE_POST': 'Publication retirée',
   'admin.audit.action.DELETE_POST.explain': 'Un contenu a été retiré par un tiers habilité, non par son auteur : c’est un geste de modération.',
+  'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'Fiche d’un participant de World Wide lue',
+  'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Lecture souveraine, pour modérer, de la configuration d’une personne entrée dans World Wide — invité compris : langues, pays, navigateur et appareil, date d’entrée, lien utilisé. Jamais d’adresse IP.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Liste des vues d’un contenu lue',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED.explain': 'Lecture souveraine de qui a vu un contenu et de ce que chacun y a fait — l’auteur d’un post ou d’un réel n’en voit que les nombres.',
   'admin.audit.action.CREATE_BROADCAST': 'Diffusion créée',

@@ -95,8 +95,8 @@ export function systemRowOf(message: Pick<Message, 'messageType' | 'messageSourc
     /* `JoinNoticePresentation.init` (`BubbleSystemViews.swift:159-173`) : le
        nom DONNÉ au formulaire prime, le pseudo descend en handle — omis s'il
        répète le nom retenu. Celui d'un participant SANS COMPTE (`ano_…`) est
-       un identifiant technique, jamais montré (#9710) : la pastille « sans
-       compte » dit déjà qui il est. Décidé par `isAnonymous`, pas par le
+       un identifiant technique, jamais montré (#9710) : le masque dit déjà
+       qui il est (#10101). Décidé par `isAnonymous`, pas par le
        préfixe — un compte peut s'appeler `ano_bob`. */
     const givenName = joinNotice.givenName !== undefined && joinNotice.givenName.trim() !== '' ? joinNotice.givenName : undefined;
     const primaryName = givenName ?? joinNotice.displayName;
@@ -148,6 +148,18 @@ export function systemRowText(row: SystemRow, language: string = currentInterfac
     case 'capture':
       return captureNoticeText(row.notice, { language, timeZone });
   }
+}
+
+/**
+ * LE NOM ACCESSIBLE d'une rangée système — son texte, et, pour l'avis
+ * d'arrivée d'un invité, « sans compte » (#10101). À l'œil, le masque le dit
+ * seul : la pastille qui le répétait à côté du nom a quitté la rangée. Le
+ * lecteur d'écran, qui ne voit pas le masque, l'entend ici — le site UNIQUE
+ * que `SystemNotice` et `composeMessageLabel` lisent tous deux.
+ */
+export function systemRowLabel(row: SystemRow, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  const text = systemRowText(row, language);
+  return row.kind === 'join' && row.isAnonymous ? `${text}, ${translate(language, 'message.join.noAccount')}` : text;
 }
 
 /** Le fuseau IANA de l'appareil du lecteur ; illisible ⇒ `captureNoticeText` retombe sur UTC. */

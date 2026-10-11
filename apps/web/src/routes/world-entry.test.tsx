@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
@@ -11,6 +11,8 @@ import type { GuestIdentity } from '@/lib/api/session';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
 import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+
+import { WORLD_ENTRY_HANDOFF_KEY } from '@/landing/world-entry';
 
 import { WorldGuestEntry, type WorldEntryDeps } from './world-entry';
 
@@ -74,24 +76,82 @@ function deps(overrides: Partial<WorldEntryDeps> = {}): { readonly deps: WorldEn
       },
       adoptGuest: (token, guest) => recorded.adopted.push([token, guest]),
       adoptInterfaceLanguage: (code) => recorded.languages.push(code),
-      heldGuest: () => null,
       signedIn: () => false,
       go: (url, replace) => recorded.gone.push([url, replace]),
       joined: () => undefined,
       canGoBack: () => false,
       back: () => recorded.gone.push(['<back>', false]),
+      handoff: () => memoryStorage(),
+      now: () => NOW,
       ...overrides,
     },
   };
 }
 
-async function mount(props: { readonly initialName?: string; readonly deps: WorldEntryDeps }): Promise<HTMLDivElement> {
+const NOW = 1_800_000_000_000;
+
+/** Un `sessionStorage` d'onglet en mémoire — le jeton de passage de la landing y est posé. */
+function memoryStorage(seed: Readonly<Record<string, string>> = {}): Storage {
+  const values = new Map(Object.entries(seed));
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => Array.from(values.keys())[index] ?? null,
+    removeItem: (key) => {
+      values.delete(key);
+    },
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+  };
+}
+
+/** Le fil en focus, réduit à ce qu'il dit : la conversation qu'il ouvre. */
+const focusStub = (conversationId: string): ReactNode => <div data-focus-thread={conversationId} />;
+
+/**
+ * L'HÔTE DE LA SESSION — ce que `useStore(sessionStore)` fait en vrai : une
+ * identité ADOPTÉE devient l'invité TENU au rendu suivant. `expire` la retire,
+ * comme le 401 d'une session périmée.
+ */
+let expire: (() => void) | null = null;
+
+function Harness(props: { readonly initialName: string; readonly initialLanguage?: string | null; readonly held: GuestIdentity | null; readonly deps: WorldEntryDeps }) {
+  const [held, setHeld] = useState<GuestIdentity | null>(props.held);
+  expire = () => setHeld(null);
+  const deps: WorldEntryDeps = {
+    ...props.deps,
+    adoptGuest: (token, guest) => {
+      props.deps.adoptGuest(token, guest);
+      setHeld(guest);
+    },
+  };
+  return (
+    <WorldGuestEntry
+      initialName={props.initialName}
+      initialLanguage={props.initialLanguage ?? null}
+      held={held}
+      deps={deps}
+      focus={focusStub}
+    />
+  );
+}
+
+async function mount(props: {
+  readonly initialName?: string;
+  readonly initialLanguage?: string | null;
+  readonly held?: GuestIdentity | null;
+  readonly deps: WorldEntryDeps;
+}): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
   await act(async () => {
-    root.render(<WorldGuestEntry initialName={props.initialName ?? ''} deps={props.deps} />);
+    root.render(<Harness initialName={props.initialName ?? ''} initialLanguage={props.initialLanguage ?? null} held={props.held ?? null} deps={props.deps} />);
   });
   await act(async () => {
     await Promise.resolve();
@@ -240,13 +300,15 @@ describe('WorldGuestEntry — entrer', () => {
     ]);
   });
 
-  test('la langue choisie devient la langue d’interface, puis le fil s’ouvre sans retour vers l’entrée', async () => {
+  test('la langue choisie devient la langue d’interface, puis le fil s’ouvre SUR /world, sans retour vers l’entrée (#10100)', async () => {
     const { deps: d, recorded } = deps();
     const host = await mount({ initialName: 'Awa', deps: d });
     await pick(host, 'es');
     await click(enterButton(host));
     expect(recorded.languages).toEqual(['es']);
-    expect(recorded.gone).toEqual([['/c/c-world', true]]);
+    expect(recorded.gone).toEqual([['/world', true]]);
+    expect(host.querySelector('[data-focus-thread]')?.getAttribute('data-focus-thread')).toBe('c-world');
+    expect(host.querySelector('[data-world-form]')).toBeNull();
   });
 
   test('un nom déjà pris garde la vue, la suggestion pré-remplie et le refus dit', async () => {
@@ -285,17 +347,94 @@ describe('WorldGuestEntry — ce qui précède le parcours', () => {
     expect(host.querySelector('[data-world-enter]')).toBeNull();
   });
 
-  test('un invité déjà entré par ce lien retourne directement dans le fil', async () => {
-    const held: GuestIdentity = { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-world', link: 'mshy_world_served', mayWrite: true };
-    const { deps: d, recorded } = deps({ heldGuest: () => held });
-    await mount({ initialName: 'Autre', deps: d });
-    expect(recorded.gone).toEqual([['/c/c-world', true]]);
-    expect(recorded.joins).toEqual([]);
-  });
-
   test('un compte connecté suit la jonction par lien, sans formulaire d’invité', async () => {
     const { deps: d, recorded } = deps({ signedIn: () => true });
     await mount({ deps: d });
     expect(recorded.gone).toEqual([['/chat/mshy_world_served', true]]);
+  });
+
+  /* La landing d'un compte mène aussi à `/world?name=…&language=…` (#10100) :
+     le nom et la langue qu'il y a choisis le suivent jusqu'à la jonction, qui
+     le fait entrer sous son identité anonyme (#8816) comme avant. */
+  test('un compte venu de la landing garde son nom et sa langue jusqu’à la jonction anonyme', async () => {
+    const { deps: d, recorded } = deps({ signedIn: () => true });
+    await mount({ initialName: ' Awa ', initialLanguage: 'pt', deps: d });
+    expect(recorded.gone).toEqual([['/chat/mshy_world_served?mode=anonymous&name=Awa&language=pt', true]]);
+  });
+});
+
+const HELD: GuestIdentity = { participantId: 'p-awa', nickname: 'Awa', conversationId: 'c-world', link: 'mshy_world_served', mayWrite: true };
+
+describe('WorldGuestEntry — l’invité RESTE sur /world, le fil en focus (#10100)', () => {
+  test('un invité déjà entré par ce lien voit le fil EN PLACE, sans navigation ni formulaire', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ initialName: 'Autre', held: HELD, deps: d });
+    expect(host.querySelector('[data-focus-thread]')?.getAttribute('data-focus-thread')).toBe('c-world');
+    expect(host.querySelector('[data-world-form]')).toBeNull();
+    expect(recorded.gone).toEqual([]);
+    expect(recorded.joins).toEqual([]);
+  });
+
+  test('rafraîchir rouvre le fil SANS attendre le réseau (cache d’abord) : l’entrée n’est pas encore lue', async () => {
+    const { deps: d } = deps({ loadWorld: () => new Promise<ApiResult<WorldEntry>>(() => undefined) });
+    const host = await mount({ held: HELD, deps: d });
+    expect(host.querySelector('[data-focus-thread]')?.getAttribute('data-focus-thread')).toBe('c-world');
+  });
+
+  test('hors ligne, le fil tenu reste lisible', async () => {
+    const offline: ApiResult<WorldEntry> = { ok: false, status: 0, error: 'réseau', code: 'NETWORK_ERROR' };
+    const { deps: d } = deps({ loadWorld: async () => offline });
+    const host = await mount({ held: HELD, deps: d });
+    expect(host.querySelector('[data-focus-thread]')).not.toBeNull();
+  });
+
+  test('l’invité d’un AUTRE lien voit l’entrée de World Wide, pas sa conversation', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ held: { ...HELD, link: 'autre_lien', conversationId: 'c-autre' }, deps: d });
+    expect(host.querySelector('[data-focus-thread]')).toBeNull();
+    expect(host.querySelector('[data-world-form]')).not.toBeNull();
+  });
+
+  test('une session expirée ou retirée rend l’entrée (nom + langue)', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ held: HELD, deps: d });
+    await act(async () => expire?.());
+    expect(host.querySelector('[data-focus-thread]')).toBeNull();
+    expect(nameField(host)).not.toBeNull();
+    expect(languageSelect(host)).not.toBeNull();
+  });
+});
+
+describe('WorldGuestEntry — la landing fait entrer sur /world (#10100, jeton #10094)', () => {
+  const token = (fields: Partial<{ link: string; name: string; language: string; at: number }> = {}) =>
+    JSON.stringify({ link: 'mshy_world_served', name: 'Awa', language: 'pt', at: NOW - 1000, ...fields });
+
+  test('le jeton de passage de la landing fait entrer sans autre geste, sous le nom et la langue choisis', async () => {
+    const storage = memoryStorage({ [WORLD_ENTRY_HANDOFF_KEY]: token() });
+    const { deps: d, recorded } = deps({ handoff: () => storage });
+    const host = await mount({ initialName: 'Awa', initialLanguage: 'pt', deps: d });
+    expect(recorded.joins).toEqual([['mshy_world_served', { language: 'pt', nickname: 'Awa' }]]);
+    expect(recorded.gone).toEqual([['/world', true]]);
+    expect(host.querySelector('[data-focus-thread]')?.getAttribute('data-focus-thread')).toBe('c-world');
+    expect(storage.getItem(WORLD_ENTRY_HANDOFF_KEY)).toBeNull();
+  });
+
+  test('sans jeton (adresse forgée), rien ne part : le nom et la langue sont pré-remplis et attendent le geste', async () => {
+    const { deps: d, recorded } = deps();
+    const host = await mount({ initialName: 'Awa', initialLanguage: 'pt', deps: d });
+    expect(recorded.joins).toEqual([]);
+    expect(nameField(host)?.value).toBe('Awa');
+    expect(languageSelect(host)?.value).toBe('pt');
+  });
+
+  test('un jeton périmé ou pour un autre nom ne fait entrer personne', async () => {
+    for (const stale of [token({ at: NOW - 60_000 }), token({ name: 'Mallory' })]) {
+      const { deps: d, recorded } = deps({ handoff: () => memoryStorage({ [WORLD_ENTRY_HANDOFF_KEY]: stale }) });
+      await mount({ initialName: 'Awa', initialLanguage: 'pt', deps: d });
+      expect(recorded.joins).toEqual([]);
+      act(() => mounted?.root.unmount());
+      mounted?.container.remove();
+      mounted = null;
+    }
   });
 });

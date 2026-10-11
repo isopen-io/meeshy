@@ -36,6 +36,8 @@ import {
   type ConversationEntryDecision,
 } from '../../services/conversations/conversationEntryAdmission';
 import { findFreeAnonymousUsername } from '../../services/conversations/anonymousUsername';
+import { describeGuestClient } from '../../services/conversations/guestClient';
+import { extractUserAgent } from '../../services/GeoIPService';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import {
   resolveEntryRights,
@@ -80,6 +82,12 @@ export interface LinkJoinParams {
   /** `undefined` = visiteur sans AUCUNE créance — l'identité vient de la créance, jamais du chemin. */
   readonly authContext: UnifiedAuthContext | undefined;
   readonly requestIp: string;
+  /**
+   * La chaîne User-Agent de la requête d'entrée (#10102) — lue pour graver le
+   * poste RÉDUIT d'un invité (`describeGuestClient`), jamais écrite telle quelle.
+   * Absente : aucun poste n'est relevé.
+   */
+  readonly requestUserAgent?: string | null;
   readonly profile: LinkJoinProfileInput;
   readonly broadcast?: LinkJoinBroadcast;
   /**
@@ -231,7 +239,8 @@ async function joinAsGuest(
   prisma: PrismaClient,
   shareLink: ShareLinkWithConversation,
   profile: LinkJoinProfileInput,
-  broadcast: LinkJoinBroadcast | undefined
+  broadcast: LinkJoinBroadcast | undefined,
+  requestUserAgent: string | null | undefined
 ): Promise<LinkJoinOutcome> {
   const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
   const lastName = SecuritySanitizer.sanitizeText(profile.lastName || '');
@@ -297,6 +306,9 @@ async function joinAsGuest(
           // l'heuristique du premier octet que #4167 a retirée.
           country: null,
           deviceFingerprint: profile.deviceFingerprint || null,
+          // Le poste RÉDUIT (#10102) — nom et version majeure, jamais la
+          // chaîne User-Agent. Lu par la seule fiche de modération de World Wide.
+          client: describeGuestClient(requestUserAgent),
           connectedAt: new Date(),
         },
         profile: {
@@ -500,7 +512,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   }
 
   const outcome = identity.kind === 'guest'
-    ? await joinAsGuest(prisma, shareLink, profile, broadcast)
+    ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)
     : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
 
   // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
@@ -763,6 +775,7 @@ export function registerLinkAdmissionRoutes(
           key,
           authContext,
           requestIp: resolveClientIp(request),
+          requestUserAgent: extractUserAgent(request),
           rejectedCredential,
           profile: {
             firstName: body.nickname ?? '',

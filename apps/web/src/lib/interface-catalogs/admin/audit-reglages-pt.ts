@@ -146,6 +146,8 @@ const f = {
   'admin.audit.action.ADMIN_COMMUNITY_UPDATED.explain': 'A ativação ou a visibilidade de uma comunidade foi alterada por um administrador.',
   'admin.audit.action.DELETE_POST': 'Publicação removida',
   'admin.audit.action.DELETE_POST.explain': 'Um conteúdo foi removido por um terceiro autorizado, não pelo seu autor: é um gesto de moderação.',
+  'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'Ficha de um participante do World Wide lida',
+  'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Leitura soberana, para moderar, da configuração de uma pessoa que entrou no World Wide — convidados incluídos: idiomas, país, navegador e dispositivo, data de entrada, link usado. Nunca um endereço IP.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Lista de visualizações de um conteúdo lida',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED.explain': 'Leitura soberana de quem viu um conteúdo e do que cada pessoa fez nele — o autor de uma publicação ou de um reel só vê os números.',
   'admin.audit.action.CREATE_BROADCAST': 'Difusão criada',
