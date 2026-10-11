@@ -33,7 +33,7 @@ import { useOnline } from '@/lib/net/online';
 import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { defaultGuestLanguage, GuestForm, GuestSubmit } from '@/routes/chat-join-guest';
+import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
 import {
   GroupCard,
   INK,
@@ -186,7 +186,7 @@ const PASSING_REFUSALS: ReadonlySet<LinkRefusal> = new Set<LinkRefusal>(['rate-l
 export default function ChatJoinScreen() {
   const { link } = useParams<'/chat/$link'>();
   const [search] = useSearch();
-  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} />;
+  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} entry={guestEntryOf(search)} />;
 }
 
 const MISSING_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.missing.${GuestField}`>>> = {
@@ -212,11 +212,14 @@ const PAGE_BACKGROUND =
 export function ChatJoin({
   link,
   anonymousRequested = false,
+  entry = null,
   deps = DEFAULT_DEPS,
 }: {
   readonly link: string;
   /** `?mode=anonymous` (#8816) — un compte connecté a choisi « Anonyme ». */
   readonly anonymousRequested?: boolean;
+  /** Le nom et la langue choisis sur la landing (#10003, `guestEntryOf`). */
+  readonly entry?: GuestEntry | null;
   readonly deps?: ChatJoinDeps;
 }) {
   const language = currentInterfaceLanguage();
@@ -231,6 +234,10 @@ export function ChatJoin({
   const [draft, setDraft] = useState<GuestDraft>(EMPTY_DRAFT);
   const [focused, setFocused] = useState<GuestField | null>(null);
   const [input, setInput] = useState<InputRefusal | null>(null);
+  /* L'ENTRÉE de la landing est lue UNE fois, au montage : l'adresse qui la
+     porte ne change pas, et une revalidation ne doit jamais la rejouer. */
+  const [arrival] = useState(entry);
+  const [entering, setEntering] = useState(arrival !== null);
 
   /**
    * LA LECTURE — relancée au retour du réseau.
@@ -275,6 +282,30 @@ export function ChatJoin({
   }, [load, language]);
 
   const isAccount = session.status === 'authenticated';
+
+  /**
+   * L'ENTRÉE DEPUIS LA LANDING (#10003, D-186) — le nom et la langue y sont
+   * déjà choisis : l'invité est CRÉÉ sans autre geste, et l'invitation n'est
+   * pas peinte entre-temps. Un lien qui exige plus (e-mail, date de naissance),
+   * un nom refusé ou un refus du lien rendent la main au formulaire, PRÉ-REMPLI,
+   * avec la cause dite — jamais une garde contournée.
+   */
+  useEffect(() => {
+    if (!entering || arrival === null || load.kind === 'loading') return;
+    const guestDoor = joinChoicesOf({ signedIn: isAccount, guestAllowed: load.kind === 'ready' && load.invitation.guest.allowed, anonymousRequested }).guest;
+    if (load.kind !== 'ready' || !guestDoor || !online) {
+      setDraft((current) => (current.nickname === '' ? { ...current, nickname: arrival.nickname } : current));
+      setEntering(false);
+      return;
+    }
+    const terms = load.invitation.guest;
+    const chosen = arrival.language !== null && guestLanguageOptions(terms).includes(arrival.language) ? arrival.language : defaultGuestLanguage(terms, language);
+    const seeded: GuestDraft = { ...EMPTY_DRAFT, nickname: arrival.nickname, language: chosen };
+    setDraft(seeded);
+    void handleGuestJoin(seeded).finally(() => setEntering(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- l'entrée part une fois, quand l'invitation arrive
+  }, [load]);
+
   const accountLanguage = session.status === 'authenticated' ? (session.user.systemLanguage ?? null) : null;
 
   async function handleJoin() {
@@ -296,10 +327,10 @@ export function ChatJoin({
     deps.joined();
   }
 
-  async function handleGuestJoin() {
+  async function handleGuestJoin(submitted: GuestDraft = draft) {
     if (load.kind !== 'ready' || join.kind === 'joining' || join.kind === 'joined' || !online) return;
 
-    const validated = validateGuestDraft(draft, load.invitation.guest);
+    const validated = validateGuestDraft(submitted, load.invitation.guest);
     if (!validated.ok) {
       setInput({ field: validated.field, message: translateInvite(language, MISSING_KEY[validated.field]) });
       /* Le bouton vit dans la barre collée, loin des champs : un formulaire
@@ -413,7 +444,7 @@ export function ChatJoin({
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <InviteHeader language={language} next={isAccount ? null : next} />
       <main id="contenu" className="mx-auto grid w-full max-w-[1280px] flex-1 content-start px-4 md:px-12 md:pb-12">
-        {load.kind === 'loading' ? <InvitationPending language={language} /> : null}
+        {load.kind === 'loading' || (entering && load.kind === 'ready') ? <InvitationPending language={language} /> : null}
 
         {load.kind === 'refused' ? (
           <div className="mx-auto grid w-full max-w-md content-center py-8">
@@ -421,7 +452,7 @@ export function ChatJoin({
           </div>
         ) : null}
 
-        {invitation === null ? null : (
+        {invitation === null || entering ? null : (
           <div
             data-invite-layout
             className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"

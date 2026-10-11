@@ -139,10 +139,75 @@ body {
   color: var(--ios-ink-2);
 }
 .ld-form {
+  max-width: 520px;
+}
+.ld-step {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  max-width: 520px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+/* L'ÉTAPE DE LA LANGUE (#10003) — glisse depuis le sens de lecture, et ne
+ * bouge pas pour qui a demandé moins de mouvement. */
+.ld-step--language {
+  --ld-slide: 32px;
+  animation: ld-slide 0.28s ease-out;
+}
+[dir='rtl'] .ld-step--language {
+  --ld-slide: -32px;
+}
+@keyframes ld-slide {
+  from {
+    opacity: 0;
+    transform: translateX(var(--ld-slide));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-step--language {
+    animation: none;
+  }
+}
+.ld-step legend {
+  font-size: 20px;
+  font-weight: 700;
+}
+.ld-step .ld-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+.ld-langs {
+  flex-basis: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.ld-lang {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 30%, transparent);
+  background: var(--ios-surface-card);
+  cursor: pointer;
+}
+.ld-lang:has(input:checked) {
+  border-color: var(--ios-indigo-500);
+  background: color-mix(in srgb, var(--ios-indigo-500) 14%, var(--ios-surface-card));
+}
+.ld-lang input {
+  accent-color: var(--ios-indigo-500);
+  margin: 0;
+}
+.ld-error {
+  color: var(--ios-error);
+}
+.ld-return {
+  margin-bottom: 18px;
 }
 .ld-field {
   flex: 1 1 240px;

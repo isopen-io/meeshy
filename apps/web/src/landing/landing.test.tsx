@@ -12,6 +12,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import type { LandingBootConfig } from './landing-boot';
 import { LANDING_COPY } from './landing-copy';
+import { minifyInlineScript } from '../../scripts/lib/minify-inline-script';
 import { landingBootScript, landingDocument, landingOgImagePath } from './landing-document';
 import { LANDING_LANGUAGES, landingPath, landingPaths, type LandingLanguage } from './landing-languages';
 import { WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from './world-entry';
@@ -105,7 +106,7 @@ describe('le document prérendu, par langue (#10002)', () => {
 
       test('l’étape de la langue est dans la page : sept langues dans leur écriture, retour, erreur dite (#10003, #10067)', () => {
         const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
-        for (const code of LANDING_LANGUAGES) expect(body).toMatch(new RegExp(`<input type="radio" name="language" value="${code}"`));
+        for (const code of LANDING_LANGUAGES) expect(body).toMatch(new RegExp(`<input type="radio" name="language"[^>]*value="${code}"`));
         expect(body).toContain('data-world-back');
         expect(body).toMatch(/role="alert"[^>]*data-world-error|data-world-error[^>]*role="alert"/);
         expect(body).toContain(copy.entryFailed.replace(/'/g, '&#x27;'));
@@ -141,6 +142,8 @@ const harness = (input: {
   readonly responses?: readonly Answer[];
   readonly installed?: 'display-mode' | 'ios-standalone';
   readonly deviceLanguages?: readonly string[];
+  /** Le script tel que le prérendu l'inline — minifié (`minifyInlineScript`). */
+  readonly script?: (config: LandingBootConfig) => string;
 }): Harness => {
   const html = documentFor(input.language);
   document.documentElement.removeAttribute('data-session');
@@ -219,7 +222,7 @@ const harness = (input: {
   };
   /* Le script est exécuté par son TEXTE, comme dans la page servie : une
      référence à une variable extérieure à `landingBoot` y lèverait. */
-  new Function('window', landingBootScript(config))(fake);
+  new Function('window', (input.script ?? landingBootScript)(config))(fake);
   return {
     win: fake as unknown as Window & typeof globalThis,
     trace,
@@ -525,5 +528,24 @@ describe('un invité revient dans World Wide (#10003)', () => {
     const { settle } = harness({ language: 'fr' });
     await settle();
     expect(visible('[data-world-return]')).toBe(false);
+  });
+});
+
+describe('le script MINIFIÉ que le prérendu inline (#10003)', () => {
+  test('plus court que sa source, il se comporte comme elle : qui est là, nom, langue, entrée', async () => {
+    const configs: LandingBootConfig[] = [];
+    harness({ language: 'ar', script: (config) => (configs.push(config), landingBootScript(config)) });
+    const source = landingBootScript(configs[0] as LandingBootConfig);
+    const minified = await minifyInlineScript(source);
+    expect(minified.length).toBeLessThan(source.length);
+
+    const stored = { [SESSION_KEY]: JSON.stringify({ kind: 'guest', sessionToken: 's', expiresAt: Date.now() + 3_600_000 }) };
+    const { trace, settle } = harness({ language: 'ar', stored, deviceLanguages: ['es-MX'], script: () => minified });
+    expect(document.documentElement.getAttribute('data-session')).toBe('guest');
+    await settle();
+    typeName('Luiza');
+    expect(checkedLanguage()).toBe('es');
+    submit();
+    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Luiza&language=es']);
   });
 });

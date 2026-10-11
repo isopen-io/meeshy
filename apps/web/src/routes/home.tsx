@@ -8,7 +8,7 @@ import { isInstalledApp, landingBoot } from '@/landing/landing-boot';
 import { LANDING_COPY } from '@/landing/landing-copy';
 import { ROOT_LANDING_LANGUAGE, landingPaths } from '@/landing/landing-languages';
 import { LandingPage } from '@/landing/landing-page';
-import { WORLD_GUEST_ENTRY_TEMPLATE } from '@/landing/world-entry';
+import { WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from '@/landing/world-entry';
 import { apiConfig } from '@/lib/api/config';
 import { SESSION_STORAGE_KEY } from '@/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '@/lib/inline-interface-language-bootstrap.js';
@@ -52,6 +52,7 @@ export default function HomeScreen() {
         sessionKey: SESSION_STORAGE_KEY,
         languageKey: INTERFACE_LANGUAGE_KEY,
         entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
+        threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
         appPath: href('list'),
         presence: copy.presence,
       },
