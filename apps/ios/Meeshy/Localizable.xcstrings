@@ -279369,7 +279369,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des points selon tes missions, de la Gloire, des fragments de Meesh — cinq paient une frappe —, et parfois un gel."
+            "value": "Des points selon tes missions, de la Gloire, des fragments de Meesh (cinq paient une frappe), parfois un gel."
           }
         },
         "it": {
@@ -279381,7 +279381,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pontos conforme tuas missões, Glória, fragmentos de Meesh — cinco pagam uma cunhagem — e às vezes um congelamento."
+            "value": "Pontos por suas missões, Glória, fragmentos de Meesh (cinco pagam uma cunhagem) e às vezes um congelamento."
           }
         }
       }

@@ -178,7 +178,7 @@ const fr = {
   'game.detail.mission.what': 'Une mission est un petit but à atteindre aujourd’hui.',
   'game.detail.mission.how': 'Elle rapporte des points et te rapproche du coffre du jour.',
   'game.detail.chest.what': 'Le coffre du jour s’ouvre quand tes missions sont faites.',
-  'game.detail.chest.how': 'Des points selon tes missions, de la Gloire, des fragments de Meesh — cinq paient une frappe —, et parfois un gel.',
+  'game.detail.chest.how': 'Des points selon tes missions, de la Gloire, des fragments de Meesh (cinq paient une frappe), parfois un gel.',
   'game.detail.coin.what': 'La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro.',
   'game.detail.coin.how': 'Frappe-la avec tes points dès que tu en as assez.',
   'game.detail.ring.what': 'L’anneau montre ton niveau : il se remplit avec tes points.',
