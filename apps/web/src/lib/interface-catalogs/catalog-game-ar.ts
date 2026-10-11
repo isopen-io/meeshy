@@ -688,6 +688,8 @@ const ar = {
   'game.settings.notifications.body': 'دعوة إلى مهمة الثنائي، نتيجة الدوري، مرحلة من الموسم: إشعار واحد للعبة في اليوم على الأكثر. يسري هذا الإعداد على حسابك في جميع أجهزتك.',
   'game.settings.notifications.switch': 'تلقي إشعارات اللعبة',
   'game.archive.season.past_title': 'الموسم ⁦{number}⁩ · انتهى',
+  'game.archive.season.current_title': 'الموسم ⁦{number}⁩ · جارٍ',
+  'game.archive.season.opened_note': 'الموسم مفتوح: يظهر مسارك فور إعادة تحميله.',
   'game.archive.season.dates': 'من ⁦{start}⁩ إلى ⁦{end}⁩',
   'game.archive.season.rewards.one': '⁦{count}⁩ مكافأة مُستلمة',
   'game.archive.season.rewards.other': '⁦{count}⁩ مكافآت مُستلمة',

@@ -680,6 +680,8 @@ const it = {
   'game.settings.notifications.body': 'Un invito alla missione in coppia, un risultato di lega, una tappa della stagione: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi.',
   'game.settings.notifications.switch': 'Ricevi le notifiche del gioco',
   'game.archive.season.past_title': 'Stagione {number} · conclusa',
+  'game.archive.season.current_title': 'Stagione {number} · in corso',
+  'game.archive.season.opened_note': 'La stagione è aperta: il tuo percorso appare appena viene ricaricata.',
   'game.archive.season.dates': 'Dal {start} al {end}',
   'game.archive.season.rewards.one': '{count} ricompensa riscattata',
   'game.archive.season.rewards.other': '{count} ricompense riscattate',

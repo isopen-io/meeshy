@@ -166,6 +166,31 @@ public enum GameSeason {
         self.season(at: dayKey) == season
     }
 
+    /// L'ÉTAT D'UNE SAISON À UN MOMENT (#10131) — miroir de `seasonTenseAt` (`season.ts`) : la fermeture du
+    /// dimanche 20 h ouvre la semaine suivante, la saison du lundi est donc en cours dès la veille à 20 h.
+    public static func tense(startDay: String, endDay: String, at moment: LeagueMoment) -> GameArchiveStatus {
+        let week = GameLeague.weekOfMoment(moment)
+        if week < GameLeague.weekKey(of: startDay) { return .upcoming }
+        return week > GameLeague.weekKey(of: endDay) ? .past : .current
+    }
+
+    /// L'état d'une COPIE (#10131) — miroir de `liveSeasonTense` : l'état servi, avancé par l'horloge locale. Une
+    /// saison « à venir » gardée hors ligne passe « en cours » le jour de son ouverture ; une horloge en retard ne
+    /// fait jamais reculer l'état servi.
+    public static func liveTense(served: GameArchiveStatus, startDay: String, endDay: String,
+                                 at moment: LeagueMoment) -> GameArchiveStatus {
+        let computed = tense(startDay: startDay, endDay: endDay, at: moment)
+        return tenseRank(computed) > tenseRank(served) ? computed : served
+    }
+
+    private static func tenseRank(_ tense: GameArchiveStatus) -> Int {
+        switch tense {
+        case .upcoming: return 0
+        case .current: return 1
+        case .past: return 2
+        }
+    }
+
     /// La saison À VENIR (#10014) : la saison 1 tant qu'aucune n'est ouverte, `nil` ensuite
     /// (les saisons s'enchaînent sans trou). Une donnée de calendrier, la même pour tous.
     public static func upcoming(of moment: LeagueMoment) -> SeasonCalendar? {

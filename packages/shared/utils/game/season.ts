@@ -26,7 +26,7 @@
 
 import { addDays, dayDiff } from './day-prng.js';
 import { GLORY_POINTS } from './glory.js';
-import { leagueWeekOfMoment, type LeagueMoment } from './league.js';
+import { leagueWeekKey, leagueWeekOfMoment, type LeagueMoment } from './league.js';
 import type { MissionDifficulty } from './missions.js';
 
 export const SEASON_ONE_START = '2026-12-21';
@@ -96,6 +96,36 @@ export const seasonOfMoment = (moment: LeagueMoment): number | null => seasonAt(
 
 export const isSeasonOpen = (params: { readonly season: number; readonly dayKey: string }): boolean =>
   seasonAt(params.dayKey) === Math.trunc(params.season);
+
+/** L'état d'une saison : terminée, en cours, à venir — les valeurs de `GameArchiveStatus`. */
+export type SeasonTense = 'past' | 'current' | 'upcoming';
+
+const TENSE_RANK: Readonly<Record<SeasonTense, number>> = { upcoming: 0, current: 1, past: 2 };
+
+/**
+ * L'ÉTAT D'UNE SAISON À UN MOMENT (#10131) — lu sur ses dates (`startDay`, `endDay`) et la semaine de ligue du moment :
+ * la fermeture du dimanche 20 h ouvre la semaine suivante, donc la saison qui commence le lundi est en cours dès la
+ * veille à 20 h, et se termine le dimanche 20 h de sa dernière semaine. La passerelle sert l'état ainsi
+ * (`GameArchiveService`) ; un client le RECALCULE sur sa copie hors ligne avec son horloge (`liveSeasonTense`).
+ */
+export function seasonTenseAt(dates: { readonly startDay: string; readonly endDay: string }, moment: LeagueMoment): SeasonTense {
+  const week = leagueWeekOfMoment(moment);
+  if (week < leagueWeekKey(dates.startDay)) return 'upcoming';
+  return week > leagueWeekKey(dates.endDay) ? 'past' : 'current';
+}
+
+/**
+ * L'état d'une COPIE (#10131) : celui que le serveur a servi, avancé par l'horloge locale — une saison « à venir »
+ * gardée hors ligne passe « en cours » le jour de son ouverture, puis « terminée », sans réseau. Une horloge en
+ * retard ne le fait jamais RECULER : l'état servi est un plancher.
+ */
+export function liveSeasonTense(
+  copy: { readonly served: SeasonTense; readonly startDay: string; readonly endDay: string },
+  moment: LeagueMoment,
+): SeasonTense {
+  const computed = seasonTenseAt(copy, moment);
+  return TENSE_RANK[computed] > TENSE_RANK[copy.served] ? computed : copy.served;
+}
 
 /**
  * La saison À VENIR (#10014) : avant l'ouverture de la première, la saison 1 —

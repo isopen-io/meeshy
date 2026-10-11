@@ -26,10 +26,10 @@ final class GameArchiveTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeSUT() -> (sut: GameArchiveModel, service: MockGameArchiveService, cache: MemoryCache) {
+    private func makeSUT(network: FakeNetworkMonitor = FakeNetworkMonitor()) -> (sut: GameArchiveModel, service: MockGameArchiveService, cache: MemoryCache) {
         let service = MockGameArchiveService()
         let cache = MemoryCache()
-        return (GameArchiveModel(service: service, cache: cache), service, cache)
+        return (GameArchiveModel(service: service, cache: cache, networkMonitor: network), service, cache)
     }
 
     private static let weekKeys = ["2027-02-15", "2027-02-22", "2027-03-01", "2027-03-08", "2027-03-15", "2027-03-22", "2027-03-29", "2027-04-05"]
@@ -147,9 +147,79 @@ final class GameArchiveTests: XCTestCase {
         XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 3, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
     }
 
-    func test_season_servedAsCurrent_isTheCurrentScreen() {
-        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(value: season(status: .current)))
+    func test_season_servedAsCurrent_andCarriedByTheBlock_isTheCurrentScreen() {
+        let shown = GameSeasonShown.of(focus: 1, game: GameWave2Fixture.game(), load: GameLoad(value: season(number: 1, status: .current)))
         XCTAssertEqual(shown, .current)
+    }
+
+    func test_season_servedAsCurrent_whileTheKeptBlockCarriesAnother_isOpened_neverAnotherSeasonsPath() {
+        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(value: season(status: .current)),
+                                       moment: LeagueMoment(dayKey: "2027-02-20", minuteOfDay: 600))
+        XCTAssertEqual(shown, .opened(GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
+    }
+
+    // MARK: - Une saison « à venir » gardée hors ligne, le jour J (#10131)
+
+    private static let eve = LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 19 * 60 + 59)
+    private static let opening = LeagueMoment(dayKey: "2027-02-15", minuteOfDay: 9 * 60)
+
+    func test_aFutureCopyKeptOffline_isStillUpcoming_theEveBefore8pm() {
+        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(value: season(status: .upcoming)), moment: Self.eve)
+        XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
+    }
+
+    func test_aFutureCopyKeptOffline_turnsCurrentByItself_onItsOpeningDay() {
+        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(value: season(status: .upcoming)), moment: Self.opening)
+        XCTAssertEqual(shown, .opened(GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
+    }
+
+    func test_theUpcomingSeasonOfTheKeptBlock_turnsOpenedToo_onItsOpeningDay() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let opening = LeagueMoment(dayKey: "2026-12-21", minuteOfDay: 600)
+        XCTAssertEqual(GameSeasonShown.of(focus: 1, game: game, load: GameLoad(), moment: opening), .opened(GameWave2Fixture.upcoming))
+        let e = monter(GameSeasonUpcoming(upcoming: GameWave2Fixture.upcoming, moment: opening))
+        XCTAssertTrue(e.identifiers.contains("game.season.opened"), "vus : \(e.identifiers)")
+        XCTAssertFalse(e.identifiers.contains("game.season.upcoming"))
+    }
+
+    func test_anOpenedSeason_saysItsNumberStateAndThatThePathComesBackWithTheNetwork() {
+        let opened = GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")
+        let e = monter(GameSeasonArchiveView(shown: .opened(opened), retry: {}))
+        XCTAssertTrue(e.identifiers.contains("game.season.opened"), "vus : \(e.identifiers)")
+        XCTAssertTrue(e.says(GameText.archiveSeasonCurrentTitle(number: GameCopy.formatCount(2))))
+        XCTAssertTrue(e.says(GameText.archiveSeasonOpenedNote))
+    }
+
+    func test_theSeasonIsReadAgain_whenTheNetworkComesBack() async {
+        let network = FakeNetworkMonitor(isOnline: false)
+        let (sut, service, cache) = makeSUT(network: network)
+        await cache.save(season(status: .upcoming), name: GameWave2CacheName.seasonArchive(2))
+        var blockReloads = 0
+        sut.onReconnect = { blockReloads += 1 }
+        await sut.loadSeason(number: 2)
+        XCTAssertEqual(service.seasonCalls, [2])
+        service.seasonResult = .success(season(status: .current))
+
+        await sut.connectivityChanged(offline: false)
+
+        XCTAssertEqual(service.seasonCalls, [2, 2], "le retour du réseau relit la saison")
+        XCTAssertEqual(sut.season.value?.status, .current)
+        XCTAssertEqual(blockReloads, 1, "et le bloc gardé avec elle")
+    }
+
+    func test_theNetworkPublisher_drivesTheReread_onlyOnTheOfflineToOnlineEdge() async throws {
+        let network = FakeNetworkMonitor(isOnline: true)
+        let (sut, service, _) = makeSUT(network: network)
+        await sut.loadSeason(number: 2)
+        network.offlineTransitions.send(false)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(service.seasonCalls, [2], "rester en ligne ne relit rien")
+
+        network.offlineTransitions.send(true)
+        network.offlineTransitions.send(false)
+        for _ in 0..<50 where service.seasonCalls.count < 2 { try await Task.sleep(nanoseconds: 20_000_000) }
+
+        XCTAssertEqual(service.seasonCalls, [2, 2])
     }
 
     func test_season_coldAndOffline_saysItFailed_neverAnEmptyScreen() {
