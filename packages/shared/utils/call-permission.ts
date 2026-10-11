@@ -17,6 +17,7 @@
  * @see schema.prisma Participant.role, User.role, Conversation.type
  */
 
+import { CALL_ERROR_CODES } from '../types/call-error-codes.js';
 import { isGlobalAdmin, isMemberAdmin, isMemberCreator } from '../types/role-types.js';
 
 export type CallStartContext = {
@@ -29,7 +30,7 @@ export type CallStartContext = {
 
 const OPEN_CALL_TYPES: ReadonlySet<string> = new Set(['direct', 'group']);
 
-export const CALL_NOT_ALLOWED_CODE = 'CALL_NOT_ALLOWED' as const;
+export const CALL_NOT_ALLOWED_CODE = CALL_ERROR_CODES.CALL_NOT_ALLOWED;
 
 function holdsPublicCallRight(context: CallStartContext): boolean {
   if (context.viewerIsCreator) return true;

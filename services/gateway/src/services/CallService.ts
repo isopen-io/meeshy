@@ -38,6 +38,7 @@ import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
+import { assertCallableConversationType, assertViewerMayStartCall } from './calls/callStartAdmission';
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
 import { guardedTimeout } from '../utils/guarded-timer';
@@ -1002,16 +1003,8 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CONVERSATION_CLOSED}: Conversation is closed`);
     }
 
-    // Validate conversation type (only DIRECT and GROUP support video calls)
-    if (conversation.type !== 'direct' && conversation.type !== 'group') {
-      logger.error('❌ Video calls not supported for this conversation type', {
-        conversationId,
-        type: conversation.type
-      });
-      throw new Error(
-        `${CALL_ERROR_CODES.VIDEO_CALLS_NOT_SUPPORTED}: Video calls are only supported for DIRECT and GROUP conversations`
-      );
-    }
+    // Loi `canStartCall` (#10207) : un type que personne ne peut appeler.
+    assertCallableConversationType(conversation.type);
 
     // Check if user is participant of conversation. `participantId` MUST be
     // checked explicitly before hitting Prisma: passing `id: undefined` in a
@@ -1044,6 +1037,8 @@ export class CallService {
       });
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
     }
+
+    await assertViewerMayStartCall(this.prisma, { conversationType: conversation.type, membership });
 
     if (conversation.type === 'direct') {
       await assertDirectCalleeReachable(this.prisma, { conversationId, callerUserId: initiatorId });

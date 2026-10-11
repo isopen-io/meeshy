@@ -29,6 +29,13 @@ export const CALL_ERROR_CODES = {
    * groupe, le membre concerné n'est simplement pas sonné.
    */
   CALLEE_REFUSES_NON_CONTACTS: 'CALLEE_REFUSES_NON_CONTACTS',
+  /**
+   * L'appelant n'a pas le droit de LANCER un appel ici (#10207) : invité sans
+   * compte, ou conversation `public` dont il n'est ni créateur, ni admin, ni
+   * administrateur plateforme. Loi : `canStartCall`
+   * (`utils/call-permission.ts`). Rejoindre un appel en cours n'est pas visé.
+   */
+  CALL_NOT_ALLOWED: 'CALL_NOT_ALLOWED',
 
   // Call state errors
   CALL_NOT_FOUND: 'CALL_NOT_FOUND',
