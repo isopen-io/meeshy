@@ -31,7 +31,8 @@ function fakeDb(options: { auditFails?: boolean; indexesFail?: boolean } = {}) {
   const proposals: Row[] = [];
   const audit: Row[] = [];
   let seq = 0;
-  const matches = (row: Row, where: Row) => Object.entries(where).every(([k, v]) => row[k] === v);
+  const matches = (row: Row, where: Row) =>
+    Object.entries(where).every(([k, v]) => (v !== null && typeof v === 'object' && 'in' in (v as Row) ? (v as Row).in.includes(row[k]) : row[k] === v));
   const prisma = {
     $runCommandRaw: jest.fn(async () => {
       if (options.indexesFail) throw new Error('not authorized');
@@ -367,6 +368,30 @@ describe('les cas de l’audit adversarial', () => {
     const res = await call(app, 'PUT', '/admin/game/seasons/2', { expectedRevision: 0, status: 'paused' });
     expect(res.statusCode).toBe(422);
     expect(res.json().error).toBe('season-announced');
+    await app.close();
+  });
+});
+
+describe('une validation interrompue se reprend', () => {
+  it('une proposition restée « approving » plus de 5 minutes se valide ou se rejette, et reste listée', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    const { id } = (await call(app, 'POST', '/admin/game/seasons/2/proposals', {})).json().data;
+    Object.assign(db.proposals[0]!, { status: 'approving', reviewedAt: new Date(NOW.getTime() - 6 * 60_000) });
+    expect((await call(app, 'GET', '/admin/game/seasons/proposals')).json().data.items).toHaveLength(1);
+    const res = await call(app, 'POST', `/admin/game/seasons/proposals/${id}/reject`, {});
+    expect(res.statusCode).toBe(200);
+    expect(db.proposals[0]!.status).toBe('rejected');
+    await app.close();
+  });
+
+  it('une validation en cours depuis moins de 5 minutes ne se double pas', async () => {
+    const db = fakeDb();
+    const app = await build(db);
+    const { id } = (await call(app, 'POST', '/admin/game/seasons/2/proposals', {})).json().data;
+    Object.assign(db.proposals[0]!, { status: 'approving', reviewedAt: new Date(NOW.getTime() - 60_000) });
+    expect((await call(app, 'POST', `/admin/game/seasons/proposals/${id}/approve`, { expectedRevision: 0 })).statusCode).toBe(409);
+    expect(db.definitions).toHaveLength(0);
     await app.close();
   });
 });

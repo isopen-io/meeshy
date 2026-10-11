@@ -281,3 +281,11 @@ describe('les cas de l’audit adversarial', () => {
     expect(validateAppEvent(ev)).toEqual([]);
   });
 });
+
+describe('des textes devenus illisibles ne décalent jamais une saison', () => {
+  it('seuls les textes tombent, les dates restent', () => {
+    const bad = Object.fromEntries(SEASON_COPY_LOCALES.map((l) => [l, { title: 'Saison', tagline: 'Gagne 10 €', description: 'x' }]));
+    const schedule = normalizeSeasonSchedule({ revision: 2, seasons: [{ number: 2, startDay: '2027-03-01', status: 'scheduled', themeKey: 'language:ja', stepPoints: 150, copy: bad }] });
+    expect(schedule.seasons).toEqual([expect.objectContaining({ number: 2, startDay: '2027-03-01', copy: null })]);
+  });
+});

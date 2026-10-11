@@ -558,7 +558,8 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
       const status = request.query.status ?? 'pending';
       if (!['pending', 'approved', 'rejected', 'all'].includes(status)) return fail(reply, 400, 'invalid-status');
       const rows = (await prisma.gameSeasonProposal.findMany({
-        where: status === 'all' ? {} : { status },
+        // Une validation interrompue (« approving ») se montre avec les propositions en attente : elle se reprend.
+        where: status === 'all' ? {} : status === 'pending' ? { status: { in: ['pending', 'approving'] } } : { status },
         orderBy: { createdAt: 'desc' },
         take: 50,
       })) as unknown as ProposalRow[];
@@ -639,13 +640,14 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
     async (request: FastifyRequest<{ Params: { id: string }; Body: { reason?: string } | undefined }>, reply) => {
       const proposal = (await prisma.gameSeasonProposal.findUnique({ where: { id: request.params.id } })) as unknown as ProposalRow | null;
       if (proposal === null) return fail(reply, 404, 'proposal-not-found');
-      if (proposal.status !== 'pending') return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
+      const reclaimable = isStaleApproving(proposal, clock());
+      if (proposal.status !== 'pending' && !reclaimable) return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
       const reason = request.body?.reason?.trim() || null;
       if (!(await journal(request, prisma, { action: 'GAME_SEASON_PROPOSAL_REJECT', entityId: String(proposal.number), metadata: { proposalId: proposal.id, reason } }))) {
         return fail(reply, 500, 'audit-unavailable', 'Le journal d’audit est indisponible.');
       }
       const done = await prisma.gameSeasonProposal.updateMany({
-        where: { id: proposal.id, status: 'pending' },
+        where: reclaimable ? { id: proposal.id, status: 'approving', reviewedAt: proposal.reviewedAt } : { id: proposal.id, status: 'pending' },
         data: { status: 'rejected', reviewedBy: actorOf(request), reviewedAt: clock(), rejectReason: reason },
       });
       if (done.count !== 1) return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
