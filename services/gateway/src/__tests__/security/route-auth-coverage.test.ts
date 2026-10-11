@@ -246,20 +246,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       'compte : ce serait un oracle, à rebours de la doctrine de /forgot-password et de ' +
       '/magic-link/request (#4158). Bornée à 20/min par IP, plus un coupe-circuit global.',
   },
-  {
-    method: 'GET',
-    url: '/api/v1/directory/people/:handle',
-    why:
-      "L'ADRESSE canonique d'un profil public (S1 anonyme / S2 connecté, #4161). " +
-      'Un profil se consulte depuis un lien partagé, sans compte — comme le faisaient ' +
-      "déjà GET /u/:username, GET /users/:id et GET /users/id/:id, dont elle est " +
-      "l'implémentation UNIQUE, ces trois-là devenant des alias. Elle sert la " +
-      'projection publique et rien de plus : les trois langues du Prisme, isActive, ' +
-      'deactivatedAt et updatedAt ne sont plus ni chargés ni déclarés. La présence ' +
-      "n'est servie que sur ?expand=presence, et toujours sous la loi du 2026-08-25 ; " +
-      'les quatre compteurs intimes de ?expand=stats ne partent qu\'à soi et à ' +
-      "l'administration. Débit : 60/min par IP pour l'anonyme, 240/min par compte.",
-  },
   // --- Récupération de compte ---
   {
     method: 'POST',
@@ -338,9 +324,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/me/delete-account/delete-now', why: 'idem (purgeTokenHash) — les trois ne font plus aucune mutation depuis #4183, elles redirigent' },
 
   // --- Profils publics (design produit assumé) ---
-  { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },
-  { method: 'GET', url: '/api/v1/users/:id', why: 'idem, par id' },
-  { method: 'GET', url: '/api/v1/users/id/:id', why: 'idem, lookup par ObjectId opaque' },
   // `/users/email/:email` et `/users/phone/:phone` ont QUITTÉ cette liste : elles
   // sont désormais AUTHENTIFIÉES (#4160). Elles confirmaient sans compte qu'une
   // adresse ou un numéro appartient à un utilisateur Meeshy — et rendaient son
@@ -363,7 +346,11 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // #10000 — l'entrée de World Wide que lit la landing de meeshy.me, servie à
   // des visiteurs SANS compte ni session : identique pour tous, sans identité
   // lue, ni id ni participant ni présence (schéma de réponse fermé).
-  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage et effectif agrégé, aucun id ni identité" },
+  { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage, aucun id ni identité ; l'effectif ne part que vers un compte Meeshy (#10205)" },
+  // Les profils (GET /directory/people/:handle et ses trois alias /u/:username,
+  // /users/:id, /users/id/:id) ne sont PLUS publics depuis #10205 (directive
+  // porteur du 2026-10-11) : un lecteur sans compte reçoit 403 ACCOUNT_REQUIRED,
+  // et le témoin ci-dessous le PROUVE en les traitant comme toute route gardée.
   // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
   // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
   // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.

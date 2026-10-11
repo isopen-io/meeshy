@@ -32,32 +32,68 @@ function memoryCache() {
   };
 }
 
-async function buildApp(options: { entry?: WorldEntry | null; cache?: ReturnType<typeof memoryCache> } = {}) {
+const { memberCount: _count, ...ENTRY_WITHOUT_COUNT } = ENTRY;
+
+const MEMBER_CONTEXT = {
+  type: 'user', isAuthenticated: true, isAnonymous: false,
+  userId: '507f1f77bcf86cd799439011', registeredUser: { id: '507f1f77bcf86cd799439011', role: 'USER' },
+};
+const ANONYMOUS_CONTEXT = { type: 'anonymous', isAuthenticated: false, isAnonymous: true, userId: 'anonymous' };
+
+async function buildApp(options: {
+  entry?: WorldEntry | null;
+  cache?: ReturnType<typeof memoryCache>;
+  viewer?: Record<string, unknown>;
+} = {}) {
   const loadEntry = jest.fn(async () => (options.entry === undefined ? ENTRY : options.entry));
   const cache = options.cache ?? memoryCache();
   const app = Fastify();
   app.decorate('prisma', {});
-  await app.register(worldRoutes, { prefix: '/api/v1', cache, loadEntry });
+  const authenticate = async (request: any) => {
+    request.authContext = options.viewer ?? ANONYMOUS_CONTEXT;
+  };
+  await app.register(worldRoutes, { prefix: '/api/v1', cache, loadEntry, authenticate });
   await app.ready();
   return { app, loadEntry, cache };
 }
 
 describe('GET /api/v1/world', () => {
-  it('sert l’entrée — identifiant, titre, lien, effectif — sans authentification', async () => {
+  it('sert l’entrée — identifiant, titre, lien — sans authentification, SANS effectif (#10205)', async () => {
     const { app } = await buildApp();
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
 
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    expect(body).toEqual({ success: true, data: ENTRY });
-    expect(worldEntrySchema.parse(body.data)).toEqual(ENTRY);
+    expect(body).toEqual({ success: true, data: ENTRY_WITHOUT_COUNT });
+    expect(worldEntrySchema.parse(body.data)).toEqual(ENTRY_WITHOUT_COUNT);
     await app.close();
   });
 
-  it('conserve le drapeau de plafond « 199+ » à travers la sérialisation', async () => {
+  it('ne sert à un invité de lien (session sans compte) aucun effectif non plus', async () => {
+    const guest = { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: 'p1', participantId: 'p1' };
+    const { app } = await buildApp({ viewer: guest });
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
+
+    expect(JSON.parse(res.body).data).toEqual(ENTRY_WITHOUT_COUNT);
+    await app.close();
+  });
+
+  it('sert l’effectif à un compte Meeshy, en cache PRIVÉ', async () => {
+    const { app } = await buildApp({ viewer: MEMBER_CONTEXT });
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
+
+    expect(JSON.parse(res.body).data).toEqual(ENTRY);
+    expect(res.headers['cache-control']).toBe(`private, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}`);
+    expect(String(res.headers.vary)).toContain('Authorization');
+    await app.close();
+  });
+
+  it('conserve le drapeau de plafond « 199+ » à travers la sérialisation, pour un compte', async () => {
     const capped: WorldEntry = { ...ENTRY, memberCount: 199, memberCountCapped: true };
-    const { app } = await buildApp({ entry: capped });
+    const { app } = await buildApp({ entry: capped, viewer: MEMBER_CONTEXT });
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
 
@@ -72,7 +108,7 @@ describe('GET /api/v1/world', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
 
     expect(Object.keys(JSON.parse(res.body).data).sort()).toEqual(
-      ['identifier', 'memberCount', 'shareLinkIdentifier', 'title'],
+      ['identifier', 'shareLinkIdentifier', 'title'],
     );
     await app.close();
   });
@@ -83,6 +119,7 @@ describe('GET /api/v1/world', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
 
     expect(res.headers['cache-control']).toBe(`public, max-age=${WORLD_ENTRY_CACHE_TTL_SECONDS}, stale-while-revalidate=60`);
+    expect(String(res.headers.vary)).toContain('Authorization');
     expect(res.headers.etag).toMatch(/^"[0-9a-f]{64}"$/);
     await app.close();
   });
@@ -122,7 +159,7 @@ describe('GET /api/v1/world', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/world' });
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).data).toEqual(ENTRY);
+    expect(JSON.parse(res.body).data).toEqual(ENTRY_WITHOUT_COUNT);
     await app.close();
   });
 
