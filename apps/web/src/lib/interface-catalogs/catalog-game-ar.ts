@@ -708,6 +708,18 @@ const ar = {
   'game.archive.week.purged': 'هذا الأسبوع قديم جدًا: حُذفت نتيجته كما هو مقرر.',
   'game.archive.week.upcoming': 'لم يبدأ هذا الأسبوع بعد.',
   'game.archive.week.privacy': 'تُحفظ نتيجتك وحدها: لا يمكن الاطلاع على بقية أعضاء المجموعة مجددًا.',
+  'game.constellation.title': 'الكوكبة',
+  'game.constellation.stars.one': 'نجمة واحدة مضيئة',
+  'game.constellation.stars.other': '{count} نجوم مضيئة',
+  'game.constellation.next.one': 'بقيت شظية نجم واحدة للنجمة التالية',
+  'game.constellation.next.other': 'بقي {count} من شظايا النجم للنجمة التالية',
+  'game.constellation.how': 'تضيء نجمة مع كل عشر شظايا نجم تجمعها. وكل نجمة تفتح زينة للملف الشخصي، دون أي أفضلية في اللعب.',
+  'game.constellation.cosmetics': 'الزينات المفتوحة',
+  'game.constellation.cosmetic': '{kind} · النجمة {star}',
+  'game.constellation.kind.halo': 'هالة',
+  'game.constellation.kind.frame': 'إطار',
+  'game.constellation.kind.sparkle': 'بريق',
+  'game.constellation.visibility': 'تظهر كوكبتك وزيناتها حسب إعداد واجهتك.',
 } as const satisfies GameCoreCatalog;
 
 export default ar;
