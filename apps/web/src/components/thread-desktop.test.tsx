@@ -234,8 +234,8 @@ describe('la feuille de bureau du fil', () => {
 
   test('le vocal, le fichier et la citation gardent une largeur de carte au lieu de courir sur la colonne', () => {
     const block = mediaBlock(WIDE);
-    expect(ruleIn(block, '.voice-card')).toContain('max-width');
-    expect(ruleIn(block, '.file-card')).toContain('max-width');
+    expect(ruleIn(block, '[data-message] .voice-card')).toContain('max-width');
+    expect(ruleIn(block, '[data-message] .file-card')).toContain('max-width');
     expect(ruleIn(block, '[data-reading-mode] [data-quote-card]')).toContain('max-width');
   });
 
@@ -243,6 +243,16 @@ describe('la feuille de bureau du fil', () => {
     const block = mediaBlock(WIDE);
     expect(ruleIn(block, '[data-day-separator]::before,\n  [data-day-separator]::after')).toContain('var(--color-ios-hairline)');
     expect(ruleIn(block, '[data-unread-separator]::before,\n  [data-unread-separator]::after')).toContain('var(--color-ios-brand)');
+  });
+
+  /* LA FEUILLE PART AVEC LE CHUNK DU FIL, MAIS VAUT POUR TOUT LE DOCUMENT une
+     fois chargée : une carte bornée sans portée bornait aussi le vocal et le
+     fichier de la médiathèque de la conversation (`conversation-media-hub-items.tsx`,
+     la même `Attachments` dans une rangée de feuille de 40rem). */
+  test('la borne des cartes ne vaut que dans une rangée de message du fil', () => {
+    const block = mediaBlock(WIDE);
+    const bare = /(^\s*|[,{]\s*)\.(voice|file)-card\s*[{,]/m;
+    expect(bare.test(block)).toBe(false);
   });
 
   test('le dock du composeur : le rayon du composeur (22), un filet et une lueur à l’accent', () => {
