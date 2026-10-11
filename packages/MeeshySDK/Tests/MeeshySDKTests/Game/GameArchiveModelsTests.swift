@@ -111,6 +111,30 @@ struct GameArchiveModelsTests {
         #expect(MeEndpoint.gameLeagueWeekArchive(weekKey: "2026-10-12").path == "/api/v1/me/game/league/weeks/2026-10-12")
         #expect(MeEndpoint.gameLeagueWeekArchive(weekKey: "../x").path == "/api/v1/me/game/league/weeks/%2E%2E%2Fx")
     }
+
+    @Test("une copie « à venir » gardée hors ligne bascule d'elle-même le jour de son ouverture (#10131)")
+    func upcomingCopyTurnsCurrentOnOpeningDay() throws {
+        let copy = try Self.decode(GameSeasonArchive.self, Self.upcomingSeasonJSON)
+        #expect(copy.liveStatus(at: LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 1199)) == .upcoming)
+        #expect(copy.liveStatus(at: LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 1200)) == .current)
+        #expect(copy.liveStatus(at: LeagueMoment(dayKey: "2027-02-15", minuteOfDay: 600)) == .current)
+        #expect(copy.liveStatus(at: LeagueMoment(dayKey: "2027-05-01", minuteOfDay: 0)) == .past)
+    }
+
+    @Test("une horloge en retard ne fait jamais reculer l'état servi (#10131)")
+    func lateClockNeverRewinds() throws {
+        let past = try Self.decode(GameSeasonArchive.self, Self.pastSeasonJSON)
+        #expect(past.liveStatus(at: LeagueMoment(dayKey: "2026-12-01", minuteOfDay: 0)) == .past)
+    }
+
+    @Test("l'instant local : le jour civil et la minute depuis minuit, dans le calendrier donné (#10131)")
+    func localMomentReadsTheCalendar() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Europe/Paris"))
+        let date = try #require(ISO8601DateFormatter().date(from: "2027-02-14T19:05:00Z"))
+        #expect(LeagueMoment.local(date, calendar: calendar) == LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 20 * 60 + 5))
+    }
+
 }
 
 /// Lecture du contrat que la passerelle valide : `packages/shared/types/game-archive.ts` (les schémas Zod) et

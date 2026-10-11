@@ -3,13 +3,15 @@ import { useQuery } from '@tanstack/react-query';
 import { parseSeasonNumberParam } from '@meeshy/shared/utils/game/game-links';
 import type { GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 
+import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
+
 import { GameSeasonArchiveView, needsSeasonArchive, seasonShown, type ArchiveRead } from '@/components/game-archive';
 import { GameSeason } from '@/components/game-season';
 import { GAME_BRAND, GAME_CARD, GAME_INK_2 } from '@/components/game-surface';
-import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { loadSeasonArchive, seasonArchiveQueryKey } from '@/lib/api/game-archive';
+import { seasonArchiveQuery } from '@/lib/api/game-archive';
+import { localMoment } from '@/lib/game/local-moment';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -27,7 +29,17 @@ import { ProgressionSkeleton } from '@/routes/progression-parts';
  * serveur (aucune clé `season` — `null` est une saison absente, pas un ancien
  * serveur), la page dit que cette partie n'est pas disponible.
  */
-export function SaisonBody({ progress, actions, online }: { readonly progress: EngagementWithGame; readonly actions: GameV2Actions; readonly online: boolean }) {
+export function SaisonBody({
+  progress,
+  actions,
+  online,
+  moment,
+}: {
+  readonly progress: EngagementWithGame;
+  readonly actions: GameV2Actions;
+  readonly online: boolean;
+  readonly moment?: LeagueMoment | undefined;
+}) {
   const game = progress.game;
   if (game === undefined || game.season === undefined) {
     return (
@@ -40,6 +52,7 @@ export function SaisonBody({ progress, actions, online }: { readonly progress: E
     <GameSeason
       season={game.season}
       upcoming={game.seasonUpcoming ?? null}
+      moment={moment}
       held={game.treasury.held}
       online={online}
       claimingStep={actions.claimStep.vars ?? null}
@@ -65,28 +78,24 @@ export function SaisonFocusBody(props: {
   readonly onRetry: () => void;
   readonly actions: GameV2Actions;
   readonly online: boolean;
+  /** L'instant qui juge l'état de la saison (#10131) — l'horloge locale par défaut. */
+  readonly moment?: LeagueMoment | undefined;
 }) {
-  const shown = seasonShown(props.focus, props.progress.game, props.read);
-  if (shown.kind !== 'current') return <GameSeasonArchiveView shown={shown} onRetry={props.onRetry} skeleton={<ProgressionSkeleton />} />;
-  return <SaisonBody progress={props.progress} actions={props.actions} online={props.online} />;
+  const shown = seasonShown(props.focus, props.progress.game, props.read, props.moment ?? localMoment());
+  if (shown.kind !== 'current') return <GameSeasonArchiveView shown={shown} onRetry={props.onRetry} skeleton={<ProgressionSkeleton />} moment={props.moment} />;
+  return <SaisonBody progress={props.progress} actions={props.actions} online={props.online} moment={props.moment} />;
 }
 
-function SaisonScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
+function SaisonScreenBody({ progress, focus, moment }: { readonly progress: EngagementWithGame; readonly focus: number | null; readonly moment?: LeagueMoment | undefined }) {
   const online = useOnline();
   const actions = useGameV2Actions();
-  const asked = useOptionalRoute()?.params['saison'];
-  const focus = asked === undefined ? null : parseSeasonNumberParam(asked);
-  const archive = useQuery({
-    queryKey: seasonArchiveQueryKey(focus ?? 0),
-    enabled: focus !== null && needsSeasonArchive(focus, progress.game),
-    queryFn: async ({ signal }): Promise<GameSeasonArchive> => unwrap(await loadSeasonArchive({ ...apiDeps, signal, number: focus ?? 0 })),
-  });
+  const archive = useQuery(seasonArchiveQuery({ number: focus ?? 0, enabled: focus !== null && needsSeasonArchive(focus, progress.game), deps: apiDeps }));
   const read: ArchiveRead<GameSeasonArchive> = { data: archive.data, error: archive.data === undefined && archive.isError && !archive.isFetching ? (archive.error?.message ?? '') : null };
-  return <SaisonFocusBody progress={progress} focus={focus} read={read} onRetry={() => void archive.refetch()} actions={actions} online={online} />;
+  return <SaisonFocusBody progress={progress} focus={focus} read={read} onRetry={() => void archive.refetch()} actions={actions} online={online} moment={moment} />;
 }
 
-export default function ProgressionSaisonScreen() {
-  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
+/** La page Saison, sur la saison qu'un lien nomme (ou sans lien). */
+export function ProgressionSaisonPage({ focus, moment }: { readonly focus: number | null; readonly moment?: LeagueMoment | undefined }) {
   return (
     <ProgressionPage
       titre={gameText('game.season.title')}
@@ -96,7 +105,13 @@ export default function ProgressionSaisonScreen() {
         return season === undefined || season === null ? null : `${season.steps} / ${season.stepsTotal}`;
       }}
     >
-      {(progress) => <SaisonScreenBody progress={progress} />}
+      {(progress) => <SaisonScreenBody progress={progress} focus={focus} moment={moment} />}
     </ProgressionPage>
   );
+}
+
+export default function ProgressionSaisonScreen() {
+  suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
+  const asked = useOptionalRoute()?.params['saison'];
+  return <ProgressionSaisonPage focus={asked === undefined ? null : parseSeasonNumberParam(asked)} />;
 }

@@ -286060,6 +286060,100 @@
         }
       }
     },
+    "game2.archive.season.current_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم ⁦%@⁩ · جارٍ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · läuft"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %@ · in progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · en curso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · en cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stagione %@ · in corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · em andamento"
+          }
+        }
+      }
+    },
+    "game2.archive.season.opened_note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم مفتوح: يظهر مسارك فور إعادة تحميله."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Saison ist eröffnet: Dein Weg erscheint, sobald sie neu geladen ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The season is open: your path shows up as soon as it’s reloaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La temporada está abierta: tu recorrido aparece en cuanto se vuelva a cargar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La saison est ouverte : ton parcours s’affiche dès qu’elle est relue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La stagione è aperta: il tuo percorso appare appena viene ricaricata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A temporada está aberta: seu percurso aparece assim que ela for recarregada."
+          }
+        }
+      }
+    },
     "game2.archive.season.dates": {
       "extractionState": "manual",
       "localizations": {

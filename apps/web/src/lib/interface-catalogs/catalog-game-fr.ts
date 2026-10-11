@@ -694,6 +694,8 @@ const fr = {
   'game.settings.notifications.body': 'Une invitation à la mission en duo, un résultat de ligue, une étape de saison : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils.',
   'game.settings.notifications.switch': 'Recevoir les notifications du jeu',
   'game.archive.season.past_title': 'Saison {number} · terminée',
+  'game.archive.season.current_title': 'Saison {number} · en cours',
+  'game.archive.season.opened_note': 'La saison est ouverte : ton parcours s’affiche dès qu’elle est relue.',
   'game.archive.season.dates': 'Du {start} au {end}',
   'game.archive.season.rewards.one': '{count} récompense réclamée',
   'game.archive.season.rewards.other': '{count} récompenses réclamées',

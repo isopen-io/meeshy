@@ -30,7 +30,13 @@ struct GameSeasonFocusScreen: View {
                 GameSeasonArchiveView(shown: shown) { reload() }
             }
         }
-        .task(id: focus) { await load() }
+        .task(id: focus) {
+            // Au retour du réseau (#10131), le bloc `game` gardé se relit avec la saison : une saison ouverte à
+            // l'horloge locale retrouve alors son parcours.
+            let progression = model.progression
+            archive.onReconnect = { await progression.load(forceNetwork: true) }
+            await load()
+        }
     }
 
     private func load() async {
@@ -54,6 +60,8 @@ struct GameSeasonArchiveView: View {
             EmptyView()
         case .upcoming(let upcoming):
             GameSeasonUpcoming(upcoming: upcoming)
+        case .opened(let season):
+            GameSeasonOpened(season: season)
         case .past(let season):
             GameSeasonRecord(season: season)
         case .skeleton:

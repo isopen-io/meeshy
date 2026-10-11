@@ -680,6 +680,8 @@ const en = {
   'game.settings.notifications.body': 'A duo mission invitation, a league result, a season step: at most one game notification a day. This setting applies to your account, on all your devices.',
   'game.settings.notifications.switch': 'Receive game notifications',
   'game.archive.season.past_title': 'Season {number} · ended',
+  'game.archive.season.current_title': 'Season {number} · in progress',
+  'game.archive.season.opened_note': 'The season is open: your path shows up as soon as it’s reloaded.',
   'game.archive.season.dates': 'From {start} to {end}',
   'game.archive.season.rewards.one': '{count} reward claimed',
   'game.archive.season.rewards.other': '{count} rewards claimed',

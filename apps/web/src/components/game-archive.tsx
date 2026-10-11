@@ -2,16 +2,17 @@ import type { ReactNode } from 'react';
 
 import type { GameUpcomingSeasonBlock } from '@meeshy/shared/types/game';
 import type { GameLeagueWeekArchive, GameLeagueWeekResult, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
-import type { LeagueZone } from '@meeshy/shared/utils/game/league';
-import { SEASON_STEPS } from '@meeshy/shared/utils/game/season';
+import type { LeagueMoment, LeagueZone } from '@meeshy/shared/utils/game/league';
+import { SEASON_STEPS, liveSeasonTense } from '@meeshy/shared/utils/game/season';
 
+import { localMoment } from '@/lib/game/local-moment';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { dayLabel, leagueName, seasonThemeName, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 
 import { LeagueGem } from './game/league-gem';
-import { GameSeasonUpcoming } from './game-season';
+import { GameSeasonOpened, GameSeasonUpcoming } from './game-season';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
 
 /**
@@ -39,6 +40,8 @@ type FocusGame = {
 export type SeasonShown =
   | { readonly kind: 'current' }
   | { readonly kind: 'upcoming'; readonly upcoming: GameUpcomingSeasonBlock }
+  /** Ouverte d'après l'horloge locale, mais le bloc gardé ne porte pas encore son parcours (#10131). */
+  | { readonly kind: 'opened'; readonly season: GameUpcomingSeasonBlock }
   | { readonly kind: 'past'; readonly season: GameSeasonArchive }
   | { readonly kind: 'loading' }
   | { readonly kind: 'error'; readonly message: string };
@@ -56,17 +59,34 @@ export const needsSeasonArchive = (focus: number | null, game: FocusGame | undef
 export const needsLeagueWeekArchive = (focus: string | null, game: FocusGame | undefined): boolean =>
   focus !== null && game?.league?.weekKey !== focus;
 
-export function seasonShown(focus: number | null, game: FocusGame | undefined, read: ArchiveRead<GameSeasonArchive>): SeasonShown {
+/**
+ * L'écran d'une saison sous un lien. L'état se CALCULE (#10131) : celui que la passerelle a servi, avancé par
+ * l'horloge locale (`liveSeasonTense`) — une copie « à venir » gardée hors ligne bascule d'elle-même le jour de son
+ * ouverture. Une saison ouverte dont le bloc gardé ne porte pas encore le parcours se dit OUVERTE (`opened`), jamais
+ * sous le parcours d'une autre saison.
+ */
+export function seasonShown(
+  focus: number | null,
+  game: FocusGame | undefined,
+  read: ArchiveRead<GameSeasonArchive>,
+  moment: LeagueMoment = localMoment(),
+): SeasonShown {
   if (focus === null) return { kind: 'current' };
   const archive = read.data;
   if (archive !== undefined && archive.number === focus) {
-    if (archive.status === 'current') return { kind: 'current' };
-    if (archive.status === 'past') return { kind: 'past', season: archive };
-    return { kind: 'upcoming', upcoming: { number: archive.number, themeKey: archive.themeKey, startDay: archive.startDay, endDay: archive.endDay } };
+    const dates = { number: archive.number, themeKey: archive.themeKey, startDay: archive.startDay, endDay: archive.endDay };
+    const tense = liveSeasonTense({ served: archive.status, startDay: archive.startDay, endDay: archive.endDay }, moment);
+    if (tense === 'past') return { kind: 'past', season: archive.status === 'past' ? archive : { ...archive, status: 'past' } };
+    if (tense === 'upcoming') return { kind: 'upcoming', upcoming: dates };
+    return game?.season?.number === focus ? { kind: 'current' } : { kind: 'opened', season: dates };
   }
   if (game?.season?.number === focus) return { kind: 'current' };
   const upcoming = game?.seasonUpcoming;
-  if (upcoming !== undefined && upcoming !== null && upcoming.number === focus) return { kind: 'upcoming', upcoming };
+  if (upcoming !== undefined && upcoming !== null && upcoming.number === focus) {
+    const tense = liveSeasonTense({ served: 'upcoming', startDay: upcoming.startDay, endDay: upcoming.endDay }, moment);
+    if (tense === 'upcoming') return { kind: 'upcoming', upcoming };
+    if (tense === 'current') return { kind: 'opened', season: upcoming };
+  }
   return read.error === null ? { kind: 'loading' } : { kind: 'error', message: read.error };
 }
 
@@ -98,8 +118,19 @@ export function GameArchiveRetry({ id, message, onRetry }: { readonly id: string
 }
 
 /** Ce que la page Saison montre d'une saison qui n'est pas en cours. */
-export function GameSeasonArchiveView({ shown, onRetry, skeleton }: { readonly shown: SeasonShown; readonly onRetry: () => void; readonly skeleton: ReactNode }) {
-  if (shown.kind === 'upcoming') return <GameSeasonUpcoming upcoming={shown.upcoming} />;
+export function GameSeasonArchiveView({
+  shown,
+  onRetry,
+  skeleton,
+  moment,
+}: {
+  readonly shown: SeasonShown;
+  readonly onRetry: () => void;
+  readonly skeleton: ReactNode;
+  readonly moment?: LeagueMoment | undefined;
+}) {
+  if (shown.kind === 'upcoming') return <GameSeasonUpcoming upcoming={shown.upcoming} moment={moment} />;
+  if (shown.kind === 'opened') return <GameSeasonOpened season={shown.season} />;
   if (shown.kind === 'past') return <GameSeasonRecord season={shown.season} />;
   if (shown.kind === 'error') return <GameArchiveRetry id="game-season-archive-error" message={shown.message} onRetry={onRetry} />;
   if (shown.kind === 'loading') return <>{skeleton}</>;

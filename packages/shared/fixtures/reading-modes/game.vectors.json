@@ -16558,6 +16558,141 @@
           "trophy.league-cup.2026-10.ambre.bronze"
         ]
       }
+    },
+    {
+      "_label": "état de la saison 1, servie upcoming, le 2026-12-20 à 1199 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "upcoming",
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "tense": "upcoming",
+        "live": "upcoming"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie upcoming, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "upcoming",
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "tense": "current",
+        "live": "current"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie upcoming, le 2026-12-21 à 0 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "upcoming",
+        "dayKey": "2026-12-21",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "tense": "current",
+        "live": "current"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie current, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "current",
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "tense": "current",
+        "live": "current"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie current, le 2027-02-14 à 1200 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "current",
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "tense": "past",
+        "live": "past"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie upcoming, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "upcoming",
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "tense": "past",
+        "live": "past"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie current, le 2026-12-01 à 0 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "current",
+        "dayKey": "2026-12-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "tense": "upcoming",
+        "live": "current"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie past, le 2026-12-01 à 0 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "past",
+        "dayKey": "2026-12-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "tense": "upcoming",
+        "live": "past"
+      }
+    },
+    {
+      "_label": "état de la saison 1, servie past, le 2027-01-10 à 600 min",
+      "input": {
+        "law": "season-tense",
+        "startDay": "2026-12-21",
+        "endDay": "2027-02-14",
+        "served": "past",
+        "dayKey": "2027-01-10",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "tense": "current",
+        "live": "past"
+      }
     }
   ]
 }

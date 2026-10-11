@@ -680,6 +680,8 @@ const de = {
   'game.settings.notifications.body': 'Eine Einladung zur Duo-Mission, ein Ligaergebnis, ein Saisonschritt: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten.',
   'game.settings.notifications.switch': 'Spielbenachrichtigungen erhalten',
   'game.archive.season.past_title': 'Saison {number} · beendet',
+  'game.archive.season.current_title': 'Saison {number} · läuft',
+  'game.archive.season.opened_note': 'Die Saison ist eröffnet: Dein Weg erscheint, sobald sie neu geladen ist.',
   'game.archive.season.dates': 'Vom {start} bis {end}',
   'game.archive.season.rewards.one': '{count} Belohnung abgeholt',
   'game.archive.season.rewards.other': '{count} Belohnungen abgeholt',
