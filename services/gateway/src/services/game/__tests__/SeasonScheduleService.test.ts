@@ -9,7 +9,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { DEFAULT_SEASON_SCHEDULE, scheduledSeasonCalendar } from '@meeshy/shared/utils/game/season-schedule';
-import { currentSeasonSchedule, invalidateSeasonSchedule, scheduleOfRows, seasonSchedule } from '../SeasonScheduleService';
+import { SeasonScheduleUnavailable, currentSeasonSchedule, invalidateSeasonSchedule, scheduleOfRows, seasonSchedule, seasonScheduleForWrite } from '../SeasonScheduleService';
 
 const row = (over: Record<string, unknown> = {}) => ({
   number: 2,
@@ -47,5 +47,23 @@ describe('SeasonScheduleService', () => {
     await seasonSchedule(prismaWith(async () => [row()]), { fresh: true });
     const kept = await seasonSchedule(prismaWith(async () => { throw new Error('down'); }), { fresh: true });
     expect(kept.revision).toBe(4);
+  });
+
+  it('une lecture fraîche ne rejoint pas une lecture en vol partie avant une écriture', async () => {
+    let release: (rows: unknown[]) => void = () => undefined;
+    const slow = prismaWith(() => new Promise((resolve) => { release = resolve; }));
+    const stale = seasonSchedule(slow);
+    const fresh = await seasonSchedule(prismaWith(async () => [row({ revision: 9 })]), { fresh: true });
+    expect(fresh.revision).toBe(9);
+    release([]);
+    await stale;
+  });
+
+  it('une écriture du Jeu ne part jamais sur la constante faute de lecture', async () => {
+    await expect(seasonScheduleForWrite(prismaWith(async () => { throw new Error('down'); }))).rejects.toBeInstanceOf(SeasonScheduleUnavailable);
+    await seasonSchedule(prismaWith(async () => [row()]), { fresh: true });
+    invalidateSeasonSchedule();
+    await seasonSchedule(prismaWith(async () => [row()]), { fresh: true });
+    expect((await seasonScheduleForWrite(prismaWith(async () => { throw new Error('down'); }))).revision).toBe(4);
   });
 });

@@ -145,7 +145,9 @@ describe('la programmation (admin) : futur seulement, un lundi, sans chevaucheme
     expect(p.ok).toBe(true);
     if (!p.ok) return;
     expect(scheduledSeasonCalendar(p.schedule, 2)).toBeNull();
-    expect(applySeasonEdit(p.schedule, { number: 3, startDay: '2027-06-07' }, now)).toEqual({ ok: false, reason: 'previous-paused' });
+    // Derrière une pause, une saison reste programmable (elle n'a jamais commencé) — mais sans dates tant que la pause dure.
+    const behind = applySeasonEdit(p.schedule, { number: 3, startDay: '2027-06-07' }, now);
+    expect(behind.ok && scheduledSeasonCalendar(behind.schedule, 3)).toBeNull();
     const r = applySeasonEdit(p.schedule, { number: 2, status: 'scheduled', startDay: '2027-03-08' }, now);
     expect(r.ok && scheduledSeasonCalendar(r.schedule, 2)?.startDay).toBe('2027-03-08');
   });
@@ -235,5 +237,47 @@ describe("le bloc app_events d'andp.yml", () => {
     const out = replaceAppEventsBlock(`${andp}after:\n  k: v\n`, block);
     expect(out).toContain('- key: saison-1');
     expect(out.indexOf('after:')).toBeGreaterThan(out.indexOf('- key: saison-1'));
+  });
+});
+
+describe('les cas de l’audit adversarial', () => {
+  const now = { dayKey: '2027-01-05', minuteOfDay: 600 };
+
+  it('une pause ne bloque jamais le calendrier : on décale la suivante, puis on reprend', () => {
+    const s3 = applySeasonEdit(SEED, { number: 3, startDay: '2027-04-12' }, now);
+    if (!s3.ok) throw new Error(s3.reason);
+    const paused = applySeasonEdit(s3.schedule, { number: 2, status: 'paused' }, now);
+    if (!paused.ok) throw new Error(paused.reason);
+    expect(applySeasonEdit(paused.schedule, { number: 2, status: 'scheduled', startDay: '2027-03-08' }, now)).toEqual({ ok: false, reason: 'overlaps-next' });
+    const moved = applySeasonEdit(paused.schedule, { number: 3, startDay: '2027-05-03' }, now);
+    if (!moved.ok) throw new Error(moved.reason);
+    const resumed = applySeasonEdit(moved.schedule, { number: 2, status: 'scheduled', startDay: '2027-03-08' }, now);
+    if (!resumed.ok) throw new Error(resumed.reason);
+    expect(scheduledSeasonCalendar(resumed.schedule, 2)?.startDay).toBe('2027-03-08');
+    expect(scheduledSeasonCalendar(resumed.schedule, 3)?.startDay).toBe('2027-05-03');
+  });
+
+  it('une saison annoncée (J-7) ne se décale ni ne se met en pause ; une date trop proche est refusée', () => {
+    const lateNow = { dayKey: '2027-02-09', minuteOfDay: 600 }; // saison 2 le 2027-02-15
+    expect(applySeasonEdit(SEED, { number: 2, status: 'paused' }, lateNow)).toEqual({ ok: false, reason: 'season-announced' });
+    expect(applySeasonEdit(SEED, { number: 2, startDay: '2027-03-01' }, lateNow)).toEqual({ ok: false, reason: 'season-announced' });
+    expect(applySeasonEdit(SEED, { number: 2, startDay: '2027-02-15' }, { dayKey: '2027-02-01', minuteOfDay: 0 }).ok).toBe(true);
+    expect(applySeasonEdit({ revision: 0, seasons: [] }, { number: 1, startDay: '2026-10-19' }, { dayKey: '2026-10-13', minuteOfDay: 0 })).toEqual({ ok: false, reason: 'start-too-soon' });
+  });
+
+  it.each([
+    ['un lien', 'Va sur meeshy.me/promo'],
+    ['une URL', 'https://evil.example'],
+    ['une devise', 'Gagne 10 €'],
+    ['un contrôle bidirectionnel', 'Saison\u202Eetiuq'],
+    ['un caractère sans chasse', 'Sai\u200Bson'],
+  ])('un texte de saison refuse %s', (_label, text) => {
+    const copy = Object.fromEntries(SEASON_COPY_LOCALES.map((l) => [l, { title: 'Saison', tagline: 'Huit semaines', description: 'Une étoile par jour' }]));
+    expect(applySeasonEdit(SEED, { number: 2, copy: { ...copy, fr: { ...copy.fr, description: text } } }, now)).toEqual({ ok: false, reason: 'copy-invalid' });
+  });
+
+  it('les textes par défaut de l’événement passent la loi', () => {
+    const ev = seasonAppEvent(SEED, 1, { dayKey: '2026-10-11', minuteOfDay: 0 })!;
+    expect(validateAppEvent(ev)).toEqual([]);
   });
 });

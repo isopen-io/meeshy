@@ -30,7 +30,7 @@ import {
 } from '@meeshy/shared/utils/game/season';
 import { seasonCupTrophy } from '@meeshy/shared/utils/game/trophies';
 import { scheduledSeasonOfMoment, seasonDefinitionOf } from '@meeshy/shared/utils/game/season-schedule';
-import { seasonSchedule } from './SeasonScheduleService';
+import { seasonSchedule, seasonScheduleForWrite } from './SeasonScheduleService';
 import { GameRefusal } from './GameRefusal';
 import type { GameNotifier } from './GameNotifier';
 import { GloryService } from './GloryService';
@@ -77,22 +77,22 @@ export class SeasonService {
   }
 
   /** La saison en cours pour ce compte (son fuseau), `null` avant la première. */
-  private async currentNumber(userId: string, now: Date): Promise<number | null> {
+  private async currentNumber(userId: string, now: Date, forWrite = false): Promise<number | null> {
     const [row, schedule] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId }, select: { timezone: true } }),
-      seasonSchedule(this.prisma),
+      forWrite ? seasonScheduleForWrite(this.prisma) : seasonSchedule(this.prisma),
     ]);
     return scheduledSeasonOfMoment(schedule, { dayKey: dayKeyOf(now, row?.timezone), minuteOfDay: minuteOfDayInTimezone(now, row?.timezone) });
   }
 
   /** Les points d'une étape ordinaire de cette saison, lus au calendrier servi (#10016). */
   private async stepPointsOf(season: number): Promise<number | undefined> {
-    return seasonDefinitionOf(await seasonSchedule(this.prisma), season)?.stepPoints;
+    return seasonDefinitionOf(await seasonScheduleForWrite(this.prisma), season)?.stepPoints;
   }
 
   /** Des étoiles gagnées : une mission achevée (par difficulté) ou un duo mené à bout. */
   async addStars(userId: string, source: SeasonStarSource, now: Date = new Date()): Promise<void> {
-    const number = await this.currentNumber(userId, now);
+    const number = await this.currentNumber(userId, now, true);
     if (number === null) return;
     const stars = seasonStarsForMission(source);
     const write = () =>
@@ -127,8 +127,8 @@ export class SeasonService {
     if (pending !== undefined) pending.catch(() => undefined);
   }
 
-  async state(userId: string, now: Date = new Date()): Promise<SeasonState> {
-    const number = await this.currentNumber(userId, now);
+  async state(userId: string, now: Date = new Date(), forWrite = false): Promise<SeasonState> {
+    const number = await this.currentNumber(userId, now, forWrite);
     if (number === null) return NO_SEASON;
     const row = await this.prisma.gameSeason.findUnique({
       where: { userId_number: { userId, number } },
@@ -145,7 +145,7 @@ export class SeasonService {
   async claim(params: { readonly userId: string; readonly step: number; readonly now?: Date }): Promise<SeasonClaimResponse> {
     const { userId, step } = params;
     const now = params.now ?? new Date();
-    const state = await this.state(userId, now);
+    const state = await this.state(userId, now, true);
     if (state.number === null) throw new GameRefusal('SEASON_NOT_OPEN');
     const season = state.number;
 
@@ -235,7 +235,7 @@ export class SeasonService {
   async buySeal(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<SeasonSealResponse> {
     const { userId, requestId } = params;
     const now = params.now ?? new Date();
-    const season = await this.currentNumber(userId, now);
+    const season = await this.currentNumber(userId, now, true);
     if (season === null) throw new GameRefusal('SEASON_NOT_OPEN');
 
     const owned = async (db: Pick<PrismaClient, 'gameSeason'>): Promise<boolean> =>

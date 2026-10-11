@@ -137,7 +137,7 @@ export function adminSeasonRow(schedule: SeasonSchedule, number: number, now: Le
     status: definition.status,
     tense,
     explicit: schedule.seasons.some((d) => d.number === number),
-    editable: probe.ok || ('reason' in probe && probe.reason !== 'season-not-future' && probe.reason !== 'previous-paused'),
+    editable: probe.ok || ('reason' in probe && probe.reason !== 'season-not-future' && probe.reason !== 'season-announced'),
     themeKey: definition.themeKey,
     stepPoints: definition.stepPoints,
     copy: definition.copy,
@@ -378,7 +378,9 @@ function proposalView(row: ProposalRow, schedule: SeasonSchedule, now: LeagueMom
 const REFUSAL_MESSAGES: Readonly<Record<string, string>> = {
   'revision-conflict': 'Le calendrier a changé depuis votre lecture : rechargez.',
   'season-not-future': 'Une saison en cours ou passée ne se réécrit pas.',
-  'previous-paused': 'La saison précédente est en pause : reprenez-la d’abord.',
+  'season-announced': 'La saison est annoncée sur l’App Store (publication 7 jours avant) : elle ne se décale plus.',
+  'start-too-soon': 'L’ouverture doit laisser 7 jours pour annoncer la saison sur l’App Store.',
+  'schedule-indexes-unavailable': 'Les index du calendrier ne sont pas garantis : rien n’a été écrit.',
   'invalid-day': 'Date illisible.',
   'not-monday': 'Une saison commence un lundi.',
   'start-not-future': 'La date d’ouverture doit être future.',
@@ -390,6 +392,11 @@ const REFUSAL_MESSAGES: Readonly<Record<string, string>> = {
   'invalid-status': 'Statut inconnu.',
   'invalid-number': 'Numéro de saison invalide.',
 };
+
+/** Une validation interrompue (processus tombé entre la réservation et l'écriture) se reprend après 5 minutes. */
+const APPROVING_STALE_MS = 5 * 60_000;
+const isStaleApproving = (row: { status: string; reviewedAt: Date | null }, now: Date): boolean =>
+  row.status === 'approving' && row.reviewedAt !== null && now.getTime() - new Date(row.reviewedAt).getTime() > APPROVING_STALE_MS;
 
 const PROPOSAL_RATE_LIMIT = { max: 10, timeWindow: '1 minute', hook: 'preHandler' as const, skipOnError: false };
 
@@ -414,17 +421,25 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
     const actor = actorOf(request);
     if (actor === null) return { reply: fail(reply, 401, 'unauthorized') };
     const now = momentOf(clock());
+    // L'état d'AVANT entre au journal : on sait d'où une saison a été décalée.
+    const before = seasonDefinitionOf(await seasonSchedule(prisma, { fresh: true }), edit.number);
     const journaled = await journal(request, prisma, {
       action: audit.action,
       entityId: String(edit.number),
-      changes: { edit, expectedRevision },
+      changes: { before, edit, expectedRevision },
       metadata: audit.metadata,
     });
     if (!journaled) return { reply: fail(reply, 500, 'audit-unavailable', 'Le journal d’audit est indisponible : rien n’a été écrit.') };
-    const result = await writeSeasonEdit({ prisma, edit, expectedRevision, now, actorId: actor });
+    let result: Awaited<ReturnType<typeof writeSeasonEdit>>;
+    try {
+      result = await writeSeasonEdit({ prisma, edit, expectedRevision, now, actorId: actor });
+    } catch (error) {
+      await journal(request, prisma, { action: `${audit.action}_FAILED`, entityId: String(edit.number), metadata: { error: 'write-failed' } });
+      throw error;
+    }
     if ('reason' in result) {
       await journal(request, prisma, { action: `${audit.action}_REFUSED`, entityId: String(edit.number), metadata: { reason: result.reason } });
-      const status = result.reason === 'revision-conflict' ? 409 : 422;
+      const status = result.reason === 'revision-conflict' ? 409 : result.reason === 'schedule-indexes-unavailable' ? 503 : 422;
       return { reply: fail(reply, status, result.reason, REFUSAL_MESSAGES[result.reason]) };
     }
     return { result, now };
@@ -515,6 +530,7 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
       }
       // La passerelle est la frontière de confiance : la sortie de l'IA repasse par la loi, champ par champ.
       if (!raw || !isSeasonThemeKey(raw.themeKey) || !isLawfulStepPoints(raw.stepPoints) || !isLawfulSeasonCopy(raw.copy)) {
+        await journal(request, prisma, { action: 'GAME_SEASON_PROPOSAL_DISCARDED', entityId: String(number), metadata: { reason: 'out-of-law' } });
         return fail(reply, 502, 'proposal-invalid', 'La proposition de l’IA sort des bornes de la loi : elle est écartée.');
       }
       const created = (await prisma.gameSeasonProposal.create({
@@ -530,6 +546,7 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
           createdBy: actor,
         },
       })) as unknown as ProposalRow;
+      await journal(request, prisma, { action: 'GAME_SEASON_PROPOSAL_CREATE', entityId: String(number), metadata: { proposalId: created.id } });
       return reply.status(201).send({ success: true, data: proposalView(created, schedule, now) });
     },
   );
@@ -557,11 +574,14 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
     async (request: FastifyRequest<{ Params: { id: string }; Body: Omit<EditBody, 'status'> }>, reply) => {
       const proposal = (await prisma.gameSeasonProposal.findUnique({ where: { id: request.params.id } })) as unknown as ProposalRow | null;
       if (proposal === null) return fail(reply, 404, 'proposal-not-found');
-      if (proposal.status !== 'pending') return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
+      const reclaimable = isStaleApproving(proposal, clock());
+      if (proposal.status !== 'pending' && !reclaimable) return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
       const { expectedRevision, ...overrides } = request.body;
+      // La date n'est reprise de la proposition QUE si l'humain la pose : sinon la saison garde sa date
+      // ACTUELLE — valider une proposition ne défait jamais en silence le décalage d'un collègue.
       const edit: SeasonEdit = {
         number: proposal.number,
-        startDay: overrides.startDay ?? proposal.startDay,
+        ...(overrides.startDay !== undefined ? { startDay: overrides.startDay } : {}),
         themeKey: overrides.themeKey ?? proposal.themeKey,
         stepPoints: overrides.stepPoints ?? proposal.stepPoints,
         copy: overrides.copy !== undefined ? overrides.copy : proposal.copy,
@@ -570,7 +590,7 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
         // La proposition se RÉSERVE avant d'écrire : deux validations concurrentes n'écrivent pas deux fois.
         const actor = actorOf(request);
         const claimed = await prisma.gameSeasonProposal.updateMany({
-          where: { id: proposal.id, status: 'pending' },
+          where: reclaimable ? { id: proposal.id, status: 'approving', reviewedAt: proposal.reviewedAt } : { id: proposal.id, status: 'pending' },
           data: { status: 'approving', reviewedBy: actor, reviewedAt: clock() },
         });
         if (claimed.count !== 1) return fail(reply, 409, 'proposal-not-pending', 'Cette proposition a déjà été traitée.');
@@ -585,7 +605,7 @@ export async function gameSeasonsAdminRoutes(fastify: FastifyInstance, options: 
         const revision = outcome.result.schedule.revision;
         await prisma.gameSeasonProposal.updateMany({
           where: { id: proposal.id, status: 'approving' },
-          data: { status: 'approved', appliedRevision: revision, startDay: edit.startDay, themeKey: edit.themeKey, stepPoints: edit.stepPoints, copy: (edit.copy ?? null) as never },
+          data: { status: 'approved', appliedRevision: revision, startDay: outcome.result.definition.startDay, themeKey: edit.themeKey, stepPoints: edit.stepPoints, copy: (edit.copy ?? null) as never },
         });
         const updated = (await prisma.gameSeasonProposal.findUnique({ where: { id: proposal.id } })) as unknown as ProposalRow;
         return reply.send({

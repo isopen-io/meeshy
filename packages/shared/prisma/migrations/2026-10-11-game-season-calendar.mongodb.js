@@ -11,7 +11,8 @@
  *     `language:fr`, 100 points d'étape, sans texte propre, révision 1. La loi dérive EXACTEMENT
  *     le même calendrier avec ou sans cette ligne : aucun changement visible tant que l'admin
  *     n'a rien modifié ;
- *  3. ne réécrit JAMAIS une saison 1 déjà présente (un admin a pu la programmer) : `$setOnInsert`.
+ *  3. ne réécrit JAMAIS une saison 1 déjà présente (un admin a pu la programmer) : `$setOnInsert` ; ne seed rien
+ *     si l'admin a déjà programmé une autre saison (la révision 1 pourrait heurter une révision écrite).
  *
  * La ligne insérée est notée dans `_migration_2026_10_11_season_calendar`. `ROLLBACK=1` la retire
  * — seulement si elle est encore telle que le seed l'a posée (révision 1) ; une saison que l'admin a
@@ -67,6 +68,9 @@ function seed(database, options) {
   const definitions = database.getCollection('GameSeasonDefinition');
   const present = definitions.findOne({ number: 1 });
   if (present) return { seeded: false, present: true };
+  // L'admin a déjà programmé (saison 2 ou plus) : le seed est inutile (la saison 1 se dérive à l'identique)
+  // et sa révision 1 pourrait heurter une révision déjà écrite. On ne pose rien.
+  if (definitions.findOne({})) return { seeded: false, present: false, programmed: true };
   if (!options.apply) return { seeded: false, present: false };
   const now = new Date();
   const result = definitions.updateOne(
@@ -107,6 +111,7 @@ function runSeasonCalendarMigration(database, options) {
     ? '===== Calendrier des saisons (#10016) — ÉCRITURE ====='
     : '===== Calendrier des saisons (#10016) — À BLANC, rien n’est écrit =====');
   if (report.present) print('saison 1 : déjà présente — non réécrite');
+  else if (report.programmed) print('calendrier déjà programmé par l’admin : seed inutile, rien n’est posé');
   else if (report.seeded) print('saison 1 : posée (2026-12-21, language:fr, 100 points, révision 1) ; index posés');
   else print('saison 1 : à poser (2026-12-21, language:fr, 100 points, révision 1) ; index à poser');
   if (!options.apply) print('Relancer avec APPLY=1 pour écrire, ROLLBACK=1 pour revenir en arrière (production : feu vert du porteur et sauvegarde vérifiée).');

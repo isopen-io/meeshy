@@ -38,6 +38,12 @@ export const SEASON_STEP_POINTS_MIN = 50;
 export const SEASON_STEP_POINTS_MAX = 200;
 export const SEASON_STEP_POINTS_STEP = 10;
 
+/**
+ * Une saison se fige SEPT jours avant son ouverture : son événement in-app App Store est alors publié
+ * (`season-app-events.ts`, publication J-7) — la décaler ou la mettre en pause ensuite mentirait à l'App Store.
+ */
+export const SEASON_EDIT_FREEZE_DAYS = 7;
+
 /** Les sept langues de la fiche — arabe en miroir. */
 export const SEASON_COPY_LOCALES = ['fr', 'en', 'es', 'de', 'it', 'pt-BR', 'ar'] as const;
 export type SeasonCopyLocale = (typeof SEASON_COPY_LOCALES)[number];
@@ -87,8 +93,21 @@ export const isLawfulStepPoints = (value: unknown): value is number =>
   value <= SEASON_STEP_POINTS_MAX &&
   value % SEASON_STEP_POINTS_STEP === 0;
 
+/** Aucun lien, domaine ni adresse dans un texte de saison (il devient un événement App Store). */
+export const SEASON_COPY_LINK_PATTERN = /[a-z][a-z0-9+.-]*:\/\/|www\.|[a-z0-9-]+\.[a-z]{2,}(?:\/|\b)|@[a-z0-9-]+\./i;
+/** Aucune devise : une saison ne promet jamais d'argent. */
+export const SEASON_COPY_MONEY_PATTERN = /[$€£¥₹₦₩₽¢]|\b(?:USD|EUR|XAF|XOF|FCFA|GBP|CFA)\b/i;
+/** Ni contrôle, ni contrôle bidirectionnel, ni caractère sans chasse : rien qui retourne ou cache un texte. */
+const HIDDEN_PATTERN = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/;
+
 const lawfulText = (value: unknown, max: number): value is string =>
-  typeof value === 'string' && value.trim().length > 0 && value.trim() === value && [...value].length <= max && !/[\u0000-\u001f\u007f]/.test(value);
+  typeof value === 'string' &&
+  value.trim().length > 0 &&
+  value.trim() === value &&
+  [...value].length <= max &&
+  !HIDDEN_PATTERN.test(value) &&
+  !SEASON_COPY_LINK_PATTERN.test(value) &&
+  !SEASON_COPY_MONEY_PATTERN.test(value);
 
 /** Sept langues, trois textes chacune, dans les limites ; rien d'autre. */
 export function isLawfulSeasonCopy(value: unknown): value is SeasonCopyByLocale {
@@ -153,6 +172,12 @@ function anchorFor(plan: Plan, n: number): { readonly number: number; readonly s
   return found;
 }
 
+/** Le plan des DATES, pauses ignorées : la date prévue d'une saison en pause, ou derrière une pause. */
+function datesPlanOf(schedule: SeasonSchedule): Plan {
+  if (!schedule.seasons.some((d) => d.status === 'paused')) return planOf(schedule);
+  return planOf({ revision: schedule.revision, seasons: schedule.seasons.map((d) => (d.status === 'paused' ? { ...d, status: 'scheduled' } : d)) });
+}
+
 /** Le lundi d'ouverture de la saison, `null` en pause (ou derrière une pause). */
 function startOf(plan: Plan, n: number): string | null {
   if (plan.pausedFrom !== null && n >= plan.pausedFrom) return null;
@@ -178,9 +203,11 @@ export function normalizeSeasonSchedule(raw: unknown): SeasonSchedule {
   const accepted: SeasonDefinition[] = [];
   for (const def of candidates) {
     if (accepted.some((d) => d.number === def.number)) continue;
-    if (def.status === 'scheduled' && def.number > 1) {
-      const previous = startOf(planOf({ revision: 0, seasons: accepted }), def.number - 1);
-      if (previous !== null && dayDiff(previous, def.startDay) < SEASON_DAYS) continue;
+    // Les dates se vérifient pauses IGNORÉES : une saison en pause garde sa date prévue, et ce qui suit
+    // doit rester cohérent avec elle — sinon la reprise serait impossible sans chirurgie en base.
+    if (def.number > 1) {
+      const previous = startOf(datesPlanOf({ revision: 0, seasons: accepted }), def.number - 1)!;
+      if (dayDiff(previous, def.startDay) < SEASON_DAYS) continue;
     }
     accepted.push(def);
   }
@@ -268,7 +295,7 @@ export function seasonDefinitionOf(schedule: SeasonSchedule, number: number): Se
   const plan = planOf(schedule);
   const explicit = plan.byNumber.get(number);
   if (explicit) return explicit;
-  const anchor = anchorFor(plan, number);
+  const anchor = anchorFor(datesPlanOf(schedule), number);
   return {
     number,
     startDay: addDays(anchor.startDay, (number - anchor.number) * SEASON_DAYS),
@@ -293,10 +320,11 @@ export type SeasonEditRefusal =
   | 'invalid-number'
   | 'invalid-status'
   | 'season-not-future'
-  | 'previous-paused'
+  | 'season-announced'
   | 'invalid-day'
   | 'not-monday'
   | 'start-not-future'
+  | 'start-too-soon'
   | 'overlaps-previous'
   | 'overlaps-next'
   | 'invalid-theme'
@@ -319,13 +347,11 @@ export function applySeasonEdit(schedule: SeasonSchedule, edit: SeasonEdit, now:
   const n = edit.number;
   const plan = planOf(schedule);
   const current = calendarOf(plan, n);
+  // Une saison datée doit être à venir, et pas encore annoncée sur l'App Store (publication J-7).
+  // Une saison en pause (ou derrière une pause) n'a jamais commencé : elle reste programmable.
   if (current !== null) {
     if (seasonTenseAt(current, now) !== 'upcoming') return refuse('season-not-future');
-  } else if (plan.pausedFrom !== null && n > plan.pausedFrom) {
-    return refuse('previous-paused');
-  }
-  if (n > 1 && calendarOf(plan, n - 1) === null && (edit.status ?? seasonStatusOf(schedule, n)) === 'scheduled') {
-    return refuse('previous-paused');
+    if (dayNumber(current.startDay) - SEASON_EDIT_FREEZE_DAYS <= dayNumber(now.dayKey)) return refuse('season-announced');
   }
   const base = seasonDefinitionOf(schedule, n)!;
 
@@ -347,12 +373,17 @@ export function applySeasonEdit(schedule: SeasonSchedule, edit: SeasonEdit, now:
     copy: edit.copy === undefined ? base.copy : ((edit.copy as SeasonCopyByLocale | null) ?? null),
   };
 
-  if (definition.status === 'scheduled') {
+  if (definition.status === 'scheduled' && edit.startDay !== undefined) {
     if (dayNumber(definition.startDay) <= dayNumber(leagueWeekOfMoment(now))) return refuse('start-not-future');
-    if (n > 1) {
-      const previous = calendarOf(plan, n - 1);
-      if (previous !== null && dayNumber(definition.startDay) <= dayNumber(previous.endDay)) return refuse('overlaps-previous');
-    }
+    if (dayNumber(definition.startDay) - SEASON_EDIT_FREEZE_DAYS <= dayNumber(now.dayKey)) return refuse('start-too-soon');
+  }
+  if (definition.status === 'scheduled' && current === null && edit.startDay === undefined) {
+    // Une reprise sans date : la date prévue doit encore laisser le temps de l'annonce.
+    if (dayNumber(definition.startDay) - SEASON_EDIT_FREEZE_DAYS <= dayNumber(now.dayKey)) return refuse('start-too-soon');
+  }
+  if (n > 1) {
+    const previousStart = startOf(datesPlanOf(schedule), n - 1)!;
+    if (dayDiff(previousStart, definition.startDay) < SEASON_DAYS) return refuse('overlaps-previous');
   }
 
   const seasons = [...schedule.seasons.filter((d) => d.number !== n), definition].sort((a, b) => a.number - b.number);

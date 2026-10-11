@@ -72,6 +72,17 @@ async function readSchedule(prisma: PrismaClient): Promise<SeasonSchedule> {
 export async function seasonSchedule(prisma: PrismaClient, options: { readonly fresh?: boolean } = {}): Promise<SeasonSchedule> {
   const now = Date.now();
   if (!options.fresh && cache !== null && now - cache.loadedAt < SCHEDULE_TTL_MS) return cache.schedule;
+  // Une lecture FRAÎCHE ne rejoint jamais une lecture déjà en vol : celle-ci a pu partir avant une écriture.
+  if (options.fresh) {
+    try {
+      const schedule = await readSchedule(prisma);
+      cache = { schedule, loadedAt: Date.now() };
+      return schedule;
+    } catch (error) {
+      log.warn('lecture fraîche du calendrier impossible — dernière lecture ou constante', { error });
+      return cache?.schedule ?? DEFAULT_SEASON_SCHEDULE;
+    }
+  }
   if (inflight !== null) return inflight;
   inflight = readSchedule(prisma)
     .then((schedule) => {
@@ -86,6 +97,31 @@ export async function seasonSchedule(prisma: PrismaClient, options: { readonly f
       inflight = null;
     });
   return inflight;
+}
+
+/**
+ * Le calendrier pour une ÉCRITURE du Jeu (étoiles, réclamation, Sceau) : jamais la constante par défaut.
+ * Base injoignable : la dernière lecture réussie si elle existe, sinon on refuse (`SeasonScheduleUnavailable`) —
+ * payer ou marquer le mauvais numéro de saison serait pire que de différer.
+ */
+export class SeasonScheduleUnavailable extends Error {
+  constructor() {
+    super('calendrier des saisons illisible');
+    this.name = 'SeasonScheduleUnavailable';
+  }
+}
+
+export async function seasonScheduleForWrite(prisma: PrismaClient): Promise<SeasonSchedule> {
+  if (cache !== null && Date.now() - cache.loadedAt < SCHEDULE_TTL_MS) return cache.schedule;
+  try {
+    const schedule = await readSchedule(prisma);
+    cache = { schedule, loadedAt: Date.now() };
+    return schedule;
+  } catch (error) {
+    if (cache !== null) return cache.schedule;
+    log.warn('calendrier illisible et jamais lu : écriture du Jeu refusée', { error });
+    throw new SeasonScheduleUnavailable();
+  }
 }
 
 /** La dernière lecture, sans attendre (la constante avant la première). */
@@ -103,7 +139,36 @@ export function primeSeasonSchedule(schedule: SeasonSchedule): void {
 
 export type ScheduleWriteResult =
   | { readonly ok: true; readonly schedule: SeasonSchedule; readonly definition: SeasonDefinition; readonly before: SeasonDefinition | null }
-  | { readonly ok: false; readonly reason: SeasonEditRefusal | 'revision-conflict' };
+  | { readonly ok: false; readonly reason: SeasonEditRefusal | 'revision-conflict' | 'schedule-indexes-unavailable' };
+
+let indexesReady = false;
+
+/**
+ * Les index UNIQUES (`number`, `revision`) qui rendent l'écriture compare-and-set sûre : posés ici, une fois par
+ * processus (idempotent, mêmes noms que la migration). S'ils ne peuvent pas l'être, aucune écriture ne part.
+ */
+export async function ensureScheduleIndexes(prisma: PrismaClient): Promise<boolean> {
+  if (indexesReady) return true;
+  try {
+    await (prisma as unknown as { $runCommandRaw: (c: object) => Promise<unknown> }).$runCommandRaw({
+      createIndexes: 'GameSeasonDefinition',
+      indexes: [
+        { key: { number: 1 }, name: 'GameSeasonDefinition_number_key', unique: true },
+        { key: { revision: 1 }, name: 'GameSeasonDefinition_revision_key', unique: true },
+      ],
+    });
+    indexesReady = true;
+    return true;
+  } catch (error) {
+    log.warn('index uniques du calendrier impossibles à garantir : écriture refusée', { error });
+    return false;
+  }
+}
+
+/** Pour les témoins. */
+export function resetScheduleIndexesForTests(): void {
+  indexesReady = false;
+}
 
 const isP2002 = (err: unknown): boolean => typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 
@@ -120,6 +185,7 @@ export async function writeSeasonEdit(params: {
   readonly actorId: string;
 }): Promise<ScheduleWriteResult> {
   const { prisma, edit, expectedRevision, now, actorId } = params;
+  if (!(await ensureScheduleIndexes(prisma))) return { ok: false, reason: 'schedule-indexes-unavailable' };
   const schedule = await readSchedule(prisma);
   if (schedule.revision !== expectedRevision) return { ok: false, reason: 'revision-conflict' };
   const verdict = applySeasonEdit(schedule, edit, now);
@@ -147,8 +213,9 @@ export async function writeSeasonEdit(params: {
     if (isP2002(err)) return { ok: false, reason: 'revision-conflict' };
     throw err;
   }
-  invalidateSeasonSchedule();
-  const fresh = await seasonSchedule(prisma, { fresh: true });
+  // Relue en base APRÈS l'écriture, sans rejoindre une lecture en vol partie avant elle.
+  const fresh = await readSchedule(prisma);
+  cache = { schedule: fresh, loadedAt: Date.now() };
   const before: SeasonDefinition | null =
     existing === null
       ? null
