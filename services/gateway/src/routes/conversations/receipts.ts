@@ -911,6 +911,10 @@ export function receiptHandlers(ctx: ReceiptContext): ReceiptHandlers {
     messageReadStatusAlias: guarded('Error fetching message read status',
       'Erreur lors de la récupération du statut de lecture',
       async (request, reply) => {
+        // #10205 — receivedBy/readBy/notSeenBy nomment tous les membres : pas pour un invité.
+        if (isGuestViewer(authContextOf(request))) {
+          return sendAccountRequired(reply, 'A Meeshy account is required to see who received a message');
+        }
         const { messageId } = request.params as MessageReadStatusAliasParams;
         const message = await ctx.prisma.message.findUnique({
           where: { id: messageId },

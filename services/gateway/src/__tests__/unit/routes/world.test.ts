@@ -84,15 +84,26 @@ describe('GET /api/v1/world', () => {
 
   // RÉTROCOMPATIBILITÉ (#9223) : `WorldEntry.memberCount` est un `Int` OBLIGATOIRE
   // du SDK iOS publié — sans lui, la carte « Entrer dans World Wide » disparaît.
-  // Un client natif (seul iOS pose `X-App-Version`) sans compte reçoit un effectif
+  // Un client iOS (`X-Meeshy-Platform: ios`) sans compte reçoit un effectif
   // NEUTRE, jamais le vrai chiffre.
   it('sert à un client natif sans compte un effectif NEUTRE (0), jamais le vrai', async () => {
     const { app } = await buildApp();
 
-    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: { 'x-app-version': '1.1.2' } });
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: { 'x-meeshy-platform': 'ios', 'x-meeshy-version': '1.1.2' } });
 
     expect(JSON.parse(res.body).data).toEqual({ ...ENTRY_WITHOUT_COUNT, memberCount: 0 });
-    expect(String(res.headers.vary)).toContain('X-App-Version');
+    expect(String(res.headers.vary)).toContain('X-Meeshy-Platform');
+    await app.close();
+  });
+
+  // Le web construit lui aussi `X-Meeshy-Version` (`clientSessionHeaders`) : la
+  // version ne désigne PAS iOS. Seule la PLATEFORME le fait.
+  it('un client web qui pose un en-tête de version garde la forme SANS effectif', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/world', headers: { 'x-meeshy-platform': 'web', 'x-meeshy-version': '2.0.0', 'x-app-version': '2.0.0' } });
+
+    expect(JSON.parse(res.body).data).toEqual(ENTRY_WITHOUT_COUNT);
     await app.close();
   });
 

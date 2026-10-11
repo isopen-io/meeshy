@@ -58,19 +58,22 @@ export function memberCountServedToViewer(
 }
 
 /**
- * RÉTROCOMPATIBILITÉ (#9223) — un client NATIF publié décode certains effectifs
- * en champs OBLIGATOIRES (SDK iOS : `WorldEntry.memberCount`, `ShareLinkStats`).
- * Seul iOS pose `X-App-Version` / `X-Meeshy-Version` ; à lui, une forme
- * DÉCODABLE aux valeurs NEUTRES — jamais le vrai chiffre. Le web, qui lit ces
- * champs en optionnels, reçoit la forme sans clé.
+ * RÉTROCOMPATIBILITÉ (#9223) — le SDK iOS publié décode certains effectifs en
+ * champs OBLIGATOIRES (`WorldEntry.memberCount`, `ShareLinkStats`,
+ * `ShareLinkCreator.id`). À lui, une forme DÉCODABLE aux valeurs NEUTRES —
+ * jamais le vrai chiffre. Le discriminant est la PLATEFORME que l'app pose sur
+ * chaque requête (`X-Meeshy-Platform: ios`, `X-App-Platform: ios`), jamais la
+ * VERSION : le web construit lui aussi `X-Meeshy-Version`
+ * (`clientSessionHeaders`). Le web lit ces champs en optionnels et reçoit la
+ * forme sans clé.
  */
 export function clientDecodesLegacyCounts(headers: Readonly<Record<string, unknown>>): boolean {
-  const present = (name: string): boolean => typeof headers[name] === 'string' && (headers[name] as string).length > 0;
-  return present('x-app-version') || present('x-meeshy-version');
+  const isIos = (name: string): boolean => typeof headers[name] === 'string' && (headers[name] as string).trim().toLowerCase() === 'ios';
+  return isIos('x-meeshy-platform') || isIos('x-app-platform');
 }
 
 /** Les en-têtes qui font varier la forme d'une réponse publique (`Vary`). */
-export const LEGACY_COUNTS_VARY = 'X-App-Version, X-Meeshy-Version';
+export const LEGACY_COUNTS_VARY = 'X-Meeshy-Platform, X-App-Platform';
 
 export function sendAccountRequired(reply: FastifyReply, message: string) {
   return sendForbidden(reply, 'Account required', { code: ACCOUNT_REQUIRED_CODE, message });

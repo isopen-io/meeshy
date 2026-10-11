@@ -100,10 +100,10 @@ describe('#10205 — aperçu d’un lien lu sans compte Meeshy', () => {
 
   // RÉTROCOMPATIBILITÉ (#9223) : le SDK iOS publié décode `creator.id`/`username`
   // et `stats.totalParticipants/memberCount/anonymousCount` en champs OBLIGATOIRES
-  // (`ShareLinkModels.swift`). Un client natif (seul iOS pose `X-App-Version`)
+  // (`ShareLinkModels.swift`). Un client iOS (`X-Meeshy-Platform: ios`)
   // reçoit donc une forme DÉCODABLE, aux effectifs NEUTRES — jamais le vrai chiffre.
   it('sert à un client natif sans compte une forme décodable, effectifs à zéro', async () => {
-    const data = await preview({ 'x-app-version': '1.1.2' });
+    const data = await preview({ 'x-meeshy-platform': 'ios', 'x-meeshy-version': '1.1.2' });
     expect(data.stats).toEqual({ totalParticipants: 0, memberCount: 0, anonymousCount: 0, languageCount: 2, spokenLanguages: expect.arrayContaining(['fr', 'en']) });
     expect(data.creator).toEqual({ id: CREATOR_ID, username: 'alice', displayName: 'Alice', avatar: null });
     expect(data).not.toHaveProperty('currentUses');

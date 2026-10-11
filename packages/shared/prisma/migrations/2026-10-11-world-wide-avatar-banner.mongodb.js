@@ -32,7 +32,9 @@
  *
  *   F=packages/shared/prisma/migrations/2026-10-11-world-wide-avatar-banner.mongodb.js
  *   B=/opt/meeshy/backups/2026-10-11-world-wide-avatar-banner
- *   A='-u ops -p "$MONGO_OPS_PASSWORD" --authenticationDatabase admin'
+ *   A='-u ops -p "${MONGO_OPS_PASSWORD:?MONGO_OPS_PASSWORD absente sur l hote}" --authenticationDatabase admin'
+ *   # ${…:?} fait ÉCHOUER la commande distante si la variable manque : sans lui,
+ *   # mongosh demanderait le mot de passe sur stdin — qui est ce script.
  *
  *   # 0. Les deux images répondent 200 sur l'origine visée (sinon : ne pas appliquer)
  *   curl -fsSI https://staging.meeshy.me/brand/world-wide/avatar.png && curl -fsSI https://staging.meeshy.me/brand/world-wide/banner.png
