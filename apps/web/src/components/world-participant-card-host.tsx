@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import {
@@ -77,6 +78,11 @@ export function WorldParticipantCardHost({
     [allowed, catalogReady, language],
   );
   const close = useCallback(() => setOpenId(null), []);
+  const client = access?.client ?? appQueryClient;
+  const refused = useCallback(() => {
+    setOpenId(null);
+    void client.invalidateQueries({ queryKey: ADMIN_PERMISSIONS_QUERY_KEY });
+  }, [client]);
 
   return (
     <WorldParticipantCardContext.Provider value={opener}>
@@ -87,8 +93,9 @@ export function WorldParticipantCardHost({
             key={openId}
             participantId={openId}
             deps={access?.deps ?? apiDeps}
-            client={access?.client ?? appQueryClient}
+            client={client}
             onClose={close}
+            onRefused={refused}
           />
         </Suspense>
       ) : null}

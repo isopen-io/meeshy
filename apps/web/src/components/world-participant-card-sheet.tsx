@@ -56,11 +56,16 @@ export function WorldParticipantCardSheet({
   deps,
   client,
   onClose,
+  onRefused,
 }: {
   readonly participantId: string;
   readonly deps: WorldParticipantCardDeps;
   readonly client: QueryClient;
   readonly onClose: () => void;
+  /** Un 403 : la passerelle a refusé. L'hôte referme la feuille ET relit le
+   * rôle servi — sinon un rôle retiré laisserait des auteurs touchables pour
+   * rien jusqu'à la péremption de la matrice. */
+  readonly onRefused?: () => void;
 }) {
   const language = currentInterfaceLanguage();
   const query = useQuery(
@@ -81,8 +86,8 @@ export function WorldParticipantCardSheet({
   const refused = failure !== null && isWorldParticipantCardRefusal(failure);
 
   useEffect(() => {
-    if (refused) onClose();
-  }, [refused, onClose]);
+    if (refused) (onRefused ?? onClose)();
+  }, [refused, onClose, onRefused]);
 
   const view = useMemo(
     () => (query.data === undefined ? null : worldParticipantCardView(query.data, { language, t: (key) => translateWorldParticipantCard(language, key) })),

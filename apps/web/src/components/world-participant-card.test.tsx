@@ -345,6 +345,32 @@ describe('la feuille : ce que le contrat sert, et rien sur un refus', () => {
     expect(sheet()).toBeNull();
   });
 
+  test('un 403 relit le rôle servi : un rôle retiré referme la porte, aucun auteur ne reste touchable pour rien', async () => {
+    let role = 'MODERATOR';
+    const permissionReads: string[] = [];
+    const transport = {
+      request: async ({ path }: { readonly path: string }): Promise<ApiResult<unknown>> => {
+        if (path === '/api/v1/me/permissions') {
+          permissionReads.push(role);
+          return { ok: true, data: { role, permissions: NO_PERMISSIONS } };
+        }
+        role = 'USER';
+        return { ok: false, status: 403, error: 'refusé', code: 'WORLD_PARTICIPANT_CARD_FORBIDDEN' };
+      },
+    } as unknown as HttpTransport;
+    mount(
+      <WorldParticipantCardHost conversationIdentifier="world" access={{ deps: { source: 'gateway', transport }, client: new QueryClient(), session: signedIn() }}>
+        <Probe />
+      </WorldParticipantCardHost>,
+    );
+    await settle(() => probe() === 'open');
+    click(container?.querySelector('[data-probe]') as HTMLElement);
+    await settle(() => probe() === 'closed');
+    expect(permissionReads).toEqual(['MODERATOR', 'USER']);
+    expect(probe()).toBe('closed');
+    expect(sheet()).toBeNull();
+  });
+
   test('un 404 : la feuille dit que la personne n’est plus dans World Wide', async () => {
     mountHost({ identifier: 'world', role: 'MODERATOR', card: () => ({ ok: false, status: 404, error: 'absent', code: 'WORLD_PARTICIPANT_NOT_FOUND' }) });
     await settle(() => probe() === 'open');
