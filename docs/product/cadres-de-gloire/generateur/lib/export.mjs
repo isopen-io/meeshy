@@ -15,7 +15,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch } from './launch.mjs';
-import { BLENDS, classify, read, show } from './layers.mjs';
+import { classify, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
 
@@ -36,9 +36,6 @@ const BANNER = [0, 1720, FW, 200];
 const CORNER = 28 * SCALE;
 const THUMB = [270, 480];
 const AFRICA = new Set(['savane', 'royaumes']);
-const GRADES = [{ kind: 'decor', name: 'normal', blend: 'normal' }, ...BLENDS.map((b) => ({ kind: `decor-${b}`, name: b, blend: b })), { kind: 'decor-late', name: 'over', blend: 'normal' }];
-const DECOR_KINDS = GRADES.map((g) => g.kind);
-const gradeStep = (g) => (g.name === 'normal' ? 'grade' : `grade:${g.name}`);
 const QUALITY = { decor: Number(arg('--quality', '82')), layer: Number(arg('--quality', '82')), thumb: 80 };
 const LOSSLESS = process.argv.includes('--lossless');
 
@@ -143,12 +140,12 @@ function slotsOf(texts) {
   });
 }
 
-function stackOf(order) {
+function stackOf(order, runs) {
   const anchored = [['crest', 'crest'], ['plate', 'plate'], ['front-under', 'front:under-birds'], ['birds', 'birds'], ['front-over', 'front:over-birds']]
     .filter(([k]) => order[k] !== undefined)
     .sort(([a], [b]) => order[a] - order[b])
     .map(([, name]) => name);
-  const grades = GRADES.filter((g) => order[g.kind] !== undefined).sort((a, b) => order[a.kind] - order[b.kind]).map(gradeStep);
+  const grades = runs.map((_, n) => `grade:${n}`);
   return ['photo', ...grades, 'decor', ...anchored, 'text'];
 }
 
@@ -194,7 +191,8 @@ async function exportFrame(handle, { collection, name, message }) {
   const svg = fs.readFileSync(path.join(OUT, collection, name + '.svg'), 'utf8');
   await showSvg(handle, svg, { fonts: 'exact' });
   const { page } = handle;
-  const { order } = await page.evaluate(classify);
+  const { order, runs } = await page.evaluate(classify);
+  const DECOR_KINDS = runs.map((r) => r.kind);
   const dom = await page.evaluate(read);
   const render = async (kinds, extra = {}) => {
     const inventory = await page.evaluate(show, { kinds, ...extra });
@@ -212,7 +210,7 @@ async function exportFrame(handle, { collection, name, message }) {
 
   const decorRaw = await render(['backdrop', ...decorKinds]);
   const grades = [];
-  for (const g of GRADES.filter((x) => has(x.kind))) grades.push({ ...g, shot: await render([g.kind]) });
+  for (const run of runs) grades.push({ ...run, shot: await render([run.kind]) });
   const fill = await render(['photo-bg', 'backdrop']);
   const frontU = has('front-under') ? await render(['front-under']) : null;
   const frontO = has('front-over') ? await render(['front-over']) : null;
@@ -228,10 +226,10 @@ async function exportFrame(handle, { collection, name, message }) {
   const windowFile = await encode(dir, 'window', winBuf, { lossless: true });
   const decorBuf = MUTATE === 'veil' ? decorRaw.raw : cut(decorRaw.raw, winMask, false);
   const gradeBufs = grades.map((g) => ({ ...g, buf: cut(g.shot.raw, winMask, true) }));
-  const gradeLayers = {};
-  for (const g of gradeBufs) {
-    const file = await encode(dir, g.name === 'normal' ? 'grade' : `grade-${g.name}`, g.buf);
-    if (file) gradeLayers[g.name] = { ...file, blend: g.blend };
+  const gradeLayers = [];
+  for (const [n, g] of gradeBufs.entries()) {
+    const file = await encode(dir, `grade-${n}`, g.buf);
+    gradeLayers.push(file ? { ...file, blend: g.blend } : null);
   }
   const empty = Buffer.alloc(FW * FH * 4);
 
@@ -261,7 +259,7 @@ async function exportFrame(handle, { collection, name, message }) {
     size: [FW, FH],
     motifs: [...new Set([...(AFRICA.has(collection) ? ['afrique'] : []), ...dom.motifs])].sort(),
     message: Boolean(message),
-    stack: stackOf(order),
+    stack: stackOf(order, runs).filter((step) => !step.startsWith('grade:') || gradeLayers[Number(step.slice(6))]),
     window,
     veil: veilOf({ box: window.box, mask: winMask }, veilLayers),
     banner: bandOf(decorBuf, frontU?.raw ?? empty),
@@ -269,6 +267,7 @@ async function exportFrame(handle, { collection, name, message }) {
     thumb: { src: name + '/thumb.webp', size: THUMB, bytes: thumbBuf.length, sha256: sha256(thumbBuf) },
     crest: dom.crest,
     birds,
+    art: dom.art,
     text,
     inventory: {
       decor: decorRaw.inventory,
