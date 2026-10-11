@@ -9,13 +9,18 @@
  *
  * Les fragments ne se dépensent pas : la constellation LIT le total collecté, toujours dérivé, jamais gravé. Elle
  * ne porte aucune valeur — ni points, ni Meesh, ni argent — et rien ne s'y convertit. Elle se montre aux autres
- * selon le réglage de la vitrine (`showcase`), comme les trophées, sans rien dire de la présence de quiconque.
+ * selon le réglage de la vitrine (`showcase`), comme les trophées, sans rien dire de la présence de quiconque :
+ * un VISITEUR la lit FIGÉE AU MOIS (`constellationVisitorBound`, `countsForVisitor`), comme `awardedMonth` — sur les
+ * seuls fragments d'avant le 1er du mois courant —, jamais en direct, sinon relire la vitrine dirait le jour où une
+ * étoile s'allume, donc quand la personne a joué. Le membre lui-même lit son total en direct.
  *
  * La clé d'un cosmétique est DÉTERMINISTE : `constellation.star-<n>.<genre>`, le genre tournant dans
  * `CONSTELLATION_COSMETIC_KINDS` (étoile 1 → halo, 2 → cadre, 3 → scintillement, 4 → halo…). Deux appareils, un
  * serveur et un client calculent donc la même clé pour la même étoile, sans table. Miroir Swift :
  * `GameConstellation` (SDK), rejoué sur les vecteurs partagés (`game.vectors.json`, loi `constellation`).
  */
+
+import { seasonCalendar } from './season.js';
 
 export const CONSTELLATION_FRAGMENTS_PER_STAR = 10;
 
@@ -72,4 +77,23 @@ export function constellationOf(collected: number): Constellation {
     if (cosmetic !== null) cosmetics.push(cosmetic);
   }
   return { collected: total, stars, inStar, toNextStar: CONSTELLATION_FRAGMENTS_PER_STAR - inStar, cosmetics };
+}
+
+/**
+ * La borne de ce qu'un VISITEUR voit (#10053) : le 1er du mois courant, en UTC (`AAAA-MM-01`). Seuls les fragments
+ * collectés STRICTEMENT avant comptent pour lui — la constellation qu'il lit ne bouge qu'au changement de mois.
+ */
+export function constellationVisitorBound(now: Date): string {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/**
+ * Une source de fragment compte-t-elle pour un visiteur ? Un coffre : son jour est avant la borne. Une saison : elle
+ * s'est TERMINÉE avant la borne — ses étapes réclamées ne portent pas de date, une saison en cours ne compte donc
+ * qu'à partir du mois qui suit sa fin.
+ */
+export function countsForVisitor(source: { readonly dayKey: string } | { readonly season: number }, bound: string): boolean {
+  if ('dayKey' in source) return source.dayKey < bound;
+  const calendar = seasonCalendar(source.season);
+  return calendar !== null && calendar.endDay < bound;
 }

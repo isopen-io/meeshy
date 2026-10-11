@@ -27,10 +27,10 @@ import {
   type TrophyRecord,
   type TrophySpec,
 } from '@meeshy/shared/utils/game/trophies';
-import { constellationOf } from '@meeshy/shared/utils/game/constellation';
+import { constellationOf, constellationVisitorBound } from '@meeshy/shared/utils/game/constellation';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { GameProfileService } from './GameProfileService';
-import { starFragmentsOf } from './StarFragments';
+import { starFragmentsOf, starFragmentsVisibleBefore } from './StarFragments';
 
 /** Un compte ne porte jamais plus de trophées que le contrat ne sert. */
 export const TROPHY_LIST_MAX = 500;
@@ -77,18 +77,22 @@ export class TrophyService {
   }
 
   /** La vitrine d'un membre telle qu'un LECTEUR la voit. */
-  async showcaseFor(params: { readonly viewer: PresenceViewer; readonly targetId: string }): Promise<UserShowcaseResponse> {
+  async showcaseFor(params: { readonly viewer: PresenceViewer; readonly targetId: string; readonly now?: Date }): Promise<UserShowcaseResponse> {
     const allowed = await this.profile.facetVisibleTo({ viewer: params.viewer, targetId: params.targetId, facet: 'showcase' });
     if (!allowed) return { visible: false, items: [], order: [] };
 
+    const own = params.viewer?.userId === params.targetId;
     const [owned, settings, fragments] = await Promise.all([
       this.list(params.targetId),
       this.profile.settings(params.targetId),
-      starFragmentsOf(this.prisma, params.targetId),
+      // La constellation (#10053) suit le réglage de la vitrine et ne dit que ses étoiles, jamais le total. Un
+      // visiteur la lit FIGÉE AU MOIS (comme `awardedMonth`) : relire la vitrine ne dit jamais quand on a joué.
+      own
+        ? starFragmentsOf(this.prisma, params.targetId)
+        : starFragmentsVisibleBefore(this.prisma, params.targetId, constellationVisitorBound(params.now ?? new Date())),
     ]);
-    // La constellation (#10053) suit le réglage de la vitrine et ne dit que ses étoiles, jamais le total.
     const constellation = { stars: constellationOf(fragments).stars };
-    if (params.viewer?.userId !== params.targetId) {
+    if (!own) {
       const view = visitorShowcase({ owned, order: settings.showcaseOrder });
       return { visible: true, items: [...view.items], order: [...view.order], constellation };
     }

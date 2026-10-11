@@ -4,6 +4,8 @@ import {
   CONSTELLATION_FRAGMENTS_PER_STAR,
   constellationOf,
   constellationStarCosmetic,
+  constellationVisitorBound,
+  countsForVisitor,
   isConstellationCosmeticKey,
 } from '../../utils/game/constellation.js';
 
@@ -60,5 +62,21 @@ describe('la constellation (#10053, décision du porteur du 2026-10-11)', () => 
     const shape = constellationOf(42);
     expect(Object.keys(shape).sort()).toEqual(['collected', 'cosmetics', 'inStar', 'stars', 'toNextStar']);
     shape.cosmetics.forEach((c) => expect(Object.keys(c).sort()).toEqual(['cosmeticKey', 'kind', 'star']));
+  });
+});
+
+describe('la constellation vue par un visiteur est figée au mois (#10053, présence)', () => {
+  it('la borne est le 1er du mois courant (UTC) : rien de ce mois ne se voit', () => {
+    expect(constellationVisitorBound(new Date('2026-10-11T12:00:00Z'))).toBe('2026-10-01');
+    expect(constellationVisitorBound(new Date('2026-10-31T23:59:59Z'))).toBe('2026-10-01');
+    expect(constellationVisitorBound(new Date('2026-11-01T00:00:00Z'))).toBe('2026-11-01');
+  });
+
+  it('un coffre compte s’il est d’un jour d’avant la borne ; une saison, si elle s’est terminée avant', () => {
+    expect(countsForVisitor({ dayKey: '2026-09-30' }, '2026-10-01')).toBe(true);
+    expect(countsForVisitor({ dayKey: '2026-10-01' }, '2026-10-01')).toBe(false);
+    expect(countsForVisitor({ season: 1 }, '2027-02-14')).toBe(false);
+    expect(countsForVisitor({ season: 1 }, '2027-03-01')).toBe(true);
+    expect(countsForVisitor({ season: 0 }, '2099-01-01')).toBe(false);
   });
 });
