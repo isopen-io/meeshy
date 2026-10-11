@@ -149,7 +149,13 @@ function measureLadderRooms(button: HTMLElement | null): LadderRooms | null {
 /** Les Réels sans graine — `ReelsPresenter.presentFresh()`, le geste de l'appui long. */
 const ouvrirReels = () => navigate(href('reels'));
 
-export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
+/**
+ * `contained` (#10117) : la couche se borne à son hôte au lieu de couvrir la
+ * fenêtre — le cadre côte à côte la pose dans la colonne de la liste
+ * (`routes/split-frame.tsx`). Témoins, échelle et déplacement se mesurent sur
+ * la couche (`.floating-menus`) : ils suivent sans autre changement.
+ */
+export function FloatingMenus({ routeKey, contained = false }: { readonly routeKey: string; readonly contained?: boolean }) {
   const session = useStore(sessionStore, (s) => s.session);
   const unread = useNotificationCounts().data?.unread ?? 0;
   const pendingFriendRequests = usePendingFriendRequestCount();
@@ -216,7 +222,7 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
 
   return (
     <div
-      className="floating-menus pointer-events-none fixed inset-0 z-30"
+      className={`floating-menus pointer-events-none ${contained ? 'absolute' : 'fixed'} inset-0 z-30`}
       /* LES COULOIRS SONT POSÉS DEPUIS LA LOI (`lib/view/floating-corridor.ts`),
          que le chrome du Flux lit aussi — la feuille ne garde que le couloir
          bas, qu'aucun écran ne partage. Le couloir haut part de `--safe-top`, pas

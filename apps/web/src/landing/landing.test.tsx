@@ -7,7 +7,6 @@ import { formatMemberCount } from '@meeshy/shared/utils/member-visibility';
 
 import { SESSION_STORAGE_KEY } from '@/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '@/lib/inline-interface-language-bootstrap.js';
-import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 import { href } from '@/routes/route-table';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -135,15 +134,16 @@ describe('le document prérendu, par langue (#10002)', () => {
   }
 });
 
-describe('le point d’accroche de l’entrée invité (#10003)', () => {
-  test('vise la jonction par lien que la table des routes sert, en mode invité, nom ET langue', () => {
+describe('le point d’accroche de l’entrée invité (#10003, #10100)', () => {
+  test('vise /world, que la table des routes sert, avec le nom ET la langue — jamais la jonction /chat/… (#10100)', () => {
     expect(WORLD_GUEST_ENTRY_TEMPLATE.replace('{link}', 'L').replace('{name}', 'N').replace('{language}', 'ar')).toBe(
-      href('chatJoin', { link: 'L' }, { mode: ANONYMOUS_MODE, name: 'N', language: 'ar' }),
+      href('world', {}, { name: 'N', language: 'ar' }),
     );
+    expect(WORLD_GUEST_ENTRY_TEMPLATE).not.toContain('/chat/');
   });
 
-  test('le retour d’un invité vise le fil que la table des routes sert', () => {
-    expect(WORLD_GUEST_THREAD_TEMPLATE.replace('{conversation}', 'C')).toBe(href('thread', { conversation: 'C' }));
+  test('le retour d’un invité vise /world, où son fil s’ouvre en focus (#10100)', () => {
+    expect(WORLD_GUEST_THREAD_TEMPLATE.replace('{conversation}', 'C')).toBe(href('world'));
   });
 });
 
@@ -418,7 +418,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
     const { trace, win, settle } = harness({ language: 'fr' });
     await settle();
     typeName('  Amina & co ');
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Amina%20%26%20co&language=fr']);
+    expect(trace.assigned).toEqual(['/world?name=Amina%20%26%20co&language=fr']);
     expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('fr');
     expect(trace.pushed).toEqual([]);
   });
@@ -430,7 +430,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
       expect(languageSelect().value).toBe(language);
       expect(shownFlag()).toBe(getLanguageInfo(language).flag);
       typeName('Kenji');
-      expect(trace.assigned).toEqual([`/chat/mshy_wx?mode=anonymous&name=Kenji&language=${language}`]);
+      expect(trace.assigned).toEqual([`/world?name=Kenji&language=${language}`]);
     }
   });
 
@@ -442,7 +442,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
     expect(trace.assigned).toEqual([]);
     expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe(null);
     typeName('Amina');
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Amina&language=ar']);
+    expect(trace.assigned).toEqual(['/world?name=Amina&language=ar']);
     expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('ar');
   });
 
@@ -480,7 +480,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
     await settle();
     pickLanguage('es');
     typeName('Kenji');
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Kenji&language=es']);
+    expect(trace.assigned).toEqual(['/world?name=Kenji&language=es']);
   });
 
   test('un COMPTE qui entre en anonyme garde la langue de son interface', async () => {
@@ -489,7 +489,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
     await settle();
     pickLanguage('es');
     typeName('Ada');
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Ada&language=es']);
+    expect(trace.assigned).toEqual(['/world?name=Ada&language=es']);
     expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe(null);
   });
 
@@ -498,7 +498,7 @@ describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #1000
     typeName('Kenji');
     expect(trace.assigned).toEqual([]);
     await settle();
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Kenji&language=fr']);
+    expect(trace.assigned).toEqual(['/world?name=Kenji&language=fr']);
   });
 });
 
@@ -519,7 +519,7 @@ describe('jamais un bouton inerte quand GET /world échoue (#10067)', () => {
       expect(trace.fetches).toBe(3);
       await settle();
       expect(visible('[data-world-error]')).toBe(false);
-      expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Kenji&language=es']);
+      expect(trace.assigned).toEqual(['/world?name=Kenji&language=es']);
     });
   }
 
@@ -541,10 +541,10 @@ describe('un invité revient dans World Wide (#10003)', () => {
     }),
   });
 
-  test('une session invité de World Wide propose « Revenir dans World Wide », vers son fil', async () => {
+  test('une session invité de World Wide propose « Revenir dans World Wide », vers /world (#10100)', async () => {
     const { settle } = harness({ language: 'fr', stored: guest('mshy_wx') });
     expect(visible('[data-world-return]')).toBe(true);
-    expect(document.querySelector('[data-world-return]')?.getAttribute('href')).toBe('/c/c-world');
+    expect(document.querySelector('[data-world-return]')?.getAttribute('href')).toBe('/world');
     await settle();
     expect(visible('[data-world-return]')).toBe(true);
   });
@@ -578,6 +578,6 @@ describe('le script MINIFIÉ que le prérendu inline (#10003)', () => {
     pickLanguage('es');
     expect(shownFlag()).toBe(getLanguageInfo('es').flag);
     typeName('Luiza');
-    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Luiza&language=es']);
+    expect(trace.assigned).toEqual(['/world?name=Luiza&language=es']);
   });
 });

@@ -66,13 +66,3 @@
     --thread-column: 56rem;
   }
 }
-
-/* DANS LE VOLET DROIT DU CADRE SCINDÉ (#10073) — la liste est à côté, le
-   retour vers elle n'a plus d'objet : le chevron (et son badge « non lus
-   ailleurs », que la liste montre déjà) se retire. Hors du cadre — téléphone,
-   invité, fenêtre étroite — le sélecteur ne rencontre rien. */
-@media (min-width: 1024px) {
-  [data-split-detail] [data-thread-back] {
-    display: none;
-  }
-}

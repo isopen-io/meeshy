@@ -24,6 +24,7 @@ const CLASS_ATTR = ['class', 'Name'].join('');
 const css = readFileSync(new URL('./thread-column.css', import.meta.url).pathname, 'utf8');
 const threadSource = readFileSync(new URL('../routes/thread.tsx', import.meta.url).pathname, 'utf8');
 const writeLockSource = readFileSync(new URL('../components/thread-write-lock.tsx', import.meta.url).pathname, 'utf8');
+const chromeSource = readFileSync(new URL('../components/thread-composer-chrome.tsx', import.meta.url).pathname, 'utf8');
 
 const withoutComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\//g, '');
 
@@ -48,18 +49,17 @@ const ruleIn = (block: string, selector: string): string => {
 
 const TABLET = '(min-width: 768px)';
 const WIDE = '(min-width: 1280px)';
-const SPLIT = '(min-width: 1024px)';
 
 describe('la feuille de la colonne ne touche pas au téléphone', () => {
   test('aucune règle hors des requêtes média', () => {
-    const outside = [TABLET, WIDE, SPLIT].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
+    const outside = [TABLET, WIDE].reduce((rest, query) => rest.replace(mediaBlock(query), ''), withoutComments(css));
     expect(outside.trim()).toBe('');
   });
 });
 
-describe('dans le volet du cadre scindé (#10073)', () => {
-  test('le retour vers la liste se retire, la liste étant à côté', () => {
-    expect(ruleIn(mediaBlock(SPLIT), '[data-split-detail] [data-thread-back]')).toContain('display: none');
+describe('dans le volet du cadre scindé (#10073, #10117)', () => {
+  test('le retour vers la liste reste : il referme le fil, la liste à côté', () => {
+    expect(withoutComments(css)).not.toContain('[data-thread-back]');
   });
 });
 
@@ -98,11 +98,15 @@ describe('qui porte la colonne', () => {
   test('l’écran du fil : la racine, le défileur et la bande du composeur', () => {
     expect(threadSource).toContain(`${CLASS_ATTR}={\`thread-root relative `);
     expect(threadSource).toContain(`${CLASS_ATTR}="thread-column scrollbar-none absolute inset-0`);
-    expect(threadSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
+    expect(threadSource).toContain('<ThreadComposerChrome');
   });
 
+  /* LA BANDE BASSE A UN SEUL SITE depuis #10101 (`thread-composer-chrome.tsx`) :
+     au téléphone elle porte le verre, sur ordinateur le dock de la colonne —
+     `components/thread-desktop.test.tsx` rend les deux gabarits. */
   test('le bandeau qui remplace le composeur', () => {
-    expect(writeLockSource).toContain(`${CLASS_ATTR}="thread-composer-chrome thread-column glass-prominent"`);
+    expect(writeLockSource).toContain('<ThreadComposerChrome');
+    expect(chromeSource).toContain(`'thread-composer-chrome thread-column glass-prominent'`);
   });
 
   test('le chargement : racine, en-tête et rangées fantômes bornés', () => {

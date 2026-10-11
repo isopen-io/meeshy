@@ -12,5 +12,8 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** GET /api/v1/world/participants/:participantId */
+export const participantsByParticipantId = (participantId: string): string => `/api/v1/world/participants/${encodeURIComponent(participantId)}`;
+
 /** GET /api/v1/world */
 export const root = '/api/v1/world';

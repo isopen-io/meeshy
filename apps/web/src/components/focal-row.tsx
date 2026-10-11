@@ -824,7 +824,7 @@ export const FocalRow = memo(function FocalRow({
             DERNIÈRE ligne du bloc — `items-end` fait ce que
             `HStack(alignment:.bottom)` fait côté iOS. */}
         <div data-row-content className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
+          <div data-row-body className="min-w-0 flex-1">
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
                 protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}

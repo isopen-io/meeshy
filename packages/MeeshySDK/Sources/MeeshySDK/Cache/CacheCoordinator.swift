@@ -26,6 +26,9 @@ public actor CacheCoordinator {
     /// #10093 — les statistiques PUBLIQUES d'un profil visité, clé = userId. Distinct de `stats` (les miennes,
     /// dix entrées au plus) : visiter onze fiches n'évince pas mes chiffres, et la fiche d'un autre se rouvre peinte.
     public let profileStats: GRDBCacheStore<String, UserStats>
+    /// #10111 — la fiche d'un participant de conversation, clé = `conversationId/participantId`. Chiffrée : elle
+    /// peut porter l'e-mail et la date de naissance servis au cercle des hôtes.
+    public let participantProfiles: GRDBCacheStore<String, ConversationParticipantProfile>
     /// L'instantané de `GET /me/engagement` (#5698) — badges, série, niveau
     /// de l'utilisateur courant, UNE entrée par compte (`id = "current"`).
     /// Même politique que `stats` : l'écran « Progression » s'ouvre sur le
@@ -340,6 +343,7 @@ public actor CacheCoordinator {
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories", encrypted: true)
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
         self.profileStats = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "pstats")
+        self.participantProfiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "partprof", encrypted: true)
         self.engagementProgress = GRDBCacheStore(policy: .userStats, db: db, namespace: "engagement")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
@@ -746,7 +750,7 @@ public actor CacheCoordinator {
     var allGRDBStores: [any GRDBDirtyFlushing] {
         [
             conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
-            comments, statuses, communities, stats, profileStats, engagementProgress, drafts,
+            comments, statuses, communities, stats, profileStats, participantProfiles, engagementProgress, drafts,
             callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, sessions, userSearch,
             phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,
