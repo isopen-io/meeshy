@@ -408,6 +408,7 @@ const MATRICE: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: true,
+  canManageGame: true,
 };
 
 describe('la tuile du hub', () => {

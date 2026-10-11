@@ -10,6 +10,7 @@ import auditReglagesFr from './admin/audit-reglages-fr';
 import personnesFr from './admin/personnes-fr';
 import conversationsAgentFr from './admin/conversations-agent-fr';
 import engagementScaleFr from './admin/engagement-scale-fr';
+import gameSeasonsFr from './admin/game-seasons-fr';
 
 /**
  * LE CATALOGUE D'INTERFACE D'ADMINISTRATION FRANÇAIS (#6871, #6834) — la
@@ -65,6 +66,8 @@ const fr = {
   'admin.nav.settings.hint': 'Votre accès et les préférences de l’espace',
   'admin.nav.engagementScale': 'Barème de points',
   'admin.nav.engagementScale.hint': 'Ce que chaque geste rapporte en points',
+  'admin.nav.gameSeasons': 'Jeu — saisons',
+  'admin.nav.gameSeasons.hint': 'Programmer, décaler ou mettre en pause les saisons',
   'admin.users.search': 'Rechercher un compte',
   'admin.users.count': '{count} compte(s)',
   'admin.users.unavailable': 'Liste indisponible pour le moment.',
@@ -405,6 +408,7 @@ const fr = {
   ...personnesFr,
   ...conversationsAgentFr,
   ...engagementScaleFr,
+  ...gameSeasonsFr,
 } as const;
 
 export default fr;

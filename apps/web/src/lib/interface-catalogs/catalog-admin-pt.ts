@@ -11,6 +11,7 @@ import auditReglagesPt from './admin/audit-reglages-pt';
 import personnesPt from './admin/personnes-pt';
 import conversationsAgentPt from './admin/conversations-agent-pt';
 import engagementScalePt from './admin/engagement-scale-pt';
+import gameSeasonsPt from './admin/game-seasons-pt';
 
 const pt = {
   'admin.role': 'Seu papel: {role}',
@@ -52,6 +53,8 @@ const pt = {
   'admin.nav.settings.hint': 'Seu acesso e as preferências do espaço',
   'admin.nav.engagementScale': 'Tabela de pontos',
   'admin.nav.engagementScale.hint': 'O que cada gesto rende em pontos',
+  'admin.nav.gameSeasons': 'Jogo — temporadas',
+  'admin.nav.gameSeasons.hint': 'Programar, adiar ou pausar as temporadas',
   'admin.users.search': 'Procurar uma conta',
   'admin.users.count': '{count} conta(s)',
   'admin.users.unavailable': 'Lista indisponível no momento.',
@@ -377,6 +380,7 @@ const pt = {
   ...personnesPt,
   ...conversationsAgentPt,
   ...engagementScalePt,
+  ...gameSeasonsPt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

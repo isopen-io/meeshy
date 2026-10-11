@@ -73,6 +73,13 @@ export type AdminPermissions = {
    * 403, que la loi 4 interdit au même titre qu'un contrôle inerte.
    */
   readonly canManageAgent: boolean;
+  /**
+   * **LA GARDE RÉELLE DES ROUTES `/admin/game/*`** (#10232, #10233) — le calendrier
+   * des saisons du Jeu : programmer, décaler, mettre en pause une saison FUTURE,
+   * valider une proposition de l'IA, exporter `store.app_events`. BIGBOSS et ADMIN
+   * la portent, aucun autre rôle : la tuile se lit sur elle, jamais sur le rang.
+   */
+  readonly canManageGame: boolean;
 };
 
 export type AdminPermissionKey = keyof AdminPermissions;
@@ -199,6 +206,9 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
      le réserve à ADMIN et BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous
      l'accès à l'espace — un MODERATOR ne verrait qu'un refus. */
   section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
+  /* LE CALENDRIER DES SAISONS (#10232) — `canManageGame` : la tuile porte le seuil de ce qu'elle
+     OUVRE (programmer, décaler, mettre en pause, valider une proposition de l'IA). */
+  section('gameSeasons', { permission: 'canManageGame', glyph: 'calendarBlank', ready: true }),
   section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 

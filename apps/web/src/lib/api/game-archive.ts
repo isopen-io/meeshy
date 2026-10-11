@@ -1,10 +1,12 @@
 import type { GameLeagueWeekArchive, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 import { GAME_ARCHIVE_RETENTIONS, GAME_ARCHIVE_STATUSES, gameLeagueWeekArchivePath, gameSeasonArchivePath } from '@meeshy/shared/types/game-archive-routes';
 import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
-import { SEASON_STEPS, SEASON_WEEKS, seasonAt, seasonCalendar } from '@meeshy/shared/utils/game/season';
+import { SEASON_STEPS, SEASON_WEEKS } from '@meeshy/shared/utils/game/season';
+import { scheduledSeasonAt, scheduledSeasonCalendar, seasonStatusOf, type SeasonSchedule } from '@meeshy/shared/utils/game/season-schedule';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
+import { currentSeasonSchedule } from './game-season-calendar';
 import { isBool, isInt, isOneOf, isText, orNull, shape } from './game-guards';
 import { GAME_V2_QUERY_PREFIX } from './game-v2-queries';
 import type { ApiResult, HttpTransport } from './http';
@@ -117,7 +119,13 @@ export const fetchSeasonArchive = (transport: HttpTransport, number: number, sig
 export const fetchLeagueWeekArchive = (transport: HttpTransport, weekKey: string, signal?: AbortSignal) =>
   read({ transport, route: gameLeagueWeekArchivePath(encodeURIComponent(weekKey)), decode: isLeagueWeekArchive, what: 'semaine de ligue', signal });
 
-type Deps = { readonly source: DataSource; readonly transport: HttpTransport; readonly signal?: AbortSignal };
+type Deps = {
+  readonly source: DataSource;
+  readonly transport: HttpTransport;
+  readonly signal?: AbortSignal;
+  /** Le calendrier servi (#10232) ; absent, la copie courante (gardée hors ligne, sinon la dérivation de la loi). */
+  readonly schedule?: SeasonSchedule;
+};
 
 /**
  * Le banc (`'fixtures'`) sert le CALENDRIER de la loi partagée, sans progression
@@ -134,8 +142,14 @@ function statusAgainstToday(first: string, last: string): GameSeasonArchive['sta
 
 export async function loadSeasonArchive(deps: Deps & { readonly number: number }): Promise<ApiResult<GameSeasonArchive>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
-    const calendar = seasonCalendar(deps.number);
-    if (calendar === null) return { ok: false, status: 404, error: 'Saison inconnue', code: 'SEASON_NOT_FOUND' };
+    const schedule = deps.schedule ?? currentSeasonSchedule();
+    const calendar = scheduledSeasonCalendar(schedule, deps.number);
+    if (calendar === null) {
+      const paused = Number.isInteger(deps.number) && deps.number >= 1 && seasonStatusOf(schedule, deps.number) === 'paused';
+      return paused
+        ? { ok: false, status: 404, error: 'Saison en pause', code: 'SEASON_PAUSED' }
+        : { ok: false, status: 404, error: 'Saison inconnue', code: 'SEASON_NOT_FOUND' };
+    }
     return {
       ok: true,
       data: {
@@ -156,7 +170,7 @@ export async function loadLeagueWeekArchive(deps: Deps & { readonly weekKey: str
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return {
       ok: true,
-      data: { weekKey: deps.weekKey, status: statusAgainstToday(deps.weekKey, sundayOf(deps.weekKey)), season: seasonAt(deps.weekKey), retention: 'kept', result: null },
+      data: { weekKey: deps.weekKey, status: statusAgainstToday(deps.weekKey, sundayOf(deps.weekKey)), season: scheduledSeasonAt(deps.schedule ?? currentSeasonSchedule(), deps.weekKey), retention: 'kept', result: null },
     };
   }
   return fetchLeagueWeekArchive(deps.transport, deps.weekKey, deps.signal);

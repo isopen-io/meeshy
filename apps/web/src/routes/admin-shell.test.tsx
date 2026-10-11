@@ -60,6 +60,7 @@ const MATRICE: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 async function cadre(role: string): Promise<HTMLDivElement> {
