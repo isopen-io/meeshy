@@ -64,12 +64,7 @@ public actor ContentAddressedStore {
     /// (une seule requête pour des demandes simultanées), vérifiés puis gardés.
     public func data(for file: PackAssetFile) async throws -> Data {
         if let stored = readVerified(file) { return stored }
-        if let running = inFlight[file.name] { return try await running.value }
-        let fetcher = self.fetcher
-        let task = Task { try await fetcher.fetch(file: file.name) }
-        inFlight[file.name] = task
-        defer { inFlight[file.name] = nil }
-        let data = try await task.value
+        let data = try await download(file.name)
         guard Self.matches(data, file) else { throw ContentAddressedStoreError.digestMismatch }
         write(data, name: file.name)
         return data
@@ -80,6 +75,19 @@ public actor ContentAddressedStore {
     }
 
     // MARK: - Interne
+
+    /// Une seule requête pour des demandes simultanées du même nom ; chaque
+    /// demandeur vérifie ENSUITE les octets contre SA référence — celle qui
+    /// porte l'empreinte entière ne se contente jamais du contrôle de préfixe
+    /// d'une autre.
+    private func download(_ name: String) async throws -> Data {
+        if let running = inFlight[name] { return try await running.value }
+        let fetcher = self.fetcher
+        let task = Task { try await fetcher.fetch(file: name) }
+        inFlight[name] = task
+        defer { inFlight[name] = nil }
+        return try await task.value
+    }
 
     private func readVerified(_ file: PackAssetFile) -> Data? {
         let url = directory.appendingPathComponent(file.name)
