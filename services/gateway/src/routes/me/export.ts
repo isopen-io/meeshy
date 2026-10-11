@@ -11,6 +11,7 @@ import {
   exportReactions,
   exportMedia,
   exportVoiceProfile,
+  exportPacks,
 } from './export-sections';
 import {
   exportSecurityEvents,
@@ -38,10 +39,11 @@ type ExportType =
   | 'voiceProfile'
   | 'sessions'
   | 'securityEvents'
-  | 'game';
+  | 'game'
+  | 'packs';
 
 const VALID_TYPES: ExportType[] = [
-  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game',
+  'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -109,6 +111,91 @@ const gameExportSchema = {
     gloryLedger: gameRowsSchema,
     meeshLedger: gameRowsSchema,
     hasMore: { type: 'boolean' },
+  },
+} as const;
+
+const packFileFields = {
+  mimeType: { type: 'string' },
+  filePath: { type: 'string' },
+  fileUrl: { type: 'string' },
+  width: { type: 'integer' },
+  height: { type: 'integer' },
+  sizeBytes: { type: 'integer' },
+} as const;
+
+const packsExportSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    choices: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          domain: { type: 'string', nullable: true },
+          slug: { type: 'string' },
+          installed: { type: 'boolean' },
+          installedAt: { type: 'string', nullable: true },
+          updatedAt: { type: 'string' },
+        },
+      },
+    },
+    library: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string', nullable: true },
+          origin: { type: 'string' },
+          animated: { type: 'boolean' },
+          createdAt: { type: 'string' },
+          lastUsedAt: { type: 'string' },
+          ...packFileFields,
+        },
+      },
+    },
+    submissions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          author: { type: 'string' },
+          status: { type: 'string' },
+          reviewNote: { type: 'string', nullable: true },
+          reviewedAt: { type: 'string', nullable: true },
+          installCount: { type: 'integer' },
+          createdAt: { type: 'string' },
+          items: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                key: { type: 'string' },
+                title: { type: 'string' },
+                emoji: { type: 'string' },
+                kind: { type: 'string' },
+                // `StickerTextZone[]` d'un Instant, servies telles que proposées.
+                zones: { type: 'array', nullable: true },
+                position: { type: 'integer' },
+                ...packFileFields,
+              },
+            },
+          },
+        },
+      },
+    },
+    counts: {
+      type: 'object',
+      properties: { choices: { type: 'integer' }, library: { type: 'integer' }, submissions: { type: 'integer' } },
+    },
+    hasMore: {
+      type: 'object',
+      properties: { choices: { type: 'boolean' }, library: { type: 'boolean' }, submissions: { type: 'boolean' } },
+    },
   },
 } as const;
 
@@ -256,7 +343,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game. ' +
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs. ' +
                 'Defaults to all eleven.',
             },
             limit: {
@@ -370,6 +457,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   securityEventsCount: { type: 'integer', nullable: true },
                   securityEventsHasMore: { type: 'boolean', nullable: true },
                   game: gameExportSchema,
+                  packs: packsExportSchema,
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -609,6 +697,17 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.game = await exportGame(fastify.prisma, userId, page);
         }
 
+        if (requestedTypes.includes('packs')) {
+          const sections = await exportPacks(fastify.prisma, userId, page);
+          exportData.packs = {
+            choices: sections.choices.items,
+            library: sections.library.items,
+            submissions: sections.submissions.items,
+            counts: { choices: sections.choices.total, library: sections.library.total, submissions: sections.submissions.total },
+            hasMore: { choices: sections.choices.hasMore, library: sections.library.hasMore, submissions: sections.submissions.hasMore },
+          };
+        }
+
         if (format === 'csv') {
           const csvSections: Record<string, string> = {};
 
@@ -673,6 +772,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                 ? [value as Record<string, unknown>]
                 : [];
             if (rows.length > 0) csvSections[`game.${childKey}`] = toCsv(Object.keys(rows[0]), rows);
+          }
+
+          // Les packs : une table par liste ; les éléments d'une proposition voyagent en JSON dans leur cellule.
+          const packs = exportData.packs as Record<string, unknown> | undefined;
+          for (const childKey of ['choices', 'library', 'submissions'] as const) {
+            const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
+            const flat = rows.map((row) => ('items' in row ? { ...row, items: JSON.stringify(row.items) } : row));
+            if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

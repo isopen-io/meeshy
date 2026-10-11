@@ -53,6 +53,8 @@ const FROZEN_WRITE_SITES = [
   'services/packs/PackCatalog.ts|userStickerPack|create',
   'services/packs/PackCatalog.ts|userStickerPack|updateMany',
   'services/packs/PackCatalog.ts|userStickerPack|updateMany',
+  // La purge RGPD d'un compte supprimé (#10151) : aucun appareil à prévenir, le compte n'existe plus.
+  'services/packs/PackPrivacy.ts|userStickerPack|deleteMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|updateMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',

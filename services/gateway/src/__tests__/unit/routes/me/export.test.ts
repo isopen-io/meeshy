@@ -90,6 +90,12 @@ async function buildApp(opts: {
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), findUnique: jest.fn().mockResolvedValue(null) }],
       ),
     ),
+    // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
+    ...Object.fromEntries(
+      ['userStickerPack', 'userSticker', 'stickerPack'].map(
+        (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
+      ),
+    ),
   } as any);
 
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -136,10 +142,10 @@ describe('GET /export — default JSON (all types)', () => {
     expect(body.data).toBeDefined();
     expect(body.data.exportDate).toBeDefined();
     expect(body.data.format).toBe('json');
-    // #3633 — le défaut couvre désormais les douze types (le jeu, #9384, et les événements de sécurité, #9614, en plus), pas seulement les trois
+    // #3633 — le défaut couvre désormais les treize types (le jeu, #9384, les événements de sécurité, #9614, et les packs, #10151, en plus), pas seulement les trois
     // premiers (l'export RGPD ne doit pas exiger de connaître chaque catégorie).
     expect(body.data.requestedTypes).toEqual([
-      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game',
+      'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
     ]);
     expect(body.data.profile).toBeDefined();
     expect(body.data.profile.id).toBe(USER_ID);

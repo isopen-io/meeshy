@@ -18,6 +18,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
 import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
+import { exportPackData } from '../../services/packs/PackPrivacy';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -228,6 +229,21 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
   return profile.referenceAudioUrl
     ? { ...profile, referenceAudioUrl: publicMediaUrlFromEnv(profile.referenceAudioUrl) }
     : profile;
+}
+
+/**
+ * Les packs du compte (#10151) : ses choix d'installation des trois domaines,
+ * sa bibliothèque de stickers et les packs qu'il a proposés. La lecture vit
+ * dans `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs ;
+ * cette section n'y ajoute que le découpage en pages.
+ */
+export async function exportPacks(prisma: PrismaClient, userId: string, page: ExportPage) {
+  const data = await exportPackData(prisma, userId, page);
+  return {
+    choices: toSection(data.choices.items, data.choices.total, page),
+    library: toSection(data.library.items, data.library.total, page),
+    submissions: toSection(data.submissions.items, data.submissions.total, page),
+  };
 }
 
 // Les sessions et les événements de sécurité : `export-security.ts` (#9614).
