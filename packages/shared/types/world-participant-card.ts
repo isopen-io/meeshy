@@ -21,7 +21,9 @@ import { GlobalUserRole, globalRoleLevel } from './role-types.js';
  * (`resolvePresenceVisibility`), qu'un ANALYST ne franchit pas.
  *
  * Adresse : `GET /api/v1/world/participants/:participantId` — `participantId`
- * est le `Participant.id` que porte déjà chaque message (`senderId`).
+ * est le `Participant.id` que porte déjà chaque message (`senderId`). Le
+ * chemin se compose par le catalogue généré, jamais à la main :
+ * `participantsByParticipantId` (`@meeshy/shared/api/endpoints/world`).
  */
 
 /** Le rang à partir duquel la fiche s'ouvre : le premier au-delà de `USER`. */
@@ -104,11 +106,6 @@ export const worldParticipantCardSchema = z.object({
 });
 
 export type WorldParticipantCard = z.infer<typeof worldParticipantCardSchema>;
-
-/** Le chemin, relatif à `/api/v1`, d'où la fiche se lit. */
-export function worldParticipantCardPath(participantId: string): string {
-  return `/world/participants/${encodeURIComponent(participantId)}`;
-}
 
 /** Les codes d'erreur que la porte rend, en plus de `AUTH_REQUIRED` / `AUTH_FAILED` (401). */
 export const WORLD_PARTICIPANT_CARD_ERRORS = {
