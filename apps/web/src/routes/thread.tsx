@@ -672,7 +672,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
   return (
-    /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
+    /* `h-app` (`100dvh` moins le clavier qui recouvre, #10005) +
+       `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
        difference entre une PAGE (le document entier defile, le composeur suit)
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
@@ -700,7 +701,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
-      className={`thread-root relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
+      className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />

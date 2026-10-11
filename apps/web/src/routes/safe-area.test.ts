@@ -31,8 +31,9 @@ import { describe, expect, test } from 'bun:test';
 
 const ROUTES = dirname(fileURLToPath(import.meta.url));
 
-/** La marque d'un écran plein-cadre : il occupe la hauteur visible entière. */
-const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
+/** La marque d'un écran plein-cadre : il occupe la hauteur visible entière —
+ * `h-app` compris, la même hauteur moins le clavier qui la recouvre (#10005). */
+const FULL_FRAME = /\b(?:min-)?h-(?:dvh|app)\b/;
 
 /**
  * Les racines plein-cadre qui n'ont PAS à porter l'inset, et pourquoi. Une
