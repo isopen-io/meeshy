@@ -5105,6 +5105,10 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 
 **Témoins.** `landing/landing.test.tsx` (étape langue prérendue dans les sept documents ; nom → langue sans rien envoyer ; nom vide ; langue de l'appareil ; arabe `dir="rtl"` ; entrée encodée et langue d'interface ; compte qui garde la sienne ; retour par bouton, Échap, historique ; relance et échec dit de `GET /world` ; « Revenir dans World Wide » ; script MINIFIÉ rejoué), `routes/chat-join.test.tsx` (`guestEntryOf` ; création sans geste et ordre adoption → interface → fil ; écran en attente ; langue par défaut ; nom pris avec suggestion ; champ exigé non contourné ; lien réservé aux comptes ; une seule tentative).
 
+**Amendé par D-190 (#10094)** : la création sans geste exige désormais le jeton de passage de la landing ; sans lui, l'adresse ne fait que pré-remplir le formulaire.
+
+---
+
 ## D-187 — On entre dans World Wide sans compte par `/world` : nom, glissement, langue principale, puis le fil ; un invité n'y joint que du `.txt` et de l'audio (2026-10-11, #10003)
 
 **Parcours.** `routes/world-entry.tsx` sert `/world` — l'entrée de la coque Android et de l'écran de connexion (#10007), où la landing prérendue n'est pas servie ; la landing, elle, fait le même parcours dans sa page et joint par `/chat/{link}?mode=anonymous&name=&language=` (D-186). Nom → glissement → langue principale (la première langue de l'appareil parmi les sept, groupe radio au clavier, flèches inversées en arabe) → jonction invité par la clé que sert `GET /world` (`worldEndpoints.root`), jamais une clé en dur. La langue choisie devient la langue de lecture (rang 1 du Prisme) et la langue d'interface. Un invité déjà entré retourne directement dans son fil ; un compte suit la jonction par lien. « Retour » ramène de la langue au nom, puis à la page d'avant (lue sur la navigation de l'application, jamais sur `history.length`).
@@ -5143,3 +5147,19 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Kotlin natif** : rien (gel). **iOS** : rien.
 
 **Témoins.** `routes/first-paint-graph.test.ts` parcourt les imports STATIQUES depuis `main.tsx` et rougit si le cadre, son volet vide ou les gestes de l'enregistrement y rentrent ; `routes/split-frame.test.tsx` monte désormais le routeur avec le cadre DIFFÉRÉ que la table remet vraiment.
+
+---
+
+## D-190 — Une adresse d'entrée `/chat/…` ne crée l'invité sans geste que si la landing de cet onglet vient de la poser : un jeton de passage à usage unique (2026-10-11, #10094, amende D-186)
+
+**Contexte.** Revue de sécurité du 2026-10-11 : depuis D-186, `/chat/{link}?mode=anonymous&name=…&language=…` créait l'invité (`POST /links/:key/members`) sans geste. L'adresse se fabrique de n'importe où : un lien piégé faisait entrer un visiteur, sous un nom choisi par un tiers, dans n'importe quelle conversation à lien de partage (action forcée, CSRF côté client).
+
+**Décision.**
+- **Le script de la landing pose un JETON DE PASSAGE dans l'onglet juste avant de naviguer** : `sessionStorage[WORLD_ENTRY_HANDOFF_KEY]` = `{ link, name, language, at }` (`landing/world-entry.ts`, clé passée par la configuration `handoffKey`, que `landingBootConfig` et `routes/home.tsx` fournissent). Aucune autre origine ne peut écrire le `sessionStorage` de meeshy.me, et il ne vit que dans l'onglet.
+- **La jonction le LIT ET L'EFFACE au montage, une seule fois** (`routes/chat-join-handoff.ts`, `takeLandingHandoff`, schéma Zod) et ne crée l'invité sans geste que si le lien, le nom (rogné) et la langue concordent avec l'adresse et que le jeton date de moins de `WORLD_ENTRY_HANDOFF_TTL_MS` (15 s, jamais du futur). Le lien du jeton est la clé que la landing a lue dans `GET /world` : la concordance borne l'entrée sans geste au lien de World Wide servi à l'instant.
+- **Toute autre arrivée** — adresse forgée, ancien gabarit `?mode=anonymous&name=` (sans langue), autre onglet, jeton périmé, réutilisé, pour un autre lien, nom ou langue, mal formé, `sessionStorage` refusé (navigation privée : chaque accès est sous `try`) — **ouvre le formulaire PRÉ-REMPLI** du nom et de la langue de l'adresse (si le lien l'accepte), et attend le geste. Fail-closed : un doute coûte un clic, jamais une entrée subie.
+- **Le poids** : +107 octets minifiés, +39 octets gzip sur le script inliné (mesuré sur la fonction minifiée, avant/après) — la landing reste sous son plafond de 10 Ko.
+
+**Témoins.** `routes/chat-join.test.tsx` (« une adresse d'entrée FORGÉE ne fait entrer personne sans son geste » : sans jeton ⇒ aucun POST et formulaire pré-rempli, puis le geste fait partir ce qu'il montre ; périmé et effacé ; daté du futur ; réutilisé ; autre lien ; autre nom ou langue ; mal formé ; stockage refusé — et le parcours de la landing, jeton valide ⇒ un POST et le jeton effacé ; l'ancien gabarit ouvre le formulaire), `landing/landing.test.tsx` (le jeton est posé AVANT la navigation, nom rogné, clé servie, instant ; un onglet sans `sessionStorage` navigue quand même).
+
+**Kotlin natif** : rien (gel). **iOS** : non concerné (aucune entrée par adresse qui crée sans geste).
