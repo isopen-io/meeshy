@@ -109,7 +109,7 @@ struct GameArchiveModelsTests {
         #expect(source.contains("leagueWeek: '/me/game/league/weeks/:weekKey'"))
         #expect(MeEndpoint.gameSeasonArchive(number: 3).path == "/api/v1/me/game/seasons/3")
         #expect(MeEndpoint.gameLeagueWeekArchive(weekKey: "2026-10-12").path == "/api/v1/me/game/league/weeks/2026-10-12")
-        #expect(MeEndpoint.gameLeagueWeekArchive(weekKey: "../x").path == "/api/v1/me/game/league/weeks/x")
+        #expect(MeEndpoint.gameLeagueWeekArchive(weekKey: "../x").path == "/api/v1/me/game/league/weeks/%2E%2E%2Fx")
     }
 }
 

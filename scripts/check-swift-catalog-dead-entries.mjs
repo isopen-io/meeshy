@@ -445,7 +445,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
 // l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
 // dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
-const BASELINE_DEAD_ENTRIES = 292;
+//
+// 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
+// `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
+// `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 290;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
