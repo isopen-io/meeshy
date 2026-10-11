@@ -127,6 +127,9 @@ function SystemNoticeContent({ row, language }: { readonly row: SystemRow; reado
         ) : (
           <GlyphSvg glyph={THREAD_STATES_GLYPHS.userPlus} size={13} />
         )}
+        {/* Même raison que l'espace du handle, juste dessous (#10101) : sur
+            la peau `row`, le glyphe se collait à la phrase. */}
+        {' '}
         <span>{systemRowText(row, language)}</span>
         {/* L'ESPACE EST ÉCRITE (#9710) : sur la peau `row`, ces morceaux ne
             vivent pas dans une boîte flexible, et rien d'autre ne les sépare —
