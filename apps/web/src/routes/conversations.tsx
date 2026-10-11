@@ -422,8 +422,9 @@ export default function ConversationsScreen() {
   const { visible, emptiness, sections, world } = useMemo(() => {
     const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
-    /* WORLD WIDE SORT DES SECTIONS ET SE POSE EN CARTE AU-DESSUS D'ELLES
-       (#10004) — seulement si le filtre et la recherche la gardent. */
+    /* WORLD WIDE SORT DES SECTIONS ET SE POSE AU-DESSUS D'ELLES (#10004), en
+       rangée ordinaire (#10191) — seulement si le filtre et la recherche la
+       gardent. */
     const pinned = pinWorldWide(kept);
     return {
       visible: ordered,
@@ -483,12 +484,12 @@ export default function ConversationsScreen() {
     onReach: () => void list.fetchNextPage(),
   });
 
-  /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par la carte
-     World Wide épinglée en tête (#10004) : mêmes signaux, même scène. */
-  const lensRowOf = (c: (typeof conversations)[number], card = false) => (
+  /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
+     épinglée en tête (#10004) : mêmes signaux, même scène, même peau (#10191). */
+  const lensRowOf = (c: (typeof conversations)[number], pinnedAtHead = false) => (
     <LensRow
       key={c.id}
-      card={card}
+      pinnedAtHead={pinnedAtHead}
       conversation={c}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
