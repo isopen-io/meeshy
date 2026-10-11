@@ -5209,7 +5209,7 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - **La liste** : les trois portes de son en-tête s'espacent de 4 px au lieu de 12 — « Meeshy Chats » tient à 24rem et à 375 px ; le volet vide prend la lueur radiale de marque et un repère teinté.
 - **Les invités** : l'avis d'arrivée d'un participant sans compte garde son masque et perd la pastille « sans compte » ; son nom accessible la dit encore, dans la langue de l'interface (`systemRowLabel`, site unique lu par `SystemNotice` et `composeMessageLabel`).
 
-**Ce que cela coûte** (`vite build --outDir dist-recette-10101`, `node scripts/measure-weight.mjs --dist`) : première peinture 89,15 Ko, inchangée (plafond 90) ; chunk du fil 40,35 → 40,43 Ko (plafond 42) et sa feuille +0,22 Ko ; liste 23,35 → 23,36 Ko (plafond 25) ; cadre 0,96 → 2,82 Ko et 0,58 Ko de feuille, toujours chargé à la demande (D-189).
+**Ce que cela coûte** (`vite build --outDir dist-recette-…`, `node scripts/measure-weight.mjs --dist`, gzip -9, avant/après sur le même relevé) : première peinture 89,19 Ko (plafond 90) — ce lot n'y ajoute aucun module ; chunk du fil 40,35 → 40,45 Ko (plafond 42) et sa feuille 2,92 → 3,15 Ko ; liste 23,35 → 23,36 Ko (plafond 25) ; cadre 0,91 → 2,86 Ko et 0,55 Ko de feuille, toujours chargé à la demande (D-189).
 
 **Limites assumées.** Sous 1024 px, rien ne change (souris comprise : Chromium a un pointeur fin à 390 px, la feuille de bureau est donc bornée à 1024). Les menus flottants de `/chats` restent posés sur la fenêtre et décalent la liste de 70 px à l'ouverture d'une conversation (#10106).
 
