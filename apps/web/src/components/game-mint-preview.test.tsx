@@ -158,7 +158,7 @@ describe('la dixième Meesh : le prix monte', () => {
   test('la 11e coûte plus, et le héros le dit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ mintedLifetime: 10, score: 3000, debitablePoints: 3000 })} />));
     expect(page).toContain('n° 11');
-    expect(page).toContain('1 294 points');
+    expect(page).toContain('1 587 points');
   });
 
   test('la centième est en or', () => {
