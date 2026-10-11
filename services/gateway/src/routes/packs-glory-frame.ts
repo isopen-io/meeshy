@@ -16,7 +16,7 @@ import type { FastifyInstance } from 'fastify';
 import { PACK_LANGUAGES } from '@meeshy/shared/types/content-pack';
 
 import { PackCatalog } from '../services/packs/PackCatalog';
-import { loadPackIndex, type PackIndex } from '../services/packs/PackIndex';
+import { startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { gloryFramePackSpec, type FramePackDetail, type FramePackSummary } from '../services/packs/gloryFramePackSpec';
 import { packInstallationBroadcaster, packRouteGuard, registerPackRoutes } from './pack-routes';
 
@@ -105,7 +105,7 @@ export async function gloryFramePacksRoutes(fastify: FastifyInstance, options: G
     options.catalog ??
     new PackCatalog({
       prisma: fastify.prisma,
-      spec: gloryFramePackSpec({ index: options.index ?? loadPackIndex() }),
+      spec: gloryFramePackSpec({ index: options.index ?? startupPackIndex() }),
       broadcast: packInstallationBroadcaster(fastify),
     });
 

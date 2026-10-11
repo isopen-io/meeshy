@@ -81,6 +81,7 @@ export * from './frame-usage.js';
 export * from './glory-atmospheres.js';
 export * from './content-pack.js';
 export * from './content-pack-index.js';
+export * from './glory-frame-pack.js';
 export * from './pack-presence.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline

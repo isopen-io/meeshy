@@ -1,0 +1,99 @@
+[
+  {
+    "slug": "exemple-savane",
+    "domain": "glory-frame",
+    "origin": "official",
+    "version": 1,
+    "order": 1000,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "98c061337887927e.webp",
+      "bytes": 26530,
+      "sha256": "98c061337887927ea3a7499cdd283a54027ddfaa75cfcd2990023eefe63c471d"
+    },
+    "preview": null,
+    "contract": {
+      "src": "2ce5ecd63cb9cccb.json",
+      "bytes": 1489,
+      "sha256": "2ce5ecd63cb9cccbba02da16ad1a538b6f4aed5cd50c2c3f977f3ebd4df85f0e"
+    },
+    "strings": {
+      "fr": {
+        "src": "85c131552b6dfd88.json",
+        "bytes": 273,
+        "sha256": "85c131552b6dfd88ce38ea349da3415a6196f80af23d59d2fc79747c057429dd"
+      },
+      "en": {
+        "src": "c67ab0179885f415.json",
+        "bytes": 280,
+        "sha256": "c67ab0179885f415720e6eead64d618c1fd7823374139aae64787556c36a80b0"
+      },
+      "es": {
+        "src": "97cf207b391fc8d8.json",
+        "bytes": 275,
+        "sha256": "97cf207b391fc8d8675e0f838c3038eb69e9e08094b2894ab771422406ab5ab2"
+      },
+      "pt": {
+        "src": "e97bef1627f04c38.json",
+        "bytes": 271,
+        "sha256": "e97bef1627f04c38c3c309449a0f22f336120a9fa7f12865cbfd421386241b8e"
+      },
+      "de": {
+        "src": "5230eaa9fa88e65f.json",
+        "bytes": 277,
+        "sha256": "5230eaa9fa88e65f4fa1f6cfd559616e0a447b8505fe6f0abc8d47f7261cbd4e"
+      },
+      "it": {
+        "src": "4717976c3b8eea62.json",
+        "bytes": 270,
+        "sha256": "4717976c3b8eea622bcdf3edf42f1fa57da0db46fe8b016d6c2bb84fc99ccb06"
+      },
+      "ar": {
+        "src": "ac42f1939630886e.json",
+        "bytes": 295,
+        "sha256": "ac42f1939630886e20e1a043c783ef581702d1b9190de2e712e6a8838de255db"
+      }
+    },
+    "downloadBytes": {
+      "story": 92252,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Exemple · Savane",
+        "description": "Pack d'exemple du staging : quatre cadres d'Ambassadeur, de la division IV à la I."
+      },
+      "en": {
+        "name": "Sample · Savanna",
+        "description": "Staging sample pack: four Ambassador frames, divisions IV to I."
+      },
+      "es": {
+        "name": "Ejemplo · Sabana",
+        "description": "Paquete de ejemplo del entorno de pruebas: cuatro marcos de Embajador, de la división IV a la I."
+      },
+      "pt": {
+        "name": "Exemplo · Savana",
+        "description": "Pacote de exemplo do ambiente de testes: quatro molduras de Embaixador, da divisão IV à I."
+      },
+      "de": {
+        "name": "Beispiel · Savanne",
+        "description": "Beispielpaket der Testumgebung: vier Botschafter-Rahmen, Division IV bis I."
+      },
+      "it": {
+        "name": "Esempio · Savana",
+        "description": "Pacchetto di esempio dell'ambiente di prova: quattro cornici da Ambasciatore, dalla divisione IV alla I."
+      },
+      "ar": {
+        "name": "مثال · السافانا",
+        "description": "حزمة تجريبية لبيئة الاختبار: أربعة إطارات لرتبة السفير، من القسم الرابع إلى الأول."
+      }
+    },
+    "usage": {
+      "kind": "rank",
+      "rank": "ambassadeur"
+    }
+  }
+]

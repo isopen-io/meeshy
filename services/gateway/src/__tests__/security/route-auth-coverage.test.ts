@@ -364,6 +364,10 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   // des visiteurs SANS compte ni session : identique pour tous, sans identité
   // lue, ni id ni participant ni présence (schéma de réponse fermé).
   { method: 'GET', url: '/api/v1/world', why: "entrée publique de World Wide pour la landing : clé du lien de partage et effectif agrégé, aucun id ni identité" },
+  // #10157 (L5) — le magasin adressé par contenu des packs officiels : le web
+  // le lit en `fetch(url, { mode: 'cors' })` SANS aucun en-tête. Liste blanche
+  // calculée au démarrage par `PackIndex`, aucune lecture de base, aucune identité.
+  { method: 'GET', url: '/api/v1/pack-assets/:file', why: "fichier d'un pack OFFICIEL adressé par son empreinte (<sha16>.<ext>), liste blanche des registres, aucune identité lue ni servie" },
   // #4167 — porte CANONIQUE de jointure par lien (S1 invité, S2 inscrit) et ses
   // deux jumelles de session invitée : mêmes raisons que les quatre `anonymous/*`
   // ci-dessus, sous les nouveaux noms cibles (`docs/product/api-simplification/conversations.md`).

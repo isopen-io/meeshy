@@ -276,6 +276,17 @@ export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
       "est jugé par `resolveAttachmentReadVerdict` (participation à la conversation + cycle de vie du " +
       "message porteur), jamais par l'origine.",
   },
+  {
+    fichier: 'routes/pack-assets.ts',
+    forme: 'litterale',
+    entete: 'Access-Control-Allow-Origin',
+    valeur: '*',
+    pourquoi:
+      "Les fichiers des packs officiels (#10157) sont lus par le web depuis meeshy.me sur gate.meeshy.me en " +
+      "`fetch(url, { mode: 'cors' })` puis `createImageBitmap` : sans `*`, le décor teinterait le canvas et " +
+      "`toBlob` lèverait `SecurityError`. Inerte pour une requête créditée — pas d'`…-Credentials` — et la " +
+      "route est PUBLIQUE par conception : liste blanche d'empreintes calculée au démarrage, aucune identité lue.",
+  },
   // `routes/uploads/tus-handler.ts` a rejoint la règle (#5298) : `new Server({…})`
   // passe désormais `allowedOrigins: (origin) => originIsAllowed(origin)`. Les
   // appelants réels mesurés — le web (navigateur, sert un `Origin`) et les

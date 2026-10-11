@@ -139,6 +139,7 @@ import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { packAssetsRoutes } from './pack-assets';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -344,6 +345,11 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
+  // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
+  // lecture de base, seau de débit propre. Préfixe distinct de `/packs/` pour
+  // ne jamais croiser un segment `:slug`.
+  { name: 'pack-assets', prefix: `${API_PREFIX}/pack-assets`, module: packAssetsRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

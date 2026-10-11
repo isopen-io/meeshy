@@ -447,7 +447,10 @@ export const callersIn = (contents, nsNames) => {
 // domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`apps/web/src/lib/api/packs.ts`)
 // et ramènera la référence à 274. Valeur MESURÉE le 2026-10-11 sur dev 4c4c56ebd8 (CI run
 // 38150253397 rouge sur 278).
-const BASELINE_DEAD_ENTRIES = 278;
+// 278 -> 279 (#10157, 2026-10-11) : `packAssets.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP1 #10149 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+const BASELINE_DEAD_ENTRIES = 279;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -12,13 +12,25 @@
  * vaut un registre VIDE — c'est l'état voulu jusqu'au L3 : le moteur se monte
  * et répond une boutique vide, jamais des données inventées.
  *
+ * Le registre d'EXEMPLES (`packages/shared/design/packs/samples/glory-frame.json`,
+ * demande porteur du 2026-10-11) n'est lu que sous `PACK_SAMPLES=1`, valeur
+ * EXACTE : absente, vide ou autre ⇒ jamais lu, donc jamais servi. Le staging
+ * la pose ; la production, jamais.
+ *
+ * La liste blanche porte aussi les fichiers qu'un CONTRAT de pack référence
+ * (les vignettes de ses cadres) : chaque contrat est lu une fois, au
+ * démarrage, depuis le magasin (`services/gateway/assets/packs/`), et vérifié
+ * contre son empreinte — un contrat illisible ou altéré n'ouvre rien.
+ *
  * Fail-closed PAR ENTRÉE (`parsePackIndex`) : une entrée illisible tombe seule
  * et se compte, un fichier illisible tombe entier et se compte.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePackIndex, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAssetRef, PackDomain } from '@meeshy/shared/types/content-pack';
+import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
 
 export type PackIndex = {
   /** Les entrées d'un domaine, dans l'ordre éditorial (`order`). */
@@ -32,8 +44,10 @@ export type PackIndex = {
 export type PackIndexSources = {
   /** Le contenu brut de chaque registre (déjà `JSON.parse`), un par fichier. */
   readonly registries: readonly unknown[];
-  /** Le contenu brut de `retained.json` : une liste de `<sha16>.<ext>`. */
+  /** Le contenu brut de `retained.json` : une liste de `<sha16>.<ext>`, ou `{ "<domaine>/<slug>@<version>": [...] }`. */
   readonly retained: unknown;
+  /** Les fichiers qu'un contrat de pack référence (vignettes, couches), lus et vérifiés par l'appelant. */
+  readonly contractRefs?: (entry: PackIndexEntry) => readonly PackAssetRef[];
 };
 
 const ASSET_SRC = /^[0-9a-f]{16}\.(?:webp|png|json|woff2)$/;
@@ -45,6 +59,12 @@ const refsOf = (entry: PackIndexEntry): readonly PackAssetRef[] => [
   ...Object.values(entry.strings).filter((ref): ref is PackAssetRef => ref !== undefined),
 ];
 
+const retainedSources = (retained: unknown): readonly unknown[] => {
+  if (Array.isArray(retained)) return retained;
+  if (typeof retained !== 'object' || retained === null) return [];
+  return Object.values(retained).flatMap((list) => (Array.isArray(list) ? list : []));
+};
+
 export function buildPackIndex(sources: PackIndexSources): PackIndex {
   const parsed = sources.registries.map((registry) => parsePackIndex(registry));
   const all = parsed.flatMap(({ entries }) => entries);
@@ -55,8 +75,9 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
     seen.add(key);
     return true;
   });
-  const retained = Array.isArray(sources.retained) ? sources.retained.filter((src): src is string => typeof src === 'string' && ASSET_SRC.test(src)) : [];
-  const served = new Set<string>([...entries.flatMap((entry) => refsOf(entry).map((ref) => ref.src)), ...retained]);
+  const retained = retainedSources(sources.retained).filter((src): src is string => typeof src === 'string' && ASSET_SRC.test(src));
+  const contractRefs = sources.contractRefs ?? (() => []);
+  const served = new Set<string>([...entries.flatMap((entry) => [...refsOf(entry), ...contractRefs(entry)].map((ref) => ref.src)), ...retained]);
   const byDomain = (domain: PackDomain) => entries.filter((entry) => entry.domain === domain).sort((a, b) => a.order - b.order);
   return {
     entries: byDomain,
@@ -68,7 +89,11 @@ export function buildPackIndex(sources: PackIndexSources): PackIndex {
 export const EMPTY_PACK_INDEX: PackIndex = buildPackIndex({ registries: [], retained: [] });
 
 const REGISTRY_FILES = ['glory-frames/packs.json', 'call-capture-frames/packs.json'] as const;
+const SAMPLE_REGISTRY_FILES = ['packs/samples/glory-frame.json'] as const;
 const RETAINED_FILE = 'packs/retained.json';
+
+/** Les exemples ne se lisent que sous `PACK_SAMPLES=1`, valeur exacte (fail-closed). */
+export const packSamplesEnabled = (env: NodeJS.ProcessEnv): boolean => env.PACK_SAMPLES === '1';
 
 /** Où chercher `packages/shared/design` : la variable d'environnement d'abord, puis le dépôt vu depuis la passerelle. */
 export function packDesignDirCandidates(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): readonly string[] {
@@ -76,6 +101,16 @@ export function packDesignDirCandidates(cwd: string = process.cwd(), env: NodeJS
     (dir): dir is string => typeof dir === 'string' && dir.length > 0,
   );
 }
+
+/** Où chercher le magasin `services/gateway/assets/packs` : la variable d'environnement d'abord, puis l'image (`/app`), puis le dépôt. */
+export function packAssetsDirCandidates(cwd: string = process.cwd(), env: NodeJS.ProcessEnv = process.env): readonly string[] {
+  return [env.MEESHY_PACK_ASSETS_DIR, join(cwd, 'assets/packs'), join(cwd, 'services/gateway/assets/packs')].filter(
+    (dir): dir is string => typeof dir === 'string' && dir.length > 0,
+  );
+}
+
+export const resolvePackAssetsDir = (candidates: readonly string[] = packAssetsDirCandidates()): string =>
+  candidates.find((candidate) => existsSync(candidate)) ?? candidates[candidates.length - 1];
 
 type ReadResult = { readonly value: unknown; readonly unreadable: boolean };
 
@@ -88,13 +123,47 @@ function readJson(path: string): ReadResult {
   }
 }
 
-/** Lit les registres une fois, au démarrage. Aucun dossier de design trouvé ⇒ registres vides. */
-export function loadPackIndex(candidates: readonly string[] = packDesignDirCandidates()): PackIndex {
+/** Le contrat d'un pack de cadres, lu dans le magasin et vérifié contre son empreinte ; sinon rien. */
+function frameContractRefs(assetsDir: string, entry: PackIndexEntry): readonly PackAssetRef[] {
+  if (entry.domain !== 'glory-frame' || !ASSET_SRC.test(entry.contract.src)) return [];
+  const path = join(assetsDir, entry.contract.src);
+  if (!existsSync(path)) return [];
+  try {
+    const bytes = readFileSync(path);
+    if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return [];
+    return parseGloryFramePackContract(JSON.parse(bytes.toString('utf8')) as unknown)?.contract.frames.map((frame) => frame.thumb) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Lit les registres une fois, au démarrage. Aucun dossier de design trouvé ⇒
+ * registres vides. Le registre d'exemples ne se lit que sous `PACK_SAMPLES=1`.
+ */
+export function loadPackIndex(
+  candidates: readonly string[] = packDesignDirCandidates(),
+  env: NodeJS.ProcessEnv = process.env,
+  assetsDir: string = resolvePackAssetsDir(),
+): PackIndex {
   const dir = candidates.find((candidate) => existsSync(candidate));
   if (dir === undefined) return EMPTY_PACK_INDEX;
-  const registries = REGISTRY_FILES.map((file) => readJson(join(dir, file)));
+  const files = packSamplesEnabled(env) ? [...REGISTRY_FILES, ...SAMPLE_REGISTRY_FILES] : REGISTRY_FILES;
+  const registries = files.map((file) => readJson(join(dir, file)));
   const retained = readJson(join(dir, RETAINED_FILE));
-  const index = buildPackIndex({ registries: registries.map(({ value }) => value), retained: retained.value });
+  const index = buildPackIndex({
+    registries: registries.map(({ value }) => value),
+    retained: retained.value,
+    contractRefs: (entry) => frameContractRefs(assetsDir, entry),
+  });
   const unreadable = [...registries, retained].filter((result) => result.unreadable).length;
   return { ...index, rejected: index.rejected + unreadable };
+}
+
+let startupIndex: PackIndex | undefined;
+
+/** L'index du DÉMARRAGE, lu une seule fois et partagé par la boutique des cadres et le magasin. */
+export function startupPackIndex(): PackIndex {
+  startupIndex ??= loadPackIndex();
+  return startupIndex;
 }

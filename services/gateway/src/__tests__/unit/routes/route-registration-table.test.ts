@@ -221,7 +221,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // Vérifié : le manifeste passe de 657 à 662 routes, soit exactement les
     // cinq neuves (GET /, GET /installed, GET /:slug, PUT et DELETE
     // /:slug/install).
-    expect(ROUTE_TABLE.length).toBe(79);
+    // 80 : #10157 (L5) ajoute `pack-assets` — le magasin PUBLIC adressé par
+    // contenu des packs officiels sous `/api/v1/pack-assets/:file`. Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste gagne
+    // exactement cette route.
+    expect(ROUTE_TABLE.length).toBe(80);
   });
 });
 

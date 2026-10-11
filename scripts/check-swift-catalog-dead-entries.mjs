@@ -467,7 +467,10 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`PackServiceProviding`)
 // et ramènera la référence à 291. Valeur MESURÉE le 2026-10-11 sur dev 8a68ca00fe (CI run
 // 38147814970 rouge sur 295).
-const BASELINE_DEAD_ENTRIES = 295;
+// 295 -> 296 (#10157, 2026-10-11) : `PackAssetsEndpoint.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP2 #10150 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+const BASELINE_DEAD_ENTRIES = 296;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
