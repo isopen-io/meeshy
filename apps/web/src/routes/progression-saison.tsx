@@ -1,12 +1,23 @@
+import { useQuery } from '@tanstack/react-query';
+
+import { parseSeasonNumberParam } from '@meeshy/shared/utils/game/game-links';
+import type { GameSeasonArchive } from '@meeshy/shared/types/game-archive';
+
+import { GameSeasonArchiveView, needsSeasonArchive, seasonShown, type ArchiveRead } from '@/components/game-archive';
 import { GameSeason } from '@/components/game-season';
 import { GAME_BRAND, GAME_CARD, GAME_INK_2 } from '@/components/game-surface';
+import { unwrap } from '@/lib/api/client';
+import { apiDeps } from '@/lib/api/deps';
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { loadSeasonArchive, seasonArchiveQueryKey } from '@/lib/api/game-archive';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { useOptionalRoute } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { useGameV2Actions, type GameV2Actions } from '@/routes/game-v2-actions';
 import { ProgressionPage } from '@/routes/progression-page';
+import { ProgressionSkeleton } from '@/routes/progression-parts';
 
 /**
  * LA PAGE « SAISON » (#9386) — le parcours de huit semaines et ses quarante
@@ -40,10 +51,38 @@ export function SaisonBody({ progress, actions, online }: { readonly progress: E
   );
 }
 
+/**
+ * LA SAISON QU'UN LIEN NOMME (#10018) — passée : mon palmarès ; future : son
+ * thème et sa date d'ouverture ; en cours (ou sans lien) : la page d'avant,
+ * inchangée. La lecture (`GET /me/game/seasons/:number`) est cache-first : la
+ * dernière copie persistée sert hors ligne, et la saison à venir que le bloc
+ * `game` porte déjà se peint sans attendre le réseau.
+ */
+export function SaisonFocusBody(props: {
+  readonly progress: EngagementWithGame;
+  readonly focus: number | null;
+  readonly read: ArchiveRead<GameSeasonArchive>;
+  readonly onRetry: () => void;
+  readonly actions: GameV2Actions;
+  readonly online: boolean;
+}) {
+  const shown = seasonShown(props.focus, props.progress.game, props.read);
+  if (shown.kind !== 'current') return <GameSeasonArchiveView shown={shown} onRetry={props.onRetry} skeleton={<ProgressionSkeleton />} />;
+  return <SaisonBody progress={props.progress} actions={props.actions} online={props.online} />;
+}
+
 function SaisonScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
   const online = useOnline();
   const actions = useGameV2Actions();
-  return <SaisonBody progress={progress} actions={actions} online={online} />;
+  const asked = useOptionalRoute()?.params['saison'];
+  const focus = asked === undefined ? null : parseSeasonNumberParam(asked);
+  const archive = useQuery({
+    queryKey: seasonArchiveQueryKey(focus ?? 0),
+    enabled: focus !== null && needsSeasonArchive(focus, progress.game),
+    queryFn: async ({ signal }): Promise<GameSeasonArchive> => unwrap(await loadSeasonArchive({ ...apiDeps, signal, number: focus ?? 0 })),
+  });
+  const read: ArchiveRead<GameSeasonArchive> = { data: archive.data, error: archive.data === undefined && archive.isError && !archive.isFetching ? (archive.error?.message ?? '') : null };
+  return <SaisonFocusBody progress={progress} focus={focus} read={read} onRetry={() => void archive.refetch()} actions={actions} online={online} />;
 }
 
 export default function ProgressionSaisonScreen() {
