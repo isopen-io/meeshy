@@ -54,7 +54,8 @@ describe('la coque propose d’allumer la localisation éteinte (#10227)', () =>
     expect(invite).toContain('super.onGeolocationPermissionsShowPrompt(origin,');
     expect(invite).toContain('callback.invoke(');
     expect(invite).toContain('LocationPromptRules.opensLocationSettings(');
-    expect(invite).toContain('LocationManagerCompat.isLocationEnabled(');
+    expect(invite).toContain('locationEnabled()');
+    expect(corpsDe(code, 'private boolean locationEnabled(')).toContain('LocationManagerCompat.isLocationEnabled(');
   });
 
   test('les réglages de localisation s’ouvrent, sans jamais faire tomber la coque', () => {
