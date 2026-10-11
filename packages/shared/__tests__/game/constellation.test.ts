@@ -5,6 +5,7 @@ import {
   constellationOf,
   constellationStarCosmetic,
   constellationVisitorBound,
+  constellationVisitorBoundInstant,
   countsForVisitor,
   isConstellationCosmeticKey,
 } from '../../utils/game/constellation.js';
@@ -66,6 +67,10 @@ describe('la constellation (#10053, décision du porteur du 2026-10-11)', () => 
 });
 
 describe('la constellation vue par un visiteur est figée au mois (#10053, présence)', () => {
+  it('la borne est aussi un INSTANT : minuit UTC du 1er du mois', () => {
+    expect(constellationVisitorBoundInstant('2026-10-01').toISOString()).toBe('2026-10-01T00:00:00.000Z');
+  });
+
   it('la borne est le 1er du mois courant (UTC) : rien de ce mois ne se voit', () => {
     expect(constellationVisitorBound(new Date('2026-10-11T12:00:00Z'))).toBe('2026-10-01');
     expect(constellationVisitorBound(new Date('2026-10-31T23:59:59Z'))).toBe('2026-10-01');
@@ -77,6 +82,9 @@ describe('la constellation vue par un visiteur est figée au mois (#10053, prés
     expect(countsForVisitor({ dayKey: '2026-10-01' }, '2026-10-01')).toBe(false);
     expect(countsForVisitor({ season: 1 }, '2027-02-14')).toBe(false);
     expect(countsForVisitor({ season: 1 }, '2027-03-01')).toBe(true);
+    // Une étape se réclame jusqu'au dimanche 20 h LOCAL de la fin : deux jours de marge sur la borne UTC.
+    expect(countsForVisitor({ season: 1 }, '2027-02-16')).toBe(false);
+    expect(countsForVisitor({ season: 1 }, '2027-02-17')).toBe(true);
     expect(countsForVisitor({ season: 0 }, '2099-01-01')).toBe(false);
   });
 });

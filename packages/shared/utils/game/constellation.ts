@@ -20,6 +20,7 @@
  * `GameConstellation` (SDK), rejoué sur les vecteurs partagés (`game.vectors.json`, loi `constellation`).
  */
 
+import { addDays } from './day-prng.js';
 import { seasonCalendar } from './season.js';
 
 export const CONSTELLATION_FRAGMENTS_PER_STAR = 10;
@@ -88,12 +89,24 @@ export function constellationVisitorBound(now: Date): string {
 }
 
 /**
- * Une source de fragment compte-t-elle pour un visiteur ? Un coffre : son jour est avant la borne. Une saison : elle
- * s'est TERMINÉE avant la borne — ses étapes réclamées ne portent pas de date, une saison en cours ne compte donc
- * qu'à partir du mois qui suit sa fin.
+ * La borne comme INSTANT : minuit UTC du 1er du mois. Un coffre se juge sur l'instant où il a été RÉCLAMÉ
+ * (`chestClaimedAt`), jamais sur son jour : le jour de jeu est local, choisi par le membre, et une journée se
+ * réclame jusqu'à vingt heures après son ouverture — un coffre du « 31 » réclamé le 1er après minuit UTC
+ * changerait encore, à l'heure près, ce que voit un visiteur (audit adversarial #10053).
+ */
+export const constellationVisitorBoundInstant = (bound: string): Date => new Date(`${bound}T00:00:00.000Z`);
+
+/** Une étape de saison se réclame jusqu'au dimanche 20 h LOCAL de sa fin : deux jours couvrent tous les fuseaux. */
+const SEASON_CLAIM_MARGIN_DAYS = 2;
+
+/**
+ * Une source de fragment compte-t-elle pour un visiteur ? Un coffre : réclamé avant l'instant de la borne
+ * (`constellationVisitorBoundInstant`), ou — sans instant — d'un jour avant la borne. Une saison : terminée, marge de
+ * réclamation comprise, avant la borne — ses étapes réclamées ne portent pas de date, une saison en cours ne compte
+ * donc qu'à partir du mois qui suit sa fin.
  */
 export function countsForVisitor(source: { readonly dayKey: string } | { readonly season: number }, bound: string): boolean {
   if ('dayKey' in source) return source.dayKey < bound;
   const calendar = seasonCalendar(source.season);
-  return calendar !== null && calendar.endDay < bound;
+  return calendar !== null && addDays(calendar.endDay, SEASON_CLAIM_MARGIN_DAYS) < bound;
 }
