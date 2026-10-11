@@ -91,7 +91,7 @@ export function PersonName({
     <Link
       to="userProfile"
       params={{ username: cible.username }}
-      onClick={peekProfileOnClick(cible.username)}
+      onClick={peekProfileOnClick(cible.username, { displayName: name, avatar: null })}
       className={className} style={style} {...accessibilite}>
       {contenu}
     </Link>

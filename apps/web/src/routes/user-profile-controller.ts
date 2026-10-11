@@ -15,12 +15,13 @@ import {
   type FriendActionOutcome,
 } from '@/lib/api/friend-actions';
 import type { PersonSummary } from '@/lib/api/friend-requests';
-import { publicProfileQueryOptions } from '@/lib/api/public-profile';
+import { publicProfileQueryOptions, type PublicProfile } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { sessionStore } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { knownPerson, type KnownPerson } from '@/lib/profile/known-people';
 import { profilePresenceLine } from '@/lib/profile/presence-line';
 import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
@@ -37,6 +38,16 @@ import { href, navigate } from '@/routes/route-table';
  * par commodité de table aurait annoncé une autre action que celle posée — un
  * lecteur d'écran aurait entendu le mauvais mot avant de changer d'écran.
  */
+const seedProfile = (known: KnownPerson): PublicProfile => ({
+  id: '',
+  username: known.username,
+  displayName: known.displayName,
+  avatar: known.avatar,
+  banner: null,
+  bio: null,
+  createdAt: null,
+});
+
 const ANNOUNCE = {
   add: {
     done: 'discover.announce.sent',
@@ -98,9 +109,17 @@ export function useProfileController(username: string, language: InterfaceLangua
      exactement comme `/me` le fait (`profile.tsx:132`). */
   const signedIn = apiDeps.source === 'fixtures' || viewerId !== null;
 
-  const view = useQuery(publicProfileQueryOptions({ ...apiDeps, handle: username }), appQueryClient);
-  const person = view.data?.profile;
+  /* CACHE D'ABORD, SYNCHRO À L'OUVERTURE (#10092) — la fiche en cache se
+     peint au premier rendu, et la lecture repart à CHAQUE ouverture, fraîche
+     ou non : statistiques et relation bougent sous les gestes des autres. Un
+     échec garde la fiche affichée (TanStack conserve `data`). */
+  const view = useQuery({ ...publicProfileQueryOptions({ ...apiDeps, handle: username }), refetchOnMount: 'always' }, appQueryClient);
   const served = view.data?.relation ?? 'none';
+  /* CE QU'ON SAVAIT DE LA PERSONNE TOUCHÉE amorce une fiche jamais vue : son
+     identité seule, jamais une relation ni des gestes devinés. */
+  const [known] = useState(() => knownPerson(username));
+  const seed = view.data === undefined && !view.isError && known !== null ? seedProfile(known) : null;
+  const person = view.data?.profile;
 
   /**
    * **LE BLOCAGE SE LIT PAR SUJET, SUR LE MÊME FIL QUE L'IDENTITÉ** (#7125) —
@@ -140,7 +159,8 @@ export function useProfileController(username: string, language: InterfaceLangua
   });
   const actions = actionsFor(relation);
 
-  const name = person?.displayName ?? person?.username ?? `@${username}`;
+  const shown = person ?? seed ?? undefined;
+  const name = shown?.displayName ?? shown?.username ?? `@${username}`;
   const accent = person === undefined ? 'var(--color-ios-brand)' : authorAccentColor(person.id, name);
   /* La présence d'un AMI (#9063) — telle que la passerelle l'a servie, et
      jamais sur une fiche bloquée : la pastille ne survit pas au geste. */
@@ -242,6 +262,7 @@ export function useProfileController(username: string, language: InterfaceLangua
   return {
     view,
     person,
+    seed,
     name,
     accent,
     presence,

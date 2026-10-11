@@ -401,6 +401,8 @@ const it = {
   'profile.avatar.updated': 'Foto del profilo aggiornata',
   'profile.avatar.error': 'Impossibile aggiornare la foto del profilo',
   'profile.banner.edit': 'Modifica il banner',
+  'profile.avatar.view': 'Visualizza la foto del profilo a schermo intero',
+  'profile.banner.view': 'Visualizza il banner a schermo intero',
   'profile.banner.updated': 'Banner aggiornato',
   'profile.banner.error': 'Impossibile aggiornare il banner',
   'profile.image.uploading': 'Invio in corso',

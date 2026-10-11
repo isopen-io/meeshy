@@ -44,9 +44,11 @@ describe('mon profil', () => {
     expect(html).toContain('data-game-notch="on"');
   });
 
-  test('le trésor et la Flamme', () => {
+  /* LA FLAMME NE SE MONTRE PAS SUR UNE FICHE (#10092) : aucun réglage ne permet à son propriétaire de la choisir. */
+  test('le trésor, et jamais la Flamme', () => {
     expect(t).toMatch(/Meeshes?/);
-    expect(t).toContain('Flamme : 6 jours');
+    expect(t).not.toContain('Flamme :');
+    expect(html).not.toContain('data-game-flame=');
   });
 
   test('la vitrine : jusqu’à quatre coupes, la porte vers toute la vitrine', () => {
@@ -190,9 +192,9 @@ describe('le jeu d’un autre : niveau, rang, trésor, Flamme', () => {
     expect(html).toContain('data-game-rank="voix"');
   });
 
-  test('le palier du trésor et la forme de la Flamme, nommés', () => {
+  test('le palier du trésor nommé, et jamais la Flamme (#10092)', () => {
     expect(t).toContain('Trésor : Coffre');
-    expect(t).toContain('Flamme : Brasier');
+    expect(t).not.toContain('Flamme');
   });
 
   test('jamais un compte exact : ni Gloire, ni jours de série, ni Meeshes', () => {
@@ -252,13 +254,14 @@ describe('la carte de contact : le niveau et le rang en quelques pictogrammes', 
     treasury: { tier: 'tresor' },
   };
 
-  test('l’anneau, le blason, le palier du trésor et la Flamme — chacun nommé au lecteur d’écran', () => {
+  test('l’anneau, le blason, le palier du trésor — chacun nommé au lecteur d’écran ; jamais la Flamme (#10092)', () => {
     const html = renderToStaticMarkup(<ContactGameStrip showcase={undefined} game={served} />);
     expect(html).toContain('data-game-contact-standing');
     expect(html).toContain('data-game-level="34"');
     expect(html).toContain('data-game-shield');
     expect(text(html)).toContain('Trésor : Trésor');
-    expect(text(html)).toContain('Flamme : Astre');
+    expect(text(html)).not.toContain('Flamme');
+    expect(html).not.toContain('data-game-flame');
   });
 
   test('avec les coupes : le niveau d’abord, les trois coupes ensuite', () => {

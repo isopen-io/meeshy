@@ -15,7 +15,7 @@ import { LANDING_COPY } from './landing-copy';
 import { minifyInlineScript } from '../../scripts/lib/minify-inline-script';
 import { landingBootScript, landingDocument, landingOgImagePath } from './landing-document';
 import { LANDING_LANGUAGES, landingPath, landingPaths, type LandingLanguage } from './landing-languages';
-import { WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from './world-entry';
+import { WORLD_ENTRY_HANDOFF_KEY, WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from './world-entry';
 
 /**
  * LA LANDING PRÉRENDUE (#10002) — le gate des balises, langue par langue, et le
@@ -128,7 +128,14 @@ describe('le point d’accroche de l’entrée invité (#10003)', () => {
   });
 });
 
-type Trace = { readonly assigned: string[]; readonly replaced: string[]; readonly pushed: unknown[]; fetches: number };
+type Trace = {
+  readonly assigned: string[];
+  readonly replaced: string[];
+  readonly pushed: unknown[];
+  /** Le jeton de passage tel qu'il était posé à l'instant de CHAQUE navigation (#10094). */
+  readonly handoffAtAssign: Array<string | null>;
+  fetches: number;
+};
 
 type Answer = { readonly status: number; readonly body: unknown } | 'network';
 
@@ -144,12 +151,18 @@ const harness = (input: {
   readonly deviceLanguages?: readonly string[];
   /** Le script tel que le prérendu l'inline — minifié (`minifyInlineScript`). */
   readonly script?: (config: LandingBootConfig) => string;
+  /** `sessionStorage` refusé (navigation privée, quota) — chaque accès lève. */
+  readonly sessionRefused?: boolean;
 }): Harness => {
   const html = documentFor(input.language);
   document.documentElement.removeAttribute('data-session');
   document.body.innerHTML = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
   const stored = new Map(Object.entries(input.stored ?? {}));
-  const trace: Trace = { assigned: [], replaced: [], pushed: [], fetches: 0 };
+  const trace: Trace = { assigned: [], replaced: [], pushed: [], handoffAtAssign: [], fetches: 0 };
+  const tab = new Map<string, string>();
+  const refused = (): never => {
+    throw new DOMException('refusé', 'SecurityError');
+  };
   const answers: readonly Answer[] = input.responses ?? [input.response ?? { status: 200, body: { success: true, data: world() } }];
   let pending: Promise<unknown> = Promise.resolve();
   let historyState: unknown = null;
@@ -183,10 +196,17 @@ const harness = (input: {
       getItem: (key: string) => stored.get(key) ?? null,
       setItem: (key: string, value: string) => void stored.set(key, value),
     },
+    sessionStorage: {
+      getItem: (key: string) => (input.sessionRefused === true ? refused() : (tab.get(key) ?? null)),
+      setItem: (key: string, value: string) => (input.sessionRefused === true ? refused() : void tab.set(key, value)),
+    },
     location: {
       search: '',
       hash: '',
-      assign: (to: string) => void trace.assigned.push(to),
+      assign: (to: string) => {
+        trace.handoffAtAssign.push(tab.get(WORLD_ENTRY_HANDOFF_KEY) ?? null);
+        trace.assigned.push(to);
+      },
       replace: (to: string) => void trace.replaced.push(to),
     },
     fetch: () => {
@@ -217,6 +237,7 @@ const harness = (input: {
     languageKey: INTERFACE_LANGUAGE_KEY,
     entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
     threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
+    handoffKey: WORLD_ENTRY_HANDOFF_KEY,
     appPath: href('list'),
     presence: LANDING_COPY[input.language].presence,
   };
@@ -415,6 +436,29 @@ describe('le parcours nom → langue → World Wide (#10003)', () => {
     submit();
     expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Amina%20%26%20co&language=ar']);
     expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('ar');
+  });
+
+  test('avant de naviguer, la landing pose dans l’ONGLET le jeton de passage : la clé servie, le nom rogné, la langue, l’instant (#10094)', async () => {
+    const { trace, settle } = harness({ language: 'fr' });
+    await settle();
+    const before = Date.now();
+    typeName('  Amina & co ');
+    pickLanguage('ar');
+    submit();
+    expect(trace.assigned.length).toBe(1);
+    const token: unknown = JSON.parse(trace.handoffAtAssign[0] ?? 'null');
+    expect(token).toMatchObject({ link: 'mshy_wx', name: 'Amina & co', language: 'ar' });
+    const at: unknown = typeof token === 'object' && token !== null ? Reflect.get(token, 'at') : null;
+    expect(typeof at === 'number' && at >= before && at <= Date.now()).toBe(true);
+  });
+
+  test('un onglet sans sessionStorage navigue quand même : sans jeton, la jonction demandera le geste (#10094)', async () => {
+    const { trace, settle } = harness({ language: 'fr', sessionRefused: true });
+    await settle();
+    typeName('Kenji');
+    pickLanguage('es');
+    submit();
+    expect(trace.assigned).toEqual(['/chat/mshy_wx?mode=anonymous&name=Kenji&language=es']);
   });
 
   test('un COMPTE qui entre en anonyme garde la langue de son interface', async () => {
