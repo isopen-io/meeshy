@@ -40,6 +40,7 @@ import {
   applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { CONVERSATION_CATEGORIES_QUERY_KEY } from './conversation-categories-key';
 import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
@@ -226,6 +227,13 @@ export type RealtimeConnection = {
    * (`api/realtime.ts`). */
   destroy(): void;
 };
+
+const CATEGORY_EVENTS = [
+  SERVER_EVENTS.CATEGORY_CREATED,
+  SERVER_EVENTS.CATEGORY_UPDATED,
+  SERVER_EVENTS.CATEGORY_DELETED,
+  SERVER_EVENTS.CATEGORIES_REORDERED,
+] as const;
 
 function defaultWindow(): RealtimeDeps['windowTarget'] {
   return typeof window === 'undefined' ? undefined : window;
@@ -820,6 +828,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX });
   };
 
+  /** `category:*` (#10103) — une catégorie changée sur un autre appareil repeint les sections de la liste. */
+  const onCategoriesChanged = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
+  };
+
   /** `user:updated` (#8889, #8890) — la photo et le nom d'un pair repeints dans chaque copie du cache ; la loi vit dans `my-portrait.ts`. */
   const onUserUpdated = (payload: unknown): void => {
     const update = profileRepaintOfUserUpdated(payload);
@@ -979,6 +992,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+  for (const event of CATEGORY_EVENTS) socket.on<unknown>(event, onCategoriesChanged);
   socket.on<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
@@ -1063,6 +1077,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+      for (const event of CATEGORY_EVENTS) socket.off<unknown>(event, onCategoriesChanged);
       socket.off<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);

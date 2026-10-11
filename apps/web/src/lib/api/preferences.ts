@@ -69,6 +69,14 @@ export function flagsOf(conversation: Conversation): ConversationFlags {
   };
 }
 
+/** La catégorie où le lecteur a rangé la conversation (#10103) — `undefined`
+ * pour toute forme qui n'est pas un identifiant : la conversation tombe alors
+ * dans les sections par date, jamais dans une section fantôme. */
+export function categoryIdOf(conversation: Conversation): string | undefined {
+  const value = preferenceEntryOf(conversation)?.['categoryId'];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
 export function customNameOf(conversation: Conversation): string | undefined {
   const entry = preferenceEntryOf(conversation);
   const value = entry?.['customName'];

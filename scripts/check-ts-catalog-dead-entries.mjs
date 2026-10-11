@@ -434,7 +434,11 @@ export const callersIn = (contents, nsNames) => {
 // Valeur MESURÉE le 2026-10-11.
 // 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
 // l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 → 275 (2026-10-11, #10103) : `me.categories` et `me.categoriesByCategoryId` ont leur
+// appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
+// Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
+// Valeur MESURÉE le 2026-10-11.
+const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
