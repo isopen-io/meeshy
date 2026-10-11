@@ -39,6 +39,7 @@ const arIdentity = {
   'conversation.details.share.failed': 'تعذّر إنشاء الرابط — أعد المحاولة بعد لحظة.',
   'conversation.details.share.unavailable': 'المشاركة غير متاحة هنا — انسخ الرابط: {url}',
   'thread.header.active_members': 'الأعضاء الأكثر نشاطًا',
+  'thread.header.share': 'مشاركة المحادثة',
 };
 
 export default arIdentity;

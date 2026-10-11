@@ -39,6 +39,7 @@ const frIdentity = {
   'conversation.details.share.failed': 'Impossible de créer le lien — réessayez dans un instant.',
   'conversation.details.share.unavailable': 'Partage impossible ici — copiez le lien : {url}',
   'thread.header.active_members': 'Participants les plus actifs',
+  'thread.header.share': 'Partager la conversation',
 } as const;
 
 export default frIdentity;

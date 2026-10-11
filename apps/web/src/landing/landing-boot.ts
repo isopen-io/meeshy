@@ -11,8 +11,11 @@
  *     est l'`x-default` qu'il doit pouvoir lire) ;
  *  3. changer de langue depuis le sélecteur, en retenant le choix pour
  *     l'application ;
- *  4. lire `GET /world` (#10000) : l'effectif, la clé de jonction, ou
- *     l'absence d'entrée ouverte — et masquer alors l'entrée ;
+ *  4. lire `GET /world` (#10000) : la clé de jonction, ou l'absence d'entrée
+ *     ouverte — et masquer alors l'entrée. L'EFFECTIF ne se montre qu'à un
+ *     COMPTE (#10205, directive porteur du 2026-10-11 : pas de nombre de
+ *     participants pour qui n'est pas membre de Meeshy), et seulement s'il est
+ *     servi : son absence n'empêche jamais d'entrer ;
  *  5. faire entrer dans World Wide d'UN clic (#10098, amende D-186) : le nom
  *     et la langue de lecture, choisie dans la liste déroulante posée avant
  *     « Rejoindre » (celle de la page par défaut) ; la langue choisie devient celle de l'interface d'un visiteur
@@ -118,7 +121,7 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     win.location.replace(target + win.location.search + win.location.hash);
   };
 
-  const entryOf = (raw: unknown): { readonly link: string; readonly count: string } | null => {
+  const entryOf = (raw: unknown): { readonly link: string; readonly count: string | null } | null => {
     if (typeof raw !== 'object' || raw === null || Reflect.get(raw, 'success') !== true) return null;
     const data: unknown = Reflect.get(raw, 'data');
     if (typeof data !== 'object' || data === null) return null;
@@ -129,9 +132,8 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     const count: unknown = Reflect.get(data, 'memberCount');
     const capped: unknown = Reflect.get(data, 'memberCountCapped');
     if (!text('identifier') || !text('title') || !text('shareLinkIdentifier')) return null;
-    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return null;
-    if (capped !== undefined && capped !== true) return null;
-    return { link: String(Reflect.get(data, 'shareLinkIdentifier')), count: capped === true ? `${count}+` : `${count}` };
+    const counted = typeof count === 'number' && Number.isInteger(count) && count >= 0 && (capped === undefined || capped === true);
+    return { link: String(Reflect.get(data, 'shareLinkIdentifier')), count: counted ? (capped === true ? `${count}+` : `${count}`) : null };
   };
 
   const unavailable = (status: number, raw: unknown): boolean =>
@@ -229,8 +231,9 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
           }
           link = entry.link;
           offerReturn(link);
-          for (const slot of all('[data-world-count]')) slot.textContent = config.presence.replace('{count}', entry.count);
-          flag('[data-world-presence]', true);
+          const count = session === 'member' ? entry.count : null;
+          for (const slot of all('[data-world-count]')) slot.textContent = count === null ? '' : config.presence.replace('{count}', count);
+          flag('[data-world-presence]', count !== null);
           go?.();
         })
         .catch(failed);

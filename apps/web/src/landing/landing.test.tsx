@@ -354,20 +354,43 @@ describe('le script de la landing — GET /world (#10000)', () => {
     world({ identifier: 7 }),
   ];
 
+  const member = { [SESSION_KEY]: JSON.stringify({ token: 't', sessionToken: 's', user: { id: 'u' }, expiresAt: Date.now() + 60_000 }) };
+
   for (const data of PAYLOADS) {
-    test(`même verdict que worldEntrySchema et formatMemberCount — ${JSON.stringify(data)}`, async () => {
-      const { settle } = harness({ language: 'fr', response: { status: 200, body: { success: true, data } } });
+    test(`un COMPTE lit l’effectif au même verdict que worldEntrySchema et formatMemberCount — ${JSON.stringify(data)}`, async () => {
+      const { settle } = harness({ language: 'fr', stored: member, response: { status: 200, body: { success: true, data } } });
       await settle();
       const parsed = worldEntrySchema.safeParse(data);
-      expect(visible('[data-world-presence]')).toBe(parsed.success);
-      if (!parsed.success) return;
+      const counted = parsed.success && parsed.data.memberCount !== undefined;
+      expect(visible('[data-world-presence]')).toBe(counted);
+      if (!parsed.success || parsed.data.memberCount === undefined) return;
       const expected = LANDING_COPY.fr.presence.replace(
         '{count}',
         formatMemberCount(parsed.data.memberCount, parsed.data.memberCountCapped),
       );
       expect(document.querySelector('[data-world-count]')?.textContent).toBe(expected);
     });
+
+    test(`un visiteur sans compte ne lit JAMAIS l’effectif (#10205) — ${JSON.stringify(data)}`, async () => {
+      const { settle } = harness({ language: 'fr', response: { status: 200, body: { success: true, data } } });
+      await settle();
+      expect(visible('[data-world-presence]')).toBe(false);
+      expect(document.querySelector('[data-world-count]')?.textContent ?? '').toBe('');
+    });
   }
+
+  test('un serveur qui ne sert plus l’effectif laisse entrer d’un clic, sans pastille (#10205)', async () => {
+    const { trace, settle } = harness({
+      language: 'fr',
+      response: { status: 200, body: { success: true, data: world({ memberCount: undefined }) } },
+    });
+    await settle();
+    expect(visible('[data-world-presence]')).toBe(false);
+    expect(visible('[data-world-form]')).toBe(true);
+    typeName('Awa');
+    expect(trace.assigned).toEqual(['/world?name=Awa&language=fr']);
+    expect(trace.handoffAtAssign[0]).toContain('mshy_wx');
+  });
 
   test('404 WORLD_UNAVAILABLE ⇒ l’entrée disparaît et la page le dit', async () => {
     const { settle } = harness({

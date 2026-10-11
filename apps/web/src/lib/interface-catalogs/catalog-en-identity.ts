@@ -39,6 +39,7 @@ const enIdentity = {
   'conversation.details.share.failed': 'Couldn’t create the link — try again in a moment.',
   'conversation.details.share.unavailable': 'Sharing isn’t available here — copy the link: {url}',
   'thread.header.active_members': 'Most active members',
+  'thread.header.share': 'Share the conversation',
 };
 
 export default enIdentity;

@@ -1,6 +1,7 @@
 import { useContext, type ComponentProps, type CSSProperties } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import { useGuestFocus } from '@/lib/view/guest-focus';
 import { useAuthorMood } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
@@ -39,6 +40,7 @@ export function AuthorAvatar({
   const mood = useAuthorMood(authorId);
   const openDetails = useContext(ConversationDetailsContext);
   const worldCard = useContext(WorldParticipantCardContext);
+  const guestFocus = useGuestFocus();
   const entries = avatarMenuEntries({
     username: props.profileUsername,
     storyRing: props.storyRing,
@@ -53,6 +55,14 @@ export function AuthorAvatar({
     hereActive: active || props.hereActive === true,
     hereFocused: focused || props.hereFocused === true,
   };
+
+  /* UN VISITEUR SANS COMPTE N'OUVRE AUCUNE FICHE (#10205, directive porteur
+     du 2026-10-11) — ni profil, ni story, ni menu : l'avatar reste un visage.
+     L'anneau de story part avec la porte, pour ne rien promettre au doigt. */
+  if (guestFocus) {
+    const { profileUsername: _profile, storyRing: _ring, ...visual } = props;
+    return <CardTriggerAvatar {...(mood === undefined ? {} : { mood })} {...visual} {...decorated} />;
+  }
 
   /* LA FICHE DE WORLD WIDE (#10102) — quand le fil l'ouvre (équipe, World
      Wide), toucher l'auteur, compte OU anonyme, ouvre sa fiche de modération

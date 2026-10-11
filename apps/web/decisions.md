@@ -5321,3 +5321,16 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 **Ce que cela coûte.** Rien : des règles CSS en moins, aucune case ni aucune hauteur de rangée touchée, la Lentille inchangée.
 
 **iOS** : la liste iOS ne rend World Wide ni Meeshy Global en carte, rien à reporter. **Kotlin natif** : rien (gel).
+
+## D-198 — Un visiteur sans compte lit World Wide sans effectif, sans détails ni fiches ; l'en-tête partage la conversation à côté de l'avatar, et l'appel suit `canStartCall` (2026-10-11, #10205, #10206, #10207, #10114)
+
+**Contexte.** Directives porteur du 2026-10-11 : « si on n'est pas utilisateur Meeshy, ne pas afficher le nombre de participants ni les détails de la conversation, ni les profils » ; « puisqu'on ne peut plus ouvrir le détail, mettre à côté de l'avatar le lien pour partager la conversation » ; « plus d'appel dans une conversation global, et dans une public seuls le créateur et les admins lancent ». Mesuré sur `dev` : l'en-tête d'un invité affichait « 42 participants » sous un cadenas (World Wide n'est pas chiffrée), son titre ouvrait les détails, un avatar ou un nom d'auteur menait au profil ou à la story, et la landing peignait « 16 personnes dans World Wide » à un visiteur.
+
+**Décision.**
+- **Le client décide par le STATUT du lecteur, jamais par l'absence d'un champ.** L'invité est celui de `useGuestFocus()` (session `guest` sans compte tenu, D-193). L'en-tête ne lui donne ni effectif, ni porte vers les détails (titre, avatar, menu, pile des plus actifs) ; `AuthorAvatar` et `PersonName` ne posent aucun lien de profil ni de story (l'anneau part avec la porte). Un membre garde tout. La passerelle cesse de servir ces données aux invités (#10205) : un champ absent ne se peint pas non plus.
+- **Le cadenas ne dit que ce qui est vrai** (`threadHeaderSubtitle`, `lib/view/thread-header-offer.ts`) : `e2ee` ou `hybrid`. Une conversation directe non chiffrée n'affiche plus « Chiffré de bout en bout ».
+- **L'appel consomme `canStartCall`** (`@meeshy/shared/utils/call-permission`), jamais une réimplémentation (`threadCallOffer`) : `start` lance ; `join-only` (une `public` pour qui ne peut pas lancer) ne garde que « Rejoindre » et « Revenir à l'appel » d'un appel déjà en cours ; `none` (global, diffusion, invité) ne montre rien. Le rôle de plateforme est celui SERVI (`useServedGlobalRole`, lecture déjà faite par le fil).
+- **Partager, à côté de l'avatar** (`ThreadShareButton`) : `/chat/<clé du lien>`, sur l'origine publique (`webOriginOf`). La clé n'est jamais écrite en dur : l'invité transmet le lien par lequel il est entré (`GuestIdentity.link`), un membre de World Wide la clé servie par `GET /world`. Sans clé connue, aucun bouton. Feuille du système (ou pont de la coque Android), sinon copie dite dans une bulle visible annoncée au lecteur d'écran. Absent de l'aperçu, qui garde « Agrandir ».
+- **La landing ne montre l'effectif qu'à un compte**, et seulement s'il est servi ; `memberCount` devient optionnel dans `worldEntrySchema` et sa jumelle `decodeWorldEntry` : la passerelle peut cesser de le servir sans casser la landing ni l'entrée `/world`.
+
+**Ce qui reste.** Les autres conversations publiques n'exposent pas de clé de lien stable à leur lecteur : le bouton n'y apparaît pas (une issue suivra si le porteur le veut). iOS : issues jumelles. **Kotlin natif** : rien (gel).

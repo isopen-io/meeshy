@@ -88,15 +88,16 @@ const WORLD = {
   unreadCount: 0,
 } as unknown as Conversation;
 
-const header = () => (
+const header = (extra: { readonly onOpenDetails?: () => void; readonly conversation?: Conversation; readonly expanded?: boolean } = {}) => (
   <ThreadHeader
     title="World Wide"
     accent="#6366f1"
-    conversation={WORLD}
+    conversation={extra.conversation ?? WORLD}
+    {...(extra.onOpenDetails === undefined ? {} : { onOpenDetails: extra.onOpenDetails })}
     viewerId="p-awa"
     group
     otherUnread={0}
-    expanded={false}
+    expanded={extra.expanded ?? false}
     onToggleExpanded={() => {}}
     currentRowTitle=""
     isAuto
@@ -114,11 +115,54 @@ describe('l’en-tête du fil d’un invité', () => {
     expect(el.querySelector('a[href="/chats"]')).toBeNull();
   });
 
-  test('au téléphone, au repos, il dit où l’on est : World Wide et son effectif', () => {
+  test('au téléphone, au repos, il dit où l’on est : World Wide — sans effectif ni cadenas (#10205, #10114)', () => {
     asGuest();
     const el = mount(header());
     expect(el.querySelector('h1')?.textContent).toBe('World Wide');
+    expect(el.textContent).not.toContain('participants');
+    expect(el.querySelector('header p svg')).toBeNull();
+  });
+
+  test('même quand un ancien serveur sert encore l’effectif, ni le titre ni l’avatar n’ouvrent les détails (#10205)', () => {
+    asGuest();
+    let opened = 0;
+    const el = mount(header({ onOpenDetails: () => (opened += 1) }));
+    expect(el.querySelector('[data-thread-title-details]')).toBeNull();
+    expect(el.textContent).not.toContain('42');
+    expect(opened).toBe(0);
+  });
+
+  test('aucun appel dans World Wide, conversation global (#10207, #10114)', () => {
+    asGuest();
+    const el = mount(header());
+    expect(el.querySelector('[data-thread-call]')).toBeNull();
+    expect(el.querySelector('[aria-label="Appeler"]')).toBeNull();
+  });
+
+  test('à côté de l’avatar, l’invité partage la conversation par le lien qui l’y a fait entrer (#10206)', async () => {
+    asGuest();
+    const shared: string[] = [];
+    const el = mount(header());
+    const button = el.querySelector<HTMLButtonElement>('[data-thread-share]');
+    expect(button).not.toBeNull();
+    expect(button?.getAttribute('aria-label')).toBe('Partager la conversation');
+    const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
+    const original = nav.share;
+    Object.defineProperty(nav, 'share', { configurable: true, value: async (data: ShareData) => void shared.push(data.url ?? '') });
+    await act(async () => button?.click());
+    Object.defineProperty(nav, 'share', { configurable: true, value: original });
+    expect(shared).toHaveLength(1);
+    expect(shared[0]?.endsWith('/chat/mshy_world')).toBe(true);
+  });
+
+  test('un membre garde l’effectif et le titre qui ouvre les détails ; aucun cadenas sur une conversation non chiffrée', () => {
+    sessionStore.setState({ session: ACCOUNT });
+    let opened = 0;
+    const el = mount(header({ onOpenDetails: () => (opened += 1), conversation: { ...WORLD, type: 'group' } as Conversation, expanded: true }));
     expect(el.textContent).toContain('42 participants');
+    act(() => el.querySelector<HTMLButtonElement>('[data-thread-title-details]')?.click());
+    expect(opened).toBe(1);
+    expect(el.querySelector('header p svg')).toBeNull();
   });
 
   test('un compte, même sous son identité anonyme, garde son retour et son en-tête replié', () => {
