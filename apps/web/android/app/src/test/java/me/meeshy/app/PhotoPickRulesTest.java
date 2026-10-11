@@ -39,13 +39,33 @@ public class PhotoPickRulesTest {
     }
 
     @Test
+    public void preciseImageTypesOpenThePhotoPickerOnPhotos() {
+        assertEquals("image/*", PhotoPickRules.pickerType(34,
+                accept("image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"), false));
+        assertEquals("image/*", PhotoPickRules.pickerType(33, accept("image/png", "image/*"), false));
+    }
+
+    @Test
+    public void aSinglePreciseTypeFiltersThePhotoPickerOnIt() {
+        assertEquals("image/png", PhotoPickRules.pickerType(34, accept(" Image/PNG "), false));
+        assertEquals("video/mp4", PhotoPickRules.pickerType(34, accept("video/mp4", "video/mp4"), false));
+    }
+
+    @Test
+    public void precisePhotosAndVideosOpenThePhotoPickerOnBoth() {
+        assertEquals("*/*", PhotoPickRules.pickerType(34, accept("image/jpeg", "video/mp4"), false));
+    }
+
+    @Test
     public void anyOtherAcceptKeepsTheFilePicker() {
         assertNull(PhotoPickRules.pickerType(34, accept(), false));
         assertNull(PhotoPickRules.pickerType(34, accept(""), false));
         assertNull(PhotoPickRules.pickerType(34, null, false));
-        assertNull(PhotoPickRules.pickerType(34, accept("image/png", "image/webp"), false));
         assertNull(PhotoPickRules.pickerType(34, accept("image/*", "application/pdf"), false));
         assertNull(PhotoPickRules.pickerType(34, accept(".png"), false));
         assertNull(PhotoPickRules.pickerType(34, accept("audio/*", "video/mp4"), false));
+        assertNull(PhotoPickRules.pickerType(34, accept("image/"), false));
+        assertNull(PhotoPickRules.pickerType(34, accept("image/png", ".jpg"), false));
+        assertNull(PhotoPickRules.pickerType(34, accept("imagery/png"), false));
     }
 }
