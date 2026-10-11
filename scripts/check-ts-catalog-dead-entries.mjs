@@ -441,7 +441,13 @@ export const callersIn = (contents, nsNames) => {
 // 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
 // la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
 // ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 274;
+// 274 → 278 (#10201, 2026-10-11) : `packs.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP1 #10149 (« le web installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`apps/web/src/lib/api/packs.ts`)
+// et ramènera la référence à 274. Valeur MESURÉE le 2026-10-11 sur dev 4c4c56ebd8 (CI run
+// 38150253397 rouge sur 278).
+const BASELINE_DEAD_ENTRIES = 278;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
