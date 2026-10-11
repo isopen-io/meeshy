@@ -12,6 +12,7 @@ import { apiDeps } from '@/lib/api/deps';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { seasonArchiveQuery } from '@/lib/api/game-archive';
 import { localMoment } from '@/lib/game/local-moment';
+import { useWeekCloseMoment } from '@/lib/game/season-clock';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -119,5 +120,7 @@ export function ProgressionSaisonPage({ focus, moment }: { readonly focus: numbe
 export default function ProgressionSaisonScreen() {
   suspendForGameCatalog(currentInterfaceLanguage(), 'progression');
   const asked = useOptionalRoute()?.params['saison'];
-  return <ProgressionSaisonPage focus={asked === undefined ? null : parseSeasonNumberParam(asked)} />;
+  // Restée ouverte, la page se repeint au dimanche 20 h (#10225) : l'instant se renouvelle à chaque fermeture.
+  const moment = useWeekCloseMoment();
+  return <ProgressionSaisonPage focus={asked === undefined ? null : parseSeasonNumberParam(asked)} moment={moment} />;
 }
