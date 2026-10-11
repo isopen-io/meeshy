@@ -71,7 +71,7 @@ const fakeViewport = () => {
   const fake = target;
   Object.defineProperties(fake, {
     width: { get: () => window.innerWidth },
-    height: { get: () => window.innerHeight - state.inset - state.offsetTop },
+    height: { get: () => window.innerHeight - state.inset },
     offsetTop: { get: () => state.offsetTop },
     offsetLeft: { get: () => 0 },
     pageTop: { get: () => window.scrollY + state.offsetTop },
@@ -159,6 +159,7 @@ try {
           const header = document.querySelector('header');
           return {
             barBottom: bar.getBoundingClientRect().bottom,
+            visibleTop: vv.offsetTop,
             visibleBottom: vv.offsetTop + vv.height,
             headerTop: header?.getBoundingClientRect().top ?? null,
             attribute: document.documentElement.getAttribute('data-keyboard'),
@@ -170,7 +171,7 @@ try {
         const tag = `${device} fil, clavier ouvert`;
         check(`${tag} : data-keyboard=open`, glue.attribute === 'open', JSON.stringify(glue));
         check(`${tag} : composeur collé au clavier`, Math.abs(glue.barBottom - glue.visibleBottom) <= 1, `${glue.barBottom} vs ${glue.visibleBottom}`);
-        check(`${tag} : en-tête en place`, glue.headerTop === null || glue.headerTop >= 0, String(glue.headerTop));
+        check(`${tag} : en-tête en place`, glue.headerTop === null || glue.headerTop >= glue.visibleTop, `${glue.headerTop} vs ${glue.visibleTop}`);
         if (OUT) await page.screenshot({ path: `${OUT}/${device}_thread_keyboard.png` });
         if (device === 'iphone') await page.evaluate(() => window.__keyboard(0, 0));
         else await page.setViewportSize(options.viewport);
