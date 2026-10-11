@@ -55,7 +55,8 @@ describe('InstitutionalPage — l’en-tête et le pied de meeshy.me (#10071)', 
 
   test('le pied porte la signature de marque', () => {
     expect(html).toContain('Meeshy 3.1.0');
-    expect(html).toContain('Services CEO');
+    expect(html).toContain('>by services.ceo<');
+    expect(html).toContain('href="https://services.ceo"');
   });
 });
 
