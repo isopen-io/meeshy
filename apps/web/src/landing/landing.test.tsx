@@ -118,7 +118,6 @@ describe('le document prérendu, par langue (#10002)', () => {
         for (const code of LANDING_LANGUAGES) {
           expect(select).toMatch(new RegExp(`<option[^>]*value="${code}"[^>]*>${getLanguageInfo(code).flag}`));
         }
-        expect(select).toMatch(new RegExp(`data-world-language-flag[^>]*>${getLanguageInfo(language).flag}<`));
         expect(select).not.toContain('<svg');
         const at = (needle: string): number => formHtml.indexOf(needle);
         expect(at('name="name"')).toBeGreaterThan(-1);
@@ -399,7 +398,8 @@ describe('le script de la landing — GET /world (#10000)', () => {
 const form = (): HTMLFormElement => document.querySelector('[data-world-form]') as HTMLFormElement;
 const nameField = (): HTMLInputElement => form().querySelector('input[name="name"]') as HTMLInputElement;
 const languageSelect = (): HTMLSelectElement => form().querySelector('select[data-world-language]') as HTMLSelectElement;
-const shownFlag = (): string | null => form().querySelector('[data-world-language-flag]')?.textContent ?? null;
+const shownFlag = (): string | null =>
+  Array.from(languageSelect().options).find((option) => option.value === languageSelect().value)?.textContent?.split(' ')[0] ?? null;
 const submit = () => form().dispatchEvent(new window.Event('submit', { cancelable: true }));
 const fillName = (value: string) => {
   nameField().value = value;

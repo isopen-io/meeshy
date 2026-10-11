@@ -101,7 +101,10 @@ async function mount(props: { readonly initialName?: string; readonly deps: Worl
 
 const nameField = (host: HTMLElement) => host.querySelector<HTMLInputElement>('[data-world-name]');
 const languageSelect = (host: HTMLElement) => host.querySelector<HTMLSelectElement>('select[data-world-language]');
-const shownFlag = (host: HTMLElement) => host.querySelector('[data-world-language-flag]')?.textContent ?? null;
+const shownFlag = (host: HTMLElement) => {
+  const select = languageSelect(host);
+  return Array.from(select?.options ?? []).find((option) => option.value === select?.value)?.textContent?.split(' ')[0] ?? null;
+};
 const enterButton = (host: HTMLElement) => host.querySelector<HTMLButtonElement>('[data-world-enter]');
 const click = async (element: Element | null) => {
   await act(async () => {

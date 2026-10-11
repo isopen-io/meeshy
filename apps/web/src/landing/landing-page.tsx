@@ -1,5 +1,5 @@
 import type { LandingCopy } from './landing-copy';
-import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, type LandingLanguage } from './landing-languages';
+import type { LandingLanguage } from './landing-languages';
 import { GlobeIcon, LanguageSelect, SiteFooter, SiteHeader } from './site-chrome';
 
 /**
@@ -26,7 +26,7 @@ export function LandingPage({ language, copy }: LandingPageProps) {
   return (
     <div className="ld" data-landing={language}>
       <div className="ld-glow" aria-hidden="true" />
-      <SiteHeader language={language} copy={copy} onLanding languageControl={<LanguageSelect language={language} copy={copy} />} />
+      <SiteHeader language={language} copy={copy} onLanding languageControl={<LanguageSelect language={language} label={copy.languageLabel} />} />
 
       <main>
         <section className="ld-wrap ld-hero">
@@ -44,40 +44,21 @@ export function LandingPage({ language, copy }: LandingPageProps) {
               {copy.returnToWorld}
             </a>
             <form id="rejoindre" className="ld-form" aria-label={copy.formLabel} data-world-form data-world-entry>
-              <div className="ld-step" data-world-step="name">
+              <div className="ld-step">
                 <label className="ld-field">
                   {copy.nameLabel}
                   <input type="text" name="name" required maxLength={40} autoComplete="nickname" placeholder={copy.namePlaceholder} />
                 </label>
+                <LanguageSelect language={language} label={copy.languageTitle} purpose="reading" describedBy="ld-join-note" />
                 <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
                   {copy.join}
                 </button>
               </div>
-              <fieldset className="ld-step ld-step--language" data-world-step="language" aria-describedby="ld-language-hint" hidden>
-                <legend>{copy.languageTitle}</legend>
-                <p id="ld-language-hint" className="ld-note">
-                  {copy.languageHint}
-                </p>
-                <div className="ld-langs">
-                  {LANDING_LANGUAGES.map((code) => (
-                    <label key={code} className="ld-lang" lang={code} dir={landingDirection(code)}>
-                      <input type="radio" name="language" value={code} defaultChecked={code === language} />
-                      {LANGUAGE_AUTONYMS[code]}
-                    </label>
-                  ))}
-                </div>
-                <button type="button" className="ld-btn ld-btn--ghost ld-btn--large" data-world-back>
-                  {copy.back}
-                </button>
-                <button type="submit" className="ld-btn ld-btn--primary ld-btn--large">
-                  {copy.enter}
-                </button>
-              </fieldset>
               <p className="ld-note ld-error" role="alert" data-world-error hidden>
                 {copy.entryFailed}
               </p>
             </form>
-            <p className="ld-note" data-world-entry>
+            <p id="ld-join-note" className="ld-note" data-world-entry>
               {copy.joinNote}
             </p>
             <p className="ld-note" data-world-unavailable hidden>
