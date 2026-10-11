@@ -171,6 +171,7 @@ final class GuestRouterProfileRefusalTests: XCTestCase {
 }
 
 /// #10216 — « Qui a vu » rend 403 à un invité : la porte ne lui est pas offerte.
+@MainActor
 final class GuestViewerAccessTests: XCTestCase {
 
     func test_offersWhoSaw_neverToAGuest() {
