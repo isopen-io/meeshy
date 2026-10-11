@@ -13,14 +13,19 @@ import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.util.Rational;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.RenderProcessGoneDetail;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -75,6 +80,10 @@ public class MainActivity extends BridgeActivity {
 
     /** #9847 — la video qui flotte joue-t-elle ? null tant que la page ne l'a pas dit. */
     private Boolean floatPlaying;
+
+    /** #10087 — le selecteur de photos du systeme, et l'entree qui attend sa reponse. */
+    private ActivityResultLauncher<Intent> photoPicker;
+    private ValueCallback<Uri[]> pickCallback;
 
     static boolean isInForeground() {
         return inForeground;
@@ -190,6 +199,25 @@ public class MainActivity extends BridgeActivity {
         if (call != null) call.pictureInPictureChanged(active);
     }
 
+    /** #10087 — l'entree recoit toujours une reponse, vide quand rien n'est choisi. */
+    private void photosPicked(ActivityResult result) {
+        ValueCallback<Uri[]> callback = pickCallback;
+        pickCallback = null;
+        if (callback == null) return;
+        Intent data = result.getData();
+        if (result.getResultCode() != RESULT_OK || data == null) {
+            callback.onReceiveValue(null);
+            return;
+        }
+        if (data.getClipData() != null) {
+            Uri[] picked = new Uri[data.getClipData().getItemCount()];
+            for (int i = 0; i < picked.length; i++) picked[i] = data.getClipData().getItemAt(i).getUri();
+            callback.onReceiveValue(picked);
+            return;
+        }
+        callback.onReceiveValue(data.getData() == null ? null : new Uri[] { data.getData() });
+    }
+
     private MeeshyCallPlugin callPlugin() {
         PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("MeeshyCall");
         return handle == null ? null : (MeeshyCallPlugin) handle.getInstance();
@@ -222,6 +250,7 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
+        photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);
         // #8547 — sans `poster`, le web montre le fond du `<video>` jusqu'a sa
         // premiere image ; la WebView dessine son icone « lecture » grise si
         // son client ne fournit pas d'apercu. On garde le client de Capacitor
@@ -230,6 +259,32 @@ public class MainActivity extends BridgeActivity {
             @Override
             public Bitmap getDefaultVideoPoster() {
                 return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+            }
+
+            /**
+             * #10087 — une entree qui n'accepte que des photos et/ou des
+             * videos ouvre le selecteur de photos du systeme, comme Chrome ;
+             * tout le reste garde le chemin de Capacitor.
+             */
+            @Override
+            @SuppressLint("NewApi")
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                String type = PhotoPickRules.pickerType(Build.VERSION.SDK_INT, params.getAcceptTypes(), params.isCaptureEnabled());
+                if (type == null) return super.onShowFileChooser(webView, callback, params);
+                Intent pick = new Intent(MediaStore.ACTION_PICK_IMAGES);
+                if (!PhotoPickRules.BOTH.equals(type)) pick.setType(type);
+                if (params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    pick.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
+                }
+                if (pickCallback != null) pickCallback.onReceiveValue(null);
+                pickCallback = callback;
+                try {
+                    photoPicker.launch(pick);
+                } catch (android.content.ActivityNotFoundException missing) {
+                    pickCallback = null;
+                    return super.onShowFileChooser(webView, callback, params);
+                }
+                return true;
             }
 
             @Override
