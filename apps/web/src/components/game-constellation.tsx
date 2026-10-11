@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { UserShowcaseResponse } from '@meeshy/shared/types/game';
 import {
   CONSTELLATION_FRAGMENTS_PER_STAR,
@@ -18,7 +20,7 @@ import { GAME_BRAND, GAME_INK, GAME_INK_2, GameCard } from './game-surface';
  * chacune débloque un cosmétique de profil — halo, cadre, scintillement — sans avantage de jeu. Le total est
  * DÉRIVÉ, jamais dépensé ; rien n'y vaut des points, une Meesh ou de l'argent.
  *
- * Le membre (`collected`) voit l'étoile suivante se remplir ; un visiteur (`stars`) ne voit que les étoiles que le
+ * Le membre (`GameConstellationOwn`) voit l'étoile suivante se remplir ; un visiteur (`stars`) ne voit que les étoiles que le
  * serveur lui sert, figées au mois et selon le réglage de la vitrine. Le dessin se retourne en arabe ; il est
  * décoratif (`aria-hidden`) : le texte dit tout. Miroir de `GameConstellationCard` (iOS).
  */
@@ -142,35 +144,36 @@ function Cosmetics({ cosmetics }: { readonly cosmetics: readonly ConstellationCo
 }
 
 /**
- * `collected` : le membre lui-même, sur son total collecté (`game.starFragments.collected`).
- * `stars` : un visiteur, sur les étoiles que le serveur lui sert (`visitorConstellation`).
+ * La carte, commune au membre et au visiteur. `progress` et `footer` sont les lignes du membre seul
+ * (`GameConstellationOwn`, `game-constellation-own.tsx`) : leurs textes vivent dans la partie `concept` du catalogue,
+ * que la page Vitrine charge et le profil d'un autre non.
  */
-export function GameConstellation(props: { readonly collected: number } | { readonly stars: number }) {
+export function GameConstellationCard({
+  collected,
+  progress,
+  footer,
+}: {
+  readonly collected: number;
+  readonly progress?: ReactNode;
+  readonly footer?: ReactNode;
+}) {
   const language = currentInterfaceLanguage();
-  const own = 'collected' in props;
-  const shape = constellationOf(own ? props.collected : props.stars * CONSTELLATION_FRAGMENTS_PER_STAR);
+  const shape = constellationOf(collected);
+  const own = progress !== undefined;
   return (
     <GameCard id="game-constellation" labelledBy="game-constellation-title">
       <h2 id="game-constellation-title" className="text-body font-bold" style={{ color: GAME_INK }}>
         {gameText('game.constellation.title')} · {translateGamePlural(language, 'game.constellation.stars', shape.stars)}
       </h2>
       <Sky stars={shape.stars} inStar={own ? shape.inStar : null} />
-      {own ? (
-        <>
-          <p className="text-caption" style={{ color: GAME_INK }}>
-            {translateGamePlural(language, 'game.constellation.next', shape.toNextStar)}
-          </p>
-          <p className="text-caption" style={{ color: GAME_INK_2 }}>
-            {gameText('game.constellation.how')}
-          </p>
-        </>
-      ) : null}
+      {progress}
       <Cosmetics cosmetics={shape.cosmetics} />
-      {own ? (
-        <p className="text-check" style={{ color: GAME_INK_2 }}>
-          {gameText('game.constellation.visibility')}
-        </p>
-      ) : null}
+      {footer}
     </GameCard>
   );
+}
+
+/** La constellation d'un VISITEUR : les seules étoiles que le serveur sert (`visitorConstellation`). */
+export function GameConstellation({ stars }: { readonly stars: number }) {
+  return <GameConstellationCard collected={stars * CONSTELLATION_FRAGMENTS_PER_STAR} />;
 }

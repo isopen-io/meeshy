@@ -263,6 +263,10 @@ const en = {
   'game.notebook.legacy_delete': 'Delete the old notebook',
   'game.notebook.device_only': 'Your photos live on this device.',
   'game.notebook.size': 'The notebook takes up {size}.',
+  'game.constellation.next.one': '{count} more star fragment to the next star',
+  'game.constellation.next.other': '{count} more star fragments to the next star',
+  'game.constellation.how': 'A star lights up for every ten star fragments collected. Each one unlocks a profile cosmetic, with no gameplay advantage.',
+  'game.constellation.visibility': 'Your constellation and its cosmetics are shown according to your showcase setting.',
 } as const satisfies GameConceptCatalog;
 
 export default en;

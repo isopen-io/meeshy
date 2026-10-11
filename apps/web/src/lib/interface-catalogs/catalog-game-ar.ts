@@ -711,15 +711,11 @@ const ar = {
   'game.constellation.title': 'الكوكبة',
   'game.constellation.stars.one': '{count} نجمة مضيئة',
   'game.constellation.stars.other': '{count} نجوم مضيئة',
-  'game.constellation.next.one': 'بقيت {count} شظية نجم للنجمة التالية',
-  'game.constellation.next.other': 'بقي {count} من شظايا النجم للنجمة التالية',
-  'game.constellation.how': 'تضيء نجمة مع كل عشر شظايا نجم تجمعها. وكل نجمة تفتح زينة للملف الشخصي، دون أي أفضلية في اللعب.',
   'game.constellation.cosmetics': 'الزينات المفتوحة',
   'game.constellation.cosmetic': '{kind} · النجمة {star}',
   'game.constellation.kind.halo': 'هالة',
   'game.constellation.kind.frame': 'إطار',
   'game.constellation.kind.sparkle': 'بريق',
-  'game.constellation.visibility': 'تظهر كوكبتك وزيناتها حسب إعداد واجهتك.',
 } as const satisfies GameCoreCatalog;
 
 export default ar;

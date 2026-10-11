@@ -703,15 +703,11 @@ const it = {
   'game.constellation.title': 'Costellazione',
   'game.constellation.stars.one': '{count} stella accesa',
   'game.constellation.stars.other': '{count} stelle accese',
-  'game.constellation.next.one': 'Ancora {count} frammento di stella per la prossima stella',
-  'game.constellation.next.other': 'Ancora {count} frammenti di stella per la prossima stella',
-  'game.constellation.how': 'Si accende una stella ogni dieci frammenti di stella raccolti. Ognuna sblocca un cosmetico del profilo, senza vantaggi di gioco.',
   'game.constellation.cosmetics': 'Cosmetici sbloccati',
   'game.constellation.cosmetic': '{kind} · stella {star}',
   'game.constellation.kind.halo': 'Alone',
   'game.constellation.kind.frame': 'Cornice',
   'game.constellation.kind.sparkle': 'Scintillio',
-  'game.constellation.visibility': 'La tua costellazione e i suoi cosmetici si mostrano secondo l’impostazione della vetrina.',
 } as const satisfies GameCoreCatalog;
 
 export default it;
