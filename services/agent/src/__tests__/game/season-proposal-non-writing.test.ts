@@ -111,6 +111,7 @@ describe('la proposition de saison ne peut ni publier, ni écrire, ni planifier 
     expect(agentClosure()).toEqual([
       'game/season-proposal.ts',
       'llm/types.ts',
+      'routes/internal-auth.ts',
       'routes/season-proposal.ts',
       'utils/parse-json-llm.ts',
     ]);
@@ -147,14 +148,14 @@ describe('la proposition de saison ne peut ni publier, ni écrire, ni planifier 
     }
   });
 
-  it('le câblage de production ne remet à la route que le LLM', () => {
+  it('le câblage de production ne remet à la route que le LLM et le secret interne', () => {
     const lines = readAbs(path.join(SRC_ROOT, 'server.ts'))
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.includes('seasonProposalRoutes'));
     expect(lines).toEqual([
       "import { seasonProposalRoutes } from './routes/season-proposal';",
-      'server.register((instance) => seasonProposalRoutes(instance, llm));',
+      'server.register((instance) => seasonProposalRoutes(instance, llm, { internalToken: env.AGENT_INTERNAL_TOKEN }));',
     ]);
   });
 });

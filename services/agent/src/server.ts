@@ -190,7 +190,7 @@ async function start() {
   server.register((instance) => readingRoutes(instance, bridgeReadingOutlet));
   // #10234 — proposition de saison (l'IA propose, un humain valide). Ne reçoit que le LLM :
   // ni base, ni file, ni horloge — la route rend un brouillon validé par la loi partagée.
-  server.register((instance) => seasonProposalRoutes(instance, llm));
+  server.register((instance) => seasonProposalRoutes(instance, llm, { internalToken: env.AGENT_INTERNAL_TOKEN }));
 
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);

@@ -1,5 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { seasonProposalRoutes } from '../../routes/season-proposal';
+import { INTERNAL_TOKEN_HEADER } from '../../routes/internal-auth';
+
+const INTERNAL_TOKEN = 'route-test-internal-token-0123456789abcdef';
 import type { LlmChatParams, LlmChatResponse, LlmProvider } from '../../llm/types';
 
 // #10234 (parent #10016) — « L'IA aide à construire une saison, un humain valide ».
@@ -44,14 +47,14 @@ function fakeLlm(...outputs: Array<string | Error | ((p: LlmChatParams) => strin
 
 async function buildApp(llm: LlmProvider): Promise<FastifyInstance> {
   const app = Fastify();
-  await app.register((instance) => seasonProposalRoutes(instance, llm));
+  await app.register((instance) => seasonProposalRoutes(instance, llm, { internalToken: INTERNAL_TOKEN, rateLimit: { max: 1000, windowMs: 60_000 } }));
   await app.ready();
   return app;
 }
 
 async function post(llm: LlmProvider, body: unknown = VALID_BODY) {
   const app = await buildApp(llm);
-  const response = await app.inject({ method: 'POST', url: URL, payload: body as object });
+  const response = await app.inject({ method: 'POST', url: URL, payload: body as object, headers: { [INTERNAL_TOKEN_HEADER]: INTERNAL_TOKEN } });
   await app.close();
   return response;
 }
