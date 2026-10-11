@@ -64,6 +64,12 @@ import {
   type GameVectorInputPhoto,
   type GameVectorInputPhotoDay,
 } from './game-vectors-law-photo.js';
+import {
+  GAME_VECTOR_LAWS_CONSTELLATION,
+  buildGameVectorsConstellation,
+  evaluateGameVectorConstellation,
+  type GameVectorInputConstellation,
+} from './game-vectors-law-constellation.js';
 import { prestigeTransition } from '../../utils/game/prestige.js';
 import {
   achievementGloryAtEarning,
@@ -179,7 +185,8 @@ export type GameVectorInputV2 =
   | { readonly law: 'showcase-visitor'; readonly owned: readonly TrophyRecord[]; readonly order: readonly string[] }
   | { readonly law: 'season-tense'; readonly startDay: string; readonly endDay: string; readonly served: SeasonTense; readonly dayKey: string; readonly minuteOfDay: number }
   | GameVectorInputPhoto
-  | GameVectorInputPhotoDay;
+  | GameVectorInputPhotoDay
+  | GameVectorInputConstellation;
 
 export const GAME_VECTOR_LAWS_V2 = [
   'league-week',
@@ -230,6 +237,7 @@ export const GAME_VECTOR_LAWS_V2 = [
   'showcase-visitor',
   'season-tense',
   ...GAME_VECTOR_LAWS_PHOTO,
+  ...GAME_VECTOR_LAWS_CONSTELLATION,
 ] as const;
 
 const lawSet: ReadonlySet<string> = new Set(GAME_VECTOR_LAWS_V2);
@@ -400,6 +408,10 @@ export function evaluateGameVectorV2(input: GameVectorInputV2): unknown {
     case 'photo-standing':
     case 'photo-alert':
       return evaluateGameVectorPhoto(input);
+    case 'constellation':
+    case 'constellation-key':
+    case 'league-next-close':
+      return evaluateGameVectorConstellation(input);
   }
 }
 
@@ -892,5 +904,6 @@ export function buildGameVectorsV2() {
     ...visitorShowcases,
     ...tenses,
     ...buildGameVectorsPhoto(),
+    ...buildGameVectorsConstellation(),
   ];
 }

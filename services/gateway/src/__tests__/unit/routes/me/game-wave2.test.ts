@@ -392,6 +392,7 @@ describe('GET /users/:userId/game/showcase', () => {
       visible: true,
       items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }],
       order: ['trophy.season-cup.1'],
+      constellation: { stars: 0 },
     });
     expect(shown.body).not.toContain('06T21');
     await stranger.close();
@@ -427,6 +428,7 @@ describe('GET /users/:userId/game/showcase', () => {
         { key: 'trophy.league-cup.2026-10.ambre.bronze', awardedMonth: '2026-10' },
       ],
       order: ['trophy.league-cup.2026-10.jade.gold', 'trophy.flame.365', 'trophy.league-cup.2026-10.ambre.bronze'],
+      constellation: { stars: 0 },
     });
     await app.close();
   });

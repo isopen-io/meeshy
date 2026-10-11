@@ -48,7 +48,7 @@ describe('TrophyService.showcaseFor', () => {
 
     const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
 
-    expect(view).toEqual({ visible: true, items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }], order: ['trophy.season-cup.1'] });
+    expect(view).toEqual({ visible: true, items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }], order: ['trophy.season-cup.1'], constellation: { stars: 0 } });
     expect(JSON.stringify(view)).not.toContain('06T21');
   });
 
