@@ -220,3 +220,55 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
     expect(header?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe(href('login'));
   });
 });
+
+describe('sur un téléphone court, la porte du mot de passe tient dans la vue (#10007)', () => {
+  const withViewportHeight = async (height: number, body: () => Promise<void>) => {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => {
+      const bound = /max-height:\s*(\d+)px/u.exec(query);
+      const matches = bound !== null && height <= Number(bound[1]);
+      return {
+        matches,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      };
+    }) as typeof window.matchMedia;
+    try {
+      await body();
+    } finally {
+      window.matchMedia = original;
+    }
+  };
+
+  test('à 667 px de haut, le blason cède la place à World Wide', async () => {
+    await withViewportHeight(667, async () => {
+      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      expect(el.querySelector('h1')).toBeNull();
+      expect(el.querySelector('a[data-login-world]')).not.toBeNull();
+      expect(el.querySelector('#login-username')).not.toBeNull();
+    });
+  });
+
+  test('à 844 px de haut, le blason reste', async () => {
+    await withViewportHeight(844, async () => {
+      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      expect(text(el.querySelector('h1'))).toBe('Meeshy');
+    });
+  });
+
+  test('le second facteur garde le blason, même court : il dit de qui vient la demande de code', async () => {
+    sessionStore.getState().beginTwoFactor({
+      user: { id: 'u1', username: 'ada', email: 'ada@example.com', firstName: 'Ada', lastName: 'L', displayName: 'Ada', avatar: '' },
+      twoFactorToken: 'jeton-2fa',
+    });
+    await withViewportHeight(667, async () => {
+      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      expect(text(el.querySelector('h1'))).toBe('Meeshy');
+    });
+  });
+});
