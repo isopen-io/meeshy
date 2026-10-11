@@ -78,6 +78,8 @@ function deps(overrides: Partial<WorldEntryDeps> = {}): { readonly deps: WorldEn
       deviceLanguages: () => ['es-ES', 'en'],
       go: (url, replace) => recorded.gone.push([url, replace]),
       joined: () => undefined,
+      canGoBack: () => false,
+      back: () => recorded.gone.push(['<back>', false]),
       ...overrides,
     },
   };
@@ -156,6 +158,50 @@ describe('WorldGuestEntry — le nom, puis la langue', () => {
     const { deps: d } = deps({ deviceLanguages: () => ['ja-JP', 'de-DE', 'en'] });
     const host = await mount({ initialName: 'Awa', deps: d });
     expect(radio(host, 'de')?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('retour depuis le nom rend la page d’avant quand l’application en a une', async () => {
+    const { deps: d, recorded } = deps({ canGoBack: () => true });
+    const host = await mount({ deps: d });
+    await click(host.querySelector('[data-world-back]'));
+    expect(recorded.gone).toEqual([['<back>', false]]);
+  });
+
+  /* L'historique du navigateur compte aussi l'entrée qu'a posée l'étape de la
+     langue (retour matériel) et les pages des autres sites : seul ce que
+     l'application sait de SA page d'avant décide. */
+  test('retour depuis le nom mène à l’accueil quand /world a été ouvert seul, quel que soit l’historique', async () => {
+    window.history.pushState({}, '', '/world');
+    const { deps: d, recorded } = deps({ canGoBack: () => false });
+    const host = await mount({ deps: d });
+    await click(host.querySelector('[data-world-back]'));
+    expect(recorded.gone).toEqual([['/', true]]);
+  });
+
+  test('les flèches parcourent les langues, un seul arrêt de tabulation', async () => {
+    const { deps: d } = deps();
+    const host = await mount({ initialName: 'Awa', deps: d });
+    await act(async () => {
+      radio(host, 'es')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+    expect(radio(host, 'pt')?.getAttribute('aria-checked')).toBe('true');
+    expect(Array.from(host.querySelectorAll('[role="radio"]')).filter((node) => node.getAttribute('tabindex') === '0')).toHaveLength(1);
+  });
+
+  test('en arabe, la flèche gauche avance', async () => {
+    await loadInviteCatalog('ar');
+    document.documentElement.lang = 'ar';
+    try {
+      const { deps: d } = deps();
+      const host = await mount({ initialName: 'Awa', deps: d });
+      expect(host.querySelector('[data-world-entry-screen]')?.getAttribute('dir')).toBe('rtl');
+      await act(async () => {
+        radio(host, 'es')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      });
+      expect(radio(host, 'pt')?.getAttribute('aria-checked')).toBe('true');
+    } finally {
+      document.documentElement.lang = 'fr';
+    }
   });
 
   test('retour depuis la langue rend le nom, saisi tel quel', async () => {
