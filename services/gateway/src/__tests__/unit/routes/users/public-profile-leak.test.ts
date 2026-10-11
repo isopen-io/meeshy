@@ -37,7 +37,13 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
   presenceFor: () => null,
   applyPresenceVisibilityAsOffline: (rows: unknown) => rows,
   gateProfilePresence: async (_f: unknown, _r: unknown, user: unknown) => user,
-  getOptionalAuth: () => async () => {},
+  // Un lecteur INSCRIT tiers : un lecteur sans compte ne lit plus aucun profil (#10205).
+  getOptionalAuth: () => async (req: any) => {
+    req.authContext = {
+      type: 'user', isAuthenticated: true, isAnonymous: false,
+      userId: '507f1f77bcf86cd7994390fe', registeredUser: { id: '507f1f77bcf86cd7994390fe', role: 'USER' },
+    };
+  },
 }));
 
 import { getUserById, getUserByUsername } from '../../../../routes/users/profile';
@@ -75,7 +81,8 @@ const JAMAIS_PUBLIC = [
 ] as const;
 
 function buildApp() {
-  const findFirst = jest.fn<any>(async () => LIGNE_COMPLETE);
+  // La question du blocage n'a pas de ligne : personne n'a bloqué personne.
+  const findFirst = jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : LIGNE_COMPLETE));
   const findUnique = jest.fn<any>(async () => LIGNE_COMPLETE);
   return { prisma: { user: { findFirst, findUnique } }, findFirst, findUnique };
 }
@@ -97,7 +104,7 @@ const PORTES = [
   { nom: '/u/:username', url: `${PREFIXE}/u/quelquun` },
 ] as const;
 
-describe('Un appelant ANONYME ne reçoit aucun champ privé', () => {
+describe('Un appelant TIERS inscrit ne reçoit aucun champ privé (un anonyme n’en lit plus aucun, #10205)', () => {
   it.each(PORTES)('$nom ne sert AUCUN des champs qui fuyaient', async ({ url }) => {
     const { prisma } = buildApp();
     const app = await monter(prisma);

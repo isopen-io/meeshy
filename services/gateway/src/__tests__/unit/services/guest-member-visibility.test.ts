@@ -41,6 +41,12 @@ describe('isGuestViewer', () => {
     expect(isGuestViewer({ type: 'user', isAuthenticated: false, isAnonymous: false })).toBe(true);
     expect(isGuestViewer({ type: 'user', isAuthenticated: true, isAnonymous: true })).toBe(true);
     expect(isGuestViewer({ type: 'bot', isAuthenticated: true, isAnonymous: false })).toBe(true);
+    expect(isGuestViewer({ isAuthenticated: true, isAnonymous: false })).toBe(true);
+    expect(isGuestViewer({ type: 'anonymous', isAuthenticated: true, isAnonymous: false, registeredUser: { id: 'u1' } })).toBe(true);
+  });
+
+  it('un contexte authentifié qui porte sa ligne User est un compte', () => {
+    expect(isGuestViewer({ isAuthenticated: true, isAnonymous: false, registeredUser: { id: 'u1' } })).toBe(false);
   });
 });
 

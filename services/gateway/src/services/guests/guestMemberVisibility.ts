@@ -24,11 +24,19 @@ export type GuestViewerContext = {
   readonly isAuthenticated?: boolean;
   readonly isAnonymous?: boolean;
   readonly participantId?: string;
+  readonly registeredUser?: unknown;
 } | null | undefined;
 
+/**
+ * Un COMPTE est un contexte authentifié, non anonyme, qui se déclare `user` ou
+ * porte sa ligne `User` (`registeredUser`, toujours posée par la branche JWT de
+ * `middleware/auth.ts`). Tout le reste — session de lien, requête nue, `bot`,
+ * contexte absent — est un invité.
+ */
 export function isGuestViewer(context: GuestViewerContext): boolean {
-  if (!context) return true;
-  return !(context.type === 'user' && context.isAuthenticated === true && context.isAnonymous === false);
+  if (!context || context.isAuthenticated !== true || context.isAnonymous === true) return true;
+  if (context.type === 'anonymous' || context.type === 'bot') return true;
+  return !(context.type === 'user' || context.registeredUser);
 }
 
 /** Un compte reçoit la liste entière ; un invité sa SEULE ligne ; une requête sans session, rien. */

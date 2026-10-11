@@ -246,21 +246,22 @@ describe('les cas où la garde ne doit RIEN faire', () => {
   });
 
   /**
-   * LE LECTEUR ANONYME est traité EXPLICITEMENT : il n'a bloqué personne et
-   * personne ne l'a bloqué, donc il voit le profil public. C'est un choix, pas
-   * un oubli — et il coûte zéro requête, ce que ce témoin garde aussi en
-   * mesurant qu'aucune interrogation de blocage n'est émise.
+   * LE LECTEUR SANS COMPTE ne lit AUCUN profil (#10205, directive porteur du
+   * 2026-10-11 : « il ne faut pas permettre d'afficher les profils
+   * utilisateurs non plus sauf les utilisateurs membres de meeshy »). Le refus
+   * est un 403 lisible, posé AVANT toute lecture de la personne : ni la ligne
+   * `User`, ni la question du blocage ne partent.
    */
-  it('sert le profil à un anonyme, sans interroger le blocage', async () => {
+  it('refuse le profil à un lecteur sans compte (403 ACCOUNT_REQUIRED), sans lire la personne', async () => {
     const app = await monter(null);
 
     const res = await app.inject({ method: 'GET', url: `${PREFIXE}/directory/people/${CIBLE}` });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toMatchObject({ success: false, code: 'ACCOUNT_REQUIRED' });
     const findFirst = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: any[][] } } } } }).prisma.user
       .findFirst;
-    const interrogationsDeBlocage = findFirst.mock.calls.filter((call) => call[0]?.where?.blockedUserIds);
-    expect(interrogationsDeBlocage).toHaveLength(0);
+    expect(findFirst.mock.calls).toHaveLength(0);
     await app.close();
   });
 
