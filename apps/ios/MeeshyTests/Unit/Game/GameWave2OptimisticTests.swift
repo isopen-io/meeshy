@@ -97,6 +97,20 @@ final class GameWave2OptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.season?.nextReward?.reward.kind, .points)
     }
 
+    /// Les points d'étape sont ceux de LA saison (calendrier servi, #10232) : le geste optimiste ne les ramène pas à 100.
+    func test_afterSeasonClaim_theNextRewardCarriesTheSeasonsOwnStepPoints() {
+        let state = GameWave2Fixture.state(GameWave2Fixture.game(season: GameWave2Fixture.season(steps: 4, claimed: [1, 2], stepPoints: 150)))
+        let next = GameWave2Optimistic.afterSeasonClaim(state, step: 3)
+        XCTAssertEqual(next.game.season?.nextReward?.reward, GameSeasonBlock.Reward(kind: .points, amount: 150))
+        XCTAssertEqual(next.game.season?.stepPoints, 150, "le geste garde les points de la saison")
+    }
+
+    func test_aStepShowsTheSeasonsPoints_andTheLawWhenTheServerDoesNotSendThem() {
+        XCTAssertEqual(GameWave2Fixture.season(stepPoints: 70).stepReward(1), SeasonReward(kind: .points, amount: 70))
+        XCTAssertEqual(GameWave2Fixture.season().stepReward(1), SeasonReward(kind: .points, amount: GameSeason.stepPoints))
+        XCTAssertEqual(GameWave2Fixture.season(stepPoints: 70).stepReward(5), SeasonReward(kind: .fragment, amount: 1))
+    }
+
     func test_afterSeasonClaim_refusesAnUnreachedOrAlreadyClaimedStep() {
         let state = GameWave2Fixture.state(GameWave2Fixture.game(season: GameWave2Fixture.season(steps: 4, claimed: [1, 2])))
         XCTAssertEqual(GameWave2Optimistic.afterSeasonClaim(state, step: 9), state)

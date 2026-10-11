@@ -158,6 +158,35 @@ final class GameArchiveTests: XCTestCase {
         XCTAssertEqual(shown, .opened(GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
     }
 
+    // MARK: - Le calendrier servi peint une saison future (#10232)
+
+    private static let shiftedSchedule = SeasonSchedule.normalize(["revision": 2, "seasons": [
+        ["number": 1, "startDay": "2026-12-21", "status": "scheduled", "themeKey": "language:fr", "stepPoints": 100, "copy": NSNull()],
+        ["number": 2, "startDay": "2027-03-01", "status": "scheduled", "themeKey": "language:ja", "stepPoints": 150, "copy": NSNull()],
+    ]])
+
+    func test_aFutureSeasonOfTheServedCalendar_isPaintedWithItsShiftedDates_beforeAnyRead() {
+        let shown = GameSeasonShown.of(focus: 3, game: GameWave2Fixture.game(), load: GameLoad(isLoading: true),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: Self.shiftedSchedule)
+        XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 3, themeKey: "language:ar", startDay: "2027-04-26", endDay: "2027-06-20")))
+    }
+
+    func test_aPausedSeasonOfTheServedCalendar_hasNoDateToPaint_andWaitsForItsRead() {
+        let paused = SeasonSchedule.normalize(["revision": 2, "seasons": [
+            ["number": 2, "startDay": "2027-02-15", "status": "paused", "themeKey": "language:es", "stepPoints": 100, "copy": NSNull()],
+        ]])
+        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(isLoading: true),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: paused)
+        XCTAssertEqual(shown, .skeleton)
+    }
+
+    func test_aServedArchive_winsOverTheCalendar() {
+        let archive = season(number: 3, status: .upcoming)
+        let shown = GameSeasonShown.of(focus: 3, game: GameWave2Fixture.game(), load: GameLoad(value: archive),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: Self.shiftedSchedule)
+        XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 3, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
+    }
+
     // MARK: - Une saison « à venir » gardée hors ligne, le jour J (#10131)
 
     private static let eve = LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 19 * 60 + 59)

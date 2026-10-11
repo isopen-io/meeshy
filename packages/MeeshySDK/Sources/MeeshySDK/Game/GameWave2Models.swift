@@ -219,10 +219,16 @@ public struct GameSeasonBlock: Codable, Sendable, Equatable {
     public let nextReward: NextReward?
     public let sealOwned: Bool
     public let sealPrice: Int
+    /// Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10232). Absent d'un serveur antérieur :
+    /// `servedStepPoints` rend la loi (100).
+    public let stepPoints: Int?
+
+    /// Les points d'une étape ordinaire tels que l'écran les montre : ceux de la saison, sinon la loi.
+    public var servedStepPoints: Int { stepPoints.flatMap { $0 > 0 ? $0 : nil } ?? GameSeason.stepPoints }
 
     public init(number: Int, themeKey: String, startDay: String, endDay: String, week: Int, stars: Int,
                 steps: Int, stepsTotal: Int, starsToNext: Int, progress: Double, completed: Bool,
-                claimedSteps: [Int], nextReward: NextReward?, sealOwned: Bool, sealPrice: Int) {
+                claimedSteps: [Int], nextReward: NextReward?, sealOwned: Bool, sealPrice: Int, stepPoints: Int? = nil) {
         self.number = number
         self.themeKey = themeKey
         self.startDay = startDay
@@ -238,6 +244,7 @@ public struct GameSeasonBlock: Codable, Sendable, Equatable {
         self.nextReward = nextReward
         self.sealOwned = sealOwned
         self.sealPrice = sealPrice
+        self.stepPoints = stepPoints
     }
 }
 

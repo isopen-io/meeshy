@@ -74,6 +74,8 @@ private struct GameWave2Frame<Content: View>: View {
         }
         .task { await progression.load() }
         .task { await model.loadSettings() }
+        // Le calendrier des saisons servi (#10232) : chargé à l'ouverture du Jeu, sans rien bloquer.
+        .task { await model.loadSeasonSchedule() }
     }
 }
 
