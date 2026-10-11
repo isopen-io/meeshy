@@ -9,11 +9,8 @@ import {
 } from '@/lib/i18n-world-participant-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useServedGlobalRole, type AdminAccessOptions } from '@/lib/view/use-admin-access';
-import {
-  opensWorldParticipantCards,
-  WorldParticipantCardContext,
-  type WorldParticipantCardOpener,
-} from '@/lib/view/world-participant-card-access';
+import { opensWorldParticipantCards } from '@/lib/view/world-participant-card-access';
+import { WorldParticipantCardContext, type WorldParticipantCardOpener } from '@/lib/view/world-participant-card-context';
 
 const LazyWorldParticipantCardSheet = lazy(() =>
   import('@/components/world-participant-card-sheet').then(async (m) => {

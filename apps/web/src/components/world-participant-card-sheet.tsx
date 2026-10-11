@@ -138,7 +138,7 @@ function CardBody({ view, purpose }: { readonly view: WorldParticipantCardView; 
       >
         <Avatar initials={header.initials} color="var(--accent, var(--color-ios-brand))" size={56} />
         <div className="grid min-w-0 gap-1">
-          <p className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          <p className="truncate text-thread font-bold leading-tight" style={{ color: 'var(--color-ios-ink)' }}>
             {header.name}
           </p>
           <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-caption">
