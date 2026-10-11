@@ -195,7 +195,7 @@ public enum GameSeason {
         )
     }
 
-    /// La récompense GRATUITE d'une étape : des points ; un fragment de cosmétique
+    /// La récompense GRATUITE d'une étape : des points ; UN fragment d'étoile (`GameStarFragments`)
     /// toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
     public static func stepReward(_ step: Int) -> SeasonReward? {
         guard (1...steps).contains(step) else { return nil }
