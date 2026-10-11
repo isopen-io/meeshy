@@ -71,12 +71,19 @@ const RANK_KEYS = {
 export const usageText = (language: InterfaceLanguage, usage: FrameUsage): string =>
   frameUsageText(language, describeFrameUsage(usage), usage.kind === 'rank' ? { rank: translateGame(language, RANK_KEYS[usage.rank]) } : {});
 
-/** L'origine de la passerelle : celle de la base d'API résolue, ou celle de la page pour une base relative. */
+/**
+ * L'origine de la passerelle : celle de la base d'API résolue. Une base
+ * malformée ne retombe JAMAIS sur l'origine de la PAGE — dans la coque
+ * Capacitor elle vaudrait `https://localhost`, une origine qui composerait
+ * une adresse d'actif FAUSSE plutôt qu'absente (#8385, même loi que
+ * `webOriginOf`) ; `onOrigin`/`urlOf` dégradent déjà proprement sur une
+ * origine vide.
+ */
 const apiOrigin = (): string => {
   try {
     return new URL(apiConfig.base === '' ? location.href : apiConfig.base, location.href).origin;
   } catch {
-    return location.origin;
+    return '';
   }
 };
 
