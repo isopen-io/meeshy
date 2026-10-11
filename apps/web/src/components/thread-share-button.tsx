@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/api/config';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { LINK_ANNOUNCE_MS } from '@/lib/links/link-copy';
@@ -45,7 +45,7 @@ export function ThreadShareButton({
 
   if (link === null) return null;
   const language = currentInterfaceLanguage();
-  const url = conversationShareUrl(link, apiConfig.base, typeof window === 'undefined' ? '' : window.location.origin);
+  const url = conversationShareUrl(link, publicWebOrigin(typeof window === 'undefined' ? '' : window.location.origin));
 
   const share = () => {
     void partagerLien({ title, text: title, url }, portail).then((issue) => {

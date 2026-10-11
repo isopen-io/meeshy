@@ -37,11 +37,8 @@ describe('conversationShareLinkOf', () => {
 });
 
 describe('conversationShareUrl', () => {
-  test('l’origine PUBLIQUE vient de la passerelle — jamais l’origine virtuelle d’une coque', () => {
-    expect(conversationShareUrl('mshy_world', 'https://gate.staging.meeshy.me', 'https://localhost')).toBe('https://staging.meeshy.me/chat/mshy_world');
-  });
-
-  test('une passerelle locale garde l’origine de la page, et la clé est encodée', () => {
-    expect(conversationShareUrl('a b', 'http://localhost:3000', 'http://localhost:5173')).toBe('http://localhost:5173/chat/a%20b');
+  test('/chat/<clé> sur l’origine publique, la clé encodée', () => {
+    expect(conversationShareUrl('mshy_world', 'https://staging.meeshy.me')).toBe('https://staging.meeshy.me/chat/mshy_world');
+    expect(conversationShareUrl('a b', 'http://localhost:5173')).toBe('http://localhost:5173/chat/a%20b');
   });
 });

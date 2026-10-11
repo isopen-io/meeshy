@@ -6,7 +6,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { WORLD_IDENTIFIER } from '@/lib/lens/world-pin';
-import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
+import { shareLinkUrl } from '@/lib/links/web-origin';
 
 /**
  * **LE LIEN PUBLIC D'UNE CONVERSATION, À TRANSMETTRE** (#10206, directive
@@ -36,9 +36,9 @@ export function conversationShareLinkOf(params: {
   return typeof params.worldLink === 'string' && params.worldLink !== '' ? params.worldLink : null;
 }
 
-/** L'URL à partager — l'origine PUBLIQUE (une coque n'a qu'une origine virtuelle). */
-export function conversationShareUrl(link: string, apiBase: string, pageOrigin: string): string {
-  return shareLinkUrl(webOriginOf(apiBase, pageOrigin), encodeURIComponent(link));
+/** L'URL à partager, sur l'origine PUBLIQUE (`publicWebOrigin` — une coque n'a qu'une origine virtuelle). */
+export function conversationShareUrl(link: string, publicOrigin: string): string {
+  return shareLinkUrl(publicOrigin, encodeURIComponent(link));
 }
 
 export const WORLD_ENTRY_QUERY_KEY = ['world', 'entry'] as const;
