@@ -707,6 +707,11 @@ export default defineConfig({
                    empreinte de build est celle du fichier par défaut, pas de
                    celui que le conteneur sert. Elle a son seau (ci-dessous). */
                 'config.js',
+                /* L'AVATAR ET LA BANNIÈRE DE WORLD WIDE (#10204) — servis par
+                   adresse ABSOLUE dans la conversation et lus par le réseau
+                   comme n'importe quelle photo de conversation : ni leurs
+                   sources SVG ni leurs PNG n'ont à peser sur l'installation. */
+                'brand/world-wide/**',
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
