@@ -5066,3 +5066,13 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 - le sélecteur de langue était écrit à 13 px. Safari iOS zoomait au focus (`check-phone-frame`). Il passe à 16 px ;
 - deux visites de gate attendaient encore la liste sur `/` (`check-list-folded-unread`, retour du disque du Flux) ;
 - le témoin institutionnel installait le service worker par `/chats` sur un serveur sans repli. Il passe par `/index.html`.
+
+## D-185 — On entre dans World Wide sans compte par `/world` : nom, glissement, langue principale, puis le fil ; un invité n'y joint que du `.txt` et de l'audio (2026-10-11, #10003)
+
+**Parcours.** `routes/world-entry.tsx` sert `/world` (la landing y mène par `/world?name=`). Nom → glissement → langue principale (la première langue de l'appareil parmi les sept, groupe radio au clavier, flèches inversées en arabe) → jonction invité par la clé que sert `GET /world` (`worldEndpoints.root`), jamais une clé en dur. La langue choisie devient la langue de lecture (rang 1 du Prisme) et la langue d'interface. Un invité déjà entré retourne directement dans son fil ; un compte suit la jonction par lien. « Retour » ramène de la langue au nom, puis à la page d'avant (lue sur la navigation de l'application, jamais sur `history.length`).
+
+**Pièces jointes de l'invité.** La jonction sert `entry.allowedAttachmentKinds` ; la session le garde comme des NOMS (`string[]`), et `guestAttachmentKindsFor` (`lib/send/guest-attachment-policy.ts`) écarte une famille inconnue (fail-closed) et applique le plafond `.txt` + audio à une session World Wide d'avant le champ. Charger la table des familles dans la session la faisait entrer dans la première peinture (90,41 Ko pour un plafond de 90) ; sans elle, 89,96 Ko. Le composeur n'offre que « Fichier texte (.txt) », « Audio » et le vocal, refuse en le nommant ce qui sort des familles, et dit la cause des refus serveur `GUEST_ATTACHMENT_*`. La passerelle reste l'autorité (#10001).
+
+**Budgets relevés sur mesure.** `interface_catalogs_invite` 20 → 22 Ko (20,91 mesurés : 16 clés `invite.world.*` × 7) ; `story_reader` 13 → 14 Ko (13,02 mesurés : le chemin d'envoi partagé porte la règle de l'invité).
+
+**Kotlin natif** : rien (gel). **Reste** : recette navigateur et coque Android (#10075), jumelles sans Zod (#10038), entrée depuis l'écran de connexion (#10007).
