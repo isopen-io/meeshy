@@ -48,7 +48,7 @@ import {
   type LeagueKey,
 } from '@meeshy/shared/utils/game/league';
 import { scheduledSeasonAt, scheduledSeasonCalendar } from '@meeshy/shared/utils/game/season-schedule';
-import { currentSeasonSchedule, seasonSchedule } from './SeasonScheduleService';
+import { currentSeasonSchedule, seasonScheduleForWrite } from './SeasonScheduleService';
 import { leagueCupTrophy } from '@meeshy/shared/utils/game/trophies';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameNotifier, type GameNotificationEvent } from './GameNotifier';
@@ -431,7 +431,15 @@ export class LeagueSettlement {
    * 2026-12-20, avec le premier horizon de saison.
    */
   async purgeOld(now: Date = new Date()): Promise<number> {
-    const horizon = leagueRetentionHorizon(now, await seasonSchedule(this.prisma));
+    // Une purge DÉTRUIT : jamais sur la constante faute de calendrier lu (audit #10016) — on la diffère.
+    let schedule;
+    try {
+      schedule = await seasonScheduleForWrite(this.prisma);
+    } catch {
+      log.warn('calendrier des saisons illisible : purge des ligues différée');
+      return 0;
+    }
+    const horizon = leagueRetentionHorizon(now, schedule);
     if (horizon === null) return 0;
     const where = { weekKey: { lt: horizon } };
     const [groups, memberships, points] = await Promise.all([

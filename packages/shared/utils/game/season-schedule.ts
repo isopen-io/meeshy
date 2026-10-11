@@ -134,8 +134,9 @@ function definitionFromUnknown(raw: unknown): SeasonDefinition | null {
   if (typeof r.startDay !== 'string' || !isDayKey(r.startDay) || !isMonday(r.startDay)) return null;
   if (r.status !== 'scheduled' && r.status !== 'paused') return null;
   if (!isSeasonThemeKey(r.themeKey) || !isLawfulStepPoints(r.stepPoints)) return null;
-  const copy = r.copy ?? null;
-  if (copy !== null && !isLawfulSeasonCopy(copy)) return null;
+  // Des textes devenus illisibles (une loi des textes durcie) ne retirent QUE les textes : jamais les dates
+  // d'une saison, qui se décalerait sinon en silence.
+  const copy = r.copy !== undefined && r.copy !== null && isLawfulSeasonCopy(r.copy) ? r.copy : null;
   return { number: r.number, startDay: r.startDay, status: r.status, themeKey: r.themeKey, stepPoints: r.stepPoints, copy };
 }
 
