@@ -15,30 +15,19 @@
 import { z } from 'zod';
 import { LEAGUE_KEYS } from '../utils/game/league.js';
 import { SEASON_STEPS, SEASON_WEEKS } from '../utils/game/season.js';
+import { GAME_ARCHIVE_RETENTIONS, GAME_ARCHIVE_STATUSES } from './game-archive-routes.js';
 
-export const GAME_ARCHIVE_ROUTES = {
-  /** Une saison par son numéro : calendrier, thème, état, et ma progression si j'y ai joué. GET. */
-  season: '/me/game/seasons/:number',
-  /** Une semaine de ligue par sa clé (le lundi) : mon résultat gravé, ou la purge. GET. */
-  leagueWeek: '/me/game/league/weeks/:weekKey',
-} as const;
-
-export const GAME_ARCHIVE_ROUTE_METHODS = { season: 'GET', leagueWeek: 'GET' } as const satisfies Record<keyof typeof GAME_ARCHIVE_ROUTES, 'GET'>;
-
-export const gameSeasonArchivePath = (number: number): string => GAME_ARCHIVE_ROUTES.season.replace(':number', String(number));
-export const gameLeagueWeekArchivePath = (weekKey: string): string => GAME_ARCHIVE_ROUTES.leagueWeek.replace(':weekKey', weekKey);
-
-/** Codes d'erreur des lectures : un paramètre qui n'est pas une saison ou une semaine est un 400. */
-export const GAME_ARCHIVE_ERROR_CODES = {
-  seasonInvalid: 'SEASON_INVALID',
-  leagueWeekInvalid: 'LEAGUE_WEEK_INVALID',
-  /** Le calendrier ne connaît pas (encore) cette saison. */
-  seasonNotFound: 'SEASON_NOT_FOUND',
-} as const;
-
-/** Par rapport à MON moment (mon fuseau, la fermeture du dimanche 20 h comprise). */
-export const GAME_ARCHIVE_STATUSES = ['past', 'current', 'upcoming'] as const;
-export type GameArchiveStatus = (typeof GAME_ARCHIVE_STATUSES)[number];
+export {
+  GAME_ARCHIVE_ERROR_CODES,
+  GAME_ARCHIVE_RETENTIONS,
+  GAME_ARCHIVE_ROUTE_METHODS,
+  GAME_ARCHIVE_ROUTES,
+  GAME_ARCHIVE_STATUSES,
+  gameLeagueWeekArchivePath,
+  gameSeasonArchivePath,
+  type GameArchiveRetention,
+  type GameArchiveStatus,
+} from './game-archive-routes.js';
 
 const dayKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const count = z.number().int().min(0);
@@ -78,8 +67,6 @@ export const gameLeagueWeekResultSchema = z
     settled: z.boolean(),
   })
   .strict();
-
-export const GAME_ARCHIVE_RETENTIONS = ['kept', 'purged'] as const;
 
 export const gameLeagueWeekArchiveSchema = z
   .object({

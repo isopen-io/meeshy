@@ -113,12 +113,16 @@ struct GameArchiveModelsTests {
     }
 }
 
-/// Lecture de `packages/shared/types/game-archive.ts`, le contrat que la passerelle valide.
+/// Lecture du contrat que la passerelle valide : `packages/shared/types/game-archive.ts` (les schémas Zod) et
+/// `game-archive-routes.ts` (sa partie sans Zod : routes, états, rétentions).
 private enum SharedArchiveSchema {
     static func source() throws -> String {
         var url = URL(fileURLWithPath: #filePath)
         for _ in 0..<5 { url.deleteLastPathComponent() }
-        return try String(contentsOf: url.appendingPathComponent("shared/types/game-archive.ts"), encoding: .utf8)
+        let types = url.appendingPathComponent("shared/types")
+        return try ["game-archive.ts", "game-archive-routes.ts"]
+            .map { try String(contentsOf: types.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// Les clés de premier niveau d'un `export const NOM = z.object({ … })`.
