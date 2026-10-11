@@ -1,4 +1,6 @@
 import type { SessionState } from '@/lib/api/session';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import {
   GUEST_KIND_EXTENSIONS,
@@ -74,4 +76,45 @@ export function guestAttachmentVerdict(file: File, kinds: readonly GuestKind[]):
   if (kind === null || !kinds.includes(kind)) return { ok: false, reason: 'kind' };
   if (file.size > GUEST_KIND_MAX_BYTES) return { ok: false, reason: 'size' };
   return { ok: true };
+}
+
+/**
+ * Une PORTE du composeur (tuile, bouton de la barre) désignée par un type —
+ * `image/*`, `audio/*`, ou le type précis d'un fichier — est-elle ouverte à
+ * cet invité ? Une famille ouverte prime sur les droits instantanés de sa
+ * jonction (#10029) : seul le lien en décide.
+ */
+export function guestKindsAllowMime(kinds: readonly GuestKind[], mimeType: string | undefined): boolean {
+  if (mimeType === 'image/*') return kinds.includes('image');
+  if (mimeType === 'audio/*') return kinds.includes('audio');
+  const kind = guestKindOfMimeType(mimeType);
+  return kind !== null && kinds.includes(kind);
+}
+
+/** Ce que l'hôte du composeur sait d'un invité restreint : ses familles, et le titre du fil (« Partager dans … »). */
+export type GuestAttachments = { readonly kinds: readonly GuestKind[]; readonly title: string };
+
+const INLINE_KEY = {
+  text: 'composer.guest.inline.text',
+  audio: 'composer.guest.inline.audio',
+  image: 'composer.guest.inline.image',
+  pdf: 'composer.guest.inline.pdf',
+} as const satisfies Readonly<Record<GuestKind, string>>;
+
+/** Les familles ouvertes, jointes par la conjonction de la langue (« fichiers texte (.txt) et audio »). */
+export function guestKindsPhrase(language: InterfaceLanguage, kinds: readonly GuestKind[]): string {
+  const names = kinds.map((kind) => translate(language, INLINE_KEY[kind]));
+  return new Intl.ListFormat(language, { type: 'conjunction', style: 'long' }).format(names);
+}
+
+/** Le plafond de taille dit dans la langue (« 25 Mo », « 25 MB »). */
+export function guestMaxSizeLabel(language: InterfaceLanguage): string {
+  return new Intl.NumberFormat(language, { style: 'unit', unit: 'megabyte', unitDisplay: 'short' }).format(GUEST_KIND_MAX_BYTES / (1024 * 1024));
+}
+
+/** Pourquoi CE fichier ne passe pas — nommé, avec ce qui passe (planche « Attach »). */
+export function guestRefusalText(language: InterfaceLanguage, params: { readonly name: string; readonly reason: 'kind' | 'size'; readonly kinds: readonly GuestKind[] }): string {
+  return params.reason === 'size'
+    ? translate(language, 'composer.guest.refused.size', { name: params.name, max: guestMaxSizeLabel(language) })
+    : translate(language, 'composer.guest.refused.kind', { name: params.name, kinds: guestKindsPhrase(language, params.kinds) });
 }

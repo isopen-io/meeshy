@@ -32,6 +32,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
+import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
@@ -190,10 +191,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * (F8) — le résultat est alors `undefined`, sans conséquence tant que le
    * rendu final ne montre pas encore le fil réel.
    */
-  const viewerParticipant = useMemo(
-    () => conversation?.participants.find((p) => p.userId === viewer.id),
-    [conversation, viewer.id],
-  );
+  const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
@@ -951,7 +950,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             stickyProtection={compose.stickyProtection}
             /* `replyToId` COMPOSÉ PAR `useThreadCompose` (#6175, #7429) — `Composer` ne connaît que la citation PRÉ-ADRESSÉE. */
             onDraftChange={compose.reportComposerDraft}
-            {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
+            {...composerAccess}
             {...(compose.replyTo
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
