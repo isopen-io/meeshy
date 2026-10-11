@@ -700,6 +700,18 @@ const en = {
   'game.archive.week.purged': 'This week is too old: its result was erased, as planned.',
   'game.archive.week.upcoming': 'This week hasn’t started yet.',
   'game.archive.week.privacy': 'Only your result is kept: the other members of the group can’t be looked up again.',
+  'game.constellation.title': 'Constellation',
+  'game.constellation.stars.one': '{count} star lit',
+  'game.constellation.stars.other': '{count} stars lit',
+  'game.constellation.next.one': '{count} more star fragment to the next star',
+  'game.constellation.next.other': '{count} more star fragments to the next star',
+  'game.constellation.how': 'A star lights up for every ten star fragments collected. Each one unlocks a profile cosmetic, with no gameplay advantage.',
+  'game.constellation.cosmetics': 'Unlocked cosmetics',
+  'game.constellation.cosmetic': '{kind} · star {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Frame',
+  'game.constellation.kind.sparkle': 'Sparkle',
+  'game.constellation.visibility': 'Your constellation and its cosmetics are shown according to your showcase setting.',
 } as const satisfies GameCoreCatalog;
 
 export default en;

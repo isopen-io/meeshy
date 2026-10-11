@@ -700,6 +700,18 @@ const es = {
   'game.archive.week.purged': 'Esta semana es demasiado antigua: su resultado se borró, como estaba previsto.',
   'game.archive.week.upcoming': 'Esta semana aún no ha empezado.',
   'game.archive.week.privacy': 'Solo se guarda tu resultado: los demás miembros del grupo no se pueden volver a consultar.',
+  'game.constellation.title': 'Constelación',
+  'game.constellation.stars.one': '{count} estrella encendida',
+  'game.constellation.stars.other': '{count} estrellas encendidas',
+  'game.constellation.next.one': 'Falta {count} fragmento de estrella para la próxima estrella',
+  'game.constellation.next.other': 'Faltan {count} fragmentos de estrella para la próxima estrella',
+  'game.constellation.how': 'Se enciende una estrella por cada diez fragmentos de estrella reunidos. Cada una desbloquea un cosmético de perfil, sin ventaja de juego.',
+  'game.constellation.cosmetics': 'Cosméticos desbloqueados',
+  'game.constellation.cosmetic': '{kind} · estrella {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Marco',
+  'game.constellation.kind.sparkle': 'Destello',
+  'game.constellation.visibility': 'Tu constelación y sus cosméticos se muestran según el ajuste de tu vitrina.',
 } as const satisfies GameCoreCatalog;
 
 export default es;

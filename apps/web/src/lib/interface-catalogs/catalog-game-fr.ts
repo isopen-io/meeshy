@@ -714,6 +714,18 @@ const fr = {
   'game.archive.week.purged': 'Cette semaine est trop ancienne : son résultat a été effacé, comme prévu.',
   'game.archive.week.upcoming': 'Cette semaine n’a pas encore commencé.',
   'game.archive.week.privacy': 'Seul ton résultat est gardé : les autres membres du groupe ne se relisent pas.',
+  'game.constellation.title': 'Constellation',
+  'game.constellation.stars.one': '{count} étoile allumée',
+  'game.constellation.stars.other': '{count} étoiles allumées',
+  'game.constellation.next.one': 'Encore {count} fragment d’étoile pour la prochaine étoile',
+  'game.constellation.next.other': 'Encore {count} fragments d’étoile pour la prochaine étoile',
+  'game.constellation.how': 'Une étoile s’allume tous les dix fragments d’étoile collectés. Chacune débloque un cosmétique de profil, sans avantage de jeu.',
+  'game.constellation.cosmetics': 'Cosmétiques débloqués',
+  'game.constellation.cosmetic': '{kind} · étoile {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Cadre',
+  'game.constellation.kind.sparkle': 'Scintillement',
+  'game.constellation.visibility': 'Ta constellation et ses cosmétiques se montrent selon le réglage de la vitrine.',
 } as const;
 
 export default fr;
