@@ -27,7 +27,7 @@ import * as worldEndpoints from '@meeshy/shared/api/endpoints/world';
 import budgets from '../budgets.json';
 import { LANDING_COPY } from '../src/landing/landing-copy';
 import { landingDocument, landingOgImagePath } from '../src/landing/landing-document';
-import { LANDING_LANGUAGES, landingFiles, landingPath } from '../src/landing/landing-languages';
+import { LANDING_APP_PATH, LANDING_LANGUAGES, landingFiles, landingPath } from '../src/landing/landing-languages';
 import { WORLD_GUEST_ENTRY_TEMPLATE } from '../src/landing/world-entry';
 import { resolveApiConfig } from '../src/lib/api/config';
 import { SESSION_STORAGE_KEY } from '../src/lib/api/session';
@@ -132,6 +132,7 @@ for (const language of LANDING_LANGUAGES) {
       sessionKey: SESSION_STORAGE_KEY,
       languageKey: INTERFACE_LANGUAGE_KEY,
       entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
+      appPath: LANDING_APP_PATH,
     },
   });
   const failures = check(language, html);

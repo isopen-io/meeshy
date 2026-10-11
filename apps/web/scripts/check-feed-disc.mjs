@@ -250,7 +250,7 @@ for (const scheme of ['light', 'dark']) {
       check(await waitPath(page, '/chats'), `${g} : sur le Flux, le tap ne ramène pas à la liste`);
     });
     const deRetour = await settled(page);
-    check((await navs(page)).slice(avant).join('|') === 'push /', `${g} : le tap vers la liste empile autre chose que / — ${(await navs(page)).slice(avant)}`);
+    check((await navs(page)).slice(avant).join('|') === 'push /chats', `${g} : le tap vers la liste empile autre chose que /chats — ${(await navs(page)).slice(avant)}`);
     check(disparitionsRetour === 0, `${g} : le disque a quitté le document pendant la bascule vers la liste (${disparitionsRetour})`);
     check(samePlace(repos, deRetour) && deRetour?.label === 'Flux', `${g} : revenu sur la liste, le disque n'est pas « Flux » à sa place`);
 

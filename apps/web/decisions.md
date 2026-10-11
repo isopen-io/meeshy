@@ -5061,6 +5061,12 @@ La règle « une connexion par identité » vit dans `keepRealtimeConnection` (m
 
 **Témoins.** `landing/landing.test.tsx` (balises par langue, script rejoué par son texte : session, langue, `GET /world` contre `worldEntrySchema`, 404, entrée encodée), `landing/landing-static.test.ts` (sitemap, robots, nginx, service worker, manifeste, images 1200 × 630), `landing/landing-routes.test.ts` et `routes/home.test.tsx` (`/chats`, `/` dans la coque et sur le web), `scripts/check-bascule-recette.mjs` (la recette sert la landing sur `/`).
 
+**Livraison (2026-10-10).** `bun run build` mesure les sept landings entre 8,43 Ko (/en) et 8,77 Ko (/ar) gzip. `landing_page.kb` est posé à 10 Ko (Ko supérieur + 1), à confirmer par le porteur. `first_paint` tient. Le gate complet a trouvé quatre défauts du lot, tous corrigés avant la fusion :
+- l'exemple « Ex. Amina » dans le champ du nom : c'est un nom de fixture, que `check-gateway-build` refuse. Il devient « Ex. Awa » et un témoin garde la copie ;
+- le sélecteur de langue était écrit à 13 px. Safari iOS zoomait au focus (`check-phone-frame`). Il passe à 16 px ;
+- deux visites de gate attendaient encore la liste sur `/` (`check-list-folded-unread`, retour du disque du Flux) ;
+- le témoin institutionnel installait le service worker par `/chats` sur un serveur sans repli. Il passe par `/index.html`.
+
 ## D-185 — Sur grand écran, la liste et le fil côte à côte : un CADRE du routeur garde la liste montée, les adresses ne changent pas (2026-10-11, #10073)
 
 **Contexte.** Sur ordinateur, ouvrir une conversation faisait quitter la liste : `/chats` et `/c/:id` sont deux écrans découpés qui se remplacent, et `<Screen key={routeKey}>` démonte l'un pour monter l'autre.

@@ -474,6 +474,21 @@ export function safeNextPath(raw: string | null): string | null {
 }
 
 /**
+ * `/` ÉTAIT LA LISTE jusqu'à #10002 ; c'est désormais la landing publique. Un
+ * `next` ou un `returnUrl` qui la vise encore (un lien d'e-mail parti avant la
+ * bascule) demandait la liste : une session qui s'ouvre ne finit jamais sur la
+ * landing (décision porteur du 2026-10-10 : « après connexion : `/chats` »).
+ */
+const LEGACY_LIST_PATH = '/';
+
+/** `next` s'il est sûr ET qu'il n'est pas la landing — sinon `null`, l'appelant
+ * rendant sa destination par défaut (la liste, l'accueil post-inscription). */
+export function sessionNextPath(raw: string | null): string | null {
+  const safe = safeNextPath(raw);
+  return safe === LEGACY_LIST_PATH ? null : safe;
+}
+
+/**
  * LA DESTINATION D'UNE SESSION QUI VIENT DE S'OUVRIR — `next` s'il est sûr,
  * l'accueil sinon. L'accueil est FOURNI par l'appelant (`href('list')`) : ce
  * module décide, il ne connaît pas le routeur.
@@ -485,5 +500,5 @@ export function safeNextPath(raw: string | null): string | null {
  * l'écran) le recouvrirait par `/`.
  */
 export function landingAfterSession(next: string | null, home: string): string {
-  return safeNextPath(next) ?? home;
+  return sessionNextPath(next) ?? home;
 }
