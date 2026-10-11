@@ -1,7 +1,7 @@
 {
   "$format": {
-    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, mint-fragments, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
-    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier, held, gate (palier des étapes, null : rien ne retient), step (prochaine étape {level, kind, target, current, met, rank} ou null), unlockLevel (lu sur le score et le record)} — le plafond se lit sur la Gloire (`glory`), les étapes sur `steps` (#9706) ; mint-price → {price, edition} (+30 % toutes les dix frappes, plafond 16 556) ; mint-fragments → {number, edition, cost (5), held, canMint, missingFragments, levelBefore, levelAfter, gloryGained} ; chest → {points (100 à 10 000 selon la complexité des missions), fragment (la prime), freeze, glory, meeshFragments} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
+    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, star-fragments, guide, puis — vague 2, #9384 à #9392 — league-week, league-week-points, league-access, league-pseudonym, league-pseudonym-draw, league-pseudonym-check, league-snapshot, league-groups, league-settle, league-friends, league-visibility, duo-draw, duo-progress, duo-reward, duo-invite, duo-transition, season-calendar, season-at, season-progress, season-reward, season-claim, season-settlement, season-stars, season-seal, trophy-key, trophy-parse, trophy-flame, showcase-order, showcase-view, showcase-cap, trophy-month, atlas, atlas-language, prestige, rarity, rarity-display, mythic-seats, mythic-crossing, mythic-signature, badge-tier, badge-served, guide-v2, guide-choose, photo-moment). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax, cap (null : sans limite), legacyLevel, legacyTier, held, gate (palier des étapes, null : rien ne retient), step (prochaine étape {level, kind, target, current, met, rank} ou null), unlockLevel (lu sur le score et le record)} — le plafond se lit sur la Gloire (`glory`), les étapes sur `steps` (#9706) ; mint-price → {price, edition} (+30 % toutes les dix frappes, plafond 16 556) ; chest → {points (500 à 10 000 selon la complexité des missions, prime comprise), fragment (UN fragment d'étoile), freeze, glory, bonus (none | fifth | whole), bonusPoints (au cours de la Meesh : nextMeeshPrice ou son cinquième arrondi)} ; star-fragments → {collected} ; glory-standing → {rank, division (héritée 1–3), division5 (V=5 à I=1), …, mythicNumber, mythicEdition, levelCap (499, 1000 ou null)} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment ; league-groups → {groups:[{groupId, memberIds}]} ; league-settle → {settled:[{userId, weekPoints, rank, zone, cup, outcome}], pointsToPromotion} ; season-calendar → le calendrier ; atlas → le résumé et les entrées ; rarity → {rarity, measured, border, glory} ; guide-v2 / guide-choose / photo-moment → le moment, la carte choisie, l'emblème. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
     "provenance": "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373, vague 2 #9384 à #9392 : les cas de la vague 2 viennent APRÈS ceux de la vague 1, jamais mêlés). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts."
   },
   "vectors": [
@@ -1864,90 +1864,6 @@
         "levelBefore": 9,
         "levelAfter": 9,
         "levelsLost": 0,
-        "gloryGained": 0
-      }
-    },
-    {
-      "_label": "frappe par fragments : 5 en poche, 12 frappées",
-      "input": {
-        "law": "mint-fragments",
-        "score": 121800,
-        "mintedLifetime": 12,
-        "fragmentsHeld": 5,
-        "glory": 0
-      },
-      "expected": {
-        "number": 13,
-        "edition": "silver",
-        "cost": 5,
-        "held": 5,
-        "canMint": true,
-        "missingFragments": 0,
-        "levelBefore": 34,
-        "levelAfter": 34,
-        "gloryGained": 1000
-      }
-    },
-    {
-      "_label": "frappe par fragments : 3 en poche, 0 frappées",
-      "input": {
-        "law": "mint-fragments",
-        "score": 2000,
-        "mintedLifetime": 0,
-        "fragmentsHeld": 3,
-        "glory": 0
-      },
-      "expected": {
-        "number": 1,
-        "edition": "silver",
-        "cost": 5,
-        "held": 3,
-        "canMint": false,
-        "missingFragments": 2,
-        "levelBefore": 4,
-        "levelAfter": 4,
-        "gloryGained": 0
-      }
-    },
-    {
-      "_label": "frappe par fragments : 12 en poche, 99 frappées",
-      "input": {
-        "law": "mint-fragments",
-        "score": 9000,
-        "mintedLifetime": 99,
-        "fragmentsHeld": 12,
-        "glory": 0
-      },
-      "expected": {
-        "number": 100,
-        "edition": "gold",
-        "cost": 5,
-        "held": 12,
-        "canMint": true,
-        "missingFragments": 0,
-        "levelBefore": 9,
-        "levelAfter": 9,
-        "gloryGained": 1000
-      }
-    },
-    {
-      "_label": "frappe par fragments : 0 en poche, 999 frappées",
-      "input": {
-        "law": "mint-fragments",
-        "score": 0,
-        "mintedLifetime": 999,
-        "fragmentsHeld": 0,
-        "glory": 0
-      },
-      "expected": {
-        "number": 1000,
-        "edition": "prism",
-        "cost": 5,
-        "held": 0,
-        "canMint": false,
-        "missingFragments": 5,
-        "levelBefore": 1,
-        "levelAfter": 1,
         "gloryGained": 0
       }
     },
@@ -4843,131 +4759,286 @@
       }
     },
     {
-      "_label": "coffre de « u1 » le 2026-10-05, effort 0",
+      "_label": "coffre de « u1 » le 2026-10-05, effort 0, Meesh à 1221",
       "input": {
         "law": "chest",
         "userId": "u1",
         "dayKey": "2026-10-05",
-        "effort": 0
+        "effort": 0,
+        "nextMeeshPrice": 1221
       },
       "expected": {
-        "points": 100,
+        "points": 1721,
         "fragment": false,
         "freeze": false,
-        "glory": 10,
-        "meeshFragments": 1
+        "glory": 50,
+        "bonus": "whole",
+        "bonusPoints": 1221
       }
     },
     {
-      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05, effort 300",
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05, effort 300, Meesh à 1587",
       "input": {
         "law": "chest",
         "userId": "6502f1a2b3c4d5e6f7a8b9c0",
         "dayKey": "2026-10-05",
-        "effort": 300
+        "effort": 300,
+        "nextMeeshPrice": 1587
       },
       "expected": {
-        "points": 100,
+        "points": 500,
         "fragment": false,
         "freeze": false,
-        "glory": 10,
-        "meeshFragments": 1
+        "glory": 50,
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06, effort 415",
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06, effort 415, Meesh à 16556",
       "input": {
         "law": "chest",
         "userId": "6502f1a2b3c4d5e6f7a8b9c0",
         "dayKey": "2026-10-06",
-        "effort": 415
+        "effort": 415,
+        "nextMeeshPrice": 16556
       },
       "expected": {
-        "points": 371,
+        "points": 760,
         "fragment": true,
         "freeze": false,
-        "glory": 37,
-        "meeshFragments": 2
+        "glory": 76,
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07, effort 1000",
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07, effort 1000, Meesh à 1221",
       "input": {
         "law": "chest",
         "userId": "6502f1a2b3c4d5e6f7a8b9c0",
         "dayKey": "2026-10-07",
-        "effort": 1000
+        "effort": 1000,
+        "nextMeeshPrice": 1221
       },
       "expected": {
-        "points": 1750,
+        "points": 2083,
         "fragment": true,
         "freeze": false,
-        "glory": 175,
-        "meeshFragments": 2
+        "glory": 208,
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de « amélie-été » le 2026-02-28, effort 2400",
+      "_label": "coffre de « amélie-été » le 2026-02-28, effort 2400, Meesh à 1587",
       "input": {
         "law": "chest",
         "userId": "amélie-été",
         "dayKey": "2026-02-28",
-        "effort": 2400
+        "effort": 2400,
+        "nextMeeshPrice": 1587
       },
       "expected": {
-        "points": 5050,
+        "points": 5250,
         "fragment": false,
         "freeze": false,
-        "glory": 505,
-        "meeshFragments": 2
+        "glory": 525,
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de « user-with-a-rather-long-identifier-0001 » le 2028-02-29, effort 3550",
+      "_label": "coffre de « user-with-a-rather-long-identifier-0001 » le 2028-02-29, effort 3550, Meesh à 16556",
       "input": {
         "law": "chest",
         "userId": "user-with-a-rather-long-identifier-0001",
         "dayKey": "2028-02-29",
-        "effort": 3550
+        "effort": 3550,
+        "nextMeeshPrice": 16556
       },
       "expected": {
-        "points": 7761,
+        "points": 7851,
         "fragment": true,
         "freeze": false,
-        "glory": 776,
-        "meeshFragments": 4
+        "glory": 785,
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de «  » le 2026-12-31, effort 4500",
+      "_label": "coffre de «  » le 2026-12-31, effort 4500, Meesh à 1221",
       "input": {
         "law": "chest",
         "userId": "",
         "dayKey": "2026-12-31",
-        "effort": 4500
+        "effort": 4500,
+        "nextMeeshPrice": 1221
       },
       "expected": {
         "points": 10000,
         "fragment": true,
         "freeze": false,
         "glory": 1000,
-        "meeshFragments": 4
+        "bonus": "none",
+        "bonusPoints": 0
       }
     },
     {
-      "_label": "coffre de « 7a7a » le 2027-01-01, effort 9000",
+      "_label": "coffre de « 7a7a » le 2027-01-01, effort 9000, Meesh à 1587",
       "input": {
         "law": "chest",
         "userId": "7a7a",
         "dayKey": "2027-01-01",
-        "effort": 9000
+        "effort": 9000,
+        "nextMeeshPrice": 1587
       },
       "expected": {
         "points": 10000,
         "fragment": false,
         "freeze": false,
         "glory": 1000,
-        "meeshFragments": 3
+        "bonus": "none",
+        "bonusPoints": 0
+      }
+    },
+    {
+      "_label": "coffre de « prime-0 » le 2026-10-11, effort 1000, Meesh à 1587",
+      "input": {
+        "law": "chest",
+        "userId": "prime-0",
+        "dayKey": "2026-10-11",
+        "effort": 1000,
+        "nextMeeshPrice": 1587
+      },
+      "expected": {
+        "points": 2083,
+        "fragment": false,
+        "freeze": false,
+        "glory": 208,
+        "bonus": "none",
+        "bonusPoints": 0
+      }
+    },
+    {
+      "_label": "coffre de « prime-1 » le 2026-10-11, effort 1000, Meesh à 1587",
+      "input": {
+        "law": "chest",
+        "userId": "prime-1",
+        "dayKey": "2026-10-11",
+        "effort": 1000,
+        "nextMeeshPrice": 1587
+      },
+      "expected": {
+        "points": 2400,
+        "fragment": true,
+        "freeze": false,
+        "glory": 208,
+        "bonus": "fifth",
+        "bonusPoints": 317
+      }
+    },
+    {
+      "_label": "coffre de « prime-25 » le 2026-10-11, effort 1000, Meesh à 1587",
+      "input": {
+        "law": "chest",
+        "userId": "prime-25",
+        "dayKey": "2026-10-11",
+        "effort": 1000,
+        "nextMeeshPrice": 1587
+      },
+      "expected": {
+        "points": 3670,
+        "fragment": false,
+        "freeze": false,
+        "glory": 208,
+        "bonus": "whole",
+        "bonusPoints": 1587
+      }
+    },
+    {
+      "_label": "fragments d'étoile : 0 coffres, 0 saisons",
+      "input": {
+        "law": "star-fragments",
+        "chestDays": 0,
+        "seasons": []
+      },
+      "expected": {
+        "collected": 0
+      }
+    },
+    {
+      "_label": "fragments d'étoile : 4 coffres, 0 saisons",
+      "input": {
+        "law": "star-fragments",
+        "chestDays": 4,
+        "seasons": []
+      },
+      "expected": {
+        "collected": 4
+      }
+    },
+    {
+      "_label": "fragments d'étoile : 0 coffres, 1 saisons",
+      "input": {
+        "law": "star-fragments",
+        "chestDays": 0,
+        "seasons": [
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            10,
+            15
+          ]
+        ]
+      },
+      "expected": {
+        "collected": 2
+      }
+    },
+    {
+      "_label": "fragments d'étoile : 2 coffres, 2 saisons",
+      "input": {
+        "law": "star-fragments",
+        "chestDays": 2,
+        "seasons": [
+          [
+            5,
+            15,
+            25,
+            35,
+            40
+          ],
+          [
+            5,
+            5,
+            10
+          ]
+        ]
+      },
+      "expected": {
+        "collected": 7
+      }
+    },
+    {
+      "_label": "fragments d'étoile : 1 coffres, 1 saisons",
+      "input": {
+        "law": "star-fragments",
+        "chestDays": 1,
+        "seasons": [
+          [
+            0,
+            45,
+            -5
+          ]
+        ]
+      },
+      "expected": {
+        "collected": 1
       }
     },
     {

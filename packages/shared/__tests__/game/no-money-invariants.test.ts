@@ -3,10 +3,13 @@
  * C-1 ; CSI art. L320-1 ; décision du porteur du 2026-10-10, #10011).
  *
  * Le coffre du jour est du hasard GRATUIT : on l'ouvre en faisant ses missions, jamais en payant ; son contenu
- * certain et les probabilités de ses deux tirages sont affichés AVANT l'ouverture. Depuis #10011 il contient de
- * la Gloire et des fragments de Meesh — cinq fragments paient une frappe gratuite —, ce qui reste
- * dans le jeu : rien de ce qu'il donne, comme rien de ce que la saison ou le duo donnent, ne s'achète, ne se
- * transfère à un autre compte ni ne se convertit en argent.
+ * certain, ses primes possibles et les probabilités de ses tirages sont affichés AVANT l'ouverture. Depuis #10011
+ * il donne des points (500 à 10 000, plus une prime en points au cours de la Meesh du compte), de la Gloire, UN
+ * fragment d'étoile une fois sur six et un gel : rien de ce qu'il donne, comme rien de ce que la saison ou le duo
+ * donnent, ne s'achète, ne se transfère à un autre compte ni ne se convertit — ni en argent, ni en Meesh.
+ *
+ * Et depuis la décision du porteur du 2026-10-10 : AUCUNE Meesh sans débit de points. La frappe est le seul
+ * chemin vers une Meesh, et elle débite toujours son prix en points.
  *
  * Ces témoins gardent la FORME des catalogues : le jour où un prix en argent, une monnaie, un transfert ou un
  * retrait y entrerait, ils tombent, et la décision se prend en connaissance de cause (monétisation précédée du
@@ -19,7 +22,7 @@ import { seasonStepReward } from '../../utils/game/season.js';
 import { duoReward } from '../../utils/game/duo.js';
 
 /** Ce qu'un coffre peut donner : des grandeurs du JEU, et elles seules. */
-const CHEST_CONTENTS = ['fragment', 'freeze', 'glory', 'meeshFragments', 'points'];
+const CHEST_CONTENTS = ['bonus', 'bonusPoints', 'fragment', 'freeze', 'glory', 'points'];
 
 /** Des mots qui trahiraient de l'argent, un achat, un transfert ou un retrait. */
 const MONEY_WORDS = /price|cost|cash|money|euro|eur|usd|dollar|currency|coin|pay|purchase|buy|transfer|withdraw|redeem|gift|iap|sku/i;
@@ -27,26 +30,28 @@ const MONEY_WORDS = /price|cost|cash|money|euro|eur|usd|dollar|currency|coin|pay
 describe('le coffre du jour', () => {
   it('ne porte dans ses probabilités que des grandeurs du jeu — aucun prix, aucune monnaie, aucun transfert', () => {
     expect(Object.keys(CHEST_ODDS).sort()).toEqual(
-      ['fragment', 'freeze', 'maxGlory', 'maxMeeshFragments', 'maxPoints', 'meeshFragmentsPerMeesh', 'minGlory', 'minMeeshFragments', 'minPoints'].sort(),
+      ['bonusFifth', 'bonusWhole', 'fragment', 'freeze', 'maxGlory', 'maxPoints', 'minGlory', 'minPoints'].sort(),
     );
     Object.keys(CHEST_ODDS).forEach((key) => expect(key).not.toMatch(MONEY_WORDS));
   });
 
-  it('ne donne dans aucun tirage autre chose que des points, de la Gloire, des fragments de Meesh et un gel', () => {
+  it('ne donne dans aucun tirage autre chose que des points, de la Gloire, un fragment d\'étoile et un gel', () => {
     for (let day = 1; day <= 28; day += 1) {
       for (const effort of [0, 900, 4500]) {
-        const chest = dailyChest({ userId: 'u1', dayKey: `2026-10-${String(day).padStart(2, '0')}`, effort });
+        const chest = dailyChest({ userId: 'u1', dayKey: `2026-10-${String(day).padStart(2, '0')}`, effort, nextMeeshPrice: 1221 });
         expect(Object.keys(chest).sort()).toEqual(CHEST_CONTENTS);
-        Object.values(chest).forEach((value) => expect(typeof value === 'number' || typeof value === 'boolean').toBe(true));
+        expect(typeof chest.fragment).toBe('boolean');
+        expect(['none', 'fifth', 'whole']).toContain(chest.bonus);
+        [chest.points, chest.glory, chest.bonusPoints].forEach((value) => expect(Number.isInteger(value)).toBe(true));
       }
     }
   });
 
-  it('ne paie jamais une frappe d\'un seul coffre : seulement des fragments, cinq par frappe', () => {
-    for (let day = 1; day <= 28; day += 1) {
-      const chest = dailyChest({ userId: 'u2', dayKey: `2026-10-${String(day).padStart(2, '0')}`, effort: 4500 });
-      expect(chest.meeshFragments).toBeLessThan(CHEST_ODDS.meeshFragmentsPerMeesh);
-      expect(chest.meeshFragments).toBeLessThanOrEqual(CHEST_ODDS.maxMeeshFragments);
+  it('n\'ajoute que des points : la prime n\'excède jamais le prix d\'UNE Meesh, et rien ne se frappe au coffre', () => {
+    for (let u = 0; u < 2000; u += 1) {
+      const chest = dailyChest({ userId: `u${u}`, dayKey: '2026-10-11', effort: 4500, nextMeeshPrice: 16_556 });
+      expect(chest.bonusPoints).toBeLessThanOrEqual(16_556);
+      expect(chest.points).toBe(10_000 + chest.bonusPoints);
     }
   });
 
@@ -59,7 +64,7 @@ describe('le coffre du jour', () => {
 });
 
 describe('la saison et le duo', () => {
-  it('ne donnent jamais une Meesh : les 40 étapes sont des points, des fragments, des gels et la coupe', () => {
+  it('ne donnent jamais une Meesh : les 40 étapes sont des points, des fragments d\'étoile, des gels et la coupe', () => {
     const kinds = new Set(Array.from({ length: 40 }, (_, i) => seasonStepReward(i + 1)?.kind));
     expect([...kinds].sort()).toEqual(['fragment', 'freeze', 'points', 'season-cup']);
   });
