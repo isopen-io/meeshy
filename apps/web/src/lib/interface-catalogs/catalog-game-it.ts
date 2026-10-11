@@ -681,6 +681,7 @@ const it = {
   'game.settings.notifications.switch': 'Ricevi le notifiche del gioco',
   'game.archive.season.past_title': 'Stagione {number} · conclusa',
   'game.archive.season.current_title': 'Stagione {number} · in corso',
+  'game.archive.season.upcoming_title': 'Stagione {number} · in arrivo',
   'game.archive.season.opened_note': 'La stagione è aperta: il tuo percorso appare appena viene ricaricata.',
   'game.archive.season.dates': 'Dal {start} al {end}',
   'game.archive.season.rewards.one': '{count} ricompensa riscattata',

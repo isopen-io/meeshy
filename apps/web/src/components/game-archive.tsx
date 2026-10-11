@@ -90,6 +90,25 @@ export function seasonShown(
   return read.error === null ? { kind: 'loading' } : { kind: 'error', message: read.error };
 }
 
+/**
+ * L'EN-TÊTE DE LA PAGE SAISON (#10132) — la saison du LIEN, son numéro et son état ; le compteur d'étapes de la
+ * saison en cours seulement quand c'est elle que la page montre. Une lecture en attente ne compte rien.
+ */
+export function seasonHeaderCount(shown: SeasonShown, current: { readonly steps: number; readonly stepsTotal: number } | null | undefined): string | null {
+  switch (shown.kind) {
+    case 'current':
+      return current === null || current === undefined ? null : `${current.steps} / ${current.stepsTotal}`;
+    case 'past':
+      return gameText('game.archive.season.past_title', { number: formatCount(shown.season.number) });
+    case 'upcoming':
+      return gameText('game.archive.season.upcoming_title', { number: formatCount(shown.upcoming.number) });
+    case 'opened':
+      return gameText('game.archive.season.current_title', { number: formatCount(shown.season.number) });
+    default:
+      return null;
+  }
+}
+
 export function leagueShown(focus: string | null, game: FocusGame | undefined, read: ArchiveRead<GameLeagueWeekArchive>): LeagueShown {
   if (focus === null) return { kind: 'current' };
   const archive = read.data;

@@ -5,7 +5,7 @@ import type { GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 
 import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
 
-import { GameSeasonArchiveView, needsSeasonArchive, seasonShown, type ArchiveRead } from '@/components/game-archive';
+import { GameSeasonArchiveView, needsSeasonArchive, seasonHeaderCount, seasonShown, type ArchiveRead } from '@/components/game-archive';
 import { GameSeason } from '@/components/game-season';
 import { GAME_BRAND, GAME_CARD, GAME_INK_2 } from '@/components/game-surface';
 import { apiDeps } from '@/lib/api/deps';
@@ -94,15 +94,21 @@ function SaisonScreenBody({ progress, focus, moment }: { readonly progress: Enga
   return <SaisonFocusBody progress={progress} focus={focus} read={read} onRetry={() => void archive.refetch()} actions={actions} online={online} moment={moment} />;
 }
 
-/** La page Saison, sur la saison qu'un lien nomme (ou sans lien). */
+/**
+ * LA PAGE SAISON D'UN LIEN (#10132) — l'en-tête montre la saison du LIEN : « Saison n · terminée », « · à venir » ou
+ * « · en cours » (#10131), comme iOS ; le compteur d'étapes de la saison en cours seulement quand c'est elle. Il lit
+ * la même copie que le corps (même clé, aucune lecture de plus : l'observateur de l'en-tête ne lit jamais lui-même).
+ */
 export function ProgressionSaisonPage({ focus, moment }: { readonly focus: number | null; readonly moment?: LeagueMoment | undefined }) {
+  const archive = useQuery({ ...seasonArchiveQuery({ number: focus ?? 0, enabled: false, deps: apiDeps }) });
   return (
     <ProgressionPage
       titre={gameText('game.season.title')}
       teinte={GAME_BRAND}
       compte={(p) => {
-        const season = (p as EngagementWithGame).game?.season;
-        return season === undefined || season === null ? null : `${season.steps} / ${season.stepsTotal}`;
+        const game = (p as EngagementWithGame).game;
+        const shown = seasonShown(focus, game, { data: archive.data, error: null }, moment ?? localMoment());
+        return seasonHeaderCount(shown, game?.season);
       }}
     >
       {(progress) => <SaisonScreenBody progress={progress} focus={focus} moment={moment} />}

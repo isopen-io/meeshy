@@ -689,6 +689,7 @@ const ar = {
   'game.settings.notifications.switch': 'تلقي إشعارات اللعبة',
   'game.archive.season.past_title': 'الموسم ⁦{number}⁩ · انتهى',
   'game.archive.season.current_title': 'الموسم ⁦{number}⁩ · جارٍ',
+  'game.archive.season.upcoming_title': 'الموسم ⁦{number}⁩ · قادم',
   'game.archive.season.opened_note': 'الموسم مفتوح: يظهر مسارك فور إعادة تحميله.',
   'game.archive.season.dates': 'من ⁦{start}⁩ إلى ⁦{end}⁩',
   'game.archive.season.rewards.one': '⁦{count}⁩ مكافأة مُستلمة',
