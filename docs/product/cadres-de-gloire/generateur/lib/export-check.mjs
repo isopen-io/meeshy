@@ -1,7 +1,7 @@
 // Juge un export (lot L1) : rouge tant qu'une couche peinte par le générateur porte du texte ou un oiseau, qu'une
 // fenêtre photo est voilée par le décor ou trop voilée par le grade, que la bande du bandeau n'est pas pleine, qu'un
 // emplacement de texte n'a pas de contraste mesuré, ou qu'un fichier déclaré ne correspond pas à ses octets.
-// Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json]
+// Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json] [--partial : n'exige pas les 191 cadres]
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -100,7 +100,8 @@ for (const collection of index?.collections ?? []) {
     await checkFrame(dir, frame);
   }
 }
-for (const name of expected) if (index && !seen.has(name)) failures.push(`${name} : absent de l'export`);
+const partial = process.argv.includes('--partial');
+for (const name of expected) if (index && !partial && !seen.has(name)) failures.push(`${name} : absent de l'export`);
 
 if (failures.length) {
   console.error(`ROUGE — ${failures.length} défaut(s) sur ${seen.size}/${expected.length} cadres :`);

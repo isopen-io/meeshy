@@ -2,14 +2,17 @@
 // ensemble de natures pour rendre une couche. Les natures :
 //   photo, photo-bg     la photo factice et son fond d'atmosphère (lib/base.py, photo())
 //   backdrop            un décor dessiné AVANT la photo (donc derrière elle)
-//   decor, decor-screen le décor, et ce qui s'y fond en `mix-blend-mode: screen`
+//   decor               le décor
+//   decor-<mode>        ce qui s'y fond en `mix-blend-mode` (screen, multiply…)
+//   decor-late          le décor normal dessiné APRÈS le premier élément fondu (il le recouvre)
 //   front-under         un décor dessiné après le blason ou la plaque, mais avant les oiseaux
 //   front-over          un décor dessiné après les oiseaux
 //   crest, plate, birds le blason, le panneau de la plaque, Mee et Meo
 //   text                tout `<text>` (et ses tspan, textPath) : un emplacement vivant
 // Un élément de définition (masque, motif, filtre, dégradé…) n'est jamais touché : seul ce qui se PEINT l'est.
 
-export const KINDS = ['photo', 'photo-bg', 'backdrop', 'decor', 'decor-screen', 'front-under', 'front-over', 'crest', 'plate', 'birds', 'text'];
+export const BLENDS = ['screen', 'multiply', 'color'];
+export const KINDS = ['photo', 'photo-bg', 'backdrop', 'decor', ...BLENDS.map((b) => `decor-${b}`), 'decor-late', 'front-under', 'front-over', 'crest', 'plate', 'birds', 'text'];
 
 export function classify() {
   const DEFS = new Set(['defs', 'mask', 'clippath', 'pattern', 'filter', 'lineargradient', 'radialgradient', 'symbol', 'marker', 'style', 'title', 'desc', 'metadata']);
@@ -27,9 +30,12 @@ export function classify() {
   walk(root);
   const layerOf = (el) => el.closest('[data-layer]:not([data-layer="root"])')?.getAttribute('data-layer') ?? null;
   const embossed = (el) => Boolean(el.closest('[filter*="emb"]'));
-  const screenOf = (el) => {
-    for (let n = el; n && n !== root; n = n.parentElement) if (getComputedStyle(n).mixBlendMode === 'screen') return true;
-    return false;
+  const blendOf = (el) => {
+    for (let n = el; n && n !== root; n = n.parentElement) {
+      const mode = getComputedStyle(n).mixBlendMode;
+      if (mode !== 'normal') return mode;
+    }
+    return 'normal';
   };
   const tagged = all.map((el) => {
     const tag = el.tagName.toLowerCase();
@@ -43,13 +49,16 @@ export function classify() {
   const firstPhoto = first((k) => k === 'photo' || k === 'photo-bg');
   const firstAnchor = first((k) => k === 'crest' || k === 'plate' || k === 'birds');
   const firstBird = first((k) => k === 'birds');
+  const blends = all.map((el, i) => (tagged[i] || CONTAINERS.has(el.tagName.toLowerCase()) ? 'normal' : blendOf(el)));
+  const firstBlend = blends.findIndex((b) => b !== 'normal');
   all.forEach((el, i) => {
     const kind = tagged[i] ?? (() => {
       if (CONTAINERS.has(el.tagName.toLowerCase())) return 'group';
       if (firstPhoto >= 0 && i < firstPhoto) return 'backdrop';
       if (firstBird >= 0 && i > firstBird) return 'front-over';
       if (firstAnchor >= 0 && i > firstAnchor) return 'front-under';
-      return screenOf(el) ? 'decor-screen' : 'decor';
+      if (blends[i] !== 'normal') return `decor-${blends[i]}`;
+      return firstBlend >= 0 && i > firstBlend ? 'decor-late' : 'decor';
     })();
     el.setAttribute('data-k', kind);
   });
