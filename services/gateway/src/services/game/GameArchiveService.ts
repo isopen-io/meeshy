@@ -3,8 +3,8 @@
  * et une semaine de ligue, passée ou en cours. Lecture seule.
  *
  *  - **le calendrier d'une saison se lit par UNE fonction** (`SeasonCalendarSource.season`).
- *    Aujourd'hui, la loi partagée (`seasonCalendar`) ; demain, peut-être un
- *    calendrier servi par la base (décision #10016) — seul ce point change ;
+ *    Le calendrier SERVI par la base (#10016, `SeasonScheduleService`), lu par la
+ *    loi partagée (`scheduledSeasonCalendar`) ; la constante en repli ;
  *  - **l'état** (passée, en cours, à venir) se lit contre MON moment : mon fuseau,
  *    la fermeture du dimanche 20 h comprise (`leagueWeekOfMoment`) ;
  *  - **rien de la présence d'autrui** : la saison sert son calendrier et MA
@@ -17,7 +17,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameArchiveStatus, GameLeagueWeekArchive, GameSeasonArchive } from '@meeshy/shared/types/game-archive';
 import { LEAGUE_KEYS, leagueWeekOfMoment, type LeagueKey, type LeagueMoment } from '@meeshy/shared/utils/game/league';
-import { seasonAt, seasonCalendar, seasonProgress, seasonTenseAt, type SeasonCalendar } from '@meeshy/shared/utils/game/season';
+import { seasonCalendar, seasonProgress, seasonTenseAt, type SeasonCalendar } from '@meeshy/shared/utils/game/season';
+import { scheduledSeasonAt, scheduledSeasonCalendar } from '@meeshy/shared/utils/game/season-schedule';
+import { seasonSchedule } from './SeasonScheduleService';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { leagueRetentionHorizon } from './LeagueSettlement';
 
@@ -27,6 +29,11 @@ export type SeasonCalendarSource = {
 };
 
 export const lawSeasonCalendar: SeasonCalendarSource = { season: async (number) => seasonCalendar(number) };
+
+/** Le calendrier servi par la base (#10016) — la source par défaut. */
+export const servedSeasonCalendar = (prisma: PrismaClient): SeasonCalendarSource => ({
+  season: async (number) => scheduledSeasonCalendar(await seasonSchedule(prisma), number),
+});
 
 export type GameArchiveDeps = { readonly calendar?: SeasonCalendarSource };
 
@@ -48,7 +55,7 @@ export class GameArchiveService {
     private readonly prisma: PrismaClient,
     deps: GameArchiveDeps = {},
   ) {
-    this.calendar = deps.calendar ?? lawSeasonCalendar;
+    this.calendar = deps.calendar ?? servedSeasonCalendar(prisma);
   }
 
   /** MON moment, dans mon fuseau. */
@@ -98,12 +105,13 @@ export class GameArchiveService {
   }
 
   async leagueWeek(userId: string, weekKey: string, now: Date = new Date()): Promise<GameLeagueWeekArchive> {
-    const [myWeek, membership] = await Promise.all([
+    const [myWeek, membership, schedule] = await Promise.all([
       this.myWeek(userId, now),
       this.prisma.leagueMembership.findUnique({
         where: { userId_weekKey: { userId, weekKey } },
         select: { league: true, finalRank: true, finalPoints: true, zone: true, cup: true, settledAt: true },
       }),
+      seasonSchedule(this.prisma),
     ]);
     const status = statusOf({ firstWeek: weekKey, lastWeek: weekKey, myWeek });
     const horizon = leagueRetentionHorizon(now);
@@ -112,7 +120,7 @@ export class GameArchiveService {
     return {
       weekKey,
       status,
-      season: seasonAt(weekKey),
+      season: scheduledSeasonAt(schedule, weekKey),
       retention: purged && membership === null ? 'purged' : 'kept',
       result:
         membership === null || league === null

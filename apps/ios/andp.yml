@@ -155,3 +155,47 @@ store:
       dark_interface: true
     IPAD:
       dark_interface: true
+
+  app_events:
+    - key: saison-1
+      reference_name: "Saison 1"
+      badge: NEW_SEASON
+      purpose: KEEP_ACTIVE_USERS_INFORMED
+      priority: HIGH
+      purchase_requirement: NO_COST_ASSOCIATED
+      deep_link: https://meeshy.me/me/progression/saison/1
+      primary_locale: fr-FR
+      territories: all
+      publish_start: 2026-12-14T00:00:00+01:00
+      event_start: 2026-12-21T00:00:00+01:00
+      event_end: 2027-01-17T20:00:00+01:00
+      submit: true
+      localizations:
+        fr-FR:
+          name: "Saison 1"
+          short_description: "Huit semaines, 40 étapes"
+          long_description: "Une nouvelle saison du Jeu Meeshy : des missions chaque jour, des étoiles à gagner et une coupe au bout."
+        en-US:
+          name: "Season 1"
+          short_description: "Eight weeks, 40 steps"
+          long_description: "A new Meeshy Game season: daily missions, stars to earn and a cup at the finish line."
+        es-ES:
+          name: "Temporada 1"
+          short_description: "Ocho semanas, 40 etapas"
+          long_description: "Una nueva temporada del Juego Meeshy: misiones cada día, estrellas que ganar y una copa al final."
+        de-DE:
+          name: "Saison 1"
+          short_description: "Acht Wochen, 40 Etappen"
+          long_description: "Eine neue Saison im Meeshy-Spiel: tägliche Missionen, Sterne zum Sammeln und ein Pokal am Ziel."
+        it:
+          name: "Stagione 1"
+          short_description: "Otto settimane, 40 tappe"
+          long_description: "Una nuova stagione del Gioco Meeshy: missioni ogni giorno, stelle da vincere e una coppa alla fine."
+        pt-BR:
+          name: "Temporada 1"
+          short_description: "Oito semanas, 40 etapas"
+          long_description: "Uma nova temporada do Jogo Meeshy: missões diárias, estrelas para ganhar e uma taça no final."
+        ar-SA:
+          name: "الموسم 1"
+          short_description: "ثمانية أسابيع و40 مرحلة"
+          long_description: "موسم جديد في لعبة Meeshy: مهام يومية ونجوم تكسبها وكأس في النهاية."

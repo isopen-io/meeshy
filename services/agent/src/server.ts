@@ -24,6 +24,7 @@ import { configRoutes } from './routes/config';
 import { deliveryRoutes } from './routes/delivery';
 import { readingRoutes } from './routes/reading';
 import { installInternalGuard } from './routes/internal-guard';
+import { seasonProposalRoutes } from './routes/season-proposal';
 import { createBridgeReadingOutlet, messageReaderFromStore } from './reading/bridge-reading-outlet';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
@@ -187,6 +188,9 @@ async function start() {
     reader: messageReaderFromStore(stateManager),
   });
   server.register((instance) => readingRoutes(instance, bridgeReadingOutlet));
+  // #10234 — proposition de saison (l'IA propose, un humain valide). Ne reçoit que le LLM :
+  // ni base, ni file, ni horloge — la route rend un brouillon validé par la loi partagée.
+  server.register((instance) => seasonProposalRoutes(instance, llm));
 
   const reactiveHandler = new ReactiveHandler(llm, persistence, stateManager, deliveryQueue);
   const scanner = new ConversationScanner(graph, persistence, stateManager, deliveryQueue, redis, configCache, budgetManager, tracerRef);

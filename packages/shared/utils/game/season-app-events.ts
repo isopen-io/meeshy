@@ -196,3 +196,26 @@ export function seasonAppEventsYaml(events: readonly SeasonAppEvent[], indent = 
   }
   return `${lines.join('\n')}\n`;
 }
+
+/**
+ * Remplace (ou ajoute à la fin de `store:`) le bloc `app_events:` d'un `andp.yml`, sans toucher au reste :
+ * c'est ce que `apps/ios/scripts/season-app-events.mjs` écrit pour une PR. `block` vient de `seasonAppEventsYaml`.
+ */
+export function replaceAppEventsBlock(andpYaml: string, block: string): string {
+  const lines = andpYaml.split('\n');
+  const storeAt = lines.findIndex((line) => /^store:\s*$/.test(line));
+  if (storeAt < 0) throw new Error('andp.yml sans bloc store:');
+  let storeEnd = lines.findIndex((line, i) => i > storeAt && /^\S/.test(line));
+  if (storeEnd < 0) storeEnd = lines.length;
+  const blockLines = block.replace(/\n+$/, '').split('\n');
+  const startAt = lines.findIndex((line, i) => i > storeAt && i < storeEnd && /^ {2}app_events:/.test(line));
+  if (startAt >= 0) {
+    let endAt = lines.findIndex((line, i) => i > startAt && i < storeEnd && /^ {0,2}\S/.test(line));
+    if (endAt < 0) endAt = storeEnd;
+    while (endAt - 1 > startAt && lines[endAt - 1]!.trim() === '') endAt -= 1;
+    return [...lines.slice(0, startAt), ...blockLines, ...lines.slice(endAt)].join('\n');
+  }
+  let insertAt = storeEnd;
+  while (insertAt - 1 > storeAt && lines[insertAt - 1]!.trim() === '') insertAt -= 1;
+  return [...lines.slice(0, insertAt), '', ...blockLines, ...lines.slice(insertAt)].join('\n');
+}

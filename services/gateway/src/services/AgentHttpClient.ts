@@ -129,6 +129,20 @@ export class AgentHttpClient {
       { timeoutMs: 1500 }
     );
   }
+
+  /**
+   * Une PROPOSITION de saison (#10016) : thème, points d'étape, textes en sept langues. Le service d'agent ne
+   * publie rien ; la passerelle revalide la sortie par la loi et la garde EN ATTENTE d'une validation humaine.
+   */
+  async proposeSeason(input: {
+    readonly number: number;
+    readonly startDay: string;
+    readonly themeKey: string;
+    readonly previousThemes: readonly string[];
+    readonly brief: string | null;
+  }): Promise<{ themeKey: unknown; stepPoints: unknown; copy: unknown; model?: unknown }> {
+    return this.request('/api/agent/game/season-proposal', { method: 'POST', body: JSON.stringify(input), timeoutMs: 90_000 });
+  }
 }
 
 /** Forme exacte rendue par `services/agent/src/routes/reading.ts` (G-126). */
