@@ -9,7 +9,9 @@ import {
   SHARE_PREVIEW_FAMILIES,
   SHARE_PREVIEW_LANGUAGE_RULES,
   SHARE_PREVIEW_ROUTES,
+  SHARE_PREVIEW_BOT_AGENTS,
   SHELL_TITLE,
+  isSharePreviewBot,
   sharePreviewFamily,
   sharePreviewFile,
   sharePreviewHead,
@@ -24,6 +26,7 @@ import { SHARE_PREVIEW_COPY } from './share-preview-copy';
  */
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8');
 const NGINX = read('../../nginx.conf');
+const TRAEFIK = ['docker-compose.staging.yml', 'docker-compose.prod.yml'].map((file) => read(`../../../../infrastructure/docker/compose/${file}`));
 const VITE = read('../../vite.config.ts');
 const ORIGIN = 'https://meeshy.me';
 
@@ -170,14 +173,51 @@ describe('nginx.conf — la famille et la langue sont des MIROIRS de ce module',
     expect(NGINX).toContain('map "$http_x_facebook_locale|$http_accept_language" $meeshy_og_lang {');
   });
 
-  test('le repli de l’application sert la copie de la famille, la coquille seulement si elle manque', () => {
-    expect(NGINX).toMatch(/location @app \{[\s\S]*?rewrite \^ \/shell-og\/\$meeshy_og_family\/\$meeshy_og_lang\.html last;/);
+  test('seul un robot d’aperçu reçoit la copie ; un navigateur reçoit index.html', () => {
+    expect(mapBody('meeshy_preview_bot')).toEqual(['default 0;', `~*(${SHARE_PREVIEW_BOT_AGENTS}) 1;`]);
+    expect(mapBody('meeshy_app_document')).toEqual(['default /index.html;', '1 /shell-og/$meeshy_og_family/$meeshy_og_lang.html;']);
+    expect(NGINX).toMatch(/location @app \{[\s\S]*?rewrite \^ \$meeshy_app_document last;/);
+  });
+
+  test('la coquille habillée n’a pas d’adresse publique, et retombe sur index.html si elle manque', () => {
     expect(NGINX).toMatch(/location \/shell-og\/ \{\n\s+internal;[\s\S]*?try_files \$uri \/index\.html;/);
     expect(sharePreviewFile('link', 'de')).toBe('shell-og/link/de.html');
   });
 
   test('la copie dit au cache qu’elle varie selon la langue demandée', () => {
-    expect(NGINX).toMatch(/location \/shell-og\/ \{[\s\S]*?add_header Vary "Accept-Language, X-Facebook-Locale" always;/);
+    expect(NGINX).toMatch(/location \/shell-og\/ \{[\s\S]*?add_header Vary "User-Agent, Accept-Language, X-Facebook-Locale" always;/);
+  });
+});
+
+describe('les robots d’aperçu — la liste des routeurs Traefik *-unfurl', () => {
+  test('la liste est celle des routeurs de la passerelle, staging et production', () => {
+    for (const compose of TRAEFIK) {
+      const agents = [...compose.matchAll(/HeaderRegexp\(`User-Agent`, `\(\?i\)\(([^`]+)\)`\)/g)].map((m) => m[1]);
+      expect(agents.length).toBeGreaterThanOrEqual(2);
+      expect(new Set(agents)).toEqual(new Set([SHARE_PREVIEW_BOT_AGENTS]));
+    }
+  });
+
+  const ROBOTS = [
+    'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+    'facebookexternalhit/1.1 Facebot Twitterbot/1.0',
+    'WhatsApp/2.23.20.0 A',
+    'Twitterbot/1.0',
+    'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)',
+    'TelegramBot (like TwitterBot)',
+    'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+    'LinkedInBot/1.0 (compatible; Mozilla/5.0; Apache-HttpClient +http://www.linkedin.com)',
+  ];
+  const HUMAINS = [
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+    'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 [FBAN/FBIOS;FBAV/470.0.0.40.97;FBBV/620000000]',
+    'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36 LinkedInApp/9.29',
+  ];
+
+  test('reconnaît les robots des messageries, jamais un navigateur ni un navigateur intégré', () => {
+    expect(ROBOTS.filter((agent) => !isSharePreviewBot(agent))).toEqual([]);
+    expect(HUMAINS.filter((agent) => isSharePreviewBot(agent))).toEqual([]);
   });
 });
 

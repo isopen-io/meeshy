@@ -31,9 +31,10 @@ const TOKEN = 'Ab3xYz';
 const SHARE_ID = 'mshy_beta-10192';
 const CONVERSATION_ID = '64f0c0ffee0000000000abcd';
 
-type Suivi = { readonly originalUrl?: string; readonly isActive?: boolean; readonly expiresAt?: Date | null };
+type Suivi = { readonly targetType?: string; readonly originalUrl?: string; readonly isActive?: boolean; readonly expiresAt?: Date | null };
 
 const suivi = (o: Suivi = {}) => ({
+  targetType: o.targetType ?? 'EXTERNAL',
   originalUrl: o.originalUrl ?? 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
   isActive: o.isActive ?? true,
   expiresAt: o.expiresAt ?? null,
@@ -142,7 +143,9 @@ describe('Une cible qui n’est pas publique, ou un lien mort, rend le génériq
     ['cible illisible', { suivi: suivi({ originalUrl: 'pas une adresse' }) }],
     ['cible avec identifiants', { suivi: suivi({ originalUrl: 'https://alice:secret@exemple.org/' }) }],
     ['une conversation Meeshy', { suivi: suivi({ originalUrl: `${ORIGIN}/c/${CONVERSATION_ID}` }) }],
-    ['un post Meeshy', { suivi: suivi({ originalUrl: `${ORIGIN}/feeds/post/${CONVERSATION_ID}` }) }],
+    ['un post Meeshy', { suivi: suivi({ targetType: 'POST', originalUrl: `${ORIGIN}/feeds/post/${CONVERSATION_ID}` }) }],
+    ['un partage de contenu dont l’adresse n’est pas celle de l’application', { suivi: suivi({ targetType: 'STORY', originalUrl: `https://www.exemple.org/story/${CONVERSATION_ID}` }) }],
+    ['une conversation Meeshy sous www.', { suivi: suivi({ originalUrl: `https://www.staging.meeshy.me/c/${CONVERSATION_ID}` }) }],
     ['une invitation fermée', { suivi: suivi({ originalUrl: `${ORIGIN}/chat/${SHARE_ID}` }), partage: partage({ isActive: false }) }],
     ['une invitation bornée à des plages d’adresses', { suivi: suivi({ originalUrl: `${ORIGIN}/chat/${SHARE_ID}` }), partage: partage({ allowedIpRanges: ['10.0.0.0/8'] }) }],
     ['jeton inconnu', { suivi: null, partage: null }],

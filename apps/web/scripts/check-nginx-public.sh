@@ -80,7 +80,7 @@ expect_status /c/64f0c0ffee0000000000abcd '200 text/html'
 expect_status /chat/mshy_world '200 text/html'
 expect_status /world '200 text/html'
 
-# L'APERÇU DE CHAQUE ADRESSE (#10192) — ce qu'un robot de messagerie lit : le
+# L'APERÇU DE CHAQUE ADRESSE (#10192) — ce qu'un robot d'aperçu lit : le
 # titre de la famille dans la langue demandée, la grande carte, et RIEN de
 # l'adresse elle-même (identifiant, jeton) dans le document servi.
 expect_og() {
@@ -102,6 +102,12 @@ expect_og /chat/mshy_world es 'Una invitación en Meeshy' mshy_world
 expect_og /l/Ab3xYz it 'Un link condiviso su Meeshy' Ab3xYz
 expect_og /about fr 'À propos de Meeshy'
 expect_status /shell-og/app/fr.html '404 text/html'
+# Un NAVIGATEUR reçoit la coquille d'avant, octet pour octet.
+if [ "$(curl -s -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Safari/604.1' "$base/c/64f0c0ffee0000000000abcd")" = "$(cat /usr/share/nginx/html/index.html)" ]; then
+  echo "ok    navigateur /c/… -> index.html inchangée"
+else
+  echo "FAUX  navigateur /c/… ne reçoit pas index.html"; fail=1
+fi
 
 # LE STAGING NE S'INDEXE PAS (#10123) — l'hôte seul le distingue.
 staging_robots=$(curl -s -H 'Host: staging.meeshy.me' "$base/robots.txt")

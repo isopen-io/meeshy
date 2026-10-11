@@ -24,6 +24,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 export type TrackingLinkUnfurlSource = {
+  /** `EXTERNAL` seul désigne une adresse hors de Meeshy ; un partage de contenu (`POST`, `STORY`…) n'est jamais redirigé. */
+  readonly targetType: string;
   readonly originalUrl: string;
   readonly isActive: boolean;
   readonly expiresAt: Date | null;
@@ -51,7 +53,7 @@ export function isTrackingToken(token: string): boolean {
 export async function loadTrackingLinkUnfurlSource(prisma: PrismaClient, token: string): Promise<TrackingLinkUnfurlSource | null> {
   return prisma.trackingLink.findUnique({
     where: { token },
-    select: { originalUrl: true, isActive: true, expiresAt: true }
+    select: { targetType: true, originalUrl: true, isActive: true, expiresAt: true }
   });
 }
 
@@ -64,11 +66,10 @@ const parseWebUrl = (raw: string): URL | null => {
   }
 };
 
-/** Une adresse de l'application web elle-même : son hôte, ou son `www.`. */
-const isAppAddress = (url: URL, origin: string): boolean => {
-  const appHost = new URL(origin).hostname;
-  return url.hostname === appHost || url.hostname === `www.${appHost}`;
-};
+const bareHost = (hostname: string): string => hostname.replace(/^www\./, '');
+
+/** Une adresse de l'application web elle-même, `www.` ou non, dans un sens comme dans l'autre. */
+const isAppAddress = (url: URL, origin: string): boolean => bareHost(url.hostname) === bareHost(new URL(origin).hostname);
 
 export function decideTrackingLinkUnfurl(params: {
   readonly token: string;
@@ -82,7 +83,7 @@ export function decideTrackingLinkUnfurl(params: {
   if (!tracking.isActive || (tracking.expiresAt !== null && tracking.expiresAt.getTime() <= now.getTime())) return GENERIC;
   const target = parseWebUrl(tracking.originalUrl);
   if (target === null) return GENERIC;
-  if (!isAppAddress(target, origin)) return { kind: 'redirect', location: target.href };
+  if (!isAppAddress(target, origin)) return tracking.targetType === 'EXTERNAL' ? { kind: 'redirect', location: target.href } : GENERIC;
   const invitation = INVITATION_PATH.exec(target.pathname)?.[1];
   return invitation === undefined ? GENERIC : { kind: 'invitation', identifier: invitation };
 }

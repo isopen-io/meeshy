@@ -15,8 +15,9 @@ export type { SharePreviewFamily } from './share-preview-copy';
  * une COPIE de la coquille par famille d'adresse et par langue
  * (`scripts/prerender-share-previews.ts`), identique à `index.html` octet pour
  * octet hormis son titre, sa description et ses balises Open Graph / Twitter ;
- * nginx la sert à la place de `index.html` sur les adresses de l'application
- * (`location @app`), la famille lue sur le chemin, la langue sur l'en-tête.
+ * nginx la sert aux ROBOTS D'APERÇU à la place de `index.html` sur les adresses
+ * de l'application (`location @app`), la famille lue sur le chemin, la langue
+ * sur l'en-tête. Un navigateur reçoit `index.html`, inchangée.
  *
  * LA RÈGLE DE SÉCURITÉ EST STRUCTURELLE : la copie est écrite au BUILD, sans
  * connaître aucune adresse réelle. Elle ne PEUT rien dire d'une conversation,
@@ -71,6 +72,19 @@ export const SHARE_PREVIEW_LANGUAGE_RULES: readonly { readonly pattern: string; 
 export function sharePreviewLanguage(headers: { readonly facebookLocale?: string; readonly acceptLanguage?: string }): LandingLanguage {
   const key = `${headers.facebookLocale ?? ''}|${headers.acceptLanguage ?? ''}`;
   return SHARE_PREVIEW_LANGUAGE_RULES.find((rule) => new RegExp(rule.pattern, 'i').test(key))?.language ?? ROOT_LANDING_LANGUAGE;
+}
+
+/**
+ * LES ROBOTS D'APERÇU — eux seuls reçoivent la copie (`map … $meeshy_preview_bot`) ;
+ * un navigateur reçoit `index.html` inchangée. La liste est celle des routeurs
+ * Traefik `*-unfurl` (#9712), confrontée à eux par le témoin : elle ne nomme que
+ * des agents qui ne sont pas des navigateurs, si bien qu'un humain dans le
+ * navigateur intégré d'une application (Facebook, Instagram) reçoit l'application.
+ */
+export const SHARE_PREVIEW_BOT_AGENTS = 'facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse';
+
+export function isSharePreviewBot(userAgent: string): boolean {
+  return new RegExp(`(${SHARE_PREVIEW_BOT_AGENTS})`, 'i').test(userAgent);
 }
 
 /** L'image de marque, 1200 × 630, la même pour toutes les langues — celle de l'invitation (#9712). */
