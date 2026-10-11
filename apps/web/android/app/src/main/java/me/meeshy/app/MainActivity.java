@@ -214,6 +214,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyFileSinkPlugin.class);
         registerPlugin(MeeshyScreenGuardPlugin.class);
         registerPlugin(MeeshyLocalePlugin.class);
+        registerPlugin(MeeshySystemBarsPlugin.class);
         // #10034 — recreee par Android, l'activite rejoue l'ecran ouvert par le
         // chemin des liens profonds : `BridgeActivity.load()` relit l'intent.
         String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
