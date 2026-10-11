@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { SPLIT_QUERY } from '@/lib/view/split-query';
+import { floatingMenusReady } from '@/test-support/floating-menus-ready';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { SplitFrame } from './split-frame';
@@ -26,7 +27,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 let originalMatchMedia: typeof window.matchMedia;
 let originalInnerWidth: number;
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   originalMatchMedia = window.matchMedia;
@@ -37,6 +38,7 @@ beforeAll(() => {
     addEventListener: () => {},
     removeEventListener: () => {},
   })) as unknown as typeof window.matchMedia;
+  await floatingMenusReady();
 });
 
 afterAll(async () => {
