@@ -138,6 +138,8 @@ export const gameSeasonBlockSchema = z.object({
   nextReward: z.object({ step: z.number().int().min(1).max(SEASON_STEPS), reward: seasonRewardSchema }).nullable(),
   sealOwned: z.boolean(),
   sealPrice: nonNegativeInt,
+  /** Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10016) ; absent, la loi (100). */
+  stepPoints: z.number().int().min(1).optional(),
 });
 
 /**

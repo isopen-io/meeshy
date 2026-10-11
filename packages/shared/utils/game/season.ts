@@ -175,15 +175,16 @@ export type SeasonReward = { readonly kind: SeasonRewardKind; readonly amount: n
 export const SEASON_STEP_POINTS = 100;
 
 /**
- * La récompense GRATUITE d'une étape : des points ; UN fragment d'étoile (`star-fragments.ts`)
+ * La récompense GRATUITE d'une étape : des points (ceux de la saison, bornés par
+ * `season-schedule.ts`, #10016) ; UN fragment d'étoile (`star-fragments.ts`)
  * toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
  */
-export function seasonStepReward(step: number): SeasonReward | null {
+export function seasonStepReward(step: number, stepPoints: number = SEASON_STEP_POINTS): SeasonReward | null {
   if (!Number.isInteger(step) || step < 1 || step > SEASON_STEPS) return null;
   if (step === SEASON_STEPS) return { kind: 'season-cup', amount: 1 };
   if (step % 10 === 0) return { kind: 'freeze', amount: 1 };
   if (step % 5 === 0) return { kind: 'fragment', amount: 1 };
-  return { kind: 'points', amount: SEASON_STEP_POINTS };
+  return { kind: 'points', amount: Number.isInteger(stepPoints) && stepPoints > 0 ? stepPoints : SEASON_STEP_POINTS };
 }
 
 /** Le cosmétique de la rangée Sceau à cette étape, `null` hors des étapes marquées. */
@@ -211,8 +212,10 @@ export function claimSeasonStep(params: {
   readonly stepsReached: number;
   readonly claimed: readonly number[];
   readonly sealOwned: boolean;
+  /** Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10016) ; absent, la loi. */
+  readonly stepPoints?: number;
 }): SeasonClaim {
-  const reward = seasonStepReward(params.step);
+  const reward = seasonStepReward(params.step, params.stepPoints);
   if (reward === null) return { allowed: false, reason: 'out-of-range' };
   if (params.claimed.includes(params.step)) return { allowed: false, reason: 'already-claimed' };
   if (params.step > params.stepsReached) return { allowed: false, reason: 'locked' };
