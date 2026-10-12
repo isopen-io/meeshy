@@ -87,7 +87,7 @@ public struct PackShopView: View {
                 // Cache vide au premier lancement : des rangées fantômes, jamais
                 // un indicateur au milieu d'une feuille vide.
                 ForEach(0..<3, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color.primary.opacity(0.06))
                         .frame(height: Self.coverSide + 16)
                 }
@@ -181,17 +181,17 @@ struct PackCoverView: View {
                 placeholder
             }
             .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         case .stored(let file):
             StoredPackImage(file: file, maxPixelSize: Int(side * 3))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         case .none:
             placeholder
         }
     }
 
     private var placeholder: some View {
-        RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.06))
+        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(Color.primary.opacity(0.06))
     }
 }
 
@@ -219,7 +219,7 @@ public struct StoredPackImage: View {
             if let image {
                 Image(uiImage: image).resizable().scaledToFit()
             } else {
-                RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.06))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(Color.primary.opacity(0.06))
             }
         }
         .task(id: file) {
