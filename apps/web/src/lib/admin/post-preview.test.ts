@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { parseCanvasDocument } from '@/lib/canvas/document';
+
 import { neighborsOf, previewKeyOf, previewPlanOf, sceneCarrierOf } from './post-preview';
 
 /**
@@ -20,17 +22,17 @@ const media = (id: string, mimeType: string, overrides: Record<string, unknown> 
   ...overrides,
 });
 
-const SCENE = { v: 3, scenes: [{ id: 's1', objects: [] }] };
+const SCENE = parseCanvasDocument({ v: 3, scenes: [{ id: 's1', objects: [] }] });
 
 describe('previewPlanOf — la scène d’abord, sinon chaque média dans son lecteur', () => {
   test('une story ou un réel qui porte une scène se rend par le lecteur de scène', () => {
-    expect(previewPlanOf({ type: 'STORY', storyEffects: SCENE, media: [media('m1', 'image/jpeg')] })).toEqual({ kind: 'scene', mode: 'story' });
-    expect(previewPlanOf({ type: 'REEL', storyEffects: SCENE, media: [] })).toEqual({ kind: 'scene', mode: 'reel' });
-    expect(previewPlanOf({ type: 'POST', storyEffects: SCENE, media: [] })).toEqual({ kind: 'scene', mode: 'card' });
+    expect(previewPlanOf({ type: 'STORY', canvas: SCENE, media: [media('m1', 'image/jpeg')] })).toEqual({ kind: 'scene', mode: 'story' });
+    expect(previewPlanOf({ type: 'REEL', canvas: SCENE, media: [] })).toEqual({ kind: 'scene', mode: 'reel' });
+    expect(previewPlanOf({ type: 'POST', canvas: SCENE, media: [] })).toEqual({ kind: 'scene', mode: 'card' });
   });
 
   test('sans scène, chaque média se lit : vidéo, audio, image en plein format ; un fichier reste un lien', () => {
-    const plan = previewPlanOf({ type: 'POST', storyEffects: null, media: [media('v', 'video/mp4'), media('a', 'audio/mpeg'), media('i', 'image/png'), media('f', 'application/pdf')] });
+    const plan = previewPlanOf({ type: 'POST', canvas: null, media: [media('v', 'video/mp4'), media('a', 'audio/mpeg'), media('i', 'image/png'), media('f', 'application/pdf')] });
     expect(plan).toEqual({
       kind: 'media',
       items: [
@@ -43,7 +45,7 @@ describe('previewPlanOf — la scène d’abord, sinon chaque média dans son le
   });
 
   test('un média sans adresse n’est pas offert ; rien du tout ⇒ texte seul', () => {
-    expect(previewPlanOf({ type: 'STATUS', storyEffects: null, media: [media('x', 'image/png', { fileUrl: null })] })).toEqual({ kind: 'text' });
+    expect(previewPlanOf({ type: 'STATUS', canvas: null, media: [media('x', 'image/png', { fileUrl: null })] })).toEqual({ kind: 'text' });
   });
 });
 
