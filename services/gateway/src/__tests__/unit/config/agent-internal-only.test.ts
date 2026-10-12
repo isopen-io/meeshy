@@ -11,6 +11,11 @@
  * environnement (`agent-staging` sur `meeshy-staging-network`, `agent` sur le
  * réseau de production) : aucun routeur public n'est nécessaire.
  *
+ * En production (#10289), l'agent partageait `meeshy-network` avec Traefik, la
+ * webapp, static-files et certs-dumper : un de ces conteneurs compromis joignait
+ * ses routes et son canal ZMQ. Il vit désormais sur `meeshy-agent-network`, que
+ * seuls la passerelle, la base et Redis partagent avec lui.
+ *
  * Ce témoin lit les FICHIERS du dépôt (même patron que
  * `staging-admin-surfaces-ssh-tunnel-only.test.ts`).
  *
@@ -33,7 +38,7 @@ function serviceBlock(source: string, serviceName: string, file: string): string
 
 const CASES = [
   { file: 'docker-compose.staging.yml', service: 'agent-staging', privateNetwork: 'meeshy-staging-network' },
-  { file: 'docker-compose.prod.yml', service: 'agent', privateNetwork: null },
+  { file: 'docker-compose.prod.yml', service: 'agent', privateNetwork: 'meeshy-agent-network' },
 ] as const;
 
 describe("le service agent n'est jamais publié sur Internet (#10242)", () => {
@@ -62,6 +67,53 @@ describe("le service agent n'est jamais publié sur Internet (#10242)", () => {
       it("ne rejoint plus le réseau partagé avec la production (meeshy-network) : il ne servait qu'à Traefik", () => {
         expect(block).not.toMatch(/-\s+meeshy-network\b/);
       });
+    }
+  });
+});
+
+describe("en production, le réseau de l'agent n'est partagé qu'avec la passerelle, la base et Redis (#10289)", () => {
+  const file = 'docker-compose.prod.yml';
+  const source = fs.readFileSync(path.join(COMPOSE_DIR, file), 'utf8');
+  const PRIVATE = 'meeshy-agent-network';
+  const ALLOWED = new Set(['agent', 'gateway', 'database', 'redis']);
+
+  function servicesOn(network: string): string[] {
+    const servicesSection = source.split('\n');
+    const start = servicesSection.findIndex((l) => l === 'services:');
+    const names = servicesSection
+      .slice(start + 1)
+      .filter((l) => /^ {2}[a-z0-9-]+:\s*$/.test(l))
+      .map((l) => l.trim().replace(/:$/, ''));
+    return names.filter((name) => {
+      let block: string;
+      try {
+        block = serviceBlock(source, name, file);
+      } catch {
+        return false;
+      }
+      return new RegExp(`-\\s+${network}\\b|^\\s{6}${network}:`, 'm').test(block);
+    });
+  }
+
+  it('déclare le réseau privé au niveau racine, en bridge (sortie vers le fournisseur LLM)', () => {
+    const networks = source.slice(source.lastIndexOf('\nnetworks:'));
+    expect(networks).toMatch(new RegExp(`\\n {2}${PRIVATE}:\\n {4}driver: bridge`));
+  });
+
+  it("n'y place que l'agent, la passerelle, la base et Redis", () => {
+    const members = servicesOn(PRIVATE);
+    expect(members.sort()).toEqual([...ALLOWED].sort());
+  });
+
+  it("garde la passerelle sur meeshy-network (Traefik la route) et sur le réseau de l'agent", () => {
+    const gateway = serviceBlock(source, 'gateway', file);
+    expect(gateway).toMatch(/-\s+meeshy-network\b/);
+    expect(gateway).toMatch(new RegExp(`-\\s+${PRIVATE}\\b`));
+  });
+
+  it('ne laisse aucun service du réseau d\'entrée (traefik, frontend, static-files, certs-dumper) joindre l\'agent', () => {
+    for (const edge of ['traefik', 'frontend', 'static-files', 'certs-dumper', 'nosqlclient', 'p3x-redis-ui', 'translator']) {
+      expect(servicesOn(PRIVATE)).not.toContain(edge);
     }
   });
 });
