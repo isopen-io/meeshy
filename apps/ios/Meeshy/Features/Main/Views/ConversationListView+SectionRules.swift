@@ -41,6 +41,16 @@ extension ConversationListView {
         if !isSectionCollapsible(sectionId: sectionId) { return true }
         return expandedSections.contains(sectionId)
     }
+
+    /// La liste PLATE — une seule section « Mes conversations » — ne montre
+    /// aucun en-tête.
+    nonisolated static func isSingleUngroupedSection(sectionIds: [String]) -> Bool {
+        sectionIds.count == 1 && sectionIds[0] == "other"
+    }
+
+    nonisolated static func showsSectionHeader(sectionId: String, isSingleUngroupedSection: Bool) -> Bool {
+        !isSingleUngroupedSection
+    }
 }
 
 // MARK: - Branche vide et queue de liste (#8759)
