@@ -69,9 +69,11 @@ extension ComposerCaptureSession {
         filmIntents = filmIntents.filter { $0.value == .gallery }
     }
 
-    /// La case choisie n'est la zone cadre que si un look y est posé : la case
-    /// « naturelle » d'une bande ouverte prend comme le rond, hors cadre.
-    var frameIntent: ComposerTakeIntent { look.isUntouched ? .edit : .gallery }
+    /// La case choisie n'est la zone cadre que si un VRAI cadre y est posé : la
+    /// case « Aucun » prend comme le rond, hors cadre — retouche, prise gardée
+    /// dans l'app ; Réglages › Médias « enregistrer l'original » prime toujours
+    /// (décision porteur 2026-10-12, #10284).
+    var frameIntent: ComposerTakeIntent { look.frame == ComposerPhotoFrame.none ? .edit : .gallery }
 
     /// **Le geste décidé par la table, exécuté.** Mise au point, zoom, rangement et
     /// cadrage ont besoin d'une géométrie : la vue les fait elle-même.

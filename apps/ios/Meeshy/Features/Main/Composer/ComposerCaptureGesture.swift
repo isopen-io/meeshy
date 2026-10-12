@@ -47,6 +47,9 @@ nonisolated struct ComposerCaptureGestureContext: Equatable, Sendable {
     var pendingSegments = 0
     var allowsPhoto = true
     var allowsVideo = true
+    /// La case choisie porte un VRAI cadre. Sur « Aucun », elle prend hors cadre
+    /// (décision porteur 2026-10-12, #10284) : retouche, prise gardée dans l'app.
+    var frameChosen = true
 }
 
 /// Le toucher précédent, et la zone où il est tombé : un double ne se fait
@@ -197,6 +200,7 @@ nonisolated enum ComposerCaptureGesture {
     /// (`CaptureSaveLaw.destination(for: .frame)`).
     private static func chosen(_ gesture: ComposerCaptureGestureKind,
                                _ context: ComposerCaptureGestureContext) -> ComposerCaptureAction {
+        guard context.frameChosen else { return shutter(gesture, context) }
         switch gesture {
         case .tap:
             if context.stage == .recording { return context.locked ? .stopTake : .none }
