@@ -106,3 +106,14 @@ export async function actOnAdminReport(
   const report = asRecord(data?.report);
   return { ok: true, data: { reportId: params.reportId, status: textOrNull(report?.status) ?? '', post: decodeAdminPostView(data?.target) } };
 }
+
+/** **RETIRER UN COMMENTAIRE PAR LA MODÉRATION** (#10394) — `POST admin.commentsByCommentIdRemove` : le commentaire et ses réponses. */
+export async function removeAdminComment(params: AdminDeps & { readonly commentId: string; readonly reason?: string | null }): Promise<ApiResult<{ readonly commentId: string }>> {
+  const result = await params.transport.request<unknown>({
+    method: 'POST',
+    path: adminEndpoints.commentsByCommentIdRemove(params.commentId),
+    body: params.reason === null || params.reason === undefined || params.reason === '' ? {} : { reason: params.reason },
+  });
+  if (!result.ok) return result;
+  return { ok: true, data: { commentId: params.commentId } };
+}

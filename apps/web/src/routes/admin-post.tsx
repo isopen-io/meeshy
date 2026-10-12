@@ -34,6 +34,7 @@ import { gestureEffect } from '@/lib/admin/post-gestures';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminPostRemoval, PostAudioTrack, PostCommentsSection, PostEngagementSection, PostMediaSection, PostStorySection, PostViewersSection } from './admin-post-parts';
+import { AdminCommentRemoval } from './admin-comment-removal';
 import { AdminPostGestureBar } from './admin-post-gestures';
 
 /**
@@ -259,7 +260,30 @@ export function AdminPostPanel({
       case 'story':
         return fiche.story === null ? null : <PostStorySection language={language} story={fiche.story} />;
       case 'comments':
-        return <PostCommentsSection language={language} fiche={fiche} now={now} />;
+        return (
+          <PostCommentsSection
+            language={language}
+            fiche={fiche}
+            now={now}
+            {...(reach.can('canModerateContent')
+              ? {
+                  commentActions: (commentId: string) => (
+                    <AdminCommentRemoval
+                      language={language}
+                      commentId={commentId}
+                      onAnnounce={announcer.announce}
+                      deps={deps}
+                      optimistic={{
+                        key: adminPostQueryKey(postId),
+                        apply: (before) =>
+                          before === null || before === undefined ? before : { ...(before as AdminPostFiche), comments: (before as AdminPostFiche).comments.filter((entry) => entry.id !== commentId) },
+                      }}
+                    />
+                  ),
+                }
+              : {})}
+          />
+        );
       case 'viewers':
         return <PostViewersSection language={language} fiche={fiche} now={now} />;
     }
