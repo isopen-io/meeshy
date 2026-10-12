@@ -65,7 +65,10 @@ describe("le service agent n'est jamais publié sur Internet (#10242)", () => {
       });
 
       it("ne rejoint plus le réseau partagé avec la production (meeshy-network) : il ne servait qu'à Traefik", () => {
+        // Forme liste (`- meeshy-network`) ET forme dictionnaire (`meeshy-network: {}`).
         expect(block).not.toMatch(/-\s+meeshy-network\b/);
+        expect(block).not.toMatch(/^\s{6}meeshy-network:/m);
+        expect(block).not.toMatch(/^\s{4}network_mode:/m);
       });
     }
   });
@@ -109,6 +112,10 @@ describe("en production, le réseau de l'agent n'est partagé qu'avec la passere
     const gateway = serviceBlock(source, 'gateway', file);
     expect(gateway).toMatch(/-\s+meeshy-network\b/);
     expect(gateway).toMatch(new RegExp(`-\\s+${PRIVATE}\\b`));
+  });
+
+  it("aucun service ne partage la pile réseau de l'agent (network_mode: service:agent / container:meeshy-agent)", () => {
+    expect(source).not.toMatch(/network_mode:\s*["']?(service:agent|container:meeshy-agent)\b/);
   });
 
   it('ne laisse aucun service du réseau d\'entrée (traefik, frontend, static-files, certs-dumper) joindre l\'agent', () => {
