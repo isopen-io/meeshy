@@ -439,9 +439,10 @@ struct ComposerLeadingRail: View {
         .accessibilityAddTraits(isOn ? .isSelected : [])
         .accessibilityActions {
             if let longPress {
-                ForEach(longPress.actions) { named in
-                    Button(named.label) { named.perform() }
-                }
+                ForEach(longPress.actions.map { named in
+                            AsyncRenderRow(id: named.id, content: Button(named.label) { named.perform() })
+                        },
+                        content: asyncRenderRowContent)
             }
         }
         // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
