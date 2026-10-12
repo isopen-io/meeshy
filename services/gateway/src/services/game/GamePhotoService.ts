@@ -16,7 +16,9 @@
  *   branché sur `gloryFramePackSpec.removalGuard`, PP7) — un autre appareil ou un ancien client ne le
  *   contourne pas.
  * - **L'accusé de présentation est idempotent** : une ligne par (compte, étape), d'`_id` DÉRIVÉ
- *   (`photoMomentId`) ; la date de la PREMIÈRE présentation ne bouge plus.
+ *   (`photoMomentId`) ; la date de la PREMIÈRE présentation ne bouge plus. Le registre est BORNÉ : la route
+ *   n'accepte que des étapes connues (`isKnownPhotoStepId`), et un compte ne dépasse jamais
+ *   `PHOTO_MOMENTS_ACCOUNT_MAX` lignes — au-delà, les étapes neuves sont ignorées, les gardées restent accusables.
  * - **Le plus haut palier du trésor** (D14) ne redescend pas : tenu à la frappe (`notePeakTreasury`), et
  *   servi comme le plus haut du gardé et du courant — un compte déjà riche avant ce lot n'attend pas sa
  *   prochaine frappe.
@@ -36,6 +38,7 @@ import {
   type GamePhotoBlock,
   type PhotoInvitations,
 } from '@meeshy/shared/types/game-photo';
+import { PHOTO_MOMENTS_ACCOUNT_MAX } from '@meeshy/shared/utils/game/photo-step-ids';
 import { TREASURY_TIERS, treasuryTier, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 type PhotoDb = Pick<PrismaClient, 'gameProfile' | 'gamePhotoMoment'>;
@@ -113,7 +116,8 @@ export class GamePhotoService {
 
   /**
    * Accuse la présentation d'étapes. Une ligne par étape, jamais deux ; une étape déjà présentée garde sa
-   * date. Rend chaque étape avec la date de sa première présentation.
+   * date. Une étape NEUVE n'entre que sous le plafond du compte (`PHOTO_MOMENTS_ACCOUNT_MAX`) ; au-delà elle
+   * est ignorée. Rend chaque étape gardée avec la date de sa première présentation.
    */
   async markPresented(userId: string, stepIds: readonly string[], now: Date = new Date()): Promise<{ presented: { stepId: string; presentedAt: string }[] }> {
     const unique = [...new Set(stepIds)];
@@ -124,7 +128,7 @@ export class GamePhotoService {
     const known = new Set(
       (await this.prisma.gamePhotoMoment.findMany({ where: { userId, stepId: { in: unique } }, select: { stepId: true }, take: unique.length })).map((row) => row.stepId),
     );
-    for (const stepId of unique.filter((id) => !known.has(id))) {
+    for (const stepId of await this.withinAccountCap(userId, unique.filter((id) => !known.has(id)))) {
       await this.createPresented(userId, stepId, now);
     }
     const rows = await this.prisma.gamePhotoMoment.findMany({
@@ -133,7 +137,19 @@ export class GamePhotoService {
       take: unique.length,
     });
     const presentedAt = new Map(rows.map((row) => [row.stepId, row.presentedAt ?? now]));
-    return { presented: unique.map((stepId) => ({ stepId, presentedAt: (presentedAt.get(stepId) ?? now).toISOString() })) };
+    return {
+      presented: unique.flatMap((stepId) => {
+        const at = presentedAt.get(stepId);
+        return at === undefined ? [] : [{ stepId, presentedAt: at.toISOString() }];
+      }),
+    };
+  }
+
+  /** Les étapes neuves qui tiennent sous `PHOTO_MOMENTS_ACCOUNT_MAX`, dans l'ordre du lot ; aucune au-delà. */
+  private async withinAccountCap(userId: string, fresh: readonly string[]): Promise<readonly string[]> {
+    if (fresh.length === 0) return [];
+    const held = await this.prisma.gamePhotoMoment.count({ where: { userId } });
+    return fresh.slice(0, Math.max(0, PHOTO_MOMENTS_ACCOUNT_MAX - held));
   }
 
   /** Garde le plus haut palier du trésor atteint ; n'écrit que s'il monte. */
