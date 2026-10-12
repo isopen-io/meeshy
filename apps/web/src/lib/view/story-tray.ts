@@ -125,14 +125,21 @@ export function groupStoriesByAuthor(
  * (`use-author-moods.ts`), qui n'exigent pas que l'auteur ait une story.
  */
 export function moodsByAuthor(moods: readonly StatusMoodPost[]): ReadonlyMap<string, string> {
-  const moodByAuthor = new Map<string, string>();
+  return new Map([...currentMoodPosts(moods)].map(([authorId, post]) => [authorId, post.moodEmoji ?? '']));
+}
+
+/** Le POST de l'humeur courante de chaque auteur — la même élection que
+ * {@link moodsByAuthor}, dont il est la source : c'est lui que l'écran affiche,
+ * donc lui qui reçoit l'impression `status` (#10401). */
+export function currentMoodPosts(moods: readonly StatusMoodPost[]): ReadonlyMap<string, StatusMoodPost> {
+  const byAuthor = new Map<string, StatusMoodPost>();
   for (const post of moods) {
     const authorId = post.author?.id ?? post.authorId;
-    if (authorId === undefined || moodByAuthor.has(authorId)) continue;
+    if (authorId === undefined || byAuthor.has(authorId)) continue;
     if (post.moodEmoji === null || post.moodEmoji === undefined || post.moodEmoji === '') continue;
-    moodByAuthor.set(authorId, post.moodEmoji);
+    byAuthor.set(authorId, post);
   }
-  return moodByAuthor;
+  return byAuthor;
 }
 
 /**

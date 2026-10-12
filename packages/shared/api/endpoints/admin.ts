@@ -240,11 +240,26 @@ export const messagesTrends = '/api/v1/admin/messages/trends';
 /** GET /api/v1/admin/monitoring */
 export const monitoring = '/api/v1/admin/monitoring';
 
+/** POST /api/v1/admin/ops/:operation */
+export const opsByOperation = (operation: string): string => `/api/v1/admin/ops/${encodeURIComponent(operation)}`;
+
+/** GET /api/v1/admin/ops/host-metrics */
+export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
+
+/** GET /api/v1/admin/ops/status */
+export const opsStatus = '/api/v1/admin/ops/status';
+
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';
 
 /** GET · DELETE /api/v1/admin/posts/:postId */
 export const postsByPostId = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}`;
+
+/** POST /api/v1/admin/posts/:postId/gestures */
+export const postsByPostIdGestures = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}/gestures`;
+
+/** POST /api/v1/admin/posts/gestures */
+export const postsGestures = '/api/v1/admin/posts/gestures';
 
 /** GET /api/v1/admin/posts/stats */
 export const postsStats = '/api/v1/admin/posts/stats';

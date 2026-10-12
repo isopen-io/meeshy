@@ -21,6 +21,8 @@ import { feedCardBody, reelPosterOf, type FeedCardMedia, type FeedCardModel, typ
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
+import type { ImpressionSource } from '@/lib/api/social-events';
+import { useImpressionRef } from '@/lib/view/reading-telemetry';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -324,13 +326,14 @@ function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardMo
   );
 }
 
-function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
+function FeedReelCard({ model, impressionRef, ...hosts }: { readonly model: FeedCardModel; readonly impressionRef: (node: Element | null) => void } & CardHosts) {
   const poster = reelPosterOf(model);
   const ratio = poster?.ratio ?? 1.25;
   const language = currentInterfaceLanguage();
 
   return (
     <div
+      ref={impressionRef}
       role="group"
       aria-label={translate(language, 'feed.post.reel.of', { author: model.author.name })}
       className="relative overflow-hidden"
@@ -613,13 +616,17 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
   const active = useIsActiveScene(model.id);
+  // L'IMPRESSION DE LA CARTE (#10401) — une par apparition, posée ICI pour
+  // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
+  // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
+  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource);
 
-  if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
+  if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
   // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
   // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
@@ -635,6 +642,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
 
   return (
     <article
+      ref={impressionRef}
       className="flex flex-col gap-2 pb-3"
       style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18, border: '0.5px solid var(--color-edge)' }}
       data-feed-card="post"

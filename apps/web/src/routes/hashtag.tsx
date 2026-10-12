@@ -120,6 +120,7 @@ export default function HashtagScreen() {
               <FeedPostCard
                 key={model.id}
                 model={model}
+                impressionSource="search"
                 onGesture={onGesture}
                 onShare={onShare}
                 onComment={onComment}
