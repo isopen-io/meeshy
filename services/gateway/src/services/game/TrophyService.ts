@@ -27,7 +27,7 @@ import {
   type TrophyRecord,
   type TrophySpec,
 } from '@meeshy/shared/utils/game/trophies';
-import { constellationOf, constellationVisitorBound } from '@meeshy/shared/utils/game/constellation';
+import { constellationOf, constellationVisitorBound, constellationVisitorBoundInstant } from '@meeshy/shared/utils/game/constellation';
 import type { PresenceViewer } from '../PresenceVisibilityService';
 import { GameProfileService } from './GameProfileService';
 import { starFragmentsOf, starFragmentsVisibleBefore } from './StarFragments';
@@ -66,9 +66,13 @@ export class TrophyService {
     for (const days of flameTrophiesEarned(params)) await this.award(params.userId, flameTrophy(days));
   }
 
-  async list(userId: string): Promise<TrophyRecord[]> {
+  /**
+   * Les trophées d'un membre. `before` : seulement ceux obtenus STRICTEMENT avant cet instant — ce qu'un visiteur
+   * en lit (#10240, `visitorTrophyBound`).
+   */
+  async list(userId: string, before?: Date): Promise<TrophyRecord[]> {
     const rows = await this.prisma.gameTrophy.findMany({
-      where: { userId },
+      where: before === undefined ? { userId } : { userId, awardedAt: { lt: before } },
       select: { key: true, awardedAt: true },
       orderBy: { awardedAt: 'desc' },
       take: TROPHY_LIST_MAX,
@@ -82,14 +86,17 @@ export class TrophyService {
     if (!allowed) return { visible: false, items: [], order: [] };
 
     const own = params.viewer?.userId === params.targetId;
+    const bound = constellationVisitorBound(params.now ?? new Date());
     const [owned, settings, fragments] = await Promise.all([
-      this.list(params.targetId),
+      // Un VISITEUR (ADMIN compris) lit les trophées FIGÉS AU MOIS, à la borne de la constellation (#10240) : un
+      // trophée du mois courant n'apparaît qu'au 1er du mois suivant — relire la vitrine ne date pas une présence.
+      own ? this.list(params.targetId) : this.list(params.targetId, constellationVisitorBoundInstant(bound)),
       this.profile.settings(params.targetId),
       // La constellation (#10053) suit le réglage de la vitrine et ne dit que ses étoiles, jamais le total. Un
       // visiteur la lit FIGÉE AU MOIS (comme `awardedMonth`) : relire la vitrine ne dit jamais quand on a joué.
       own
         ? starFragmentsOf(this.prisma, params.targetId)
-        : starFragmentsVisibleBefore(this.prisma, params.targetId, constellationVisitorBound(params.now ?? new Date())),
+        : starFragmentsVisibleBefore(this.prisma, params.targetId, bound),
     ]);
     const constellation = { stars: constellationOf(fragments).stars };
     if (!own) {
@@ -103,3 +110,6 @@ export class TrophyService {
     return { visible: true, items, order: [...orderShowcase({ owned, order: settings.showcaseOrder })], constellation };
   }
 }
+
+/** L'instant avant lequel un trophée est visible d'un visiteur : minuit UTC du 1er du mois courant (#10240, #10053). */
+export const visitorTrophyBound = (now: Date): Date => constellationVisitorBoundInstant(constellationVisitorBound(now));
