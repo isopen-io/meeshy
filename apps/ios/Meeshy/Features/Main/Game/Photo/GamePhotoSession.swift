@@ -264,7 +264,12 @@ final class GamePhotoSession: ObservableObject {
 
     // MARK: - Étape 2 et 3 : la prise et la frappe en place
 
-    func shutter() async {
+    var momentFrameId: String { moment.id }
+    var showsSave: Bool { true }
+    func chooseFrame(_ frameId: String?) {}
+    func gesture(_ kind: ComposerCaptureGestureKind, on zone: ComposerCaptureZone) async {}
+
+    func take(from zone: CaptureZone) async {
         guard case .camera(.live) = state else { return }
         guard let shot = await camera.capture() else {
             send(.cameraFailed(.unavailable))

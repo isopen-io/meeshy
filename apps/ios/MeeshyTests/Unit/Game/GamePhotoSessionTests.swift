@@ -53,7 +53,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let rig = makeRig()
         await rig.sut.chooseSelfie()
         XCTAssertEqual(rig.sut.state, .camera(.live))
-        await rig.sut.shutter()
+        await rig.sut.take(from: .outside)
         XCTAssertEqual(rig.sut.state, .result(.selfie, kept: nil))
         XCTAssertEqual(rig.composer.composed.first?.hadSource, true)
         XCTAssertEqual(rig.composer.composed.first?.mode, .selfie)
@@ -63,13 +63,13 @@ final class GamePhotoSessionTests: XCTestCase {
     func test_shutter_strikesInPlaceWithTheHapticShock() async {
         let rig = makeRig()
         await rig.sut.chooseSelfie()
-        await rig.sut.shutter()
+        await rig.sut.take(from: .outside)
         XCTAssertEqual(rig.haptics.played, [GameHapticPattern.strikeInPlace])
     }
 
     func test_shutter_beforeTheCameraIsLive_doesNothing() async {
         let rig = makeRig()
-        await rig.sut.shutter()
+        await rig.sut.take(from: .outside)
         XCTAssertEqual(rig.sut.state, .offer)
         XCTAssertEqual(rig.camera.captureCount, 0)
     }
@@ -95,7 +95,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let rig = makeRig()
         await rig.sut.chooseSelfie()
         rig.camera.shot = nil
-        await rig.sut.shutter()
+        await rig.sut.take(from: .outside)
         XCTAssertEqual(rig.sut.state, .camera(.failed(.unavailable)))
     }
 
@@ -161,7 +161,7 @@ final class GamePhotoSessionTests: XCTestCase {
     func test_keep_aSelfie_carriesItsReducedSource_andItsMirror() async {
         let rig = makeRig()
         await rig.sut.chooseSelfie()
-        await rig.sut.shutter()
+        await rig.sut.take(from: .outside)
         await rig.sut.keep()
         XCTAssertNotNil(rig.notebook.kept.first?.photo.source)
         XCTAssertEqual(rig.notebook.kept.first?.photo.recipe.mirror, true)
@@ -175,12 +175,12 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertNil(rig.notebook.kept.first?.photo.recipe.mirror)
     }
 
-    func test_save_writesTheChosenFormatToThePhotoLibrary() async {
+    func test_save_writesTheChosenFormatToThePhotoLibrary_onceForThisFrame() async {
         let rig = makeRig()
         await rig.sut.chooseCard()
-        await rig.sut.save(square: false)
         await rig.sut.save(square: true)
-        XCTAssertEqual(rig.library.savedImages, [Data("story".utf8), Data("square".utf8)])
+        await rig.sut.save(square: false)
+        XCTAssertEqual(rig.library.savedImages, [Data("square".utf8)], "déjà en galerie avec ce cadre : rien de plus")
         XCTAssertEqual(rig.sut.notice?.tone, .good)
     }
 
@@ -402,5 +402,88 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertEqual(rig.sut.referral, ReferralCard(link: Self.link, flame: Self.flame))
         XCTAssertEqual(rig.composer.composed.last?.referral?.link, Self.link)
         XCTAssertEqual(rig.links.existingCalls, 1)
+    }
+
+    // MARK: - Le cadre est le déclencheur (#10284)
+
+    func test_aTakeFromTheFrame_isSavedToPhotos_thenOpensTheResult_withoutSave() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .frame)
+        XCTAssertEqual(rig.sut.state, .result(.selfie, kept: nil))
+        XCTAssertEqual(rig.library.savedImages, [Data("story".utf8)], "la prise par le cadre part en galerie")
+        XCTAssertFalse(rig.sut.showsSave, "déjà enregistrée avec ce cadre : « Enregistrer » est masqué")
+        XCTAssertEqual(rig.sut.notice?.tone, .good)
+    }
+
+    func test_aTakeFromTheScene_neverReachesPhotos_andOffersSave() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .outside)
+        XCTAssertEqual(rig.sut.state, .result(.selfie, kept: nil))
+        XCTAssertTrue(rig.library.savedImages.isEmpty, "hors cadre : gardée dans l'app seulement")
+        XCTAssertTrue(rig.sut.showsSave)
+        XCTAssertNil(rig.sut.notice)
+    }
+
+    func test_theGalleryAndTheCardAlone_areOutsideTheFrame_andNeverReachPhotos() async {
+        let card = makeRig()
+        await card.sut.chooseCard()
+        XCTAssertTrue(card.library.savedImages.isEmpty)
+        XCTAssertTrue(card.sut.showsSave)
+
+        let gallery = makeRig()
+        await gallery.sut.chooseSelfie()
+        await gallery.sut.useGalleryPhoto(MockGamePhotoCamera.pixel().pngData() ?? Data())
+        XCTAssertTrue(gallery.library.savedImages.isEmpty)
+        XCTAssertTrue(gallery.sut.showsSave)
+    }
+
+    func test_saving_hidesSave_aNewFrameBringsItBack_andReturningToTheSavedFrameHidesItAgain() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .outside)
+        await rig.sut.save(square: false)
+        XCTAssertFalse(rig.sut.showsSave)
+
+        rig.sut.chooseFrame("afrique.savane.voix")
+        XCTAssertTrue(rig.sut.showsSave, "changer de cadre fait réapparaître « Enregistrer »")
+
+        rig.sut.chooseFrame(rig.sut.momentFrameId)
+        XCTAssertFalse(rig.sut.showsSave, "revenir au cadre déjà écrit : pas de doublon")
+        XCTAssertEqual(rig.library.savedImages.count, 1)
+    }
+
+    func test_aFrameTakeThatPhotosRefuses_bringsSaveBack_andSaysSo() async {
+        let rig = makeRig()
+        rig.library.fails = true
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .frame)
+        XCTAssertEqual(rig.sut.state, .result(.selfie, kept: nil))
+        XCTAssertTrue(rig.sut.showsSave, "l'écriture a échoué : le bouton revient")
+        XCTAssertEqual(rig.sut.notice?.tone, .error)
+    }
+
+    func test_theChosenFrameTap_takesFromTheFrame_theSceneDoubleTapFromOutside_andNoGestureFilms() async {
+        let framed = makeRig()
+        await framed.sut.chooseSelfie()
+        await framed.sut.gesture(.tap, on: .chosenThumbnail)
+        XCTAssertEqual(framed.library.savedImages.count, 1)
+
+        let scene = makeRig()
+        await scene.sut.chooseSelfie()
+        await scene.sut.gesture(.longPress, on: .chosenThumbnail)
+        await scene.sut.gesture(.longPress, on: .scene)
+        XCTAssertEqual(scene.camera.captureCount, 0, "le déroulé du jeu ne filme pas : l'appui long ne prend rien")
+        await scene.sut.gesture(.doubleTap, on: .scene)
+        XCTAssertEqual(scene.sut.state, .result(.selfie, kept: nil))
+        XCTAssertTrue(scene.library.savedImages.isEmpty)
+    }
+
+    func test_keep_carriesTheChosenFrameInTheRecipe() async {
+        let rig = makeRig()
+        await rig.sut.chooseCard()
+        await rig.sut.keep()
+        XCTAssertEqual(rig.notebook.kept.first?.photo.recipe.frameId, rig.sut.momentFrameId)
     }
 }

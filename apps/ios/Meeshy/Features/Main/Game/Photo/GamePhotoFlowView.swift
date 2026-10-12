@@ -166,7 +166,7 @@ struct GamePhotoFlowView: View {
 
                 Button {
                     HapticFeedback.medium()
-                    Task { await session.shutter() }
+                    Task { await session.take(from: .outside) }
                 } label: {
                     Circle()
                         .strokeBorder(Color.white, lineWidth: 4)
