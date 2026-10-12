@@ -68,7 +68,7 @@ struct ComposerTrailingRail: View {
 
     /// **Des boutons séparés, sans libellé** (directive porteur 2026-09-27 :
     /// « fais des boutons séparés sans caption […] de petite taille »). Chaque
-    /// entrée porte son disque de verre. Depuis #8713 : les OPTIONS du moment en
+    /// entrée est un glyphe blanc en relief, sans disque (#10364). Depuis #8713 : les OPTIONS du moment en
     /// haut, puis « Temps », annuler et rétablir en bas — le Cadre est parti au
     /// rail gauche, la nouvelle scène à la barre haute.
     var separateButtons: Bool = false
@@ -200,14 +200,15 @@ struct ComposerTrailingRail: View {
         }
     }
 
-    /// Un bouton SÉPARÉ : l'icône seule, petite, dans son disque de verre —
-    /// indigo quand l'outil qu'il ouvre est actif. Le libellé reste le nom
-    /// accessible.
+    /// Un bouton SÉPARÉ : l'icône seule, sans disque de verre (#10364, comme
+    /// le rail gauche depuis #10358) — glyphe BLANC en relief par son ombre,
+    /// JAUNE quand l'outil qu'il ouvre est actif. La cible reste le cadre de
+    /// `railWidth`, 44 pt ; le libellé reste le nom accessible.
     private func tile(symbol: String,
                       label: String,
                       key: String,
                       isOn: Bool,
-                      tint: Color = MeeshyColors.textPrimary(isDark: true),
+                      tint: Color = ComposerFloatingRailInk.rest,
                       action: @escaping () -> Void) -> some View {
         Button {
             lastTapped = key
@@ -215,12 +216,11 @@ struct ComposerTrailingRail: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: symbol)
-                .font(.body.weight(.semibold))
+                .font(.title3.weight(.semibold))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(tint)
+                .foregroundColor(ComposerFloatingRailInk.floating(active: isOn, restTint: tint))
+                .modifier(ComposerRailGlyphRelief(active: true))
                 .composerToolBounce(active: lastTapped == key)
-                .modifier(ComposerRailButtonGlass(active: true, plateauTint: plateauTint,
-                                                  tint: isOn ? MeeshyColors.brandPrimary : nil))
                 .frame(width: ComposerRailGeometry.railWidth, height: ComposerRailGeometry.railWidth)
                 .contentShape(Rectangle())
         }
@@ -427,7 +427,7 @@ struct ComposerTrailingColumnPaint {
     }
 
     init(_ entry: ComposerTrailingColumn.Entry) {
-        let neutre = MeeshyColors.textPrimary(isDark: true)
+        let neutre = ComposerFloatingRailInk.rest
         switch entry {
         case .toolControl(let control):
             symbol = control.symbolName

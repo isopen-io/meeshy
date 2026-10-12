@@ -59,15 +59,9 @@ nonisolated enum ComposerRailGeometry {
     /// scène — l'ambiguïté même que l'encastrement existe pour lever.
     static let gutter: CGFloat = 8
 
-    /// **Le disque de verre d'un bouton FLOTTANT** (directive porteur
-    /// 2026-09-28 : « réduis la taille des boutons flottants liquidglass »).
-    /// Le DESSIN rétrécit, jamais la cible : le cadre du bouton garde
-    /// `railWidth`, et c'est l'écart entre deux cadres qui se resserre
-    /// (`floatingEntrySpacing`) pour que les disques gardent leur respiration.
-    static let floatingButtonSize: CGFloat = 36
-
-    /// L'écart entre deux CADRES de 44 pt dont le disque n'en dessine que 36 :
-    /// `2 + 2 × 4 = 10 pt` entre deux disques, la respiration d'avant.
+    /// L'écart entre deux CADRES de 44 pt d'un rail flottant. Les boutons n'ont
+    /// plus de disque de verre (#10358, #10364) : le cadre reste la cible, et
+    /// ce resserrement garde la colonne de glyphes compacte.
     static let floatingEntrySpacing: CGFloat = 2
 
     /// **La remontée des deux rails flottants** (même directive : « remonte-les
