@@ -4,7 +4,8 @@ import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
-import { isContentRefusal as isRefusal, RefusedContentBackdrop, useVisitorInvitation } from '@/components/visitor-invitation';
+import { RefusedContentBackdrop, RefusedContentNotice, refusalViewOf } from '@/components/refused-content';
+import { isContentRefusal as isRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { usePost } from '@/lib/api/query';
@@ -80,30 +81,6 @@ export function PostDetailHeader() {
   );
 }
 
-/** 403 et 404 confondus (D-6) — rien de la publication ne transparaît. */
-export function PostDetailRefused() {
-  return (
-    <div className="grid flex-1 content-center justify-items-center gap-3 px-8 text-center">
-      <span style={{ color: 'var(--color-ios-ink-3)' }}>
-        <Glyph name="lock" size={28} />
-      </span>
-      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        Cette publication n’est pas accessible
-      </p>
-      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Elle n’existe pas, ou vous n’y avez pas accès.
-      </p>
-      <Link
-        to="feed"
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
-        style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-      >
-        Retour au fil
-      </Link>
-    </div>
-  );
-}
-
 export function PostDetailError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
   return (
     <div role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
@@ -131,10 +108,11 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
 export type PostDetailBody = 'card' | 'visitor-refused' | 'refused' | 'error' | 'loading';
 
 /**
- * CE QUE LE DÉTAIL MONTRE, selon le verdict de la passerelle (#10314). Un
- * visiteur refusé voit le fond sombre neutre des réels sous l'invitation ; un
- * membre refusé, le refus dessiné (D-6) ; une panne, « Réessayer » — jamais
- * confondue avec un refus.
+ * CE QUE LE DÉTAIL MONTRE, selon le verdict de la passerelle (#10314, #10318).
+ * Un refus — 403 et 404 confondus (D-6) — se présente comme un réel refusé
+ * (`components/refused-content.tsx`) : le noir de média, l'invitation par-dessus
+ * pour un visiteur, la notice « Retour » pour un membre. Une panne garde
+ * « Réessayer » — jamais confondue avec un refus.
  */
 export function postDetailBodyOf(input: {
   readonly served: boolean;
@@ -143,7 +121,7 @@ export function postDetailBodyOf(input: {
   readonly failed: boolean;
 }): PostDetailBody {
   if (input.served) return 'card';
-  if (input.refused) return input.visitor ? 'visitor-refused' : 'refused';
+  if (input.refused) return refusalViewOf({ visitor: input.visitor }) === 'invitation' ? 'visitor-refused' : 'refused';
   return input.failed ? 'error' : 'loading';
 }
 
@@ -248,7 +226,7 @@ export default function PostDetailScreen() {
         ) : body === 'visitor-refused' ? (
           <RefusedContentBackdrop />
         ) : body === 'refused' ? (
-          <PostDetailRefused />
+          <RefusedContentNotice language={currentInterfaceLanguage()} onBack={() => navigate(href('feed'), true)} />
         ) : body === 'error' ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
         ) : (
