@@ -753,10 +753,7 @@ public final class ReaderAudioMixer {
     /// plus la sienne : la tâche s'arrête.
     private func applyLoopEnvelope(audioId: String, epoch: UInt64, cycle: Double) -> Bool {
         guard playbackEpoch == epoch, let live = entries[audioId] else { return false }
-        // Une pause gèle la phase : l'origine ne glisse qu'à la reprise.
-        guard pausedAtHostTime == nil, let origin = playbackStartHostTime else { return true }
-        let slideElapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
-                                                         relativeTo: origin)
+        guard let slideElapsed = loopEnvelopeSlideElapsed else { return true }
         let volume = ReaderLoopEnvelope.volume(elapsedInClip: slideElapsed - Double(live.startTime),
                                                cycle: cycle,
                                                fadeIn: Double(live.fadeIn),
@@ -764,6 +761,14 @@ public final class ReaderAudioMixer {
                                                target: live.targetVolume)
         live.node.volume = (isMuted || live.isUserMuted) ? 0 : volume
         return true
+    }
+
+    /// Écoulé de la passe que lit une enveloppe de boucle — premier plan et
+    /// fond (#10369). `nil` hors passe ou en pause : une pause gèle la phase,
+    /// l'origine ne glisse qu'à la reprise.
+    var loopEnvelopeSlideElapsed: Double? {
+        guard pausedAtHostTime == nil, let origin = playbackStartHostTime else { return nil }
+        return ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: origin)
     }
 
     // MARK: - host-time helpers
@@ -847,6 +852,9 @@ public final class ReaderAudioMixer {
         var fadeTasks: [Task<Void, Never>] = []
         /// Jumelle de `Entry.trimBounds` — même règle, même résolveur.
         let trimBounds: MediaTrimBounds?
+        /// Jumelle de `Entry.envelopeCycle` (#10369) : le tour d'enveloppe du
+        /// fond bouclé par l'aperçu, `nil` pour les fondus posés une fois.
+        var envelopeCycle: Double? = nil
 
         /// `true` when the composer authored an explicit fade — the default
         /// envelope must then defer to the configured values (RC4.7).
