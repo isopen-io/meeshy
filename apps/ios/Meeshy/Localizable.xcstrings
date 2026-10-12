@@ -114890,6 +114890,100 @@
         }
       }
     },
+    "feed.post.pending.alreadySent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إرسال هذا المنشور للتو. احذفه بعد ظهوره على الإنترنت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Beitrag wurde gerade gesendet. Lösche ihn, sobald er online ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This post was just sent. Delete it once it's online."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicación acaba de enviarse. Elimínala cuando esté en línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette publication vient de partir. Supprimez-la une fois en ligne."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo post è appena partito. Eliminalo quando sarà online."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicação acabou de ser enviada. Exclua-a quando estiver online."
+          }
+        }
+      }
+    },
+    "feed.post.pending.withdrawn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء الإرسال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senden abgebrochen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending canceled"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envío cancelado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoi annulé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invio annullato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envio cancelado"
+          }
+        }
+      }
+    },
     "feed.post.pin": {
       "extractionState": "manual",
       "localizations": {

@@ -394,5 +394,13 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "senderHasAccount", .boolean)
             }
         }
+
+        // **La marque d'annulation d'une publication en vol** (#10321).
+        // `OutboxRecord.cancelRequestedAt` : NULL ⇒ personne n'a rien demandé.
+        migrator.registerMigration("outbox_v4_cancel_requested_at") { db in
+            try db.alter(table: "outbox") { t in
+                t.add(column: "cancelRequestedAt", .datetime)
+            }
+        }
     }
 }

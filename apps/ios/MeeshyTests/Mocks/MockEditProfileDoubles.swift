@@ -170,6 +170,14 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         cancelCreatePostCalls.append(clientMutationId)
     }
 
+    var cancelPendingPublicationResult: PublicationCancellation = .removed
+    var cancelPendingPublicationCalls: [String] = []
+
+    func cancelPendingPublication(clientMutationId: String) async -> PublicationCancellation {
+        cancelPendingPublicationCalls.append(clientMutationId)
+        return cancelPendingPublicationResult
+    }
+
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome> {
         AsyncStream<OutboxOutcome> { continuation in
             outcomeContinuations[cmid] = continuation

@@ -364,6 +364,10 @@ public protocol OfflineQueueing: Sendable {
     /// when the user re-sends the recovered draft so the resend replaces the
     /// stuck row instead of racing it to the server (no duplicate on reconnect).
     func cancelCreatePost(clientMutationId: String) async
+
+    /// #10321 — « Supprimer » sur une publication encore en file : retirée si
+    /// elle attend, marquée si elle est en vol. Voir `OfflineQueue+PublicationCancel`.
+    func cancelPendingPublication(clientMutationId: String) async -> PublicationCancellation
 }
 
 /// A recovered offline post / status / reel, decoded from a stuck `.createPost`
@@ -2348,30 +2352,10 @@ public actor OfflineQueue {
         return nil
     }
 
+    /// Délègue à `cancelPendingPublication` (#10321) : une ligne EN VOL n'est
+    /// plus supprimée sous les pieds du téléverseur, elle est marquée.
     public func cancelCreatePost(clientMutationId cmid: String) async {
-        let outboxId = "ofqm_\(cmid)"
-        guard let pool = outboxPool else { return }
-        // Reclaim pending-media files before deleting the row so they don't leak.
-        do {
-            if let record = try await pool.read({ db in try OutboxRecord.fetchOne(db, key: outboxId) }) {
-                let payload = try JSONDecoder().decode(CreatePostPayload.self, from: record.payload)
-                for stored in payload.localMediaPaths ?? [] {
-                    FileManager.default.removeItemLogging(atPath: Self.absoluteMediaPath(forStored: stored), context: "cancelCreatePost media")
-                }
-            }
-        } catch {
-            // Non bloquant : la ligne est supprimée juste après. Seuls les
-            // fichiers médias associés restent alors sur disque.
-            logger.error("cancelCreatePost: pending media not reclaimed, files leaked on disk: \(error.localizedDescription, privacy: .public)")
-        }
-        do {
-            try await pool.write { db in
-                _ = try OutboxRecord.deleteOne(db, key: outboxId)
-            }
-        } catch {
-            logger.error("cancelCreatePost failed: \(error.localizedDescription, privacy: .public)")
-        }
-        await refreshPendingCount()
+        _ = await cancelPendingPublication(clientMutationId: cmid)
     }
 
     // MARK: - Reaction Enqueue (Wave 1 Task 3.6 — ports ReactionQueue.enqueue)
