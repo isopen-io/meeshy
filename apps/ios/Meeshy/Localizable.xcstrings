@@ -16955,49 +16955,96 @@
         }
       }
     },
-    "composer.rail.media.openCamera": {
+    "composer.rail.media.takePhoto": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "فتح الكاميرا"
+            "value": "التقاط صورة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kamera öffnen"
+            "value": "Foto aufnehmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open the camera"
+            "value": "Take a photo"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abrir la cámara"
+            "value": "Hacer una foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrir la caméra"
+            "value": "Prendre une photo"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Apri la fotocamera"
+            "value": "Scatta una foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Abrir a câmera"
+            "value": "Tirar uma foto"
+          }
+        }
+      }
+    },
+    "composer.rail.media.fromFiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من الملفات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Dateien"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From Files"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde Archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depuis les fichiers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da File"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos Arquivos"
           }
         }
       }

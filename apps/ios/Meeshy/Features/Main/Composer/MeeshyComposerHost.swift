@@ -508,6 +508,9 @@ struct MeeshyComposerHost: View {
     @State var openingPickFoundsScenes = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
+    /// Les sources que l'appui long sur la photothèque propose (#10357) ;
+    /// `nil` ⇒ aucun choix présenté.
+    @State var railLongPressSources: [ComposerMediaIntake]? = nil
 
     /// **Ce que l'importateur ouvert va rapporter** (#4632). Le meuble n'a qu'UN
     /// `.fileImporter` — deux sélecteurs frères rejoueraient le conflit de
