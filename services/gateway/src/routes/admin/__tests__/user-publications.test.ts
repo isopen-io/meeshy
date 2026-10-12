@@ -298,6 +298,7 @@ describe('POST /admin/users/:userId/publications/moderation', () => {
     postFindMany
       .mockResolvedValueOnce([row({ id: P1, type: 'STORY', visibility: 'FRIENDS' })])
       .mockResolvedValueOnce([row({ id: COPY, authorId: REPOSTER, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 })]);
+    userFindMany.mockResolvedValue([{ id: REPOSTER, role: 'USER' }]);
     const app = await buildApp('ADMIN');
     const res = await moderate(app, { action: 'take-offline', postIds: [P1], reason: 'Contenu signalé' });
     expect(res.statusCode).toBe(200);
@@ -321,6 +322,7 @@ describe('POST /admin/users/:userId/publications/moderation', () => {
         row({ id: '507f1f77bcf86cd799439052', authorId: '507f1f77bcf86cd799439050', repostOfId: P1, ...held, moderationPriorVisibility: 'PUBLIC' }),
         row({ id: '507f1f77bcf86cd799439053', authorId: '507f1f77bcf86cd799439050', repostOfId: P1, ...held, moderationHiddenAt: new Date('2026-10-09T00:00:00Z') }),
       ]);
+    userFindMany.mockResolvedValue([{ id: '507f1f77bcf86cd799439050', role: 'USER' }]);
     const app = await buildApp('ADMIN');
     await moderate(app, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
     expect(postUpdateMany.mock.calls.map((call) => (call[0] as any).where.id)).toEqual([P1, '507f1f77bcf86cd799439052']);
@@ -346,6 +348,144 @@ describe('GET — la hiérarchie vaut aussi pour la lecture', () => {
     const res = await app.inject({ method: 'GET', url: `/admin/users/${AUTHOR}/publications` });
     expect(res.statusCode).toBe(403);
     expect(postFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('troisième passe — hiérarchie des COPIES et signataire au rang inconnu', () => {
+  const BOSS = '507f1f77bcf86cd799439060';
+  const PEER = '507f1f77bcf86cd799439061';
+  const LOW = '507f1f77bcf86cd799439062';
+  const COPY_BOSS = '507f1f77bcf86cd799439071';
+  const COPY_PEER = '507f1f77bcf86cd799439072';
+  const COPY_LOW = '507f1f77bcf86cd799439073';
+
+  it("un modérateur n'emporte pas la copie d'un rang égal ou supérieur : elle reste intacte et se compte à part", async () => {
+    postFindMany
+      .mockResolvedValueOnce([row({ id: P1, type: 'STORY', visibility: 'FRIENDS' })])
+      .mockResolvedValueOnce([
+        row({ id: COPY_BOSS, authorId: BOSS, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 }),
+        row({ id: COPY_PEER, authorId: PEER, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 }),
+        row({ id: COPY_LOW, authorId: LOW, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 }),
+      ]);
+    userFindMany.mockImplementation(async (args: any) =>
+      [
+        { id: BOSS, role: 'BIGBOSS' },
+        { id: PEER, role: 'MODERATOR' },
+        { id: LOW, role: 'USER' },
+      ].filter((u) => args.where.id.in.includes(u.id)),
+    );
+    const app = await buildApp('MODERATOR');
+
+    const res = await moderate(app, { action: 'take-offline', postIds: [P1], reason: 'Contenu signalé' });
+
+    expect(res.statusCode).toBe(200);
+    expect(postUpdateMany.mock.calls.map((call) => (call[0] as any).where.id)).toEqual([P1, COPY_LOW]);
+    expect(res.json().data.outrankedCopies).toBe(2);
+    await app.close();
+  });
+
+  it("une copie dont l'auteur est introuvable ou au rang inconnu n'est pas touchée — fail-closed", async () => {
+    postFindMany
+      .mockResolvedValueOnce([row({ id: P1, type: 'STORY', visibility: 'FRIENDS' })])
+      .mockResolvedValueOnce([
+        row({ id: COPY_BOSS, authorId: BOSS, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 }),
+        row({ id: COPY_PEER, authorId: PEER, type: 'STORY', visibility: 'PUBLIC', repostOfId: P1 }),
+      ]);
+    userFindMany.mockImplementation(async (args: any) => [{ id: PEER, role: 'WHATEVER' }].filter((u) => args.where.id.in.includes(u.id)));
+    const app = await buildApp('ADMIN');
+    const res = await moderate(app, { action: 'take-offline', postIds: [P1], reason: 'Contenu signalé' });
+    expect(postUpdateMany.mock.calls.map((call) => (call[0] as any).where.id)).toEqual([P1]);
+    expect(res.json().data.outrankedCopies).toBe(2);
+    await app.close();
+  });
+
+  it("un retrait signé par un compte au rang INCONNU (hors matrice) ne se lève que du rang souverain", async () => {
+    const STRANGE = '507f1f77bcf86cd799439063';
+    const held = () => [row({ id: P1, visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z'), moderationHiddenById: STRANGE, moderationPriorVisibility: 'PUBLIC' })];
+    userFindMany.mockResolvedValue([{ id: STRANGE, role: 'AGENT' }]);
+    postFindMany.mockResolvedValue(held());
+    const moderator = await buildApp('MODERATOR');
+    const refused = await moderate(moderator, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
+    expect(refused.json().data.results[0].outcome).toBe('outranked');
+    expect(postUpdateMany).not.toHaveBeenCalled();
+    await moderator.close();
+  });
+});
+
+describe('troisième passe — les bornes échouent FERMÉES', () => {
+  it.each(['0', '-1', '1.5', 'abc', '51', '999999', ''])("refuse limit=%p sans interroger la base", async (limit) => {
+    const app = await buildApp('ADMIN');
+    const res = await app.inject({ method: 'GET', url: `/admin/users/${AUTHOR}/publications?limit=${limit}` });
+    expect(res.statusCode).toBe(400);
+    expect(postFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("refuse un limit répété (tableau) et un offset négatif", async () => {
+    const app = await buildApp('ADMIN');
+    const repeated = await app.inject({ method: 'GET', url: `/admin/users/${AUTHOR}/publications?limit=10&limit=5000` });
+    const negative = await app.inject({ method: 'GET', url: `/admin/users/${AUTHOR}/publications?offset=-5` });
+    expect([repeated.statusCode, negative.statusCode]).toEqual([400, 400]);
+    expect(postFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("sans limit, la page est bornée par défaut (24), jamais illimitée", async () => {
+    postFindMany.mockResolvedValue([]);
+    postCount.mockResolvedValue(0);
+    const app = await buildApp('ADMIN');
+    await app.inject({ method: 'GET', url: `/admin/users/${AUTHOR}/publications` });
+    expect((postFindMany.mock.calls[0]?.[0] as any).take).toBe(24);
+    await app.close();
+  });
+
+  it.each([
+    ['absent', {}],
+    ['vide', { postIds: [] }],
+    ['non tableau', { postIds: P1 }],
+    ['51 doublons', { postIds: Array.from({ length: 51 }, () => P1) }],
+  ])("refuse un lot %s", async (_label, extra) => {
+    const app = await buildApp('ADMIN');
+    const res = await moderate(app, { action: 'make-private', reason: 'Spam massif', ...extra });
+    expect(res.statusCode).toBe(400);
+    expect(postFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("50 doublons ne lisent qu'une publication, et la lecture reste bornée à 50", async () => {
+    postFindMany.mockResolvedValue([row()]);
+    const app = await buildApp('ADMIN');
+    await moderate(app, { action: 'make-private', reason: 'Spam massif', postIds: Array.from({ length: 50 }, () => P1) });
+    expect(postFindMany.mock.calls[0]?.[0]).toMatchObject({ where: { id: { in: [P1] } }, take: 50 });
+    await app.close();
+  });
+});
+
+describe('troisième passe — la salle temps réel du post se vide au retrait', () => {
+  it("met hors ligne : les sockets restées sur la salle du post en sont sorties, la remise en ligne n'y touche pas", async () => {
+    const socketsLeave = jest.fn();
+    const inRoom = jest.fn(() => ({ socketsLeave }));
+    const io = { in: inRoom, to: jest.fn(() => ({ emit: jest.fn(), except: jest.fn(() => ({ emit: jest.fn() })) })) };
+    const app = Fastify({ logger: false });
+    app.decorate('prisma', prisma);
+    app.decorate('socialEvents', socialEvents as any);
+    app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io }) } as any);
+    app.decorate('authenticate', async (request: any) => {
+      request.authContext = { isAuthenticated: true, userId: ACTOR, registeredUser: { id: ACTOR, role: 'ADMIN' } };
+    });
+    registerUserPublicationRoutes(app);
+    await app.ready();
+
+    postFindMany.mockResolvedValue([row({ id: P1, visibility: 'PUBLIC' })]);
+    await moderate(app, { action: 'take-offline', postIds: [P1], reason: 'Contenu signalé' });
+    expect(inRoom).toHaveBeenCalledWith(`post:${P1}`);
+    expect(socketsLeave).toHaveBeenCalledWith(`post:${P1}`);
+
+    inRoom.mockClear();
+    postFindMany.mockResolvedValue([row({ id: P1, visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z'), moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })]);
+    await moderate(app, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
+    expect(inRoom).not.toHaveBeenCalled();
     await app.close();
   });
 });

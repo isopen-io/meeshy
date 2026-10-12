@@ -22,6 +22,7 @@ import { NOT_DELETED } from '../../services/posts/softDelete';
 import { retractPostNotifications } from '../../services/posts/retractPostNotifications';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { logError, logWarn } from '../../utils/logger';
 import { sendBadRequest, sendForbidden, sendInternalError, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
 import { UserRoleEnum } from '@meeshy/shared/types';
@@ -158,6 +159,7 @@ const moderationResponseSchema = {
         updated: { type: 'number' },
         unchanged: { type: 'number' },
         skipped: { type: 'number' },
+        outrankedCopies: { type: 'number' },
         results: {
           type: 'array',
           items: {
@@ -238,8 +240,9 @@ async function outrankedPlans(fastify: FastifyInstance, plans: readonly Plan[], 
   const hiderIds = [...new Set(lifts.map((plan) => plan.before.moderationHiddenById).filter((id): id is string => id !== null))];
   const hiders =
     hiderIds.length === 0 ? [] : await fastify.prisma.user.findMany({ where: { id: { in: hiderIds } }, select: { id: true, role: true }, take: hiderIds.length });
-  const levelOf = new Map(hiders.map((hider) => [hider.id, adminPermissionsService.getRoleLevel(hider.role as UserRoleEnum)]));
   const sovereign = adminPermissionsService.getRoleLevel(UserRoleEnum.BIGBOSS);
+  // Un rang hors de la matrice (niveau 0) ne se compare pas : il compte comme souverain.
+  const levelOf = new Map(hiders.map((hider) => [hider.id, adminPermissionsService.getRoleLevel(hider.role as UserRoleEnum) || sovereign]));
   const mine = adminPermissionsService.getRoleLevel(actor.role);
   const required = (plan: Plan): number => (plan.before.moderationHiddenById === null ? sovereign : (levelOf.get(plan.before.moderationHiddenById) ?? sovereign));
   return new Set(lifts.filter((plan) => required(plan) > mine).map((plan) => plan.row.id));
@@ -256,15 +259,37 @@ const COPIES_MAX = 500;
  * elle ; la remise en ligne ne rend que celles que CE retrait avait emportées
  * (même date, même signataire) — jamais une copie retirée pour elle-même.
  */
+type CopyPlans = { readonly plans: readonly Plan[]; readonly outranked: number };
+
+const NO_COPIES: CopyPlans = { plans: [], outranked: 0 };
+
+/**
+ * La hiérarchie vaut pour chaque publication ÉCRITE, copie comprise (troisième passe
+ * #10315) : la copie d'un rang égal ou supérieur n'est pas touchée, elle se compte.
+ * Un auteur introuvable ou au rang hors matrice ne se laisse pas comparer : fail-closed.
+ */
+async function withinHierarchy(fastify: FastifyInstance, copies: readonly Plan[], actor: { readonly id: string; readonly role: UserRoleEnum }): Promise<CopyPlans> {
+  const others = [...new Set(copies.map((plan) => plan.row.authorId).filter((id) => id !== actor.id))];
+  const authors = others.length === 0 ? [] : await fastify.prisma.user.findMany({ where: { id: { in: others } }, select: { id: true, role: true }, take: others.length });
+  const roleOf = new Map(authors.map((author) => [author.id, author.role as UserRoleEnum]));
+  const manageable = (plan: Plan): boolean => {
+    if (plan.row.authorId === actor.id) return true;
+    const role = roleOf.get(plan.row.authorId);
+    return role !== undefined && adminPermissionsService.getRoleLevel(role) > 0 && adminPermissionsService.canManageUser(actor.role, role);
+  };
+  const kept = copies.filter(manageable);
+  return { plans: kept, outranked: copies.length - kept.length };
+}
+
 async function copyPlans(
   fastify: FastifyInstance,
   action: PostModerationAction,
   primary: readonly Plan[],
-  context: { readonly now: Date; readonly actorId: string },
-): Promise<Plan[]> {
-  if (action === 'make-private') return [];
+  context: { readonly now: Date; readonly actor: { readonly id: string; readonly role: UserRoleEnum } },
+): Promise<CopyPlans> {
+  if (action === 'make-private') return NO_COPIES;
   const sources = primary.filter((plan) => plan.after !== null && EPHEMERAL_TYPES.has(plan.row.type));
-  if (sources.length === 0) return [];
+  if (sources.length === 0) return NO_COPIES;
   const sourceIds = sources.map((plan) => plan.row.id);
   const copies = await fastify.prisma.post.findMany({
     where: { OR: [{ repostOfId: { in: sourceIds } }, { originalRepostOfId: { in: sourceIds } }], isQuote: false, deletedAt: NOT_DELETED },
@@ -272,7 +297,7 @@ async function copyPlans(
     take: COPIES_MAX,
   });
   const byId = new Map(sources.map((plan) => [plan.row.id, plan]));
-  return copies.flatMap((copy): Plan[] => {
+  const planned = copies.flatMap((copy): Plan[] => {
     const source = byId.get(copy.originalRepostOfId ?? '') ?? byId.get(copy.repostOfId ?? '');
     if (source === undefined || byId.has(copy.id)) return [];
     const before = stateOf(copy);
@@ -282,9 +307,10 @@ async function copyPlans(
       before.moderationHiddenAt.getTime() === source.before.moderationHiddenAt.getTime() &&
       before.moderationHiddenById === source.before.moderationHiddenById;
     if (action === 'restore' && !sameHold) return [];
-    const after = nextModerationState(action, before, context);
+    const after = nextModerationState(action, before, { now: context.now, actorId: context.actor.id });
     return after === null ? [] : [{ row: copy, before, after, copyOf: source.row.id }];
   });
+  return withinHierarchy(fastify, planned, context.actor);
 }
 
 /** Ce que les CLIENTS doivent oublier, et ce que l'inbox doit retirer : effets hors transaction, jamais bloquants. */
@@ -303,6 +329,10 @@ function announceWithdrawals(fastify: FastifyInstance, action: PostModerationAct
   if (withdrawn.length === 0) return;
   // Les citations ouvertes dans les conversations se disent retirées sur-le-champ, comme au retrait définitif.
   const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+  // Une socket jointe à la salle du post quand il était lisible y resterait, et
+  // recevrait les éditions de l'auteur pendant le retrait : la salle se vide, et
+  // `post:join` refait passer la porte de visibilité à qui revient.
+  withdrawn.forEach((plan) => io?.in(ROOMS.post(plan.row.id)).socketsLeave(ROOMS.post(plan.row.id)));
   withdrawn
     .filter((plan) => plan.after?.moderationHiddenAt != null)
     .forEach((plan) =>
@@ -408,7 +438,7 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
         const plans: Plan[] = rows.map((row) => ({ row, before: stateOf(row), after: nextModerationState(action, stateOf(row), { now, actorId: actor.id }) }));
         const outranked = await outrankedPlans(fastify, plans, actor);
         const candidates = plans.filter((plan) => plan.after !== null && !outranked.has(plan.row.id));
-        const copies = await copyPlans(fastify, action, candidates, { now, actorId: actor.id });
+        const copies = await copyPlans(fastify, action, candidates, { now, actor });
 
         // Écriture CONDITIONNELLE et SÉQUENTIELLE dans une transaction : chaque
         // mise à jour ne porte que sur l'état lu (audience, retrait, signataire) ;
@@ -416,7 +446,7 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
         // `conflict`. Le journal n'écrit que ce qui a changé. Une transaction
         // avortée par un conflit d'écriture concurrent rend `conflict` à tout le
         // lot, jamais un 500 ni un changement partiel.
-        const writes = [...candidates, ...copies];
+        const writes = [...candidates, ...copies.plans];
         const applied: readonly Plan[] =
           writes.length === 0
             ? []
@@ -468,6 +498,7 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
           updated: count('updated'),
           unchanged: count('unchanged'),
           skipped: count('skipped') + count('outranked') + count('conflict'),
+          outrankedCopies: copies.outranked,
           results,
         });
       } catch (error) {
