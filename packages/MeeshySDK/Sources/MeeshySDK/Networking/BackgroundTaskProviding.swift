@@ -71,6 +71,8 @@ final class BackgroundTaskLease {
         self.provider = provider
     }
 
+    nonisolated deinit {}
+
     /// Prise AVANT que le travail démarre : aucun octet ne part hors tâche.
     func begin(named name: String) {
         token = provider.beginBackgroundTask(withName: name) { [weak self] in
