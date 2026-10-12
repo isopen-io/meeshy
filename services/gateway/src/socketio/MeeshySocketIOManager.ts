@@ -3064,7 +3064,7 @@ export class MeeshySocketIOManager {
             normalizedId,
             message,
             broadcastPayload,
-            resolvedSenderId,
+            resolvedSenderId, quotedDeaths: sealedQuote,
             ...(sealedKeys.length > 0
               ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
               : {}),
