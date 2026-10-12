@@ -27,7 +27,19 @@ export type LensPaginationFooterProps = {
    * `SkeletonFeedList` pendant `isLoadingMore`). Défaut INCHANGÉ : les points.
    */
   readonly loadingMoreContent?: ReactNode;
+  /**
+   * UNE SEULE HAUTEUR DANS LES QUATRE ÉTATS (#8760, miroir iOS
+   * `ConversationPaginationFooterContent.slotHeight`, #8759). Ce qui suit le
+   * pied — « Et maintenant ? » sous la liste des conversations — ne bouge plus
+   * quand une page se charge. Réservé aux listes qui posent quelque chose
+   * dessous : le fil des publications garde ses cartes fantômes.
+   */
+  readonly fixedSlot?: boolean;
 };
+
+/** La place la plus haute — l'erreur : libellé, 6 px, bouton de 44 px. */
+const SLOT_HEIGHT = '4.25rem';
+const SLOT = { height: SLOT_HEIGHT, flexShrink: 0 } as const;
 
 const DEFAULT_EXHAUSTED_LABEL = 'Toutes les conversations sont chargées';
 
@@ -63,7 +75,9 @@ export function LensPaginationFooter({
   sentinelRef,
   exhaustedLabel = DEFAULT_EXHAUSTED_LABEL,
   loadingMoreContent,
+  fixedSlot = false,
 }: LensPaginationFooterProps) {
+  const slot = fixedSlot ? SLOT : undefined;
   if (state === 'loading-more') {
     return (
       /**
@@ -75,7 +89,7 @@ export function LensPaginationFooter({
        * annonce son CONTENU qui change, pas son nom calculé — avec le seul
        * `aria-label`, l'arrivée du pied ne se disait pas.
        */
-      <li data-pagination-footer="loading-more" className={loadingMoreContent ? 'py-1' : 'grid place-items-center py-4'}>
+      <li data-pagination-footer="loading-more" style={slot} className={loadingMoreContent ? 'py-1' : `grid place-items-center ${fixedSlot ? '' : 'py-4'}`}>
         <span role="status" className={loadingMoreContent ? 'block' : `inline-flex items-center ${FOOTER_INK}`}>
           {loadingMoreContent ?? <TypingDots color="currentColor" />}
           <span className="sr-only">Chargement de la suite</span>
@@ -85,9 +99,9 @@ export function LensPaginationFooter({
   }
 
   if (state === 'exhausted') {
-    if (!showsAllLoadedHint) return null;
+    if (!showsAllLoadedHint) return fixedSlot ? <li data-pagination-footer="exhausted" aria-hidden="true" style={SLOT} /> : null;
     return (
-      <li data-pagination-footer="exhausted" className="py-4 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+      <li data-pagination-footer="exhausted" className={`${fixedSlot ? 'grid place-items-center' : 'py-4'} text-center text-caption`} style={{ ...slot, color: 'var(--color-ios-ink-2)' }}>
         {exhaustedLabel}
       </li>
     );
@@ -95,7 +109,7 @@ export function LensPaginationFooter({
 
   if (state === 'error') {
     return (
-      <li data-pagination-footer="error" className="grid justify-items-center gap-1.5 py-4">
+      <li data-pagination-footer="error" style={slot} className={`grid justify-items-center gap-1.5 ${fixedSlot ? 'content-center' : 'py-4'}`}>
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           Impossible de charger plus
         </p>
@@ -112,5 +126,5 @@ export function LensPaginationFooter({
   }
 
   // `idle` — la sentinelle invisible dont l'intersection charge la suite.
-  return <li data-pagination-footer="idle" data-load-more-sentinel aria-hidden="true" ref={sentinelRef} style={{ height: 1, flexShrink: 0 }} />;
+  return <li data-pagination-footer="idle" data-load-more-sentinel aria-hidden="true" ref={sentinelRef} style={slot ?? { height: 1, flexShrink: 0 }} />;
 }

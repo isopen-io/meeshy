@@ -187,3 +187,42 @@ final class ShareLinkDetailViewModelTests: XCTestCase {
         XCTAssertEqual(recorder.deletedIds, [])
     }
 }
+
+/// #9195 — un lien créé depuis « Mes liens › Liens de partage › + » n'apparaissait
+/// pas : la feuille rappelait `load()`, qui servait le cache `.fresh` (une liste
+/// VIDE relevée moins de cinq minutes plus tôt) SANS interroger le réseau ; et un
+/// échec réseau écrasait la liste et le cache par `[]`.
+final class ShareLinksReloadLawTests: XCTestCase {
+
+    private func makeLink(id: String) -> MyShareLink {
+        MyShareLink(
+            id: id, linkId: "mshy_\(id)", identifier: id, name: nil,
+            isActive: true, currentUses: 0, maxUses: nil, expiresAt: nil,
+            createdAt: Date(timeIntervalSince1970: 1_759_430_000),
+            conversationTitle: "Soirée internationale"
+        )
+    }
+
+    func test_mustFetch_afterALinkWasCreated_evenOnAFreshCache() {
+        XCTAssertTrue(ShareLinksReloadLaw.mustFetch(.linkCreated, cacheIsFresh: true))
+    }
+
+    func test_mustFetch_onPullToRefresh_evenOnAFreshCache() {
+        XCTAssertTrue(ShareLinksReloadLaw.mustFetch(.pullToRefresh, cacheIsFresh: true))
+    }
+
+    func test_mustFetch_onAppear_onlyWhenTheCacheIsNotFresh() {
+        XCTAssertFalse(ShareLinksReloadLaw.mustFetch(.appear, cacheIsFresh: true))
+        XCTAssertTrue(ShareLinksReloadLaw.mustFetch(.appear, cacheIsFresh: false))
+    }
+
+    func test_linksAfterFetch_servesWhatTheServerReturned() {
+        let created = makeLink(id: "invites-de-samedi")
+        XCTAssertEqual(ShareLinksReloadLaw.linksAfterFetch(current: [], fetched: [created]), [created])
+    }
+
+    func test_linksAfterFetch_aFailedFetchKeepsTheListShown() {
+        let shown = [makeLink(id: "a"), makeLink(id: "b")]
+        XCTAssertEqual(ShareLinksReloadLaw.linksAfterFetch(current: shown, fetched: nil), shown)
+    }
+}

@@ -35,7 +35,7 @@ export default function AdminEngagementScaleScreen() {
             language={language}
             title={translateAdmin(language, 'admin.scale.title')}
             subtitle={translateAdmin(language, 'admin.scale.subtitle')}
-            crumbs={[{ label: translateAdmin(language, 'admin.group.platform') }, { label: translateAdmin(language, 'admin.scale.title') }]}
+            crumbs={[{ label: translateAdmin(language, 'admin.group.scales') }, { label: translateAdmin(language, 'admin.scale.title') }]}
           />
           <AdminOfflineNotice language={language} />
           <AdminEngagementScalePanel language={language} deps={apiDeps} />

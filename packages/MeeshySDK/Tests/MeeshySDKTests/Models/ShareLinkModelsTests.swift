@@ -300,4 +300,67 @@ final class ShareLinkModelsTests: XCTestCase {
         XCTAssertEqual(response.shareLink.id, "sl-new")
         XCTAssertTrue(response.shareLink.isActive)
     }
+
+    // MARK: - GET /links?expand=conversation,policy (#9195)
+
+    /// La réponse RÉELLE que `listMyLinks` reçoit — socle, `inactiveReason`,
+    /// les seize clés de police (dont celles que le modèle ne déclare pas) et
+    /// la conversation, avec `pagination` à la racine. Un lien fraîchement créé
+    /// (`currentUses: 0`, `expiresAt: null`) doit se décoder : sinon la liste
+    /// « Liens de partage » reste vide alors que le serveur le renvoie.
+    func test_myLinksListResponse_realGatewayShape_decodesTheFreshlyCreatedLink() throws {
+        let json = """
+        {
+            "success": true,
+            "data": [
+                {
+                    "id": "68fd0b3c1a2b3c4d5e6f7a8b",
+                    "linkId": "mshy_invites-de-samedi",
+                    "identifier": "mshy_invites-de-samedi",
+                    "name": "Invites de samedi",
+                    "isActive": true,
+                    "currentUses": 0,
+                    "maxUses": null,
+                    "expiresAt": null,
+                    "createdAt": "2026-10-02T18:42:11.512Z",
+                    "conversationTitle": "Soirée internationale",
+                    "inactiveReason": null,
+                    "conversation": {
+                        "id": "68fd0a001a2b3c4d5e6f7a00",
+                        "title": "Soirée internationale",
+                        "type": "group",
+                        "description": null
+                    },
+                    "description": null,
+                    "maxConcurrentUsers": null,
+                    "currentConcurrentUsers": 0,
+                    "maxUniqueSessions": null,
+                    "currentUniqueSessions": 0,
+                    "allowAnonymousMessages": true,
+                    "allowAnonymousFiles": false,
+                    "allowAnonymousImages": false,
+                    "allowViewHistory": false,
+                    "requireAccount": false,
+                    "requireNickname": true,
+                    "requireEmail": false,
+                    "requireBirthday": false,
+                    "allowedCountries": [],
+                    "allowedLanguages": [],
+                    "allowedIpRanges": []
+                }
+            ],
+            "pagination": { "total": 1, "offset": 0, "limit": 50, "hasMore": false }
+        }
+        """.data(using: .utf8)!
+
+        let response = try makeDecoder().decode(APIResponse<[MyShareLink]>.self, from: json)
+        XCTAssertEqual(response.data.count, 1)
+        let link = try XCTUnwrap(response.data.first)
+        XCTAssertEqual(link.identifier, "mshy_invites-de-samedi")
+        XCTAssertEqual(link.displayName, "Invites de samedi")
+        XCTAssertTrue(link.isActive)
+        XCTAssertEqual(link.currentUses, 0)
+        XCTAssertNil(link.expiresAt)
+        XCTAssertEqual(link.conversation?.title, "Soirée internationale")
+    }
 }

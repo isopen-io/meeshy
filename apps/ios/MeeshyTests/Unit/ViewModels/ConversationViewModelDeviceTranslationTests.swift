@@ -217,6 +217,44 @@ final class ConversationViewModelDeviceTranslationTests: XCTestCase {
         XCTAssertNil(data.confidenceScore)
     }
 
+    // MARK: - Langue d'origine au rang 1, résolue avant la fenêtre (#8896)
+
+    private func makeFrenchMessage() -> MeeshyMessage {
+        MeeshyMessage(id: Ids.messageA, conversationId: Ids.conversation, senderId: Ids.peer,
+                      content: "Bonjour de Dakar", originalLanguage: "fr")
+    }
+
+    private func makeEnglishTranslation(from sourceLanguage: String) -> MessageTranslation {
+        MessageTranslation(id: "srv:\(Ids.messageA):en", messageId: Ids.messageA,
+                           sourceLanguage: sourceLanguage, targetLanguage: "en",
+                           translatedContent: "Hello from Dakar", translationModel: nil, confidenceScore: nil)
+    }
+
+    func test_preferredTranslation_resolvedBeforeTheMessageEntersTheWindow_servesTheOriginalOnceItIsThere() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messageTranslations = [Ids.messageA: [makeEnglishTranslation(from: "auto")]]
+        _ = rig.sut.preferredTranslation(for: Ids.messageA)
+
+        rig.sut.messages = [makeFrenchMessage()]
+
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+    }
+
+    func test_preferredTranslation_messageOutsideTheWindow_readsItsOriginFromItsTranslations() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messageTranslations = [Ids.messageA: [makeEnglishTranslation(from: "fr")]]
+
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+    }
+
+    func test_preferredTranslation_originAtRankTwo_servesTheRankOneTranslation() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messages = [makeMessage()]
+        rig.sut.messageTranslations = [Ids.messageA: [makeTranslation(content: "Bonjour")]]
+
+        XCTAssertEqual(rig.sut.preferredTranslation(for: Ids.messageA)?.translatedContent, "Bonjour")
+    }
+
     func test_deviceTranslationConversationId_ofAConversation_isItsId() throws {
         let rig = try makeRig()
 

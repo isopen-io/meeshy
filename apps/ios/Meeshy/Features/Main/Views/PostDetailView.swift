@@ -1557,18 +1557,13 @@ EngagementGlyph(
                 HapticFeedback.light()
             } label: {
                 EngagementGlyph(
-                    // Le repost est le seul des trois à changer de FAMILLE selon
-                    // son état : flèches nues au repos, disque plein une fois
-                    // reposté. Son contour est donc `.circle` — et c'est juste :
-                    // il retrace le bord du glyphe AFFICHÉ. La règle proscrit
-                    // l'anneau ajouté autour d'un glyphe qui n'en a pas, pas la
-                    // famille `.circle` quand le glyphe EST un disque.
-                    outline: "arrow.2.squarepath.circle",
-                    filled: "arrow.2.squarepath.circle.fill",
-                    // Au REPOS, les flèches nues — l'apparence d'origine. Sans
-                    // ce paramètre, le repos aurait hérité du contour `.circle`
-                    // et gagné un cercle qu'il n'avait pas.
-                    inactiveSymbol: "arrow.2.squarepath",
+                    // Les flèches nues dans les deux états, comme le fil et le
+                    // réel : `arrow.2.squarepath.circle(.fill)` n'existe pas au
+                    // catalogue SF Symbols, l'état reposté se peignait vide
+                    // (#8939). Le reposté se lit à sa teinte et à son contour
+                    // d'accent.
+                    outline: "arrow.2.squarepath",
+                    filled: "arrow.2.squarepath",
                     participated: isPostReposted,
                     accentHex: accentColor,
                     activeTint: MeeshyColors.success,

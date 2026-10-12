@@ -67,6 +67,39 @@ final class GameSourceGuardTests: XCTestCase {
         XCTAssertTrue(view.contains("on: .scene"), "la scène prend hors cadre")
     }
 
+    // MARK: - Le déroulé plein écran noir se dessine en apparence sombre (#10294)
+
+    /// Le déroulé dessine sur fond noir : un contrôle système (sélecteur de format, interrupteurs) qui suivrait
+    /// l'apparence CLAIRE de l'appareil y poserait un texte sombre sur du noir. Le schéma sombre est imposé à
+    /// TOUT le déroulé, à sa racine — jamais contrôle par contrôle, qu'un ajout oublierait.
+    func test_thePhotoFlowForcesTheDarkAppearanceAtItsRoot() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        let body = try XCTUnwrap(view.components(separatedBy: "var body: some View {").dropFirst().first?
+            .components(separatedBy: "private var closeButton").first)
+        XCTAssertTrue(body.contains(".environment(\\.colorScheme, .dark)"),
+                      "le corps du déroulé impose l'apparence sombre à tout ce qu'il contient")
+        XCTAssertFalse(view.contains(".preferredColorScheme("),
+                       "l'apparence se fixe pour le déroulé seul, jamais pour la fenêtre qui le présente")
+    }
+
+    // MARK: - La note de caméra refusée ne recouvre pas le cadre (#10295)
+
+    /// La note de refus était posée au centre de l'aperçu, PAR-DESSUS le titre et la date du cadre du moment :
+    /// les deux textes se chevauchaient. Elle vit désormais HORS du cadre, sous lui, et la scène ne la porte plus.
+    func test_theCameraFailureNoteLivesOutsideTheFrame() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        let camera = try XCTUnwrap(view.components(separatedBy: "private func camera(_ phase: PhotoCameraPhase)").dropFirst().first?
+            .components(separatedBy: "private func sideGlyph").first)
+        let scene = try XCTUnwrap(camera.components(separatedBy: "framed { size in").dropFirst().first?
+            .components(separatedBy: ".accessibilityIdentifier(\"game.photo.scene\")").first)
+        XCTAssertFalse(scene.contains("failureNote("), "la note ne se pose plus sur le cadre du moment")
+        let belowTheFrame = try XCTUnwrap(camera.components(separatedBy: ".accessibilityIdentifier(\"game.photo.scene\")").dropFirst().first?
+            .components(separatedBy: "HStack(alignment: .top").first)
+        XCTAssertTrue(belowTheFrame.contains("failureNote("), "la note se dit sous le cadre, avant la bande des déclencheurs")
+    }
+
     // MARK: - Les clés d'usage et la fréquence d'images
 
     private func infoPlist() throws -> [String: Any] {

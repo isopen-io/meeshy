@@ -11,7 +11,8 @@ const f = {
   'admin.group.content': 'Contenus',
   'admin.group.moderation': 'Modération',
   'admin.group.growth': 'Croissance',
-  'admin.group.platform': 'Plateforme',
+  'admin.group.scales': 'Barèmes',
+  'admin.group.operations': 'Opérations',
 
   'admin.kit.breadcrumb': 'Fil d’Ariane',
   'admin.kit.retry': 'Réessayer',

@@ -233,7 +233,9 @@ export type AdminAuditAction =
   // Actions de broadcast
   | 'CREATE_BROADCAST'
   | 'SEND_BROADCAST'
-  | 'DELETE_BROADCAST';
+  | 'DELETE_BROADCAST'
+  // Operations serveur (#10385, #10386)
+  | 'TRIGGER_SERVER_OPERATION';
 
 /**
  * Types d'entites auditees
@@ -247,7 +249,8 @@ export type AdminAuditEntity =
   | 'Attachment'
   | 'Session'
   | 'TrackingLink'
-  | 'Broadcast';
+  | 'Broadcast'
+  | 'Server';
 
 /**
  * Detail d'un changement dans l'audit

@@ -41,9 +41,14 @@ extension ReaderAudioMixer {
     /// `StoryEffects.backgroundAudioStart` into `startTime`, so it is the single
     /// source of truth. Re-configuring drops the idempotence key so the next
     /// `play(...)` re-schedules against the fresh entry.
+    ///
+    /// `loopsEveryClip` : l'aperçu d'édition du composer, où un fond bouclé
+    /// rejoue ses fondus à chaque tour (`ReaderLoopEnvelope`, #10369). Le
+    /// lecteur garde ses fondus posés une fois.
     public func configureBackground(audio: StoryAudioPlayerObject,
                                     url: URL,
-                                    looping: Bool) throws {
+                                    looping: Bool,
+                                    loopsEveryClip: Bool = false) throws {
         // Tear down any prior background node before re-attaching.
         if let prior = backgroundEntry {
             prior.player.stop()
@@ -67,9 +72,20 @@ extension ReaderAudioMixer {
         // fois rogné, porte la durée occupée sur la timeline, pas celle du
         // fichier). Pas d'intention de rognage déclarée ⇒ `nil`, et
         // `scheduleAudio` retombe sur `scheduleFile` sans surcoût.
+        let sourceDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
         let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
             ? nil
-            : audio.trimBounds(sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1))
+            : audio.trimBounds(sourceDuration: sourceDuration)
+        let envelopeCycle: Double? = ReaderLoopEnvelope.repeatsEveryPass(
+            loopsEveryClip: loopsEveryClip && looping,
+            fadeIn: Double(audio.fadeIn ?? 0),
+            fadeOut: Double(audio.fadeOut ?? 0))
+            ? ReaderLoopEnvelope.backgroundCycle(
+                declaredLoop: audio.loop,
+                occupiedDuration: Double(resolvedDuration),
+                passLength: ReaderLoopLaw.passLength(sourceDuration: sourceDuration,
+                                                     trimBounds: trimBounds))
+            : nil
         backgroundEntry = BackgroundEntry(
             player: player,
             file: file,
@@ -80,7 +96,8 @@ extension ReaderAudioMixer {
             fadeOut: audio.fadeOut ?? 0,
             startOffset: startOffset,
             duration: resolvedDuration,
-            trimBounds: trimBounds
+            trimBounds: trimBounds,
+            envelopeCycle: envelopeCycle
         )
         backgroundStartOffset = startOffset
         player.volume = isMuted ? 0 : audio.volume
@@ -128,6 +145,10 @@ extension ReaderAudioMixer {
     /// on joue le son directement aligné ».
     private func scheduleExplicitBackgroundFades(originHost: UInt64, slideElapsed: Double) {
         guard let bg = backgroundEntry, bg.hasExplicitFade else { return }
+        if let cycle = bg.envelopeCycle {
+            runBackgroundLoopEnvelope(cycle: cycle)
+            return
+        }
         let envelope = AudioEnvelope.plan(
             elapsedInClip: slideElapsed - bg.startOffset,
             fadeIn: Double(bg.fadeIn),
@@ -144,6 +165,42 @@ extension ReaderAudioMixer {
                     + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset + ramp.startOffset)
             )
         }
+    }
+
+    /// **Le fond bouclé par l'aperçu suit l'horloge de la passe (#10369).**
+    ///
+    /// Jumelle de `runLoopEnvelope(for:cycle:)` : une minuterie par fondu ne
+    /// vaut que pour le premier tour, le volume se relit donc à 60 Hz sur la
+    /// phase du tour. La tâche s'efface avec SA passe (époque) et tombe avec
+    /// les autres rampes du fond — `configureBackground`, `teardown()`,
+    /// `fadeOutAndStop`.
+    private func runBackgroundLoopEnvelope(cycle: Double) {
+        let epoch = playbackEpoch
+        _ = applyBackgroundLoopEnvelope(epoch: epoch, cycle: cycle)
+        let task = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard self?.applyBackgroundLoopEnvelope(epoch: epoch, cycle: cycle) == true else { return }
+                try? await Task.sleep(nanoseconds: UInt64(ReaderVolumeRamp.stepInterval * 1_000_000_000))
+            }
+        }
+        if var bg = backgroundEntry {
+            bg.fadeTasks.append(task)
+            backgroundEntry = bg
+        }
+    }
+
+    /// Pose le volume que dicte la phase du tour. `false` quand la passe n'est
+    /// plus la sienne : la tâche s'arrête.
+    private func applyBackgroundLoopEnvelope(epoch: UInt64, cycle: Double) -> Bool {
+        guard playbackEpoch == epoch, let live = backgroundEntry else { return false }
+        guard let slideElapsed = loopEnvelopeSlideElapsed else { return true }
+        let volume = ReaderLoopEnvelope.volume(elapsedInClip: slideElapsed - live.startOffset,
+                                               cycle: cycle,
+                                               fadeIn: Double(live.fadeIn),
+                                               fadeOut: Double(live.fadeOut),
+                                               target: live.targetVolume)
+        live.player.volume = isMuted ? 0 : volume
+        return true
     }
 
     /// Volume RÉELLEMENT porté par le node du fond — jumelle de

@@ -52,6 +52,10 @@ final class SecureCaptureHostView: UIView {
         self.secureLayer = layer
         hosting = SecureCaptureHostingController(rootView: root)
         hosting.sizingOptions = [.preferredContentSize]
+        // #10352 — la zone sûre est déjà appliquée par la mise en page qui POSE
+        // le bouclier ; la réappliquer ici décalait une page plein écran
+        // protégée hors du viewport, et le clavier la soulevait.
+        if #available(iOS 16.4, *) { hosting.safeAreaRegions = [] }
         hosting.view.backgroundColor = .clear
         hosting.view.clipsToBounds = false
         super.init(frame: .zero)

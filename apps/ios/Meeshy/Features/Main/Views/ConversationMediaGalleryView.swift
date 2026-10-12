@@ -186,6 +186,10 @@ struct ConversationMediaGalleryView: View {
     /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
     @State var cadreRegionSize: CGSize = .zero
 
+    /// #10352 — le viewport RÉEL de la galerie, mesuré sur son fond : le solveur
+    /// le lit (`stageViewport`), la fenêtre n'étant qu'un repli avant la mesure.
+    @State var measuredViewport: CGSize = .zero
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
@@ -324,6 +328,7 @@ struct ConversationMediaGalleryView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+                .onGeometryChange(for: CGSize.self) { $0.size } action: { measuredViewport = $0 }
 
             // **LE SOL d'une page scène** (#6904, directive porteur du
             // 2026-09-17 : « On préserve le même fond que pour la story ! »).

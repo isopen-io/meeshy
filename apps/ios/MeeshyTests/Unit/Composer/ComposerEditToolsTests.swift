@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreMedia
 import XCTest
 import UIKit
@@ -230,6 +231,107 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(export.contains("|| audioGain != 1"), "un son réglé force le rendu")
         XCTAssertTrue(export.contains("session.audioMix = audioMix"), "le gain part dans le fichier")
         XCTAssertTrue(export.contains("setVolume("))
+    }
+
+    // MARK: - Le gain au-delà de 100 % s'entend dans l'aperçu (#10360)
+
+    func test_takeGain_splitsIntoAnAttenuationAndABoost() {
+        XCTAssertEqual(ComposerTakeGain.volume(0.5), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeGain.boost(0.5), 1, "sous 100 %, rien à amplifier")
+        XCTAssertEqual(ComposerTakeGain.volume(1), 1)
+        XCTAssertEqual(ComposerTakeGain.boost(1), 1)
+        XCTAssertEqual(ComposerTakeGain.volume(1.5), 1, "au-dessus de 100 %, le volume reste plein")
+        XCTAssertEqual(ComposerTakeGain.boost(1.5), 1.5, accuracy: 0.0001, "et le tap amplifie le reste")
+        XCTAssertEqual(ComposerTakeGain.boost(2), 2)
+        XCTAssertEqual(ComposerTakeGain.boost(9), 2, "borné à 200 %")
+        XCTAssertEqual(ComposerTakeGain.volume(0), 0, "muet")
+        XCTAssertEqual(ComposerTakeGain.volume(.nan), 1)
+        XCTAssertEqual(ComposerTakeGain.boost(.nan), 1)
+    }
+
+    func test_amplifiedSample_isLinearBelowTheKnee_andSoftClipsAbove() {
+        XCTAssertEqual(ComposerTakeGain.amplified(0.7, boost: 1), 0.7, "sans amplification, intact")
+        XCTAssertEqual(ComposerTakeGain.amplified(0.1, boost: 2), 0.2, accuracy: 0.0001, "200 % double le son")
+        XCTAssertEqual(ComposerTakeGain.amplified(-0.2, boost: 1.5), -0.3, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeGain.amplified(0.4, boost: 2), 0.8, accuracy: 0.0001, "le genou lui-même")
+        let fort = ComposerTakeGain.amplified(1, boost: 2)
+        XCTAssertGreaterThan(fort, ComposerTakeGain.knee, "au-delà du genou, le son monte encore")
+        XCTAssertLessThan(fort, 1, "sans jamais atteindre la pleine échelle : pas de craquement")
+        XCTAssertEqual(ComposerTakeGain.amplified(-1, boost: 2), -fort, accuracy: 0.0001, "symétrique")
+        XCTAssertLessThan(ComposerTakeGain.amplified(0.6, boost: 2), fort, "monotone")
+        XCTAssertEqual(ComposerTakeGain.amplified(0.4001, boost: 2), 0.8002, accuracy: 0.001, "continu au genou")
+    }
+
+    func test_boostTap_amplifiesEverySampleOfEveryBuffer() {
+        var echantillons: [Float] = [0.1, -0.2, 0.3, 1]
+        echantillons.withUnsafeMutableBytes { octets in
+            var liste = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(
+                mNumberChannels: 1, mDataByteSize: UInt32(octets.count), mData: octets.baseAddress))
+            ComposerTakeBoostTap.amplify(&liste, boost: 2)
+        }
+        XCTAssertEqual(echantillons[0], 0.2, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[1], -0.4, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[2], 0.6, accuracy: 0.0001)
+        XCTAssertEqual(echantillons[3], ComposerTakeGain.amplified(1, boost: 2), accuracy: 0.0001)
+        var intacts: [Float] = [0.5, -0.5]
+        intacts.withUnsafeMutableBytes { octets in
+            var liste = AudioBufferList(mNumberBuffers: 1, mBuffers: AudioBuffer(
+                mNumberChannels: 1, mDataByteSize: UInt32(octets.count), mData: octets.baseAddress))
+            ComposerTakeBoostTap.amplify(&liste, boost: 1)
+        }
+        XCTAssertEqual(intacts, [0.5, -0.5], "à 100 %, le tap ne touche rien")
+    }
+
+    func test_boostTap_acceptsOnlyFloat32() {
+        var flottant = AudioStreamBasicDescription()
+        flottant.mFormatID = kAudioFormatLinearPCM
+        flottant.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsNonInterleaved
+        flottant.mBitsPerChannel = 32
+        XCTAssertTrue(ComposerTakeBoostTap.acceptsFloats(flottant))
+        var entier = flottant
+        entier.mFormatFlags = kAudioFormatFlagIsSignedInteger
+        entier.mBitsPerChannel = 16
+        XCTAssertFalse(ComposerTakeBoostTap.acceptsFloats(entier), "un format inattendu passe intact")
+    }
+
+    func test_boostTap_mixPutsATapOnEveryTrack_sharingOneLevel() throws {
+        let niveau = ComposerTakeBoostLevel()
+        XCTAssertNotNil(ComposerTakeBoostTap.make(niveau), "le système crée le tap")
+        let mixage = try XCTUnwrap(ComposerTakeBoostTap.audioMix(trackIDs: [1, 2], volume: 1, level: niveau))
+        XCTAssertEqual(mixage.inputParameters.map(\.trackID), [1, 2])
+        XCTAssertTrue(mixage.inputParameters.allSatisfy { $0.audioTapProcessor != nil })
+        XCTAssertNil(ComposerTakeBoostTap.audioMix(trackIDs: [], volume: 1, level: niveau), "sans son, pas de mixage")
+        niveau.boost = 1.5
+        XCTAssertEqual(niveau.boost, 1.5, accuracy: 0.0001, "le tap lit le niveau qu'on règle, sans se reconstruire")
+        niveau.boost = 7
+        XCTAssertEqual(niveau.boost, 2)
+        XCTAssertEqual(ComposerTakeBoostLevel(boost: 0.3).boost, 1, "un niveau n'atténue jamais")
+    }
+
+    func test_session_passesTheGainAbove100_toThePreview() async {
+        let (session, lecteur) = await videoSession()
+        session.setTakeGain(1.5)
+        XCTAssertEqual(lecteur.volumes.last ?? -1, 1.5, accuracy: 0.0001, "l'aperçu reçoit le gain réel, pas 1")
+        session.toggleTakeMute()
+        XCTAssertEqual(lecteur.volumes.last, 0)
+        session.toggleTakeMute()
+        XCTAssertEqual(lecteur.volumes.last ?? -1, 1.5, accuracy: 0.0001, "rétabli, le son amplifié revient")
+    }
+
+    /// Le niveau vit sur le lecteur, et chaque élément qui joue — boucle
+    /// reconstruite, frame sous la règle, filet du tick — porte son tap.
+    func test_theLoopPlayer_andTheRender_serveTheSameGainLaw() throws {
+        let boucle = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerEditSources.swift")
+        XCTAssertTrue(boucle.contains("player.volume = ComposerTakeGain.volume(gain)"))
+        XCTAssertTrue(boucle.contains("boostLevel.boost = ComposerTakeGain.boost(gain)"))
+        XCTAssertFalse(boucle.contains("max(0, min(1, gain))"), "l'aperçu ne borne plus le gain à 100 %")
+        XCTAssertGreaterThanOrEqual(boucle.components(separatedBy: "attachBoost(to: element)").count - 1, 3,
+                                    "la boucle reconstruite, la règle et le filet portent chacun le tap")
+        XCTAssertTrue(boucle.contains("level: boostLevel"), "un seul niveau, partagé par tous les éléments")
+        let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        XCTAssertTrue(export.contains("ComposerTakeBoostTap.audioMix("), "le rendu amplifie par le même tap")
+        XCTAssertTrue(export.contains("ComposerTakeGain.volume(gain)"))
+        XCTAssertFalse(export.contains("max(0, min(1, gain))"))
     }
 
     // MARK: - (4) La frame exacte sous la règle
