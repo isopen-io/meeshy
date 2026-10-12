@@ -379,6 +379,10 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
+      # #10323 — la passerelle a DEUX réseaux (#10289) : Traefik la joint par le réseau d'entrée,
+      # sous son nom RÉEL (préfixé par le projet compose `meeshy`). Sans ce label, il a pris
+      # l'IP du réseau de l'agent, qu'il ne joint pas : gate.meeshy.me en 504 (2026-10-12).
+      - "traefik.docker.network=meeshy_meeshy-network"
       # API Gateway sur gate.${DOMAIN}
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
