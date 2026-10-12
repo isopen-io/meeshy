@@ -11,6 +11,7 @@ import personnesFr from './admin/personnes-fr';
 import conversationsAgentFr from './admin/conversations-agent-fr';
 import engagementScaleFr from './admin/engagement-scale-fr';
 import gestesFr from './admin/gestes-fr';
+import operationsFr from './admin/operations-fr';
 import gameSeasonsFr from './admin/game-seasons-fr';
 
 /**
@@ -410,6 +411,7 @@ const fr = {
   ...conversationsAgentFr,
   ...engagementScaleFr,
   ...gestesFr,
+  ...operationsFr,
   ...gameSeasonsFr,
 } as const;
 

@@ -32,6 +32,7 @@ const FRAGMENT_PREFIXES: Readonly<Record<string, readonly string[]>> = {
   'engagement-scale': ['admin.scale.'],
   'game-seasons': ['admin.gameSeasons.'],
   gestes: ['admin.gesture.'],
+  operations: ['admin.ops.'],
 };
 
 const IDS = Object.keys(FRAGMENT_PREFIXES);
@@ -49,8 +50,8 @@ async function base(language: AdminLanguage): Promise<Fragment> {
 const startsWithAny = (key: string, prefixes: readonly string[]): boolean => prefixes.some((prefix) => key.startsWith(prefix));
 
 describe('les fragments du catalogue d’administration', () => {
-  test('la table des préfixes couvre les onze fragments de la spécification, le barème de points (#8906), le calendrier des saisons (#10232) et les gestes (#10392)', () => {
-    expect(IDS).toHaveLength(14);
+  test('la table des préfixes couvre les onze fragments de la spécification, le barème de points (#8906), le calendrier des saisons (#10232) les gestes (#10392) et les opérations (#10396)', () => {
+    expect(IDS).toHaveLength(15);
   });
 
   for (const id of IDS) {

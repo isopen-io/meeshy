@@ -1,4 +1,4 @@
-import { adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publications';
+import { adminPostStateOf, type AdminPostState } from '@meeshy/shared/types/admin-publication-states';
 
 import { asRecord } from '@/lib/api/admin';
 

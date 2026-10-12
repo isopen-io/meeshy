@@ -135,10 +135,10 @@ describe('le hub : la bande « À traiter », six cartes résumées, le détail 
     expect(appQueryClient.getQueryCache().find({ queryKey: ADMIN_DASHBOARD_QUERY_KEY })?.state.data).toBeDefined();
   });
 
-  test('le hub ne lit que les SEPT lectures légères — ni graphiques, ni classements, ni la liste des inscrits (qui écrit un audit)', async () => {
+  test('le hub ne lit que les HUIT lectures légères (la machine comprise, #10396) — ni graphiques, ni classements, ni la liste des inscrits (qui écrit un audit)', async () => {
     const { calls } = await dashboard();
     const routes = calls().map((call) => routeOf({ method: 'GET', path: call.path }));
-    expect([...routes].sort()).toEqual(['agent', 'broadcasts', 'dashboard', 'kpis', 'monitoring', 'realtime', 'reportsStats']);
+    expect([...routes].sort()).toEqual(['agent', 'broadcasts', 'dashboard', 'hostMetrics', 'kpis', 'monitoring', 'realtime', 'reportsStats']);
   });
 
   test('ouvrir « Tendances » lit ses cinq graphiques, et rien d’autre — jamais le navigateur de messages ni les traductions (#6919)', async () => {
@@ -151,6 +151,16 @@ describe('le hub : la bande « À traiter », six cartes résumées, le détail 
     expect([...opened].sort()).toEqual(['distribution', 'hourly', 'languages', 'types', 'volume']);
     const paths = calls().map((call) => call.path.split('?')[0] ?? '');
     expect(paths.filter((path) => path.endsWith('/admin/messages') || path.endsWith('/admin/translations'))).toEqual([]);
+  });
+});
+
+describe('La machine en tête du tableau de bord (#10396)', () => {
+  test('processeur, mémoire, disque de la dernière mesure, et le chemin vers les opérations', async () => {
+    const { host } = await dashboard();
+    const band = host.querySelector('[data-admin-dash-machine]');
+    expect(band?.querySelector('[data-admin-dash-gauge="cpu"]')?.textContent).toContain('42');
+    expect(band?.querySelector('[data-admin-dash-gauge="disk"]')?.textContent).toContain('70');
+    expect(band?.querySelector('[data-admin-route-link], a')?.getAttribute('href')).toContain('/operations');
   });
 });
 

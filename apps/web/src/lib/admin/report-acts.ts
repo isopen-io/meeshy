@@ -1,4 +1,4 @@
-import type { AdminReportAction } from '@meeshy/shared/types/admin-publications';
+import type { AdminReportAction } from '@meeshy/shared/types/admin-publication-states';
 
 /**
  * **UN SIGNALEMENT SE TRAITE EN UN GESTE** (#10394) — les actes qu'un dossier OUVERT

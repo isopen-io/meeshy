@@ -1,7 +1,7 @@
 import type { QueryKey } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import type { AdminReportAction } from '@meeshy/shared/types/admin-publications';
+import type { AdminReportAction } from '@meeshy/shared/types/admin-publication-states';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
