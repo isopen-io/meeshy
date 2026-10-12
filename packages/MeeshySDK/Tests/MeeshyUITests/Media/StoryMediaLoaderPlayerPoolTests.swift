@@ -94,6 +94,29 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
         loader.clearPlayerCache()
     }
 
+    /// Le pool déborde en rendant le lecteur le plus LOIN du réel affiché,
+    /// jamais celui du réel qu'on vient de quitter (#10354).
+    func test_insert_withDistances_evictsTheFarthest_notTheReelJustLeft() {
+        let loader = StoryMediaLoader.shared
+        loader.clearPlayerCache()
+        let previous = remoteURL(), next = remoteURL(), far = remoteURL(), nextNext = remoteURL()
+        loader.setRetentionDistances([
+            previous.absoluteString: -1, next.absoluteString: 1,
+            far.absoluteString: 5, nextNext.absoluteString: 2,
+        ])
+        defer {
+            loader.setRetentionDistances([:])
+            loader.clearPlayerCache()
+        }
+
+        [previous, far, next, nextNext].forEach { loader.returnPlayer(AVPlayer(), for: $0) }
+
+        XCTAssertNil(loader.peekCachedPlayer(for: far), "le plus loin part, même arrivé après")
+        XCTAssertNotNil(loader.peekCachedPlayer(for: previous), "le réel quitté garde son lecteur")
+        XCTAssertNotNil(loader.peekCachedPlayer(for: next))
+        XCTAssertNotNil(loader.peekCachedPlayer(for: nextNext))
+    }
+
     func test_discardCachedPlayer_freesItsPlace() {
         let loader = StoryMediaLoader.shared
         loader.clearPlayerCache()
