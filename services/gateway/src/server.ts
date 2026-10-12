@@ -75,6 +75,7 @@ import { ExpiredShareLinksCleanupService } from './services/ExpiredShareLinksCle
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
+import { agentInternalTokenConfigured } from './services/AgentHttpClient';
 import { typedErrorResponse } from './errors/custom-errors';
 import { prismaRecipientAddressLookup, registerEmailRecipientLookup } from './services/email/recipient-policy';
 
@@ -866,6 +867,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Initialize agent ZMQ client (optional — only when AGENT_HOST is set)
     const agentHost = process.env.AGENT_HOST;
     if (agentHost) {
+      // #10242 — sans secret interne, aucun appel HTTP ne part vers l'agent (fermé) : on le dit UNE fois, fort.
+      if (!agentInternalTokenConfigured()) {
+        logger.error('❌ AGENT_HOST is set but AGENT_INTERNAL_TOKEN is missing or shorter than 32 characters — every HTTP call to the agent is refused');
+      }
       try {
         this.agentClient = new ZmqAgentClient(agentHost, 5560, 5561);
         await this.agentClient.initialize();

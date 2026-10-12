@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { AgentHttpClient, AgentUnavailableError, AGENT_INTERNAL_TOKEN_HEADER } from '../../../services/AgentHttpClient';
+import { AgentHttpClient, AgentUnavailableError, AGENT_INTERNAL_TOKEN_HEADER, agentInternalTokenConfigured } from '../../../services/AgentHttpClient';
 
 const TOKEN = 't'.repeat(48);
 
@@ -72,7 +72,7 @@ describe("la passerelle présente le secret interne à chaque appel de l'agent (
     expect(headers[AGENT_INTERNAL_TOKEN_HEADER]).toBe(TOKEN);
   });
 
-  it.each([['absent', undefined], ['vide', ''], ['blanc', '   ']])(
+  it.each([['absent', undefined], ['vide', ''], ['blanc', '   '], ['trop court (< 32, que l’agent refuserait)', 'x'.repeat(31)]])(
     'secret %s côté passerelle : aucun appel ne part, AgentUnavailableError',
     async (_label, value) => {
       if (value === undefined) delete process.env.AGENT_INTERNAL_TOKEN;
@@ -102,4 +102,15 @@ describe("la passerelle présente le secret interne à chaque appel de l'agent (
     expect(error).not.toBeInstanceOf(AgentUnavailableError);
     expect((error as { statusCode?: number }).statusCode).toBe(503);
   });
+});
+
+describe('agentInternalTokenConfigured — le signal de démarrage de la passerelle (#10242)', () => {
+  it.each([[undefined, false], ['', false], ['x'.repeat(31), false], ['  ' + 'x'.repeat(31) + '  ', false], ['x'.repeat(32), true]])(
+    '%p ⇒ %p (même minimum que l’agent : 32)',
+    (value, expected) => {
+      if (value === undefined) delete process.env.AGENT_INTERNAL_TOKEN;
+      else process.env.AGENT_INTERNAL_TOKEN = value;
+      expect(agentInternalTokenConfigured()).toBe(expected);
+    },
+  );
 });
