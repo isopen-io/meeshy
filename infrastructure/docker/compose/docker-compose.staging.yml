@@ -306,6 +306,10 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      # L'AGENT de staging (#10269) — `server.ts` n'initialise son client que si
+      # `AGENT_HOST` est posée : sans elle, `agent-staging` tourne pour personne
+      # (« AGENT_HOST not set — agent service disabled »), sans rien rougir.
+      - AGENT_HOST=agent-staging
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
