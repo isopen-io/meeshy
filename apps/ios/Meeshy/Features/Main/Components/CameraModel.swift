@@ -35,6 +35,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     func savesOriginal(for token: String?) -> Bool {
         CaptureSavePolicy.stored().savesOriginal && keepsOriginalInApp?(token) != true
     }
+    var savesOriginalSetting: (@MainActor () -> Bool)?
+    func savesOriginal() -> Bool { savesOriginal(for: nil) }
     /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
     private(set) var recordingId: String?

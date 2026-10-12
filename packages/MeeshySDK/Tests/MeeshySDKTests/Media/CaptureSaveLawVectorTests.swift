@@ -10,6 +10,7 @@ struct CaptureSaveLawVectorTests {
 
     private struct Destination: Decodable {
         let zone: CaptureZone
+        let savesOriginal: Bool
         let expected: CaptureDestination
     }
 
@@ -63,13 +64,22 @@ struct CaptureSaveLawVectorTests {
         try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: vectorsURL))
     }
 
-    @Test("une prise par la zone cadre part en galerie puis en retouche, hors cadre elle reste dans l'app")
+    @Test("une prise par la zone cadre part en galerie ; hors cadre, elle reste dans l'app sauf si le réglage demande l'original")
     func destinationsMatch() throws {
         let vectors = try Self.load()
-        #expect(Set(vectors.destinations.map(\.zone)) == Set(CaptureZone.allCases))
+        let couverts = Set(vectors.destinations.map { "\($0.zone.rawValue):\($0.savesOriginal)" })
+        #expect(couverts == Set(CaptureZone.allCases.flatMap { ["\($0.rawValue):false", "\($0.rawValue):true"] }))
         for destination in vectors.destinations {
-            #expect(CaptureSaveLaw.destination(for: destination.zone) == destination.expected, "zone \(destination.zone)")
+            #expect(CaptureSaveLaw.destination(for: destination.zone, savesOriginal: destination.savesOriginal) == destination.expected,
+                    "zone \(destination.zone), original \(destination.savesOriginal)")
         }
+    }
+
+    @Test("par défaut, l'original d'une prise hors cadre reste dans l'app (#10284) ; le réglage activé l'envoie en galerie")
+    func outsideFollowsTheSetting() {
+        #expect(CaptureSaveLaw.destination(for: .outside) == .outside)
+        #expect(CaptureSaveLaw.destination(for: .outside, savesOriginal: true) == .frame)
+        #expect(CaptureSaveLaw.destination(for: .frame, savesOriginal: false) == .frame)
     }
 
     @Test("le bouton Enregistrer de la retouche suit, étape par étape, la loi TypeScript")

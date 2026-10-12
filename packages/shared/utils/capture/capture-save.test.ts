@@ -22,7 +22,11 @@ type Step =
   | { readonly op: 'frame'; readonly frameId: FrameChoice };
 
 type Vectors = {
-  readonly destinations: readonly { readonly zone: CaptureZone; readonly expected: CaptureDestination }[];
+  readonly destinations: readonly {
+    readonly zone: CaptureZone;
+    readonly savesOriginal: boolean;
+    readonly expected: CaptureDestination;
+  }[];
   readonly sequences: readonly {
     readonly name: string;
     readonly origin: CaptureOrigin;
@@ -56,17 +60,31 @@ describe('la loi d’enregistrement d’une prise — directive porteur 2026-10-
     expect(captureDestination('frame')).toEqual({ gallery: true, then: 'edit', keptInApp: false });
   });
 
-  it('une prise hors zone cadre va en retouche et reste dans l’app, jamais en galerie', () => {
+  it('par défaut, une prise hors zone cadre va en retouche et reste dans l’app', () => {
     expect(captureDestination('outside')).toEqual({ gallery: false, then: 'edit', keptInApp: true });
+    expect(captureDestination('outside', { savesOriginal: false })).toEqual({ gallery: false, then: 'edit', keptInApp: true });
   });
 
-  it('les vecteurs couvrent chaque zone', () => {
-    expect(vectors.destinations.map((d) => d.zone).sort()).toEqual([...CAPTURE_ZONES].sort());
+  it('Réglages › Médias « enregistrer l’original » activé : une prise hors cadre met son original dans la galerie (correction porteur 2026-10-12)', () => {
+    expect(captureDestination('outside', { savesOriginal: true })).toEqual({ gallery: true, then: 'edit', keptInApp: false });
   });
 
-  it.each(vectors.destinations.map((d) => [d.zone, d] as const))('destination « %s » = vecteur', (_, d) => {
-    expect(captureDestination(d.zone)).toEqual(d.expected);
+  it('une prise par le cadre part en galerie quel que soit le réglage de l’original', () => {
+    expect(captureDestination('frame', { savesOriginal: false })).toEqual({ gallery: true, then: 'edit', keptInApp: false });
+    expect(captureDestination('frame', { savesOriginal: true })).toEqual({ gallery: true, then: 'edit', keptInApp: false });
   });
+
+  it('les vecteurs couvrent chaque zone, réglage de l’original activé et désactivé', () => {
+    const covered = vectors.destinations.map((d) => `${d.zone}:${d.savesOriginal}`).sort();
+    expect(covered).toEqual(CAPTURE_ZONES.flatMap((zone) => [`${zone}:false`, `${zone}:true`]).sort());
+  });
+
+  it.each(vectors.destinations.map((d) => [`${d.zone}, original ${d.savesOriginal ? 'enregistré' : 'par défaut'}`, d] as const))(
+    'destination « %s » = vecteur',
+    (_, d) => {
+      expect(captureDestination(d.zone, { savesOriginal: d.savesOriginal })).toEqual(d.expected);
+    },
+  );
 
   it.each(vectors.sequences.map((s) => [s.name, s] as const))('%s', (_, sequence) => {
     expect(sequence.visible).toHaveLength(sequence.steps.length + 1);

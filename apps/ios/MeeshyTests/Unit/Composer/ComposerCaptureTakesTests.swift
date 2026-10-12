@@ -79,19 +79,67 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertNil(FeedbackToastManager.shared.currentToast, "un enregistrement refusé ne se dit jamais « enregistré »")
     }
 
-    /// **L'original d'une prise hors cadre ne quitte jamais l'app** (#10284), même
-    /// si Réglages › Médias demande l'original ; une prise par le cadre suit le réglage.
-    func test_camera_keepsTheOriginalInApp_forATakeOutsideTheFrame() {
+    /// **Le réglage de l'utilisateur prime sur le défaut de #10284** (correction
+    /// porteur 2026-10-12 : « il faut respecter la consigne et reglage
+    /// utilisateur. Je n'exprimais que le comportement par défaut ») : Réglages ›
+    /// Médias « enregistrer l'original » activé, la caméra écrit l'original de
+    /// TOUTE prise, hors cadre comprise — comme avant #10284.
+    func test_camera_writesTheOriginalOfATakeOutsideTheFrame_whenTheSettingAsksForIt() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery(),
                                              savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) })
-        let veto = session.camera.keepsOriginalInApp
-        XCTAssertEqual(veto?(nil), true, "la photo de la scène reste dans l'app")
-        session.photoInFlightIntent = .gallery
-        XCTAssertEqual(veto?(nil), false, "la photo du cadre suit le réglage")
+        XCTAssertEqual(session.photoInFlightIntent, .edit, "une photo de la scène : hors cadre")
+        XCTAssertTrue(session.camera.savesOriginal(), "réglage activé : l'original de la prise hors cadre rejoint Photos")
         session.bindRecording(.edit, to: "segment")
-        session.bindRecording(.gallery, to: "cadre")
-        XCTAssertEqual(veto?("segment"), true)
-        XCTAssertEqual(veto?("cadre"), false)
+        XCTAssertTrue(session.camera.savesOriginal(), "la vidéo de la scène aussi")
+    }
+
+    /// Par défaut (#9684), aucun original ne rejoint Photos : la prise hors cadre
+    /// reste dans l'app, celle du cadre n'y envoie que son rendu.
+    func test_camera_keepsTheOriginalInApp_byDefault_whateverTheZone() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery(), savePolicy: { .standard })
+        XCTAssertFalse(session.camera.savesOriginal(), "hors cadre, par défaut : l'original reste dans l'app")
+        session.photoInFlightIntent = .gallery
+        XCTAssertFalse(session.camera.savesOriginal(), "par le cadre, par défaut : l'original non plus")
+    }
+
+    /// Réglage activé, vidéo HORS cadre d'un seul segment, sans effet : la caméra
+    /// a écrit l'original, « Enregistrer » le constate et n'en écrit pas un second.
+    func test_outsideVideo_originalWrittenBySetting_saveToPhotos_writesNothingMore() async throws {
+        let (session, galerie) = try await Self.untouchedOutsideVideoInRetouch(renderedMode: .manual)
+        session.saveTakeToPhotos()
+        await Self.waitUntil { session.takeSaveState == .saved && session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original est déjà dans Photos : rien ne se double")
+        XCTAssertEqual(session.takeSaveState, .saved, "et l'état le dit vrai : la prise y est")
+    }
+
+    func test_outsideVideo_originalWrittenBySetting_automaticFinish_writesNothingMore() async throws {
+        let (session, galerie) = try await Self.untouchedOutsideVideoInRetouch(renderedMode: .automatic)
+        var remis = false
+        session.onDeliver = { _ in remis = true }
+        session.finishEditing()
+        await Self.waitUntil { remis }
+        XCTAssertTrue(remis)
+        XCTAssertEqual(galerie.saveVideoCount, 0, "« Terminé » automatique : l'original est déjà dans Photos, une seule fois")
+    }
+
+    /// Un segment de la scène, dont la caméra a écrit l'original (réglage activé),
+    /// validé puis ouvert en retouche sans effet.
+    private static func untouchedOutsideVideoInRetouch(
+        renderedMode: CaptureRenderedSaveMode
+    ) async throws -> (ComposerCaptureSession, MockComposerGallery) {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: renderedMode) },
+                                             loopPlayerFactory: { _ in lecteur })
+        let url = try tempFile()
+        session.bindRecording(.edit, to: "segment")
+        session.camera.librarySave = Task { true }
+        session.camera.capturedVideoURL = url
+        session.camera.capturedVideoId = "segment"
+        session.validateSegments()
+        await waitUntil { session.phase == .editing(.video(url)) }
+        return (session, galerie)
     }
 
     func test_photoArrived_editIntent_entersEditing_andDeliversNothingYet() {

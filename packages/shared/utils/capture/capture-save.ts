@@ -47,7 +47,9 @@ export type TakeSaveState = {
 const FRAME_DESTINATION: CaptureDestination = { gallery: true, then: 'edit', keptInApp: false };
 const OUTSIDE_DESTINATION: CaptureDestination = { gallery: false, then: 'edit', keptInApp: true };
 
-export const captureDestination = (zone: CaptureZone): CaptureDestination =>
+export type CaptureDestinationOptions = { readonly savesOriginal?: boolean };
+
+export const captureDestination = (zone: CaptureZone, _options: CaptureDestinationOptions = {}): CaptureDestination =>
   zone === 'frame' ? FRAME_DESTINATION : OUTSIDE_DESTINATION;
 
 /** L'état juste après la prise : une prise par le cadre part déjà en galerie (mise à jour optimiste). */

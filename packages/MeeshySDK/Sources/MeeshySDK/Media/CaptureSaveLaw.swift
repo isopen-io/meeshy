@@ -79,7 +79,7 @@ public struct TakeSaveState: Sendable, Hashable {
 }
 
 public enum CaptureSaveLaw {
-    public static func destination(for zone: CaptureZone) -> CaptureDestination {
+    public static func destination(for zone: CaptureZone, savesOriginal: Bool = false) -> CaptureDestination {
         switch zone {
         case .frame: return .frame
         case .outside: return .outside

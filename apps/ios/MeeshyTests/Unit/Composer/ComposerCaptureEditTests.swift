@@ -594,9 +594,9 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(galerie.saveVideoCount, 1, "sans effet ni cadre, l'original rejoint Photos")
     }
 
-    /// #10284 : une prise HORS cadre garde son original dans l'app, même quand
-    /// Réglages › Médias demande l'original — « Enregistrer » doit donc l'ÉCRIRE,
-    /// jamais conclure qu'il est déjà dans Photos.
+    /// #10284 : « Enregistrer » lit un FAIT — le brut écrit par la caméra —,
+    /// jamais le réglage : une prise dont aucun brut n'a été écrit (ici ouverte
+    /// sans passer par la caméra) s'ÉCRIT, même réglage activé.
     func test_saveTakeToPhotos_untouchedOutsideVideo_savesOriginalSetting_stillWritesTheTake() async {
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
@@ -606,7 +606,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         await session.beginEditing(video: Self.clip())
         session.saveTakeToPhotos()
         await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
-        XCTAssertEqual(galerie.saveVideoCount, 1, "l'original d'une prise hors cadre n'est pas dans Photos : la prise s'y écrit")
+        XCTAssertEqual(galerie.saveVideoCount, 1, "aucun brut écrit : la prise s'y écrit")
     }
 
     func test_finishEditingVideo_untouchedOutside_automatic_savesOriginalSetting_stillWritesTheTake() async {
@@ -620,7 +620,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         session.onDeliver = { _ in remis = true }
         session.finishEditing()
         await ComposerCaptureTakesTests.waitUntil { remis }
-        XCTAssertEqual(galerie.saveVideoCount, 1, "« Terminé » automatique écrit la prise hors cadre : son original est resté dans l'app")
+        XCTAssertEqual(galerie.saveVideoCount, 1, "« Terminé » automatique écrit la prise dont aucun brut n'est dans Photos")
     }
 
     func test_frameTake_untouchedVideo_originalAlreadyInPhotos_writesNothingMore() async {
@@ -688,16 +688,19 @@ final class ComposerCaptureEditTests: XCTestCase {
                        "jamais un échec silencieux")
     }
 
-    /// La caméra n'écrit plus le brut sans que le réglage le demande, ni pour une
-    /// prise que l'hôte garde dans l'app (#10284) : chacune de ses trois écritures
-    /// (photo, vidéo, repli du dernier segment) passe par la même garde.
-    func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo_andTheHostLetsItGo() throws {
+    /// La caméra écrit le brut si, et seulement si, Réglages › Médias le demande
+    /// (#9684) — quelle que soit la zone de la prise : la directive #10284 fixe
+    /// un défaut, le réglage de l'utilisateur prime (correction porteur
+    /// 2026-10-12). Chacune de ses trois écritures (photo, vidéo, repli du
+    /// dernier segment) passe par la même garde.
+    func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {
         let camera = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
         let ecritures = camera.components(separatedBy: "PhotoLibraryManager.shared.save").count - 1
-        let gardes = camera.components(separatedBy: "savesOriginal(for:").count - 1
+        XCTAssertTrue(camera.contains("func savesOriginal() -> Bool"))
+        let gardes = camera.components(separatedBy: "savesOriginal()").count - 2
         XCTAssertEqual(ecritures, 3)
         XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la garde")
-        XCTAssertTrue(camera.contains("CaptureSavePolicy.stored().savesOriginal && keepsOriginalInApp?(token) != true"))
+        XCTAssertFalse(camera.contains("keepsOriginalInApp"), "aucun veto de l'hôte ne passe outre le réglage")
     }
 
     func test_cameraBar_offersTheSaveArrow_wiredToTheSession() throws {

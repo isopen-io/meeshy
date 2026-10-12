@@ -1,8 +1,18 @@
 {
-  "$comment": "La loi d'enregistrement d'une prise (#10284), rejouée par vitest (packages/shared/utils/capture/capture-save.test.ts) et par Swift (CaptureSaveLawVectorTests). Sur divergence, le TypeScript a raison : le miroir bouge, jamais le vecteur. `visible` donne l'état du bouton Enregistrer de la retouche juste après la prise, puis après chaque étape.",
+  "$comment": "La loi d'enregistrement d'une prise (#10284), rejouée par vitest (packages/shared/utils/capture/capture-save.test.ts) et par Swift (CaptureSaveLawVectorTests). Sur divergence, le TypeScript a raison : le miroir bouge, jamais le vecteur. `visible` donne l'état du bouton Enregistrer de la retouche juste après la prise, puis après chaque étape. `savesOriginal` est le réglage Réglages › Médias « enregistrer l'original » (#9684) : la directive #10284 fixe les DÉFAUTS (hors cadre ⇒ gardée dans l'app), le réglage de l'utilisateur prime (correction porteur 2026-10-12).",
   "destinations": [
     {
       "zone": "frame",
+      "savesOriginal": false,
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
+      }
+    },
+    {
+      "zone": "frame",
+      "savesOriginal": true,
       "expected": {
         "gallery": true,
         "then": "edit",
@@ -11,10 +21,20 @@
     },
     {
       "zone": "outside",
+      "savesOriginal": false,
       "expected": {
         "gallery": false,
         "then": "edit",
         "keptInApp": true
+      }
+    },
+    {
+      "zone": "outside",
+      "savesOriginal": true,
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
       }
     }
   ],
