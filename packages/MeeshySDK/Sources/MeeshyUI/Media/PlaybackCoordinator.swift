@@ -138,6 +138,8 @@ public final class PlaybackCoordinator {
         stopAllExternal(except: nil)
     }
 
+    public func fadeOutAllExternal(duration: TimeInterval) async {}
+
     // MARK: - Cleanup
 
     private func stopAllExternal(except excludeId: ObjectIdentifier?) {
