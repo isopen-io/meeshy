@@ -94,10 +94,11 @@ nonisolated enum ComposerInlineEditing {
     /// **Les sous-outils d'une famille, dans l'ordre que ses inventaires ont
     /// déjà fixé** (`ComposerObjectEditorRail.entries`) — aucune seconde liste.
     ///
-    /// **La fenêtre de temps et le plan 2D sont réservés au TEXTE** : leur
-    /// réglage n'écrit que sur un objet texte (`ComposerObjectTimingControls`),
-    /// et les offrir ailleurs serait servir un contrôle sans effet — ce que la
-    /// loi 4 bannit. Un fond, lui, dure la slide entière.
+    /// **La fenêtre de temps et le plan 2D vont à toute famille POSÉE**
+    /// (#9144) : leur écrivain sert les cinq familles
+    /// (`StoryComposerViewModel.setSceneObjectTiming`). Un fond, lui, dure la
+    /// slide entière — les lui offrir serait servir un contrôle sans effet, ce
+    /// que la loi 4 bannit.
     ///
     /// **Une IMAGE se recadre, d'abord** — l'ordre des décisions de la vue
     /// `2d`. Deux images le servent : le FOND IMAGE d'une pièce retouchée
@@ -120,7 +121,7 @@ nonisolated enum ComposerInlineEditing {
                                                        offersAdjust: family.sceneKind == .media)
             .filter { section in
                 switch section {
-                case .timing, .plan:  return family == .text
+                case .timing, .plan:  return !family.isBackground
                 case .media(let outil): return MediaEditTool.served.contains(outil)
                 case .tool:           return true
                 }

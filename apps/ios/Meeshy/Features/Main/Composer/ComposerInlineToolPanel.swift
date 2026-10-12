@@ -31,8 +31,8 @@ struct ComposerInlineToolPanel: View {
     /// La description d'un média vit au MEUBLE (#4756) ; `nil` ⇒ aucun champ
     /// qui n'écrirait nulle part (loi 4).
     var altText: Binding<String>?
-    /// Le plan 2D désigne un autre texte : l'édition en place le reprend.
-    var onSelectText: (String) -> Void = { _ in }
+    /// Le plan 2D désigne un autre objet : l'édition en place le reprend.
+    var onSelectObject: (String) -> Void = { _ in }
     /// L'appui maintenu sur « Comparer » des réglages (#9175) : le meuble
     /// montre l'original de l'image dans la scène tant qu'il dure.
     var onCompareLook: ((Bool) -> Void)?
@@ -62,7 +62,7 @@ struct ComposerInlineToolPanel: View {
         case .plan:
             ComposerObjectPlanControls(viewModel: viewModel,
                                        objectId: edit.objectId,
-                                       onSelectText: onSelectText,
+                                       onSelectObject: onSelectObject,
                                        holdsGesture: $planHoldsGesture)
         case .media(.filter):
             if let media {

@@ -49,40 +49,60 @@ final class ComposerInlineEditTests: XCTestCase {
     /// un effet partout où l'objet se peint.
     /// Les EFFETS (#9498) suivent les réglages : on règle l'image, puis on y
     /// pose un look.
-    func test_sections_image_recadrageFiltreReglagesEffetsActionsDescription() {
+    func test_sections_image_recadrageFiltreReglagesEffetsActionsDescription_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false),
                        [.media(.crop), .media(.filter), .media(.adjust), .media(.effects), .media(.actions),
-                        .media(.altText)])
+                        .media(.altText), .timing, .plan])
     }
 
-    func test_sections_video_reglagesRognageActionsDescription_sansFiltre() {
+    func test_sections_video_reglagesRognageActionsDescription_sansFiltre_puisTempsEtPlan() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true),
-                       [.media(.adjust), .media(.trim), .media(.actions), .media(.altText)],
+                       [.media(.adjust), .media(.trim), .media(.actions), .media(.altText), .timing, .plan],
                        "le filtre se cuit dans une image : une vidéo n'en rend aucun ; ses réglages, si (#9169)")
     }
 
     /// RÉGLAGES compris depuis #9496 (`StoryBackgroundLook` les peint) ; le
     /// RECADRAGE hors retouche (#9499) reste réservé au média posé — le fond ne
     /// se recadre qu'en retouche (#9136).
-    func test_sections_fond_lesMemesQuUnMediaPose() {
+    func test_sections_fond_lesMemesQuUnMediaPose_saufLeTemps() {
+        let horsDuTemps: (ComposerObjectEditorSection) -> Bool = { $0 != .timing && $0 != .plan }
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false),
                        ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false)
-                           .filter { $0 != .media(.crop) })
+                           .filter { $0 != .media(.crop) }.filter(horsDuTemps))
         XCTAssertEqual(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true),
-                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true))
+                       ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true).filter(horsDuTemps))
     }
 
-    /// **Aucun contrôle inerte** (loi 4) : la fenêtre de temps et le plan
-    /// n'écrivent que sur un TEXTE (`ComposerObjectTimingControls.apply`), donc
-    /// aucune autre famille ne les offre.
-    func test_sections_tempsEtPlan_reservesAuTexte() {
-        let familles: [ComposerInlineFamily] = [.image, .video, .audio, .sticker, .place,
-                                                .background(isVideo: false), .background(isVideo: true)]
-        for famille in familles {
+    /// **La fenêtre de temps et le plan vont à toute famille POSÉE** (#9144) :
+    /// leur écrivain sert les cinq familles (`setSceneObjectTiming`). Le
+    /// témoin s'écrit sur les familles où le défaut vivait — tout sauf le
+    /// texte — et garde la seule exclusion juste : un fond dure la slide.
+    func test_sections_tempsEtPlan_offertsAToutObjetPose_jamaisAuFond() {
+        let posees: [ComposerInlineFamily] = [.text, .image, .video, .audio, .sticker, .place]
+        for famille in posees {
             let sections = ComposerInlineEditing.sections(for: famille, hasTrimmableSource: true)
-            XCTAssertFalse(sections.contains(.timing), "\(famille) offrirait une fenêtre de temps sans effet")
-            XCTAssertFalse(sections.contains(.plan), "\(famille) offrirait un plan sans effet")
+            XCTAssertEqual(Array(sections.suffix(2)), [.timing, .plan],
+                           "\(famille) : la fenêtre de temps puis le plan, après ses propres sous-outils")
         }
+        for fond in [ComposerInlineFamily.background(isVideo: false), .background(isVideo: true)] {
+            let sections = ComposerInlineEditing.sections(for: fond, hasTrimmableSource: true)
+            XCTAssertFalse(sections.contains(.timing), "\(fond) offrirait une fenêtre de temps sans effet")
+            XCTAssertFalse(sections.contains(.plan), "\(fond) offrirait un plan sans effet")
+        }
+    }
+
+    /// **L'écrivain de la fenêtre n'est plus le binding du texte** — sans quoi
+    /// la fenêtre d'un sticker, d'une image, d'un lieu ou d'un son serait un
+    /// contrôle inerte, et le plan ne désignerait qu'un texte.
+    func test_laFenetre_secritParLeVerbeDesCinqFamilles() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerObjectTimingControls.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("viewModel.setSceneObjectTiming(id:objectId,"))
+        XCTAssertFalse(code.contains("textObjectBinding(for:objectId)"),
+                       "le binding du texte réserverait la fenêtre au texte")
+        XCTAssertTrue(code.contains("viewModel.currentSlide.sceneObject(id:id)!=nil"),
+                      "toucher une piste du plan désigne l'objet de n'importe quelle famille")
     }
 
     func test_sections_retouchedBackgroundImage_opensOnCrop() {
@@ -123,14 +143,15 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertTrue(sections.contains(.media(.actions)), "Le muet vit dans les actions du média")
     }
 
-    func test_sections_stickerEtLieu_aucunSousOutil_seulementLeursActions() {
-        XCTAssertEqual(ComposerInlineEditing.sections(for: .sticker, hasTrimmableSource: false), [])
-        XCTAssertEqual(ComposerInlineEditing.sections(for: .place, hasTrimmableSource: false), [])
+    func test_sections_stickerEtLieu_leTempsEtLePlanSeulement() {
+        XCTAssertEqual(ComposerInlineEditing.sections(for: .sticker, hasTrimmableSource: false), [.timing, .plan])
+        XCTAssertEqual(ComposerInlineEditing.sections(for: .place, hasTrimmableSource: false), [.timing, .plan])
     }
 
     func test_sections_son_leRognageSeulementQuandIlYADeQuoiRogner() {
-        XCTAssertEqual(ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: true), [.media(.trim)])
-        XCTAssertEqual(ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: false), [])
+        XCTAssertEqual(ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: true),
+                       [.media(.trim), .timing, .plan])
+        XCTAssertEqual(ComposerInlineEditing.sections(for: .audio, hasTrimmableSource: false), [.timing, .plan])
     }
 
     /// La scission n'est servie par AUCUNE famille : aucun champ du modèle ne
@@ -168,9 +189,13 @@ final class ComposerInlineEditTests: XCTestCase {
                                         requested: .timing, hasTrimmableSource: false),
             ComposerInlineEdit(objectId: "bg", family: .background(isVideo: false), openSection: nil))
         XCTAssertEqual(
+            ComposerInlineEditing.begin(objectId: "bg", family: .background(isVideo: true), onSceneSurface: true,
+                                        requested: .plan, hasTrimmableSource: true)?.openSection,
+            nil)
+        XCTAssertEqual(
             ComposerInlineEditing.begin(objectId: "st", family: .sticker, onSceneSurface: true,
                                         requested: .plan, hasTrimmableSource: false)?.openSection,
-            nil)
+            .plan, "le plan d'un sticker est servi depuis #9144")
     }
 
     func test_begin_horsDeLaScene_laisseLEditeurDObjet() {

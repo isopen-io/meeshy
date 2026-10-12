@@ -121,7 +121,7 @@ extension MeeshyComposerHost {
             section: section,
             plateauTint: tint.color,
             altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
-            onSelectText: { beginInlineEdit($0, section: .plan) },
+            onSelectObject: { beginInlineEdit($0, section: .plan) },
             onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
     }
 
