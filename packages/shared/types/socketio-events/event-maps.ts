@@ -9,6 +9,7 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
 import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -261,6 +262,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
   [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.ADMIN_METRICS_SAMPLE]: (sample: HostMetricsSample) => void;
   [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.ENGAGEMENT_POST_UPDATED]: (data: PostEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
@@ -475,6 +477,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
+  [CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE]: (data: Record<string, never> | undefined, ack?: (response: AdminMetricsSubscribeAck) => void) => void;
+  [CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE]: () => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**
