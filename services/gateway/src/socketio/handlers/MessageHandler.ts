@@ -831,7 +831,7 @@ export class MessageHandler {
       // ajoutée par édition restait intraçable pour toujours.
       const editedLinks = await reconcileEditedLinks({
         linkService: this.trackingLinkService,
-        message: { id: validated.messageId, conversationId: message.conversationId },
+        message: { id: validated.messageId, conversationId: message.conversationId, sender: message.sender },
         content: contentAdmission.content,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),

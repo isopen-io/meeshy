@@ -113,7 +113,7 @@ describe('processExplicitLinks', () => {
  * mapping des URLs BRUTES que seule la création recomposait.
  */
 describe('reconcileEditedLinks', () => {
-  const MESSAGE = { id: 'msg-1', conversationId: 'conv-1' };
+  const MESSAGE = { id: 'msg-1', conversationId: 'conv-1', sender: { type: 'user', userId: 'u-author' } };
 
   function makeReconciler(options: {
     processed?: string;
