@@ -277,7 +277,7 @@ extension StoryCanvasUIView {
             }
             self.displayLinkTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
+        link.preferredFrameRateRange = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
         link.add(to: .main, forMode: .common)
         displayLink = link
         // Autorise (ou ré-autorise après pause) la lecture du player vidéo de
@@ -337,6 +337,33 @@ extension StoryCanvasUIView {
         if playheadTickClock.isDriftCheckDue(now: link.timestamp) {
             correctVideoDriftIfNeeded()
         }
+        applyPlaybackCadence(to: link)
+    }
+
+    /// Le palier du lien de lecture pour la slide à l'instant courant (#9864).
+    /// La loi est `StoryPlaybackCadence` ; la vue ne fournit que ce qu'elle
+    /// seule sait : le genre du fond, l'audio planifiable, et si un hôte
+    /// dessine sa barre depuis `onPlaybackTime`.
+    func playbackCadenceTier() -> StoryPlaybackCadenceTier {
+        let backgroundIsVideo: Bool = {
+            if case .video = backgroundLayer.kind { return true }
+            return false
+        }()
+        return StoryPlaybackCadence.tier(slide: slide,
+                                         elapsed: currentTime.seconds,
+                                         totalDuration: effectiveSlideTotalDuration,
+                                         backgroundIsVideo: backgroundIsVideo,
+                                         hasSchedulableAudio: slideHasSchedulableAudio,
+                                         relaysPlaybackClock: onPlaybackTime != nil)
+    }
+
+    /// Ré-évaluée à chaque tick : une ouverture qui se termine, une fermeture
+    /// qui approche, un audio qui se planifie ou un hôte qui s'abonne changent
+    /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
+    func applyPlaybackCadence(to link: CADisplayLink) {
+        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
+        guard !link.preferredFrameRateRange.isEqual(to: range) else { return }
+        link.preferredFrameRateRange = range
     }
 
     /// Les vidéos ne se calaient sur la timeline qu'au démarrage et à la
@@ -650,7 +677,9 @@ extension StoryCanvasUIView {
     }
 
     func startEditDisplayLinkIfNeeded() {
-        guard mode == .edit, editDisplayLink == nil else { return }
+        guard EditClockArming.shouldArm(isEditing: mode == .edit,
+                                        isInteractive: isUserInteractionEnabled),
+              editDisplayLink == nil else { return }
         let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
             guard let self else {
                 link.invalidate()

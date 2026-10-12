@@ -98,6 +98,17 @@ public final class StoryBackdropCapture: BackdropCapturing {
     /// change (e.g. iPad rotation, Stage Manager resize).
     private var cachedRenderSize: CGSize?
 
+    /// Rang de la dernière capture réussie, croissant pour toute la vie de
+    /// l'instance : une couche de verre nourrie par une génération plus
+    /// ancienne porte une découpe périmée (#9864).
+    private(set) var generation: Int = 0
+
+    /// La clé et l'instant de la capture de LECTURE en cache (#9864), que
+    /// `StoryGlassBackdropPlayback.shouldRecapture` compare au tick courant.
+    /// `invalidate()` les efface avec la texture.
+    private(set) var playbackKey: StoryGlassCaptureKey?
+    private(set) var playbackCapturedAt: CFTimeInterval = 0
+
     public init() {}
 
     // `nonisolated` deinit : la classe @MainActor ne stocke que des références
@@ -189,7 +200,30 @@ public final class StoryBackdropCapture: BackdropCapturing {
 
         cachedCanvasBackdrop = target
         cachedRenderSize = renderSize
+        generation &+= 1
         return target
+    }
+
+    /// Capture de LECTURE (#9864) : la même passe, mémorisée sous la clé et
+    /// l'instant qui l'ont décidée. Une capture qui échoue ne laisse aucune
+    /// clé, pour que le tick suivant la retente.
+    @discardableResult
+    func capturePlaybackBackdrop(slide: StorySlide,
+                                 geometry: CanvasGeometry,
+                                 time: CMTime,
+                                 languages: [String],
+                                 key: StoryGlassCaptureKey,
+                                 now: CFTimeInterval) -> MTLTexture? {
+        invalidate()
+        let texture = captureCanvasBackdrop(slide: slide,
+                                            geometry: geometry,
+                                            time: time,
+                                            mode: .play,
+                                            languages: languages)
+        guard texture != nil else { return nil }
+        playbackKey = key
+        playbackCapturedAt = now
+        return texture
     }
 
     /// Returns a region of the cached canvas backdrop matching `frame` in
@@ -276,6 +310,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
     public func invalidate() {
         cachedCanvasBackdrop = nil
         cachedRenderSize = nil
+        playbackKey = nil
+        playbackCapturedAt = 0
     }
 
     // MARK: - Private

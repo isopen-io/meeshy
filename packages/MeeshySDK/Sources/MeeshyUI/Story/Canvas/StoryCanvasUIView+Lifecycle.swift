@@ -187,6 +187,10 @@ extension StoryCanvasUIView {
         // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
         // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
         stopPlayback()
+        // La capture plein cadre du verre (une texture Metal à la taille du
+        // rendu) ne sert qu'à l'écran : hors fenêtre, elle se rend, et la
+        // lecture la refait au retour — sa clé part avec elle (#9864).
+        backdropCapture.invalidate()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
