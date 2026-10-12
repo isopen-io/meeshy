@@ -600,9 +600,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         guard pipCreationTask == nil else { return }
         pipCreationTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: Self.deferredPipDelay)
-            guard let self else { return }
+            // Annulée par `tearDown()`, la tâche ne touche plus à rien : une
+            // demande neuve a peut-être déjà pris sa place.
+            guard let self, !Task.isCancelled else { return }
             self.pipCreationTask = nil
-            guard !Task.isCancelled, let layer = self.pendingPipLayer else { return }
+            guard let layer = self.pendingPipLayer else { return }
             self.pendingPipLayer = nil
             guard Self.mayCreateDeferredPip(
                 layerShowsEnginePlayer: self.player != nil && layer.player === self.player,
