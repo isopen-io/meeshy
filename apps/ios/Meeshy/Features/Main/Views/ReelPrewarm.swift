@@ -309,8 +309,8 @@ final class ReelPagerPreloader {
     /// sous la clé que la page lit à son init. Un poster déjà en mémoire ne
     /// repart pas.
     private func prefetchPosters(reels: [FeedPost], indices: [Int]) async {
-        let screen = UIScreen.main
-        let pixels = ReelPosterPrefetch.pixelSize(screenPoints: screen.bounds.size, scale: screen.scale)
+        let scale = DeviceLayout.activeWindow?.traitCollection.displayScale ?? UITraitCollection.current.displayScale
+        let pixels = ReelPosterPrefetch.pixelSize(screenPoints: DeviceLayout.windowSize, scale: scale)
         for index in indices where reels.indices.contains(index) {
             guard !Task.isCancelled else { return }
             guard let url = ReelPosterPrefetch.posterURL(for: reels[index]),
