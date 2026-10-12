@@ -20,6 +20,9 @@
  * | appartenance | oui | oui | oui |
  * | **lien de partage ÉCHU → 403** | **oui** | **NON** | **NON** |
  *
+ * (Depuis #7388, les deux routes dédiées portent aussi la porte du lien échu :
+ * voir le bloc `#7388` plus bas.)
+ *
  * La quatrième ligne est l'absence que ce lot ne veut pas propager : unifier
  * sans la voir aurait rendu `view=pinned` lisible par un invité dont le lien
  * est mort, ou aurait retiré la garde du chemin nominal. Le chemin unifié la
@@ -724,6 +727,37 @@ describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
       const { corps } = await lireVue(`${url}&before=507f1f77bcf86cd7994399ff`);
       expect(ids(corps)).toContain(M_OK);
     });
+  });
+});
+
+/**
+ * #7388 — la porte d'un lien de partage ÉCHU vaut aussi sur les deux routes
+ * DÉDIÉES. Elles lisaient le lien pour son seul `allowViewHistory` : un invité
+ * dont le lien est mort ne lisait plus le fil, et pouvait encore en chercher un
+ * mot ou en lire les épingles.
+ */
+describe('#7388 — les routes dédiées ferment la porte d’un lien ÉCHU comme le fil', () => {
+  const DEDIEES: ReadonlyArray<readonly [string, string]> = [
+    ['GET .../messages/search', `/conversations/${CONV_ID}/messages/search?q=cible`],
+    ['GET .../pinned-messages', `/conversations/${CONV_ID}/pinned-messages`],
+  ];
+
+  it.each(DEDIEES)('%s refuse 403 SHARE_LINK_EXPIRED, sans rien servir', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(403);
+    expect(corps.success).toBe(false);
+    expect(corps.code).toBe('SHARE_LINK_EXPIRED');
+    expect(corps.data).toBeUndefined();
+  });
+
+  it.each(DEDIEES)('%s sert toujours le lecteur dont le lien est VIVANT', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2999-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(200);
+    expect(ids(corps)).toContain(M_OK);
   });
 });
 

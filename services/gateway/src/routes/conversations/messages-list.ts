@@ -21,7 +21,7 @@ import {
   applyHistoryFloor,
   historyFloorFor
 } from '../../services/historyFloor';
-import { shareLinkHasExpired } from '../../services/shareLinkReadGate';
+import { refuseExpiredShareLink, shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import {
   loadPersonalHistoryHiding,
@@ -41,7 +41,7 @@ import type {
   ConversationParams,
   MessagesQuery
 } from './types';
-import { sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import type { PaginationMeta } from '../../utils/pagination';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -309,7 +309,7 @@ export function registerMessagesListRoute(
           })
         : null;
       if (shareLinkHasExpired(shareLink)) {
-        return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
+        return refuseExpiredShareLink(reply);
       }
       // Le plancher vaut pour TOUT participant, lien ou non : un membre ajouté
       // après coup, un inscrit dans le salon global, un octroi par date d'un

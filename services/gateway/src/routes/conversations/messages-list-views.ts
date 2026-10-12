@@ -15,13 +15,13 @@
  * La mesure du 2026-09-02, faite sur le corps SÉRIALISÉ des trois routes et non
  * sur leur code, rend deux écarts qu'aucune lecture du code ne montre :
  *
- * - **Les gardes divergent.** Le refus d'un lien de partage ÉCHU
- *   (403 `SHARE_LINK_EXPIRED`) n'existe QUE sur `GET .../messages`. Ni la
- *   recherche ni la liste des épinglés ne lit `expiresAt` : elles lisent le
- *   lien pour son seul `allowViewHistory` (`loadReaderHistoryFloor`), ce qui
- *   rétrécit une LECTURE sans jamais fermer la PORTE. Un invité dont le lien
- *   est mort ne peut plus lire le fil, et peut toujours en chercher un mot ou
- *   en lire les épingles.
+ * - **Les gardes divergeaient.** Le refus d'un lien de partage ÉCHU
+ *   (403 `SHARE_LINK_EXPIRED`) n'existait que sur `GET .../messages` : la
+ *   recherche et la liste des épinglés lisaient le lien pour son seul
+ *   `allowViewHistory` (`loadReaderHistoryFloor`), ce qui rétrécissait une
+ *   LECTURE sans fermer la PORTE. Depuis #7388, les deux routes dédiées et le
+ *   fil de réponses (`threads.ts`) appellent la même porte
+ *   (`readerShareLinkHasExpired`, `services/shareLinkReadGate.ts`).
  * - **La forme diverge, en partie corrigée depuis (#4885).** Au 2026-09-02,
  *   un résultat de recherche ne portait NI `isViewOnce`, NI `isBlurred`, NI
  *   `expiresAt`, NI `attachments`, NI `deletedAt` — son `select` ne les
