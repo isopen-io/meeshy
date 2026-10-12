@@ -33,6 +33,8 @@ export interface NotificationPreference {
   readonly contactActivityEnabled?: boolean;
   /** « Jeu » (#9490) — absent = reçu. */
   readonly gameEnabled?: boolean;
+  /** « Moments à immortaliser » (#10175, D8) : le push d'une étape franchie app fermée — absent = reçu. */
+  readonly gamePhotoEnabled?: boolean;
 
   // === DO NOT DISTURB ===
   readonly dndEnabled: boolean;
@@ -155,6 +157,8 @@ export function isNotificationTypeEnabled(
     case 'game_season_step':
     case 'game_mission_window':
       return prefs.gameEnabled !== false;
+    case 'game_photo_moment':
+      return prefs.gameEnabled !== false && prefs.gamePhotoEnabled !== false;
     case 'member_joined':
     case 'member_left':
       return prefs.memberJoinedEnabled;

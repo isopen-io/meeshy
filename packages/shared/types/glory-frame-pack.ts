@@ -73,7 +73,8 @@ const envelopeSchema = z.object({
 
 const isGloryFrameUsage = (usage: FrameUsage): usage is GloryFrameUsage => usage.kind !== 'free';
 
-const readFrame = (candidate: unknown): GloryFramePackFrame | null => {
+/** Lit UN cadre de la boutique ; `null` s'il est illisible. Le contrat complet (`glory-frames.ts`) part de lui. */
+export const readGloryFramePackFrame = (candidate: unknown): GloryFramePackFrame | null => {
   const parsed = frameSchema.safeParse(candidate);
   if (!parsed.success || !isGloryFrameUsage(parsed.data.usage)) return null;
   const { story, name } = parsed.data.i18n;
@@ -90,7 +91,7 @@ export function parseGloryFramePackContract(input: unknown): { readonly contract
   if (!envelope.success) return null;
   const raw = envelope.data.frames;
   const frames = raw.reduce<GloryFramePackFrame[]>((kept, candidate) => {
-    const frame = readFrame(candidate);
+    const frame = readGloryFramePackFrame(candidate);
     if (frame === null || kept.some((other) => other.id === frame.id)) return kept;
     return [...kept, frame];
   }, []);

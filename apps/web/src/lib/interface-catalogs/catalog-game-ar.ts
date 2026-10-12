@@ -536,6 +536,7 @@ const ar = {
   'game.season.completed': 'اكتمل المسار: كأس وشارة مؤرخة و{glory} مجد.',
   'game.season.none': 'لا يوجد موسم مفتوح الآن. يبدأ الموسم القادم قريبًا.',
   'game.season.upcoming': 'يُفتتح الموسم ⁦{number}⁩ في ⁦{date}⁩.',
+  'game.season.paused': 'الموسم متوقف مؤقتًا: سيُعلن عن تاريخ افتتاحه.',
   'game.season.seal.title': 'صف الختم',
   'game.season.seal.body': 'الختم للزينة فقط: عنصر للجمع كل ⁦{every}⁩ مراحل، دون أي تأثير على اللعبة.',
   'game.season.seal.buy': 'احصل على الختم · {price}',
@@ -692,6 +693,7 @@ const ar = {
   'game.archive.season.past_title': 'الموسم ⁦{number}⁩ · انتهى',
   'game.archive.season.current_title': 'الموسم ⁦{number}⁩ · جارٍ',
   'game.archive.season.upcoming_title': 'الموسم ⁦{number}⁩ · قادم',
+  'game.archive.season.paused_title': 'الموسم ⁦{number}⁩ · متوقف مؤقتًا',
   'game.archive.season.opened_note': 'الموسم مفتوح: يظهر مسارك فور إعادة تحميله.',
   'game.archive.season.dates': 'من ⁦{start}⁩ إلى ⁦{end}⁩',
   'game.archive.season.rewards.one': '⁦{count}⁩ مكافأة مُستلمة',
@@ -708,6 +710,14 @@ const ar = {
   'game.archive.week.purged': 'هذا الأسبوع قديم جدًا: حُذفت نتيجته كما هو مقرر.',
   'game.archive.week.upcoming': 'لم يبدأ هذا الأسبوع بعد.',
   'game.archive.week.privacy': 'تُحفظ نتيجتك وحدها: لا يمكن الاطلاع على بقية أعضاء المجموعة مجددًا.',
+  'game.constellation.title': 'الكوكبة',
+  'game.constellation.stars.one': '{count} نجمة مضيئة',
+  'game.constellation.stars.other': '{count} نجوم مضيئة',
+  'game.constellation.cosmetics': 'الزينات المفتوحة',
+  'game.constellation.cosmetic': '{kind} · النجمة {star}',
+  'game.constellation.kind.halo': 'هالة',
+  'game.constellation.kind.frame': 'إطار',
+  'game.constellation.kind.sparkle': 'بريق',
 } as const satisfies GameCoreCatalog;
 
 export default ar;

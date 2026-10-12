@@ -337,6 +337,7 @@ def contours(card, cx, cy, n, seed, step=14):
 
 def explorateur():
     c = Card("jb")
+    c.motif("afrique")
     photo(c, top="#33261A", bottom="#120C08", rim="#FFD9A8", glow=0.22)
     win = rrect(84, 296, 456, 726, 14)
     with group(c, f'mask="{deco_mask(c, win)}"'):

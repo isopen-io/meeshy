@@ -477,7 +477,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 290 -> 293 (#10162, 2026-10-11) : `MeEndpoint.gameFramesAtmosphere`, `.gamePhotoMomentsInvitations` et
 // `.gamePhotoMomentsPresented` (L10a), générées depuis le manifeste — PRÉMATURÉES : iOS les appellera par
 // `GameRoutes.swift` et ses lots (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
-const BASELINE_DEAD_ENTRIES = 293;
+// 293 -> 301 (#10233, 2026-10-12) : les huit `AdminEndpoint.gameSeasons*` (`/api/v1/admin/game/seasons…` —
+// lecture, édition, propositions de l'IA, validation, rejet, export `store.app_events`), générées depuis le
+// manifeste — l'administration du calendrier des saisons n'a pas d'écran iOS (web seulement), même raison que les
+// dizaines d'autres `AdminEndpoint.*` ci-dessus. `MeEndpoint.gameSeasonsCalendar` a, lui, son appelant
+// (`GameEndpointPolicy.gameSeasonCalendar`). Valeur MESURÉE le 2026-10-12 en CI (run 38190033361 rouge sur 301).
+const BASELINE_DEAD_ENTRIES = 301;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

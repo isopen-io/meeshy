@@ -5,46 +5,54 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 138306
+  "windowPx": 141664,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "tresor-bourse-b",
-  "overlap": 4337,
+  "overlap": 110,
   "face": 0,
-  "depth": 46,
+  "depth": 3,
   "bbox": [
-   100,
-   636,
-   439,
-   703
+   128,
+   685,
+   442,
+   707
   ],
-  "windowPx": 131453
+  "windowPx": 134902,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "tresor-coffre-a",
-  "overlap": 190,
+  "overlap": 11,
   "face": 0,
-  "depth": 16,
+  "depth": 3,
   "bbox": [
-   149,
-   629,
-   162,
-   648
+   147,
+   639,
+   152,
+   643
   ],
-  "windowPx": 103906
+  "windowPx": 104372,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "tresor-coffre-b",
-  "overlap": 5,
+  "overlap": 36,
   "face": 0,
-  "depth": 0,
+  "depth": 5,
   "bbox": [
-   114,
-   712,
-   118,
-   713
+   107,
+   713,
+   119,
+   718
   ],
-  "windowPx": 143332
+  "windowPx": 147515,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "tresor-coffre-c",
@@ -52,7 +60,9 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 168121
+  "windowPx": 166638,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "tresor-coffret-a",
@@ -60,20 +70,24 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 134684
+  "windowPx": 139981,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "tresor-coffret-b",
-  "overlap": 299,
+  "overlap": 87,
   "face": 0,
-  "depth": 11,
+  "depth": 5,
   "bbox": [
-   109,
-   392,
-   470,
-   490
+   111,
+   379,
+   446,
+   480
   ],
-  "windowPx": 117543
+  "windowPx": 121079,
+  "layout": "cotes",
+  "verdict": "ok"
  },
  {
   "file": "tresor-escarcelle-a",
@@ -81,7 +95,9 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 134576
+  "windowPx": 138445,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "tresor-escarcelle-b",
@@ -89,7 +105,9 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 133173
+  "windowPx": 137057,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "tresor-reserve-a",
@@ -97,58 +115,68 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 134090
+  "windowPx": 135507,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "tresor-reserve-b",
-  "overlap": 1002,
+  "overlap": 128,
   "face": 0,
-  "depth": 38,
+  "depth": 4,
   "bbox": [
-   94,
-   632,
-   445,
-   679
+   91,
+   650,
+   448,
+   684
   ],
-  "windowPx": 144326
+  "windowPx": 146535,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "tresor-reserve-c",
-  "overlap": 6690,
+  "overlap": 7171,
   "face": 0,
-  "depth": 78,
+  "depth": 83,
   "bbox": [
-   314,
-   593,
-   434,
-   708
+   315,
+   594,
+   437,
+   713
   ],
-  "windowPx": 135209
+  "windowPx": 138514,
+  "layout": "selfie",
+  "verdict": "ok"
  },
  {
   "file": "tresor-tresor-a",
-  "overlap": 899,
+  "overlap": 58,
   "face": 0,
-  "depth": 16,
+  "depth": 4,
   "bbox": [
-   105,
-   330,
-   445,
-   416
+   116,
+   334,
+   439,
+   378
   ],
-  "windowPx": 134297
+  "windowPx": 136056,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "tresor-tresor-b",
-  "overlap": 422,
+  "overlap": 96,
   "face": 0,
-  "depth": 14,
+  "depth": 5,
   "bbox": [
-   100,
-   397,
-   439,
-   492
+   98,
+   424,
+   443,
+   490
   ],
-  "windowPx": 141843
+  "windowPx": 145368,
+  "layout": "cotes",
+  "verdict": "ok"
  }
 ]

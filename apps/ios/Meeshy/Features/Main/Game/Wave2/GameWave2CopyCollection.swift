@@ -249,3 +249,45 @@ extension GameText {
     static var rarityMeasuring: String { String(localized: "game2.rarity.measuring", defaultValue: "Rareté en cours de mesure", bundle: .main) }
 
 }
+
+// MARK: - La constellation (#10053) — mêmes clés et mêmes textes que le web (`game.constellation.*`)
+
+extension GameText {
+    static var constellationTitle: String { String(localized: "game.constellation.title", defaultValue: "Constellation", bundle: .main) }
+
+    static func constellationStars(_ count: Int) -> String {
+        let number = GameCopy.formatCount(count)
+        return GameCopy.isSingular(count)
+            ? String(localized: "game.constellation.stars.one", defaultValue: "\(number) étoile allumée", bundle: .main)
+            : String(localized: "game.constellation.stars.other", defaultValue: "\(number) étoiles allumées", bundle: .main)
+    }
+
+    static func constellationNext(_ count: Int) -> String {
+        let number = GameCopy.formatCount(count)
+        return GameCopy.isSingular(count)
+            ? String(localized: "game.constellation.next.one", defaultValue: "Encore \(number) fragment d’étoile pour la prochaine étoile", bundle: .main)
+            : String(localized: "game.constellation.next.other", defaultValue: "Encore \(number) fragments d’étoile pour la prochaine étoile", bundle: .main)
+    }
+
+    static var constellationHow: String {
+        String(localized: "game.constellation.how", defaultValue: "Une étoile s’allume tous les dix fragments d’étoile collectés. Chacune débloque un cosmétique de profil, sans avantage de jeu.", bundle: .main)
+    }
+
+    static var constellationCosmetics: String { String(localized: "game.constellation.cosmetics", defaultValue: "Cosmétiques débloqués", bundle: .main) }
+
+    static func constellationCosmetic(kind: String, star: String) -> String {
+        String(localized: "game.constellation.cosmetic", defaultValue: "\(kind) · étoile \(star)", bundle: .main)
+    }
+
+    static func constellationKind(_ kind: ConstellationCosmeticKind) -> String {
+        switch kind {
+        case .halo: String(localized: "game.constellation.kind.halo", defaultValue: "Halo", bundle: .main)
+        case .frame: String(localized: "game.constellation.kind.frame", defaultValue: "Cadre", bundle: .main)
+        case .sparkle: String(localized: "game.constellation.kind.sparkle", defaultValue: "Scintillement", bundle: .main)
+        }
+    }
+
+    static var constellationVisibility: String {
+        String(localized: "game.constellation.visibility", defaultValue: "Ta constellation et ses cosmétiques se montrent selon le réglage de la vitrine.", bundle: .main)
+    }
+}

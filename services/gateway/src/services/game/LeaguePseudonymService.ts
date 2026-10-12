@@ -21,7 +21,8 @@
 import { randomInt } from 'node:crypto';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { checkLeaguePseudonym, leaguePseudonymFromDraw } from '@meeshy/shared/utils/game/league';
-import { seasonAt } from '@meeshy/shared/utils/game/season';
+import { scheduledSeasonAt } from '@meeshy/shared/utils/game/season-schedule';
+import { seasonSchedule } from './SeasonScheduleService';
 import { GameRefusal } from './GameRefusal';
 import { dayKeyOf } from './gameClock';
 
@@ -86,7 +87,7 @@ export class LeaguePseudonymService {
    * l'unicité se retire.
    */
   async ensure(userId: string, now: Date = new Date()): Promise<string> {
-    const season = seasonAt(dayKeyOf(now, null));
+    const season = scheduledSeasonAt(await seasonSchedule(this.prisma), dayKeyOf(now, null));
     const stored = (await this.prisma.leaguePseudonym.findUnique({
       where: { userId },
       select: { pseudonym: true, kind: true, seasonNumber: true },
@@ -134,7 +135,7 @@ export class LeaguePseudonymService {
     }
     if (this.isOffensive(params.value)) throw new GameRefusal('LEAGUE_PSEUDONYM_FORBIDDEN', { reason: 'offensive' });
 
-    const season = seasonAt(dayKeyOf(new Date(), null));
+    const season = scheduledSeasonAt(await seasonSchedule(this.prisma), dayKeyOf(new Date(), null));
     try {
       await this.prisma.leaguePseudonym.upsert({
         where: { userId: params.userId },

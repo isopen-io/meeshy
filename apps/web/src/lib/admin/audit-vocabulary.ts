@@ -133,6 +133,13 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
   // ── Réglages de la plateforme ──────────────────────────────────────────────
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
+  // ── Le calendrier des saisons du Jeu (#10232, #10233) ──────────────────────
+  GAME_SEASON_UPDATE: entry('settings', 'calendarBlank', 'warning'),
+  GAME_SEASON_PROPOSAL_REQUEST: entry('settings', 'robot', 'info'),
+  GAME_SEASON_PROPOSAL_CREATE: entry('settings', 'robot', 'neutral'),
+  GAME_SEASON_PROPOSAL_DISCARDED: entry('settings', 'prohibit', 'warning'),
+  GAME_SEASON_PROPOSAL_APPROVE: entry('settings', 'checkCircle', 'success'),
+  GAME_SEASON_PROPOSAL_REJECT: entry('settings', 'prohibit', 'neutral'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

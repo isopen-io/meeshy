@@ -67,6 +67,14 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case dashboard
     case dashboardInvalidateCache
     case engagementScale
+    case gameSeasons
+    case gameSeasonsAppEvents
+    case gameSeasonsAppEventsYaml
+    case gameSeasonsByNumber(number: String)
+    case gameSeasonsByNumberProposals(number: String)
+    case gameSeasonsProposals
+    case gameSeasonsProposalsByIdApprove(id: String)
+    case gameSeasonsProposalsByIdReject(id: String)
     case invitations
     case invitationsById(id: String)
     case invitationsStats
@@ -192,6 +200,14 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .dashboard: return "/api/v1/admin/dashboard"
         case .dashboardInvalidateCache: return "/api/v1/admin/dashboard/invalidate-cache"
         case .engagementScale: return "/api/v1/admin/engagement-scale"
+        case .gameSeasons: return "/api/v1/admin/game/seasons"
+        case .gameSeasonsAppEvents: return "/api/v1/admin/game/seasons/app-events"
+        case .gameSeasonsAppEventsYaml: return "/api/v1/admin/game/seasons/app-events.yaml"
+        case .gameSeasonsByNumber(let number): return "/api/v1/admin/game/seasons/\(number)"
+        case .gameSeasonsByNumberProposals(let number): return "/api/v1/admin/game/seasons/\(number)/proposals"
+        case .gameSeasonsProposals: return "/api/v1/admin/game/seasons/proposals"
+        case .gameSeasonsProposalsByIdApprove(let id): return "/api/v1/admin/game/seasons/proposals/\(id)/approve"
+        case .gameSeasonsProposalsByIdReject(let id): return "/api/v1/admin/game/seasons/proposals/\(id)/reject"
         case .invitations: return "/api/v1/admin/invitations"
         case .invitationsById(let id): return "/api/v1/admin/invitations/\(id)"
         case .invitationsStats: return "/api/v1/admin/invitations/stats"

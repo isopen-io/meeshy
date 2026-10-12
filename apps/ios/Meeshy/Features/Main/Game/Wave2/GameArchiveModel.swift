@@ -121,8 +121,12 @@ enum GameSeasonShown: Equatable {
     /// L'état se CALCULE (#10131) : celui que la passerelle a servi, avancé par l'horloge locale
     /// (`GameSeason.liveTense`, miroir de `liveSeasonTense`) — une copie « à venir » gardée hors ligne bascule
     /// d'elle-même le jour de son ouverture. Miroir de `seasonShown` (`apps/web/src/components/game-archive.tsx`).
+    ///
+    /// Une saison FUTURE que ni le bloc ni la lecture ne portent encore se peint depuis le calendrier SERVI (#10232) —
+    /// ses dates décalées, son thème — plutôt qu'un squelette ou un échec hors ligne ; en pause, elle n'a pas de date
+    /// et attend sa lecture. Sans calendrier fourni (`nil`), la règle d'avant.
     static func of(focus: Int?, game: GameBlock, load: GameLoad<GameSeasonArchive>,
-                   moment: LeagueMoment = .local()) -> GameSeasonShown {
+                   moment: LeagueMoment = .local(), schedule: SeasonSchedule? = nil) -> GameSeasonShown {
         guard let focus else { return .current }
         if let archive = load.value, archive.number == focus {
             let dates = GameUpcomingSeasonBlock(number: archive.number, themeKey: archive.themeKey,
@@ -143,6 +147,11 @@ enum GameSeasonShown: Equatable {
             case .current: return .opened(upcoming)
             case .past: break
             }
+        }
+        if let calendar = schedule?.calendar(number: focus),
+           GameSeason.tense(startDay: calendar.startDay, endDay: calendar.endDay, at: moment) == .upcoming {
+            return .upcoming(GameUpcomingSeasonBlock(number: calendar.number, themeKey: calendar.themeKey,
+                                                     startDay: calendar.startDay, endDay: calendar.endDay))
         }
         if let message = load.errorMessage, !load.isLoading { return .failed(message) }
         return .skeleton

@@ -20,11 +20,14 @@ enum GameVisitorLoading {
             let cachedShowcase = await showcase.cached(userId: userId)
             let cachedStanding = await standing.cached(userId: userId)
             guard !Task.isCancelled else { return nil }
-            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding))
+            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding,
+                                        constellationStars: GameVisitorShowcase.constellationStars(cachedShowcase)))
         }
         async let freshShowcase = showcase.load(userId: userId)
         async let freshStanding = standing.load(userId: userId)
-        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(await freshShowcase), standing: await freshStanding)
+        let showcaseRead = await freshShowcase
+        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(showcaseRead), standing: await freshStanding,
+                                   constellationStars: GameVisitorShowcase.constellationStars(showcaseRead))
         return Task.isCancelled ? nil : read
     }
 }
@@ -48,6 +51,7 @@ struct GameContactStrip: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     if let standing = shown.standing { GameStandingView(content: standing, compact: true) }
                     if !shown.entries.isEmpty { trophies(shown.entries) }
+                    if let stars = shown.constellationStars { constellation(stars) }
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("game.contact.strip")
@@ -60,6 +64,20 @@ struct GameContactStrip: View {
                 read = fresh
             }
         }
+    }
+
+    /// Sa constellation (#10053) : ses étoiles allumées, en une ligne — la vitrine l'ouvre, le serveur les fige au mois.
+    private func constellation(_ stars: Int) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "sparkles")
+                .foregroundColor(MeeshyColors.brandPrimary)
+                .accessibilityHidden(true)
+            Text(GameText.constellationTitle + " · " + GameText.constellationStars(stars))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(ThemeManager.shared.textSecondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game.contact.constellation")
     }
 
     private func trophies(_ entries: [GameVisitorShowcase.Entry]) -> some View {

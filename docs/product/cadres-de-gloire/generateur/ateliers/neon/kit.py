@@ -648,7 +648,7 @@ def birds(card, spots, glow=None):
     """Mee et Meo à des places libres : [(pose, x, y, size, flip, rot)]. `glow` : une lueur colorée sous chacun."""
     for pose, x, y, s, flip, rot in spots:
         if glow:
-            card.add(f'<ellipse cx="{f(x)}" cy="{f(y + s * 0.08)}" rx="{f(s * 0.42)}" ry="{f(s * 0.36)}" fill="{glow}" opacity="0.38" filter="{ublur(card, 12)}"/>')
+            card.add(f'<g data-follows-bird="{card.birds}"><ellipse cx="{f(x)}" cy="{f(y + s * 0.08)}" rx="{f(s * 0.42)}" ry="{f(s * 0.36)}" fill="{glow}" opacity="0.38" filter="{ublur(card, 12)}"/></g>')
         bird(card, pose, x, y, s, flip=flip, rotate=rot)
 
 

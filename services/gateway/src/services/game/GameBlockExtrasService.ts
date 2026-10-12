@@ -17,6 +17,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { GameAchievementRarities, GamePhotoBlock } from '@meeshy/shared/types/game';
+import { seasonSchedule } from './SeasonScheduleService';
 import { buildGameBlockExtras, type GameBlockExtras, type GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { AchievementRarityService } from './AchievementRarityService';
@@ -70,8 +71,10 @@ export class GameBlockExtrasService {
   private readonly rarity: Pick<AchievementRarityService, 'served'>;
 
   private readonly photo: Pick<GamePhotoService, 'block'>;
+  private readonly prisma: PrismaClient;
 
   constructor(prisma: PrismaClient, deps: GameBlockExtrasDeps = {}) {
+    this.prisma = prisma;
     this.profile = deps.profile ?? new GameProfileService(prisma);
     this.league = deps.league ?? new LeagueService(prisma, { profile: this.profile });
     this.seasons =
@@ -108,7 +111,7 @@ export class GameBlockExtrasService {
   async build(base: ExtrasBase): Promise<GameBlockExtras | null> {
     const now = base.now ?? new Date();
     try {
-      const [placement, friends, pseudonym, duo, season, trophies, atlas, settings] = await Promise.all([
+      const [placement, friends, pseudonym, duo, season, trophies, atlas, settings, schedule] = await Promise.all([
         this.league.placement(base.userId, now),
         this.league.friendsFacts(base.userId, now),
         this.league.pseudonyms.current(base.userId),
@@ -117,6 +120,7 @@ export class GameBlockExtrasService {
         this.trophies.list(base.userId),
         this.atlas.state(base.userId),
         this.profile.settings(base.userId),
+        seasonSchedule(this.prisma),
       ]);
 
       const facts: GameBlockExtrasFacts = {
@@ -141,6 +145,7 @@ export class GameBlockExtrasService {
         },
         duo,
         season: { stars: season.stars, claimedSteps: season.claimedSteps, sealOwned: season.sealOwned },
+        schedule,
         trophies,
         showcaseOrder: settings.showcaseOrder,
         atlas,

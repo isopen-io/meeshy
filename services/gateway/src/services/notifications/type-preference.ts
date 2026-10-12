@@ -34,6 +34,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'game_league_result':
     case 'game_season_step':
     case 'game_mission_window': return prefs.gameEnabled ?? true;
+    case 'game_photo_moment':   return (prefs.gameEnabled ?? true) && (prefs.gamePhotoEnabled ?? true);
     case 'member_joined':     return prefs.memberJoinedEnabled;
     case 'message_reply':
     case 'reply':             return prefs.replyEnabled;

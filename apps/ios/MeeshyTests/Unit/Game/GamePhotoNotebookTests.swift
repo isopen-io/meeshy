@@ -77,7 +77,8 @@ final class GamePhotoNotebookTests: XCTestCase {
             mirror: true, showFlame: true, showLink: false, momentAt: Date(timeIntervalSince1970: 1_789_000_000)
         )
         let outcome = await sut.keep(moment, photo: photo(.selfie, source: Data("source".utf8), recipe: recipe))
-        let entry = try XCTUnwrap(await sut.list().first)
+        let listed = await sut.list()
+        let entry = try XCTUnwrap(listed.first)
         XCTAssertEqual(outcome, .kept)
         XCTAssertEqual(entry.recipe, recipe)
         XCTAssertNil(entry.squareFile)
@@ -105,7 +106,8 @@ final class GamePhotoNotebookTests: XCTestCase {
     func test_keep_aCardAlone_hasNoSource() async throws {
         let (sut, _, _) = makeSUT()
         _ = await sut.keep(moment, photo: photo(.card))
-        let entry = try XCTUnwrap(await sut.list().first)
+        let listed = await sut.list()
+        let entry = try XCTUnwrap(listed.first)
         XCTAssertNil(entry.sourceFile)
         XCTAssertEqual(entry.retakeChoices, [.selfie, .card])
     }
@@ -120,7 +122,8 @@ final class GamePhotoNotebookTests: XCTestCase {
             "createdAt": "2026-01-01T00:00:00Z", "expiresAt": NSNull(), "mode": "selfie",
             "storyFile": "start-story.jpg", "squareFile": "start-square.jpg",
         ]], in: directory)
-        let entry = try XCTUnwrap(await sut.list().first)
+        let listed = await sut.list()
+        let entry = try XCTUnwrap(listed.first)
         XCTAssertEqual(entry.momentId, "start")
         XCTAssertEqual(entry.recipe, NotebookRecipe())
         XCTAssertEqual(entry.retakeChoices, [.selfie, .card])
@@ -162,7 +165,8 @@ final class GamePhotoNotebookTests: XCTestCase {
         _ = await sut.keep(moment, photo: KeptPhoto(story: Data("before".utf8), mode: .card))
         let failing = failingSUT(directory: directory, error: CocoaError(.fileWriteOutOfSpace))
         let outcome = await failing.keep(moment, photo: KeptPhoto(story: Data("after".utf8), mode: .selfie, source: Data("source".utf8)))
-        let entry = try XCTUnwrap(await sut.list().first)
+        let listed = await sut.list()
+        let entry = try XCTUnwrap(listed.first)
         let story = await sut.imageData(for: entry, square: false)
         XCTAssertEqual(outcome, .noSpace)
         XCTAssertEqual(entry.mode, .card)
@@ -180,7 +184,8 @@ final class GamePhotoNotebookTests: XCTestCase {
         _ = await sut.keep(moment, photo: photo(.selfie, source: Data("source".utf8)))
         let files = try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
         XCTAssertEqual(files, ["index.json", "rank_voix_2-source.jpg", "rank_voix_2-story.jpg"])
-        let entry = try XCTUnwrap(await sut.list().first)
+        let listed = await sut.list()
+        let entry = try XCTUnwrap(listed.first)
         let story = await sut.imageData(for: entry, square: false)
         XCTAssertEqual(story, Data("story".utf8))
     }

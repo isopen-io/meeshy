@@ -322,6 +322,8 @@ export function fakeGameDb(): FakeGameDb {
   // `_id` dérivé de (userId, stepId) (`photoMomentId`), plus l'unique posé par la migration du registre.
   const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt'] }));
   const userStickerPack = flattenCompound(new Model({ uniques: [['userId', 'packSlug']], optional: ['installedAt'] }));
+  // Le calendrier des saisons servi (#10016) : vide, la loi rend la constante.
+  const gameSeasonDefinition = flattenCompound(new Model({ uniques: [['number'], ['revision']] }));
   const models = {
     user,
     gloryLedger,
@@ -356,6 +358,7 @@ export function fakeGameDb(): FakeGameDb {
     mythicEdition,
     gamePhotoMoment,
     userStickerPack,
+    gameSeasonDefinition,
   };
 
   /**

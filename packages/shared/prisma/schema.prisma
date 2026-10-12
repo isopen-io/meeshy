@@ -1118,6 +1118,58 @@ model Message {
   @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
 }
 
+/// La traduction d'un message qu'un MEMBRE a faite sur son appareil et PARTAGÉE
+/// aux autres (#9899) — gardée SCELLÉE : le serveur ne la lit jamais.
+///
+/// `payload` est le base64 d'une enveloppe AES-256-GCM (nonce ‖ chiffré ‖ tag)
+/// que seuls les lecteurs du message savent ouvrir. La passerelle la stocke et
+/// la relaie octet pour octet, sans la déchiffrer ni l'analyser (contrat :
+/// `packages/shared/types/shared-translation.ts`). `kdf` nomme la dérivation de
+/// la clé (`message-content` | `message-secret`) : c'est le seul indice que le
+/// serveur ait, et il ne sert qu'à refuser `message-content` quand le message
+/// est chiffré de bout en bout.
+///
+/// UNE traduction par `(messageId, targetLanguage, sourceVersion)` : le PREMIER
+/// partage gagne, l'index unique règle la course et le perdant relit la
+/// gagnante. `sourceVersion` est la version du message qui a été traduite —
+/// `Message.editedAt` en ISO au moment du partage, ou `"original"` pour un
+/// message jamais édité. Une édition change la version : l'ancienne ligne n'est
+/// plus servie (la lecture compare à la version COURANTE) et un nouveau partage
+/// redevient possible.
+///
+/// `sharedById` est le `Participant.id` du partageur — le même espace
+/// d'identifiants que `Message.senderId`. `conversationId` est une COPIE
+/// immuable de `Message.conversationId`, écrite par le serveur depuis la ligne
+/// du message : elle adresse la diffusion et l'index de lecture sans relire le
+/// message.
+///
+/// Aucune relation vers `Message`, à dessein : un message s'efface presque toujours
+/// en douceur (`deletedAt`) et la lecture écarte déjà un message effacé. Deux chemins
+/// retirent pourtant la LIGNE : la compensation d'un envoi dont la copie des pièces
+/// jointes échoue (`MessageProcessor.handleAttachments`) et le balayage des avis
+/// d'arrivée d'un expéditeur disparu (`repairOrphanedMessageSenders`). Une traduction
+/// partagée y survivrait sans message, mais elle n'est jamais SERVIE : la lecture
+/// charge d'abord les messages demandés et ne rend une enveloppe que pour la version
+/// COURANTE d'un message qu'elle sert elle-même. Le balayage de ces lignes
+/// orphelines est #10008. Prisma n'émet pas les index sur MongoDB : ils sont posés à
+/// la main par `prisma/migrations/2026-10-10-shared-translation-indexes.mongodb.js`.
+model SharedTranslation {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  targetLanguage String
+  sourceVersion  String
+  kdf            String
+  payload        String
+  sharedById     String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@unique([messageId, targetLanguage, sourceVersion])
+  @@index([conversationId, messageId])
+  // L'effacement par COMPTE (`eraseSharedTranslationsOfAccount`) retire par partageur.
+  @@index([sharedById])
+}
+
 /// Traduction d'un message
 /// Attachement de fichier pour un message
 model MessageAttachment {
@@ -5537,6 +5589,58 @@ model GameSeason {
 
   @@unique([userId, number])
   @@index([number, settledAt])
+}
+
+/// LE CALENDRIER DES SAISONS (#10016) : une définition par saison PROGRAMMÉE par
+/// l'admin (ou proposée par l'IA puis validée). Ce qui n'y est pas se dérive de la
+/// loi (`packages/shared/utils/game/season-schedule.ts`) : saison 1 au
+/// 2026-12-21, saisons enchaînées de 56 jours. `startDay` est un lundi ; une
+/// saison en cours ou passée ne se réécrit pas. `revision` croît à chaque écriture
+/// (unique : deux écritures concurrentes ne peuvent pas prendre la même) et sert
+/// d'ETag au calendrier servi. Seed : migration
+/// `2026-10-11-game-season-calendar.mongodb.js`.
+model GameSeasonDefinition {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  number     Int      @unique
+  startDay   String
+  /// `scheduled` | `paused`
+  status     String   @default("scheduled")
+  themeKey   String
+  stepPoints Int      @default(100)
+  /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
+  copy       Json?
+  revision   Int      @unique
+  updatedBy  String?  @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Une PROPOSITION de saison faite par l'IA (`services/agent`, #10016) : thème,
+/// textes en sept langues, points d'étape. Elle reste `pending` tant qu'un
+/// administrateur ne l'a ni validée (`approved` → écrite dans
+/// `GameSeasonDefinition`, `appliedRevision`) ni rejetée. Rien n'est publié sans
+/// cette validation.
+model GameSeasonProposal {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  number          Int
+  /// `pending` | `approved` | `rejected`
+  status          String    @default("pending")
+  startDay        String
+  themeKey        String
+  stepPoints      Int
+  copy            Json
+  brief           String?
+  model           String?
+  createdBy       String    @db.ObjectId
+  reviewedBy      String?   @db.ObjectId
+  reviewedAt      DateTime?
+  rejectReason    String?
+  appliedRevision Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([number])
 }
 
 /// Un TROPHÉE de la vitrine (#9387) : coupe de ligue, coupe de saison, Prestige,

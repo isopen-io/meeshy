@@ -30,6 +30,7 @@ import { buildPackIndex, EMPTY_PACK_INDEX, type PackIndex } from '../../../../se
 import { GameBlockService } from '../../../../services/game/GameBlockService';
 import { MissionService } from '../../../../services/game/MissionService';
 import { GamePhotoService, photoMomentId } from '../../../../services/game/GamePhotoService';
+import { PHOTO_MOMENTS_ACCOUNT_MAX, PHOTO_STATIC_STEP_IDS } from '@meeshy/shared/utils/game/photo-step-ids';
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -239,11 +240,75 @@ describe('POST /me/game/photo-moments/presented', () => {
     const db = fakeGameDb();
     seedUser(db);
     const { app } = await buildApp(db);
-    const ids = (n: number) => Array.from({ length: n }, (_, i) => `meesh:${i + 1}`);
+    const ids = (n: number) => PHOTO_STATIC_STEP_IDS.slice(0, n);
     expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00001', stepIds: ids(65) })).statusCode).toBe(400);
     expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00002', stepIds: ['<script>'] })).statusCode).toBe(400);
     expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00003', stepIds: ids(64) })).statusCode).toBe(200);
     expect(db.gamePhotoMoment.rows).toHaveLength(64);
+    await app.close();
+  });
+});
+
+describe('POST /me/game/photo-moments/presented — seules les étapes CONNUES entrent au registre (revue adverse)', () => {
+  const dayId = (offset: number) => `day:${new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10)}`;
+
+  it('une identité bien formée mais inventée ⇒ 400 PHOTO_STEP_UNKNOWN, rien n’est écrit, pas même ses voisines connues', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const { app } = await buildApp(db);
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00001', stepIds: ['start', 'invente:1', 'rank:empereur:1'] });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ success: false, code: 'PHOTO_STEP_UNKNOWN' });
+    expect(db.gamePhotoMoment.rows).toEqual([]);
+    await app.close();
+  });
+
+  it('`day:` hors de J-2..J+1 ⇒ 400 ; dans la fenêtre ⇒ accepté', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const { app } = await buildApp(db);
+    expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00001', stepIds: [dayId(-5)] })).statusCode).toBe(400);
+    expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00002', stepIds: [dayId(3)] })).statusCode).toBe(400);
+    expect(db.gamePhotoMoment.rows).toEqual([]);
+    const ok = await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00003', stepIds: [dayId(0)] });
+    expect(ok.statusCode).toBe(200);
+    expect(db.gamePhotoMoment.rows.map((row) => row.stepId)).toEqual([dayId(0)]);
+    await app.close();
+  });
+
+  it('plafond atteint ⇒ aucune ligne neuve, la réponse ne rend que les étapes déjà gardées, et leur rejeu reste accepté', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const keptAt = new Date('2026-10-11T08:00:00.000Z');
+    db.gamePhotoMoment.rows.push({ id: photoMomentId(USER, 'start'), userId: USER, stepId: 'start', presentedAt: keptAt, updatedAt: keptAt });
+    for (let i = 1; i < PHOTO_MOMENTS_ACCOUNT_MAX; i += 1) {
+      db.gamePhotoMoment.rows.push({ id: `seed${String(i).padStart(20, '0')}`, userId: USER, stepId: `seed:${i}`, updatedAt: keptAt });
+    }
+    const { app } = await buildApp(db);
+
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00001', stepIds: ['start', 'meesh:1'] });
+    expect(res.statusCode).toBe(200);
+    expect(photoMomentsPresentedResponseSchema.parse(res.json().data)).toEqual({ presented: [{ stepId: 'start', presentedAt: keptAt.toISOString() }] });
+    expect(db.gamePhotoMoment.rows).toHaveLength(PHOTO_MOMENTS_ACCOUNT_MAX);
+    expect(db.gamePhotoMoment.rows.some((row) => row.stepId === 'meesh:1')).toBe(false);
+
+    const replay = await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00002', stepIds: ['start'] });
+    expect(replay.json().data).toEqual({ presented: [{ stepId: 'start', presentedAt: keptAt.toISOString() }] });
+    await app.close();
+  });
+
+  it('sous le plafond, les places restantes vont aux premières étapes neuves du lot', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const at = new Date('2026-10-11T08:00:00.000Z');
+    for (let i = 0; i < PHOTO_MOMENTS_ACCOUNT_MAX - 1; i += 1) {
+      db.gamePhotoMoment.rows.push({ id: `seed${String(i).padStart(20, '0')}`, userId: USER, stepId: `seed:${i}`, updatedAt: at });
+    }
+    const { app } = await buildApp(db);
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'pres-00001', stepIds: ['start', 'meesh:1'] });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.presented.map((p: { stepId: string }) => p.stepId)).toEqual(['start']);
+    expect(db.gamePhotoMoment.rows).toHaveLength(PHOTO_MOMENTS_ACCOUNT_MAX);
     await app.close();
   });
 });

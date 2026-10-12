@@ -238,6 +238,12 @@ services:
       # PRODUCTION : la première passe efface l'arriéré — feu vert du porteur et
       # sauvegarde vérifiée AVANT de poser RETENTION_PURGE_ENABLED=true sur l'hôte.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
+      # #10175 (L19) — le push d'une étape du jeu franchie app fermée : détection, ligne de
+      # base et UNE notification groupée par jour au plus. ARMÉ par la seule valeur exacte on ;
+      # toute autre valeur, absence comprise, le laisse éteint (relu à chaque passage du job).
+      # PRODUCTION : livré ÉTEINT ; il s'allume après la recette de staging, par la seule
+      # valeur exacte on sur l'hôte puis un redémarrage de la passerelle (aucun code à redéployer).
+      - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-off}
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
@@ -330,6 +336,7 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
       - AGENT_HOST=agent
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}
       - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
@@ -489,6 +496,7 @@ services:
       - ZMQ_PUB_PORT=5561
       - NODE_ENV=production
       - PORT=3200
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
     depends_on:
       - database
       - redis

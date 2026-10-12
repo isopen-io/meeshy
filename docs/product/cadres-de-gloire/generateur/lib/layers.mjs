@@ -2,17 +2,23 @@
 // ensemble de natures pour rendre une couche. Les natures :
 //   photo, photo-bg     la photo factice et son fond d'atmosphère (lib/base.py, photo())
 //   backdrop            un décor dessiné AVANT la photo (donc derrière elle)
-//   decor               le décor
-//   decor-<mode>        ce qui s'y fond en `mix-blend-mode` (screen, multiply…)
-//   decor-late          le décor normal dessiné APRÈS le premier élément fondu (il le recouvre)
-//   front-under         un décor dessiné après le blason ou la plaque, mais avant les oiseaux
-//   front-over          un décor dessiné après les oiseaux
-//   crest, plate, birds le blason, le panneau de la plaque, Mee et Meo
+//   grade-<n>           le décor, découpé en PASSES consécutives de même mode de fusion (normal, screen,
+//                       multiply…) : hors de la fenêtre elles forment `decor`, dans la fenêtre chaque passe est une
+//                       couche `grade` posée sur la photo dans l'ordre du SVG, avec son mode
+//   front:<rang>        un décor dessiné après le premier ancrage (blason, plaque, oiseau), en PASSES ordonnées
+//                       comme le grade : chaque suite d'éléments entre deux ancrages prend le rang de l'ancrage
+//                       qu'elle PRÉCÈDE — `under-birds` (la lueur posée sous chaque oiseau en fait partie),
+//                       `under-plate`, `under-crest` — et la suite qui suit le dernier ancrage est `over-birds`.
+//                       Une lueur dessinée après la plaque reste ainsi AU-DESSUS d'elle, et le liseré dessiné
+//                       avant elle, dessous.
+//   crest, plate, birds le blason, le panneau de la plaque, Mee et Meo posés (lib/base.py, bird()) ; une image
+//                       de Mee hors d'un oiseau posé (frappée sur une pièce, en hologramme) est une ILLUSTRATION
+//                       du décor, comptée à part (`art`)
 //   text                tout `<text>` (et ses tspan, textPath) : un emplacement vivant
 // Un élément de définition (masque, motif, filtre, dégradé…) n'est jamais touché : seul ce qui se PEINT l'est.
 
-export const BLENDS = ['screen', 'multiply', 'color'];
-export const KINDS = ['photo', 'photo-bg', 'backdrop', 'decor', ...BLENDS.map((b) => `decor-${b}`), 'decor-late', 'front-under', 'front-over', 'crest', 'plate', 'birds', 'text'];
+export const KINDS = ['photo', 'photo-bg', 'backdrop', 'grade-<n>', 'front:<rang>', 'crest', 'plate', 'birds', 'text'];
+export const isFront = (kind) => kind.startsWith('front:');
 
 export function classify() {
   const DEFS = new Set(['defs', 'mask', 'clippath', 'pattern', 'filter', 'lineargradient', 'radialgradient', 'symbol', 'marker', 'style', 'title', 'desc', 'metadata']);
@@ -29,7 +35,6 @@ export function classify() {
   };
   walk(root);
   const layerOf = (el) => el.closest('[data-layer]:not([data-layer="root"])')?.getAttribute('data-layer') ?? null;
-  const embossed = (el) => Boolean(el.closest('[filter*="emb"]'));
   const blendOf = (el) => {
     for (let n = el; n && n !== root; n = n.parentElement) {
       const mode = getComputedStyle(n).mixBlendMode;
@@ -38,27 +43,28 @@ export function classify() {
     return 'normal';
   };
   const tagged = all.map((el) => {
-    const tag = el.tagName.toLowerCase();
     if (el.closest('text')) return 'text';
     const layer = layerOf(el);
-    if (layer === 'birds' || (tag === 'image' && !embossed(el))) return 'birds';
+    if (layer === 'birds') return 'birds';
     if (layer === 'photo' || layer === 'photo-bg' || layer === 'crest' || layer === 'plate') return layer;
     return null;
   });
   const first = (pred) => tagged.findIndex(pred);
   const firstPhoto = first((k) => k === 'photo' || k === 'photo-bg');
   const firstAnchor = first((k) => k === 'crest' || k === 'plate' || k === 'birds');
-  const firstBird = first((k) => k === 'birds');
+  const ANCHORS = new Set(['crest', 'plate', 'birds']);
+  const nextAnchor = new Array(all.length).fill(null);
+  for (let i = all.length - 2; i >= 0; i--) nextAnchor[i] = ANCHORS.has(tagged[i + 1]) ? tagged[i + 1] : nextAnchor[i + 1];
+  const RANKS = { crest: 'under-crest', plate: 'under-plate', birds: 'under-birds' };
   const blends = all.map((el, i) => (tagged[i] || CONTAINERS.has(el.tagName.toLowerCase()) ? 'normal' : blendOf(el)));
-  const firstBlend = blends.findIndex((b) => b !== 'normal');
+  const runs = [];
   all.forEach((el, i) => {
     const kind = tagged[i] ?? (() => {
       if (CONTAINERS.has(el.tagName.toLowerCase())) return 'group';
       if (firstPhoto >= 0 && i < firstPhoto) return 'backdrop';
-      if (firstBird >= 0 && i > firstBird) return 'front-over';
-      if (firstAnchor >= 0 && i > firstAnchor) return 'front-under';
-      if (blends[i] !== 'normal') return `decor-${blends[i]}`;
-      return firstBlend >= 0 && i > firstBlend ? 'decor-late' : 'decor';
+      if (firstAnchor >= 0 && i > firstAnchor) return `front:${nextAnchor[i] ? RANKS[nextAnchor[i]] : 'over-birds'}`;
+      if (runs.at(-1)?.blend !== blends[i]) runs.push({ kind: `grade-${runs.length}`, blend: blends[i] });
+      return runs.at(-1).kind;
     })();
     el.setAttribute('data-k', kind);
   });
@@ -67,7 +73,7 @@ export function classify() {
     const k = el.getAttribute('data-k');
     if (k !== 'group' && order[k] === undefined) order[k] = i;
   });
-  return { order, count: all.length };
+  return { order, runs, count: all.length };
 }
 
 export function show({ kinds, probe = null, flatSlots = null }) {
@@ -117,7 +123,8 @@ export function show({ kinds, probe = null, flatSlots = null }) {
   };
   return {
     text: [...root.querySelectorAll('text')].filter(shown).length,
-    birds: [...root.querySelectorAll('image')].filter((im) => !im.closest('[filter*="emb"]')).filter(shown).length,
+    birds: [...root.querySelectorAll('[data-layer="birds"] image')].filter(shown).length,
+    art: [...root.querySelectorAll('image')].filter((im) => !im.closest('[data-layer="birds"]')).filter(shown).length,
   };
 }
 
@@ -189,7 +196,7 @@ export function read() {
       bbox: box(el.getBoundingClientRect()),
     };
   });
-  const birds = [...root.querySelectorAll('image')].filter((im) => !im.closest('[filter*="emb"]')).map((im) => {
+  const birds = [...root.querySelectorAll('[data-layer="birds"] image')].map((im) => {
     const m = im.getCTM();
     const w = Number.parseFloat(im.getAttribute('width'));
     const h = Number.parseFloat(im.getAttribute('height'));
@@ -216,5 +223,6 @@ export function read() {
     : { x: r.x, y: r.y, r: r.x + r.width, b: r.y + r.height }, null);
   const crest = union ? { box: box({ x: union.x, y: union.y, width: union.r - union.x, height: union.b - union.y }) } : null;
   const motifs = (document.querySelector('svg')?.getAttribute('data-motifs') ?? '').split(' ').filter(Boolean);
-  return { texts, birds, crest, motifs };
+  const art = [...root.querySelectorAll('image')].filter((im) => !im.closest('[data-layer="birds"]')).map((im) => box(im.getBoundingClientRect()));
+  return { texts, birds, art, crest, motifs };
 }

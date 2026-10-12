@@ -528,6 +528,7 @@ const it = {
   'game.season.completed': 'Percorso completato: una coppa, un badge datato e {glory} di Gloria.',
   'game.season.none': 'Nessuna stagione è aperta al momento. La prossima inizia presto.',
   'game.season.upcoming': 'La stagione {number} si apre il {date}.',
+  'game.season.paused': 'La stagione è in pausa: la data di apertura sarà annunciata.',
   'game.season.seal.title': 'Fila Sigillo',
   'game.season.seal.body': 'Il Sigillo è puramente decorativo: un oggetto da collezione ogni {every} tappe, senza effetto sul gioco.',
   'game.season.seal.buy': 'Prendi il Sigillo · {price}',
@@ -684,6 +685,7 @@ const it = {
   'game.archive.season.past_title': 'Stagione {number} · conclusa',
   'game.archive.season.current_title': 'Stagione {number} · in corso',
   'game.archive.season.upcoming_title': 'Stagione {number} · in arrivo',
+  'game.archive.season.paused_title': 'Stagione {number} · in pausa',
   'game.archive.season.opened_note': 'La stagione è aperta: il tuo percorso appare appena viene ricaricata.',
   'game.archive.season.dates': 'Dal {start} al {end}',
   'game.archive.season.rewards.one': '{count} ricompensa riscattata',
@@ -700,6 +702,14 @@ const it = {
   'game.archive.week.purged': 'Questa settimana è troppo vecchia: il suo risultato è stato cancellato, come previsto.',
   'game.archive.week.upcoming': 'Questa settimana non è ancora iniziata.',
   'game.archive.week.privacy': 'Si conserva solo il tuo risultato: gli altri membri del gruppo non si possono più consultare.',
+  'game.constellation.title': 'Costellazione',
+  'game.constellation.stars.one': '{count} stella accesa',
+  'game.constellation.stars.other': '{count} stelle accese',
+  'game.constellation.cosmetics': 'Cosmetici sbloccati',
+  'game.constellation.cosmetic': '{kind} · stella {star}',
+  'game.constellation.kind.halo': 'Alone',
+  'game.constellation.kind.frame': 'Cornice',
+  'game.constellation.kind.sparkle': 'Scintillio',
 } as const satisfies GameCoreCatalog;
 
 export default it;

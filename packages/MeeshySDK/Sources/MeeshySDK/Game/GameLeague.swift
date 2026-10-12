@@ -283,6 +283,12 @@ public enum GameLeague {
         return closed ? add(7, to: week) : week
     }
 
+    /// La prochaine fermeture de semaine (#10225) — miroir de `nextLeagueWeekClose` : le dimanche 20 h de la semaine
+    /// du moment, toujours STRICTEMENT après lui. Le seul instant où l'état d'une saison change.
+    public static func nextWeekClose(after moment: LeagueMoment) -> LeagueMoment {
+        weekClose(of: weekOfMoment(moment))
+    }
+
     /// `true` quand le moment est à la fermeture de la semaine ou après.
     public static func isWeekClosed(weekKey: String, at moment: LeagueMoment) -> Bool {
         weekOfMoment(moment) > weekKey

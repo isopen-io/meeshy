@@ -9,8 +9,10 @@
  * `packages/shared/design/call-capture-frames/packs.json` (LC), plus
  * `packages/shared/design/packs/retained.json` (les empreintes qu'une photo
  * gardée peut encore demander après la sortie d'un pack). Un fichier ABSENT
- * vaut un registre VIDE — c'est l'état voulu jusqu'au L3 : le moteur se monte
- * et répond une boutique vide, jamais des données inventées.
+ * vaut un registre VIDE (celui des cadres de capture jusqu'au LC) : le moteur
+ * se monte et répond une boutique vide, jamais des données inventées. Le
+ * registre des cadres de gloire est publié depuis le L3 (#10154), produit par
+ * `generate:glory-frames`.
  *
  * Le registre d'EXEMPLES (`packages/shared/design/packs/samples/glory-frame.json`,
  * demande porteur du 2026-10-11) n'est lu que sous `PACK_SAMPLES=1`, valeur
@@ -18,7 +20,7 @@
  * la pose ; la production, jamais.
  *
  * La liste blanche porte aussi les fichiers qu'un CONTRAT de pack référence
- * (les vignettes de ses cadres) : chaque contrat est lu une fois, au
+ * (vignettes, masques, couches et passes de ses cadres) : chaque contrat est lu une fois, au
  * démarrage, depuis le magasin (`services/gateway/assets/packs/`), et vérifié
  * contre son empreinte — un contrat illisible ou altéré n'ouvre rien.
  *
@@ -31,6 +33,7 @@ import { join } from 'node:path';
 import { parsePackIndex, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import type { PackAssetRef, PackDomain } from '@meeshy/shared/types/content-pack';
 import { parseGloryFramePackContract } from '@meeshy/shared/types/glory-frame-pack';
+import { gloryFrameAssets, parseGloryFrameContract } from '@meeshy/shared/types/glory-frames';
 
 export type PackIndex = {
   /** Les entrées d'un domaine, dans l'ordre éditorial (`order`). */
@@ -130,17 +133,27 @@ function readJson(path: string): ReadResult {
   }
 }
 
-/** Les vignettes du contrat d'un pack de cadres, lu dans le magasin et vérifié contre son empreinte ; sinon rien. */
-function frameContractThumbs(assetsDir: string, entry: PackIndexEntry): readonly PackAssetRef[] {
-  if (entry.domain !== 'glory-frame' || !ASSET_SRC.test(entry.contract.src)) return [];
+type ContractFiles = { readonly refs: readonly PackAssetRef[]; readonly frames: number };
+const NO_CONTRACT: ContractFiles = { refs: [], frames: 0 };
+
+/**
+ * Les fichiers du contrat d'un pack de cadres, lu dans le magasin et vérifié
+ * contre son empreinte : la vignette de chaque cadre et, pour un cadre complet
+ * (L3), son masque, ses couches et ses passes. Contrat illisible ou altéré ⇒ rien.
+ */
+function frameContractFiles(assetsDir: string, entry: PackIndexEntry): ContractFiles {
+  if (entry.domain !== 'glory-frame' || !ASSET_SRC.test(entry.contract.src)) return NO_CONTRACT;
   const path = join(assetsDir, entry.contract.src);
-  if (!existsSync(path)) return [];
+  if (!existsSync(path)) return NO_CONTRACT;
   try {
     const bytes = readFileSync(path);
-    if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return [];
-    return parseGloryFramePackContract(JSON.parse(bytes.toString('utf8')) as unknown)?.contract.frames.map((frame) => frame.thumb) ?? [];
+    if (createHash('sha256').update(bytes).digest('hex') !== entry.contract.sha256) return NO_CONTRACT;
+    const input = JSON.parse(bytes.toString('utf8')) as unknown;
+    const thumbs = parseGloryFramePackContract(input)?.contract.frames.map((frame) => frame.thumb) ?? [];
+    const layers = parseGloryFrameContract(input)?.contract.frames.flatMap(gloryFrameAssets) ?? [];
+    return { refs: [...thumbs, ...layers], frames: thumbs.length };
   } catch {
-    return [];
+    return NO_CONTRACT;
   }
 }
 
@@ -158,11 +171,18 @@ export function loadPackIndex(
   const files = packSamplesEnabled(env) ? [...REGISTRY_FILES, ...SAMPLE_REGISTRY_FILES] : REGISTRY_FILES;
   const registries = files.map((file) => readJson(join(dir, file)));
   const retained = readJson(join(dir, RETAINED_FILE));
+  const contracts = new Map<string, ContractFiles>();
+  const filesOf = (entry: PackIndexEntry): ContractFiles => {
+    const key = `${entry.domain}.${entry.slug}`;
+    const known = contracts.get(key) ?? frameContractFiles(assetsDir, entry);
+    contracts.set(key, known);
+    return known;
+  };
   const index = buildPackIndex({
     registries: registries.map(({ value }) => value),
     retained: retained.value,
-    contractRefs: (entry) => frameContractThumbs(assetsDir, entry),
-    contractItemCount: (entry) => frameContractThumbs(assetsDir, entry).length,
+    contractRefs: (entry) => filesOf(entry).refs,
+    contractItemCount: (entry) => filesOf(entry).frames,
   });
   const unreadable = [...registries, retained].filter((result) => result.unreadable).length;
   return { ...index, rejected: index.rejected + unreadable };

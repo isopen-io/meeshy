@@ -89,6 +89,11 @@ public extension MeEndpoint {
         MeEndpoint.gameSeasonsByNumber(number: String(number))
     }
 
+    /// Le calendrier des saisons servi (#10232) : `GET /api/v1/me/game/seasons/calendar`, le cas généré du manifeste.
+    static var gameSeasonCalendar: MeEndpoint {
+        MeEndpoint.gameSeasonsCalendar
+    }
+
     /// Une semaine de ligue par son lundi (#10018). La clé vient d'un lien : encodée.
     static func gameLeagueWeekArchive(weekKey: String) -> MeEndpoint {
         MeEndpoint.gameLeagueWeeksByWeekKey(weekKey: GamePathSegment.encoded(weekKey))

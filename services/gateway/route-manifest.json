@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 667,
+  "routeCount": 678,
   "routes": [
     {
       "method": "DELETE",
@@ -1697,6 +1697,62 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/game/seasons",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/app-events",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/app-events.yaml",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/proposals",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/invitations",
       "module": "invitationRoutes",
       "mountPrefix": "/api/v1/admin/invitations",
@@ -3006,6 +3062,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/conversations/:id/shared-translations",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/conversations/:id/stats",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
@@ -3620,6 +3690,20 @@
       "method": "GET",
       "path": "/api/v1/me/game/seasons/:number",
       "module": "meGameArchiveRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/me/game/seasons/calendar",
+      "module": "meGameSeasonCalendarRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -6286,6 +6370,48 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/game/seasons/:number/proposals",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/game/seasons/proposals/:id/approve",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/game/seasons/proposals/:id/reject",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/reports",
       "module": "reportRoutes",
       "mountPrefix": "/api/v1/admin/reports",
@@ -7554,6 +7680,20 @@
     {
       "method": "POST",
       "path": "/api/v1/conversations/:id/participants",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:id/shared-translations",
       "module": "anonyme~2",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -8998,6 +9138,20 @@
         "S6"
       ],
       "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/game/seasons/:number",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
       "adminPrefixed": true
     },

@@ -356,13 +356,16 @@ public class MainActivity extends BridgeActivity {
             }
         };
         getBridge().getWebView().setWebChromeClient(chromeClient);
+        // #10250 — la WebView dessine son effet de bord sans lire
+        // `overscroll-behavior` ; Chrome, lui, le coupe comme la page le demande.
+        getBridge().getWebView().setOverScrollMode(View.OVER_SCROLL_NEVER);
         getBridge()
             .addWebViewListener(
                 new WebViewListener() {
                     @Override
                     public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail detail) {
                         long now = SystemClock.elapsedRealtime();
-                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now)) {
+                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now, detail.didCrash())) {
                             return false;
                         }
                         lastRendererRecovery = now;

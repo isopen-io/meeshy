@@ -217,6 +217,7 @@ const NO_PERMISSIONS = {
   canModerateContent: false,
   canViewAuditLogs: false,
   canManageAgent: false,
+  canManageGame: false,
   canManageNotifications: false,
   canManageTranslations: false,
 };

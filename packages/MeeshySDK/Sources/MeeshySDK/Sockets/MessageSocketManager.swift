@@ -564,23 +564,6 @@ public struct PresenceSnapshotEvent: Decodable, Sendable {
     }
 }
 
-// MARK: - Translation Event Data
-
-public struct TranslationData: Codable, Sendable, CacheIdentifiable {
-    public let id: String
-    public let messageId: String
-    public let sourceLanguage: String
-    public let targetLanguage: String
-    public let translatedContent: String
-    public let translationModel: String
-    public let confidenceScore: Double?
-}
-
-public struct TranslationEvent: Codable, Sendable {
-    public let messageId: String
-    public let translations: [TranslationData]
-}
-
 // MARK: - Transcription Event Data
 
 public struct TranscriptionSegment: Codable, Sendable {
@@ -3031,15 +3014,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Translation events ---
-
-        socket.on("message:translation") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TranslationEvent.self, from: data) { [weak self] event in
-                self?.translationReceived.send(event)
-            }
-        }
-
         // --- Transcription events ---
 
         socket.on("audio:transcription-ready") { [weak self] data, _ in
@@ -3146,6 +3120,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        registerTranslationHandlers(on: socket)
         registerViewOnceHandlers(on: socket)
         registerCitedPostHandlers(on: socket)
         registerConversationEngagementHandlers(on: socket)

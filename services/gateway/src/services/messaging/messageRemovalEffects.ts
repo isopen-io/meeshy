@@ -17,6 +17,7 @@ export type {
 } from './retractMessageNotifications';
 import { withoutCaptureNotices } from './captureNoticeVisibility';
 import { boundCaptureNoticesNaming } from './captureNoticeRetention';
+import { eraseSharedTranslations } from './sharedTranslationErasure';
 
 const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
 
@@ -34,7 +35,9 @@ const log = enhancedLogger.child({ module: 'messageRemovalEffects' });
  * handler socket, si bien qu'aucune des deux moitiés ne couvrait l'autre. Le
  * retrait des notifications que le message avait produites, lui, ne vivait
  * NULLE PART : elles gardent une copie de son extrait, et le rappel les
- * laissait affichées.
+ * laissait affichées. L'effacement des traductions PARTAGÉES (#9899) n'y
+ * vivait pas davantage : la table voisine de `Message.translations` gardait la
+ * version scellée d'un message que chaque écrivain venait de vider.
  * C'est le jumeau d'`applyPostRemovalEffects`, pour la même raison et
  * après le même constat : un effet ajouté ici s'applique à tous les chemins.
  *
@@ -273,6 +276,16 @@ export async function applyMessageRemovalEffects(
   announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
   options: { readonly cause?: 'deleted' | 'expired' } = {}
 ): Promise<void> {
+  // Les traductions PARTAGÉES du message (#9899). Chaque écrivain de retrait vide
+  // `Message.translations` ; la table voisine, elle, gardait la version scellée
+  // du message — lisible, pour qui détenait la clé, aussi longtemps que la base
+  // la gardait. Elle passe EN PREMIER parce que son retard se lit comme une
+  // fuite de contenu, au même titre que les notifications ci-dessous, et
+  // qu'elle ne lit que `message.id` : rien de ce qui suit ne peut l'invalider.
+  // BEST-EFFORT à l'intérieur de l'unité même (`eraseSharedTranslations`) :
+  // elle ne lève jamais, donc aucun `try` ici.
+  await eraseSharedTranslations(prisma, { messageIds: [message.id] });
+
   // Le décompte des compteurs de conversation. Il vivait recopié dans UNE
   // seule des quatre routes de suppression — celle qu'empruntent iOS et la vue
   // web — pendant que le comptage, lui, ne vivait que dans le handler socket.

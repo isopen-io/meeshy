@@ -114,6 +114,14 @@ ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
 ARG VITE_READING_MODES=""
 ENV VITE_READING_MODES=${VITE_READING_MODES}
 
+# **L'ADRESSE DU MOTEUR DE TRADUCTION DE L'APPAREIL se fige ici aussi (#9898).**
+# Le Worker charge transformers.js par `import()` à la première traduction ;
+# `VITE_DEVICE_TRANSLATION_RUNTIME` permet de l'héberger chez nous plutôt que sur
+# le CDN. Vide (le défaut), `deviceRuntimeUrl` retombe sur le CDN épinglé — un
+# `ARG` sans valeur ne désigne aucune adresse.
+ARG VITE_DEVICE_TRANSLATION_RUNTIME=""
+ENV VITE_DEVICE_TRANSLATION_RUNTIME=${VITE_DEVICE_TRANSLATION_RUNTIME}
+
 # **LA RÉVISION SERVIE DOIT ÊTRE LISIBLE DE L'EXTÉRIEUR, comme pour le gateway
 # (#6551).** `VCS_REF`/`BUILD_DATE` sont déjà poussés à CHAQUE image du
 # workflow (`docker.yml`, § build-args de `Build and push` — le bloc n'est

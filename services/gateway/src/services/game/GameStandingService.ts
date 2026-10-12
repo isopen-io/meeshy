@@ -38,6 +38,7 @@ import { FLAME_USER_SELECT, flameFactsOf } from './FlameService';
 import { GameProfileService } from './GameProfileService';
 import { gloryTotalFromLedger } from './GloryService';
 import { MythicSeatService } from './MythicSeatService';
+import { visitorTrophyBound } from './TrophyService';
 
 const CLOSED: UserGameProfileResponse = { visible: false, standing: null, treasury: null };
 
@@ -75,7 +76,9 @@ export class GameStandingService {
 
     const intimate = mayStanding && isIntimate(await this.profile.viewerKind(viewer, targetId));
     const [standing, treasury] = await Promise.all([
-      mayStanding ? this.standing(targetId, user, now, { intimate, trophies: allowed.showcase === true }) : Promise.resolve(null),
+      mayStanding
+        ? this.standing(targetId, user, now, { intimate, trophies: allowed.showcase === true, self: viewer?.userId === targetId })
+        : Promise.resolve(null),
       mayTreasury ? this.treasury(targetId) : Promise.resolve(null),
     ]);
     return { visible: true, standing, treasury };
@@ -89,12 +92,17 @@ export class GameStandingService {
     userId: string,
     user: { readonly engagementScore?: number | null; readonly levelRecord?: number | null; readonly prestige?: number | null } & Parameters<typeof flameFactsOf>[0],
     now: Date,
-    reader: { readonly intimate: boolean; readonly trophies: boolean },
+    reader: { readonly intimate: boolean; readonly trophies: boolean; readonly self: boolean },
   ): Promise<GameStanding> {
     const [glory, mythicSeat, trophyCount] = await Promise.all([
       gloryTotalFromLedger(this.prisma, userId),
       new MythicSeatService(this.prisma).seatOf(userId),
-      reader.intimate && reader.trophies ? this.prisma.gameTrophy.count({ where: { userId } }) : Promise.resolve(null),
+      // Le membre lit son compte en direct ; un ami ou ADMIN, figé au 1er du mois comme la vitrine (#10240).
+      !(reader.intimate && reader.trophies)
+        ? Promise.resolve(null)
+        : reader.self
+          ? this.prisma.gameTrophy.count({ where: { userId } })
+          : this.prisma.gameTrophy.count({ where: { userId, awardedAt: { lt: visitorTrophyBound(now) } } }),
     ]);
     const score = Math.max(0, Math.trunc(user.engagementScore ?? 0));
     const rank = gloryStanding({ glory, mythicSeat });

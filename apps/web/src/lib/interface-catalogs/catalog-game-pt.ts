@@ -528,6 +528,7 @@ const pt = {
   'game.season.completed': 'Percurso concluído: uma taça, uma insígnia datada e {glory} de Glória.',
   'game.season.none': 'Nenhuma temporada está aberta agora. A próxima começa em breve.',
   'game.season.upcoming': 'A temporada {number} abre em {date}.',
+  'game.season.paused': 'A temporada está em pausa: a data de abertura será anunciada.',
   'game.season.seal.title': 'Fileira Selo',
   'game.season.seal.body': 'O Selo é puramente decorativo: um item de coleção a cada {every} etapas, sem efeito no jogo.',
   'game.season.seal.buy': 'Pegar o Selo · {price}',
@@ -684,6 +685,7 @@ const pt = {
   'game.archive.season.past_title': 'Temporada {number} · encerrada',
   'game.archive.season.current_title': 'Temporada {number} · em andamento',
   'game.archive.season.upcoming_title': 'Temporada {number} · em breve',
+  'game.archive.season.paused_title': 'Temporada {number} · em pausa',
   'game.archive.season.opened_note': 'A temporada está aberta: seu percurso aparece assim que ela for recarregada.',
   'game.archive.season.dates': 'De {start} a {end}',
   'game.archive.season.rewards.one': '{count} recompensa resgatada',
@@ -700,6 +702,14 @@ const pt = {
   'game.archive.week.purged': 'Esta semana é antiga demais: o resultado foi apagado, como previsto.',
   'game.archive.week.upcoming': 'Esta semana ainda não começou.',
   'game.archive.week.privacy': 'Só o seu resultado é guardado: os outros membros do grupo não podem ser consultados de novo.',
+  'game.constellation.title': 'Constelação',
+  'game.constellation.stars.one': '{count} estrela acesa',
+  'game.constellation.stars.other': '{count} estrelas acesas',
+  'game.constellation.cosmetics': 'Cosméticos desbloqueados',
+  'game.constellation.cosmetic': '{kind} · estrela {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Moldura',
+  'game.constellation.kind.sparkle': 'Brilho',
 } as const satisfies GameCoreCatalog;
 
 export default pt;

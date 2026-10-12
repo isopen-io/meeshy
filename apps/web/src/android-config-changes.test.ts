@@ -13,6 +13,11 @@ import { describe, expect, test } from 'bun:test';
  * remet la page en page et suit la taille de police du système. La coque
  * déclare donc la taille, la graisse et le sens du texte, et règle elle-même
  * le zoom de texte de la WebView sur l'échelle du système.
+ *
+ * #10279 — même règle pour la carte SIM ou le profil eSIM (`mcc`, `mnc`), la
+ * forme d'adresse d'Android 14 (`grammaticalGender`), l'écran externe ou le
+ * mode bureau (`colorMode`, `touchscreen`) : Chrome les déclare tous, et aucune
+ * ressource de la coque ne dépend d'eux.
  */
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -48,6 +53,12 @@ describe('la coque Android suit la taille du texte sans redémarrer (#8616)', ()
 
   ['fontScale', 'fontWeightAdjustment', 'layoutDirection'].forEach((changement) => {
     test(`l'activité déclare le changement ${changement} au lieu d'être recréée`, () => {
+      expect(changementsDeclares()).toContain(changement);
+    });
+  });
+
+  ['mcc', 'mnc', 'grammaticalGender', 'colorMode', 'touchscreen'].forEach((changement) => {
+    test(`changer de SIM, de forme d'adresse ou d'écran ne recrée pas l'activité : ${changement} (#10279)`, () => {
       expect(changementsDeclares()).toContain(changement);
     });
   });

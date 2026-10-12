@@ -65,4 +65,37 @@ final class GameShowcaseRulesTests: XCTestCase {
         let entries = GameVisitorShowcase.entries(visitor(items: items, order: ["trophy.season-cup.1"]))
         XCTAssertEqual(entries.map(\.key), ["trophy.season-cup.1", "trophy.flame.100"])
     }
+
+    // MARK: - La constellation (#10053)
+
+    private var ecran: RenderedScreen?
+    override func tearDown() { ecran?.dismount(); ecran = nil; super.tearDown() }
+
+    func test_aVisitor_readsOnlyTheServedStars_ofAnOpenShowcase() {
+        let open = UserShowcaseResponse(visible: true, items: [], order: [], constellation: ShowcaseConstellation(stars: 3))
+        XCTAssertEqual(GameVisitorShowcase.constellationStars(open), 3)
+        let closed = UserShowcaseResponse(visible: false, items: [], order: [], constellation: ShowcaseConstellation(stars: 3))
+        XCTAssertNil(GameVisitorShowcase.constellationStars(closed), "une vitrine fermée ne dit rien de la constellation")
+        XCTAssertNil(GameVisitorShowcase.constellationStars(UserShowcaseResponse(visible: true, items: [], order: [])), "ancien serveur")
+        XCTAssertNil(GameVisitorShowcase.constellationStars(UserShowcaseResponse(visible: true, items: [], order: [],
+                                                                                constellation: ShowcaseConstellation(stars: 0))))
+        let read = GameVisitorRead(userId: "u", entries: [], standing: nil, constellationStars: 3)
+        XCTAssertEqual(GameVisitorRead.shown(read, for: "u", hidden: false), read, "des étoiles seules suffisent à peindre la bande")
+        XCTAssertNil(GameVisitorRead.shown(read, for: "u", hidden: true), "Jeu masqué : rien")
+    }
+
+    func test_theOwnersConstellation_saysItsStars_theNextOne_andItsCosmetics() {
+        let e = RenderedScreen(GameConstellationCard(collected: 23).padding(), size: CGSize(width: 402, height: 1200))
+        ecran = e
+        XCTAssertTrue(e.identifiers.contains("game.constellation"), "vus : \(e.identifiers)")
+        XCTAssertTrue(e.says(GameText.constellationNext(7)))
+        XCTAssertTrue(e.says(GameText.constellationCosmetic(kind: GameText.constellationKind(.frame), star: GameCopy.formatCount(2))))
+    }
+
+    func test_aVisitorsConstellation_neverShowsTheNextStar() {
+        let e = RenderedScreen(GameConstellationCard(stars: 3).padding(), size: CGSize(width: 402, height: 1200))
+        ecran = e
+        XCTAssertFalse(e.says(GameText.constellationNext(10)))
+        XCTAssertTrue(e.says(GameText.constellationCosmetic(kind: GameText.constellationKind(.sparkle), star: GameCopy.formatCount(3))))
+    }
 }

@@ -1,9 +1,14 @@
+import { lazy, Suspense } from 'react';
+
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
-import { AdminOfflineNotice } from '@/components/admin/states';
+import { AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { AdminEngagementScalePanel } from '@/routes/admin-engagement-scale-parts';
+
+/* Le calendrier des saisons (#10232) : un bloc, chargé à la demande, jamais une route neuve (budget du module d'entrée). */
+const GameSeasonsBlock = lazy(() => import('@/routes/admin-game-seasons-lazy'));
 
 /**
  * **LE BARÈME DE POINTS** (#8906, rangé dans « Plateforme » par #8876, servi en quatre langues — D-162) —
@@ -15,6 +20,8 @@ import { AdminEngagementScalePanel } from '@/routes/admin-engagement-scale-parts
  * La garde est LUE ICI (on entre aussi par un lien profond) et le seuil est celui de la passerelle — ADMIN
  * ou BIGBOSS (`adminRankOnly` de la section). Le retour reste dans l'espace où l'on est (`/adm` ne saute
  * pas vers `/admin`).
+ *
+ * Sous le panneau, le CALENDRIER DES SAISONS du Jeu (#10232) : un bloc affiché à qui porte `canManageGame`.
  */
 export default function AdminEngagementScaleScreen() {
   const language = currentAdminLanguage();
@@ -22,7 +29,7 @@ export default function AdminEngagementScaleScreen() {
 
   return (
     <AdminSectionScreen section="engagementScale" language={language} title={translateAdmin(language, 'admin.scale.title')}>
-      {() => (
+      {(reach) => (
         <div className="grid gap-4" data-admin-screen="engagement-scale">
           <AdminPageHeader
             language={language}
@@ -32,6 +39,11 @@ export default function AdminEngagementScaleScreen() {
           />
           <AdminOfflineNotice language={language} />
           <AdminEngagementScalePanel language={language} deps={apiDeps} />
+          {reach.can('canManageGame') ? (
+            <Suspense fallback={<AdminSkeleton rows={4} />}>
+              <GameSeasonsBlock language={language} />
+            </Suspense>
+          ) : null}
         </div>
       )}
     </AdminSectionScreen>

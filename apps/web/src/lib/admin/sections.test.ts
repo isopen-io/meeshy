@@ -43,6 +43,7 @@ const AUCUNE: AdminPermissions = {
   canManageNotifications: false,
   canManageTranslations: false,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 const TOUTES: AdminPermissions = {
@@ -56,6 +57,7 @@ const TOUTES: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: true,
+  canManageGame: true,
 };
 
 describe('le registre des dix-neuf sections (spécification § 1.2)', () => {

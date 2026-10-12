@@ -189,6 +189,8 @@ type TextInputProps = {
   readonly errorData?: AdminData | undefined;
   readonly data?: AdminData | undefined;
   readonly disabled?: boolean;
+  /** La direction du TEXTE saisi (un texte arabe se tape et se lit de droite à gauche, quelle que soit la langue de l'écran). */
+  readonly dir?: 'ltr' | 'rtl';
 };
 
 /**
@@ -221,6 +223,7 @@ export function AdminTextInput({
   errorData,
   data,
   disabled = false,
+  dir,
 }: TextInputProps) {
   const [focused, setFocused] = useState(false);
   return (
@@ -241,6 +244,7 @@ export function AdminTextInput({
             type={type}
             value={value}
             disabled={disabled}
+            {...(dir === undefined ? {} : { dir })}
             {...(inputMode === undefined ? {} : { inputMode })}
             {...(min === undefined ? {} : { min })}
             {...(step === undefined ? {} : { step })}
@@ -277,6 +281,10 @@ export function AdminTextArea({
   rows = 3,
   maxLength,
   data,
+  dir,
+  note,
+  noteTone,
+  noteData,
 }: {
   readonly id: string;
   readonly label: string;
@@ -285,13 +293,27 @@ export function AdminTextArea({
   readonly rows?: number;
   readonly maxLength?: number;
   readonly data?: AdminData;
+  /** La direction du TEXTE saisi (un texte arabe se tape de droite à gauche, quelle que soit la langue de l'écran). */
+  readonly dir?: 'ltr' | 'rtl';
+  /** Une note sous le champ (un compteur de signes) — citée par `aria-describedby`. */
+  readonly note?: string | undefined;
+  readonly noteTone?: 'neutral' | 'danger';
+  readonly noteData?: AdminData;
 }) {
   return (
-    <AdminField id={id} label={label}>
+    <AdminField
+      id={id}
+      label={label}
+      note={note}
+      {...(noteTone === undefined ? {} : { noteTone })}
+      {...(noteData === undefined ? {} : { noteData })}
+    >
       <textarea
         {...data}
         id={id}
         rows={rows}
+        {...(dir === undefined ? {} : { dir })}
+        {...(note === undefined ? {} : { 'aria-describedby': `${id}-note` })}
         value={value}
         {...(maxLength === undefined ? {} : { maxLength })}
         onInput={(event) => onValue(event.currentTarget.value)}

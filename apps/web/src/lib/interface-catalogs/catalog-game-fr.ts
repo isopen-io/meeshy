@@ -542,6 +542,7 @@ const fr = {
   'game.season.completed': 'Parcours terminé : une coupe, un badge daté et {glory} de Gloire.',
   'game.season.none': 'Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt.',
   'game.season.upcoming': 'La saison {number} ouvre le {date}.',
+  'game.season.paused': 'La saison est en pause : sa date d’ouverture sera annoncée.',
   'game.season.seal.title': 'Rangée Sceau',
   'game.season.seal.body': 'Le Sceau est purement décoratif : un objet à collectionner toutes les {every} étapes, qui ne change rien au jeu.',
   'game.season.seal.buy': 'Prendre le Sceau · {price}',
@@ -698,6 +699,7 @@ const fr = {
   'game.archive.season.past_title': 'Saison {number} · terminée',
   'game.archive.season.current_title': 'Saison {number} · en cours',
   'game.archive.season.upcoming_title': 'Saison {number} · à venir',
+  'game.archive.season.paused_title': 'Saison {number} · en pause',
   'game.archive.season.opened_note': 'La saison est ouverte : ton parcours s’affiche dès qu’elle est relue.',
   'game.archive.season.dates': 'Du {start} au {end}',
   'game.archive.season.rewards.one': '{count} récompense réclamée',
@@ -714,6 +716,14 @@ const fr = {
   'game.archive.week.purged': 'Cette semaine est trop ancienne : son résultat a été effacé, comme prévu.',
   'game.archive.week.upcoming': 'Cette semaine n’a pas encore commencé.',
   'game.archive.week.privacy': 'Seul ton résultat est gardé : les autres membres du groupe ne se relisent pas.',
+  'game.constellation.title': 'Constellation',
+  'game.constellation.stars.one': '{count} étoile allumée',
+  'game.constellation.stars.other': '{count} étoiles allumées',
+  'game.constellation.cosmetics': 'Cosmétiques débloqués',
+  'game.constellation.cosmetic': '{kind} · étoile {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Cadre',
+  'game.constellation.kind.sparkle': 'Scintillement',
 } as const;
 
 export default fr;

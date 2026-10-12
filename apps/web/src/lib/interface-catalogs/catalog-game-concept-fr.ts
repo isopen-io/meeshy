@@ -261,6 +261,10 @@ const fr = {
   'game.notebook.legacy_delete': 'Supprimer l’ancien carnet',
   'game.notebook.device_only': 'Tes photos vivent sur cet appareil.',
   'game.notebook.size': 'Le carnet occupe {size}.',
+  'game.constellation.next.one': 'Encore {count} fragment d’étoile pour la prochaine étoile',
+  'game.constellation.next.other': 'Encore {count} fragments d’étoile pour la prochaine étoile',
+  'game.constellation.how': 'Une étoile s’allume tous les dix fragments d’étoile collectés. Chacune débloque un cosmétique de profil, sans avantage de jeu.',
+  'game.constellation.visibility': 'Ta constellation et ses cosmétiques se montrent selon le réglage de la vitrine.',
 } as const;
 
 export default fr;

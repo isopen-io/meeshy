@@ -1156,5 +1156,2171 @@
       "png": "e345a6411c11e4e1122c5623744dc0084bdb97942bcad20395624cd96c6e9b7e",
       "sample": false
     }
+  },
+  "amendments": {
+    "l2": {
+      "note": "Lot L2 (#10153) : Mee et Meo déplacés hors de la photo (lib/anchors.json). Le décor ne bouge pas (decorDelta = 0 ; seule la lueur posée sous un oiseau le suit). En attente de la revalidation du porteur (#9963) ; vider lib/anchors.json rend la référence L0.",
+      "chromium": "151.0.7922.34",
+      "count": 107,
+      "frames": {
+        "abysses-ambassadeur-1": {
+          "collection": "abysses",
+          "svg": "dc2bf5e88fa8b8e245cda3a0e3186721013e64c897652d3513da7211f5da6df2",
+          "png": "a2767f29eaccbec11340f2af86e105a877f8e43029577cc63c81e2d7079c4de3",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -25,
+              "dy": 50.1,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 26.8,
+              "dy": 53.7,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-ambassadeur-5": {
+          "collection": "abysses",
+          "svg": "b65c3c28b660bf61b0790eb1850b1482760b50a31e01f6c7791e791d6906dd58",
+          "png": "38f98a6bb11c8e2c6cf83665d74dc1dbcd7c66180244f38be4cf0a1e071ccd8e",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -29.5,
+              "dy": 59,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 25,
+              "dy": 50.1,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-legende-1": {
+          "collection": "abysses",
+          "svg": "054f29af9b038ad1c65b72a017637f6e780de1a4239519e3335942a469a90d24",
+          "png": "9a75c3bda26ac4d7c2588fb5a7dfdab046c71754dd34d201df842fbd5473460c",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 90,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 74,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-legende-4": {
+          "collection": "abysses",
+          "svg": "9234a35b82e5f3fbba78cf019d054f95535808b5d0677618f533cf51a43d9470",
+          "png": "5ab677a841534963c093dc868214d269cc21edf05e24ae868dee13d47dbf7d5a",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -68,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 8,
+              "dy": 0,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-legende-5": {
+          "collection": "abysses",
+          "svg": "7a4f043d076b2a0403f9a0e00bff54d24db34a71459b68277769737e7477cd12",
+          "png": "71292ea9f6c55ff1166fb3e14cc90ca55c3ead06bb16d6b4609c110ff5c34026",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 74,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 62,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-mythe-b": {
+          "collection": "abysses",
+          "svg": "34908faaece77bc3c16238906760f638deb8534956d65fc5c5a1371334542fd8",
+          "png": "1a477e0fe4882e5622b39f584c02f90f76d5bc1caa9eca9b369cbf8d15dadccf",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -4,
+              "dy": 0,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 8,
+              "dy": 0,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-oracle-a": {
+          "collection": "abysses",
+          "svg": "8b63db9043d6e5e2300f6a7e48be27e8475f67bf7728d729984003ca5a1ead75",
+          "png": "57535210e6d030cf3d5eedffcc2a106ef9ab0eeff962857f95ce850ace05660c",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-oracle-b": {
+          "collection": "abysses",
+          "svg": "2ae38ce783d964ce6ef6197fab204d2ab0918dddfc678f6a799181d41ecd869f",
+          "png": "b370c0b06f5803ca1a4d728abd3ca64406b2d1aea56b4b1b5a29243f654aab39",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": -50,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-oracle-c": {
+          "collection": "abysses",
+          "svg": "711adaaf89d5a8b231f4e1e14e5dd8e93759c90fc51a00fa507f714a50962ed9",
+          "png": "045b8ca7417df2b6763d82e90987054b3381049c550c3c2848574727cc44f41d",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 72,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 70,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-orateur-a": {
+          "collection": "abysses",
+          "svg": "8bf0951f73d2279093277f0f47f6e89e4cb5680058734ae06c04e6daf2b43b48",
+          "png": "6b99f0f67d87ad6761aaa6182b889c88736394732a6a8dbb4e972b73a66de829",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 76,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 90,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "abysses-orateur-b": {
+          "collection": "abysses",
+          "svg": "f08909384da629d51e933b32ee9c1fa68367a5f226a00a3f12f26753ebf0b77b",
+          "png": "a98b43b478195f1e7f064080145573b61427d3bd757f4c856997ac4b7fe8a9a2",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 82,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 84,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-ambassadeur-1": {
+          "collection": "egypte",
+          "svg": "5ade53fd3d6c25898c8a8596e1e2caa1e03df04d29e78a9019063f92456375d5",
+          "png": "65d74231735d529f74add86e05c2efb293738542456b5af1d885045b8b43f6e7",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -12,
+              "dy": 0,
+              "scale": 0.76
+            },
+            {
+              "bird": 1,
+              "dx": 14,
+              "dy": 0,
+              "scale": 0.7
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-ambassadeur-2": {
+          "collection": "egypte",
+          "svg": "7e7037cf11711f25966c4af8efdaecfb5e6a190a92ba08a9422b4bda130ee363",
+          "png": "cb7194937198aa7fda2b22d8f6d4b1f79e82ae26499bba532772fb3bec6d0fde",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 70,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 40,
+              "dy": 0,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-ambassadeur-3": {
+          "collection": "egypte",
+          "svg": "0669d4adc02b26708e0772b3532faa2194fad83fa0b44a98215723af839e68ee",
+          "png": "cddf9af1415d7192df3ed249a560635cefa0e5d6d6e15bf961832cc8607b6917",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -24,
+              "dy": 0,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 24,
+              "dy": 0,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-ambassadeur-5": {
+          "collection": "egypte",
+          "svg": "aafd29ab5b2b11b534dc8ff837bb78fdf714e38cd6513cd0666f324f05b6c3c8",
+          "png": "3297357f48662b598fb2ea966987d9323320f691b8ccd146838c403fd1a34b4d",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -40.2,
+              "dy": 80.5,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 30.4,
+              "dy": 60.8,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-legende-1": {
+          "collection": "egypte",
+          "svg": "b365500fd5ccdbacce87f63386eaa8c2108ae8df30f6b73fa9c308b0d9d1749c",
+          "png": "883b9e9b0014c1848e16999bd01277b2a99ee2b2866d4f88f2b5f826c2918600",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 62,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 60,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-legende-2": {
+          "collection": "egypte",
+          "svg": "cd3e6092847f6adf83fe1ed8b51deed678cdd5fdb638594d7ddbee7cf05e9a69",
+          "png": "318efdbb35c6b9f901ac79e5395f013afa63104dafe87ddeb76d23bc67442dd6",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -39.6,
+              "dy": 39.6,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 68,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-legende-3": {
+          "collection": "egypte",
+          "svg": "1103c1e20ccac9e3cba0c046247300f7c96ce3e51a7f017a3c94ed70691553f7",
+          "png": "0efd5fd137af8f04e906f7ee1fc84890ea55b31f73521716b5223b5ca4e7a566",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -37.6,
+              "dy": 75.1,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 38.2,
+              "dy": 38.2,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-legende-4": {
+          "collection": "egypte",
+          "svg": "701703aed3b982b8d59e22e2db8a2026a26b719bf031f624ebe05ea719686235",
+          "png": "102ee72fe8014eada6ccbbaba44e55c1a83ff6292f5aeb6a8ebcd1405ff273c9",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -39.4,
+              "dy": 78.7,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 44,
+              "dy": 0,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-legende-5": {
+          "collection": "egypte",
+          "svg": "86b2565ef0c11f1b76b218e5a58efbc21e232bc541074a9a19fdce3829d495da",
+          "png": "3b335a9426261e770bdb22a9f9e736781ec4c7b0c6251c8fe5059ed1b2a9b4fc",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -29.5,
+              "dy": 59,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 29.5,
+              "dy": 59,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-mythe-c": {
+          "collection": "egypte",
+          "svg": "22bd50a39c566bc8645c496a539b1f738197eb3215ae41f7f01ba71bba7c90c1",
+          "png": "27045b6eff6becf0718e0d7aa1f8a8b93e38f7aba1e241bd38ad06ebc659aecf",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -8.9,
+              "dy": -4.5,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 12,
+              "dy": 0,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-oracle-a": {
+          "collection": "egypte",
+          "svg": "6529b03f389f6bb7d62a36320fa7bafd94de0a3a7b5da456a639725ec70d2e61",
+          "png": "b3bed7d093de1f70f1fd398579d0e8b1b8314e36abb6244cb6f354f0a1fac488",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -40.2,
+              "dy": 80.5,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 43.8,
+              "dy": 87.7,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-oracle-b": {
+          "collection": "egypte",
+          "svg": "263b0fcf608f04dcae08a994159625b0aa3e672764ad7694e2070dc41efb0de3",
+          "png": "3698cb478c539ffe36e5d6930d05b15531cd387ed5cf1d4d28693356072e2ccb",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -46,
+              "dy": 0,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 34,
+              "dy": 68,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-oracle-c": {
+          "collection": "egypte",
+          "svg": "810b00d6699123f2f54db06bdd9c6052b23168c3f9c5538b8908d443fb8a63f8",
+          "png": "e99dd9eb6afb93d49891cbeb597978799f604c016483349afb72483b3aa85356",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -41,
+              "dy": 41,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 46,
+              "dy": 0,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-orateur-a": {
+          "collection": "egypte",
+          "svg": "924af235682345579d243ae4ec69f5b5e4734acfbca89825b1949c3ad0dcb12e",
+          "png": "59940bf592dbf680ba6346e944b8d79b3c07c2cfa362bd4da1416b4240dba46f",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 98,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 68,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-orateur-b": {
+          "collection": "egypte",
+          "svg": "86eab96ec257499cd1a737d3a4eb2bbe6e3137f9e62f2aa588617bda6a040825",
+          "png": "0a713c704f0700a517b0a6bf78940df41b9d60687061fbd99840ad5b62128159",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -60,
+              "dy": 0,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 54,
+              "dy": 0,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "egypte-orateur-c": {
+          "collection": "egypte",
+          "svg": "b5c71cb18a1cfd45646d658bd1d4dd4a3fd6cb9abf6ea5cf40d68d8fe01428f3",
+          "png": "929c32f43a5bdfa57a3e2dadae13624a5f3b547f328ce39c569f6fb57374f9ce",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -24,
+              "dy": 0,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 25.5,
+              "dy": 25.5,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-flamme-100": {
+          "collection": "moments",
+          "svg": "01aee5f6a3cf1bd3278627a1f4aa1ce7eccc68b39ae37a3200999c60d1194855",
+          "png": "2d59b7fcce04d8063244cd8b03bc7497919cd937549c16eefb912a93e0e4a2ba",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -16,
+              "dy": 0,
+              "scale": 0.7
+            },
+            {
+              "bird": 1,
+              "dx": 14,
+              "dy": 0,
+              "scale": 0.76
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-flamme-7": {
+          "collection": "moments",
+          "svg": "f1b908e2563075ff68dba32ea38e18635c4e5f84aa47be75f5e4f0eff741d39e",
+          "png": "250392574415597697b7232e6f21c06c4fc89a80906761398b424a45542d2006",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 82,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 66,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-jour-a": {
+          "collection": "moments",
+          "svg": "99a4cfbb09442e39d47e76e2ed197e0a92681187aac6bab92bc1a9843a924646",
+          "png": "edf3591d3b5411763f9e3ca1cd237c2bf4a05947eb033e8ddccc838c6aa0592a",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 68,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 26.8,
+              "dy": 53.7,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-meesh-1": {
+          "collection": "moments",
+          "svg": "4b6290be2db760c81b43788ea1b75976069ed81867b5d66a9c2dbf975e3f4f10",
+          "png": "1074a3b802333bccbce71d8c8246397837988d1e2fe2b2271f6c9acd3e303394",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -27.7,
+              "dy": 55.5,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 80,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-meesh-10": {
+          "collection": "moments",
+          "svg": "abe4b82a7cdedc7b444edc026cab4e88b37edd54f16a9ef21414e7e2886fa843",
+          "png": "4f1bbb19e55cb62895d89251c47a30777de752b9c8b9e642f103d4abd4368c42",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -18,
+              "dy": 0,
+              "scale": 0.76
+            },
+            {
+              "bird": 1,
+              "dx": 16,
+              "dy": 0,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-palier-galaxie": {
+          "collection": "moments",
+          "svg": "6a1c6ed308635127a13c576cc971bfb561b6956a0ecc79f5c3b36fd9876fd886",
+          "png": "9eb283affc8ac1bfbace227e2c9e1df6141dba4edf0b072d5186c263ba4063b8",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 1,
+              "dx": 2.8,
+              "dy": 2.8,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-palier-lueur": {
+          "collection": "moments",
+          "svg": "662560d8cc4667819564feb863439a80ed0ce2575a6fbfea2a0b1009912a58e3",
+          "png": "efc0222f36110ba2078e32d9dbbec73be1da4799d4c162a98ca657fe5f22ad38",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 96,
+              "scale": 0.82
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 64,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "moments-palier-singularite": {
+          "collection": "moments",
+          "svg": "2503e79f1a3c91bee3487f8fa9e1cb69a46145be293ea2c93a053f26fffbd81c",
+          "png": "34741174ed67040da800286117926400f580d612079973d0b9bc77c597908efc",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 50,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-ambassadeur-1": {
+          "collection": "neon",
+          "svg": "1bcbe801fbae04255ba3ff80ad8bdce0e6caa65065815782348612b8f8649ffd",
+          "png": "014c3eca0c8b36dd036cc468a8cd21c13fba2c26fb55c2fd282e53d02eb75aa7",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -15.2,
+              "dy": 34.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 19.7,
+              "dy": 47.4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-ambassadeur-2": {
+          "collection": "neon",
+          "svg": "b31a1cb6d9c2ef19b2573b98e2dc1d76fd96bd1707be70ed1da444f51dba81da",
+          "png": "ff325e75ad0b6298561f73329bf4f62f336c36004adb19d6400b07833748e044",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -28.6,
+              "dy": 63.2,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 21.8,
+              "dy": 37.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-ambassadeur-3": {
+          "collection": "neon",
+          "svg": "8c39210cae2b809e2fcf06e17a779da3d5ed7526df95267473f3537091537913",
+          "png": "a551cc6a73d4515b5dd301d87de4271183e57d6f91c4942c0f15c50db1eec388",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -26.8,
+              "dy": 61.7,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 21.5,
+              "dy": 48.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-ambassadeur-4": {
+          "collection": "neon",
+          "svg": "08cb9376437a4c147562635054718603ebd9b9149342aeb66e1a433103bfa70b",
+          "png": "16e1f277485ca9f891dadc28be0b3503c0558a16a0cd31130cb5c9c318c27767",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -6,
+              "dy": 0,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-ambassadeur-5": {
+          "collection": "neon",
+          "svg": "c26f02bf8536d46d9e39109064658bcdbd11a840216660726dafade5f07a9d49",
+          "png": "c99dcb627f9ac3059ce80ac1da452d6e5ca1c77c9f99fa6589fffda2a6cd2810",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -22.8,
+              "dy": 37.1,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 13.4,
+              "dy": 34.8,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-legende-1": {
+          "collection": "neon",
+          "svg": "30f772b8da4b2a96953d3b58d0c061927e04c9f99c7c95addf1f4ce8c06adc82",
+          "png": "9c27380243d1e0d42d84cacebd225749082763d8a96ab34b494997f65f5d4743",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -11.6,
+              "dy": 29.3,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 20,
+              "dy": 34.3,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-legende-2": {
+          "collection": "neon",
+          "svg": "36d28cb934405c3737892d69f9d91133cd65dd1d6b58ad0ecc7a74ad63777313",
+          "png": "58ab295fd79050262cab3d84d45c3815269a02cbf6e42e78759ba4dbb497aa1a",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -15.2,
+              "dy": 36.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 25.9,
+              "dy": 61.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-legende-3": {
+          "collection": "neon",
+          "svg": "eb0590c27c1ff56c6e900dcfdc9599b0c7f10a748785278edde0953b1ba8d2e5",
+          "png": "4a6cce19b1ee97a8fd4bdbf3008da413f779dba20af617dd03015e15bce4ba45",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -25.9,
+              "dy": 59.9,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 17.9,
+              "dy": 41.8,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-legende-4": {
+          "collection": "neon",
+          "svg": "69618886fcf91a6abeaf7dc4674227c24048013c2537c4af43d40c17c95a6863",
+          "png": "0d3345ee78adb5688ea445b2b12b8518abd4fe71475e704aabf2cc189b646e6f",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 17,
+              "dy": 34,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-legende-5": {
+          "collection": "neon",
+          "svg": "a113d761018eccbdf0120e13f83eba44d414f31012dd64080920b51ef4f34896",
+          "png": "35f6a4397aba1743dfaec263318e4ce0d47eeaa698262cf720ce3ad84e70b9a6",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -17.9,
+              "dy": 43.8,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 30.7,
+              "dy": 20.2,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-mythe-a": {
+          "collection": "neon",
+          "svg": "714c454bc475a6bd6c5a2dc1286f7f8129ad7dbe6fe2c9c6e04b8fa5c8c6c38c",
+          "png": "e7d992bf35cacf52870438d43693bf5843928c811811fb296e60a6c5ea75a980",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 72,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-mythe-b": {
+          "collection": "neon",
+          "svg": "a90b9eb831ec9818b0bbfacdc524e8d69a0d2856a76b6ef61e088c8174ee9227",
+          "png": "db453bcb7069c5e14265d140c088faac14bf686b5601da6988dfaccc879ea9a0",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -15.2,
+              "dy": 36.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 16.1,
+              "dy": 42.2,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-oracle-a": {
+          "collection": "neon",
+          "svg": "0aa11a3bfc58546ebb8db5ad571b938e7c3af9f41cf0cbd3bb6d8b5b5594e5da",
+          "png": "8a0f328e7de94377cdb0945727c5a680f02cf0b99174d1c1a9f3c1cba03f0533",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 66,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 64,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-oracle-c": {
+          "collection": "neon",
+          "svg": "5ec083e9cb6644decc167caa488f0929b3d0417469fdf27c0b77f5e654b7960a",
+          "png": "b6b30df530d4e8cd1a8d6fd68c1d602a1a6621c1150abf1af0b1579e33487c23",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 58,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 2.8,
+              "dy": 36.8,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-orateur-a": {
+          "collection": "neon",
+          "svg": "635af78998734c40fae9145bf117c4a51eab277454c0c88084d998c93ef3d4d9",
+          "png": "7635aceef6eabbb3434b3c8233c89b6f6df1f56f9fd52d9028d9b969e6836f60",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -18.1,
+              "dy": 14.1,
+              "scale": 0.827
+            },
+            {
+              "bird": 1,
+              "dx": 18.3,
+              "dy": 28.6,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-orateur-b": {
+          "collection": "neon",
+          "svg": "fa1d7ece8c69678cbde819f0de8d815e78a9253bc1c12803a00588042be9b77d",
+          "png": "9e47a979a83cb554546d6e24dde5073e4209f8c52527bcfba7a6bd705ab8b2f2",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -35.4,
+              "dy": 63.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 17.9,
+              "dy": 43.8,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "neon-orateur-c": {
+          "collection": "neon",
+          "svg": "8880f026710971c0d405306f20822eabf2399dfc16a28a20cf7cddf76ba093f4",
+          "png": "bea1b43668860a5bff6e03166c579d82a9b2df8dd5df5d4550947dc27992a5f7",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -25.9,
+              "dy": 61.9,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 46,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-ambassadeur-4": {
+          "collection": "nord",
+          "svg": "0f4bbda6691f124e14382fc95c05c05bfb9415541f1434f76fdad19862dd147d",
+          "png": "1b94d567f4c77cac05af8a06a778bbccf8bfe5c66bb55347370735fc37d45c42",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -128,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 18,
+              "dy": 0,
+              "scale": 0.76
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-ambassadeur-5": {
+          "collection": "nord",
+          "svg": "c1435196a4602e6a293fcc0fba70a244e009696bf659610f032c97ad7544608e",
+          "png": "ed65a4fd0da78527e4d2f79e8f937a80ea37c7cd9080867cd6edad04b15e398c",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 76,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 26.8,
+              "dy": 53.7,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-legende-2": {
+          "collection": "nord",
+          "svg": "6f3ca4ca20933238e21ac3ea73a14af993241b3062bcb59b9a5b0eda5e736d38",
+          "png": "ec006029d3803cdd44a42e25306b3f66486fc8669a72d302ee658460a4c6ccee",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -15.2,
+              "dy": 30.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 30,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-legende-3": {
+          "collection": "nord",
+          "svg": "f3085bff0050b3ab62c2a8f10cd9e45803b47e65eb5ece8797eea39a391d9782",
+          "png": "c774a1b17aeec2241c01566f5ba4787b05e9cc8972a039d63634e27802c31a46",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -52,
+              "dy": 0,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 35.8,
+              "dy": 17.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-legende-5": {
+          "collection": "nord",
+          "svg": "a0e44b3d0781d986cdfe2a51a11635fd974069b5cceee7359f035952b39d6fea",
+          "png": "694c09b88f06159c0493cfdc3ab64fba0d58556c1b7a929fe37b3e50eb6fc940",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -31.1,
+              "dy": 31.1,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 9.8,
+              "dy": 19.7,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-mythe-a": {
+          "collection": "nord",
+          "svg": "2f086a7cd10673ff62b6ba571f29875f2d5b9556da864cb3ff4d879850207bb2",
+          "png": "71b1c7ed18d11762092fe991fcc30be6ee292222ea8e4cee31b834824ff05401",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 36,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 26.9,
+              "dy": 26.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-oracle-b": {
+          "collection": "nord",
+          "svg": "a8a630c17356e1a1369e9b979b59d18c24374d79ce626dc761706be023a59782",
+          "png": "2b60a242ea747c1a108ae8eac1e22f822e4e8c8c440a97bd1a09b95839c1d6ed",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 72,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 76,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-orateur-a": {
+          "collection": "nord",
+          "svg": "137f538b0d77793d2650c14accadaab2b374ba2d078d605a300704ebf2489946",
+          "png": "d171fa313a9b3239104a2bff0f715189b31c0ce5bc7010941c2da8bdb2429b15",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 62,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 56,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-orateur-b": {
+          "collection": "nord",
+          "svg": "64cf834667974b1cd66b91d45c244ec90d5ed7c8f69af2fde20be95db51f46b2",
+          "png": "23e4052d17cb3bd6c8f69cedf2ad66451bc10d136de843767dcc11a877946bb8",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -2.8,
+              "dy": 2.8,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 0,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "nord-orateur-c": {
+          "collection": "nord",
+          "svg": "fe3eb621c1bc2ecbbb7cd1c470eaf64cc810dfcbc4a187e78a49882fbc54fa6c",
+          "png": "dc7f41bb75617748fdad202dbc9c7c0521b20455e94f653197fedfdb8a208fdf",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -25.9,
+              "dy": 51.9,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 52,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-ambassadeur-1": {
+          "collection": "olympe",
+          "svg": "680ff3e6d3c3502afb182150a8de287ccd1980436ffcbccfb34c0d696ad9f077",
+          "png": "736287dc3e753509e79e826d745208db39efd5c6b519260dad8b064c0eccfa7b",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 72,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 82,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-ambassadeur-2": {
+          "collection": "olympe",
+          "svg": "fa1cc699b526e227a1e5e53c103484849a4973b3ef62cf9af673aa81fd143db1",
+          "png": "f96db478240af63de51a3d3f4190c7283cc33bb4682730b1c2fdfb0e001e984e",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-ambassadeur-4": {
+          "collection": "olympe",
+          "svg": "5481230c4889ca12839a496418f3ce476ff19d362563fdd63834496460732987",
+          "png": "aefc51f1d25cf47be1aba3b4f1956bbcf0bf13d1f95a53ff410f1351105a1861",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -10,
+              "dy": 0,
+              "scale": 0.7
+            },
+            {
+              "bird": 1,
+              "dx": 10,
+              "dy": 0,
+              "scale": 0.7
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-legende-1": {
+          "collection": "olympe",
+          "svg": "9255866035d9daa6eea8884a809e822cd1586c72303556a45759afc2c45153ba",
+          "png": "f26b8f789cc46caa504d025289dfc8a624a7b57b49ad15673aaa5d9cfe501348",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -10,
+              "dy": 0,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-legende-4": {
+          "collection": "olympe",
+          "svg": "964680fcbb3408e16065681bd25353f1b916b36cc30c46df60bd46ca266468c4",
+          "png": "a2e72e991cee4cae37ded9fa71aa752b85994bb43101528af3572c1014c70b92",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 90,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 96,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-mythe-a": {
+          "collection": "olympe",
+          "svg": "2bc9ef5396d0d6481802a9cdb51795b1eea71084820b80e50a7db69bf17f385c",
+          "png": "93d8d30a9847226944309c538426bd42db21566260806889052e89505c525ef1",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 96,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 84,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-mythe-b": {
+          "collection": "olympe",
+          "svg": "b38a708710c8c2de4ed6bab4f183974e78e6eda51982c5ee462fa397db2a8741",
+          "png": "244a93803063cb4166614f5770c13ce02b5209acc99ff660c126cc8f4e504c9f",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 0,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-oracle-a": {
+          "collection": "olympe",
+          "svg": "4b8ff966ddfcde228bc21d8ad344431047ddb4908ee3b18881e78df08db0f162",
+          "png": "3e119f6b5f5d42898ac7c32eca44355f92c464276bd5f3cb41300cad5c71bab2",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -2,
+              "dy": 0,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 2,
+              "dy": 0,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-orateur-a": {
+          "collection": "olympe",
+          "svg": "b0c92e8e7c266bc87cf64e655a83d0d5a998f2378f555210f54faa3c3d95f548",
+          "png": "3067e8a3269258b16f708b09503053efd7c426a46fb1cff7ac67d8aa8b44f45d",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 90,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 28.6,
+              "dy": 57.2,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "olympe-orateur-c": {
+          "collection": "olympe",
+          "svg": "1be60412a79518a2c4a5c244b2ac074fe31aae598bde047100b5693c051d4569",
+          "png": "36e1ec84b367ffe0a2ba33a6bd65e3055995b048a54439b86e69c68ded80792c",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 78,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 66,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-cotes": {
+          "collection": "poses",
+          "svg": "17fa8849892184cdaee7a3d52d69a7b337679ebf437588ba137f0777b8e9eb71",
+          "png": "cef948b33a65327d3368c04c751ae62b108f376b6a10b5ea41b2de6fe01ecd13",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -16,
+              "dy": 0,
+              "scale": 0.7
+            },
+            {
+              "bird": 1,
+              "dx": 8,
+              "dy": 0,
+              "scale": 0.7
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-groupe": {
+          "collection": "poses",
+          "svg": "7b38ddebd0d72e7e2ac2a43039eeab734873f08d8d3d7d47c4228af00396da30",
+          "png": "0a01794bed85f39cfdbf4adcdc6fea7b1661d0f6e6beb44d04299f925d912c5b",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 88,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 41.1,
+              "dy": 82.3,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-message-cartouche": {
+          "collection": "poses",
+          "svg": "1914b4368f4eec596de0aa6130d1640ae2ece18838282bbf12e7e1306f23c9bc",
+          "png": "ae9dc31c935f4a41bcea03243b290fd4e17dfb5ad8b2c9d7befe121ee6f5a567",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 88,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 98,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-message-parchemin": {
+          "collection": "poses",
+          "svg": "695813a4784304514150e5969dcde75ae3993ecb87905610d636de5891331c76",
+          "png": "0f792b93f69d0bdd9587bad480507eee78a2d6cbbb116fc2b1911dec04fbd63f",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -16,
+              "dy": 0,
+              "scale": 0.7
+            },
+            {
+              "bird": 1,
+              "dx": 10,
+              "dy": 0,
+              "scale": 0.76
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-pied": {
+          "collection": "poses",
+          "svg": "c7094a374dfed3fc9b4a0ff3dc50bab01b5914f626d227e71fbb36a9aea90769",
+          "png": "343384e26dc593869df0e220984a87cc3844dcc782419756b89b4170065435c3",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -34,
+              "dy": 68,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 98,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "poses-ruban": {
+          "collection": "poses",
+          "svg": "05cd28333ed4e0bae93155e660795a9786e9d8c0404b3567f859532e6281dc26",
+          "png": "914981c1851f854eacd574747ccb986e9d1e78f37fd9afe352c734ffe518d830",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 8,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-ambassadeur-1": {
+          "collection": "royaumes",
+          "svg": "d81401a92cc48956ead003032b86da1d4dd2e5788402a526a82796550b4664d1",
+          "png": "c90ec93b4b894e4734de6342b88d7d8cf5b5f0b800cd89956688b06e39073e58",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 80,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 76,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-ambassadeur-2": {
+          "collection": "royaumes",
+          "svg": "565c3309f2620b96d49067289d821068d9fb9b9a7c7a62ee98176fd5df694f74",
+          "png": "ca8c289028a9588f413d53ad07583a7bb1649b85f803db8d68ebadd7865e5675",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 4.5,
+              "dy": 8.9,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-ambassadeur-3": {
+          "collection": "royaumes",
+          "svg": "f6ee6fc73437ae17f95b604df33b39b41fb958a5c376849756b424997184fd17",
+          "png": "3bb1a0f93983c8e94583a948f506ffacbb76e374d86802d0f895ce6f32e761c3",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 10,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-ambassadeur-4": {
+          "collection": "royaumes",
+          "svg": "cdd7e48946a9e2afc175e8c4412b06edfd725ea139a60d484501640ff30dc080",
+          "png": "30a8adfaf56e4fa623ff2f36fa77b83db8c9c996efd64eb2db6a3404d7129994",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 76,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 25,
+              "dy": 50.1,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-ambassadeur-5": {
+          "collection": "royaumes",
+          "svg": "a1d64ddf74c93431d2a277db16d5ce6a5266d00bdd8fe0a8f46d2c731df79861",
+          "png": "60a0552ad7a4a4fa7eaab4a463b2ff513a2715975fee8a70707eb717fb632e03",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 84,
+              "scale": 0.94
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 80,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-legende-1": {
+          "collection": "royaumes",
+          "svg": "f842b45b46e5f382757a182d2c959cf77f03a0d44883ad178017760a86ea2784",
+          "png": "3ccc9d5d5aa85573452cf9bda98c7a63e9bc294e1b7028e913970b0e4d70a529",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 94,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 100,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-legende-2": {
+          "collection": "royaumes",
+          "svg": "21a7fff8568e51606e34b4bf72cc8909d40ab8c69128d89e35cfc47996f0e07a",
+          "png": "2bf0bee30d422b57b1b5ee7b2f3f9d2eb35bd8480ab0162174c4d423cd6a14c5",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -18.4,
+              "dy": 18.4,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 18.4,
+              "dy": 18.4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-legende-3": {
+          "collection": "royaumes",
+          "svg": "f66708973958e1acec80a0d46928c361c0a0b2c7eb245f7d59e82a681f3a464b",
+          "png": "ff56a0eb36885c3a6e24815d17a43fa4ce8c6cab99fd75c14f4cdca5f54b3e18",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 6,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 16,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-legende-4": {
+          "collection": "royaumes",
+          "svg": "12d2a4ef7f8b87660bca9903e3f43cd98643af8c44f5567c94695f46f7813bff",
+          "png": "1186e584f12844750dc48238a2b9709360f6776292e92087581be3e62322a4a1",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 76,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 64,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-mythe-a": {
+          "collection": "royaumes",
+          "svg": "5ed2979fcd9cad824722e9050c49ca2613880b3bd8966a9da2bb736a61e8e2fd",
+          "png": "95b8ffba32bc5465f16c845bcb11e5b0a813cb5a3895a5d627c531e05dfd821d",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 80,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 84,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-mythe-b": {
+          "collection": "royaumes",
+          "svg": "1b0b26b461c962c63d37e47271ed35b633d49ab607778e19d84f7c724ed22867",
+          "png": "dbe322eaa06f9621819526a5b77545f788bf32438934969668612d8d741d1bd4",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -8,
+              "dy": 0,
+              "scale": 0.76
+            },
+            {
+              "bird": 1,
+              "dx": 8,
+              "dy": 0,
+              "scale": 0.76
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-oracle-a": {
+          "collection": "royaumes",
+          "svg": "ce0d07f5f6d2ece225bdd26dccfc227d808cd9c8d898009e4b363ab7ac0e7b30",
+          "png": "d24cafed28a585f664e4e68fc1bd0b37717f8a3e9f484bb8fffec5088a0b4e20",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 86,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 78,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-oracle-c": {
+          "collection": "royaumes",
+          "svg": "4d61e1fa4b09ab6ee06490f2e94fdbb0c01b1f2a522b7bb7a914e0c68799bb25",
+          "png": "bb2a467295f11a63c7eb5fd5d7bf335cb2cadc8a18aab525b4bb3a17961d6273",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -5.4,
+              "dy": -2.7,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 6,
+              "dy": 0,
+              "scale": 0.76
+            }
+          ],
+          "decorDelta": 0
+        },
+        "royaumes-orateur-b": {
+          "collection": "royaumes",
+          "svg": "a9d7952f77bd8cfb1ee959c875b0e43a15dfc7f102f381b6e8976dbe8e6934ab",
+          "png": "6eb0d5418f6feb179dbca55c7e3a7c749c4990e3c6259227f0a11fbe2dc07a6c",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 86,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 66,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-ambassadeur-1": {
+          "collection": "savane",
+          "svg": "6bd994419334b57179f91bef2380d0fbb326553f47169774bc6d51094dca68dd",
+          "png": "8b46956891a3cf2d693d53dd38c6b67e480830804db93976c0c5dbe4885b61b8",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -6,
+              "dy": 0,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 4,
+              "dy": 0,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-legende-3": {
+          "collection": "savane",
+          "svg": "38eed44cb7021483b810a5efcfbfdcc5ec64628f8cec51fa70972cbf1b4dffc5",
+          "png": "ddcab3d0b0421dff82ae094a9a0b39ab925c18c54eac74f7ef42d4a8a99640b9",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -102,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 8,
+              "dy": 0,
+              "scale": 0.82
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-legende-4": {
+          "collection": "savane",
+          "svg": "8b776278ecc73d8188a1fc567e64d0a9d6150e6db7662b5af6fc4bc451de6c6e",
+          "png": "00ddf1ef99e4d9c93461b89bac68af38ee3b084b6f4b676902a4693e47e10fb6",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 64,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 70,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-mythe-b": {
+          "collection": "savane",
+          "svg": "ab9faf3c437016f6bc274942bbc729104fb24dfd60a3267dc1a18b6e51f72a3e",
+          "png": "efe7ddeb876e65fe5efc5871aa94e3298d272180df159edf510515bdc23380d3",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -70,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 4,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-mythe-c": {
+          "collection": "savane",
+          "svg": "b356746d3e5f8789a64abe0967e34aede65cd1006c43e5db4a51b2b67388bab4",
+          "png": "0563c747cf21a5210d45146669520d86bdd2f8a24a92ff6bf1c763dcc4b9d75b",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 10,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-oracle-a": {
+          "collection": "savane",
+          "svg": "2d60ed7d6d160f9aa3456798d6eda3aa1e02675e5a7c75aa8510cac85d17e2fe",
+          "png": "6c517c3fd55241e1dc89bc265e60a2c73354ba5a88f275376b20c6baeb605769",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -12,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 52,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-oracle-b": {
+          "collection": "savane",
+          "svg": "b3a9fb0762f636c35a59992e629afe94aff993b3c94258323a640b4d2e0d65a2",
+          "png": "6fcc3df8ba90836b9ba1bfd239c66ed78b369bdd70afb879fdf1448ceb327645",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -22,
+              "dy": 0,
+              "scale": 0.64
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-oracle-c": {
+          "collection": "savane",
+          "svg": "ddb016900f2a629ac1b99498baabcf353c979e49a354236f1ad1626e5ebbb8d7",
+          "png": "ac74dc2b02e6ec49ff9868ed7bafd2d551efa0c62b0084b97cca29e080c930d5",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 70,
+              "scale": 0.64
+            }
+          ],
+          "decorDelta": 0
+        },
+        "savane-orateur-c": {
+          "collection": "savane",
+          "svg": "ba124a21f98fe0f7ca3a3de6b38575ee40e7ef0bc11624ef4e77da6cd64950e8",
+          "png": "5681b7a6ba90150e21b3b768737a11d7db507bbf2979717c9e83c0ef80a92754",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 88,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 118,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-bourse-b": {
+          "collection": "tresor",
+          "svg": "d00a839b6e22df8a688a018376d6ad7d913686c85f95f8c8cc871a75c096f63f",
+          "png": "81f04eae24c108ff6549ac36b7d8745de5447267541cdbb4d0124a5bb1aa427b",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 68,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 44,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-coffre-a": {
+          "collection": "tresor",
+          "svg": "0b32bb8f8d4c9e5e4e135249f7ce2b9036a11dfbd8a8a982b97f1e10ee9d53a0",
+          "png": "d61623a40fcecfb4c48059c5d8b5ab4771b08c380794005a45e36604f3ae9f77",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -8.5,
+              "dy": 8.5,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-coffret-b": {
+          "collection": "tresor",
+          "svg": "099468c1eed25e3c983e96e710c4ee35bfcece50552c29a14659f46d687b2138",
+          "png": "8e0454d69b3480512d7853d26ff88046721876ba8119983dbecb7509d19bce55",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": -16,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 2,
+              "dy": 0,
+              "scale": 0.88
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-reserve-b": {
+          "collection": "tresor",
+          "svg": "d0ebbeedd9b929ba0081fe5c73b524beebcb425f095f458379ab9069cb40fbbd",
+          "png": "e3ce54a3f7adfceafa47bc38f42d0c0fdb4c86efd5869234637b01d69706e710",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -34,
+              "dy": 17,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 20,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-tresor-a": {
+          "collection": "tresor",
+          "svg": "9576bd9b0dff3fe3b92b14e546807e7e69ba49b5185288bd379add6c72d5a61e",
+          "png": "186b79f05e747f7ee6e647d0d356dd59e65ecf7bbf6f64ccba9ca3da5a8c1b9a",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": -5.7,
+              "dy": -5.7,
+              "scale": 1
+            },
+            {
+              "bird": 1,
+              "dx": 11.3,
+              "dy": -11.3,
+              "scale": 1
+            }
+          ],
+          "decorDelta": 0
+        },
+        "tresor-tresor-b": {
+          "collection": "tresor",
+          "svg": "a5f304e695f753ae68b8b2c88e570a12eca94396d4bca94227afcf6590e86098",
+          "png": "bd1ed10e368c7202f9b8e55ed301058f65c6577aea61dae7041039503c589282",
+          "designPng": true,
+          "anchors": [
+            {
+              "bird": 0,
+              "dx": 0,
+              "dy": 0,
+              "scale": 0.88
+            },
+            {
+              "bird": 1,
+              "dx": 0,
+              "dy": 0,
+              "scale": 0.94
+            }
+          ],
+          "decorDelta": 0
+        }
+      }
+    }
   }
 }

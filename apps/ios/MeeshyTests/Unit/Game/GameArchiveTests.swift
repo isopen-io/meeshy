@@ -158,6 +158,35 @@ final class GameArchiveTests: XCTestCase {
         XCTAssertEqual(shown, .opened(GameUpcomingSeasonBlock(number: 2, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
     }
 
+    // MARK: - Le calendrier servi peint une saison future (#10232)
+
+    private static let shiftedSchedule = SeasonSchedule.normalize(["revision": 2, "seasons": [
+        ["number": 1, "startDay": "2026-12-21", "status": "scheduled", "themeKey": "language:fr", "stepPoints": 100, "copy": NSNull()],
+        ["number": 2, "startDay": "2027-03-01", "status": "scheduled", "themeKey": "language:ja", "stepPoints": 150, "copy": NSNull()],
+    ]])
+
+    func test_aFutureSeasonOfTheServedCalendar_isPaintedWithItsShiftedDates_beforeAnyRead() {
+        let shown = GameSeasonShown.of(focus: 3, game: GameWave2Fixture.game(), load: GameLoad(isLoading: true),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: Self.shiftedSchedule)
+        XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 3, themeKey: "language:ar", startDay: "2027-04-26", endDay: "2027-06-20")))
+    }
+
+    func test_aPausedSeasonOfTheServedCalendar_hasNoDateToPaint_andWaitsForItsRead() {
+        let paused = SeasonSchedule.normalize(["revision": 2, "seasons": [
+            ["number": 2, "startDay": "2027-02-15", "status": "paused", "themeKey": "language:es", "stepPoints": 100, "copy": NSNull()],
+        ]])
+        let shown = GameSeasonShown.of(focus: 2, game: GameWave2Fixture.game(), load: GameLoad(isLoading: true),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: paused)
+        XCTAssertEqual(shown, .skeleton)
+    }
+
+    func test_aServedArchive_winsOverTheCalendar() {
+        let archive = season(number: 3, status: .upcoming)
+        let shown = GameSeasonShown.of(focus: 3, game: GameWave2Fixture.game(), load: GameLoad(value: archive),
+                                       moment: LeagueMoment(dayKey: "2027-01-05", minuteOfDay: 600), schedule: Self.shiftedSchedule)
+        XCTAssertEqual(shown, .upcoming(GameUpcomingSeasonBlock(number: 3, themeKey: "language:es", startDay: "2027-02-15", endDay: "2027-04-11")))
+    }
+
     // MARK: - Une saison « à venir » gardée hors ligne, le jour J (#10131)
 
     private static let eve = LeagueMoment(dayKey: "2027-02-14", minuteOfDay: 19 * 60 + 59)
@@ -301,5 +330,27 @@ final class GameArchiveTests: XCTestCase {
         let e = monter(GameLeagueWeekArchiveCard(archive: week()))
         XCTAssertFalse(e.identifiers.contains("game.league.standings"), "aucun classement, aucune ligne d’un autre membre")
         XCTAssertTrue(e.says(GameText.archiveWeekPrivacy))
+    }
+
+    // MARK: - Une page Saison restée ouverte se repeint au dimanche 20 h (#10225)
+
+    private func local(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int, _ second: Int = 0) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute, second: second)) ?? Date()
+    }
+
+    func test_flipSchedule_repaintsNow_thenAtEachSundayEightPm() {
+        let start = local(2026, 12, 20, 19, 59, 30)
+        let entries = Array(GameSeasonFlipSchedule().entries(from: start, mode: .normal).prefix(3))
+        XCTAssertEqual(entries, [start, local(2026, 12, 20, 20, 0), local(2026, 12, 27, 20, 0)])
+        XCTAssertEqual(GameSeasonFlipSchedule.nextClose(after: local(2026, 12, 20, 20, 0)), local(2026, 12, 27, 20, 0),
+                       "à 20 h pile, la prochaine bascule est la semaine suivante")
+    }
+
+    func test_anOpenSeasonPage_flipsFromUpcomingToOpened_atTheScheduledRepaint() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let entries = Array(GameSeasonFlipSchedule().entries(from: local(2026, 12, 20, 19, 59, 30), mode: .normal).prefix(2))
+        let shown = entries.map { GameSeasonShown.of(focus: 1, game: game, load: GameLoad<GameSeasonArchive>(), moment: .local($0)) }
+        XCTAssertEqual(shown, [.upcoming(GameWave2Fixture.upcoming), .opened(GameWave2Fixture.upcoming)],
+                       "la page peinte avant 20 h se repeint « ouverte » à l'entrée suivante de la TimelineView")
     }
 }

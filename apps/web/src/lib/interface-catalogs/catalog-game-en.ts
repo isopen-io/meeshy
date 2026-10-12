@@ -528,6 +528,7 @@ const en = {
   'game.season.completed': 'Path completed: a cup, a dated badge and {glory} Glory.',
   'game.season.none': 'No season is open right now. The next one starts soon.',
   'game.season.upcoming': 'Season {number} opens on {date}.',
+  'game.season.paused': 'The season is on hold: its opening date will be announced.',
   'game.season.seal.title': 'Seal row',
   'game.season.seal.body': 'The Seal is purely cosmetic: a collectible every {every} steps, with no effect on the game.',
   'game.season.seal.buy': 'Get the Seal · {price}',
@@ -684,6 +685,7 @@ const en = {
   'game.archive.season.past_title': 'Season {number} · ended',
   'game.archive.season.current_title': 'Season {number} · in progress',
   'game.archive.season.upcoming_title': 'Season {number} · upcoming',
+  'game.archive.season.paused_title': 'Season {number} · on hold',
   'game.archive.season.opened_note': 'The season is open: your path shows up as soon as it’s reloaded.',
   'game.archive.season.dates': 'From {start} to {end}',
   'game.archive.season.rewards.one': '{count} reward claimed',
@@ -700,6 +702,14 @@ const en = {
   'game.archive.week.purged': 'This week is too old: its result was erased, as planned.',
   'game.archive.week.upcoming': 'This week hasn’t started yet.',
   'game.archive.week.privacy': 'Only your result is kept: the other members of the group can’t be looked up again.',
+  'game.constellation.title': 'Constellation',
+  'game.constellation.stars.one': '{count} star lit',
+  'game.constellation.stars.other': '{count} stars lit',
+  'game.constellation.cosmetics': 'Unlocked cosmetics',
+  'game.constellation.cosmetic': '{kind} · star {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Frame',
+  'game.constellation.kind.sparkle': 'Sparkle',
 } as const satisfies GameCoreCatalog;
 
 export default en;

@@ -169,6 +169,7 @@
 //   AgentAnalysisSnapshot participantSnapshots, topTopics
 //   AgentScanLog          nodeResults, configSnapshot
 //   OrphanMediaCleanup    fileUrl
+//   SharedTranslation     payload (traduction SCELLÉE d'un message réel, que sa clé ne rouvre plus une fois le message réécrit)
 //
 // Laissés tels quels, chacun avec sa raison écrite (schema-exemptions.mjs,
 // collections.mjs, SECRET_EXEMPTIONS) : identifiants (`_id`, clés étrangères),

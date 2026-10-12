@@ -23,7 +23,7 @@ extension GameLawVectorEvaluator {
         "showcase-view", "showcase-cap", "trophy-month", "atlas", "atlas-language", "prestige", "rarity",
         "rarity-display", "mythic-seats", "mythic-crossing", "mythic-signature", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
         "trophy-visitor-key", "showcase-visitor", "season-tense",
-    ] + photoLaws
+    ] + photoLaws + constellationLaws + scheduleLaws
 
     static func evaluateWave2(law: String, input: GameJSON) throws -> GameJSON {
         switch law {
@@ -79,6 +79,8 @@ extension GameLawVectorEvaluator {
             return object(["key": .optionalString(GameTrophies.visitorKey(key: string(input, "key"), awardedMonth: string(input, "awardedMonth")))])
         case "showcase-visitor": return showcaseVisitor(input)
         case "photo-catch-up", "photo-offer", "photo-standing", "photo-alert": return try evaluatePhoto(law: law, input: input)
+        case "constellation", "constellation-key", "league-next-close": return try evaluateConstellation(law: law, input: input)
+        case "season-schedule": return try evaluateSchedule(law: law, input: input)
         default: throw GameLawVectorError.unknownLaw(law)
         }
     }

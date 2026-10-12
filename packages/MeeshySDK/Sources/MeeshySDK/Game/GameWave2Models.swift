@@ -219,10 +219,16 @@ public struct GameSeasonBlock: Codable, Sendable, Equatable {
     public let nextReward: NextReward?
     public let sealOwned: Bool
     public let sealPrice: Int
+    /// Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10232). Absent d'un serveur antérieur :
+    /// `servedStepPoints` rend la loi (100).
+    public let stepPoints: Int?
+
+    /// Les points d'une étape ordinaire tels que l'écran les montre : ceux de la saison, sinon la loi.
+    public var servedStepPoints: Int { stepPoints.flatMap { $0 > 0 ? $0 : nil } ?? GameSeason.stepPoints }
 
     public init(number: Int, themeKey: String, startDay: String, endDay: String, week: Int, stars: Int,
                 steps: Int, stepsTotal: Int, starsToNext: Int, progress: Double, completed: Bool,
-                claimedSteps: [Int], nextReward: NextReward?, sealOwned: Bool, sealPrice: Int) {
+                claimedSteps: [Int], nextReward: NextReward?, sealOwned: Bool, sealPrice: Int, stepPoints: Int? = nil) {
         self.number = number
         self.themeKey = themeKey
         self.startDay = startDay
@@ -238,6 +244,7 @@ public struct GameSeasonBlock: Codable, Sendable, Equatable {
         self.nextReward = nextReward
         self.sealOwned = sealOwned
         self.sealPrice = sealPrice
+        self.stepPoints = stepPoints
     }
 }
 
@@ -732,11 +739,35 @@ public struct UserShowcaseResponse: Codable, Sendable, Equatable {
     public let visible: Bool
     public let items: [GameVisitorTrophyItem]
     public let order: [String]
+    /// La constellation du membre (#10053) — ses seules étoiles, figées au mois ; absente d'un refus ou d'un ancien
+    /// serveur.
+    public let constellation: ShowcaseConstellation?
 
-    public init(visible: Bool, items: [GameVisitorTrophyItem], order: [String]) {
+    public init(visible: Bool, items: [GameVisitorTrophyItem], order: [String], constellation: ShowcaseConstellation? = nil) {
         self.visible = visible
         self.items = items
         self.order = order
+        self.constellation = constellation
+    }
+
+    private enum CodingKeys: String, CodingKey { case visible, items, order, constellation }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        visible = try container.decode(Bool.self, forKey: .visible)
+        items = try container.decode([GameVisitorTrophyItem].self, forKey: .items)
+        order = try container.decode([String].self, forKey: .order)
+        // Un champ neuf malformé ne fait pas tomber la vitrine : il se tait.
+        constellation = (try? container.decodeIfPresent(ShowcaseConstellation.self, forKey: .constellation)) ?? nil
+    }
+}
+
+/// Les étoiles allumées d'un autre membre (#10053).
+public struct ShowcaseConstellation: Codable, Sendable, Equatable {
+    public let stars: Int
+
+    public init(stars: Int) {
+        self.stars = stars
     }
 }
 

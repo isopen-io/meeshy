@@ -5,6 +5,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { gameText } from '@/lib/view/game-copy';
 import { awardedMonthLabel, trophyView } from '@/lib/view/game-copy-v2';
 
+import { GameConstellation, visitorConstellation } from './game-constellation';
 import { GameTrophyShelf, type ShelfEntry } from './game-trophy-shelf';
 import { Trophy } from './game/trophy';
 import { GameStanding, GameStandingMini, visibleStanding } from './game-standing';
@@ -53,24 +54,30 @@ export function GameProfileVisitor({
 }) {
   const standing = visibleStanding(game);
   const entries = showcase === undefined || !showcase.visible ? [] : entriesOf(showcase);
-  if (standing === null && entries.length === 0) return null;
+  // La constellation (#10053) suit le réglage de la vitrine ; ses étoiles arrivent figées au mois du serveur.
+  const stars = visitorConstellation(showcase);
+  const constellation = stars === null ? null : <GameConstellation stars={stars} />;
+  if (standing === null && entries.length === 0) return constellation;
   return (
-    <GameCard id="game-profile-visitor" labelledBy="game-profile-visitor-title">
-      <h2 id="game-profile-visitor-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-        {standing === null ? gameText('game.profile.visitor_title', { name }) : gameText('game.standing.title', { name })}
-      </h2>
-      {standing === null ? null : <GameStanding game={standing} />}
-      {entries.length === 0 ? null : (
-        <div className="flex flex-col gap-1.5" data-game-visitor-showcase="">
-          {standing === null ? null : (
-            <h3 className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
-              {gameText('game.profile.showcase')}
-            </h3>
-          )}
-          <GameTrophyShelf entries={entries} size={72} />
-        </div>
-      )}
-    </GameCard>
+    <>
+      <GameCard id="game-profile-visitor" labelledBy="game-profile-visitor-title">
+        <h2 id="game-profile-visitor-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+          {standing === null ? gameText('game.profile.visitor_title', { name }) : gameText('game.standing.title', { name })}
+        </h2>
+        {standing === null ? null : <GameStanding game={standing} />}
+        {entries.length === 0 ? null : (
+          <div className="flex flex-col gap-1.5" data-game-visitor-showcase="">
+            {standing === null ? null : (
+              <h3 className="text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
+                {gameText('game.profile.showcase')}
+              </h3>
+            )}
+            <GameTrophyShelf entries={entries} size={72} />
+          </div>
+        )}
+      </GameCard>
+      {constellation}
+    </>
   );
 }
 

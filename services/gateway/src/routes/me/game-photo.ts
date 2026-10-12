@@ -10,13 +10,17 @@
  * La LECTURE de ces réglages et du registre passe par l'extension `game.photo` du bloc `game` de
  * `GET /me/engagement` : aucune requête de plus. Aucune route ne prend d'`userId` : l'utilisateur est celui
  * de l'authentification. Un corps mal formé (atmosphère hors `GLORY_ATMOSPHERES`, réglage inconnu, étape
- * mal formée, plus de 64 étapes) est un 400 du schéma.
+ * mal formée, plus de 64 étapes) est un 400 du schéma ; une étape bien formée mais hors des familles connues
+ * (`isKnownPhotoStepId` : bornes du catalogue, `day:` de J-2 à J+1) est un 400 `PHOTO_STEP_UNKNOWN`, et rien
+ * du lot n'est écrit.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { GLORY_ATMOSPHERES, type GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 import { PHOTO_INVITATIONS, PHOTO_PRESENTED_MAX, PHOTO_STEP_ID_PATTERN, type PhotoInvitations } from '@meeshy/shared/types/game-photo';
+import { isKnownPhotoStepId } from '@meeshy/shared/utils/game/photo-step-ids';
+import { sendError } from '../../utils/response';
 import { GamePhotoService, atmosphereRemovalGuard, type FramePackInstaller } from '../../services/game/GamePhotoService';
 import { PackCatalog } from '../../services/packs/PackCatalog';
 import { startupPackIndex, type PackIndex } from '../../services/packs/PackIndex';
@@ -104,7 +108,7 @@ export async function meGamePhotoRoutes(fastify: FastifyInstance, options: GameP
       config: { rateLimit: gameRateLimitConfig('photo-presented', 60, false) },
       schema: {
         description:
-          'Accuse la présentation d’étapes du jeu (#10162) — bannière, carte photo, carnet, déroulé. Au plus 64 ; idempotent : une ligne par étape, la date de première présentation ne bouge pas.',
+          'Accuse la présentation d’étapes du jeu (#10162) — bannière, carte photo, carnet, déroulé. Au plus 64, toutes connues (sinon 400 `PHOTO_STEP_UNKNOWN`) ; idempotent : une ligne par étape, la date de première présentation ne bouge pas. Au-delà du plafond du compte, une étape neuve est ignorée (absente de la réponse).',
         tags: ['me', 'game'],
         summary: 'Mark photo moments as presented',
         body: {
@@ -132,7 +136,13 @@ export async function meGamePhotoRoutes(fastify: FastifyInstance, options: GameP
         },
       },
     },
-    (request: FastifyRequest<{ Body: { requestId: string; stepIds: string[] } }>, reply: FastifyReply) =>
-      runGameWrite(request, reply, (userId) => photo.markPresented(userId, request.body.stepIds)),
+    (request: FastifyRequest<{ Body: { requestId: string; stepIds: string[] } }>, reply: FastifyReply) => {
+      const now = new Date();
+      const unknown = request.body.stepIds.filter((stepId) => !isKnownPhotoStepId(stepId, now));
+      if (unknown.length > 0) {
+        return sendError(reply, 400, 'PHOTO_STEP_UNKNOWN', { code: 'PHOTO_STEP_UNKNOWN', details: { stepIds: [...new Set(unknown)] } });
+      }
+      return runGameWrite(request, reply, (userId) => photo.markPresented(userId, request.body.stepIds, now));
+    },
   );
 }

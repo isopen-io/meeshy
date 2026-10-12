@@ -17,7 +17,9 @@ Polices disponibles (chargées par render.mjs) : 'Cinzel', 'Cinzel Decorative', 
 import base64
 import functools
 import inspect
+import json
 import math
+import os
 import random
 import re
 import sys
@@ -79,7 +81,9 @@ class Card:
         self._n = 0
         self._slots = {esc(DATE_TEXT): "date"}
         self._decor_texts = 0
+        self._decor_keys = {}
         self.motifs = set()
+        self.birds = 0
         Card.current = self
 
     def nid(self, prefix="k"):
@@ -124,8 +128,11 @@ class Card:
                     counter[0] += 1
                     key = f"plate.{counter[0]}"
                 else:
-                    self._decor_texts += 1
-                    key = f"decor.{self._decor_texts}"
+                    where = (TAG_RE.sub("", inner).strip(), *re.findall(r'\s(?:x|y|transform)="([^"]*)"', attrs))
+                    if where not in self._decor_keys:
+                        self._decor_texts += 1
+                        self._decor_keys[where] = f"decor.{self._decor_texts}"
+                    key = self._decor_keys[where]
             return f'<text data-slot="{key}"{attrs}>{inner}</text>'
 
         return TEXT_RE.sub(tag, markup)
@@ -186,7 +193,45 @@ class Card:
 
     def save(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(self.svg())
+        Path(path).write_text(anchored(self.svg(), ANCHORS.get(Path(path).stem, [])))
+
+
+# Les ancres corrigées de Mee et Meo (lot L2, règle d'empiètement) : `lib/anchors.json` donne, par cadre, un
+# déplacement `dx`, `dy` (repère de design) et une échelle `scale` par oiseau, repéré par l'ordre de ses appels à
+# bird() (`data-bird`). Ce qui suit un oiseau (`data-follows-bird`, la lueur posée sous lui) bouge avec lui. Le décor
+# ne bouge pas. `lib/anchors.mjs` les calcule ; CADRES_ANCHORS=off rend le dessin validé du 2026-10-10 (référence L0).
+ANCHORS = {} if os.environ.get("CADRES_ANCHORS") == "off" else json.loads((HERE / "anchors.json").read_text())
+BIRD_TR = re.compile(r'(<g data-layer="birds" data-bird="(\d+)"[^>]*? transform=")translate\(([-\d.]+) ([-\d.]+)\)([^"]*)"')
+FOLLOW_TR = re.compile(r'<g data-follows-bird="(\d+)">')
+
+
+def anchored_spot(stem, index, x, y, size):
+    """La place corrigée d'un oiseau, pour un atelier qui accroche quelque chose à lui (les queues du ruban tenues au
+    bec) : ce qui s'accroche suit l'oiseau."""
+    fix = next((f for f in ANCHORS.get(stem, []) if f["bird"] == index), {})
+    return x + fix.get("dx", 0), y + fix.get("dy", 0), size * fix.get("scale", 1)
+
+
+def anchored(svg, fixes):
+    by_bird = {fix["bird"]: fix for fix in fixes}
+    if not by_bird:
+        return svg
+
+    def bird_tr(m):
+        fix = by_bird.get(int(m.group(2)))
+        if not fix:
+            return m.group(0)
+        x, y = float(m.group(3)) + fix.get("dx", 0), float(m.group(4)) + fix.get("dy", 0)
+        scale = fix.get("scale", 1)
+        return f'{m.group(1)}translate({f(x)} {f(y)}){m.group(5)}{f" scale({scale})" if scale != 1 else ""}"'
+
+    def follow_tr(m):
+        fix = by_bird.get(int(m.group(1)))
+        if not fix:
+            return m.group(0)
+        return f'<g data-follows-bird="{m.group(1)}" transform="translate({f(fix.get("dx", 0))} {f(fix.get("dy", 0))})">'
+
+    return FOLLOW_TR.sub(follow_tr, BIRD_TR.sub(bird_tr, svg))
 
 
 def nid(prefix="k"):
@@ -196,20 +241,33 @@ def nid(prefix="k"):
     return Card.current.nid(prefix)
 
 
+PLATE_VARIANT = os.environ.get("CADRES_PLATE")
+PLATE_SAMPLE_MESSAGE = "On brille ensemble"
+
+
 def plate_layer(fn=None, **aliases):
     """Une fonction d'inscription ou de panneau de plaque : tout ce qu'elle dessine — qu'elle l'ajoute au cadre ou
     qu'elle le RENDE en balisage — tombe dans la couche `plate`, et ses arguments `kicker`, `title`, `message`, `date`
     nomment les emplacements de texte qu'elle pose. `aliases` relie une clé à un autre argument :
-    `@plate_layer(title="palier")`."""
+    `@plate_layer(title="palier")`.
+
+    `CADRES_PLATE=plain|message` rejoue la plaque dans l'AUTRE variante que celle du cadre (§ 5.1 : la hauteur du
+    panneau change avec le message) : `plain` retire le message, `message` garde celui du cadre ou pose
+    PLATE_SAMPLE_MESSAGE. Seule la plaque change ; l'exportateur vérifie que le décor reste identique au pixel."""
     if fn is None:
         return lambda f_: plate_layer(f_, **aliases)
     sig = inspect.signature(fn)
     names = {key: aliases.get(key, key) for key in ("kicker", "title", "message", "date")}
+    message_arg = names["message"] if names["message"] in sig.parameters else None
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         bound = sig.bind(*args, **kwargs)
         bound.apply_defaults()
+        if PLATE_VARIANT and message_arg:
+            current = bound.arguments.get(message_arg)
+            bound.arguments[message_arg] = None if PLATE_VARIANT == "plain" else (current or PLATE_SAMPLE_MESSAGE)
+            args, kwargs = bound.args, bound.kwargs
         card = args[0]
         card.slots(**{key: bound.arguments.get(arg) for key, arg in names.items()})
         with card.layer("plate"):
@@ -291,8 +349,10 @@ def bird(card, pose, x, y, size, flip=False, rotate=0, shadow=True):
     """Pose une image de Mee ou Meo, centrée en (x, y), largeur `size`."""
     tr = f"translate({f(x)} {f(y)}) rotate({rotate})" + (" scale(-1 1)" if flip else "")
     filt = f' filter="{card.shadow("bird", 0, 6, 6, "#000000", 0.45)}"' if shadow else ""
+    index = card.birds
+    card.birds += 1
     card.add(
-        f'<g data-layer="birds" data-pose="{pose}" transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
+        f'<g data-layer="birds" data-bird="{index}" data-pose="{pose}" transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
         f'width="{f(size)}" height="{f(size)}" preserveAspectRatio="xMidYMid meet"/></g>'
     )
 

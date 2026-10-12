@@ -157,7 +157,7 @@ enum ProgressionConceptModel {
 
     static func card(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?,
                      now: Date = Date()) -> ProgressionConceptCard {
-        let head = value(concept, progress: progress, game: game)
+        let head = value(concept, progress: progress, game: game, now: now)
         let action = self.action(concept, progress: progress, game: game, now: now)
         let important = ([action].compactMap { $0 } + chips(concept, progress: progress, game: game, now: now))
             .filter { !$0.isEmpty && $0 != head }
@@ -177,7 +177,8 @@ enum ProgressionConceptModel {
 
     // MARK: - La valeur de la tête
 
-    static func value(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?) -> String {
+    static func value(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?,
+                      now: Date = Date()) -> String {
         switch concept {
         case .level:
             return GameText.bannerLevel(level: count(game?.level.shown.level ?? progress.level.level))
@@ -204,6 +205,11 @@ enum ProgressionConceptModel {
             guard let season = game?.season else {
                 // Avant la saison 1 (#10014) : la date d'ouverture, jamais un vide.
                 guard let upcoming = game?.seasonUpcoming else { return GameText.doorSeasonNone }
+                // L'état se CALCULE (#10224), comme la page Saison : hors ligne, la copie « à venir » bascule
+                // d'elle-même à la fermeture du dimanche 20 h qui ouvre la saison.
+                let tense = GameSeason.liveTense(served: .upcoming, startDay: upcoming.startDay, endDay: upcoming.endDay,
+                                                 at: .local(now))
+                guard tense == .upcoming else { return GameText.doorSeason(number: count(upcoming.number)) }
                 return GameText.doorSeasonUpcoming(date: GameWave2Format.day(upcoming.startDay))
             }
             return GameText.doorSeasonSteps(steps: count(season.steps), total: count(season.stepsTotal))

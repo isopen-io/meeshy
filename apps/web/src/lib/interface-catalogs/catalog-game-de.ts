@@ -528,6 +528,7 @@ const de = {
   'game.season.completed': 'Weg abgeschlossen: ein Pokal, ein datiertes Abzeichen und {glory} Ruhm.',
   'game.season.none': 'Gerade ist keine Saison offen. Die nächste beginnt bald.',
   'game.season.upcoming': 'Saison {number} beginnt am {date}.',
+  'game.season.paused': 'Die Saison ist pausiert: Das Startdatum wird noch bekanntgegeben.',
   'game.season.seal.title': 'Siegel-Reihe',
   'game.season.seal.body': 'Das Siegel ist rein dekorativ: alle {every} Etappen ein Sammelobjekt, ohne Einfluss auf das Spiel.',
   'game.season.seal.buy': 'Siegel holen · {price}',
@@ -684,6 +685,7 @@ const de = {
   'game.archive.season.past_title': 'Saison {number} · beendet',
   'game.archive.season.current_title': 'Saison {number} · läuft',
   'game.archive.season.upcoming_title': 'Saison {number} · demnächst',
+  'game.archive.season.paused_title': 'Saison {number} · pausiert',
   'game.archive.season.opened_note': 'Die Saison ist eröffnet: Dein Weg erscheint, sobald sie neu geladen ist.',
   'game.archive.season.dates': 'Vom {start} bis {end}',
   'game.archive.season.rewards.one': '{count} Belohnung abgeholt',
@@ -700,6 +702,14 @@ const de = {
   'game.archive.week.purged': 'Diese Woche liegt zu weit zurück: Ihr Ergebnis wurde wie vorgesehen gelöscht.',
   'game.archive.week.upcoming': 'Diese Woche hat noch nicht begonnen.',
   'game.archive.week.privacy': 'Nur dein Ergebnis wird aufbewahrt: Die anderen Gruppenmitglieder lassen sich nicht mehr einsehen.',
+  'game.constellation.title': 'Sternbild',
+  'game.constellation.stars.one': '{count} Stern leuchtet',
+  'game.constellation.stars.other': '{count} Sterne leuchten',
+  'game.constellation.cosmetics': 'Freigeschaltete Kosmetik',
+  'game.constellation.cosmetic': '{kind} · Stern {star}',
+  'game.constellation.kind.halo': 'Halo',
+  'game.constellation.kind.frame': 'Rahmen',
+  'game.constellation.kind.sparkle': 'Funkeln',
 } as const satisfies GameCoreCatalog;
 
 export default de;

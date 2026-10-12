@@ -129,9 +129,9 @@ public struct FramePackShelfView: View {
         case .loading:
             LazyVGrid(columns: Self.columns, spacing: 12) {
                 ForEach(0..<4, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color.primary.opacity(0.06))
-                        .aspectRatio(9 / 16, contentMode: .fit)
+                        .aspectRatio(SceneShape.aspect, contentMode: .fit)
                 }
             }
             .accessibilityHidden(true)
@@ -155,8 +155,8 @@ public struct FramePackShelfView: View {
     private func tileView(_ tile: FrameTile) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             StoredPackImage(file: tile.thumb, maxPixelSize: 540)
-                .aspectRatio(9 / 16, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .aspectRatio(SceneShape.aspect, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             Text(tile.name)
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .lineLimit(1)
@@ -174,7 +174,7 @@ public struct FramePackShelfView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(MeeshySpacing.md)
-            .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.05)))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(Color.primary.opacity(0.05)))
     }
 }
 

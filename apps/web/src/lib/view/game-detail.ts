@@ -248,8 +248,8 @@ export function pendingStampDetail(pending: PendingStamp): ElementDetail {
   });
 }
 
-const stepReward = (step: number): string | null => {
-  const reward = seasonStepReward(step);
+const stepReward = (step: number, stepPoints?: number): string | null => {
+  const reward = seasonStepReward(step, stepPoints);
   if (reward === null) return null;
   return reward.kind === 'points' ? pointsLabel(reward.amount) : gameText(`game.season.reward.${reward.kind}`);
 };
@@ -258,7 +258,7 @@ const stepReward = (step: number): string | null => {
 export function stepDetail(season: GameSeasonBlock, step: number): ElementDetail {
   const claimed = season.claimedSteps.includes(step);
   const reached = step <= season.steps;
-  const reward = stepReward(step);
+  const reward = stepReward(step, season.stepPoints);
   return ofFamily('step', String(step), 'season', {
     emblem: { kind: 'seal', owned: claimed },
     name: gameText('game.season.step', { step: formatCount(step) }),

@@ -20,7 +20,13 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      # Les vecteurs du scellement partagé (#9899) : SharedTranslationSealVectorTests
+      # les relit depuis packages/shared — le TypeScript a raison sur divergence,
+      # et une régénération qui ne toucherait que lui doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/shared-translation/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-offer-vectors.json'
+      - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
       - 'packages/shared/design/packs/presence-vectors.json'
       - 'packages/shared/types/frame-usage.ts'
@@ -30,7 +36,10 @@ on:
       - main
     paths:
       - 'packages/MeeshySDK/**'
+      - 'packages/shared/fixtures/shared-translation/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-offer-vectors.json'
+      - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
       - 'packages/shared/design/packs/presence-vectors.json'
       - 'packages/shared/types/frame-usage.ts'

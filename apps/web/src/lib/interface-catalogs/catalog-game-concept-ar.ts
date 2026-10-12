@@ -263,6 +263,10 @@ const ar = {
   'game.notebook.legacy_delete': 'احذف الدفتر القديم',
   'game.notebook.device_only': 'صورك موجودة على هذا الجهاز.',
   'game.notebook.size': 'يشغل الدفتر {size}.',
+  'game.constellation.next.one': 'بقيت {count} شظية نجم للنجمة التالية',
+  'game.constellation.next.other': 'بقي {count} من شظايا النجم للنجمة التالية',
+  'game.constellation.how': 'تضيء نجمة مع كل عشر شظايا نجم تجمعها. وكل نجمة تفتح زينة للملف الشخصي، دون أي أفضلية في اللعب.',
+  'game.constellation.visibility': 'تظهر كوكبتك وزيناتها حسب إعداد واجهتك.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

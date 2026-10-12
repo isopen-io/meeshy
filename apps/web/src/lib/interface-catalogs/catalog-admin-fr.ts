@@ -10,6 +10,7 @@ import auditReglagesFr from './admin/audit-reglages-fr';
 import personnesFr from './admin/personnes-fr';
 import conversationsAgentFr from './admin/conversations-agent-fr';
 import engagementScaleFr from './admin/engagement-scale-fr';
+import gameSeasonsFr from './admin/game-seasons-fr';
 
 /**
  * LE CATALOGUE D'INTERFACE D'ADMINISTRATION FRANÇAIS (#6871, #6834) — la
@@ -405,6 +406,7 @@ const fr = {
   ...personnesFr,
   ...conversationsAgentFr,
   ...engagementScaleFr,
+  ...gameSeasonsFr,
 } as const;
 
 export default fr;

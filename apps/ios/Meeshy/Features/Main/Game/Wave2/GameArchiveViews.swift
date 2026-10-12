@@ -12,20 +12,25 @@ struct GameSeasonFocusScreen: View {
     @ObservedObject var model: GameWave2Model
     let game: GameBlock
     let focus: Int?
+    /// L'instant qui juge l'état de la saison (#10225) : celui de la `TimelineView` de la page, qui se renouvelle
+    /// au dimanche 20 h ; l'horloge locale par défaut.
+    let moment: LeagueMoment?
     @StateObject private var archive: GameArchiveModel
 
-    init(model: GameWave2Model, game: GameBlock, focus: Int?, archive: GameArchiveModel? = nil) {
+    init(model: GameWave2Model, game: GameBlock, focus: Int?, moment: LeagueMoment? = nil, archive: GameArchiveModel? = nil) {
         self.model = model
         self.game = game
         self.focus = focus
+        self.moment = moment
         _archive = StateObject(wrappedValue: archive ?? GameArchiveModel())
     }
 
     var body: some View {
-        let shown = GameSeasonShown.of(focus: focus, game: game, load: archive.season)
+        let shown = GameSeasonShown.of(focus: focus, game: game, load: archive.season, moment: moment ?? .local(),
+                                       schedule: model.seasonSchedule)
         Group {
             if shown == .current {
-                GameSeasonScreen(model: model, game: game)
+                GameSeasonScreen(model: model, game: game, moment: moment)
             } else {
                 GameSeasonArchiveView(shown: shown) { reload() }
             }

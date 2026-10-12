@@ -1,7 +1,8 @@
 // Juge un export contre la référence de fidélité du L0 (§ 8.3) : chaque cadre est RECOMPOSÉ depuis ses couches
 // exportées, plus ce que l'app peindra (photo factice dans la fenêtre, blason, oiseaux et texte rendus à leurs
 // positions cuites), puis comparé au rendu de référence — dont le sha256 est d'abord vérifié contre
-// reference/sha256.json : la référence ne se recalcule pas, elle se retrouve.
+// reference/sha256.json : la référence ne se recalcule pas, elle se retrouve. Un cadre dont Mee et Meo ont bougé (L2)
+// se retrouve dans `amendments` (lib/reference.mjs --amend), décor prouvé identique.
 // Hors boîtes de texte et de blason : ≥ 99,5 % des pixels à |Δ| ≤ 6 par canal, aucun bloc 16×16 à Δ moyen > 12.
 // Usage : node lib/recompose.mjs [export] [--only a,b] [--jobs 3] [--sheet cadre1,cadre2,cadre3 --sheet-dir dossier]
 import crypto from 'node:crypto';
@@ -63,13 +64,14 @@ function compare(a, b, excluded) {
   const B = TOLERANCE.block;
   const blocks = new Float64Array(Math.ceil(FW / B) * Math.ceil(FH / B));
   const counts = new Uint32Array(blocks.length);
-  let total = 0, ok = 0;
+  let total = 0, ok = 0, sq = 0;
   for (let y = 0; y < FH; y++) {
     for (let x = 0; x < FW; x++) {
       if (excluded(x, y)) continue;
       const p = (y * FW + x) * 4;
       const d = Math.max(...[0, 1, 2].map((c) => Math.abs(premul(a, p, c) - premul(b, p, c))), Math.abs(a[p + 3] - b[p + 3]));
       total++;
+      sq += d * d;
       if (d <= TOLERANCE.delta) ok++;
       const k = Math.floor(y / B) * Math.ceil(FW / B) + Math.floor(x / B);
       blocks[k] += d;
@@ -78,7 +80,8 @@ function compare(a, b, excluded) {
   }
   let worst = 0;
   blocks.forEach((s, k) => { if (counts[k] >= (B * B) / 2) worst = Math.max(worst, s / counts[k]); });
-  return { share: Math.round((ok / total) * 100000) / 100000, worstBlock: Math.round(worst * 100) / 100 };
+  const psnr = sq === 0 ? 99 : 10 * Math.log10((255 * 255) / (sq / total));
+  return { share: Math.round((ok / total) * 100000) / 100000, worstBlock: Math.round(worst * 100) / 100, psnr: Math.round(psnr * 100) / 100 };
 }
 
 async function judge(handle, { collection, frame }) {
@@ -86,7 +89,8 @@ async function judge(handle, { collection, frame }) {
   const svg = fs.readFileSync(path.join(OUT, collection, frame.frame + '.svg'), 'utf8');
   await showSvg(handle, svg, { fonts: 'design' });
   const refPng = await shoot(handle);
-  const expected = reference.frames[frame.frame]?.png;
+  const amended = Object.values(reference.amendments ?? {}).map((a) => a.frames?.[frame.frame]).filter(Boolean).at(-1);
+  const expected = amended?.png ?? reference.frames[frame.frame]?.png;
   const { page } = handle;
   await page.evaluate(classify);
   const render = async (kinds) => {
@@ -99,15 +103,14 @@ async function judge(handle, { collection, frame }) {
   const files = {
     window: await placed(dir, frame.window.mask),
     decor: await placed(dir, L.decor),
-    ...Object.fromEntries(await Promise.all(Object.entries(L.grade ?? {}).map(async ([name, layer]) => [name === 'normal' ? 'grade' : `grade:${name}`, await placed(dir, layer)]))),
-    'front:under-birds': await placed(dir, L.front?.['under-birds']),
-    'front:over-birds': await placed(dir, L.front?.['over-birds']),
-    plate: await placed(dir, Object.values(L.plate ?? {})[0]),
+    ...Object.fromEntries(await Promise.all((L.grade ?? []).map(async (layer, n) => [`grade:${n}`, await placed(dir, layer)]))),
+    ...Object.fromEntries(await Promise.all(Object.entries(L.front ?? {}).map(async ([rank, layer]) => [`front:${rank}`, await placed(dir, layer)]))),
+    plate: await placed(dir, L.plate?.[frame.message ? 'message' : 'plain']),
   };
   const canvas = Buffer.alloc(FW * FH * 4);
   for (const step of frame.stack) {
     if (step === 'photo') over(canvas, photo, { mask: files.window });
-    else if (step.startsWith('grade')) files[step] && over(canvas, files[step], { blend: (L.grade[step === 'grade' ? 'normal' : step.slice(6)] ?? {}).blend });
+    else if (step.startsWith('grade:')) files[step] && over(canvas, files[step], { blend: L.grade[Number(step.slice(6))]?.blend });
     else if (live[step]) over(canvas, live[step]);
     else if (files[step]) over(canvas, files[step]);
   }
@@ -125,7 +128,7 @@ async function judge(handle, { collection, frame }) {
       const out = excluded(i % FW, Math.floor(i / FW));
       gap.writeUInt32BE(out ? 0x30303080 : d > TOLERANCE.delta ? 0xff2020ff : ((ref[p] >> 2) << 24) | ((ref[p + 1] >> 2) << 16) | ((ref[p + 2] >> 2) << 8) | 0xff, p);
     }
-    const tiles = [['decor', files.decor], ['fenêtre', files.window], ['grade', files.grade ?? files['grade:over'] ?? files['grade:screen']], ['avant', files['front:under-birds'] ?? files['front:over-birds']], ['plaque', files.plate], ['recomposé', canvas], ['référence', ref], ['écart', gap]];
+    const tiles = [['decor', files.decor], ['fenêtre', files.window], ['grade', Object.entries(files).find(([k, v]) => k.startsWith('grade:') && v)?.[1]], ['avant', Object.entries(files).find(([k, v]) => k.startsWith('front:') && v)?.[1]], ['plaque', files.plate], ['recomposé', canvas], ['référence', ref], ['écart', gap]];
     const tw = 360, th = 640, pad = 12;
     const composites = await Promise.all(tiles.map(async ([, buf], i) => ({
       input: await sharp(buf ?? Buffer.alloc(FW * FH * 4), { raw: { width: FW, height: FH, channels: 4 } }).resize(tw, th).png().toBuffer(),
@@ -156,6 +159,7 @@ await browser.close();
 const failing = rows.filter((r) => !r.pass || !r.referenceSha);
 fs.writeFileSync(path.join(EXPORT, 'fidelity.json'), JSON.stringify({ tolerance: TOLERANCE, frames: rows }, null, 2) + '\n');
 const shares = rows.map((r) => r.share).sort((a, b) => a - b);
-console.log(`recomposition : ${rows.length - failing.length}/${rows.length} cadres dans la tolérance ; part minimale ${shares[0]}, médiane ${shares[Math.floor(shares.length / 2)]} ; référence retrouvée à l'octet : ${rows.filter((r) => r.referenceSha).length}/${rows.length}`);
+const psnrs = rows.map((r) => r.psnr).sort((a, b) => a - b);
+console.log(`recomposition : ${rows.length - failing.length}/${rows.length} cadres dans la tolérance ; part minimale ${shares[0]}, médiane ${shares[Math.floor(shares.length / 2)]} ; PSNR minimal ${psnrs[0]} dB, médian ${psnrs[Math.floor(psnrs.length / 2)]} dB ; référence retrouvée à l'octet : ${rows.filter((r) => r.referenceSha).length}/${rows.length}`);
 for (const r of failing) console.log(`  ${r.frame} : part ${r.share}, pire bloc ${r.worstBlock}${r.referenceSha ? '' : ', RÉFÉRENCE ≠ sha256.json'}`);
 process.exit(failing.length ? 1 : 0);

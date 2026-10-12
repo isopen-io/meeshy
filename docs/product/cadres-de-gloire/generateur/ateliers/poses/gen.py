@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "lib"))
 sys.path.insert(0, str(HERE))
 
 from base import (  # noqa: E402
-    CINZEL, GARAMOND, HAND, SANS, W, H, Card, adinkrahene, bird, crest, esc, f, photo, pt, shield_path, signature, sparkle,
+    CINZEL, GARAMOND, HAND, SANS, W, H, Card, adinkrahene, anchored_spot, bird, crest, esc, f, photo, pt, shield_path, signature, sparkle,
     stars, window_mask,
 )
 from afrique import (  # noqa: E402
@@ -786,6 +786,21 @@ VARIANTS = [
 ]
 
 
+def held_spots(v):
+    """Les places des oiseaux qui tiennent le ruban, ancres corrigées comprises (lib/anchors.json) : le bec bouge,
+    la queue suit."""
+    return [(pose, *anchored_spot(v["file"], i, x, y, s), flip, rot) for i, (pose, x, y, s, flip, rot) in enumerate(POSES[v["layout"]](v["mee"], v["meo"]))]
+
+
+def held(c, draw):
+    """Les queues du ruban tenues au bec SUIVENT les oiseaux (`data-follows-bird`) : elles ne sont pas du décor."""
+    start = len(c.body)
+    draw()
+    inner = "".join(c.body[start:])
+    del c.body[start:]
+    c.add(f'<g data-follows-bird="ruban">{inner}</g>')
+
+
 def build(v):
     c = Card("p-" + v["file"].replace("poses-", ""))
     c.slots(kicker=KICKER, title=TITLE, message=v["message"], date=DATE)
@@ -794,13 +809,11 @@ def build(v):
     if style == "ruban-tenu":
         ribbon(c, v["message"], held=True)
         birds(c, v["layout"], v["mee"], v["meo"])
-        spots = POSES[v["layout"]](v["mee"], v["meo"])
-        ribbon_tails_to_beaks(c, [beak(*sp) for sp in spots])
+        held(c, lambda: ribbon_tails_to_beaks(c, [beak(*sp) for sp in held_spots(v)]))
     elif style == "kente-tenu":
         ribbon_kente(c, v["message"])
         birds(c, v["layout"], v["mee"], v["meo"])
-        spots = POSES[v["layout"]](v["mee"], v["meo"])
-        kente_tails_to_beaks(c, [beak(*sp) for sp in spots])
+        held(c, lambda: kente_tails_to_beaks(c, [beak(*sp) for sp in held_spots(v)]))
     elif style == "cartouche-adinkra":
         cartouche(c, v["message"], adinkra=True)
         birds(c, v["layout"], v["mee"], v["meo"])

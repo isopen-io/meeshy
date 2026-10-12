@@ -15,6 +15,7 @@ import rateLimit from '@fastify/rate-limit';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
+import { createHash } from 'crypto';
 import { packAssetsRoutes, PACK_ASSETS_CACHE_CONTROL, PACK_ASSETS_RATE_LIMIT_MAX } from '../../../routes/pack-assets';
 import { buildPackIndex, loadPackIndex, packDesignDirCandidates, type PackIndex } from '../../../services/packs/PackIndex';
 import { gloryFramePackSpec } from '../../../services/packs/gloryFramePackSpec';
@@ -25,7 +26,12 @@ const DESIGN = join(REPO, 'packages/shared/design');
 const ASSETS = join(REPO, 'services/gateway/assets/packs');
 
 const sampleIndex = (): PackIndex => loadPackIndex([DESIGN], { PACK_SAMPLES: '1' });
-const sampleEntry = () => sampleIndex().entries('glory-frame')[0];
+const sampleEntry = () => {
+  const entry = sampleIndex().entries('glory-frame').find((candidate) => candidate.slug === 'exemple-savane');
+  if (entry === undefined) throw new Error('pack d’exemple absent');
+  return entry;
+};
+const realIndex = (): PackIndex => loadPackIndex([DESIGN], {});
 
 function tempAssets(files: Record<string, string>) {
   const dir = mkdtempSync(join(tmpdir(), 'meeshy-pack-assets-'));
@@ -209,10 +215,56 @@ describe('le pack de cadres d’EXEMPLE — servi sous PACK_SAMPLES=1 seulement 
     const index = sampleIndex();
     expect(index.entries('sticker')).toEqual([]);
     expect(stickerPackSpec({} as never).registry.map((p) => p.slug)).not.toContain('exemple-savane');
-    expect(gloryFramePackSpec({ index }).registry.map((p) => p.slug)).toEqual(['exemple-savane']);
+    expect(gloryFramePackSpec({ index }).registry.map((p) => p.slug)).toContain('exemple-savane');
+    expect(gloryFramePackSpec({ index: realIndex() }).registry.map((p) => p.slug)).not.toContain('exemple-savane');
   });
 
   it('le dossier de design du dépôt est bien un candidat depuis la passerelle', () => {
     expect(packDesignDirCandidates(join(REPO, 'services/gateway'), {})).toContain(join(REPO, 'services/gateway/../../packages/shared/design'));
   });
 });
+
+describe('le registre RÉEL des cadres de gloire (#10154, L3) — servi partout, chaque fichier de chaque contrat ouvert', () => {
+  type StoredRef = { readonly src: string; readonly sha256: string };
+  type StoredFrame = { readonly thumb: StoredRef; readonly formats?: { readonly story: { readonly window: { readonly mask: StoredRef }; readonly layers: Record<string, unknown> } } };
+  const layerRefs = (layers: Record<string, unknown>): readonly StoredRef[] =>
+    Object.values(layers).flatMap((value) => {
+      if (Array.isArray(value)) return value as StoredRef[];
+      if (typeof value === 'object' && value !== null && 'src' in value) return [value as StoredRef];
+      return typeof value === 'object' && value !== null ? (Object.values(value) as StoredRef[]) : [];
+    });
+
+  it('neuf packs, dans l’ordre éditorial, l’Afrique éternelle d’abord ; sans exemple hors PACK_SAMPLES=1', () => {
+    const index = realIndex();
+    expect(index.rejected).toBe(0);
+    expect(index.entries('glory-frame').map((entry) => entry.slug)).toEqual(['afrique', 'egypte', 'olympe', 'celeste', 'nord', 'abysses', 'neon', 'moments', 'tresor']);
+  });
+
+  it('les vignettes, masques, décors, passes, avant-plans et plaques de chaque contrat sont dans la liste blanche', () => {
+    const index = realIndex();
+    for (const entry of index.entries('glory-frame')) {
+      const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as { frames: readonly StoredFrame[] };
+      const refs = contract.frames.flatMap((frame) => [frame.thumb, ...(frame.formats === undefined ? [] : [frame.formats.story.window.mask, ...layerRefs(frame.formats.story.layers)])]);
+      expect(refs.length).toBeGreaterThan(contract.frames.length * 3);
+      expect(refs.filter((ref) => !index.isServedAsset(ref.src)).map((ref) => ref.src)).toEqual([]);
+      expect(index.itemCount(entry)).toBe(contract.frames.length);
+    }
+  });
+
+  it('un décor du registre se sert à l’octet, à son empreinte', async () => {
+    const index = realIndex();
+    const [afrique] = index.entries('glory-frame');
+    const contract = JSON.parse(readFileSync(join(ASSETS, afrique.contract.src), 'utf8')) as { frames: readonly StoredFrame[] };
+    const decor = contract.frames[0]?.formats?.story.layers.decor as StoredRef;
+    const app = await buildApp({ index, assetsDir: ASSETS });
+    try {
+      const res = await app.inject({ method: 'GET', url: `/api/v1/pack-assets/${decor.src}` });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('image/webp');
+      expect(createHash('sha256').update(res.rawPayload).digest('hex')).toBe(decor.sha256);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
