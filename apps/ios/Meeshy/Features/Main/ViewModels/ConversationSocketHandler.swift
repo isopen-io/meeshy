@@ -727,6 +727,10 @@ final class ConversationSocketHandler {
                     Task {
                         do {
                             try await persistence.markDeleted(localId: msgId, deletedAt: now, expired: true)
+                            // #10433 — ses réponses partent avec lui, et une
+                            // réponse dont la citation est déjà morte part au
+                            // lieu de rester « Message supprimé ».
+                            try await persistence.purgeQuoteCascade(fromDead: [msgId])
                         } catch {
                             Logger.messages.warning("[ConversationSocket] markDeleted (expired) failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         }

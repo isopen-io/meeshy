@@ -526,7 +526,7 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = Self.collapsingDuplicateServerIds(next).filter { !ExpiredEphemeralRow.isGone($0) }
+        let published = ExpiredEphemeralRow.living(Self.collapsingDuplicateServerIds(next))
 
         #if DEBUG
         // BUG1 diagnostics — detect any publish that DROPS currently-displayed
@@ -600,7 +600,7 @@ public final class MessageStore: ObservableObject {
     /// qui échoit à l'écran n'en provoque aucune. L'hôte appelle ce point à la
     /// fin de la combustion ; sans mort, rien n'est publié.
     func dropGoneEphemerals() {
-        let kept = messages.filter { !ExpiredEphemeralRow.isGone($0) }
+        let kept = ExpiredEphemeralRow.living(messages)
         guard kept.count != messages.count else { return }
         publishUnchecked(records: kept, mergeInMemory: false)
     }
