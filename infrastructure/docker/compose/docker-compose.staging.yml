@@ -508,22 +508,22 @@ services:
         condition: service_completed_successfully
       redis-staging:
         condition: service_healthy
+    # Réseau PRIVÉ seulement (#10242) : la passerelle joint l'agent par son nom de
+    # service (`agent-staging`, ZMQ 5560/5561 et HTTP 3200) sur
+    # meeshy-staging-network. meeshy-network ne servait qu'à Traefik.
     networks:
       - meeshy-staging-network
-      - meeshy-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Jamais publié sur Internet, comme en production (#10242) : ses routes
+    # /api/agent/* lisent des résumés de conversations, arrêtent un agent et
+    # déclenchent des appels LLM payants.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.agent-staging.rule=Host(`agent.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.agent-staging.entrypoints=websecure"
-      - "traefik.http.routers.agent-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.agent-staging.loadbalancer.server.port=3200"
+      - "traefik.enable=false"
 
 # =============================================================================
 # VOLUMES - Tous préfixés "staging" pour isolation
