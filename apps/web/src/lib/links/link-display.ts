@@ -109,3 +109,23 @@ export function displaySegments(
     return text === '' ? [] : [{ kind: 'text', text }];
   });
 }
+
+/**
+ * **UNE ADRESSE QUI N'EST PAS UN LIEN** (#10286) — la même découpe, dont chaque
+ * lien redevient le texte ÉCRIT : une adresse brute reste elle-même, un
+ * `[libellé](url)` garde son adresse visible (un libellé seul cacherait la
+ * destination), et aucune carte `trackingLinks` n'est lue. Pour le texte d'un
+ * expéditeur dont les adresses ne doivent pas devenir des liens
+ * (`linkRenderingOf`, `lib/view/sender-links.ts`).
+ */
+const writtenTextOf = (segment: LinkSegment): string => {
+  if (segment.kind === 'tracked-link') return segment.text;
+  return isBareAddress(segment) ? segment.text : `[${segment.text}](${segment.href})`;
+};
+
+export function plainDisplaySegments(segments: readonly TextSegment[]): readonly DisplaySegment[] {
+  return segments.map((segment): DisplaySegment => {
+    if (segment.kind === 'emphasis') return { kind: 'emphasis', style: segment.style, children: plainDisplaySegments(segment.children) };
+    return isLink(segment) ? { kind: 'text', text: writtenTextOf(segment) } : segment;
+  });
+}

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { amina, anonymousGuest } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { MEDIA_HUB_KINDS, itemsOfKind, mediaHubViewerOf, type MediaHubItem } from './media-hub';
@@ -31,6 +32,7 @@ const message = (overrides: Partial<Message> & { readonly id: string }): Message
   ({
     conversationId: 'c1',
     senderId: 'u1',
+    sender: amina,
     content: '',
     originalLanguage: 'fr',
     messageType: 'text',
@@ -132,5 +134,13 @@ describe('mediaHubViewerOf — la visionneuse feuillette TOUTE la conversation (
 
   test('une tuile disparue ouvre au début, jamais une visionneuse vide', () => {
     expect(mediaHubViewerOf(itemsOfKind(pages, 'visual'), 'x:y').startIndex).toBe(0);
+  });
+});
+
+describe('les adresses d’un anonyme ne rejoignent pas l’index (#10286)', () => {
+  test('ni lien, ni conversation : elles restent du texte dans le fil', () => {
+    const fromGuest = message({ id: 'm-ano', sender: anonymousGuest, content: 'https://exemple.com et https://meeshy.me/chat/mshy_x' });
+    expect(itemsOfKind([fromGuest], 'link')).toEqual([]);
+    expect(itemsOfKind([fromGuest], 'conversation')).toEqual([]);
   });
 });

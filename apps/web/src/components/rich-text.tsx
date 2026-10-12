@@ -6,7 +6,8 @@ import { segmentText, type EmphasisStyle } from '@meeshy/shared/utils/text-segme
 
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { internalPathOf } from '@/lib/links/internal-link';
-import { displaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
+import { displaySegments, plainDisplaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
+import type { LinkRendering } from '@/lib/view/sender-links';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
@@ -273,6 +274,7 @@ export function RichText({
   plainTextHidden = false,
   trackingLinks,
   claimsGesture = false,
+  links = 'live',
   ...rest
 }: {
   readonly text: string;
@@ -296,6 +298,9 @@ export function RichText({
   /** `true` ⇒ chaque lien porte `data-claims-gesture` : le lecteur qui
    * l'héberge (story, visionneuse) lui cède le geste, et à lui seul. */
   readonly claimsGesture?: boolean;
+  /** `plain` ⇒ aucune adresse ne devient un lien et `trackingLinks` est
+   * ignoré : le texte d'un expéditeur anonyme (#10286, `linkRenderingOf`). */
+  readonly links?: LinkRendering;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
   const blocks = useMemo(() => (hasBlockSyntax(text) ? parseBlocks(text) : null), [text]);
   /* UN INVITÉ N'OUVRE AUCUN PROFIL (#10205) : la passerelle les lui refuse
@@ -304,15 +309,19 @@ export function RichText({
   const speaksAsGuest = useSpeaksAsGuest();
   const linkedMentions = speaksAsGuest ? NO_MENTION_LINKS : mentions;
   const render = useMemo(() => {
+    const servedTrackingLinks = links === 'plain' ? undefined : trackingLinks;
     const options = {
       hashtags,
       ...(linkedMentions === undefined ? {} : { mentions: linkedMentions }),
-      ...(trackingLinks === undefined ? {} : { trackingLinks }),
+      ...(servedTrackingLinks === undefined ? {} : { trackingLinks: servedTrackingLinks }),
     };
     const linkAttributes = claimsGesture ? CLAIMED_LINK : UNMARKED_LINK;
-    return (content: string) =>
-      segmentNodes(displaySegments(segmentText(content, options), trackingLinks), { linkColor, plainTextHidden, linkAttributes });
-  }, [hashtags, linkedMentions, trackingLinks, linkColor, plainTextHidden, claimsGesture]);
+    const display = (content: string) =>
+      links === 'plain'
+        ? plainDisplaySegments(segmentText(content, options))
+        : displaySegments(segmentText(content, options), servedTrackingLinks);
+    return (content: string) => segmentNodes(display(content), { linkColor, plainTextHidden, linkAttributes });
+  }, [hashtags, linkedMentions, trackingLinks, linkColor, plainTextHidden, claimsGesture, links]);
   if (blocks === null) {
     return (
       <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>

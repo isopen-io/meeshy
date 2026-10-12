@@ -3,6 +3,7 @@ import { segmentText, type TextSegment } from '@meeshy/shared/utils/text-segment
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { placeOf, type SharedPlace } from './message-body';
+import { linkRenderingOf } from './sender-links';
 
 /**
  * **L'INDEX D'UNE CONVERSATION, GENRE PAR GENRE (#8103)** — la loi PURE de
@@ -107,7 +108,7 @@ function attachmentItems(message: Message, kind: AttachmentKind): readonly Media
 
 function linkItems(message: Message, kind: 'link' | 'conversation'): readonly MediaHubItem[] {
   const content = message.content ?? '';
-  if (content === '') return [];
+  if (content === '' || linkRenderingOf(message) === 'plain') return [];
   const unique = [...new Set(urlsOf(segmentText(content)))];
   return unique.flatMap((href) => {
     const host = hostOf(href);

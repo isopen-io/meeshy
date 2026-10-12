@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
 
 import { conversationCardQueryKey } from '@/lib/api/conversation-card';
+import { amina } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -34,6 +35,7 @@ const message = (content: string): Message => ({
   id: 'm-carte',
   conversationId: 'c-fil',
   senderId: 'u-autre',
+  sender: amina,
   content,
   originalLanguage: 'fr',
   messageType: 'text',
