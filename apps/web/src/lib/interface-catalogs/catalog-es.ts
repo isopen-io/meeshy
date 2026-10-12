@@ -38,6 +38,7 @@ import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
+import esContentRefused from './catalog-es-content-refused';
 import esPublicEntry from './catalog-es-public-entry';
 
 const es = {
@@ -1115,6 +1116,7 @@ const es = {
   ...esCommentRow,
   ...esContactDiscovery,
   ...esUserProfile,
+  ...esContentRefused,
   ...esPublicEntry,
 } satisfies InterfaceCatalog;
 

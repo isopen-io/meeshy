@@ -49,6 +49,7 @@ import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
+import frContentRefused from './catalog-fr-content-refused';
 import frPublicEntry from './catalog-fr-public-entry';
 
 const fr = {
@@ -1135,6 +1136,7 @@ const fr = {
   ...frCommentRow,
   ...frContactDiscovery,
   ...frUserProfile,
+  ...frContentRefused,
   ...frPublicEntry,
 } as const;
 

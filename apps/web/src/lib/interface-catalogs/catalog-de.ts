@@ -38,6 +38,7 @@ import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
+import deContentRefused from './catalog-de-content-refused';
 import dePublicEntry from './catalog-de-public-entry';
 
 const de = {
@@ -1115,6 +1116,7 @@ const de = {
   ...deCommentRow,
   ...deContactDiscovery,
   ...deUserProfile,
+  ...deContentRefused,
   ...dePublicEntry,
 } satisfies InterfaceCatalog;
 
