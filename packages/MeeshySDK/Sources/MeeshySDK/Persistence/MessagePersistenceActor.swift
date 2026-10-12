@@ -1615,7 +1615,7 @@ public actor MessagePersistenceActor {
                     existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
-                        existing.editedAt = nil
+                        existing.editedAt = api.editedAt
                     }
                     if !pendingDelete {
                         existing.deletedAt = api.deletedAt
@@ -1794,7 +1794,7 @@ public actor MessagePersistenceActor {
                         maxViewOnceCount: nil,
                         viewOnceCount: 0,
                         isEdited: api.isEdited ?? false,
-                        editedAt: nil,
+                        editedAt: api.editedAt,
                         deletedAt: api.deletedAt,
                         pinnedAt: nil,
                         pinnedBy: nil,

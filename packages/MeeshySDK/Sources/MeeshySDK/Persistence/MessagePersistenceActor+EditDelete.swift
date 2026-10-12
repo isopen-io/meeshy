@@ -22,11 +22,7 @@ extension MessagePersistenceActor {
     /// quel. `editedAt` n'est ici que l'horloge de la garde d'ordre ; ce qui
     /// dit « modifié » est `isEdited`.
     public func markEdited(localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true) throws {
-        let affectedConversationId: String? = try dbWriter.write { db -> String? in
-            guard let existing = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)
-            else { return nil }
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited) { stored in
             // Ordering guard: `message:edited` carries no monotonic sequence, so a
             // delayed/duplicate socket delivery can arrive after a newer edit was
             // already applied. Comparing against the stored `editedAt` stops a
@@ -40,10 +36,48 @@ extension MessagePersistenceActor {
             // from what was passed in — enough to misfire a strict comparison.
             // Genuine out-of-order deliveries differ by network-delay magnitudes
             // (well beyond this), so the tolerance doesn't weaken the guard.
-            if let currentEditedAt = existing.editedAt,
-               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
+            if let stored, editedAt.timeIntervalSince(stored) < -Self.editOrderingTolerance {
                 return nil
             }
+            return editedAt
+        }
+    }
+
+    /// Édition de l'APPAREIL (optimiste, ou retour arrière d'une édition hors
+    /// ligne abandonnée). Elle s'applique toujours : c'est l'utilisateur qui
+    /// vient d'écrire. Mais la date stockée peut venir du SERVEUR (#9997 —
+    /// chemin REST et socket), et l'horloge de l'appareil peut retarder sur
+    /// lui : dater l'édition de `now` la ferait refuser par la garde d'ordre.
+    /// Elle est donc datée juste après la date stockée quand celle-ci est en
+    /// avance. Rend la date posée — un retour arrière la réutilise pour passer
+    /// la garde — ou `nil` si le message est inconnu.
+    @discardableResult
+    public func markEditedLocally(localId: String, newContent: String, now: Date = Date()) throws -> Date? {
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: true) { stored in
+            Self.localEditStamp(now: now, after: stored)
+        }
+    }
+
+    nonisolated static func localEditStamp(now: Date, after stored: Date?) -> Date {
+        guard let stored, stored >= now else { return now }
+        return stored.addingTimeInterval(Self.localEditStep)
+    }
+
+    private static let localEditStep: TimeInterval = 0.001
+
+    /// `stamp` lit la date stockée et rend celle de l'édition, ou `nil` pour
+    /// la refuser. Rend la date posée.
+    @discardableResult
+    private func applyEdit(
+        localId: String, newContent: String, marksEdited: Bool,
+        stamp: @Sendable (Date?) -> Date?
+    ) throws -> Date? {
+        let applied: (conversationId: String, editedAt: Date)? = try dbWriter.write { db in
+            guard let existing = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db),
+                  let editedAt = stamp(existing.editedAt)
+            else { return nil }
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
@@ -57,11 +91,11 @@ extension MessagePersistenceActor {
                     quote.followsParentEdits ? quote.withPreviewText(newContent) : nil
                 }
             }
-            return existing.conversationId
+            return (existing.conversationId, editedAt)
         }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
+        guard let applied else { return nil }
+        postMessageStoreRefresh(conversationIds: [applied.conversationId])
+        return applied.editedAt
     }
 
     /// - Parameter sparingOpenedViewOnce: `true` pour une suppression annoncée
