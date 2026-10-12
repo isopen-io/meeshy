@@ -44,6 +44,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
     case gamePrestige
     case gamePrivacy
     case gameSeasonsByNumber(number: String)
+    case gameSeasonsCalendar
     case gameSeasonSeal
     case gameSeasonStepsByStepClaim(step: String)
     case gameShowcaseOrder
@@ -106,6 +107,7 @@ public enum MeEndpoint: MeeshyEndpoint, Sendable {
         case .gamePrestige: return "/api/v1/me/game/prestige"
         case .gamePrivacy: return "/api/v1/me/game/privacy"
         case .gameSeasonsByNumber(let number): return "/api/v1/me/game/seasons/\(number)"
+        case .gameSeasonsCalendar: return "/api/v1/me/game/seasons/calendar"
         case .gameSeasonSeal: return "/api/v1/me/game/season/seal"
         case .gameSeasonStepsByStepClaim(let step): return "/api/v1/me/game/season/steps/\(step)/claim"
         case .gameShowcaseOrder: return "/api/v1/me/game/showcase/order"

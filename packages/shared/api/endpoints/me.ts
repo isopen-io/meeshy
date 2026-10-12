@@ -109,6 +109,9 @@ export const gamePrivacy = '/api/v1/me/game/privacy';
 /** GET /api/v1/me/game/seasons/:number */
 export const gameSeasonsByNumber = (number: string): string => `/api/v1/me/game/seasons/${encodeURIComponent(number)}`;
 
+/** GET /api/v1/me/game/seasons/calendar */
+export const gameSeasonsCalendar = '/api/v1/me/game/seasons/calendar';
+
 /** POST /api/v1/me/game/season/seal */
 export const gameSeasonSeal = '/api/v1/me/game/season/seal';
 
