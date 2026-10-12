@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Le transfert EN FLUX vers un fichier (#9863).
 ///
