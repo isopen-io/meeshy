@@ -369,15 +369,16 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     announce(await env.save(outgoing[format]), gameText('game.photo.notice.save_failed'));
   }, [announce, env, format, outgoingFiles]);
 
-  /* La recette (#10161) : le 9:16 composé, la photo d'origine réduite (jamais pour une carte seule) et le miroir. */
+  /* La recette (#10161) : le 9:16 composé (en JPEG, #10238), la photo d'origine réduite (jamais pour une carte seule) et le miroir. */
   const keep = useCallback(async () => {
     if (state.step !== 'result') return;
     const outgoing = await outgoingFiles();
     if (outgoing === null) return;
     const taken = state.mode === 'card' ? null : photo.current;
     const source = taken === null ? null : await (env.developSource?.(taken) ?? Promise.resolve(null)).catch(() => null);
+    const story = await (env.keptStory?.(outgoing.story) ?? Promise.resolve(outgoing.story)).catch(() => outgoing.story);
     const outcome = await env.notebook.keep(moment, {
-      story: outgoing.story,
+      story,
       mode: state.mode,
       source,
       recipe: { ...(taken === null ? {} : { mirror: taken.mirror }), showLink: composedReferral !== null },

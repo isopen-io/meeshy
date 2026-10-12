@@ -15,7 +15,7 @@ import type { PhotoMoment } from './moments';
 import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
 import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
 import type { PhotoReferral } from './referral';
-import { renderPhotoFiles, type PhotoFiles } from './render';
+import { keptStoryOf, renderPhotoFiles, type PhotoFiles } from './render';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
 
 /**
@@ -59,6 +59,8 @@ export type PhotoEnv = {
   readonly createReferral?: () => Promise<string | null>;
   /** La photo d'origine réduite pour le carnet (`developNotebookSource`, #10161) ; absent ou `null` : gardée sans source. */
   readonly developSource?: (photo: PhotoSource) => Promise<Blob | null>;
+  /** Le 9:16 tel qu'il se garde au carnet : un JPEG (`keptStoryOf`, #10238) ; absent : le PNG du partage. */
+  readonly keptStory?: (story: File) => Promise<Blob>;
   readonly captureVideo: (video: HTMLVideoElement) => PhotoSource | null;
   readonly readGallery: (file: File) => Promise<PhotoSource | null>;
   readonly now: () => Date;
@@ -215,6 +217,7 @@ export function browserPhotoEnv(): PhotoEnv {
       return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null });
     },
     developSource: (photo) => developNotebookSource(photo),
+    keptStory: (story) => keptStoryOf(story, { createCanvas, decode: (blob) => createImageBitmap(blob) }),
     captureVideo,
     readGallery,
     now,

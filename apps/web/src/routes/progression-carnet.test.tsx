@@ -141,6 +141,21 @@ describe('les photos gardées', () => {
     expect(state.shared[0]?.type).toBe('image/png');
   });
 
+  test('une entrée neuve se garde en JPEG et se partage en .jpg ; une ancienne en PNG se relit et se partage en .png (#10238)', async () => {
+    const [first, second] = entries;
+    const neuve: NotebookEntry = { ...first!, story: new Blob(['j'], { type: 'image/jpeg' }) };
+    const ancienne: NotebookEntry = { ...second!, story: new Blob(['p'], { type: 'image/png' }) };
+    const { env, state } = bench([neuve, ancienne]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    expect(host.querySelectorAll('img').length).toBeGreaterThanOrEqual(2);
+    for (const button of Array.from(host.querySelectorAll<HTMLElement>('[data-carnet-share]'))) {
+      await click(button);
+      await settle();
+    }
+    expect(state.shared.map((file) => `${file.type} .${file.name.split('.').pop()}`).sort()).toEqual(['image/jpeg .jpg', 'image/png .png']);
+  });
+
   test('« Partager » redit aussi le lien de parrainage en texte (#7742)', async () => {
     const { env, state } = bench(entries, 'https://meeshy.me/signup/affiliate/aff_abc');
     const host = await mount(<CarnetBody env={env} />);

@@ -445,6 +445,19 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(log.kept[0]?.photo.mode).toBe('selfie');
   });
 
+  test('le carnet garde le 9:16 ré-encodé en JPEG ; le partage garde le PNG (#10238)', async () => {
+    const jpeg = new Blob(['jpeg'], { type: 'image/jpeg' });
+    const handed: Blob[] = [];
+    const { host, log } = await toResult({ keptStory: async (story) => (handed.push(story), jpeg) });
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(handed.map((story) => (story as File).name)).toEqual(['meeshy-story.png']);
+    expect(log.kept[0]?.photo.story).toBe(jpeg);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(log.shared.map((shared) => shared.file.type)).toEqual(['image/png']);
+  });
+
   test('plus de place sur l’appareil : un état d’erreur DESSINÉ propose la galerie, rien n’est gardé (#10161)', async () => {
     const { host, log } = await toResult({ keepOutcome: 'no-space' });
     await click(by(host, 'data-photo-keep'));

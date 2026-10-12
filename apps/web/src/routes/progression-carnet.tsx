@@ -57,7 +57,13 @@ const storyFile = (entry: NotebookEntry): File | null =>
     ? null
     : entry.story instanceof File
       ? entry.story
-      : new File([entry.story], fileNameOf(entry.momentId, 'story'), { type: entry.story.type === '' ? 'image/png' : entry.story.type });
+      : storyFileOf(entry.story, entry.momentId);
+
+/* Un 9:16 neuf est un JPEG (#10238), un ancien un PNG : le nom suit le format. */
+const storyFileOf = (story: Blob, momentId: string): File => {
+  const type = story.type === '' ? 'image/png' : story.type;
+  return new File([story], fileNameOf(momentId, 'story', type), { type });
+};
 
 /* Les deux lignes se redéduisent de l'EMBLÈME, dans la langue d'aujourd'hui : une
    entrée gardée hier sous une autre langue ne reste pas figée dans celle-là. */
