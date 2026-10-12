@@ -6,7 +6,8 @@ import UIKit
 /// Où part une prise (#9351, #10284 — `CaptureSaveLaw.destination(for:)`).
 nonisolated enum ComposerTakeIntent: Equatable, Sendable {
     /// HORS zone cadre (la scène, le rond sans cadre) : la retouche, la prise
-    /// gardée dans l'app seulement — même l'original, quel que soit le réglage.
+    /// gardée dans l'app par défaut — son original rejoint Photos si Réglages ›
+    /// Médias le demande (`CaptureSaveLaw.destination(for:savesOriginal:)`).
     case edit
     /// La ZONE CADRE (la case choisie) : le rendu part en galerie (l'original
     /// aussi si `CaptureSavePolicy` le veut), PUIS la retouche s'ouvre.
@@ -46,7 +47,7 @@ extension ComposerCaptureSession {
     /// ne changeraient pas `capturedPhoto`. Un enregistrement qui ne rendra aucun
     /// fichier libère son intention.
     func subscribeToTakes() {
-        camera.keepsOriginalInApp = { [weak self] jeton in self?.keepsOriginalInApp(recording: jeton) ?? true }
+        camera.savesOriginalSetting = { [weak self] in self?.savePolicy().savesOriginal ?? CaptureSavePolicy.stored().savesOriginal }
         camera.$capturedPhotoId.compactMap { $0 }
             .sink { [weak self] _ in self?.photoArrived() }
             .store(in: &takeSubscriptions)
@@ -66,15 +67,6 @@ extension ComposerCaptureSession {
         filmIntent = .edit
         if !camera.isTakingPhoto { photoInFlightIntent = .edit }
         filmIntents = filmIntents.filter { $0.value == .gallery }
-    }
-
-    /// **Seul le cadre envoie une prise vers Photos** (#10284) : l'original d'une
-    /// prise hors cadre reste dans l'app, même si Réglages › Médias le demande —
-    /// la directive « on préserve juste l'image dans l'application uniquement »
-    /// supplante ici `CaptureSavePolicy.savesOriginal`.
-    func keepsOriginalInApp(recording jeton: String?) -> Bool {
-        guard let jeton else { return photoInFlightIntent != .gallery }
-        return filmIntents[jeton] != .gallery
     }
 
     /// La case choisie n'est la zone cadre que si un look y est posé : la case
@@ -198,6 +190,7 @@ extension ComposerCaptureSession {
             saveFrameTake(awaitingRaw: brut)
         case .edit:
             beginEditing(photo: image, data: camera.capturedPhotoData)
+            if phase.isEditing { editRawSave = camera.librarySave }
         }
     }
 
@@ -326,9 +319,9 @@ extension ComposerCaptureSession {
     /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
     /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
     /// l'original ne s'écrit que si l'original n'y est pas déjà — un FAIT de la
-    /// prise (son brut écrit), jamais une lecture du réglage : depuis #10284, le
-    /// brut d'une prise hors cadre reste dans l'app même quand Réglages › Médias
-    /// demande l'original. `true` : la prise est dans Photos.
+    /// prise (son brut écrit par la caméra, `editRawSave`), jamais une lecture du
+    /// réglage : un segment assemblé à d'autres n'est pas le brut écrit, et une
+    /// écriture refusée n'a rien mis dans Photos. `true` : la prise est dans Photos.
     static func writeVideo(_ rendue: URL, original: URL, originalInLibrary: Bool,
                            gallery: any ComposerGalleryProviding) async -> Bool {
         guard rendue != original || !originalInLibrary else { return true }

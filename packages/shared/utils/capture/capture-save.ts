@@ -11,8 +11,12 @@
  * - zone `frame` : la case du cadre choisi (toucher = photo, appui long = vidéo).
  * - zone `outside` : la scène, ou le déclencheur rond quand AUCUN cadre n'est choisi.
  *
- * Une prise par la zone cadre supplante, pour elle seule, la politique de
- * Réglages › Médias (#9684, l'original jamais en galerie par défaut) :
+ * La directive fixe des DÉFAUTS ; le réglage de l'utilisateur prime (correction
+ * porteur 2026-10-12 : « il faut respecter la consigne et reglage utilisateur.
+ * Je n'exprimais que le comportement par défaut »). Réglages › Médias
+ * « enregistrer l'original » (#9684) activé, l'original d'une prise hors cadre
+ * part en galerie ; par défaut, il reste dans l'app. Une prise par le cadre part
+ * en galerie : c'est le défaut, et aucun réglage ne le contredit.
  * `decisions/2026-10-12-une-prise-par-le-cadre-part-en-galerie-une-prise-hors-cadre-reste-dans-l-app-10284.md`.
  *
  * Miroir Swift : `packages/MeeshySDK/Sources/MeeshySDK/Media/CaptureSaveLaw.swift`.
@@ -22,7 +26,7 @@
 export const CAPTURE_ZONES = ['frame', 'outside'] as const;
 export type CaptureZone = (typeof CAPTURE_ZONES)[number];
 
-/** `keptInApp` : la prise ne vit QUE dans l'application (jamais en galerie). */
+/** `keptInApp` : la prise ne vit QUE dans l'application (jamais en galerie). Hors cadre avec le réglage, c'est l'ORIGINAL qui part en galerie. */
 export type CaptureDestination =
   | { readonly gallery: true; readonly then: 'edit'; readonly keptInApp: false }
   | { readonly gallery: false; readonly then: 'edit'; readonly keptInApp: true };
@@ -47,10 +51,11 @@ export type TakeSaveState = {
 const FRAME_DESTINATION: CaptureDestination = { gallery: true, then: 'edit', keptInApp: false };
 const OUTSIDE_DESTINATION: CaptureDestination = { gallery: false, then: 'edit', keptInApp: true };
 
+/** `savesOriginal` : Réglages › Médias « enregistrer l'original » (#9684) ; absent = le défaut, désactivé. */
 export type CaptureDestinationOptions = { readonly savesOriginal?: boolean };
 
-export const captureDestination = (zone: CaptureZone, _options: CaptureDestinationOptions = {}): CaptureDestination =>
-  zone === 'frame' ? FRAME_DESTINATION : OUTSIDE_DESTINATION;
+export const captureDestination = (zone: CaptureZone, { savesOriginal = false }: CaptureDestinationOptions = {}): CaptureDestination =>
+  zone === 'frame' || savesOriginal ? FRAME_DESTINATION : OUTSIDE_DESTINATION;
 
 /** L'état juste après la prise : une prise par le cadre part déjà en galerie (mise à jour optimiste). */
 export const beginTake = (origin: CaptureOrigin): TakeSaveState => ({

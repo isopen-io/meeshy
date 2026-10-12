@@ -105,9 +105,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// (#9684). `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
     /// `true` : enregistrée.
     @Published var takeWrite: Task<Bool?, Never>?
-    /// L'écriture du BRUT de la prise en retouche vers Photos (#10284) : posée
-    /// par la seule prise par le cadre, `nil` pour une prise hors cadre, dont
-    /// l'original reste dans l'app quel que soit le réglage.
+    /// L'écriture du BRUT de la prise en retouche vers Photos par la caméra —
+    /// quand Réglages › Médias demande l'original (#9684), quelle que soit la zone
+    /// (#10284) ; `nil` : le brut n'y est pas (réglage par défaut, assemblage).
     var editRawSave: Task<Bool, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
@@ -369,7 +369,7 @@ final class ComposerCaptureSession: ObservableObject {
 
     /// **Une vidéo s'ACCUMULE** (#4099) : `✓` concatène.
     func collectSegment(_ url: URL) {
-        segments.append(ComposerCaptureSegment(url: url, duration: pendingSegmentDuration))
+        segments.append(ComposerCaptureSegment(url: url, duration: pendingSegmentDuration, rawSave: camera.librarySave))
         pendingSegmentDuration = 0
     }
 
@@ -385,7 +385,8 @@ final class ComposerCaptureSession: ObservableObject {
     }
 
     /// **`✓` assemble les segments et ouvre la retouche** (#9352, spec § 3.2) :
-    /// rien ne part avant « Terminé ». Un segment unique EST le fichier ; un
+    /// rien ne part avant « Terminé ». Un segment unique EST le fichier — et son
+    /// brut, si la caméra l'a écrit (réglage activé), est déjà dans Photos ; un
     /// assemblage qui échoue retombe sur le dernier segment plutôt que de perdre
     /// la prise entière. Un viseur fermé entre-temps n'ouvre rien.
     func validateSegments() {
@@ -401,6 +402,8 @@ final class ComposerCaptureSession: ObservableObject {
             isRenderingLook = false
             guard let url = finale ?? pris.last?.url else { return }
             await beginEditing(video: url)
+            guard phase == .editing(.video(url)) else { return }
+            editRawSave = pris.first(where: { $0.url == url })?.rawSave
         }
     }
 

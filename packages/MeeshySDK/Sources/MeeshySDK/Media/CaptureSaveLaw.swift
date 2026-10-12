@@ -11,8 +11,13 @@ import Foundation
 // visible, disparait tant qu'on ne change pas de cadre pour refaire
 // l'enregistrement. »
 //
-// Une prise par la zone cadre supplante, pour elle seule, `CaptureSavePolicy`
-// (#9684) : `packages/shared/decisions/2026-10-12-une-prise-par-le-cadre-part-en-galerie-une-prise-hors-cadre-reste-dans-l-app-10284.md`.
+// La directive fixe des DÉFAUTS ; le réglage de l'utilisateur prime (correction
+// porteur 2026-10-12 : « il faut respecter la consigne et reglage utilisateur.
+// Je n'exprimais que le comportement par défaut »). Réglages › Médias
+// « enregistrer l'original » (`CaptureSavePolicy.savesOriginal`, #9684) activé,
+// l'original d'une prise hors cadre part en galerie ; par défaut, il reste dans
+// l'app. Une prise par le cadre part en galerie : c'est le défaut, aucun réglage
+// ne le contredit. `packages/shared/decisions/2026-10-12-une-prise-par-le-cadre-part-en-galerie-une-prise-hors-cadre-reste-dans-l-app-10284.md`.
 // Les vecteurs `packages/shared/fixtures/capture-save/capture-save.vectors.json`
 // sont rejoués par `CaptureSaveLawVectorTests` : sur divergence, le TS a raison.
 
@@ -23,7 +28,8 @@ public enum CaptureZone: String, CaseIterable, Codable, Sendable, Hashable {
     case outside
 }
 
-/// Où part une prise : `keptInApp` = elle ne vit QUE dans l'application.
+/// Où part une prise : `keptInApp` = elle ne vit QUE dans l'application. Hors
+/// cadre avec le réglage, c'est l'ORIGINAL qui part en galerie.
 public struct CaptureDestination: Codable, Sendable, Hashable {
     public enum Next: String, Codable, Sendable, Hashable { case edit }
 
@@ -79,10 +85,11 @@ public struct TakeSaveState: Sendable, Hashable {
 }
 
 public enum CaptureSaveLaw {
+    /// `savesOriginal` : Réglages › Médias « enregistrer l'original » ; `false` = le défaut.
     public static func destination(for zone: CaptureZone, savesOriginal: Bool = false) -> CaptureDestination {
         switch zone {
         case .frame: return .frame
-        case .outside: return .outside
+        case .outside: return savesOriginal ? .frame : .outside
         }
     }
 
