@@ -191,6 +191,8 @@ final class LoadingSheenView: UIView {
 
     required init?(coder: NSCoder) { nil }
 
+    nonisolated deinit {}
+
     func configure(tint: UIColor, band: LoadingSheenStyle.Band, duration: Double) {
         let changed = tint != self.tint || band != self.band || duration != self.duration
         self.tint = tint
