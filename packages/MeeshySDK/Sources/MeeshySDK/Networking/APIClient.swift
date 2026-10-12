@@ -816,6 +816,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 guard (200...299).contains(statusCode) else {
                     let errBody = try? decoder.decode(ErrorBody.self, from: data)
                     let errorMsg = errBody?.message ?? errBody?.error
+                    // #10442 — un invité de lien échu ou révoqué : la session se termine, elle ne se retente pas.
+                    if let guestToken = urlRequest.value(forHTTPHeaderField: "X-Session-Token") { GuestSessionEnd.signal(statusCode: statusCode, body: data, refusedSessionToken: guestToken) }
 
                     // Rupture cliente (C4b) : le gateway refuse ce BINAIRE, pas
                     // cette requête. Le signal part AVANT que l'erreur ne soit
