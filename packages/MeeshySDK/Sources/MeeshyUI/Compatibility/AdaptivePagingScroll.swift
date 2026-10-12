@@ -48,16 +48,23 @@ where Item.ID == String {
 
     public var body: some View {
         if #available(iOS 17.0, *) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        modernPage(index: index, item: item)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            modernPage(index: index, item: item)
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .scrollTargetLayout()
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentPageID)
+                // #6686 — `scrollPosition(id:)` n'honore pas toujours la page
+                // posée avant la première mise en page : la galerie s'ouvrait
+                // sur la première pièce, le lien restant sur celle tapée. Une
+                // fois posé, le pager rejoint la page liée.
+                .onAppear { settle(on: currentPageID, with: proxy) }
             }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $currentPageID)
         } else {
             TabView(selection: $currentPageID) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -66,6 +73,14 @@ where Item.ID == String {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+    }
+
+    private func settle(on pageID: String?, with proxy: ScrollViewProxy) {
+        guard let pageID, items.first?.id != pageID else { return }
+        Task { @MainActor in
+            await Task.yield()
+            proxy.scrollTo(pageID, anchor: .center)
         }
     }
 
