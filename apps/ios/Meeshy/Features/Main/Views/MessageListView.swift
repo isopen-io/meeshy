@@ -432,6 +432,10 @@ struct MessageMenuPreviewContainer<Content: View>: View {
 
     var body: some View {
         content()
+            // **L'aperçu de l'appui long ne s'annonce pas** (#9632) : le menu
+            // natif est attaché sous la valeur d'annonce du fil, dont l'aperçu
+            // hériterait. Fermé par défaut, une flamme y reste noire.
+            .environment(\.announcesCapture, false)
             .background(
                 GeometryReader { proxy in
                     Color.clear.preference(key: MessageMenuPreviewSizeKey.self, value: proxy.size)
