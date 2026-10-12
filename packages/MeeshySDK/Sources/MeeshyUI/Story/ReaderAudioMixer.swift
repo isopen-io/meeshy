@@ -164,6 +164,11 @@ public final class ReaderAudioMixer {
                                format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
                 let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
                 node.volume = isMuted ? 0 : initialVolume
+                let sourceDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
+                let duration = audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate)
+                let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
+                    ? nil
+                    : audio.trimBounds(sourceDuration: sourceDuration)
                 entries[audio.id] = Entry(
                     audioId: audio.id,
                     file: file,
@@ -172,7 +177,7 @@ public final class ReaderAudioMixer {
                     targetVolume: audio.volume,
                     fadeIn: audio.fadeIn ?? 0,
                     fadeOut: audio.fadeOut ?? 0,
-                    duration: audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate),
+                    duration: duration,
                     loop: ReaderAudioLoopPolicy.loops(declared: audio.loop,
                                                       isBackground: false,
                                                       isEditPreview: loopsEveryClip),
@@ -187,9 +192,19 @@ public final class ReaderAudioMixer {
                     // (les deux bornes `nil`), on ne résout rien : `nil` fait
                     // retomber `scheduleEntry` sur `scheduleFile`, le chemin
                     // d'aujourd'hui, à coût nul pour l'immense majorité des clips.
-                    trimBounds: (audio.sourceStart == nil && audio.sourceEnd == nil)
-                        ? nil
-                        : audio.trimBounds(sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1))
+                    trimBounds: trimBounds,
+                    // Une boucle d'aperçu rejoue ses fondus à chaque tour
+                    // (#10367) ; `nil` garde les fondus posés une fois.
+                    envelopeCycle: ReaderLoopEnvelope.repeatsEveryPass(
+                        loopsEveryClip: loopsEveryClip,
+                        fadeIn: Double(audio.fadeIn ?? 0),
+                        fadeOut: Double(audio.fadeOut ?? 0))
+                        ? ReaderLoopEnvelope.cycle(
+                            declaredLoop: audio.loop,
+                            occupiedDuration: Double(duration),
+                            passLength: ReaderLoopLaw.passLength(sourceDuration: sourceDuration,
+                                                                 trimBounds: trimBounds))
+                        : nil
                 )
             } catch {
                 logger.error("ReaderAudioMixer failed to load \(audio.id): \(error.localizedDescription)")
@@ -638,6 +653,10 @@ public final class ReaderAudioMixer {
     /// (#6580) — la position avait suivi l'ouverture, l'amplitude non.
     /// `AudioEnvelope` est le site unique de cette règle ; le fond la partage.
     private func scheduleFades(for entry: Entry, originHost: UInt64, slideElapsed: Double) {
+        if let cycle = entry.envelopeCycle {
+            runLoopEnvelope(for: entry, cycle: cycle)
+            return
+        }
         let envelope = AudioEnvelope.plan(
             elapsedInClip: slideElapsed - Double(entry.startTime),
             fadeIn: Double(entry.fadeIn),
@@ -706,6 +725,47 @@ public final class ReaderAudioMixer {
         }
     }
 
+    /// **L'enveloppe d'une boucle d'aperçu suit l'horloge de la passe (#10367).**
+    ///
+    /// Une minuterie par fondu ne vaut que pour le premier tour : le volume se
+    /// relit donc à 60 Hz sur l'origine VIVANTE (`playbackStartHostTime`, que
+    /// la reprise après pause fait glisser) et la phase du tour
+    /// (`ReaderLoopEnvelope`). La tâche s'efface avec SA passe — `stop()`,
+    /// `play()` à neuf et `teardown()` avancent l'époque — et tombe avec les
+    /// autres rampes sous `fadeOutAndStop`.
+    private func runLoopEnvelope(for entry: Entry, cycle: Double) {
+        let audioId = entry.audioId
+        let epoch = playbackEpoch
+        _ = applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle)
+        let task = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
+                try? await Task.sleep(nanoseconds: UInt64(ReaderVolumeRamp.stepInterval * 1_000_000_000))
+            }
+        }
+        if var stored = entries[audioId] {
+            stored.fadeTasks.append(task)
+            entries[audioId] = stored
+        }
+    }
+
+    /// Pose le volume que dicte la phase du tour. `false` quand la passe n'est
+    /// plus la sienne : la tâche s'arrête.
+    private func applyLoopEnvelope(audioId: String, epoch: UInt64, cycle: Double) -> Bool {
+        guard playbackEpoch == epoch, let live = entries[audioId] else { return false }
+        // Une pause gèle la phase : l'origine ne glisse qu'à la reprise.
+        guard pausedAtHostTime == nil, let origin = playbackStartHostTime else { return true }
+        let slideElapsed = ReaderAudioMixer.delaySeconds(forHostTime: mach_absolute_time(),
+                                                         relativeTo: origin)
+        let volume = ReaderLoopEnvelope.volume(elapsedInClip: slideElapsed - Double(live.startTime),
+                                               cycle: cycle,
+                                               fadeIn: Double(live.fadeIn),
+                                               fadeOut: Double(live.fadeOut),
+                                               target: live.targetVolume)
+        live.node.volume = (isMuted || live.isUserMuted) ? 0 : volume
+        return true
+    }
+
     // MARK: - host-time helpers
 
     private static let hostTimebase: mach_timebase_info_data_t = {
@@ -764,6 +824,10 @@ public final class ReaderAudioMixer {
         /// clip n'a jamais été rogné. `scheduleAudio` (MARK: Scheduling) la
         /// consulte à chaque `scheduleSegment` — départ ET rebouclage.
         let trimBounds: MediaTrimBounds?
+        /// Durée d'un tour d'enveloppe quand la boucle d'aperçu rejoue ses
+        /// fondus à chaque tour (`ReaderLoopEnvelope`, #10367) ; `nil` pour
+        /// les fondus posés une fois — le lecteur, et toute piste sans fondu.
+        let envelopeCycle: Double?
     }
 
     /// Internal helper for the single background audio slot.

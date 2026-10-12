@@ -40,6 +40,13 @@ nonisolated enum ReaderLoopLaw {
         guard passLength.isFinite, passLength > 0 else { return elapsedInClip }
         return elapsedInClip.truncatingRemainder(dividingBy: passLength)
     }
+
+    /// Durée d'UNE passe : la fenêtre de rognage bornée à la source, ou la
+    /// source entière — ce que `TimelineAudioWindow.segment` rend réellement.
+    static func passLength(sourceDuration: Double, trimBounds: MediaTrimBounds?) -> Double {
+        guard let trimBounds else { return sourceDuration }
+        return max(0, min(trimBounds.end, sourceDuration) - trimBounds.start)
+    }
 }
 
 /// **Qui boucle : la déclaration de l'auteur, sauf dans l'aperçu du composer (#10362).**
@@ -53,6 +60,61 @@ nonisolated enum ReaderLoopLaw {
 nonisolated enum ReaderAudioLoopPolicy {
     static func loops(declared: Bool?, isBackground: Bool, isEditPreview: Bool) -> Bool {
         isEditPreview || (declared ?? isBackground)
+    }
+}
+
+/// **Une boucle d'aperçu rejoue ses fondus à CHAQUE tour (#10367).**
+///
+/// Les fondus d'un clip se posaient une fois, à la planification de la passe
+/// (`AudioEnvelope`) : montée au début, descente avant la fin. Une piste
+/// bouclée par l'aperçu d'édition (`ReaderAudioLoopPolicy`) repartait au tour
+/// suivant sur un node resté à zéro — muette pour de bon après son premier
+/// fondu de sortie.
+///
+/// Le volume se LIT donc sur la phase du tour : l'écoulé dans le clip replié
+/// sur le cycle (`elapsedInPass`), montée sur `fadeIn`, descente sur les
+/// `fadeOut` dernières secondes du cycle, le plus petit des deux facteurs
+/// gouvernant quand ils se chevauchent. Une entrée en cours de boucle tombe
+/// d'elle-même à la bonne amplitude.
+nonisolated enum ReaderLoopEnvelope {
+
+    /// Seule une boucle IMPOSÉE par l'aperçu et porteuse d'un fondu rejoue
+    /// son enveloppe : le lecteur garde ses fondus posés une fois, et une
+    /// boucle sans fondu n'a rien à rejouer — son volume ne bouge pas.
+    static func repeatsEveryPass(loopsEveryClip: Bool, fadeIn: Double, fadeOut: Double) -> Bool {
+        loopsEveryClip && (positive(fadeIn) > 0 || positive(fadeOut) > 0)
+    }
+
+    /// Durée d'un tour d'enveloppe. Une boucle DÉCLARÉE par l'auteur occupe sa
+    /// durée sur la timeline (le fichier y tourne plusieurs fois) : ses fondus
+    /// encadrent ce span. Une boucle imposée par l'aperçu tourne à la passe
+    /// réelle — la fenêtre de rognage — pour que la descente touche zéro à
+    /// l'instant où le fichier repart. Une durée inexploitable retombe sur
+    /// l'autre.
+    static func cycle(declaredLoop: Bool?, occupiedDuration: Double, passLength: Double) -> Double {
+        let occupied = positive(occupiedDuration)
+        let pass = positive(passLength)
+        if declaredLoop == true, occupied > 0 { return occupied }
+        return pass > 0 ? pass : occupied
+    }
+
+    /// Volume à l'instant `elapsedInClip` (secondes depuis le début du clip,
+    /// tous tours confondus). Un écoulé négatif — le clip n'a pas commencé —
+    /// vaut le début du tour.
+    static func volume(elapsedInClip: Double, cycle: Double,
+                       fadeIn: Double, fadeOut: Double, target: Float) -> Float {
+        let phase = ReaderLoopLaw.elapsedInPass(elapsedInClip, passLength: cycle)
+        let rise = positive(fadeIn)
+        let fall = positive(fadeOut)
+        let span = positive(cycle)
+        let rising = rise > 0 ? min(1, phase / rise) : 1
+        let falling = (fall > 0 && span > 0) ? min(1, max(0, (span - phase) / fall)) : 1
+        return target * Float(min(rising, falling))
+    }
+
+    private static func positive(_ seconds: Double) -> Double {
+        guard seconds.isFinite, seconds > 0 else { return 0 }
+        return seconds
     }
 }
 
@@ -72,9 +134,9 @@ struct ReaderLoopSource {
     /// Durée d'UNE passe : la fenêtre de rognage bornée au fichier, ou le
     /// fichier entier — ce que `TimelineAudioWindow.segment` rend réellement.
     var passLength: Double {
-        let fileDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
-        guard let trimBounds else { return fileDuration }
-        return max(0, min(trimBounds.end, fileDuration) - trimBounds.start)
+        ReaderLoopLaw.passLength(
+            sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1),
+            trimBounds: trimBounds)
     }
 }
 
