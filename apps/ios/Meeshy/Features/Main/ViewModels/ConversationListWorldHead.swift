@@ -34,4 +34,21 @@ nonisolated enum ConversationListWorldHead {
     static func isHead(sectionId: String) -> Bool {
         sectionId == Self.sectionId
     }
+
+    /// Sépare la tête du reste. World Wide n'y monte que NON archivée : dans
+    /// les archives, elle se range comme les autres.
+    static func split(_ filtered: [Conversation]) -> (head: Conversation?, rest: [Conversation]) {
+        guard let head = filtered.first(where: { $0.isWorldWide && !$0.userState.isArchived }) else {
+            return (nil, filtered)
+        }
+        return (head, filtered.filter { $0.id != head.id })
+    }
+
+    static func prepending(
+        _ head: Conversation?,
+        to sections: [(section: ConversationSection, conversations: [Conversation])]
+    ) -> [(section: ConversationSection, conversations: [Conversation])] {
+        guard let head else { return sections }
+        return [(section, [head])] + sections
+    }
 }

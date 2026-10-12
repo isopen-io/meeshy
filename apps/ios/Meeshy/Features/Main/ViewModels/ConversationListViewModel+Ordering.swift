@@ -17,16 +17,21 @@ extension ConversationListViewModel {
     /// `nonisolated`, staticité : inchangées — c'est le seul point de greffe
     /// (§4.4 du contrat). Le drapeau entre en paramètre (lu par défaut) pour que
     /// les deux branches s'éprouvent sans écrire dans `UserDefaults.standard`.
+    ///
+    /// World Wide se pose AU-DESSUS des deux branches (#10347) : elle sort du
+    /// corpus avant le groupement et le précède, sans qu'aucune des deux peaux
+    /// n'ait à la connaître.
     nonisolated static func groupConversations(
         _ filtered: [Conversation],
         categories: [ConversationSection],
         draftSummaries: [String: DraftSummary],
         lentilleEnabled: Bool = LentilleFeatureFlag.isLentilleListEnabled
     ) -> [(section: ConversationSection, conversations: [Conversation])] {
-        guard lentilleEnabled else {
-            return legacyGroupConversations(filtered, categories: categories, draftSummaries: draftSummaries)
-        }
-        return lentilleGroupConversations(filtered, categories: categories)
+        let (head, rest) = ConversationListWorldHead.split(filtered)
+        let sections = lentilleEnabled
+            ? lentilleGroupConversations(rest, categories: categories)
+            : legacyGroupConversations(rest, categories: categories, draftSummaries: draftSummaries)
+        return ConversationListWorldHead.prepending(head, to: sections)
     }
 
     /// Comportement D'AUJOURD'HUI, verbatim — seul appelant sous drapeau OFF.
