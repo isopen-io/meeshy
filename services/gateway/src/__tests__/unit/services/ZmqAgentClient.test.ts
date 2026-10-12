@@ -21,7 +21,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 jest.mock('zeromq');
 
 import * as zmq from 'zeromq';
+import { verifyAgentZmqPayload } from '@meeshy/shared/utils/agent-zmq-auth';
 import { ZmqAgentClient } from '../../../services/zmq-agent/ZmqAgentClient';
+
+const TOKEN = 't'.repeat(48);
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -139,13 +142,24 @@ describe('initialize', () => {
 // ─── sendEvent ────────────────────────────────────────────────────────────────
 
 describe('sendEvent', () => {
-  it('sends serialized JSON to the push socket', async () => {
-    const client = new ZmqAgentClient();
+  it('sends the serialized JSON followed by its signature frame (#10288)', async () => {
+    const client = new ZmqAgentClient('localhost', 5560, 5561, TOKEN);
     await client.initialize();
 
     await client.sendEvent({ action: 'ping', data: 42 });
 
-    expect(mockPushSocket.send).toHaveBeenCalledWith(JSON.stringify({ action: 'ping', data: 42 }));
+    const [frames] = mockPushSocket.send.mock.calls[0] as [string[]];
+    expect(frames[0]).toBe(JSON.stringify({ action: 'ping', data: 42 }));
+    expect(verifyAgentZmqPayload(frames[0], frames[1], TOKEN)).toMatchObject({ ok: true });
+    expect(verifyAgentZmqPayload(frames[0], frames[1], 'x'.repeat(48))).toMatchObject({ ok: false, reason: 'bad-signature' });
+  });
+
+  it('sends nothing without AGENT_INTERNAL_TOKEN — the agent would reject an unsigned event (#10288)', async () => {
+    const client = new ZmqAgentClient('localhost', 5560, 5561, null);
+    await client.initialize();
+
+    await expect(client.sendEvent({ action: 'ping' })).rejects.toThrow(/AGENT_INTERNAL_TOKEN/);
+    expect(mockPushSocket.send).not.toHaveBeenCalled();
   });
 
   it('throws when the push socket is not initialized', async () => {
