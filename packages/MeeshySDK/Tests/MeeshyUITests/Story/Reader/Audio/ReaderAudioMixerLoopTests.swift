@@ -93,8 +93,9 @@ final class ReaderAudioMixerLoopTests: XCTestCase {
     // MARK: - La loi pure
 
     func test_loopLaw_rearmsOnlyTheSamePassOnTheSameNode() {
-        let node = ObjectIdentifier(NSObject())
-        let other = ObjectIdentifier(NSObject())
+        let nodes = (NSObject(), NSObject())
+        let node = ObjectIdentifier(nodes.0)
+        let other = ObjectIdentifier(nodes.1)
         XCTAssertTrue(ReaderLoopLaw.shouldRearm(capturedEpoch: 3, liveEpoch: 3,
                                                 capturedNode: node, liveNode: node))
         XCTAssertFalse(ReaderLoopLaw.shouldRearm(capturedEpoch: 3, liveEpoch: 4,
@@ -106,6 +107,7 @@ final class ReaderAudioMixerLoopTests: XCTestCase {
         XCTAssertFalse(ReaderLoopLaw.shouldRearm(capturedEpoch: 3, liveEpoch: 3,
                                                  capturedNode: node, liveNode: nil),
                        "Un slot vidé ne se réarme pas")
+        withExtendedLifetime(nodes) {}
     }
 
     // MARK: - Fixtures

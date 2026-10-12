@@ -193,7 +193,6 @@ struct StoryViewerView: View {
     /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
     /// termine son cycle avant l'avance.
     @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
-    @State var hasFiredFadeOut = false // internal for cross-file extension access
     @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par

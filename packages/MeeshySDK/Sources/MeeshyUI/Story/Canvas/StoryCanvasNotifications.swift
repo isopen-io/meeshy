@@ -6,8 +6,6 @@ import Foundation
 /// Previously defined in StoryCanvasReaderView.swift (legacy); moved here after that file
 /// was deleted in the Phase A4 reader migration.
 public extension Notification.Name {
-    /// Posted by the viewer approximately 2 s before the end of a slide to trigger audio fade-out.
-    static let storyAudioFadeOut = Notification.Name("storyAudioFadeOut")
     /// Posted by the composer to mute all canvas audio (e.g., while the audio picker is open).
     static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
     /// Posted by the composer to restore canvas audio after muting.
