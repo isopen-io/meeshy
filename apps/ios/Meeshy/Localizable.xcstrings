@@ -19916,6 +19916,53 @@
         }
       }
     },
+    "conversation.send.slow_mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة واحدة كل 30 ث للحسابات الجديدة — أعد المحاولة بعد %lld ث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Konten: eine Nachricht alle 30 s — versuch es in %lld s erneut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One message every 30 s for new accounts — try again in %lld s"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje cada 30 s para las cuentas nuevas — vuelve a intentarlo en %lld s"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message toutes les 30 s pour les nouveaux comptes — réessaie dans %lld s"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio ogni 30 s per i nuovi account — riprova tra %lld s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem a cada 30 s para contas novas — tente de novo em %lld s"
+          }
+        }
+      }
+    },
     "emailVerification.provenElsewhere.body": {
       "extractionState": "manual",
       "localizations": {

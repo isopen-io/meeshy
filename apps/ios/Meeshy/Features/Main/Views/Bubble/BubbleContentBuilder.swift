@@ -176,7 +176,10 @@ extension BubbleContent {
             ?? message.originalLanguage
         // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
         // d'interface, fuseau) ; son `content` n'est que le repli français.
-        let effective = Self.captureNoticeText(for: message) ?? Self.resolveEffectiveContent(
+        // #7759 — la ligne d'arrivées de Meeshy Global, de même.
+        let effective = Self.captureNoticeText(for: message)
+            ?? Self.arrivalsNoticeText(for: message)
+            ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
             preferredTranslation: preferredTranslation,
@@ -417,6 +420,15 @@ extension BubbleContent {
     ) -> String? {
         guard message.messageSource == .system, let notice = message.captureNotice else { return nil }
         return CaptureNoticeText.compose(notice, language: language, timeZone: timeZone)
+    }
+
+    /// **La ligne d'arrivées de Meeshy Global** (#7759) dans la langue
+    /// d'interface du lecteur, avec les clés `system.members.arrived.*` que la
+    /// ligne de liste dit déjà. `nil` pour tout autre message — et pour une
+    /// ligne dont la métadonnée ne se lit pas, qui retombe sur son `content`.
+    static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
     }
 
     static func resolveEffectiveContent(

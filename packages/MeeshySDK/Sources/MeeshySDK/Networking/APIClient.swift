@@ -665,6 +665,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             case 403:
                 throw MeeshyError.forbidden(reason: message, body: data)
             case 429:
+                if let slowMode = NewcomerSlowMode.fromResponse(response, body: data) {
+                    throw MeeshyError.rejected(slowMode.rejection(message: message))
+                }
                 if let limit = DailyGestureLimit.fromBody(data) {
                     throw MeeshyError.rejected(APIRejection(
                         statusCode: 429, code: limit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
@@ -802,7 +805,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 // Une limite QUOTIDIENNE de gestes (429 `DAILY_*`, #9571) ne se
                 // rejoue pas : elle tient jusqu'à `resetAt`, des heures plus tard.
                 let dailyLimit = statusCode == 429 ? DailyGestureLimit.fromBody(data) : nil
-                if endpointAllowsRetry && dailyLimit == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                // Le mode lent des nouveaux comptes (#7759) se DIT à l'auteur, jamais attendu en silence.
+                let slowMode = NewcomerSlowMode.fromResponse(httpResponse, body: data)
+                if endpointAllowsRetry && dailyLimit == nil && slowMode == nil && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 
@@ -901,6 +906,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // errors) can decode them without a second request.
                         AgeGateSignal.signal(statusCode: statusCode, body: data)
                         throw MeeshyError.forbidden(reason: errorMsg, body: data)
+                    }
+
+                    if let slowMode {
+                        throw MeeshyError.rejected(slowMode.rejection(message: errorMsg))
                     }
 
                     if let dailyLimit {
