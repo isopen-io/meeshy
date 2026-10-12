@@ -36,6 +36,10 @@ protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
     nonisolated var hasAudio: Bool { get }
     @MainActor func configure(fps: Int, declaredSpace: CGColorSpace?)
     @MainActor func play()
+    /// **La lecture s'arrête à sa position** (#10356) : `play()` la reprend de là.
+    @MainActor func pause()
+    /// La vidéo avance — ni en pause, ni suspendue par un glissé de la règle.
+    @MainActor var isPlaying: Bool { get }
     @MainActor func stop()
     @MainActor func setRange(_ range: ClosedRange<TimeInterval>)
     @MainActor func seek(to time: TimeInterval)
@@ -148,6 +152,16 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         lien.preferredFramesPerSecond = fps
         lien.add(to: .main, forMode: .common)
         link = lien
+    }
+
+    @MainActor
+    func pause() {
+        player.pause()
+    }
+
+    @MainActor
+    var isPlaying: Bool {
+        player.rate != 0
     }
 
     @MainActor

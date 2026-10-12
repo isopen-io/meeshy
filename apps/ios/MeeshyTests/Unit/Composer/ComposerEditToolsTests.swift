@@ -1,6 +1,7 @@
 import CoreMedia
 import XCTest
 import UIKit
+import MeeshyUI
 @testable import Meeshy
 
 /// **Les outils du mode édition d'une prise** (#9754, directives porteur
@@ -54,7 +55,10 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_panels_stackEveryActiveTool_fromTheProportionsDownToTheCut() {
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound, .crop]),
-                       [.presets, .sound, .trim], "la coupe se pose au plus près des outils")
+                       [.presets, .trim],
+                       "la coupe se pose au plus près des outils ; le son se peint dessus, sans panneau (#10356)")
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.presets, .sound],
+                       "Couper retiré : le spectre garde sa propre piste")
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [.presets])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: []), [])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: true, active: [.crop, .trim, .sound]), [.band],
@@ -100,18 +104,18 @@ final class ComposerEditToolsTests: XCTestCase {
     func test_aVideo_opensWithCutSoundAndCropTogether_andEachLeavesAlone() async {
         let (session, _) = await videoSession()
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "le son se peint sur la coupe (#10356)")
         XCTAssertTrue(session.showsCropBrackets)
         session.toggleEditTool(.trim)
         XCTAssertEqual(session.editPanels, [.presets, .sound], "Couper se retire seul")
         XCTAssertTrue(session.showsCropBrackets, "les équerres restent")
         session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
         session.toggleFamily(.filters)
         XCTAssertEqual(session.editPanels, [.band])
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound], "la bande replie les panneaux, rien ne s'éteint")
         session.toggleFamily(.filters)
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim], "la bande repliée, ils reviennent")
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "la bande repliée, ils reviennent")
         session.cancelEditing()
         XCTAssertEqual(session.activeEditTools, [])
         XCTAssertEqual(session.editPanels, [])
@@ -123,21 +127,54 @@ final class ComposerEditToolsTests: XCTestCase {
         session.toggleEditTool(.sound)
         XCTAssertNil(session.openFamily, "le toucher d'un outil replie la bande")
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound])
-        XCTAssertEqual(session.editPanels, [.presets, .sound, .trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
+        XCTAssertTrue(session.shownEditTools.contains(.sound), "le son, lui, se montre sur la coupe")
     }
 
     // MARK: - (2) Son : spectre, ligne de volume, bouton muet
 
-    func test_theMuteSwitch_sitsRightOfOneTrack_theSpectrumFirst() {
-        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.presets, .sound, .trim], hasAudio: true), .sound)
-        XCTAssertEqual(ComposerEditTools.muteHost(panels: [.trim], hasAudio: true), .trim,
-                       "le bouton muet se pose à DROITE de la barre de trim quand le spectre est retiré")
-        XCTAssertNil(ComposerEditTools.muteHost(panels: [.trim], hasAudio: false), "un clip muet n'en a pas")
-        XCTAssertNil(ComposerEditTools.muteHost(panels: [.presets], hasAudio: true))
-        XCTAssertTrue(ComposerEditTools.reservesMuteColumn(.trim, panels: [.sound, .trim], hasAudio: true),
-                      "la coupe sous le spectre garde la place du bouton : les deux pistes du temps s'alignent")
-        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.sound, panels: [.sound, .trim], hasAudio: true))
-        XCTAssertFalse(ComposerEditTools.reservesMuteColumn(.trim, panels: [.trim], hasAudio: true))
+    /// **#10356 — « Son » ne rétrécit plus la scène.** Le spectre se pose sur
+    /// la bande vidéo depuis #10341 ; il ne réserve donc aucune hauteur, et la
+    /// scène garde la taille qu'elle a sans lui.
+    func test_10356_theSoundTool_reservesNoHeight_whileTheCutIsShown() {
+        let avecSon = ComposerEditTools.panels(familyOpen: false, active: [.crop, .trim, .sound])
+        let sansSon = ComposerEditTools.panels(familyOpen: false, active: [.crop, .trim])
+        XCTAssertEqual(ComposerEditScene.bottomReserve(avecSon), ComposerEditScene.bottomReserve(sansSon))
+        let ecran = CGSize(width: 402, height: 874)
+        XCTAssertEqual(ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: avecSon),
+                       ComposerEditScene.area(container: ecran, top: 62, bottom: 34, panels: sansSon),
+                       "allumer « Son » ne déplace pas la scène")
+    }
+
+    /// **#10356 — lecture et muet, en bas à droite de la SCÈNE**, la pause à
+    /// gauche du muet ; la rangée s'écarte du crochet du coin.
+    func test_10356_playbackRow_sitsBottomRightOfTheScene_clearOfTheCornerBracket() {
+        let cible = MeeshyControlSize.tapTarget
+        let scene = CGRect(x: 16, y: 100, width: 300, height: 500)
+        let deux = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: false)
+        XCTAssertEqual(deux.height, cible, "cible de 44 pt")
+        XCTAssertEqual(deux.width, cible * 2 + ComposerEditPlaybackLayout.spacing, accuracy: 0.001)
+        XCTAssertEqual(deux.maxX, scene.maxX - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
+        XCTAssertEqual(deux.maxY, scene.maxY - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
+        XCTAssertTrue(scene.contains(deux), "posée SUR la vidéo")
+        let crochets = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
+        XCTAssertLessThanOrEqual(crochets.maxX, scene.maxX - cible, "le crochet du coin garde sa cible")
+        let seul = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: false, clearsBrackets: false)
+        XCTAssertEqual(seul.width, cible, accuracy: 0.001, "un clip muet n'a que la lecture")
+        XCTAssertNotEqual(ComposerCaptureCopy.playbackLabel(paused: true),
+                          ComposerCaptureCopy.playbackLabel(paused: false), "« Lire » et « Pause »")
+    }
+
+    func test_10356_theMuteButton_leftTheBand_forTheScene() throws {
+        let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertFalse(bas.contains("ComposerTakeMuteButton("), "plus de bouton muet sur la bande")
+        XCTAssertFalse(bas.contains("toggleTakeMute"))
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackControls("), "lecture et muet sont montés sur la scène")
+        XCTAssertTrue(chrome.contains("onTogglePlayback: { session.toggleEditPlayback() }"))
+        XCTAssertTrue(chrome.contains("onToggleMute: { session.toggleTakeMute() }"))
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone)"),
+                      "la rangée se pose sur la scène que les crochets cadrent")
     }
 
     func test_aSilentClip_offersNoSoundTool() async {
@@ -236,12 +273,11 @@ final class ComposerEditToolsTests: XCTestCase {
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("editTools: session.editTools"))
         XCTAssertTrue(bas.contains("ForEach(session.editPanels, id: \\.self)"), "chaque outil actif a son panneau")
-        XCTAssertTrue(bas.contains("ComposerTakeMuteButton("), "le bouton muet")
         XCTAssertTrue(bas.contains("ComposerSoundTrack("), "le spectre en couleur")
         let rail = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookStrip.swift")
         XCTAssertTrue(rail.contains(".buttonStyle(ComposerBounceButtonStyle())"))
         let son = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSoundTrack.swift")
         XCTAssertTrue(son.contains("accessibilityAdjustableAction"), "VoiceOver règle le volume")
-        XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"))
+        XCTAssertTrue(son.contains(".buttonStyle(ComposerBounceButtonStyle())"), "lecture et muet rebondissent")
     }
 }

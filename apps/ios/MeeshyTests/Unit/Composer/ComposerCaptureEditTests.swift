@@ -314,7 +314,8 @@ final class ComposerCaptureEditTests: XCTestCase {
     /// qu'on recadre, même sur le plus petit écran servi (iPhone SE).
     func test_everyToolOpen_onTheSmallestScreen_stillLeavesACroppableScene() {
         let zone = ComposerEditScene.area(container: CGSize(width: 375, height: 667), top: 20, bottom: 0,
-                                          panels: [.presets, .sound, .trim])
+                                          panels: ComposerEditTools.panels(familyOpen: false,
+                                                                           active: [.crop, .trim, .sound]))
         XCTAssertGreaterThanOrEqual(zone.height, ComposerEditScene.minimumSide * 2)
     }
 

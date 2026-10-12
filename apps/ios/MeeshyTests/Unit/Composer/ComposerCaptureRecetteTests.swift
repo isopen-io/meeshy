@@ -91,8 +91,12 @@ final class ComposerCaptureRecetteTests: XCTestCase {
     func test_soundSitsOverTheVideoBand_withTheSoundIconInsideBeforeTheHandle() throws {
         let bas = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
         XCTAssertTrue(bas.contains("ComposerSoundTrack(session: session, url: trimClip.url, overlaid: true)"))
-        XCTAssertTrue(bas.contains(".padding(.trailing, ComposerTrimTrack.trackInset)"), "bord droit intérieur, avant la poignée")
-        XCTAssertTrue(bas.contains("!session.editPanels.contains(.trim)"), "plus de seconde rangée de spectre sous la vidéo")
+        XCTAssertTrue(bas.contains(".padding(.horizontal, ComposerTrimTrack.trackInset)"), "entre les deux poignées")
+        // #10356 : le son se montre sur la bande par l'OUTIL, sans panneau à lui
+        // tant que la coupe est montrée — plus de seconde rangée sous la vidéo.
+        XCTAssertTrue(bas.contains("session.shownEditTools.contains(.sound)"))
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound]), [.trim],
+                       "plus de seconde rangée de spectre sous la vidéo")
     }
 
     // MARK: - #10342 — (x) en retouche photo : confirmation, et aucun gel

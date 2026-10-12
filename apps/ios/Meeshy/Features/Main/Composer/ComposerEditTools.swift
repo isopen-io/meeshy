@@ -72,10 +72,19 @@ nonisolated enum ComposerEditTools {
     static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
-    /// outil actif.
+    /// outil actif — **sauf le son quand la coupe est montrée** (#10356) : il se
+    /// pose alors PAR-DESSUS la bande vidéo (#10341) et ne prend aucune place à
+    /// lui. La scène ne rétrécit plus pour une place vide.
     static func panels(familyOpen: Bool, active: Set<ComposerEditTool>) -> [ComposerEditPanel] {
         guard !familyOpen else { return [.band] }
-        return panelOrder.filter(active.contains).map(panel(for:))
+        return panelOrder
+            .filter { active.contains($0) && !(overlaysTrim($0) && active.contains(.trim)) }
+            .map(panel(for:))
+    }
+
+    /// Le son se peint sur la bande vidéo tant qu'elle est montrée (#10341).
+    static func overlaysTrim(_ tool: ComposerEditTool) -> Bool {
+        tool == .sound
     }
 
     static func panel(for tool: ComposerEditTool) -> ComposerEditPanel {
@@ -89,22 +98,6 @@ nonisolated enum ComposerEditTools {
     /// Les équerres suivent Crop, et lui seul.
     static func showsBrackets(active: Set<ComposerEditTool>) -> Bool {
         active.contains(.crop)
-    }
-
-    /// **Le bouton muet se pose à DROITE d'UNE piste** : celle du spectre si
-    /// elle est montrée, sinon celle de la coupe — dès que la prise a un son.
-    static func muteHost(panels: [ComposerEditPanel], hasAudio: Bool) -> ComposerEditPanel? {
-        guard hasAudio else { return nil }
-        return panels.first { $0 == .sound } ?? panels.first { $0 == .trim }
-    }
-
-    /// Les deux pistes du temps gardent la même largeur : celle qui ne porte pas
-    /// le bouton muet réserve sa place, et leurs instants s'alignent.
-    static func reservesMuteColumn(_ panel: ComposerEditPanel, panels: [ComposerEditPanel], hasAudio: Bool) -> Bool {
-        guard panel == .trim || panel == .sound, let hote = muteHost(panels: panels, hasAudio: hasAudio) else {
-            return false
-        }
-        return hote != panel
     }
 }
 

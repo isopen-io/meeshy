@@ -49,24 +49,74 @@ extension ComposerCaptureCopy {
     }
 }
 
-/// **Le bouton muet, à DROITE de la barre de trim** (#9754) : il coupe tout le
-/// son de la prise, ou le réactive au gain d'avant. Rebondit au toucher.
-struct ComposerTakeMuteButton: View {
+/// **La lecture et le son de la prise, en bas à droite de la SCÈNE** (#10356,
+/// porteur 2026-10-12) : la pause à gauche, le muet à droite. Leur rangée se
+/// pose au bas de la vidéo retouchée, et s'écarte du crochet du coin quand les
+/// équerres sont posées : aucune cible n'en couvre une autre.
+nonisolated enum ComposerEditPlaybackLayout {
+    static let spacing: CGFloat = MeeshySpacing.xs
+    static let margin: CGFloat = MeeshySpacing.sm
+
+    static func buttonCount(hasAudio: Bool) -> Int {
+        hasAudio ? 2 : 1
+    }
+
+    static func frame(scene: CGRect, hasAudio: Bool, clearsBrackets: Bool) -> CGRect {
+        let cote = MeeshyControlSize.tapTarget
+        let nombre = CGFloat(buttonCount(hasAudio: hasAudio))
+        let largeur = nombre * cote + (nombre - 1) * spacing
+        let droite = scene.maxX - (clearsBrackets ? cote + spacing : margin)
+        return CGRect(x: max(scene.minX, droite - largeur), y: scene.maxY - margin - cote,
+                      width: largeur, height: cote)
+    }
+}
+
+extension ComposerCaptureCopy {
+    /// Le libellé dit l'ACTION du bouton : « Lire » en pause, « Pause » sinon.
+    static func playbackLabel(paused: Bool) -> String {
+        paused
+            ? String(localized: "composer.frise.play", defaultValue: "Lire", bundle: .main)
+            : String(localized: "composer.frise.pause", defaultValue: "Pause", bundle: .main)
+    }
+}
+
+/// Les deux boutons posés sur la vidéo : glyphes BLANCS en relief par leur
+/// ombre, cible de 44 pt, rebond au toucher. Le muet n'existe que si la prise
+/// porte un son.
+struct ComposerEditPlaybackControls: View {
+    let paused: Bool
+    let hasAudio: Bool
     let muted: Bool
-    let onToggle: () -> Void
+    let onTogglePlayback: () -> Void
+    let onToggleMute: () -> Void
 
     var body: some View {
-        Button(action: onToggle) {
-            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundStyle(muted ? MeeshyColors.error : .white)
-                .frame(width: 40, height: 40)
-                .adaptiveLiquidGlass(in: Circle(), interactive: true)
+        HStack(spacing: ComposerEditPlaybackLayout.spacing) {
+            glyphButton(paused ? "play.fill" : "pause.fill",
+                        label: ComposerCaptureCopy.playbackLabel(paused: paused),
+                        action: onTogglePlayback)
+            if hasAudio {
+                glyphButton(muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                            label: ComposerCaptureCopy.muteLabel(muted: muted),
+                            action: onToggleMute)
+            }
+        }
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func glyphButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(ComposerFloatingRailInk.shadowOpacity),
+                        radius: ComposerFloatingRailInk.shadowRadius,
+                        y: ComposerFloatingRailInk.shadowY)
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
         }
         .buttonStyle(ComposerBounceButtonStyle())
-        .accessibilityLabel(ComposerCaptureCopy.muteLabel(muted: muted))
+        .accessibilityLabel(label)
     }
 }
 

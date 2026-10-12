@@ -50,6 +50,7 @@ extension ComposerCaptureSession {
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
         takeSound = ComposerTakeSound()
+        editPaused = false
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.video(url))
         camera.pauseRunning()
@@ -239,6 +240,7 @@ extension ComposerCaptureSession {
         editAspect = nil
         activeEditTools = []
         takeSound = ComposerTakeSound()
+        editPaused = false
         trimScrubbing = false
         takeSave = Self.noTakeSave
         editRawSave = nil
@@ -454,6 +456,10 @@ extension ComposerCaptureSession {
         loopedTrim = range
         trimScrubbing = false
         lecteur.setRange(range)
+        // **Après un rognage, la tête revient au début de la plage gardée**
+        // (#10356) — explicitement, plus par effet de bord de la boucle
+        // reconstruite. En pause, elle y reste en pause.
+        resumeLoop(lecteur, at: range.lowerBound)
     }
 
     /// **La frame EXACTE sous la règle** (#9754) : pendant qu'une poignée bouge,
@@ -470,6 +476,52 @@ extension ComposerCaptureSession {
     func seekPlayhead(to time: TimeInterval) {
         guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
         lecteur.seek(to: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    // MARK: - La lecture (#10356)
+
+    /// Lecture et pause ne s'offrent qu'à une vidéo en retouche.
+    var offersEditPlayback: Bool {
+        guard case .editing(.video) = phase else { return false }
+        return loopPlayer != nil
+    }
+
+    /// **Pause : la vidéo s'arrête où elle est. Lecture : elle repart de la
+    /// tête.** Pendant le rendu de « Terminé », plus rien ne bouge.
+    func toggleEditPlayback() {
+        guard offersEditPlayback, !isRenderingLook, let lecteur = loopPlayer else { return }
+        editPaused.toggle()
+        if editPaused {
+            lecteur.pause()
+        } else {
+            lecteur.play()
+        }
+        HapticFeedback.light()
+    }
+
+    /// **La tête suit le doigt** : l'aperçu montre l'image exacte de son
+    /// instant, borné à la plage gardée — la boucle se suspend le temps du geste.
+    func scrubPlayhead(to time: TimeInterval) {
+        guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
+        lecteur.scrub(to: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    /// **Lâchée, la tête se pose** dans la plage gardée, et la boucle repart de
+    /// là — sauf si l'auteur avait mis en pause : elle y reste arrêtée.
+    func endPlayheadScrub(at time: TimeInterval) {
+        guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
+        loopedTrim = trim
+        trimScrubbing = false
+        lecteur.setRange(trim)
+        resumeLoop(lecteur, at: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    /// La boucle reconstruite repart toujours : la tête se pose, et la pause de
+    /// l'auteur est rendue.
+    private func resumeLoop(_ lecteur: any ComposerLoopPlayerProviding, at position: TimeInterval) {
+        lecteur.seek(to: position)
+        guard editPaused else { return }
+        lecteur.pause()
     }
 
     /// L'étendue de la source éditée ; `nil` hors édition. Une vidéo la connaît

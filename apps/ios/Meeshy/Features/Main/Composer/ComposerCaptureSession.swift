@@ -77,6 +77,9 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var activeEditTools: Set<ComposerEditTool> = []
     /// Le son de la prise en retouche : gain et muet (#9754).
     @Published var takeSound = ComposerTakeSound()
+    /// La vidéo en retouche est mise en pause par l'auteur (#10356) : elle
+    /// reste arrêtée à sa position, à travers rognages et glissés de la tête.
+    @Published var editPaused = false
     /// Un glissé de la règle montre la frame sous elle : la boucle est suspendue
     /// et doit repartir à la fin du geste, même sur une plage inchangée (#9754).
     var trimScrubbing = false
