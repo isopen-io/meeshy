@@ -465,7 +465,7 @@ describe('troisième passe — les bornes échouent FERMÉES', () => {
 describe('troisième passe — la salle temps réel du post se vide au retrait', () => {
   it("met hors ligne : les sockets restées sur la salle du post en sont sorties, la remise en ligne n'y touche pas", async () => {
     const socketsLeave = jest.fn();
-    const inRoom = jest.fn(() => ({ socketsLeave }));
+    const inRoom = jest.fn((_room: string) => ({ socketsLeave }));
     const io = { in: inRoom, to: jest.fn(() => ({ emit: jest.fn(), except: jest.fn(() => ({ emit: jest.fn() })) })) };
     const app = Fastify({ logger: false });
     app.decorate('prisma', prisma);
