@@ -14,7 +14,6 @@ import type { MissionFactSignal } from '@meeshy/shared/utils/game/missions';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   BADGE_THRESHOLDS,
-  STREAK_THRESHOLDS,
   LEVEL_THRESHOLDS,
   CONTENT_ENGAGEMENT_AXES,
   CONVERSATION_ENGAGEMENT_AXES,
@@ -22,7 +21,6 @@ import {
   engagementAxisFamily,
   isEngagementAxisKey,
   levelMilestoneKey,
-  streakMilestoneKey,
   type EngagementAxisFamily,
   type EngagementAxisKey,
   type EngagementAchievementKey,
@@ -32,7 +30,6 @@ import {
   elanUnderScale,
   linkVisitPoints,
   pointsForOperation,
-  streakBonusPoints,
   type EngagementScale,
   type EngagementScaleElan,
 } from '@meeshy/shared/types/engagement-scale';
@@ -57,12 +54,14 @@ import { getEngagementEmitIO } from './engagement-emit-registry';
 import { memberSignature } from './memberSignature';
 import { EngagementQuotas, dayBucket } from './EngagementQuotas';
 import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/EngagementGameHooks';
-import { writeStreak } from '../game/FlameService';
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
+import { EngagementStreaks } from './EngagementStreaks';
+import { ENGAGEMENT_ROUTE } from './engagementRoute';
+import type { ActStreakView, EngagementStreakPostType } from '@meeshy/shared/types/engagement-act-streaks';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -112,14 +111,15 @@ function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
-/**
- * L'indice de route que les QUATRE notifications de réengagement transportent
- * (`metadata.route`, projeté en `data.route` sur le fil push) : l'écran
- * « Progression », qui RESTITUE le palier annoncé. Un client qui sait naviguer
- * par nom de route (iOS `pushNavigateToRoute`, la v3.1 web) le suit tel quel ;
- * un client qui route par TYPE de notification n'a rien à lire ici.
- */
-export const ENGAGEMENT_ROUTE = 'progression';
+export { ENGAGEMENT_ROUTE };
+
+/** Ce qu'un crédit dit aux séries : le jour civil du compte, et ce qui range le geste sous un acte. */
+type CreditDay = {
+  readonly today: Date;
+  readonly timezone: string | null;
+  readonly postType?: EngagementStreakPostType;
+  readonly conversationId?: string;
+};
 
 /** Le rang d'un seuil de score dans l'échelle des niveaux — « niveau 3 » pour le palier 150. */
 export function levelIndexOf(threshold: number): number {
@@ -153,6 +153,9 @@ export class EngagementService {
   /** Le jeu (#9374…#9377) : Vent arrière, frein de l'entre-soi, missions, Gloire. */
   private readonly game: EngagementGameHooks;
 
+  /** Les séries — globale, par acte — et la fidélité (#10389, #10390). */
+  private readonly streaks: EngagementStreaks;
+
   constructor(
     private readonly prisma: PrismaClient,
     deps: EngagementServiceDeps = {},
@@ -163,6 +166,12 @@ export class EngagementService {
     this.quotas = new EngagementQuotas(prisma);
     this.receipts = new EngagementReceipts(prisma, this.quotas, this.postRecorder, this.scale);
     this.game = deps.game ?? new EngagementGameHooks(prisma, (userId, points, axisKey) => this.creditGamePoints(userId, points, axisKey));
+    this.streaks = new EngagementStreaks(prisma, this.quotas, this.game, (userId, points) => this.updateEngagementScore(userId, points));
+  }
+
+  /** Les séries d'acte du compte (#10389) — ce que `GET /me/engagement` sert. */
+  actStreaks(userId: string): Promise<readonly ActStreakView[]> {
+    return this.streaks.list(userId);
   }
 
   /**
@@ -334,7 +343,12 @@ export class EngagementService {
     });
     if (!admitted) return false;
 
-    await this.credit(scale, userId, operationKey, points, options.actorId);
+    await this.credit(scale, userId, operationKey, points, {
+      today,
+      timezone: inputs.timezone,
+      ...(options.postType !== undefined ? { postType: options.postType } : {}),
+      ...(conversationId !== undefined ? { conversationId } : {}),
+    }, options.actorId);
     const rememberedTargetId = heavy ? options.targetId : undefined;
     if (rememberedTargetId !== undefined) {
       await this.quotas.remember(userId, operationKey, rememberedTargetId, points);
@@ -434,6 +448,7 @@ export class EngagementService {
     userId: string,
     operationKey: EngagementOperationKey,
     points: number,
+    day: CreditDay,
     actorId?: string,
   ): Promise<void> {
     const counter = await this.prisma.engagementCounter.upsert({
@@ -454,7 +469,15 @@ export class EngagementService {
       }
       await this.tryAwardAchievements(userId, operationKey, previousCount);
     }
-    await this.updateStreak(scale, userId);
+    await this.streaks.afterCredit({
+      scale,
+      userId,
+      operationKey,
+      today: civilDayKey(day.today),
+      timezone: day.timezone,
+      ...(day.postType !== undefined ? { postType: day.postType } : {}),
+      ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
+    });
     await this.updateEngagementScore(userId, points);
   }
 
@@ -490,7 +513,7 @@ export class EngagementService {
     }
     const visitNumber = await this.quotas.increment(creatorId, operationKey, `link:${linkKey}`);
     const points = linkVisitPoints(rules, visitNumber);
-    await this.credit(scale, creatorId, operationKey, points);
+    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone });
     return points;
   }
 
@@ -737,109 +760,6 @@ export class EngagementService {
       log.warn('achievement_unlocked notification failed after milestone was recorded', {
         userId,
         achievementKey,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  /**
-   * Une activité qualifiante — n'importe quel appel à `recordActivity`, sur
-   * n'importe quel axe (§ 5) — fait avancer la série de jours actifs.
-   * Comparaison par JOUR CIVIL DANS LE FUSEAU DE L'UTILISATEUR (`User.timezone`,
-   * repli UTC si absent — #5734) : plusieurs activités le même jour civil ne
-   * l'incrémentent qu'une fois ; un jour sauté la remet à 1.
-   *
-   * Lecture puis écriture CONDITIONNELLE (`writeStreak`, #9376) : la série
-   * s'écrit seulement si la Flamme vaut encore ce qu'on a lu. Un gel acheté,
-   * offert par le coffre ou une Flamme rallumée entre les deux fait reprendre
-   * le calcul au lieu d'être écrasé — une Meesh dépensée n'est jamais perdue.
-   *
-   * `currentStreakDays`/`longestStreakDays` portent un `@default(0)` dans le
-   * schéma, qui ne s'applique qu'à la CRÉATION — un `User` créé avant cette
-   * migration a ces champs ABSENTS, pas à zéro (même piège que
-   * `Conversation.firstMessageSentAt`, cf. `packages/shared/CLAUDE.md`).
-   * D'où les replis : une série pour un compte pré-existant démarre à 1,
-   * jamais `NaN`.
-   */
-  private async updateStreak(scale: EngagementScale, userId: string): Promise<void> {
-    // La transition est la LOI de la Flamme (`advanceFlame`, #9376) : un jour
-    // manqué consomme un gel quand les gels les couvrent TOUS, sinon la Flamme
-    // s'éteint — la série perdue est gardée pour le rallumage de 48 h. Sans gel,
-    // le comportement d'avant est exact : un jour sauté remet la série à 1.
-    const written = await writeStreak(this.prisma, userId, new Date());
-    if (written === null) return;
-    const { plan, previousStreak } = written;
-
-    const crossedThresholds = STREAK_THRESHOLDS.filter(
-      (threshold) => threshold > previousStreak && threshold <= plan.streak,
-    );
-
-    for (const threshold of crossedThresholds) {
-      await this.tryAwardStreakMilestone(userId, threshold);
-    }
-    await this.creditStreakBonus(scale, userId, previousStreak, plan.streak);
-    await this.game.onStreak(userId, plan);
-  }
-
-  /**
-   * La CONSTANCE paie (#8959) : franchir 7, 30 ou 100 jours actifs crédite le
-   * bonus du barème, une fois par palier (`EngagementMilestone` porte déjà
-   * l'anti-rejeu du palier, le seau `streak:<jours>` celui du bonus), jamais
-   * multiplié.
-   */
-  private async creditStreakBonus(
-    scale: EngagementScale,
-    userId: string,
-    previousStreak: number,
-    newStreak: number,
-  ): Promise<void> {
-    const operationKey: EngagementOperationKey = 'streak.bonus';
-    for (const bonus of scale.streakBonuses) {
-      if (bonus.points <= 0 || streakBonusPoints([bonus], previousStreak, newStreak) === 0) continue;
-      if (!(await this.quotas.claim(userId, operationKey, `streak:${bonus.days}`, 1))) continue;
-      await this.prisma.engagementCounter.upsert({
-        where: { userId_axisKey: { userId, axisKey: operationKey } },
-        create: { userId, axisKey: operationKey, count: 1, points: bonus.points },
-        update: { count: { increment: 1 }, points: { increment: bonus.points } },
-      });
-      await this.updateEngagementScore(userId, bonus.points);
-    }
-  }
-
-  /**
-   * Même garde anti-rejeu que `tryAwardBadge` (§ 4), portée par la contrainte
-   * unique `EngagementMilestone(userId, milestoneType, milestoneKey)`.
-   */
-  private async tryAwardStreakMilestone(userId: string, threshold: number): Promise<void> {
-    try {
-      await this.prisma.engagementMilestone.create({
-        data: {
-          userId,
-          milestoneType: 'streak',
-          milestoneKey: streakMilestoneKey(threshold),
-        },
-      });
-    } catch (err) {
-      if (isP2002(err)) return;
-      throw err;
-    }
-
-    try {
-      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
-      const lang = recipientLanguage(user, 'fr');
-      const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
-      await notificationService.createNotification({
-        userId,
-        type: 'streak_milestone',
-        priority: 'normal',
-        content: notificationString(lang, 'engagement.streakMilestone', { count: threshold }),
-        context: {},
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold },
-      });
-    } catch (err) {
-      log.warn('streak_milestone notification failed after milestone was recorded', {
-        userId,
-        threshold,
         error: err instanceof Error ? err.message : String(err),
       });
     }
