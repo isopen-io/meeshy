@@ -338,13 +338,23 @@ public final class StoryMediaLoader {
         if hadPlayers { announcePoolChange() }
     }
 
+    /// **La distance de chaque lecteur au réel affiché** (#10354), déclarée par
+    /// l'écran qui la connaît, clé = URL distante. Le pool déborde en rendant le
+    /// plus LOIN (`PlayerPoolEviction`) : le réel qu'on vient de quitter garde
+    /// son lecteur face à un préchauffage tardif. Vide : ordre d'arrivée.
+    private var retentionDistances: [String: Int] = [:]
+
+    public func setRetentionDistances(_ distances: [String: Int]) {
+        retentionDistances = distances
+    }
+
     private func insert(_ player: AVPlayer, for key: String) {
         playerCache[key] = player
         playerCacheOrder.append(key)
-        // Enforce limit — evict oldest first (FIFO)
-        while playerCache.count > maxCachedPlayers, !playerCacheOrder.isEmpty {
-            let oldest = playerCacheOrder.removeFirst()
-            if let evicted = playerCache.removeValue(forKey: oldest) {
+        while playerCache.count > maxCachedPlayers,
+              let victim = PlayerPoolEviction.victim(order: playerCacheOrder, distances: retentionDistances) {
+            playerCacheOrder.removeAll { $0 == victim }
+            if let evicted = playerCache.removeValue(forKey: victim) {
                 Self.release(evicted)
             }
         }

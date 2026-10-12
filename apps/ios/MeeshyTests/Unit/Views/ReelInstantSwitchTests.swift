@@ -344,3 +344,79 @@ final class ReelPosterPrefetchTests: XCTestCase {
                         "le poster préchargé est servi par le cache mémoire, à l'init de la page, sans disque")
     }
 }
+
+/// **Revenir sur un réel le reprend à l'instant (#10354).**
+///
+/// Le pool de lecteurs rend le plus LOIN du réel affiché quand il déborde : le
+/// réel qu'on vient de quitter garde son lecteur, sa tête et sa dernière image.
+/// La loi d'éviction est témoignée dans le SDK (`PlaybackResumeLawTests`) ; ici,
+/// la carte des distances que l'écran des réels lui déclare.
+@MainActor
+final class ReelResumeTests: XCTestCase {
+
+    private static let base = "https://gate.meeshy.me/api/v1/attachments/file"
+
+    private func videoReel(_ id: String, file: String? = nil) -> FeedPost {
+        FeedPost(id: id, author: "alice", authorId: "u1", type: "REEL", content: "",
+                 media: [FeedMedia(id: "m-\(id)", type: .video, url: "\(Self.base)/\(file ?? id).mp4")])
+    }
+
+    private func imageReel(_ id: String) -> FeedPost {
+        FeedPost(id: id, author: "alice", authorId: "u1", type: "REEL", content: "",
+                 media: [FeedMedia(id: "m-\(id)", type: .image, url: "\(Self.base)/\(id).jpg")])
+    }
+
+    private func key(_ reel: FeedPost) -> String {
+        ReelPrewarm.videoURL(for: reel)!.absoluteString
+    }
+
+    func test_distances_signedFromTheDisplayedReel() {
+        let reels = (0..<5).map { videoReel("r\($0)") }
+
+        let distances = ReelPagerPreloader.retentionDistances(reels: reels, activeIndex: 2)
+
+        XCTAssertEqual(distances[key(reels[1])], -1, "le réel qu'on vient de quitter est un voisin")
+        XCTAssertEqual(distances[key(reels[3])], 1)
+        XCTAssertEqual(distances[key(reels[0])], -2)
+        XCTAssertEqual(distances[key(reels[4])], 2)
+        XCTAssertEqual(distances[key(reels[2])], 0)
+    }
+
+    func test_distances_skipReelsWithoutVideo() {
+        let reels = [videoReel("v0"), imageReel("i1"), videoReel("v2")]
+
+        let distances = ReelPagerPreloader.retentionDistances(reels: reels, activeIndex: 1)
+
+        XCTAssertEqual(distances.count, 2)
+    }
+
+    func test_distances_sameVideoTwice_keepsTheClosest() {
+        let reels = [videoReel("a", file: "same"), videoReel("b"), videoReel("c"), videoReel("d", file: "same")]
+
+        let distances = ReelPagerPreloader.retentionDistances(reels: reels, activeIndex: 2)
+
+        XCTAssertEqual(distances[key(reels[3])], 1)
+    }
+
+    func test_distances_beyondTheRadius_areNotDeclared() {
+        let reels = (0..<30).map { videoReel("r\($0)") }
+
+        let distances = ReelPagerPreloader.retentionDistances(reels: reels, activeIndex: 0, radius: 10)
+
+        XCTAssertNil(distances[key(reels[11])])
+        XCTAssertEqual(distances[key(reels[10])], 10)
+    }
+
+    /// Avec ces distances, le pool garde le réel quitté face à un préchauffage
+    /// plus lointain arrivé après lui.
+    func test_distancesFeedThePoolEviction_keepingTheReelJustLeft() {
+        let reels = (0..<6).map { videoReel("r\($0)") }
+        let distances = ReelPagerPreloader.retentionDistances(reels: reels, activeIndex: 2)
+
+        let victim = PlayerPoolEviction.victim(
+            order: [key(reels[1]), key(reels[5]), key(reels[3]), key(reels[4])],
+            distances: distances)
+
+        XCTAssertEqual(victim, key(reels[5]))
+    }
+}

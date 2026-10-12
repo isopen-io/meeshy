@@ -250,6 +250,8 @@ final class ReelPagerPreloader {
     /// automatique en cours, lecteur préparé — et les lecteurs des réels qui
     /// n'y sont plus au palier « décode ». Synchrone : rien n'attend le réseau.
     func retire(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) {
+        StoryMediaLoader.shared.setRetentionDistances(
+            Self.retentionDistances(reels: reels, activeIndex: activeIndex))
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
         let tiers = Dictionary(uniqueKeysWithValues: plan.map { ($0.index, $0.tier) })
         for (index, reel) in reels.enumerated() where index != activeIndex {
@@ -338,8 +340,27 @@ final class ReelPagerPreloader {
     /// Le lecteur se ferme : rien de ce qu'il préparait ne doit continuer à
     /// consommer réseau ou décodeur.
     func releaseAll(reels: [FeedPost], except activeId: String?) {
+        StoryMediaLoader.shared.setRetentionDistances([:])
         for reel in reels where reel.id != activeId {
             ReelPrewarm.release(reel, center: center)
         }
+    }
+
+    /// **La distance de chaque lecteur au réel affiché** (#10354), que le pool
+    /// lit pour déborder par le plus LOIN : N±1 puis N±2 restent, le réel
+    /// qu'on vient de quitter garde son lecteur. Clé : l'URL distante, celle du
+    /// pool. Une vidéo présente deux fois prend sa plus petite distance ; hors
+    /// de N±`radius`, aucune déclaration (le pool les rend d'abord).
+    nonisolated static func retentionDistances(
+        reels: [FeedPost], activeIndex: Int, radius: Int = 10
+    ) -> [String: Int] {
+        reels.indices
+            .filter { abs($0 - activeIndex) <= radius }
+            .reduce(into: [String: Int]()) { distances, index in
+                guard let key = ReelPrewarm.videoURL(for: reels[index])?.absoluteString else { return }
+                let distance = index - activeIndex
+                if let known = distances[key], abs(known) <= abs(distance) { return }
+                distances[key] = distance
+            }
     }
 }
