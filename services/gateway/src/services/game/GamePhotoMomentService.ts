@@ -212,7 +212,7 @@ export class GamePhotoMomentService {
     );
     log.info('photo moment push', { userId, count: digest.count, result });
     // `skipped:duplicate` : ce résumé est déjà parti aujourd'hui (une écriture du registre a manqué au passage d'avant).
-    if (result !== 'sent' && result !== 'skipped:duplicate') return result === 'skipped:daily-cap' || result === 'failed' ? 'deferred' : 'skipped';
+    if (result !== 'sent' && result !== 'skipped:duplicate') return result === 'skipped:daily-cap' || result === 'skipped:declined' || result === 'failed' ? 'deferred' : 'skipped';
     await this.prisma.gamePhotoMoment.updateMany({ where: { userId, stepId: { in: [...digest.stepIds] }, ...PENDING }, data: { notifiedAt: now, updatedAt: now } });
     return 'sent';
   }

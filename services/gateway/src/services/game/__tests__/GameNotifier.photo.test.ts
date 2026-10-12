@@ -100,4 +100,19 @@ describe('le push photo (game_photo_moment)', () => {
     expect(await notifier.notify(photo(['flame:7']), NOW)).toBe('skipped:game-hidden');
     expect(sent).toHaveLength(0);
   });
+  it('refusé par la création (Ne pas déranger franchi entre le contrôle et l’envoi) : rien ne part, et le passage suivant le REPREND au lieu de le lire « déjà parti »', async () => {
+    const { sent, db } = world();
+    const refusing = { createNotification: jest.fn(async () => null) };
+    const taken = new Map<string, string>();
+    const throttle = {
+      setnx: jest.fn(async (key: string, value: string) => (taken.has(key) ? false : (taken.set(key, value), true))),
+      del: jest.fn(async (key: string) => void taken.delete(key)),
+    };
+    const declining = new GameNotifier(db.prisma, { notifications: () => refusing as never, throttle });
+    expect(await declining.notify(photo(['flame:7']), NOW)).toBe('skipped:declined');
+
+    const accepting = new GameNotifier(db.prisma, { notifications: () => ({ createNotification: async (params: Sent) => (sent.push(params), { id: 'n1' }) }) as never, throttle });
+    expect(await accepting.notify(photo(['flame:7']), NOW)).toBe('sent');
+    expect(sent).toHaveLength(1);
+  });
 });

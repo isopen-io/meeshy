@@ -159,6 +159,19 @@ describe('la loi d’usage (#10146) — jamais un cadre hors de son usage', () =
     }
   });
 
+  it('un cadre dont l’usage nomme UNE division ne sert que cette division — la loi d’usage borne la proposition même quand le placement l’ordonnerait (D3)', () => {
+    const base = catalog.find((pack) => pack.slug === 'afrique');
+    const template = base?.frames.find((frame) => frame.appliesTo.family === 'rank' && frame.appliesTo.rank === 'ambassadeur' && frame.appliesTo.division === 3);
+    expect(template).toBeDefined();
+    if (base === undefined || template === undefined) return;
+    const scoped = { ...template, usage: { kind: 'rank' as const, rank: 'ambassadeur' as const, division: 3 as const } };
+    const pack: GloryFrameOfferPack = { ...base, frames: [scoped] };
+    const at = (stepId: string) => ids(gloryFramesFor({ stepId, atmosphere: 'afrique', lastChosen: null, catalog: [pack], installed: new Set(['afrique']) }).suggested);
+
+    expect(at('rank:ambassadeur:3')).toEqual([scoped.id]);
+    expect(at('rank:ambassadeur:1')).toEqual([]);
+  });
+
   it('un cadre de rang n’est jamais proposé à un autre rang', () => {
     const result = offer({ stepId: 'rank:legende:2', installed: new Set(catalog.map((pack) => pack.slug)) });
     expect([...ids(result.suggested), ...result.others.flatMap((other) => ids(other.frames))].every((id) => id.includes('.legende-'))).toBe(true);

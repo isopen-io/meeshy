@@ -324,6 +324,8 @@ export class GameNotifier {
       });
     if (created === null) {
       await release();
+      // Un résumé photo refusé n'a rien annoncé : sa clé se rend, sinon le passage suivant le lirait « déjà parti ».
+      if (plan.deferrable) await throttle.del?.(onceKey).catch(() => undefined);
       return 'skipped:declined';
     }
     return 'sent';
