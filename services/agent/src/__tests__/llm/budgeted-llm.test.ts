@@ -1,10 +1,16 @@
 /**
  * #10287 — le budget quotidien en dollars de l'agent est APPLIQUÉ.
  * Tout appel LLM de l'agent (scanner, réactif, lecture, saison) passe par
- * `BudgetedLlmProvider` : au-delà du budget du jour, l'appel est refusé AVANT
- * d'atteindre le fournisseur, et le coût de chaque appel servi est compté.
+ * `LlmBudgetGate`, posée sous la relance de chaque fournisseur de base : au-delà du
+ * budget du jour, l'appel est refusé AVANT d'atteindre le fournisseur, et le coût de
+ * chaque tentative servie est compté.
  */
-import { BudgetedLlmProvider, LlmBudgetExceededError, resolveDailyBudgetUsd } from '../../llm/budgeted-llm';
+process.env.DATABASE_URL = 'mongodb://mock';
+process.env.OPENAI_API_KEY = 'mock-key';
+import fs from 'fs';
+import path from 'path';
+import { LlmBudgetGate, LlmBudgetExceededError, WEB_SEARCH_CALL_USD, callCostUsd, resolveDailyBudgetUsd } from '../../llm/budgeted-llm';
+import { withRetry } from '../../llm/llm-retry';
 import { DailyBudgetManager } from '../../scheduler/daily-budget';
 import type { LlmChatResponse, LlmProvider } from '../../llm/types';
 
@@ -29,16 +35,17 @@ function setup(opts: { budgetUsd?: number; maxConcurrent?: number; inner?: LlmPr
   const redis = memoryRedis();
   const budget = new DailyBudgetManager(redis as any);
   const inner: LlmProvider = opts.inner ?? { name: 'fake', chat: jest.fn(async () => RESPONSE) };
-  const llm = new BudgetedLlmProvider(inner, budget, {
+  const gate = new LlmBudgetGate(budget, {
     budgetUsd: async () => opts.budgetUsd ?? 2,
     maxConcurrentCalls: async () => opts.maxConcurrent ?? 5,
   });
-  return { redis, budget, inner, llm };
+  const llm = gate.wrap(inner);
+  return { redis, budget, inner, llm, gate };
 }
 
 const PARAMS = { messages: [{ role: 'user' as const, content: 'salut' }] };
 
-describe('BudgetedLlmProvider (#10287)', () => {
+describe('LlmBudgetGate (#10287)', () => {
   beforeEach(() => jest.spyOn(console, 'warn').mockImplementation(() => {}));
   afterEach(() => jest.restoreAllMocks());
 
@@ -111,5 +118,84 @@ describe('resolveDailyBudgetUsd', () => {
     expect(resolveDailyBudgetUsd(null)).toBe(10);
     expect(resolveDailyBudgetUsd({ globalDailyBudgetUsd: -1 })).toBe(10);
     expect(resolveDailyBudgetUsd({ globalDailyBudgetUsd: Number.NaN })).toBe(10);
+  });
+});
+
+describe('LlmBudgetGate sous la relance (audit #10302)', () => {
+  beforeEach(() => jest.spyOn(console, 'warn').mockImplementation(() => {}));
+  afterEach(() => jest.restoreAllMocks());
+
+  it('compte chaque tentative abandonnée par le délai de withRetry, et tient sa place jusqu’à sa vraie fin', async () => {
+    let billed = 0;
+    let inFlight = 0;
+    let peak = 0;
+    const base: LlmProvider = {
+      name: 'slow',
+      chat: async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise((r) => setTimeout(r, 60));
+        inFlight--;
+        billed++;
+        return RESPONSE; // 0,75 $
+      },
+    };
+    const budget = new DailyBudgetManager(memoryRedis() as any);
+    const gate = new LlmBudgetGate(budget, { budgetUsd: async () => 1, maxConcurrentCalls: async () => 1 });
+    const llm = withRetry(gate.wrap(base), { maxRetries: 2, baseDelayMs: 1, timeoutMs: 10 });
+
+    await Promise.allSettled([llm.chat(PARAMS), llm.chat(PARAMS)]);
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(peak).toBe(1);
+    // Le 1er appel servi franchit le budget (0,75 $ puis 1,50 $ au plus) : tout le reste est refusé.
+    expect(billed).toBeLessThanOrEqual(2);
+    expect(await budget.getLlmSpendToday()).toBeCloseTo(billed * 0.75, 6);
+  });
+
+  it('createLlmProvider pose la porte SOUS la relance', async () => {
+    jest.resetModules();
+    const calls: string[] = [];
+    jest.doMock('../../llm/providers/openai-provider', () => ({
+      createOpenAiProvider: () => ({ name: 'openai', chat: async () => { calls.push('base'); return RESPONSE; } }),
+    }));
+    jest.doMock('../../llm/llm-retry', () => ({
+      withRetry: (p: LlmProvider) => ({ name: p.name, chat: async (x: any) => { calls.push('retry'); return p.chat(x); } }),
+    }));
+    const { createLlmProvider } = await import('../../llm/llm-factory');
+    const llm = createLlmProvider({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-mini' }, (b) => ({
+      name: b.name,
+      chat: async (x) => { calls.push('gate'); return b.chat(x); },
+    }));
+    await llm.chat(PARAMS);
+    expect(calls).toEqual(['retry', 'gate', 'base']);
+    jest.dontMock('../../llm/providers/openai-provider');
+    jest.dontMock('../../llm/llm-retry');
+  });
+
+  it('server.ts passe la porte à CHAQUE fournisseur qu’il crée (primaire et secours)', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, '..', '..', 'server.ts'), 'utf8');
+    const creations = source.match(/createLlmProvider\(\{[\s\S]*?\}(, budgetGate\.wrap)?\)/g) ?? [];
+    expect(creations.length).toBeGreaterThanOrEqual(2);
+    for (const c of creations) expect(c).toMatch(/, budgetGate\.wrap\)$/);
+    expect(source).not.toMatch(/new Budgeted|withRetry\(/);
+  });
+});
+
+describe('callCostUsd (audit #10302)', () => {
+  it('ajoute un forfait par appel avec recherche web', () => {
+    const plain = callCostUsd(PARAMS, { ...RESPONSE, usage: { inputTokens: 1000, outputTokens: 100 } });
+    const web = callCostUsd({ ...PARAMS, tools: [{ type: 'web_search_preview' }] }, { ...RESPONSE, usage: { inputTokens: 1000, outputTokens: 100 } });
+    expect(web - plain).toBeCloseTo(WEB_SEARCH_CALL_USD, 9);
+  });
+
+  it('ne compte jamais 0 $ pour une réponse servie sans comptage de jetons', () => {
+    const cost = callCostUsd({ messages: [{ role: 'user', content: 'x'.repeat(4000) }] }, { ...RESPONSE, content: 'y'.repeat(400), usage: { inputTokens: 0, outputTokens: 0 } });
+    expect(cost).toBeGreaterThan(0);
+  });
+
+  it('un modèle inconnu est compté au tarif du plus cher (jamais sous-estimé)', () => {
+    const unknown = callCostUsd(PARAMS, { ...RESPONSE, model: 'claude-opus-9', usage: { inputTokens: 1_000_000, outputTokens: 1_000_000 } });
+    expect(unknown).toBeGreaterThanOrEqual(15 + 75);
   });
 });
