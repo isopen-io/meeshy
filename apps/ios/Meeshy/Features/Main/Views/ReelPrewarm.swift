@@ -258,7 +258,10 @@ final class ReelPagerPreloader {
             switch tiers[index] {
             case nil:
                 ReelPrewarm.release(reel, center: center)
-            case .some(.decode):
+            // N±2 garde aussi le lecteur qu'il tient déjà (#10354) — le réel
+            // quitté il y a deux pages reprend à l'instant ; le pool, borné à
+            // trois, déborde par le plus loin (`PlayerPoolEviction`).
+            case .some(.decode), .some(.mount):
                 continue
             case .some:
                 if let url = ReelPrewarm.videoURL(for: reel) {
