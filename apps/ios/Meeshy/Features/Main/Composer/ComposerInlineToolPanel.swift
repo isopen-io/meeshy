@@ -12,10 +12,11 @@ import MeeshyUI
 /// demande jusqu'à toute la hauteur libre — au-delà, elle défile. La règle de
 /// place vit dans `ComposerInlinePanelLayout` ; cette vue la lit.
 ///
-/// **Filtre et réglages descendent au bas quand le haut cacherait l'objet**
-/// (#9495) : on juge un rendu à l'œil, et un panneau qui couvre l'image réglée
-/// rend le geste aveugle et « Comparer » inutile. La surface remet le cadre de
-/// la carte (`composerSceneCardFrame`) ; la règle choisit le côté.
+/// **Le panneau ne couvre jamais l'objet qu'il règle** (#9495, #9143) : il
+/// descend au bas quand le haut le cacherait, et se réduit quand les deux le
+/// cacheraient — on juge une police sur son texte comme un filtre sur son
+/// image. La surface remet le cadre de la carte (`composerSceneCardFrame`) ; la
+/// règle choisit le côté et la hauteur.
 ///
 /// Le CONTENU de chaque sous-outil est celui que l'éditeur d'objet monte déjà —
 /// `TextEditToolOptions` du SDK, `ComposerObjectTimingControls`,
@@ -46,7 +47,8 @@ struct ComposerInlineToolPanel: View {
 
     var body: some View {
         GeometryReader { geo in
-            let cote = edge(container: geo.frame(in: .global))
+            let place = placement(container: geo.frame(in: .global))
+            let cote = place.edge
             ScrollView(.vertical, showsIndicators: false) {
                 content
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -60,8 +62,7 @@ struct ComposerInlineToolPanel: View {
             }
             .scrollDisabled(planHoldsGesture)
             .frame(width: ComposerInlinePanelLayout.width(freeWidth: geo.size.width, roomy: roomy),
-                   height: ComposerInlinePanelLayout.height(content: contentHeight,
-                                                            freeHeight: geo.size.height))
+                   height: ComposerInlinePanelLayout.height(content: contentHeight, placement: place))
             .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                            tint: plateauTint.opacity(0.55))
             .padding(cote == .top ? .top : .bottom, ComposerRailGeometry.gutter)
@@ -69,7 +70,7 @@ struct ComposerInlineToolPanel: View {
                                 + ComposerRailGeometry.railWidth + ComposerRailGeometry.gutter)
             .frame(maxWidth: .infinity, maxHeight: .infinity,
                    alignment: cote == .top ? .topTrailing : .bottomTrailing)
-            .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: cote)
+            .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: place)
         }
         .onPreferenceChange(ComposerInlinePanelHeightKey.self) { contentHeight = $0 }
         .accessibilityElement(children: .contain)
@@ -131,20 +132,72 @@ struct ComposerInlineToolPanel: View {
         viewModel.currentEffects.mediaObjects?.first { $0.id == edit.objectId }
     }
 
-    /// **Le côté qui laisse voir l'objet réglé** (#9495) — pour les sous-outils
-    /// qu'on juge à l'œil (filtre, réglages) d'un média POSÉ. Le cadre de
-    /// l'objet vient de la géométrie même du calque qui le peint
-    /// (`StoryMediaLayer.renderedPose`), ramenée dans le repère du panneau.
-    private func edge(container: CGRect) -> ComposerInlinePanelEdge {
-        guard ComposerInlinePanelLayout.keepsObjectInSight(section),
-              let media, !media.isBackground,
-              !sceneCard.isNull, sceneCard.width > 0 else { return .top }
-        let pose = StoryMediaLayer.renderedPose(for: media, geometry: CanvasGeometry(renderSize: sceneCard.size))
-        let objet = ComposerInlinePanelLayout.objectFrame(center: pose.center, size: pose.size,
-                                                          anchor: media.anchor, rotationDegrees: media.rotation,
-                                                          card: sceneCard, container: container)
-        return ComposerInlinePanelLayout.edge(object: objet, free: container.size,
-                                              panelHeight: contentHeight, roomy: roomy)
+    /// **Le côté et la hauteur qui laissent voir l'objet réglé** (#9495,
+    /// #9143) — pour TOUT sous-outil de TOUT objet posé : la police d'un texte
+    /// se juge sur le texte comme un filtre sur l'image. Le cadre de l'objet
+    /// vient de la géométrie même du calque qui le peint, ramenée dans le
+    /// repère du panneau ; un fond couvre la carte entière, il n'a rien à
+    /// éviter.
+    private func placement(container: CGRect) -> ComposerInlinePanelPlacement {
+        let objet: CGRect? = edit.family.isBackground || sceneCard.isNull || sceneCard.width <= 0
+            ? nil
+            : viewModel.currentSlide.sceneObject(id: edit.objectId).flatMap {
+                ComposerInlinePanelLayout.sceneFrame(of: $0, card: sceneCard, container: container)
+            }
+        return ComposerInlinePanelLayout.placement(object: objet, free: container.size,
+                                                   panelHeight: contentHeight, roomy: roomy)
+    }
+}
+
+extension ComposerInlinePanelLayout {
+
+    /// La hauteur de ligne d'un texte peint, rapportée à sa taille de police.
+    static let textLineHeightFactor: CGFloat = 1.25
+
+    /// Le côté d'une puce de son, que la scène ne mesure pas hors du calque.
+    static let audioChipSide: CGFloat = 64
+
+    /// **Le cadre d'un objet de la scène, dans le repère du panneau** — la
+    /// boîte englobante de ce que son calque peint, rotation comprise. Le
+    /// média et le lieu ont leur géométrie exacte (`renderedPose`,
+    /// `badgeFrame`) ; le sticker son côté rendu ; le texte la hauteur de ses
+    /// lignes sur la largeur de la carte ; la puce de son un carré nominal.
+    /// `nil` pour un fond : il occupe toute la carte.
+    @MainActor
+    static func sceneFrame(of objet: MeeshySceneObject, card: CGRect, container: CGRect) -> CGRect? {
+        guard !objet.isBackground, card.width > 0, card.height > 0 else { return nil }
+        let geometrie = CanvasGeometry(renderSize: card.size)
+        let centre = geometrie.render(geometrie.designPoint(forNormalized: CGPoint(x: objet.x, y: objet.y)))
+        switch objet {
+        case .media(let media):
+            let pose = StoryMediaLayer.renderedPose(for: media, geometry: geometrie)
+            return objectFrame(center: pose.center, size: pose.size, anchor: media.anchor,
+                               rotationDegrees: media.rotation, card: card, container: container)
+        case .place(let lieu):
+            let badge = StoryLocationLayer.badgeFrame(for: lieu, canvasSize: card.size)
+            return objectFrame(center: CGPoint(x: badge.minX + lieu.anchor.x * badge.width,
+                                               y: badge.minY + lieu.anchor.y * badge.height),
+                               size: badge.size, anchor: lieu.anchor,
+                               rotationDegrees: lieu.rotation, card: card, container: container)
+        case .sticker(let sticker):
+            let cote = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize, scale: sticker.scale,
+                                                      canvasWidth: card.width)
+            return objectFrame(center: centre, size: CGSize(width: cote, height: cote),
+                               anchor: sticker.anchor, rotationDegrees: sticker.rotation,
+                               card: card, container: container)
+        case .text(let texte):
+            let lignes = CGFloat(max(1, texte.text.components(separatedBy: .newlines).count))
+            let hauteur = StoryTextLayer.renderedFontSize(of: texte, in: geometrie)
+                * textLineHeightFactor * lignes * CGFloat(max(0.1, texte.scale))
+            return objectFrame(center: centre, size: CGSize(width: card.width, height: hauteur),
+                               anchor: CGPoint(x: 0.5, y: texte.anchor.y),
+                               rotationDegrees: texte.rotation, card: card, container: container)
+        case .audio(let son):
+            let cote = audioChipSide * CGFloat(max(0.1, son.scale ?? 1))
+            return objectFrame(center: centre, size: CGSize(width: cote, height: cote),
+                               anchor: CGPoint(x: 0.5, y: 0.5), rotationDegrees: son.rotation ?? 0,
+                               card: card, container: container)
+        }
     }
 }
 

@@ -307,6 +307,87 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertEqual(ComposerInlinePanelLayout.edge(object: enHaut, free: libre, panelHeight: 180), .bottom)
     }
 
+    // MARK: - Le panneau ne couvre jamais l'objet qu'on règle (#9143)
+
+    /// La scène libre d'un iPhone de 402 pt et sa carte 9:16, en global.
+    private let libre402 = CGRect(x: 0, y: 62, width: 402, height: 700)
+    private let carte402 = CGRect(x: 10, y: 96, width: 382, height: 679)
+
+    /// Le panneau tel qu'il se pose : son côté, sa hauteur réduite comprise.
+    private func panneauPose(_ placement: ComposerInlinePanelPlacement, contenu: CGFloat,
+                             libre: CGSize) -> CGRect {
+        ComposerInlinePanelLayout.frame(
+            edge: placement.edge, free: libre,
+            panelHeight: ComposerInlinePanelLayout.height(content: contenu, placement: placement))
+    }
+
+    /// **Le défaut d'origine** (capture 9138-texte-police) : un texte au centre,
+    /// la police ouverte — une liste plus haute que la scène libre. Le panneau
+    /// le couvrait de quelque côté qu'on le range ; il se réduit désormais au
+    /// côté qui a le plus de place, et défile.
+    @MainActor
+    func test_placement_laPoliceDUnTexteAuCentre_seReduit_etNeLeCouvrePas() {
+        let texte = MeeshySceneObject.text(StoryTextObject(text: "Bonjour", y: 0.5))
+        guard let objet = ComposerInlinePanelLayout.sceneFrame(of: texte, card: carte402,
+                                                               container: libre402) else {
+            return XCTFail("un texte posé a un cadre sur la scène")
+        }
+        let police: CGFloat = 686
+        for cote in [ComposerInlinePanelEdge.top, .bottom] {
+            XCTAssertTrue(ComposerInlinePanelLayout.frame(edge: cote, free: libre402.size, panelHeight: police)
+                .intersects(objet), "le témoin du défaut ne tombe plus (\(cote))")
+        }
+        let place = ComposerInlinePanelLayout.placement(object: objet, free: libre402.size, panelHeight: police)
+        XCTAssertLessThan(place.maxHeight, police, "le panneau se réduit")
+        XCTAssertGreaterThanOrEqual(place.maxHeight, ComposerInlinePanelLayout.minimumReducedHeight)
+        XCTAssertFalse(panneauPose(place, contenu: police, libre: libre402.size).intersects(objet),
+                       "le texte réglé reste visible pendant le réglage")
+    }
+
+    /// Un objet en haut de la scène renvoie le panneau en bas, sur toute sa
+    /// hauteur de contenu — rien à réduire.
+    func test_placement_unObjetEnHaut_lePanneauDescend_sansSeReduire() {
+        let objet = CGRect(x: 100, y: 40, width: 200, height: 120)
+        let place = ComposerInlinePanelLayout.placement(object: objet, free: libre402.size, panelHeight: 180)
+        XCTAssertEqual(place.edge, .bottom)
+        XCTAssertEqual(place.maxHeight, ComposerInlinePanelLayout.maxHeight(freeHeight: 700))
+        XCTAssertFalse(panneauPose(place, contenu: 180, libre: libre402.size).intersects(objet))
+    }
+
+    /// Sans cadre connu, et quand l'objet ne laisse aucune place utile, le
+    /// panneau garde le haut et toute sa hauteur : il ne disparaît jamais.
+    func test_placement_sansCadre_ouSansPlace_hautEtPleineHauteur() {
+        let pleine = ComposerInlinePanelLayout.maxHeight(freeHeight: 700)
+        XCTAssertEqual(ComposerInlinePanelLayout.placement(object: nil, free: libre402.size, panelHeight: 400),
+                       ComposerInlinePanelPlacement(edge: .top, maxHeight: pleine))
+        let geant = CGRect(x: 0, y: 60, width: 402, height: 580)
+        XCTAssertEqual(ComposerInlinePanelLayout.placement(object: geant, free: libre402.size,
+                                                           panelHeight: 400).maxHeight, pleine)
+    }
+
+    /// **Chaque famille posée a un cadre** — le texte, le sticker et la puce de
+    /// son aussi, pas seulement le média du #9495. Le fond n'en a pas : il
+    /// couvre la carte entière.
+    @MainActor
+    func test_sceneFrame_chaqueFamillePosee_aSonCadre_leFondAucun() {
+        let poses: [MeeshySceneObject] = [
+            .text(StoryTextObject(text: "Haut", y: 0.2)),
+            .sticker(StorySticker(emoji: "🔥", y: 0.2)),
+            .media(StoryMediaObject(id: "m", kind: .image, aspectRatio: 0.75, y: 0.2))
+        ]
+        for objet in poses {
+            guard let cadre = ComposerInlinePanelLayout.sceneFrame(of: objet, card: carte402,
+                                                                   container: libre402) else {
+                XCTFail("\(objet.kind) n'aurait pas de cadre"); continue
+            }
+            XCTAssertGreaterThan(cadre.height, 0)
+            XCTAssertEqual(cadre.midY, carte402.minY - libre402.minY + 0.2 * carte402.height, accuracy: 1,
+                           "\(objet.kind) : le centre du calque, dans le repère du panneau")
+        }
+        let fond = StoryMediaObject(id: "f", kind: .image, aspectRatio: 0.5625, isBackground: true)
+        XCTAssertNil(ComposerInlinePanelLayout.sceneFrame(of: .media(fond), card: carte402, container: libre402))
+    }
+
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
 
     func test_toolFocus_editionEnPlace_masqueToutSaufLeRailDroitEtSesControles() {

@@ -242,13 +242,48 @@ nonisolated enum ComposerInlinePanelLayout {
         min(max(content, 1), maxHeight(freeHeight: freeHeight))
     }
 
-    // MARK: Laisser voir l'objet qu'on règle (#9495)
+    // MARK: Laisser voir l'objet qu'on règle (#9495, #9143)
 
-    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages,
-    /// effets (#9498) et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
-    /// règle, et « Comparer » n'a de sens que si l'image comparée se voit.
-    static func keepsObjectInSight(_ section: ComposerObjectEditorSection) -> Bool {
-        [.media(.filter), .media(.adjust), .media(.effects), .media(.crop)].contains(section)
+    /// **Le panneau ne descend jamais plus bas que ce qui laisse l'objet en
+    /// vue** — en deçà, une rangée d'options ne tient plus et le panneau
+    /// reprend sa hauteur : il défile, il ne disparaît pas.
+    static let minimumReducedHeight: CGFloat = 120
+
+    /// **Où et sur quelle hauteur s'ouvre le panneau, pour TOUT sous-outil de
+    /// TOUT objet** (#9143 : « le panneau s'ancre du côté opposé à l'objet
+    /// sélectionné, ou se réduit, de sorte que l'objet reste visible pendant le
+    /// réglage »). La police d'un texte cachait le texte qu'elle règle ; le
+    /// rangement du #9495 ne servait que le filtre et les réglages d'une image.
+    ///
+    /// Le haut d'abord, s'il laisse l'objet entier ; sinon le côté qui le
+    /// couvre moins (`edge`). Si les deux le couvrent, le panneau se RÉDUIT au
+    /// côté qui a le plus de place hors de l'objet, et défile.
+    static func placement(object: CGRect?, free: CGSize, panelHeight: CGFloat,
+                          roomy: Bool = false) -> ComposerInlinePanelPlacement {
+        let pleine = maxHeight(freeHeight: free.height)
+        guard let object, !object.isNull, !object.isEmpty else {
+            return ComposerInlinePanelPlacement(edge: .top, maxHeight: pleine)
+        }
+        let cote = edge(object: object, free: free, panelHeight: panelHeight, roomy: roomy)
+        let cadre = frame(edge: cote, free: free, panelHeight: panelHeight, roomy: roomy)
+        guard covered(object, by: cadre) > 0 else {
+            return ComposerInlinePanelPlacement(edge: cote, maxHeight: pleine)
+        }
+        let gouttiere = ComposerRailGeometry.gutter
+        let auDessus = object.minY - 2 * gouttiere
+        let auDessous = free.height - object.maxY - 2 * gouttiere
+        let reduit = auDessus >= auDessous
+            ? ComposerInlinePanelPlacement(edge: .top, maxHeight: auDessus)
+            : ComposerInlinePanelPlacement(edge: .bottom, maxHeight: auDessous)
+        guard reduit.maxHeight >= minimumReducedHeight else {
+            return ComposerInlinePanelPlacement(edge: cote, maxHeight: pleine)
+        }
+        return ComposerInlinePanelPlacement(edge: reduit.edge, maxHeight: min(reduit.maxHeight, pleine))
+    }
+
+    /// La hauteur du panneau placé : son contenu, borné par sa place.
+    static func height(content: CGFloat, placement: ComposerInlinePanelPlacement) -> CGFloat {
+        min(max(content, 1), max(1, placement.maxHeight))
     }
 
     /// **Le haut ou le bas de la scène libre, du côté qui laisse voir l'objet**
@@ -300,6 +335,12 @@ nonisolated enum ComposerInlinePanelLayout {
 nonisolated enum ComposerInlinePanelEdge: Equatable, Sendable {
     case top
     case bottom
+}
+
+/// Le côté du panneau et la hauteur qu'il peut prendre sans couvrir l'objet.
+nonisolated struct ComposerInlinePanelPlacement: Equatable, Sendable {
+    let edge: ComposerInlinePanelEdge
+    let maxHeight: CGFloat
 }
 
 nonisolated enum ComposerInlineEditCopy {
