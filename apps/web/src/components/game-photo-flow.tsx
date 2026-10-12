@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 
+import { saveButtonVisible, type CaptureZone, type FrameChoice } from '@meeshy/shared/utils/capture/capture-save';
+
 import { GameBird, useChoreography } from '@/components/game';
 import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
@@ -36,6 +38,14 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  * navigateur fournit passe par `PhotoEnv`, injecté. Un refus de la caméra
  * n'est jamais une impasse : on nomme la raison et on garde la galerie et la
  * carte seule.
+ *
+ * LE CADRE EST LE DÉCLENCHEUR (#10284, directive porteur 2026-10-12) : aucun
+ * cercle d'enregistrement à côté du cadre. La case du cadre choisi prend la
+ * photo, l'enregistre dans la galerie puis ouvre le résultat ; la scène (toucher
+ * deux fois, tenir, Entrée au clavier) la prend sans l'écrire hors de l'app.
+ * « Enregistrer » ne se montre que si la prise n'est pas déjà enregistrée avec
+ * ce cadre (loi partagée `capture-save`, portée par le réducteur). Le cadre
+ * choisi est celui du moment tant que la bande de cadres (#10164) n'existe pas.
  */
 
 export type PhotoFlowResult = { readonly deferred: boolean };
@@ -49,6 +59,12 @@ type Props = {
 };
 
 const BUTTON = { minHeight: 44 } as const;
+
+/** Tenir la scène : au-delà de ce délai, l'appui est une prise hors cadre. */
+const HOLD_MS = 450;
+
+/** Une sortie vers la galerie a abouti : un fichier écrit, ou la feuille du système qui l'a pris. */
+const reachedGallery = (outcome: ShareOutcome): boolean => outcome === 'downloaded' || outcome === 'shared';
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([hidden]), [tabindex]:not([tabindex="-1"])';
 
@@ -101,7 +117,12 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   const [still, setStill] = useState<Blob | null>(null);
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
-  const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string; readonly action?: 'save' } | null>(null);
+  const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string; readonly action?: 'save'; readonly transient?: boolean } | null>(null);
+  /* Le cadre posé sur la prise : celui du moment, seul proposé tant que la bande n'existe pas (#10164). */
+  const frameId = moment.id;
+  /* Une prise par la case du cadre attend sa composition pour partir dans la galerie. */
+  const galleryOnCompose = useRef(false);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* Le bandeau que porte l'image COMPOSÉE — pas celui que la carte porterait maintenant : un lien lu
      après la frappe ne change ni l'image qui part, ni son texte. */
   const [composedReferral, setComposedReferral] = useState<PhotoReferral | null>(null);
@@ -238,6 +259,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
 
   /* La frappe en place, et la composition en même temps : on attend les deux. */
   const strikingMode = state.step === 'striking' ? state.mode : null;
+  const strikingZone = state.step === 'striking' ? state.zone : null;
   useEffect(() => {
     if (strikingMode === null) return;
     let live = true;
@@ -253,7 +275,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
         }
         setFiles(rendered);
         setComposedReferral(banner);
-        dispatch({ type: 'composed' });
+        galleryOnCompose.current = strikingZone === 'frame';
+        dispatch({ type: 'composed', frame: frameId });
       })
       .catch(() => {
         if (live) dispatch({ type: 'compose-failed' });
@@ -261,7 +284,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     return () => {
       live = false;
     };
-  }, [strikingMode, env, moment, play, stage]);
+  }, [strikingMode, strikingZone, frameId, env, moment, play, stage]);
 
   /* La sortie : « plus tard » laisse le moment en attente, tout le reste le laisse tel quel. */
   useEffect(() => {
@@ -273,7 +296,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     })();
   }, [state, env, moment, onClose]);
 
-  const shoot = useCallback(() => {
+  const shoot = useCallback((zone: CaptureZone) => {
     const element = video.current;
     const captured = element === null ? null : env.captureVideo(element);
     if (captured === null) {
@@ -284,8 +307,36 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     holdPhoto(captured);
     /* L'image prise reste à l'écran : une caméra rendue peut laisser un écran noir derrière le cadre. */
     (captured.image as { toBlob?: (done: (blob: Blob | null) => void) => void }).toBlob?.((blob) => setStill(blob));
-    dispatch({ type: 'shutter' });
+    dispatch({ type: 'shutter', zone });
   }, [env, holdPhoto]);
+
+  const releaseHold = useCallback(() => {
+    if (hold.current !== null) clearTimeout(hold.current);
+    hold.current = null;
+  }, []);
+  useEffect(() => releaseHold, [releaseHold]);
+  const sceneControls = {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': gameText('game.photo.take.scene'),
+    'data-photo-take': 'scene',
+    onDoubleClick: () => shoot('outside'),
+    onPointerDown: () => {
+      releaseHold();
+      hold.current = setTimeout(() => {
+        hold.current = null;
+        shoot('outside');
+      }, HOLD_MS);
+    },
+    onPointerUp: releaseHold,
+    onPointerLeave: releaseHold,
+    onPointerCancel: releaseHold,
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      shoot('outside');
+    },
+  } as const;
 
   const pickFromGallery = useCallback(
     async (file: File | undefined) => {
@@ -363,11 +414,45 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     }
   }, [announce, env, files, format, moment.title, prepareShare]);
 
-  const save = useCallback(async () => {
-    const outgoing = await outgoingFiles();
-    if (outgoing === null) return;
-    announce(await env.save(outgoing[format]), gameText('game.photo.notice.save_failed'));
-  }, [announce, env, format, outgoingFiles]);
+  /* L'écriture dans la galerie (la galerie de la coque Android, sinon un fichier, sinon la feuille du
+     système) avec le cadre `frame` ; l'état l'a déjà comptée (optimiste), un échec la rend. */
+  const writeGallery = useCallback(
+    async (frame: FrameChoice) => {
+      const outgoing = await outgoingFiles();
+      const outcome = outgoing === null ? 'failed' : await env.save(outgoing[format]);
+      if (!alive.current) return;
+      if (reachedGallery(outcome)) {
+        setNotice({ tone: 'good', text: gameText('game.photo.notice.saved_file'), transient: true });
+        return;
+      }
+      dispatch({ type: 'save-failed', frame });
+      setNotice(outcome === 'cancelled' ? null : { tone: 'error', text: gameText('game.photo.notice.save_failed') });
+    },
+    [env, format, outgoingFiles],
+  );
+
+  const canSave = state.step === 'result' && saveButtonVisible(state.save);
+  const currentFrame = state.step === 'result' ? state.save.currentFrame : null;
+  const save = useCallback(() => {
+    if (!canSave) return;
+    dispatch({ type: 'saved' });
+    void writeGallery(currentFrame);
+  }, [canSave, currentFrame, writeGallery]);
+
+  /* Une prise par la case du cadre part dans la galerie dès qu'elle est composée, puis le résultat
+     s'affiche sans « Enregistrer » (l'état l'y a déjà rangée avec ce cadre). */
+  useEffect(() => {
+    if (state.step !== 'result' || files === null || !galleryOnCompose.current) return;
+    galleryOnCompose.current = false;
+    void writeGallery(state.save.currentFrame);
+  }, [state, files, writeGallery]);
+
+  /* La pastille « Image enregistrée » s'efface seule : elle ne prend jamais le focus. */
+  useEffect(() => {
+    if (notice?.transient !== true) return;
+    const timer = setTimeout(() => setNotice((current) => (current === notice ? null : current)), 2000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   /* La recette (#10161) : le 9:16 composé (en JPEG, #10238), la photo d'origine réduite (jamais pour une carte seule) et le miroir. */
   const keep = useCallback(async () => {
@@ -464,6 +549,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
         {showStage ? (
           <div
             ref={stage}
+            {...(cameraLive ? sceneControls : {})}
             data-photo-stage={stageMode}
             className="relative mx-auto w-full overflow-hidden rounded-card"
             style={{ aspectRatio: '9 / 16', maxHeight: '62dvh', backgroundColor: 'var(--ios-indigo-950)' }}
@@ -501,9 +587,25 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
             </p>
             {options}
             {state.camera === 'live' ? (
-              <Button attr={{ 'data-photo-shutter': '' }} primary onClick={shoot}>
-                {gameText('game.photo.shutter')}
-              </Button>
+              <button
+                type="button"
+                data-photo-take="frame"
+                aria-label={gameText('game.photo.take.frame', { title: moment.title })}
+                onClick={() => shoot('frame')}
+                className="mx-auto flex flex-col items-center gap-1 rounded-card p-1"
+                style={{ minHeight: 44, minWidth: 44 }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="relative block overflow-hidden rounded-chip"
+                  style={{ width: 72, aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)', boxShadow: `0 0 0 3px ${GAME_BRAND}` }}
+                >
+                  <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={null} />
+                </span>
+                <span data-photo-take-label="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+                  {moment.title}
+                </span>
+              </button>
             ) : null}
             <Button attr={{ 'data-photo-gallery': '' }} onClick={() => picker.current?.click()}>
               {gameText('game.photo.gallery')}
@@ -551,17 +653,19 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
             <Button attr={{ 'data-photo-share': '' }} primary onClick={() => void share()}>
               {gameText('game.photo.share')}
             </Button>
-            <Button attr={{ 'data-photo-save': '' }} onClick={() => void save()}>
-              {gameText('game.photo.save')}
-            </Button>
+            {canSave ? (
+              <Button attr={{ 'data-photo-save': '' }} onClick={save}>
+                {gameText('game.photo.save')}
+              </Button>
+            ) : null}
             <Button attr={{ 'data-photo-keep': '' }} onClick={() => void keep()} disabled={state.kept === true}>
               {state.kept === true ? gameText('game.photo.kept') : gameText('game.photo.keep')}
             </Button>
             {notice === null ? null : (
               <div role={notice.tone === 'error' ? 'alert' : 'status'} className="flex flex-col gap-2 text-caption" style={{ color: notice.tone === 'error' ? GAME_ERROR : GAME_GOOD }}>
                 <p>{notice.text}</p>
-                {notice.action === 'save' ? (
-                  <Button attr={{ 'data-photo-no-space-save': '' }} onClick={() => void save()}>
+                {notice.action === 'save' && canSave ? (
+                  <Button attr={{ 'data-photo-no-space-save': '' }} onClick={save}>
                     {gameText('game.photo.notice.no_space_save')}
                   </Button>
                 ) : null}
