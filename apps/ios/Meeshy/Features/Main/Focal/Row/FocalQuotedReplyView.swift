@@ -176,7 +176,8 @@ struct FocalQuotedReplyView: View, Equatable {
                 mentionColor: MeeshyColors.mentionColor(isDark: isDark),
                 hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                 accentColor: previewColor,
-                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                linksAreInert: reference.authorIsAnonymous == true
             )
     }
 
@@ -463,7 +464,8 @@ struct FocalQuotedReplyView: View, Equatable {
                     mentionColor: MeeshyColors.mentionColor(isDark: isDark),
                     hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: previewColor,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                    linksAreInert: reference.authorIsAnonymous == true
                 )
                 .tint(previewColor)
             }

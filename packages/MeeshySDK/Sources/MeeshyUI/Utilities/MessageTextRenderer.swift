@@ -55,6 +55,9 @@ public enum MessageTextRenderer {
     /// what messages pass since their surlignage already comes from
     /// `validatedMentions` upstream. An empty `Set` is NOT the same as `nil`: it
     /// means the caller checked and nobody matched, so nothing links.
+    /// Pass `linksAreInert` for text whose author has no account (#10286):
+    /// every link — raw URL, `[label](url)`, `[[url]]`, `m+<token>` — is shown
+    /// exactly as written, as plain text, never tappable.
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
@@ -67,14 +70,15 @@ public enum MessageTextRenderer {
         mentionDisplayNames: [String: String]? = nil,
         highlightTerm: String? = nil,
         trackedLinks: [String: String]? = nil,
-        validUsernames: Set<String>? = nil
+        validUsernames: Set<String>? = nil,
+        linksAreInert: Bool = false
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         return Text(attributed(text, fontSize: fontSize, color: color, mentionColor: mentionColor,
                                hashtagColor: hashtagColor, accentColor: accentColor,
                                usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames,
                                highlightTerm: highlightTerm, trackedLinks: trackedLinks,
-                               validUsernames: validUsernames))
+                               validUsernames: validUsernames, linksAreInert: linksAreInert))
     }
 
     /// The `AttributedString` behind `render` — same parameters, plus the web
@@ -93,6 +97,7 @@ public enum MessageTextRenderer {
         highlightTerm: String? = nil,
         trackedLinks: [String: String]? = nil,
         validUsernames: Set<String>? = nil,
+        linksAreInert: Bool = false,
         webOrigin: String = MeeshyConfig.shared.webOrigin
     ) -> AttributedString {
         guard !text.isEmpty else { return AttributedString() }
@@ -104,6 +109,7 @@ public enum MessageTextRenderer {
             mentionDisplayNames: mentionDisplayNames,
             trackedLinks: trackedLinks,
             validUsernames: validUsernames,
+            linksAreInert: linksAreInert,
             webOrigin: webOrigin
         )
         if MessageBlockParser.hasBlockSyntax(text) {
@@ -124,6 +130,7 @@ public enum MessageTextRenderer {
         let mentionDisplayNames: [String: String]?
         let trackedLinks: [String: String]?
         let validUsernames: Set<String>?
+        var linksAreInert: Bool = false
         var webOrigin: String = MeeshyConfig.shared.webOrigin
     }
 
@@ -661,6 +668,13 @@ public enum MessageTextRenderer {
 
             case .link(let written):
                 charOffset += written.sourceCount
+                if context.linksAreInert {
+                    var plain = AttributedString(written.sourceText)
+                    plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
+                    plain.foregroundColor = color
+                    result.append(plain)
+                    continue
+                }
                 guard let display = LinkDisplayLaw.resolve(written, trackedLinks: trackedLinks,
                                                             webOrigin: context.webOrigin) else {
                     result.append(AttributedString(written.sourceText))

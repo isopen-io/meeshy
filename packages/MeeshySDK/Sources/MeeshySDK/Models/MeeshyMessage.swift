@@ -240,7 +240,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
         case createdAt, updatedAt, attachments, reactions
         case replyTo, forwardedFrom
-        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
@@ -290,6 +290,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         senderColor = try c.decodeIfPresent(String.self, forKey: .senderColor)
         senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
+        senderIsAnonymous = try c.decodeIfPresent(Bool.self, forKey: .senderIsAnonymous) ?? false
         deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
         deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
@@ -362,6 +363,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(senderColor, forKey: .senderColor)
         try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
         try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
+        if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
         try c.encode(deliveryStatus, forKey: .deliveryStatus)
         try c.encode(isMe, forKey: .isMe)
         try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)

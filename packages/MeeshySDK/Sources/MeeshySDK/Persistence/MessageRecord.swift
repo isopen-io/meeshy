@@ -115,6 +115,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// La carte `url → token` des liens suivis (#9104), en `[TrackedLink]` JSON.
     public var trackedLinksJson: String?
 
+    /// L'auteur n'a pas de compte (`Participant.type == "anonymous"`, #10286).
+    /// Le fil ne lit que GRDB : sans cette colonne, ses adresses redevenaient
+    /// cliquables au premier rechargement. `nil` (lignes antérieures) ⇒ inconnu.
+    public var senderIsAnonymous: Bool?
+
     /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
     /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
     /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
@@ -175,7 +180,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         stickerJson: String? = nil,
         ephemeralDuration: Int? = nil,
         viewOnceOpenedAt: Date? = nil,
-        trackedLinksJson: String? = nil
+        trackedLinksJson: String? = nil,
+        senderIsAnonymous: Bool? = nil
     ) {
         self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
@@ -242,6 +248,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.locationJson = locationJson
         self.stickerJson = stickerJson
         self.trackedLinksJson = trackedLinksJson
+        self.senderIsAnonymous = senderIsAnonymous
     }
 
     // MARK: - Timestamp pre-compute helper

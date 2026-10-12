@@ -154,6 +154,7 @@ extension MessageRecord {
             senderColor: resolvedColor ?? senderColor,
             senderAvatarURL: senderAvatarURL,
             senderUserId: senderId == currentUserId ? currentUserId : nil,
+            senderIsAnonymous: senderIsAnonymous ?? false,
             deliveryStatus: deliveryStatus,
             isMe: senderId == currentUserId,
             deliveredToAllAt: deliveredToAllAt,

@@ -1107,7 +1107,7 @@ struct BubbleStandardLayout: View {
             hashtagTint: hashtagTint,
             linkTint: linkTint,
             isDark: isDark,
-            trackedLinks: content.text?.trackedLinks ?? [:]
+            trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true
         )
     }
 
@@ -1125,7 +1125,7 @@ struct BubbleStandardLayout: View {
                 mentionTint: mentionTint,
                 hashtagTint: hashtagTint,
                 linkTint: linkTint,
-                trackedLinks: content.text?.trackedLinks ?? [:]
+                trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true
             )
         }
     }

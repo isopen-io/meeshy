@@ -376,5 +376,14 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "trackedLinksJson", .text)
             }
         }
+
+        // **L'auteur sans compte** (#10286). Le fil ne lit que GRDB : sans
+        // elle, l'adresse écrite par un invité anonyme redevenait cliquable.
+        // Même convention nullable : NULL ⇒ inconnu, rendu comme un inscrit.
+        migrator.registerMigration("messages_sender_is_anonymous") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "senderIsAnonymous", .boolean)
+            }
+        }
     }
 }

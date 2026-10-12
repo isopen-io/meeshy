@@ -159,6 +159,7 @@ extension ConversationViewModel {
         // Sans elle, la citation optimiste serait « illisible » et la réponse
         // perdrait « Imager » jusqu'à l'écho du serveur (décision 2026-10-08).
         reference.quotedExitNature = quoted.contentExitLaw.nature
+        reference.authorIsAnonymous = quoted.senderIsAnonymous
         // #9911 — la citation du message ENTIER dit combien de tuiles il porte
         // (« +N ») ; une pièce NOMMÉE n'en montre qu'une.
         if named == nil, !messageIsProtected {
