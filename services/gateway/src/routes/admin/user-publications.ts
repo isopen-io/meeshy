@@ -11,6 +11,7 @@ import {
   nextModerationState,
   POST_MODERATION_ACTIONS,
   POST_MODERATION_BATCH_MAX,
+  liftsSomeoneElsesHold,
   publicationStateOf,
   withdrawsAudience,
   type PostModerationAction,
@@ -20,8 +21,12 @@ import { getSharedNotificationService } from '../../services/notifications/notif
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { retractPostNotifications } from '../../services/posts/retractPostNotifications';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { logError, logWarn } from '../../utils/logger';
-import { sendBadRequest, sendInternalError, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
+import { sendBadRequest, sendForbidden, sendInternalError, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
+import { UserRoleEnum } from '@meeshy/shared/types';
+import { permissionsService as adminPermissionsService } from '../../services/admin/permissions.service';
 
 /**
  * **LES PUBLICATIONS D'UN MEMBRE, VUES ET MODÉRÉES DEPUIS SA FICHE** (#10315).
@@ -85,6 +90,10 @@ const publicationSelect = {
 type PublicationRow = Prisma.PostGetPayload<{ select: typeof publicationSelect }>;
 
 const iso = (date: Date | null): string | null => (date === null ? null : date.toISOString());
+
+/** P2034 (conflit d'écriture / interblocage) : la transaction n'a rien écrit, le lot se dit en conflit. */
+const isWriteConflict = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'P2034';
 
 function servePublication(row: PublicationRow, now: Date) {
   const first = row.media[0];
@@ -150,13 +159,14 @@ const moderationResponseSchema = {
         updated: { type: 'number' },
         unchanged: { type: 'number' },
         skipped: { type: 'number' },
+        outrankedCopies: { type: 'number' },
         results: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
               postId: { type: 'string' },
-              outcome: { type: 'string', enum: ['updated', 'unchanged', 'skipped'] },
+              outcome: { type: 'string', enum: ['updated', 'unchanged', 'skipped', 'outranked', 'conflict'] },
               visibility: nullableString,
               moderationHiddenAt: nullableString,
             },
@@ -180,27 +190,127 @@ const moderationSelect = {
   visibility: true,
   visibilityUserIds: true,
   moderationHiddenAt: true,
+  moderationHiddenById: true,
   moderationPriorVisibility: true,
+  repostOfId: true,
+  originalRepostOfId: true,
 } satisfies Prisma.PostSelect;
 
 type ModerationRow = Prisma.PostGetPayload<{ select: typeof moderationSelect }>;
 
-type Plan = { readonly row: ModerationRow; readonly before: PostModerationState; readonly after: PostModerationState | null };
+type Plan = {
+  readonly row: ModerationRow;
+  readonly before: PostModerationState;
+  readonly after: PostModerationState | null;
+  /** La publication retirée dont cette ligne est la COPIE (republication d'une story ou d'un statut). */
+  readonly copyOf?: string;
+};
+
+/** Pourquoi une publication du lot n'a pas changé — dit, jamais tu. */
+type Outcome = 'updated' | 'unchanged' | 'skipped' | 'outranked' | 'conflict';
 
 const stateOf = (row: ModerationRow): PostModerationState => ({
   visibility: row.visibility,
   moderationHiddenAt: row.moderationHiddenAt,
+  moderationHiddenById: row.moderationHiddenById,
   moderationPriorVisibility: row.moderationPriorVisibility,
 });
 
 const changesOf = (before: PostModerationState, after: PostModerationState) => ({
   visibility: { before: before.visibility, after: after.visibility },
   moderationHiddenAt: { before: iso(before.moderationHiddenAt), after: iso(after.moderationHiddenAt) },
+  moderationHiddenById: { before: before.moderationHiddenById, after: after.moderationHiddenById },
   moderationPriorVisibility: { before: before.moderationPriorVisibility, after: after.moderationPriorVisibility },
 });
 
-function actorIdOf(request: FastifyRequest): string {
-  return (request as UnifiedAuthRequest).authContext.registeredUser!.id;
+function actorOf(request: FastifyRequest): { readonly id: string; readonly role: UserRoleEnum } {
+  const user = (request as UnifiedAuthRequest).authContext.registeredUser!;
+  return { id: user.id, role: (user.role ?? 'USER') as UserRoleEnum };
+}
+
+/**
+ * Les retraits que l'acteur n'a pas le rang de lever (#10315, revue de sécurité) :
+ * un retrait posé par un autre ne se lève que d'un rang au moins égal au sien.
+ * Un signataire INCONNU — retrait antérieur à la signature, ou compte disparu —
+ * exige le rang souverain : fail-closed, sans rendre le retrait impossible à lever.
+ */
+async function outrankedPlans(fastify: FastifyInstance, plans: readonly Plan[], actor: { readonly id: string; readonly role: UserRoleEnum }): Promise<ReadonlySet<string>> {
+  const lifts = plans.filter((plan) => plan.after !== null && liftsSomeoneElsesHold(plan.before, plan.after, actor.id));
+  if (lifts.length === 0) return new Set();
+  const hiderIds = [...new Set(lifts.map((plan) => plan.before.moderationHiddenById).filter((id): id is string => id !== null))];
+  const hiders =
+    hiderIds.length === 0 ? [] : await fastify.prisma.user.findMany({ where: { id: { in: hiderIds } }, select: { id: true, role: true }, take: hiderIds.length });
+  const sovereign = adminPermissionsService.getRoleLevel(UserRoleEnum.BIGBOSS);
+  // Un rang hors de la matrice (niveau 0) ne se compare pas : il compte comme souverain.
+  const levelOf = new Map(hiders.map((hider) => [hider.id, adminPermissionsService.getRoleLevel(hider.role as UserRoleEnum) || sovereign]));
+  const mine = adminPermissionsService.getRoleLevel(actor.role);
+  const required = (plan: Plan): number => (plan.before.moderationHiddenById === null ? sovereign : (levelOf.get(plan.before.moderationHiddenById) ?? sovereign));
+  return new Set(lifts.filter((plan) => required(plan) > mine).map((plan) => plan.row.id));
+}
+
+const EPHEMERAL_TYPES: ReadonlySet<string> = new Set(['STORY', 'STATUS']);
+const COPIES_MAX = 500;
+
+/**
+ * **LES COPIES SUIVENT LEUR SOURCE** (contre-audit #10315, B-1). Republier une
+ * story ou un statut en DUPLIQUE le contenu (médias, texte, effets) dans la
+ * republication d'un autre : retirer la source sans ses copies laissait le contenu
+ * servi partout. La mise hors ligne les retire avec elle, datée et signée comme
+ * elle ; la remise en ligne ne rend que celles que CE retrait avait emportées
+ * (même date, même signataire) — jamais une copie retirée pour elle-même.
+ */
+type CopyPlans = { readonly plans: readonly Plan[]; readonly outranked: number };
+
+const NO_COPIES: CopyPlans = { plans: [], outranked: 0 };
+
+/**
+ * La hiérarchie vaut pour chaque publication ÉCRITE, copie comprise (troisième passe
+ * #10315) : la copie d'un rang égal ou supérieur n'est pas touchée, elle se compte.
+ * Un auteur introuvable ou au rang hors matrice ne se laisse pas comparer : fail-closed.
+ */
+async function withinHierarchy(fastify: FastifyInstance, copies: readonly Plan[], actor: { readonly id: string; readonly role: UserRoleEnum }): Promise<CopyPlans> {
+  const others = [...new Set(copies.map((plan) => plan.row.authorId).filter((id) => id !== actor.id))];
+  const authors = others.length === 0 ? [] : await fastify.prisma.user.findMany({ where: { id: { in: others } }, select: { id: true, role: true }, take: others.length });
+  const roleOf = new Map(authors.map((author) => [author.id, author.role as UserRoleEnum]));
+  const manageable = (plan: Plan): boolean => {
+    if (plan.row.authorId === actor.id) return true;
+    const role = roleOf.get(plan.row.authorId);
+    return role !== undefined && adminPermissionsService.getRoleLevel(role) > 0 && adminPermissionsService.canManageUser(actor.role, role);
+  };
+  const kept = copies.filter(manageable);
+  return { plans: kept, outranked: copies.length - kept.length };
+}
+
+async function copyPlans(
+  fastify: FastifyInstance,
+  action: PostModerationAction,
+  primary: readonly Plan[],
+  context: { readonly now: Date; readonly actor: { readonly id: string; readonly role: UserRoleEnum } },
+): Promise<CopyPlans> {
+  if (action === 'make-private') return NO_COPIES;
+  const sources = primary.filter((plan) => plan.after !== null && EPHEMERAL_TYPES.has(plan.row.type));
+  if (sources.length === 0) return NO_COPIES;
+  const sourceIds = sources.map((plan) => plan.row.id);
+  const copies = await fastify.prisma.post.findMany({
+    where: { OR: [{ repostOfId: { in: sourceIds } }, { originalRepostOfId: { in: sourceIds } }], isQuote: false, deletedAt: NOT_DELETED },
+    select: moderationSelect,
+    take: COPIES_MAX,
+  });
+  const byId = new Map(sources.map((plan) => [plan.row.id, plan]));
+  const planned = copies.flatMap((copy): Plan[] => {
+    const source = byId.get(copy.originalRepostOfId ?? '') ?? byId.get(copy.repostOfId ?? '');
+    if (source === undefined || byId.has(copy.id)) return [];
+    const before = stateOf(copy);
+    const sameHold =
+      before.moderationHiddenAt !== null &&
+      source.before.moderationHiddenAt !== null &&
+      before.moderationHiddenAt.getTime() === source.before.moderationHiddenAt.getTime() &&
+      before.moderationHiddenById === source.before.moderationHiddenById;
+    if (action === 'restore' && !sameHold) return [];
+    const after = nextModerationState(action, before, { now: context.now, actorId: context.actor.id });
+    return after === null ? [] : [{ row: copy, before, after, copyOf: source.row.id }];
+  });
+  return withinHierarchy(fastify, planned, context.actor);
 }
 
 /** Ce que les CLIENTS doivent oublier, et ce que l'inbox doit retirer : effets hors transaction, jamais bloquants. */
@@ -215,12 +325,43 @@ function announceWithdrawals(fastify: FastifyInstance, action: PostModerationAct
       ),
     );
 
-  if (action !== 'take-offline' || applied.length === 0) return;
+  const withdrawn = applied.filter((plan) => plan.after !== null && plan.after.visibility === 'PRIVATE' && action !== 'restore');
+  if (withdrawn.length === 0) return;
+  // Les citations ouvertes dans les conversations se disent retirées sur-le-champ, comme au retrait définitif.
+  const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+  // Une socket jointe à la salle du post quand il était lisible y resterait, et
+  // recevrait les éditions de l'auteur pendant le retrait : la salle se vide, et
+  // `post:join` refait passer la porte de visibilité à qui revient.
+  withdrawn.forEach((plan) => io?.in(ROOMS.post(plan.row.id)).socketsLeave(ROOMS.post(plan.row.id)));
+  withdrawn
+    .filter((plan) => plan.after?.moderationHiddenAt != null)
+    .forEach((plan) =>
+      announceCitedPostWithdrawal({ prisma: fastify.prisma, io, post: { id: plan.row.id, type: plan.row.type, moderationHiddenAt: plan.after?.moderationHiddenAt ?? null } }).catch((err) =>
+        logWarn(fastify.log, '[admin publications] cited withdrawal announce failed', err),
+      ),
+    );
   retractPostNotifications(
     fastify.prisma,
-    applied.map((plan) => plan.row.id),
+    withdrawn.map((plan) => plan.row.id),
     getSharedNotificationService(),
   ).catch((err) => logWarn(fastify.log, '[admin publications] notification retraction failed', err));
+}
+
+/** L'état LU, posé en condition de l'écriture : une valeur absente du document vaut `null` lu. */
+function expectedStateWhere(plan: Plan): Prisma.PostWhereInput {
+  const nullable = (field: 'moderationHiddenAt' | 'moderationHiddenById' | 'moderationPriorVisibility', value: unknown): Prisma.PostWhereInput =>
+    value === null ? { OR: [{ [field]: null }, { [field]: { isSet: false } }] } : { [field]: value };
+  return {
+    id: plan.row.id,
+    authorId: plan.row.authorId,
+    deletedAt: NOT_DELETED,
+    visibility: plan.before.visibility,
+    AND: [
+      nullable('moderationHiddenAt', plan.before.moderationHiddenAt),
+      nullable('moderationHiddenById', plan.before.moderationHiddenById),
+      nullable('moderationPriorVisibility', plan.before.moderationPriorVisibility),
+    ],
+  };
 }
 
 export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
@@ -228,6 +369,8 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
     '/admin/users/:userId/publications',
     {
       onRequest: [fastify.authenticate, requireModeration],
+      // Lire les publications PRIVÉES d'un rang égal ou supérieur n'est pas du ressort d'un modérateur.
+      preHandler: [requireHierarchy({ param: 'userId' })],
       schema: {
         description: "Publications récentes d'un membre (posts, réels, stories, statuts) avec leur audience et leur état. Requiert canModerateContent.",
         tags: ['admin'],
@@ -280,6 +423,11 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
       try {
         const { userId } = request.params;
         const { action } = body.data;
+        const actor = actorOf(request);
+        // On ne modère pas ses propres publications depuis l'administration : sans
+        // cette garde, un modérateur levait le retrait que son supérieur venait de
+        // poser sur lui (la hiérarchie laisse passer « soi »).
+        if (userId === actor.id) return sendForbidden(reply, 'Self moderation is not allowed', { code: 'SELF_MODERATION' });
         const ids = [...new Set(body.data.postIds)];
         const rows = await fastify.prisma.post.findMany({
           where: { id: { in: ids }, authorId: userId, deletedAt: NOT_DELETED },
@@ -287,52 +435,70 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
           take: POST_MODERATION_BATCH_MAX,
         });
         const now = new Date();
-        const plans: Plan[] = rows.map((row) => ({ row, before: stateOf(row), after: nextModerationState(action, stateOf(row), now) }));
-        const applied = plans.filter((plan) => plan.after !== null);
-        const adminId = actorIdOf(request);
+        const plans: Plan[] = rows.map((row) => ({ row, before: stateOf(row), after: nextModerationState(action, stateOf(row), { now, actorId: actor.id }) }));
+        const outranked = await outrankedPlans(fastify, plans, actor);
+        const candidates = plans.filter((plan) => plan.after !== null && !outranked.has(plan.row.id));
+        const copies = await copyPlans(fastify, action, candidates, { now, actor });
 
-        if (applied.length > 0) {
-          await fastify.prisma.$transaction([
-            ...applied.map((plan) =>
-              fastify.prisma.post.updateMany({ where: { id: plan.row.id, authorId: userId }, data: plan.after as PostModerationState }),
-            ),
-            fastify.prisma.adminAuditLog.createMany({
-              data: applied.map((plan) => ({
-                userId,
-                adminId,
-                action: 'MODERATE_POST',
-                entity: 'Post',
-                entityId: plan.row.id,
-                changes: JSON.stringify(changesOf(plan.before, plan.after as PostModerationState)),
-                metadata: JSON.stringify({ action, type: plan.row.type, reason: verdict.reason ?? null, batchSize: ids.length }),
-                ipAddress: request.ip,
-                userAgent: request.headers['user-agent'] ?? null,
-              })),
-            }),
-          ]);
-          announceWithdrawals(fastify, action, applied);
-        }
+        // Écriture CONDITIONNELLE et SÉQUENTIELLE dans une transaction : chaque
+        // mise à jour ne porte que sur l'état lu (audience, retrait, signataire) ;
+        // une publication changée entre-temps n'est pas écrasée et se dit
+        // `conflict`. Le journal n'écrit que ce qui a changé. Une transaction
+        // avortée par un conflit d'écriture concurrent rend `conflict` à tout le
+        // lot, jamais un 500 ni un changement partiel.
+        const writes = [...candidates, ...copies.plans];
+        const applied: readonly Plan[] =
+          writes.length === 0
+            ? []
+            : await fastify.prisma
+                .$transaction(async (tx) => {
+                  const done: Plan[] = [];
+                  for (const plan of writes) {
+                    const result = await tx.post.updateMany({ where: expectedStateWhere(plan), data: plan.after as PostModerationState });
+                    if (result.count === 1) done.push(plan);
+                  }
+                  if (done.length > 0) {
+                    await tx.adminAuditLog.createMany({
+                      data: done.map((plan) => ({
+                        userId: plan.row.authorId,
+                        adminId: actor.id,
+                        action: 'MODERATE_POST',
+                        entity: 'Post',
+                        entityId: plan.row.id,
+                        changes: JSON.stringify(changesOf(plan.before, plan.after as PostModerationState)),
+                        metadata: JSON.stringify({ action, type: plan.row.type, reason: verdict.reason ?? null, ...(plan.copyOf === undefined ? {} : { copyOf: plan.copyOf }) }),
+                        ipAddress: request.ip,
+                        userAgent: request.headers['user-agent'] ?? null,
+                      })),
+                    });
+                  }
+                  return done;
+                })
+                .catch((error: unknown) => {
+                  if (isWriteConflict(error)) return [];
+                  throw error;
+                });
+        announceWithdrawals(fastify, action, applied);
 
+        const appliedIds = new Set(applied.filter((plan) => plan.copyOf === undefined).map((plan) => plan.row.id));
         const byId = new Map(plans.map((plan) => [plan.row.id, plan]));
         const results = ids.map((postId) => {
           const plan = byId.get(postId);
-          if (plan === undefined) return { postId, outcome: 'skipped' as const, visibility: null, moderationHiddenAt: null };
-          const final = plan.after ?? plan.before;
-          return {
-            postId,
-            outcome: plan.after === null ? ('unchanged' as const) : ('updated' as const),
-            visibility: final.visibility as PostVisibility,
-            moderationHiddenAt: iso(final.moderationHiddenAt),
-          };
+          if (plan === undefined) return { postId, outcome: 'skipped' as Outcome, visibility: null, moderationHiddenAt: null };
+          const outcome: Outcome = appliedIds.has(postId) ? 'updated' : outranked.has(postId) ? 'outranked' : plan.after === null ? 'unchanged' : 'conflict';
+          const final = outcome === 'updated' ? (plan.after as PostModerationState) : plan.before;
+          return { postId, outcome, visibility: final.visibility as PostVisibility, moderationHiddenAt: iso(final.moderationHiddenAt) };
         });
+        const count = (outcome: Outcome) => results.filter((result) => result.outcome === outcome).length;
 
-        fastify.log.info({ action: 'admin_publications_moderation', moderation: action, userId, adminId, updated: applied.length, requested: ids.length });
+        fastify.log.info({ action: 'admin_publications_moderation', moderation: action, userId, adminId: actor.id, updated: appliedIds.size, copies: applied.length - appliedIds.size, requested: ids.length });
 
         return sendSuccess(reply, {
           action,
-          updated: applied.length,
-          unchanged: plans.length - applied.length,
-          skipped: ids.length - plans.length,
+          updated: count('updated'),
+          unchanged: count('unchanged'),
+          skipped: count('skipped') + count('outranked') + count('conflict'),
+          outrankedCopies: copies.outranked,
           results,
         });
       } catch (error) {

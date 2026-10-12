@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { logError } from '../../utils/logger';
 import {
@@ -58,7 +59,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
   fastify.post('/tracking-links', {
     onRequest: [authOptional],
     schema: {
-      description: 'Create a new tracking link for URL analytics. Supports both authenticated and anonymous users. If a tracking link already exists for the same URL and conversation, returns the existing link. Each link gets a unique 6-character alphanumeric token used for redirection.',
+      description: 'Create a new tracking link for URL analytics. Reserved to registered accounts: no session ⇒ 401 UNAUTHORIZED, guest session ⇒ 403 REGISTERED_USER_REQUIRED (#10291). If the caller already owns an active tracking link for the same URL and conversation, returns it. Each link gets a unique 6-character alphanumeric token used for redirection.',
       tags: ['tracking-links'],
       summary: 'Create tracking link',
       body: {
@@ -154,6 +155,14 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           description: 'Invalid request data',
           ...validationErrorResponseSchema
         },
+        401: {
+          description: 'No session at all (#4792)',
+          ...errorResponseSchema
+        },
+        403: {
+          description: 'Guest session: only a registered account can create a tracking link (#10291)',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -162,29 +171,43 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
     }
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
+      /**
+       * UN LIEN SUIVI SE FABRIQUE AVEC UN COMPTE (#10291). Un invité anonyme
+       * créait ici un jeton (personnalisé compris), puis tapait `m+<jeton>`
+       * dans un message que les clients antérieurs à #10286 rendent en lien
+       * Meeshy cliquable. Les seuls appelants légitimes — les écrans « Mes
+       * liens » du web et d'iOS — servent des comptes inscrits. La garde passe
+       * AVANT toute lecture du corps : aucune écriture, aucune sonde de jeton.
+       * Deux refus discernables (#4792) : sans session ⇒ 401, invité ⇒ 403.
+       */
+      if (!request.authContext?.isAuthenticated) {
+        return sendUnauthorized(reply, 'Authentication required to create a tracking link', {
+          code: 'UNAUTHORIZED'
+        });
+      }
+      if (!isRegisteredUser(request.authContext)) {
+        return sendForbidden(reply, 'A registered account is required to create a tracking link', {
+          code: 'REGISTERED_USER_REQUIRED'
+        });
+      }
+
       const body = createTrackingLinkSchema.parse(request.body);
 
-      let createdBy: string | undefined;
+      const createdBy = request.authContext.registeredUser!.id;
       // La MATRICE, jamais une liste (#4153). Un compte privilégié échappe à
       // la longueur minimale d'un jeton personnalisé — c'est une dispense, et
       // une dispense est une loi d'admission comme une autre.
-      const isPrivileged = isRegisteredUser(request.authContext) &&
-        permissionsService.hasPermission(
-          request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
-        );
-      if (isRegisteredUser(request.authContext)) {
-        createdBy = request.authContext.registeredUser!.id;
-      }
+      const isPrivileged = permissionsService.hasPermission(
+        request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
+      );
 
       if (body.customToken && body.customToken.length < 5 && !isPrivileged) {
         return sendBadRequest(reply, 'Le token personnalisé doit contenir au moins 5 caractères');
       }
 
       // `conversationId` et `messageId` viennent du corps de la requête et
-      // n'étaient jamais vérifiés : l'authentification étant optionnelle sur
-      // cette route, un appelant anonyme rattachait un lien de suivi à
-      // n'importe quelle conversation. Rattacher exige désormais d'y
-      // participer ; créer un lien sans rattachement reste ouvert.
+      // n'étaient jamais vérifiés : un appelant rattachait un lien de suivi à
+      // n'importe quelle conversation. Rattacher exige d'y participer.
       // (#4792) La règle n'est plus RÉPLIQUÉE ici : ce ternaire était la JUMELLE
       // de `canAccessConversation` — mêmes colonnes, même précédence — écrasant
       // lui aussi les deux refus dans un seul `null`, et servant le verbe
@@ -201,15 +224,12 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       // Seul l'appelant récupère un lien qu'il a déjà créé (#9184) : la
-      // réponse sert le lien ENTIER, compteurs de clics compris. Un appelant
-      // sans compte n'a rien à retrouver — il reçoit toujours un lien neuf.
-      const existingLink = createdBy
-        ? await trackingLinkService.findExistingTrackingLink(body.originalUrl, {
-          kind: 'owner',
-          createdBy,
-          conversationId: body.conversationId
-        })
-        : null;
+      // réponse sert le lien ENTIER, compteurs de clics compris.
+      const existingLink = await trackingLinkService.findExistingTrackingLink(body.originalUrl, {
+        kind: 'owner',
+        createdBy,
+        conversationId: body.conversationId
+      });
 
       if (existingLink) {
         return sendSuccess(reply, {
@@ -665,7 +685,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
+      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
         return sendForbidden(reply, 'Seul le créateur peut désactiver ce lien');
       }
 
@@ -744,7 +764,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
+      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
         return sendForbidden(reply, 'Seul le créateur peut supprimer ce lien');
       }
 
@@ -869,7 +889,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
+      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
         return sendForbidden(reply, 'Seul le créateur peut modifier ce lien');
       }
 

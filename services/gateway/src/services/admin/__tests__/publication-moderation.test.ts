@@ -4,86 +4,92 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import {
   nextModerationState,
   withdrawsAudience,
   publicationStateOf,
-  heldAgainstAuthor,
+  liftsSomeoneElsesHold,
   type PostModerationState,
 } from '../publication-moderation';
 
 const NOW = new Date('2026-10-12T10:00:00.000Z');
 const EARLIER = new Date('2026-10-11T08:00:00.000Z');
 
+const ACTOR = 'actor';
+const CTX = { now: NOW, actorId: ACTOR };
+
 const state = (over: Partial<PostModerationState> = {}): PostModerationState => ({
   visibility: 'PUBLIC',
   moderationHiddenAt: null,
+  moderationHiddenById: null,
   moderationPriorVisibility: null,
   ...over,
 });
 
 describe('nextModerationState — mettre en privé', () => {
   it("force PRIVATE et retient l'audience de l'auteur pour la rendre", () => {
-    expect(nextModerationState('make-private', state({ visibility: 'FRIENDS' }), NOW)).toEqual({
+    expect(nextModerationState('make-private', state({ visibility: 'FRIENDS' }), CTX)).toEqual({
       visibility: 'PRIVATE',
       moderationHiddenAt: null,
+      moderationHiddenById: null,
       moderationPriorVisibility: 'FRIENDS',
     });
   });
 
   it('ne touche à rien quand la publication est déjà privée', () => {
-    expect(nextModerationState('make-private', state({ visibility: 'PRIVATE' }), NOW)).toBeNull();
+    expect(nextModerationState('make-private', state({ visibility: 'PRIVATE' }), CTX)).toBeNull();
   });
 
   it("retient l'audience COURANTE, jamais une audience retenue périmée", () => {
-    const after = nextModerationState('make-private', state({ visibility: 'ONLY', moderationPriorVisibility: 'PUBLIC' }), NOW);
+    const after = nextModerationState('make-private', state({ visibility: 'ONLY', moderationPriorVisibility: 'PUBLIC' }), CTX);
     expect(after?.moderationPriorVisibility).toBe('ONLY');
   });
 });
 
 describe('nextModerationState — mettre hors ligne', () => {
-  it('date le retrait, force PRIVATE et retient l’audience', () => {
-    expect(nextModerationState('take-offline', state({ visibility: 'PUBLIC' }), NOW)).toEqual({
+  it('date et signe le retrait, force PRIVATE et retient l’audience', () => {
+    expect(nextModerationState('take-offline', state({ visibility: 'PUBLIC' }), CTX)).toEqual({
       visibility: 'PRIVATE',
       moderationHiddenAt: NOW,
+      moderationHiddenById: ACTOR,
       moderationPriorVisibility: 'PUBLIC',
     });
   });
 
   it("garde l'audience retenue par une mise en privé antérieure", () => {
-    const after = nextModerationState('take-offline', state({ visibility: 'PRIVATE', moderationPriorVisibility: 'COMMUNITY' }), NOW);
-    expect(after).toEqual({ visibility: 'PRIVATE', moderationHiddenAt: NOW, moderationPriorVisibility: 'COMMUNITY' });
+    const after = nextModerationState('take-offline', state({ visibility: 'PRIVATE', moderationPriorVisibility: 'COMMUNITY' }), CTX);
+    expect(after).toEqual({ visibility: 'PRIVATE', moderationHiddenAt: NOW, moderationHiddenById: ACTOR, moderationPriorVisibility: 'COMMUNITY' });
   });
 
   it("ne retient rien quand l'auteur l'avait lui-même rendue privée", () => {
-    const after = nextModerationState('take-offline', state({ visibility: 'PRIVATE' }), NOW);
+    const after = nextModerationState('take-offline', state({ visibility: 'PRIVATE' }), CTX);
     expect(after?.moderationPriorVisibility).toBeNull();
   });
 
   it('ne redate pas un retrait déjà en place', () => {
-    expect(nextModerationState('take-offline', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER }), NOW)).toBeNull();
+    expect(nextModerationState('take-offline', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER }), CTX)).toBeNull();
   });
 });
 
 describe('nextModerationState — remettre en ligne', () => {
   it("lève le retrait et rend l'audience que l'auteur avait choisie", () => {
-    const after = nextModerationState('restore', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER, moderationPriorVisibility: 'EXCEPT' }), NOW);
-    expect(after).toEqual({ visibility: 'EXCEPT', moderationHiddenAt: null, moderationPriorVisibility: null });
+    const after = nextModerationState('restore', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER, moderationHiddenById: 'admin', moderationPriorVisibility: 'EXCEPT' }), CTX);
+    expect(after).toEqual({ visibility: 'EXCEPT', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
   });
 
   it("n'écrase pas une audience que l'auteur a rouverte après une mise en privé", () => {
-    const after = nextModerationState('restore', state({ visibility: 'FRIENDS', moderationPriorVisibility: 'PUBLIC' }), NOW);
-    expect(after).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationPriorVisibility: null });
+    const after = nextModerationState('restore', state({ visibility: 'FRIENDS', moderationPriorVisibility: 'PUBLIC' }), CTX);
+    expect(after).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
   });
 
   it("laisse privée une publication que l'auteur avait rendue privée lui-même", () => {
-    const after = nextModerationState('restore', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER }), NOW);
-    expect(after).toEqual({ visibility: 'PRIVATE', moderationHiddenAt: null, moderationPriorVisibility: null });
+    const after = nextModerationState('restore', state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER }), CTX);
+    expect(after).toEqual({ visibility: 'PRIVATE', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
   });
 
   it("n'a rien à faire sur une publication jamais modérée", () => {
-    expect(nextModerationState('restore', state({ visibility: 'PUBLIC' }), NOW)).toBeNull();
+    expect(nextModerationState('restore', state({ visibility: 'PUBLIC' }), CTX)).toBeNull();
   });
 });
 
@@ -127,34 +133,23 @@ describe('publicationStateOf', () => {
   });
 });
 
-describe("heldAgainstAuthor — l'auteur ne rouvre pas l'audience d'une publication mise hors ligne", () => {
-  const POST = '507f1f77bcf86cd799439022';
-  const AUTHOR = '507f1f77bcf86cd799439011';
-  const OTHER = '507f1f77bcf86cd799439099';
-  const prismaWith = (row: { authorId: string; moderationHiddenAt: Date | null } | null) => {
-    const findFirst = jest.fn<any>().mockResolvedValue(row);
-    return { prisma: { post: { findFirst } }, findFirst };
-  };
+describe('liftsSomeoneElsesHold — lever le retrait d’un autre exige son rang', () => {
+  const held = state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER, moderationHiddenById: 'admin' });
+  const lifted = state({ visibility: 'PUBLIC' });
 
-  it("retient l'auteur qui rouvre une publication hors ligne", async () => {
-    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
-    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PUBLIC' })).toBe(true);
+  it('vaut vrai quand le retrait levé a été posé par un autre', () => {
+    expect(liftsSomeoneElsesHold(held, lifted, ACTOR)).toBe(true);
   });
 
-  it("laisse passer une publication en ligne", async () => {
-    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: null });
-    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PUBLIC' })).toBe(false);
+  it('vaut faux pour qui lève son propre retrait', () => {
+    expect(liftsSomeoneElsesHold(held, lifted, 'admin')).toBe(false);
   });
 
-  it("ne dit rien à un autre que l'auteur — aucun oracle sur l'état de modération", async () => {
-    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
-    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: OTHER, requestedVisibility: 'PUBLIC' })).toBe(false);
+  it('compte un signataire inconnu comme un autre — fail-closed', () => {
+    expect(liftsSomeoneElsesHold(state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER }), lifted, ACTOR)).toBe(true);
   });
 
-  it("ne lit rien quand l'audience ne change pas, ou reste privée", async () => {
-    const { prisma, findFirst } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
-    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: undefined })).toBe(false);
-    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PRIVATE' })).toBe(false);
-    expect(findFirst).not.toHaveBeenCalled();
+  it('vaut faux quand rien n’est levé', () => {
+    expect(liftsSomeoneElsesHold(state({ visibility: 'FRIENDS' }), state({ visibility: 'PRIVATE', moderationPriorVisibility: 'FRIENDS' }), ACTOR)).toBe(false);
   });
 });

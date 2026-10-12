@@ -102,6 +102,14 @@ struct ComposerCaptureBottomRow: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
+            .overlay(alignment: .bottomLeading) {
+                if ComposerCaptureGesture.offersRail(context) {
+                    ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
+                        .padding(.leading, MeeshySpacing.mdPlus)
+                        .padding(.bottom, ComposerLookStripRule.railBottomInset)
+                        .transition(.opacity)
+                }
+            }
             if showsHint {
                 Text(showsLock ? ComposerSceneCameraCopy.lockHint
                                : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
@@ -116,14 +124,6 @@ struct ComposerCaptureBottomRow: View {
             }
         }
         .padding(.bottom, MeeshySpacing.lg)
-        .overlay(alignment: .bottomLeading) {
-            if ComposerCaptureGesture.offersRail(context) {
-                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
-                    .transition(.opacity)
-            }
-        }
     }
 
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,

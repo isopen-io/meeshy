@@ -32,7 +32,7 @@ const mockShareWithTrackingLink = jest.fn<any>();
 const mockGetPostShareLink = jest.fn<any>();
 const mockRecordEngagementBatch = jest.fn<any>();
 const mockWithMutationLog = jest.fn<any>();
-
+jest.mock('../../../../services/posts/moderationHold', () => ({ ...(jest.requireActual('../../../../services/posts/moderationHold') as object), mayRepostSource: async () => true, audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }) })); // #10315 — gates witnessed in moderationHold.test.ts
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     likePost: (...a: any[]) => mockLikePost(...a),

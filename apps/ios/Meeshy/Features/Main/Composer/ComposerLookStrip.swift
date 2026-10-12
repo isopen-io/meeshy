@@ -167,7 +167,6 @@ struct ComposerLookStrip: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let scrollSpace = "composer.capture.band"
-    private static let labelHeight: CGFloat = 30
 
     /// La famille ouverte GARDE ses cases pendant l'enregistrement : basculer de la
     /// bande à la miniature seule annulerait l'appui long qui vient de lancer la
@@ -223,13 +222,13 @@ struct ComposerLookStrip: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
-                        .frame(height: Self.labelHeight, alignment: .bottom)
+                        .frame(height: ComposerLookStripRule.chosenNameHeight, alignment: .bottom)
                         .opacity(recording ? 0 : 1)
                         .accessibilityHidden(true)
                 }
             }
         }
-        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + Self.labelHeight)
+        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + ComposerLookStripRule.chosenNameHeight)
         .adaptiveOnChange(of: pressing) { _, tenu in
             guard !tenu else { return }
             session.releaseStaleHold()

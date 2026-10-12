@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { clickGeo } from './click-geo';
 import { logError } from '../../utils/logger';
@@ -477,7 +478,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
+      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
         return sendForbidden(reply, 'Accès non autorisé');
       }
 
