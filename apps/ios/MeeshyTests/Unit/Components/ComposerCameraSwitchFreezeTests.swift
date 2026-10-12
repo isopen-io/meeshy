@@ -60,6 +60,25 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
                        "le montage et chaque bascule publient leur entrée, après la validation")
     }
 
+    func test_previewMirroring_defaultsToShowingTheSystemLayer_andKeepsTheWish() {
+        let voeu = ComposerPreviewMirroring()
+        XCTAssertTrue(voeu.isWanted)
+        voeu.isWanted = false
+        XCTAssertFalse(voeu.isWanted)
+    }
+
+    func test_switch_alignsThePreviewConnection_insideItsTransaction() throws {
+        let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
+        let debut = try XCTUnwrap(modele.range(of: "ComposerCameraInputSwap.swap(in: session"))
+        let validee = try XCTUnwrap(modele.range(of: "let validee = CACurrentMediaTime()", range: debut.upperBound..<modele.endIndex))
+        XCTAssertTrue(modele[debut.upperBound..<validee.lowerBound]
+                        .contains("ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)"),
+                      "la connexion neuve de la couche prend son état AVANT la validation — jamais une écriture de plus après")
+        XCTAssertEqual(modele.components(separatedBy: "previewWanted: self.previewMirroring.isWanted").count - 1, 2)
+        let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(apercu.contains("session.camera.previewMirroring.isWanted = montre"))
+    }
+
     // MARK: - 2. Une session arrêtée par le système repart
 
     private final class Running: ComposerCaptureRunning, @unchecked Sendable {

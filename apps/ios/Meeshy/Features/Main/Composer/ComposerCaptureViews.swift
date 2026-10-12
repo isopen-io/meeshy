@@ -25,6 +25,13 @@ struct ComposerCapturePreview: View {
             && ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
     }
 
+    /// La couche système montre-t-elle l'objectif ? Le vœu suit aussi la bascule,
+    /// qui règle la connexion neuve dans sa transaction (#10308).
+    private var mirrorsSystemLayer: Bool {
+        ComposerCaptureSurfaceRule.mirrorsSystemLayer(paintsWithMetal: session.paintsWithMetal,
+                                                      metalHasFrame: metalHasFrame)
+    }
+
     /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
     private var editedSource: (any ComposerFrameSourcing)? {
         session.phase.isEditing ? session.editSource : nil
@@ -43,8 +50,7 @@ struct ComposerCapturePreview: View {
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
-                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame),
+                                           mirrorsFrames: mirrorsSystemLayer,
                                            connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
@@ -98,6 +104,9 @@ struct ComposerCapturePreview: View {
             case .permissionRefused:
                 CameraPermissionPanel()
             }
+        }
+        .adaptiveOnChange(of: mirrorsSystemLayer, initial: true) { _, montre in
+            session.camera.previewMirroring.isWanted = montre
         }
         .adaptiveOnChange(of: session.paintsWithMetal) { _, peint in
             if !peint { metalHasFrame = false }

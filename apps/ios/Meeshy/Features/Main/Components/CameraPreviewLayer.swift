@@ -129,3 +129,36 @@ final class CameraPreviewFocusPoints {
         return CGPoint(x: point.x - previewFrame.minX, y: point.y - previewFrame.minY)
     }
 }
+
+/// **Ce que la couche d'aperçu doit montrer, connu de la bascule** (#10308).
+///
+/// Une bascule refait la connexion de la couche, qui renaît ACTIVÉE. Quand la
+/// vue Metal peint, il fallait la désactiver après coup, depuis le fil
+/// principal : une écriture sur une session en marche, qui la reconfigure une
+/// seconde fois — l'aperçu gèle, noircit, juste après chaque retournement.
+/// La bascule la règle désormais DANS sa transaction, d'après ce vœu.
+nonisolated final class ComposerPreviewMirroring: @unchecked Sendable {
+    private let lock = NSLock()
+    private var wanted = true
+
+    var isWanted: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return wanted
+        }
+        set {
+            lock.lock()
+            wanted = newValue
+            lock.unlock()
+        }
+    }
+
+    /// Dans la configuration ouverte par l'appelant : les connexions de couche
+    /// d'aperçu prennent le vœu, les autres ne sont pas touchées.
+    static func align(_ connections: [AVCaptureConnection], wanted: Bool) {
+        for connexion in connections where connexion.videoPreviewLayer != nil && connexion.isEnabled != wanted {
+            connexion.isEnabled = wanted
+        }
+    }
+}

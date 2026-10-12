@@ -76,6 +76,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'entrée de l'autre objectif, prête avant la bascule (#9753).
     nonisolated let preparedInputs = ComposerCameraPreparedInputs<AVCaptureDeviceInput>()
     nonisolated let liveFeed = ComposerCameraFeed()
+    /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction (#10308).
+    nonisolated let previewMirroring = ComposerPreviewMirroring()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
     let fixture: ComposerCaptureFixtureDriver?
@@ -203,7 +205,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             self.frameOutput.setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)
             if self.session.canAddOutput(self.frameOutput) { self.session.addOutput(self.frameOutput) }
             let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
-                                                  prepared: self.preparedInputs)
+                                                  prepared: self.preparedInputs,
+                                                  previewWanted: self.previewMirroring.isWanted)
             let micro = armeLeMicro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
@@ -291,7 +294,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated private static func installVideoInput(
         in session: AVCaptureSession, position: AVCaptureDevice.Position,
         outputs: [(AVCaptureOutput, ComposerCaptureMirrorRule.Output)],
-        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>
+        prepared: ComposerCameraPreparedInputs<AVCaptureDeviceInput>,
+        previewWanted: Bool
     ) -> InstalledCamera? {
         let ancienne = session.inputs.compactMap { $0 as? AVCaptureDeviceInput }.first { $0.device.hasMediaType(.video) }
         let nouvelle = prepared.take(position) ?? videoInput(position: position)
@@ -301,6 +305,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                                                                        old: ancienne?.device.position) {
                 orient(outputs, for: objectif)
             }
+            ComposerPreviewMirroring.align(session.connections, wanted: previewWanted)
             guard issue == .swapped, let device = nouvelle?.device, let echelle else { return }
             openLens(device, opening: echelle.opening)
         }
@@ -437,7 +442,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                 self.paintCover(ComposerCameraSwitchRule.Frame(image: trame), generation: generation, leaving: quitte)
             }
             let installe = Self.installVideoInput(in: self.session, position: position, outputs: self.orientedOutputs,
-                                                  prepared: self.preparedInputs)
+                                                  prepared: self.preparedInputs,
+                                                  previewWanted: self.previewMirroring.isWanted)
             let posee = CACurrentMediaTime()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
