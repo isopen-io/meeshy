@@ -344,7 +344,9 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 //   primary) hors du contexte conversation que vise CLAUDE.md § Conversation
 //   Accent Color.
 // Valeur MESURÉE le 2026-10-11 (CI 38162549528).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 458;
+// 458 -> 457 (2026-10-13) : une variable inconnue a quitté le code iOS sur dev ; le cliquet
+// enregistre la baisse (CI 38320669253, « AMÉLIORATION NON ENREGISTRÉE » sur 457).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 457;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
