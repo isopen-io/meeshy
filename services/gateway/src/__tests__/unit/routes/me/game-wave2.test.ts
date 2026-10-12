@@ -362,6 +362,16 @@ describe('PUT /game/privacy', () => {
 });
 
 describe('GET /users/:userId/game/showcase', () => {
+  // Un visiteur ne voit un trophée qu'au 1er du mois qui suit son obtention (#10240) : ces témoins lisent la
+  // vitrine en janvier 2027, après tous les trophées qu'ils gravent. Seule l'horloge `Date` est simulée.
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: new Date('2027-01-15T12:00:00Z'),
+      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+  });
+  afterEach(() => jest.useRealTimers());
+
   const showcaseApp = async (db: FakeGameDb, viewerId: string, role = 'USER') => {
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', db.prisma as never);
