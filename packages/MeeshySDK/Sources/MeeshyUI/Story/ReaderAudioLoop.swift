@@ -98,6 +98,12 @@ nonisolated enum ReaderLoopEnvelope {
         return pass > 0 ? pass : occupied
     }
 
+    /// Le tour du FOND (#10369) : sans déclaration, un fond boucle au lecteur
+    /// (`ReaderAudioLoopPolicy`) — ses fondus y encadrent donc le span occupé.
+    static func backgroundCycle(declaredLoop: Bool?, occupiedDuration: Double, passLength: Double) -> Double {
+        cycle(declaredLoop: declaredLoop ?? true, occupiedDuration: occupiedDuration, passLength: passLength)
+    }
+
     /// Volume à l'instant `elapsedInClip` (secondes depuis le début du clip,
     /// tous tours confondus). Un écoulé négatif — le clip n'a pas commencé —
     /// vaut le début du tour.

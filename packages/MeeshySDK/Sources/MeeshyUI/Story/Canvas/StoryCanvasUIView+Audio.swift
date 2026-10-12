@@ -318,7 +318,8 @@ extension StoryCanvasUIView {
                             url: localURL,
                             looping: ReaderAudioLoopPolicy.loops(declared: background.loop,
                                                                  isBackground: true,
-                                                                 isEditPreview: isEditPreview)
+                                                                 isEditPreview: isEditPreview),
+                            loopsEveryClip: isEditPreview
                         )
                     } catch {
                         os.Logger.storyAudio.error(
