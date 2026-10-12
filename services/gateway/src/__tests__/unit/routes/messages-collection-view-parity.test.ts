@@ -151,6 +151,7 @@ function ligne(
     viewOnceCount: 0,
     isBlurred: false,
     effectFlags: 0,
+    ephemeralDuration: null,
     expiresAt: null,
     pinnedAt: hors.ordinaire ? null : new Date('2026-08-20T12:00:00.000Z'),
     pinnedBy: SENDER_PARTICIPANT_ID,
@@ -797,19 +798,30 @@ describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', ()
     expect(champsVue.length).toBeGreaterThan(champsDediee.length);
   });
 
-  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message à vue unique reste `isViewOnce: true` (#4885)', async () => {
+  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message flouté reste `isBlurred: true` (#4885)', async () => {
     // Le témoin ci-dessus ne prouve que la présence de la clé — un `undefined`
     // aurait aussi bien traversé `toContain`. Le témoin décisif porte sur la
-    // CONSÉQUENCE : le garde de transfert (`BubbleMessageNormalView.tsx`,
-    // `!message.isViewOnce`) doit lire `true`, pas une clé vidée.
+    // CONSÉQUENCE : le client doit lire `true`, pas une clé vidée. Depuis
+    // #10429, un message à vue unique n'est plus TROUVÉ du tout (témoin
+    // suivant) : le flou, qui n'est pas une disparition, porte la preuve.
     const protege = JEU.map((r) =>
-      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+      r.id === M_OK ? { ...r, isBlurred: true, effectFlags: 2 } : r
     );
     const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: protege });
     const servi = dediee.corps.data.find((m: any) => m.id === M_OK);
-    expect(servi.isViewOnce).toBe(true);
+    expect(servi.isViewOnce).toBe(false);
     expect(servi.isBlurred).toBe(true);
-    expect(servi.effectFlags).toBe(5);
+    expect(servi.effectFlags).toBe(2);
+  });
+
+  it('un message à vue unique ne sort plus par aucune des deux surfaces de recherche (#10429)', async () => {
+    const vueUnique = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: vueUnique });
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`, { jeu: vueUnique });
+    expect(ids(dediee.corps)).not.toContain(M_OK);
+    expect(ids(vue.corps)).not.toContain(M_OK);
   });
 });
 

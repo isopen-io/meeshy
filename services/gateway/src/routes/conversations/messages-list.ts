@@ -678,6 +678,7 @@ export function registerMessagesListRoute(
         const inheritedAt = new Date();
         const alive = messages.filter((message: { id: string }) =>
           isServableThroughQuotes(inheritedDeadlines, message.id, inheritedAt)
+          && !(searchMode && inheritedDeadlines.has(message.id))
         );
         if (alive.length !== messages.length) {
           messages.length = 0;
