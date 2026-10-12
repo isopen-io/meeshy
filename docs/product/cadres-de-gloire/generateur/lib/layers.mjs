@@ -5,16 +5,20 @@
 //   grade-<n>           le décor, découpé en PASSES consécutives de même mode de fusion (normal, screen,
 //                       multiply…) : hors de la fenêtre elles forment `decor`, dans la fenêtre chaque passe est une
 //                       couche `grade` posée sur la photo dans l'ordre du SVG, avec son mode
-//   front-under         un décor dessiné après le blason ou la plaque, mais avant le DERNIER oiseau (la lueur
-//                       posée sous chaque oiseau en fait partie)
-//   front-over          un décor dessiné après le dernier oiseau
+//   front:<rang>        un décor dessiné après le premier ancrage (blason, plaque, oiseau), en PASSES ordonnées
+//                       comme le grade : chaque suite d'éléments entre deux ancrages prend le rang de l'ancrage
+//                       qu'elle PRÉCÈDE — `under-birds` (la lueur posée sous chaque oiseau en fait partie),
+//                       `under-plate`, `under-crest` — et la suite qui suit le dernier ancrage est `over-birds`.
+//                       Une lueur dessinée après la plaque reste ainsi AU-DESSUS d'elle, et le liseré dessiné
+//                       avant elle, dessous.
 //   crest, plate, birds le blason, le panneau de la plaque, Mee et Meo posés (lib/base.py, bird()) ; une image
 //                       de Mee hors d'un oiseau posé (frappée sur une pièce, en hologramme) est une ILLUSTRATION
 //                       du décor, comptée à part (`art`)
 //   text                tout `<text>` (et ses tspan, textPath) : un emplacement vivant
 // Un élément de définition (masque, motif, filtre, dégradé…) n'est jamais touché : seul ce qui se PEINT l'est.
 
-export const KINDS = ['photo', 'photo-bg', 'backdrop', 'grade-<n>', 'front-under', 'front-over', 'crest', 'plate', 'birds', 'text'];
+export const KINDS = ['photo', 'photo-bg', 'backdrop', 'grade-<n>', 'front:<rang>', 'crest', 'plate', 'birds', 'text'];
+export const isFront = (kind) => kind.startsWith('front:');
 
 export function classify() {
   const DEFS = new Set(['defs', 'mask', 'clippath', 'pattern', 'filter', 'lineargradient', 'radialgradient', 'symbol', 'marker', 'style', 'title', 'desc', 'metadata']);
@@ -48,15 +52,17 @@ export function classify() {
   const first = (pred) => tagged.findIndex(pred);
   const firstPhoto = first((k) => k === 'photo' || k === 'photo-bg');
   const firstAnchor = first((k) => k === 'crest' || k === 'plate' || k === 'birds');
-  const lastBird = tagged.findLastIndex((k) => k === 'birds');
+  const ANCHORS = new Set(['crest', 'plate', 'birds']);
+  const nextAnchor = new Array(all.length).fill(null);
+  for (let i = all.length - 2; i >= 0; i--) nextAnchor[i] = ANCHORS.has(tagged[i + 1]) ? tagged[i + 1] : nextAnchor[i + 1];
+  const RANKS = { crest: 'under-crest', plate: 'under-plate', birds: 'under-birds' };
   const blends = all.map((el, i) => (tagged[i] || CONTAINERS.has(el.tagName.toLowerCase()) ? 'normal' : blendOf(el)));
   const runs = [];
   all.forEach((el, i) => {
     const kind = tagged[i] ?? (() => {
       if (CONTAINERS.has(el.tagName.toLowerCase())) return 'group';
       if (firstPhoto >= 0 && i < firstPhoto) return 'backdrop';
-      if (lastBird >= 0 && i > lastBird) return 'front-over';
-      if (firstAnchor >= 0 && i > firstAnchor) return 'front-under';
+      if (firstAnchor >= 0 && i > firstAnchor) return `front:${nextAnchor[i] ? RANKS[nextAnchor[i]] : 'over-birds'}`;
       if (runs.at(-1)?.blend !== blends[i]) runs.push({ kind: `grade-${runs.length}`, blend: blends[i] });
       return runs.at(-1).kind;
     })();

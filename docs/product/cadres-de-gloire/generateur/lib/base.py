@@ -18,6 +18,7 @@ import base64
 import functools
 import inspect
 import math
+import os
 import random
 import re
 import sys
@@ -200,20 +201,33 @@ def nid(prefix="k"):
     return Card.current.nid(prefix)
 
 
+PLATE_VARIANT = os.environ.get("CADRES_PLATE")
+PLATE_SAMPLE_MESSAGE = "On brille ensemble"
+
+
 def plate_layer(fn=None, **aliases):
     """Une fonction d'inscription ou de panneau de plaque : tout ce qu'elle dessine — qu'elle l'ajoute au cadre ou
     qu'elle le RENDE en balisage — tombe dans la couche `plate`, et ses arguments `kicker`, `title`, `message`, `date`
     nomment les emplacements de texte qu'elle pose. `aliases` relie une clé à un autre argument :
-    `@plate_layer(title="palier")`."""
+    `@plate_layer(title="palier")`.
+
+    `CADRES_PLATE=plain|message` rejoue la plaque dans l'AUTRE variante que celle du cadre (§ 5.1 : la hauteur du
+    panneau change avec le message) : `plain` retire le message, `message` garde celui du cadre ou pose
+    PLATE_SAMPLE_MESSAGE. Seule la plaque change ; l'exportateur vérifie que le décor reste identique au pixel."""
     if fn is None:
         return lambda f_: plate_layer(f_, **aliases)
     sig = inspect.signature(fn)
     names = {key: aliases.get(key, key) for key in ("kicker", "title", "message", "date")}
+    message_arg = names["message"] if names["message"] in sig.parameters else None
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         bound = sig.bind(*args, **kwargs)
         bound.apply_defaults()
+        if PLATE_VARIANT and message_arg:
+            current = bound.arguments.get(message_arg)
+            bound.arguments[message_arg] = None if PLATE_VARIANT == "plain" else (current or PLATE_SAMPLE_MESSAGE)
+            args, kwargs = bound.args, bound.kwargs
         card = args[0]
         card.slots(**{key: bound.arguments.get(arg) for key, arg in names.items()})
         with card.layer("plate"):

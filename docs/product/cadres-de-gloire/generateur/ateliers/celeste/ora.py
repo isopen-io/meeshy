@@ -169,6 +169,7 @@ def oraC():
     crest(c, 270, 132, 0.8, "redgold", division=None, gem=GEM)
     plate(c, "Orateur", message="On l'a fait ensemble", y=756, style="jade")
     duo(c, [(80, 756, 108, False, -4), (466, 758, 108, True, 4)], "mee-bravo", "meo-trophee")
+    c.motif("afrique")
     finish(c, "orateur-c", "orateur", None, "C", "Le Carillon et les cauris",
            "Un portique de carillon : six cloches de bronze à bossettes (bianzhong) sous une poutre laquée, un disque de jade bi derrière "
            "le blason, et des ondes d'or qui se propagent comme la voix. Un peu d'Afrique y est tissé : les poteaux sont habillés de bandes "

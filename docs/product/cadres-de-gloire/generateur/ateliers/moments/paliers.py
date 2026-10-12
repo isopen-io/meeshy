@@ -24,6 +24,7 @@ def kicker(n):
 
 def lueur():
     c = Card("pl1")
+    c.motif("afrique")
     photo(c, top="#2E2642", bottom="#120E1C", rim="#FFD9A0", glow=0.2)
     win = arch(82, 458, 418, 268, 728)
     ink = "#0B0716"

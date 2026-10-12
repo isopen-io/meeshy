@@ -1,4 +1,4 @@
-# Une étape du jeu franchie app fermée arrive en UNE notification discrète, regroupée, dans le plafond du jeu (2026-10-12, #10175)
+## Une étape du jeu franchie app fermée arrive en UNE notification discrète, regroupée, dans le plafond du jeu (2026-10-12, #10175)
 
 **Contexte.** Chantier « Cadres de gloire », lot L19 (`docs/product/cadres-de-gloire/PROMPT-developpement.md` § 5.16.4). Une étape du jeu (rang, palier, Flamme, Meesh, trésor…) peut être franchie pendant que l'app est fermée — des points reçus, une Flamme constatée. L'hôte de l'app la présente au retour ; sans push, l'utilisateur ne l'apprend qu'en rouvrant. Les décisions produit D8, D9 et D13 (#10183) restent ouvertes : ce lot suit la RECOMMANDATION écrite de la spec, réversible.
 

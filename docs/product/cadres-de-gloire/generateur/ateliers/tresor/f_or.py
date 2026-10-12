@@ -48,6 +48,7 @@ def gold_cartouche(card, x0, y0, x1, y1, key="gc", panel="#140A02", op=0.86):
 
 def tresor_a():
     c = start("ta", "#4A2E12", "#160C04", "#FFD27A", 0.3)
+    c.motif("afrique")
     x0, x1, spring, y1 = 84, 456, 432, 716
     win = arch(x0, x1, spring, y1, 20)
     with masked(c, win, "w"):

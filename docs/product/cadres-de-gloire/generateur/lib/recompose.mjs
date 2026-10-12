@@ -102,9 +102,8 @@ async function judge(handle, { collection, frame }) {
     window: await placed(dir, frame.window.mask),
     decor: await placed(dir, L.decor),
     ...Object.fromEntries(await Promise.all((L.grade ?? []).map(async (layer, n) => [`grade:${n}`, await placed(dir, layer)]))),
-    'front:under-birds': await placed(dir, L.front?.['under-birds']),
-    'front:over-birds': await placed(dir, L.front?.['over-birds']),
-    plate: await placed(dir, Object.values(L.plate ?? {})[0]),
+    ...Object.fromEntries(await Promise.all(Object.entries(L.front ?? {}).map(async ([rank, layer]) => [`front:${rank}`, await placed(dir, layer)]))),
+    plate: await placed(dir, L.plate?.[frame.message ? 'message' : 'plain']),
   };
   const canvas = Buffer.alloc(FW * FH * 4);
   for (const step of frame.stack) {
@@ -127,7 +126,7 @@ async function judge(handle, { collection, frame }) {
       const out = excluded(i % FW, Math.floor(i / FW));
       gap.writeUInt32BE(out ? 0x30303080 : d > TOLERANCE.delta ? 0xff2020ff : ((ref[p] >> 2) << 24) | ((ref[p + 1] >> 2) << 16) | ((ref[p + 2] >> 2) << 8) | 0xff, p);
     }
-    const tiles = [['decor', files.decor], ['fenêtre', files.window], ['grade', Object.entries(files).find(([k, v]) => k.startsWith('grade:') && v)?.[1]], ['avant', files['front:under-birds'] ?? files['front:over-birds']], ['plaque', files.plate], ['recomposé', canvas], ['référence', ref], ['écart', gap]];
+    const tiles = [['decor', files.decor], ['fenêtre', files.window], ['grade', Object.entries(files).find(([k, v]) => k.startsWith('grade:') && v)?.[1]], ['avant', Object.entries(files).find(([k, v]) => k.startsWith('front:') && v)?.[1]], ['plaque', files.plate], ['recomposé', canvas], ['référence', ref], ['écart', gap]];
     const tw = 360, th = 640, pad = 12;
     const composites = await Promise.all(tiles.map(async ([, buf], i) => ({
       input: await sharp(buf ?? Buffer.alloc(FW * FH * 4), { raw: { width: FW, height: FH, channels: 4 } }).resize(tw, th).png().toBuffer(),
