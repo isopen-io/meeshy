@@ -61,8 +61,11 @@ final class LoadingSheenSourceGuardTests: XCTestCase {
     private static let sheenToken = try! NSRegularExpression(pattern: "(?i)(shimmer|sheen)")
     private static let animationPrimitives = ["repeatForever(", "CABasicAnimation(", "TimelineView("]
 
-    /// Tout fichier de MeeshyUI qui nomme un reflet ET porte une primitive
-    /// d'animation sans fin est un reflet jumeau. Un seul est permis.
+    /// Toute déclaration de premier niveau de MeeshyUI qui nomme un reflet ET
+    /// porte une primitive d'animation sans fin est un reflet jumeau. Un seul
+    /// fichier en porte. Le découpage par déclaration évite de compter les
+    /// effets voisins (`PulseEffect`, `BreathingGlow`) d'un fichier qui
+    /// déclare aussi `.shimmer()`.
     func test_meeshyUI_hasExactlyOneAnimatedSheen() throws {
         let found = try Self.allMeeshyUISources()
             .filter { Self.isAnimatedSheen($0.code) }
@@ -110,6 +113,23 @@ final class LoadingSheenSourceGuardTests: XCTestCase {
         XCTAssertTrue(Self.isAnimatedSheen(twin))
     }
 
+    func test_guardIgnoresANeighbourEffectOfTheSameFile() {
+        let file = """
+        public struct ShimmerEffect: ViewModifier {
+            public func body(content: Content) -> some View {
+                content.modifier(LoadingSheen(style: .veil))
+            }
+        }
+
+        public struct PulseEffect: ViewModifier {
+            public func body(content: Content) -> some View {
+                content.animation(.easeInOut.repeatForever(autoreverses: true), value: x)
+            }
+        }
+        """
+        XCTAssertFalse(Self.isAnimatedSheen(file))
+    }
+
     func test_guardIgnoresAStaticPlaceholderAndComments() {
         let sample = ComposerSourceGuard.stripComments("""
         // l'ancien shimmer utilisait repeatForever(autoreverses: false)
@@ -121,9 +141,11 @@ final class LoadingSheenSourceGuardTests: XCTestCase {
     // MARK: - Outils
 
     private static func isAnimatedSheen(_ code: String) -> Bool {
-        let range = NSRange(code.startIndex..., in: code)
-        guard sheenToken.firstMatch(in: code, range: range) != nil else { return false }
-        return animationPrimitives.contains { code.contains($0) }
+        code.components(separatedBy: "\n}\n").contains { declaration in
+            let range = NSRange(declaration.startIndex..., in: declaration)
+            guard sheenToken.firstMatch(in: declaration, range: range) != nil else { return false }
+            return animationPrimitives.contains { declaration.contains($0) }
+        }
     }
 
     private static func source(_ relative: String) throws -> String {

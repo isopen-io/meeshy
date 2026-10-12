@@ -126,19 +126,24 @@ public struct LoadingSheen: ViewModifier {
         )
     }
 
+    private var sheenLayer: some View {
+        LoadingSheenLayer(style: style)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
     @ViewBuilder
     public func body(content: Content) -> some View {
         if style.masksToContent {
             content.overlay {
                 if animates {
-                    LoadingSheenLayer(style: style)
-                        .mask { content }
+                    sheenLayer.mask { content }
                 }
             }
         } else {
             content
                 .overlay {
-                    if animates { LoadingSheenLayer(style: style) }
+                    if animates { sheenLayer }
                 }
                 .clipped()
         }
@@ -237,7 +242,7 @@ final class LoadingSheenView: UIView {
 
         guard visible else { return }
         let sweep = CABasicAnimation(keyPath: "transform.translation.x")
-        sweep.fromValue = 0
+        sweep.fromValue = CGFloat.zero
         sweep.toValue = width + bandWidth
         sweep.duration = duration
         sweep.repeatCount = .infinity
