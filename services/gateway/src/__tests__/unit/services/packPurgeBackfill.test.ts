@@ -83,4 +83,27 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
       totals: { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0 },
     });
   });
+
+  it("ne touche pas un compte VIVANT dont le pseudo commence par le préfixe d'anonymisation", async () => {
+    const PIEGE = '507f1f77bcf86cd799439044';
+    const db = fakePackDb({
+      user: [
+        { id: PIEGE, username: 'compte-supprime-', email: 'piege@example.com' },
+        { id: PARTI, username: `compte-supprime-${PARTI}`, email: `compte-supprime-${PARTI}@deleted.meeshy.invalid` },
+      ],
+      userStickerPack: [{ id: 'c9', userId: PIEGE, packSlug: 'mee', installedAt: new Date(), updatedAt: new Date() }],
+      userSticker: [{ id: 's9', userId: PIEGE, filePath: `stickers/${PIEGE}/z.webp` }],
+      stickerPack: [{ id: 'p9', submitterId: PIEGE, status: 'pending', author: 'Piège' }],
+      stickerPackItem: [{ id: 'i9', packId: 'p9', filePath: 'sticker-packs/p9/y.webp' }],
+    });
+    const files = fakeFileStore([`stickers/${PIEGE}/z.webp`, 'sticker-packs/p9/y.webp']);
+
+    const report = await backfillPackPurge(db as never, { files: files.store, dryRun: false });
+
+    expect(report.accountsScanned).toBe(1);
+    expect(db.tables.userStickerPack.rows.map((row) => row.id)).toEqual(['c9']);
+    expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s9']);
+    expect(db.tables.stickerPack.rows.map((row) => row.id)).toEqual(['p9']);
+    expect(files.removed).toEqual([]);
+  });
 });

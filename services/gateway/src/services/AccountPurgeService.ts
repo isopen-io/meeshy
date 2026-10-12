@@ -119,7 +119,8 @@ const ANONYMIZED_MARKER = 'compte-supprime';
 /** Le préfixe du `username` d'un compte anonymisé — ce par quoi un rattrapage retrouve les comptes déjà purgés. */
 export const ANONYMIZED_USERNAME_PREFIX = `${ANONYMIZED_MARKER}-`;
 
-function anonymizedUsername(userId: string): string {
+/** Le pseudo EXACT d'un compte anonymisé : préfixe + ses 24 hex, hors de portée de toute validation de pseudo (≤ 32). */
+export function anonymizedUsername(userId: string): string {
   return `${ANONYMIZED_USERNAME_PREFIX}${userId}`;
 }
 

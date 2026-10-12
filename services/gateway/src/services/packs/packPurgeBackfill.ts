@@ -8,12 +8,17 @@
  * isolée) — jamais un compte vivant, ni un compte encore dans sa grâce — et
  * leur applique la même purge, la même fonction, sans réécrire la règle.
  *
+ * Le préfixe ne sert qu'à l'INDEX : « compte-supprime- » est un pseudo
+ * recevable (16 caractères, lettres et tirets), qu'un compte vivant peut
+ * porter. Seul le pseudo EXACT — préfixe + l'id du compte lui-même, 40
+ * caractères qu'aucune validation n'accepte — prouve l'anonymisation.
+ *
  * `dryRun` mesure par `measurePackData`, l'inventaire même de la purge : il
  * compte lignes et fichiers sans rien écrire. Idempotent : rejoué, il ne
  * trouve plus rien.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ANONYMIZED_USERNAME_PREFIX } from '../AccountPurgeService';
+import { ANONYMIZED_USERNAME_PREFIX, anonymizedUsername } from '../AccountPurgeService';
 import { measurePackData, purgePackData, type PackFileStore, type PackPrivacyDb, type PackPurgeSummary } from './PackPrivacy';
 
 export type PackPurgeBackfillOptions = {
@@ -51,13 +56,14 @@ export async function backfillPackPurge(
   let report: PackPurgeBackfillReport = { accountsScanned: 0, accountsWithData: 0, totals: ZERO };
 
   for (;;) {
-    const accounts: readonly { id: string }[] = await prisma.user.findMany({
+    const accounts: readonly { id: string; username: string }[] = await prisma.user.findMany({
       where: { username: { startsWith: ANONYMIZED_USERNAME_PREFIX }, ...(cursor ? { id: { gt: cursor } } : {}) },
-      select: { id: true },
+      select: { id: true, username: true },
       orderBy: { id: 'asc' },
       take,
     });
-    for (const { id } of accounts) {
+    const anonymized = accounts.filter(({ id, username }) => username === anonymizedUsername(id));
+    for (const { id } of anonymized) {
       const summary = await step(prisma, id, { files: options.files });
       options.onAccount?.(id, summary);
       report = {
