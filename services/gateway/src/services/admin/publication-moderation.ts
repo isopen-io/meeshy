@@ -1,6 +1,4 @@
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
-import { isValidObjectId } from '@meeshy/shared/utils/object-id';
-import { NOT_DELETED } from '../posts/softDelete';
 
 /**
  * **LA LOI DES TROIS GESTES DE MODÉRATION D'UNE PUBLICATION** (#10315).
@@ -12,17 +10,21 @@ import { NOT_DELETED } from '../posts/softDelete';
  *
  * - « Mettre en privé » : l'audience est réduite à l'auteur. L'auteur peut la
  *   rouvrir lui-même — c'est une mise à l'écart douce.
- * - « Mettre hors ligne » : même effet de lecture, daté par `moderationHiddenAt`,
- *   et l'auteur ne peut plus rouvrir l'audience tant que le retrait tient.
+ * - « Mettre hors ligne » : même effet de lecture, daté par `moderationHiddenAt`
+ *   et signé par `moderationHiddenById` ; l'auteur ne peut plus rouvrir
+ *   l'audience tant que le retrait tient (`services/posts/moderationHold.ts`).
  * - « Remettre en ligne » : lève le retrait et rend l'audience que l'auteur avait
  *   choisie (`moderationPriorVisibility`).
  *
- * **Retirer passe par `visibility = PRIVATE`, à dessein.** Toutes les portes de
- * lecture du dépôt (fil, profil, détail, lien public `/post/<id>`, commentaires,
+ * **Retirer passe par `visibility = PRIVATE`, à dessein.** Les portes de lecture
+ * du dépôt (fil, profil, détail, lien public `/post/<id>`, commentaires,
  * réactions, vues) jugent déjà la visibilité : PRIVATE n'est servi qu'à l'auteur,
- * et l'administration lit par ses propres routes. Ajouter un second prédicat à
- * chacune de ces portes (plus de cent sites lisent `NOT_DELETED`) aurait ouvert
- * cent occasions d'en oublier un ; la visibilité, elle, est déjà tenue partout.
+ * et l'administration lit par ses propres routes. Trois portes ne la jugeaient
+ * pas et ont été fermées dans le même lot : la relecture de secours d'un
+ * référencé (`PostService.getPostById`), l'original imbriqué d'une
+ * republication (`postReferences.ts`), la citation d'une publication dans un
+ * message (`servedPostReply.ts`) ; et l'on ne republie plus une source qu'on ne
+ * peut pas lire (`moderationHold.ts`).
  */
 
 export const POST_MODERATION_ACTIONS = ['make-private', 'take-offline', 'restore'] as const;
@@ -34,6 +36,7 @@ export const POST_MODERATION_BATCH_MAX = 50;
 export type PostModerationState = {
   readonly visibility: PostVisibility;
   readonly moderationHiddenAt: Date | null;
+  readonly moderationHiddenById: string | null;
   readonly moderationPriorVisibility: PostVisibility | null;
 };
 
@@ -41,31 +44,45 @@ const PRIVATE: PostVisibility = 'PRIVATE';
 
 function makePrivate(current: PostModerationState): PostModerationState | null {
   if (current.visibility === PRIVATE) return null;
-  return { visibility: PRIVATE, moderationHiddenAt: current.moderationHiddenAt, moderationPriorVisibility: current.visibility };
+  return { ...current, visibility: PRIVATE, moderationPriorVisibility: current.visibility };
 }
 
-function takeOffline(current: PostModerationState, now: Date): PostModerationState | null {
+function takeOffline(current: PostModerationState, now: Date, actorId: string): PostModerationState | null {
   if (current.moderationHiddenAt !== null) return null;
   const prior = current.visibility === PRIVATE ? current.moderationPriorVisibility : current.visibility;
-  return { visibility: PRIVATE, moderationHiddenAt: now, moderationPriorVisibility: prior };
+  return { visibility: PRIVATE, moderationHiddenAt: now, moderationHiddenById: actorId, moderationPriorVisibility: prior };
 }
 
 function restore(current: PostModerationState): PostModerationState | null {
   if (current.moderationHiddenAt === null && current.moderationPriorVisibility === null) return null;
   const rendue = current.visibility === PRIVATE && current.moderationPriorVisibility !== null ? current.moderationPriorVisibility : current.visibility;
-  return { visibility: rendue, moderationHiddenAt: null, moderationPriorVisibility: null };
+  return { visibility: rendue, moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null };
 }
 
 /** L'état d'après le geste, ou `null` quand le geste ne change rien (déjà fait). */
-export function nextModerationState(action: PostModerationAction, current: PostModerationState, now: Date): PostModerationState | null {
+export function nextModerationState(
+  action: PostModerationAction,
+  current: PostModerationState,
+  context: { readonly now: Date; readonly actorId: string },
+): PostModerationState | null {
   switch (action) {
     case 'make-private':
       return makePrivate(current);
     case 'take-offline':
-      return takeOffline(current, now);
+      return takeOffline(current, context.now, context.actorId);
     case 'restore':
       return restore(current);
   }
+}
+
+/**
+ * Le geste LÈVE-t-il un retrait posé par quelqu'un d'autre ? Alors il exige un
+ * rang au moins égal à celui de qui l'a posé — sans quoi un modérateur défait,
+ * d'un geste, le retrait qu'un administrateur vient de décider. Un signataire
+ * INCONNU (`null`) compte comme un autre : fail-closed.
+ */
+export function liftsSomeoneElsesHold(before: PostModerationState, after: PostModerationState, actorId: string): boolean {
+  return before.moderationHiddenAt !== null && after.moderationHiddenAt === null && before.moderationHiddenById !== actorId;
 }
 
 /** Le geste retire-t-il la publication à une audience qui la lisait ? Alors les clients doivent l'oublier. */
@@ -90,35 +107,4 @@ export function publicationStateOf(
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) return 'expired';
   if (row.visibility === PRIVATE) return 'private';
   return 'online';
-}
-
-export type ModerationHoldPrisma = {
-  readonly post: {
-    readonly findFirst: (args: {
-      where: { id: string; deletedAt: typeof NOT_DELETED };
-      select: { authorId: true; moderationHiddenAt: true };
-    }) => Promise<{ authorId: string; moderationHiddenAt: Date | null } | null>;
-  };
-};
-
-/**
- * L'AUTEUR demande-t-il de rouvrir l'audience d'une publication que la
- * modération a mise hors ligne ? Alors `PUT /posts/:postId` refuse : sans cette
- * garde, « Mettre hors ligne » ne tiendrait que jusqu'à la prochaine édition.
- *
- * Elle ne répond OUI qu'à l'auteur : à tout autre, le refus ordinaire (« pas
- * l'auteur ») tombe plus loin, et l'état de modération ne fuit pas par la
- * différence entre deux 403. Rester ou passer en PRIVATE n'est jamais retenu.
- */
-export async function heldAgainstAuthor(
-  prisma: ModerationHoldPrisma,
-  params: { readonly postId: string; readonly userId: string; readonly requestedVisibility: PostVisibility | undefined },
-): Promise<boolean> {
-  if (params.requestedVisibility === undefined || params.requestedVisibility === PRIVATE) return false;
-  if (!isValidObjectId(params.postId)) return false;
-  const row = await prisma.post.findFirst({
-    where: { id: params.postId, deletedAt: NOT_DELETED },
-    select: { authorId: true, moderationHiddenAt: true },
-  });
-  return row !== null && row.authorId === params.userId && row.moderationHiddenAt !== null;
 }

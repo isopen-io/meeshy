@@ -144,6 +144,8 @@ const f = {
   'admin.audit.action.ADMIN_COMMUNITY_UPDATED.explain': 'A community’s activation or visibility was changed by an administrator.',
   'admin.audit.action.DELETE_POST': 'Post removed',
   'admin.audit.action.DELETE_POST.explain': 'A piece of content was removed by an authorised third party, not by its author: it is a moderation gesture.',
+  'admin.audit.action.MODERATE_POST': 'Post visibility moderated',
+  'admin.audit.action.MODERATE_POST.explain': 'A post was made private, taken offline or put back online from its author’s record; the detail keeps the audience before and after.',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'World Wide participant card read',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Sovereign read, for moderation, of the setup of someone who entered World Wide — guests included: languages, country, browser and device, entry date, link used. Never an IP address.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Content viewer list read',

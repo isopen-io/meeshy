@@ -2295,7 +2295,7 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
-      "hierarchyGated": false,
+      "hierarchyGated": true,
       "adminPrefixed": true
     },
     {
