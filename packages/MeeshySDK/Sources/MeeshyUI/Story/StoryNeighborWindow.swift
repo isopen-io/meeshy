@@ -91,14 +91,163 @@ public nonisolated enum StoryNeighborWindow {
         direction: StoryNavigationDirection,
         budget: Budget = .standard
     ) -> [StoryNeighborPreparation] {
-        []
+        guard groups.indices.contains(current.group),
+              (0..<groups[current.group].slideCount).contains(current.slide) else { return [] }
+
+        let ring = ringPreparations(from: current, groups: groups, direction: direction, radius: budget.radius)
+        let reserved = Set(ring.map(\.position)).union([current])
+        let rest = groupSlidesByDistance(from: current, groups: groups, direction: direction)
+            .filter { !reserved.contains($0) }
+            .prefix(max(budget.restOfGroup, 0))
+        let tail = Array(rest)
+            + followingGroupEntries(after: current.group, groups: groups, budget: budget)
+            + [landing(in: previousGroup(before: current.group, groups: groups), groups: groups)].compactMap { $0 }
+
+        let extended = tail
+            .filter { !reserved.contains($0) }
+            .reduce(into: [StorySlidePosition]()) { kept, position in
+                if !kept.contains(position) { kept.append(position) }
+            }
+            .map { StoryNeighborPreparation(position: $0, distance: nil) }
+        return ring + extended
     }
 
+    /// Lit le sens du dernier passage dans le déplacement lui-même : un groupe
+    /// plus loin, ou une slide plus loin dans le même groupe, c'est avancer.
+    /// Sans déplacement, le sens précédent tient.
     public static func direction(
         from previous: StorySlidePosition?,
         to current: StorySlidePosition,
         otherwise fallback: StoryNavigationDirection
     ) -> StoryNavigationDirection {
-        fallback
+        guard let previous, previous != current else { return fallback }
+        if current.group != previous.group {
+            return current.group > previous.group ? .forward : .backward
+        }
+        return current.slide > previous.slide ? .forward : .backward
+    }
+
+    /// Où atterrit un balayage d'AUTEUR depuis le groupe `group`, quelle que
+    /// soit la slide affichée : l'entrée du groupe suivant, puis la dernière
+    /// slide du groupe précédent (le balayage arrière y atterrit, jamais sur
+    /// la première).
+    public static func authorSwipeLandings(
+        from group: Int,
+        groups: [StoryGroupShape]
+    ) -> [StorySlidePosition] {
+        guard groups.indices.contains(group) else { return [] }
+        let next = nextGroup(after: group, groups: groups).map {
+            StorySlidePosition(group: $0, slide: entry(of: groups[$0]))
+        }
+        let previous = landing(in: previousGroup(before: group, groups: groups), groups: groups)
+        return [next, previous].compactMap { $0 }
+    }
+
+    /// Le pas du lecteur (`goToNext` / `goToPrevious`) : dans le groupe, la
+    /// slide voisine ; à la frontière, l'ENTRÉE du groupe suivant en avançant,
+    /// la DERNIÈRE slide du groupe précédent en reculant. Un groupe vide est
+    /// enjambé.
+    static func step(
+        from position: StorySlidePosition,
+        _ direction: StoryNavigationDirection,
+        groups: [StoryGroupShape]
+    ) -> StorySlidePosition? {
+        switch direction {
+        case .forward:
+            if position.slide + 1 < groups[position.group].slideCount {
+                return StorySlidePosition(group: position.group, slide: position.slide + 1)
+            }
+            return nextGroup(after: position.group, groups: groups).map {
+                StorySlidePosition(group: $0, slide: entry(of: groups[$0]))
+            }
+        case .backward:
+            if position.slide > 0 {
+                return StorySlidePosition(group: position.group, slide: position.slide - 1)
+            }
+            return landing(in: previousGroup(before: position.group, groups: groups), groups: groups)
+        }
+    }
+
+    private static func ringPreparations(
+        from current: StorySlidePosition,
+        groups: [StoryGroupShape],
+        direction: StoryNavigationDirection,
+        radius: Int
+    ) -> [StoryNeighborPreparation] {
+        let leading = chain(from: current, direction, groups: groups, length: radius)
+        let trailing = chain(from: current, direction.opposite, groups: groups, length: radius)
+        return (0..<max(radius, 0)).flatMap { offset in
+            [leading, trailing].compactMap { side in
+                side.indices.contains(offset)
+                    ? StoryNeighborPreparation(position: side[offset], distance: offset + 1)
+                    : nil
+            }
+        }
+    }
+
+    private static func chain(
+        from origin: StorySlidePosition,
+        _ direction: StoryNavigationDirection,
+        groups: [StoryGroupShape],
+        length: Int
+    ) -> [StorySlidePosition] {
+        Array(
+            sequence(first: origin) { step(from: $0, direction, groups: groups) }
+                .dropFirst()
+                .prefix(max(length, 0))
+        )
+    }
+
+    /// Les autres slides du groupe courant, de la plus proche à la plus
+    /// lointaine, celle du sens du geste d'abord à distance égale.
+    private static func groupSlidesByDistance(
+        from current: StorySlidePosition,
+        groups: [StoryGroupShape],
+        direction: StoryNavigationDirection
+    ) -> [StorySlidePosition] {
+        let count = groups[current.group].slideCount
+        let sign = direction == .forward ? 1 : -1
+        return (1..<max(count, 1))
+            .flatMap { distance in [current.slide + sign * distance, current.slide - sign * distance] }
+            .filter { (0..<count).contains($0) }
+            .map { StorySlidePosition(group: current.group, slide: $0) }
+    }
+
+    private static func followingGroupEntries(
+        after group: Int,
+        groups: [StoryGroupShape],
+        budget: Budget
+    ) -> [StorySlidePosition] {
+        let following = sequence(first: group) { nextGroup(after: $0, groups: groups) }
+            .dropFirst()
+            .prefix(max(budget.followingGroups, 0))
+        return following.flatMap { index -> [StorySlidePosition] in
+            let shape = groups[index]
+            let start = entry(of: shape)
+            let end = min(shape.slideCount, start + max(budget.perFollowingGroup, 0))
+            return (start..<max(start, end)).map { StorySlidePosition(group: index, slide: $0) }
+        }
+    }
+
+    private static func nextGroup(after group: Int, groups: [StoryGroupShape]) -> Int? {
+        groups.indices.first { $0 > group && groups[$0].slideCount > 0 }
+    }
+
+    private static func previousGroup(before group: Int, groups: [StoryGroupShape]) -> Int? {
+        groups.indices.last { $0 < group && groups[$0].slideCount > 0 }
+    }
+
+    private static func landing(in group: Int?, groups: [StoryGroupShape]) -> StorySlidePosition? {
+        group.map { StorySlidePosition(group: $0, slide: groups[$0].slideCount - 1) }
+    }
+
+    private static func entry(of shape: StoryGroupShape) -> Int {
+        min(max(shape.entryIndex, 0), shape.slideCount - 1)
+    }
+}
+
+private extension StoryNavigationDirection {
+    nonisolated var opposite: StoryNavigationDirection {
+        self == .forward ? .backward : .forward
     }
 }

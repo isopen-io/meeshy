@@ -128,6 +128,15 @@ struct StoryNeighborWindowTests {
         #expect(positions(at(1, 7), shelf(), .forward).isEmpty)
     }
 
+    // MARK: - Balayage d'auteur
+
+    @Test func test_authorSwipeLandings_nextGroupEntryThenPreviousGroupLastSlide() {
+        #expect(StoryNeighborWindow.authorSwipeLandings(from: 1, groups: shelf()) == [at(2, 0), at(0, 2)])
+        #expect(StoryNeighborWindow.authorSwipeLandings(from: 2, groups: shelf()) == [at(3, 1), at(1, 3)])
+        #expect(StoryNeighborWindow.authorSwipeLandings(from: 0, groups: shelf()) == [at(1, 2)])
+        #expect(StoryNeighborWindow.authorSwipeLandings(from: 4, groups: shelf()).isEmpty)
+    }
+
     // MARK: - Direction du dernier passage
 
     @Test func test_direction_isReadFromTheMoveBetweenTwoPositions() {
