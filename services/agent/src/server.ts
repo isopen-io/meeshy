@@ -134,7 +134,8 @@ async function start() {
   const stateManager = new RedisStateManager(redis);
   const persistence = new MongoPersistence(prisma);
 
-  const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT);
+  // #10288 — le PULL n'accepte que les messages signés par la passerelle (même secret que le HTTP).
+  const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT, env.AGENT_INTERNAL_TOKEN);
   const zmqPublisher = new ZmqAgentPublisher(env.ZMQ_HOST, env.ZMQ_PUB_PORT);
 
   await zmqListener.initialize();

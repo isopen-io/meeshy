@@ -1,7 +1,9 @@
 import type { Push, Subscriber } from 'zeromq';
 import * as zmq from 'zeromq';
 import { z } from 'zod';
+import { signAgentZmqPayload } from '@meeshy/shared/utils/agent-zmq-auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { agentInternalToken } from '../AgentHttpClient.js';
 
 const logger = enhancedLogger.child({ module: 'ZmqAgentClient' });
 
@@ -46,6 +48,8 @@ export class ZmqAgentClient {
     private host: string = 'localhost',
     private pushPort: number = 5560,
     private subPort: number = 5561,
+    /** #10288 — le secret qui signe chaque événement ; absent, rien ne part (l'agent refuserait). */
+    private internalToken: string | null = agentInternalToken(),
   ) {}
 
   onResponse(handler: (response: AgentResponse) => Promise<void>): void {
@@ -74,7 +78,10 @@ export class ZmqAgentClient {
 
   async sendEvent(event: Record<string, unknown>): Promise<void> {
     if (!this.pushSocket) throw new Error('Agent PUSH socket not initialized');
-    await this.pushSocket.send(JSON.stringify(event));
+    if (!this.internalToken) throw new Error('AGENT_INTERNAL_TOKEN is not configured — agent events are not sent');
+    const payload = JSON.stringify(event);
+    // Trame 1 : l'événement ; trame 2 : sa signature (un agent antérieur ne lit que la première).
+    await this.pushSocket.send([payload, signAgentZmqPayload(payload, this.internalToken)]);
   }
 
   async startListening(): Promise<void> {

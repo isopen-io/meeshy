@@ -66,6 +66,6 @@ describe('agent-zmq-auth (#10288)', () => {
 
   it('ne signe pas avec le secret brut : la clé HMAC est dérivée (vecteur fixe)', () => {
     expect(signAgentZmqPayload('{}', TOKEN, 0)).toBe(signAgentZmqPayload('{}', `  ${TOKEN}  `, 0));
-    expect(signAgentZmqPayload('{}', TOKEN, 0)).toMatchInlineSnapshot();
+    expect(signAgentZmqPayload('{}', TOKEN, 0)).toBe('v1.0.29b96731cdfc28f66d5e176e51b41e0ab2d21573939e508282f6f1770d23c423');
   });
 });
