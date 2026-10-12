@@ -36,6 +36,14 @@ public struct TusResumeRetriableError: Error {
     public init() {}
 }
 
+/// Le système a retiré le temps d'arrière-plan avant la fin du téléversement
+/// (#9875). La tâche est terminée, le PATCH en vol abandonné ; le point de
+/// reprise (URL de session, dernier offset accepté) reste en base, et la
+/// prochaine tentative repart de cet offset au lieu de tout renvoyer.
+public struct TusUploadSuspendedError: Error {
+    public init() {}
+}
+
 public struct TusUploadResult: Decodable, Sendable {
     public let id: String
     public let fileName: String
@@ -143,6 +151,8 @@ public actor TusUploadManager {
     /// injectable so tests can stub success/failure without touching the
     /// real `AuthManager.shared` singleton.
     private let refreshAuthSession: @Sendable @concurrent (_ force: Bool) async throws -> String
+    private let backgroundTasks: any BackgroundTaskProviding
+    private let digestMemo: FileDigestMemo
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
         progressSubject.eraseToAnyPublisher()
@@ -154,12 +164,30 @@ public actor TusUploadManager {
         checkpointStore: TusUploadCheckpointStore = .shared,
         refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String = { force in
             try await AuthManager.shared.refreshSession(force: force)
-        }
+        },
+        backgroundTasks: any BackgroundTaskProviding = UIApplicationBackgroundTaskProvider()
+    ) {
+        self.init(
+            baseURL: baseURL, urlSession: urlSession, checkpointStore: checkpointStore,
+            refreshAuthSession: refreshAuthSession, backgroundTasks: backgroundTasks,
+            digestMemo: .shared
+        )
+    }
+
+    init(
+        baseURL: URL,
+        urlSession: URLSession,
+        checkpointStore: TusUploadCheckpointStore,
+        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String,
+        backgroundTasks: any BackgroundTaskProviding,
+        digestMemo: FileDigestMemo
     ) {
         self.baseURL = baseURL
         self.urlSession = urlSession
         self.checkpointStore = checkpointStore
         self.refreshAuthSession = refreshAuthSession
+        self.backgroundTasks = backgroundTasks
+        self.digestMemo = digestMemo
     }
 
     deinit {
@@ -225,7 +253,7 @@ public actor TusUploadManager {
                         try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
-                    // cache média typé, keyé par l'URL canonique serveur. L'auteur
+                    // cache média typé, sous la clé de rendu (`renderCacheKey`). L'auteur
                     // relit ses propres médias (story, pièce jointe) depuis le disque
                     // — offline, jamais re-téléchargés. Idempotent (no-op si déjà
                     // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
@@ -247,13 +275,14 @@ public actor TusUploadManager {
     }
 
     /// Local-first cache seed : copie le fichier source qu'on vient d'uploader
-    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, keyé par
-    /// l'URL canonique serveur (`result.fileUrl` — exactement la clé que le
-    /// reader résout). Non-destructif (la source reste pour le caller, ex. un
-    /// asset encore référencé par la preview live). Idempotent. Un MIME non-média
-    /// (document…) est ignoré. C'est ce qui garantit que l'auteur joue ses
-    /// propres stories / pièces jointes depuis le disque, offline, sans jamais
-    /// re-télécharger un média qu'il possède déjà localement.
+    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, sous la
+    /// clé de RENDU (`renderCacheKey`). Non-destructif (la source reste pour le
+    /// caller, ex. un asset encore référencé par la preview live). Idempotent.
+    /// Un MIME non-média (document…) est ignoré. C'est ce qui garantit que
+    /// l'auteur joue ses propres stories / pièces jointes depuis le disque,
+    /// offline, sans jamais re-télécharger un média qu'il possède déjà
+    /// localement. C'est l'UNIQUE ensemencement après upload (#9875) : une copie
+    /// de fichier (un clone sur APFS), jamais une relecture des octets en mémoire.
     private static func seedMediaCache(localFile: URL, result: TusUploadResult) async {
         let mime = result.mimeType
         let store: DiskCacheStore?
@@ -267,21 +296,37 @@ public actor TusUploadManager {
             store = nil
         }
         guard let store else { return }
-        await store.seed(copyingLocalFile: localFile, for: result.fileUrl)
+        await store.seed(copyingLocalFile: localFile, for: renderCacheKey(forFileUrl: result.fileUrl))
     }
 
-    private func withBackgroundTask<T: Sendable>(named name: String, operation: @Sendable () async throws -> T) async throws -> T {
-        let taskId = await UIApplication.shared.beginBackgroundTask(withName: name)
+    /// La clé sous laquelle les lecteurs cherchent un média : l'adresse
+    /// RÉSOLUE (`MeeshyConfig.resolveMediaURL`), jamais la clé de stockage que
+    /// la passerelle rend dans `fileUrl` depuis #4324 (#9839). La bulle de
+    /// l'expéditeur, le lecteur audio et les stories résolvent tous ainsi.
+    public static func renderCacheKey(forFileUrl fileUrl: String) -> String {
+        MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
+    }
+
+    /// Le téléversement tourne sous une tâche d'arrière-plan qui se termine
+    /// TOUJOURS une fois (#9875). À l'expiration, UIKit appelle le gestionnaire
+    /// sur le fil principal : le travail est annulé (le PATCH en vol tombe, aucun
+    /// octet ne part pendant la suspension) et la tâche se termine aussitôt, de
+    /// façon synchrone. Le point de reprise est déjà en base — il est écrit
+    /// après chaque tronçon accepté — et l'échec remonte en
+    /// `TusUploadSuspendedError` : la file durable rejoue, et la reprise repart
+    /// de l'offset accepté.
+    private func withBackgroundTask<T: Sendable>(named name: String, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        let lease = await BackgroundTaskLease(provider: backgroundTasks)
+        await lease.begin(named: name)
+        let work = Task { try await operation() }
+        await lease.cancelOnExpiration { work.cancel() }
         do {
-            let result = try await operation()
-            if taskId != .invalid {
-                await UIApplication.shared.endBackgroundTask(taskId)
-            }
+            let result = try await work.value
+            await lease.end()
             return result
         } catch {
-            if taskId != .invalid {
-                await UIApplication.shared.endBackgroundTask(taskId)
-            }
+            let expired = await lease.end()
+            if expired { throw TusUploadSuspendedError() }
             throw error
         }
     }
@@ -300,7 +345,7 @@ public actor TusUploadManager {
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
-        let checkpointKey = try Self.sha256Hex(of: fileURL)
+        let checkpointKey = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
         let store = checkpointStore
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
@@ -380,6 +425,7 @@ public actor TusUploadManager {
         let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
 
         while offset < fileSize {
+            try Task.checkCancellation()
             let remaining = fileSize - offset
             let readSize = min(Int64(chunkSize), remaining)
 
