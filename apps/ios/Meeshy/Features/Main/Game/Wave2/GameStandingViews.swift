@@ -12,10 +12,6 @@ import MeeshyUI
 // d'une absence.
 
 extension GameText {
-    static func visitorGameTitle(name: String) -> String {
-        String(localized: "game2.profile.visitor_game_title", defaultValue: "Le jeu de \(name)", bundle: .main)
-    }
-
     static func visitorTreasury(tier: String) -> String {
         String(localized: "game2.profile.visitor_treasury", defaultValue: "Trésor : \(tier)", bundle: .main)
     }
@@ -34,25 +30,25 @@ extension GameStandingContent {
     }
 }
 
+/// La rangée de la bande de la carte de contact (#9481) — la seule qui la monte depuis que la fiche d'un profil porte
+/// le niveau et le rang sur sa bannière (#10093, #10380).
 struct GameStandingView: View {
     let content: GameStandingContent
-    /// La rangée de la fiche de contact : plus petite, sur une ligne.
-    var compact = false
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    private var ringSize: CGFloat { compact ? 44 : 64 }
+    private let ringSize: CGFloat = 44
 
     var body: some View {
-        HStack(alignment: .center, spacing: compact ? MeeshySpacing.sm : MeeshySpacing.lg) {
+        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
             if let standing = content.standing {
                 ring(standing)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(GameText.profileLevel(level: GameCopy.formatCount(standing.shownLevel), tier: GameCopy.tierName(standing.shownTier)))
-                        .font(MeeshyFont.relative(compact ? MeeshyFont.smallSize : MeeshyFont.bodySize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Text(GameCopy.rankLabel(standing))
-                        .font(MeeshyFont.relative(compact ? MeeshyFont.footnoteSize : MeeshyFont.smallSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let tier = content.treasuryTier {
                         Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
@@ -64,7 +60,7 @@ struct GameStandingView: View {
                 Spacer(minLength: 0)
                 RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.shownLevel,
                                mythic: standing.mythic, title: nil, figures: nil)
-                    .frame(width: compact ? 36 : 56, height: compact ? 34 : 52)
+                    .frame(width: 36, height: 34)
                     .accessibilityHidden(true)
             } else if let tier = content.treasuryTier {
                 Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
@@ -75,7 +71,7 @@ struct GameStandingView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.accessibilityLabel)
-        .accessibilityIdentifier(compact ? "game.contact.standing" : "game.profile.standing")
+        .accessibilityIdentifier("game.contact.standing")
     }
 
     /// L'anneau est PLEIN : on ne sait pas où en est la barre d'un autre (le serveur ne le dit pas), et un arc

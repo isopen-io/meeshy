@@ -5,7 +5,8 @@ import MeeshyUI
 // MARK: - Le jeu d'un autre, hors de sa fiche (#9481)
 //
 // La fiche d'un profil ne porte plus de carte de jeu (#10093) : son niveau et son rang vivent sur sa bannière
-// (`GameBannerBadge`). Restent la lecture partagée et la bande de la carte de contact.
+// (`GameBannerBadge`). Restent la lecture partagée et la bande de la carte de contact — niveau, rang, trésor et trois
+// coupes, comme le web (#10097, #10380).
 
 /// La lecture de la bande de la carte de contact. Cache d'abord : ce que le disque a
 /// gardé se peint tout de suite (sauf si la vue montre déjà CE membre), la lecture servie le remplace — ou l'efface,
@@ -20,14 +21,11 @@ enum GameVisitorLoading {
             let cachedShowcase = await showcase.cached(userId: userId)
             let cachedStanding = await standing.cached(userId: userId)
             guard !Task.isCancelled else { return nil }
-            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding,
-                                        constellationStars: GameVisitorShowcase.constellationStars(cachedShowcase)))
+            paintCached(GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(cachedShowcase), standing: cachedStanding))
         }
         async let freshShowcase = showcase.load(userId: userId)
         async let freshStanding = standing.load(userId: userId)
-        let showcaseRead = await freshShowcase
-        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(showcaseRead), standing: await freshStanding,
-                                   constellationStars: GameVisitorShowcase.constellationStars(showcaseRead))
+        let read = GameVisitorRead(userId: userId, entries: GameVisitorShowcase.entries(await freshShowcase), standing: await freshStanding)
         return Task.isCancelled ? nil : read
     }
 }
@@ -49,9 +47,8 @@ struct GameContactStrip: View {
             GameLoadAnchor()
             if let shown = GameVisitorRead.shown(read, for: userId, hidden: prefs.prefs.hidden) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                    if let standing = shown.standing { GameStandingView(content: standing, compact: true) }
+                    if let standing = shown.standing { GameStandingView(content: standing) }
                     if !shown.entries.isEmpty { trophies(shown.entries) }
-                    if let stars = shown.constellationStars { constellation(stars) }
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("game.contact.strip")
@@ -64,20 +61,6 @@ struct GameContactStrip: View {
                 read = fresh
             }
         }
-    }
-
-    /// Sa constellation (#10053) : ses étoiles allumées, en une ligne — la vitrine l'ouvre, le serveur les fige au mois.
-    private func constellation(_ stars: Int) -> some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: "sparkles")
-                .foregroundColor(MeeshyColors.brandPrimary)
-                .accessibilityHidden(true)
-            Text(GameText.constellationTitle + " · " + GameText.constellationStars(stars))
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textSecondary)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("game.contact.constellation")
     }
 
     private func trophies(_ entries: [GameVisitorShowcase.Entry]) -> some View {

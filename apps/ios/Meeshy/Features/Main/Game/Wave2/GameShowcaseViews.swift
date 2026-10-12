@@ -133,35 +133,25 @@ struct GameTrophyArt: View {
 // MARK: - La constellation (#10053)
 
 /// LA CONSTELLATION — une étoile tous les dix fragments d'étoile collectés (`GameConstellation`, miroir SDK de
-/// `constellation.ts`), un cosmétique de profil par étoile, sans avantage de jeu. Le membre (`collected`) voit
-/// l'étoile suivante se remplir ; un visiteur (`stars`) ne voit que les étoiles servies, figées au mois, selon le
-/// réglage de la vitrine. Le dessin est décoratif et se retourne en arabe ; le texte dit tout. Miroir de
-/// `apps/web/src/components/game-constellation.tsx`.
+/// `constellation.ts`), un cosmétique de profil par étoile, sans avantage de jeu. Le membre voit l'étoile suivante se
+/// remplir ; la fiche d'un autre ne monte plus de constellation (#10380, comme le web depuis #10097). Le dessin est
+/// décoratif et se retourne en arabe ; le texte dit tout. Miroir de `apps/web/src/components/game-constellation.tsx`.
 struct GameConstellationCard: View {
     let constellation: Constellation
-    let own: Bool
 
     init(collected: Int) {
         constellation = GameConstellation.of(collected: collected)
-        own = true
-    }
-
-    init(stars: Int) {
-        constellation = GameConstellation.of(stars: stars)
-        own = false
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
         GameCard(title: GameText.constellationTitle + " · " + GameText.constellationStars(constellation.stars)) {
-            GameConstellationSky(stars: constellation.stars, inStar: own ? constellation.inStar : nil)
+            GameConstellationSky(stars: constellation.stars, inStar: constellation.inStar)
                 .frame(height: 64)
                 .accessibilityHidden(true)
-            if own {
-                GameNote(text: GameText.constellationNext(constellation.toNextStar))
-                GameNote(text: GameText.constellationHow)
-            }
+            GameNote(text: GameText.constellationNext(constellation.toNextStar))
+            GameNote(text: GameText.constellationHow)
             if !constellation.cosmetics.isEmpty {
                 Text(GameText.constellationCosmetics)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -178,7 +168,7 @@ struct GameConstellationCard: View {
                     .accessibilityIdentifier("game.constellation.cosmetic")
                 }
             }
-            if own { GameNote(text: GameText.constellationVisibility) }
+            GameNote(text: GameText.constellationVisibility)
         }
         .accessibilityIdentifier("game.constellation")
     }

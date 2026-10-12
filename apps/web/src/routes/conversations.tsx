@@ -714,6 +714,7 @@ export default function ConversationsScreen() {
             showsAllLoadedHint={showsAllLoadedHint(conversations.length, PAGE_SIZE)}
             onRetry={() => void list.fetchNextPage()}
             sentinelRef={observeTail}
+            fixedSlot
           />
         ) : null}
         {/*

@@ -42,7 +42,7 @@ struct ShareLinksView: View {
                     .padding(.bottom, 40)
                 }
                 .refreshable {
-                    await viewModel.load()
+                    await viewModel.load(.pullToRefresh)
                 }
             }
         }
@@ -50,7 +50,7 @@ struct ShareLinksView: View {
         .task { await viewModel.load() }
         .sheet(isPresented: $showCreate) {
             CreateShareLinkView { _ in
-                Task { await viewModel.load() }
+                Task { await viewModel.load(.linkCreated) }
             }
             .conversationListObject(conversationListViewModel)
         }
@@ -258,6 +258,28 @@ struct ShareLinksView: View {
     }
 }
 
+// MARK: - Reload law
+
+/// Ce qui demande la liste : la venue à l'écran se contente d'un cache frais ;
+/// un geste de l'utilisateur (tirer, créer un lien) exige la vérité du serveur.
+nonisolated enum ShareLinksReloadTrigger: Equatable, Sendable {
+    case appear
+    case pullToRefresh
+    case linkCreated
+}
+
+/// #9195 — un cache frais ne dispense du réseau qu'à l'affichage ; une liste
+/// qui n'a pas pu être relue reste celle qu'on montrait.
+nonisolated enum ShareLinksReloadLaw {
+    static func mustFetch(_ trigger: ShareLinksReloadTrigger, cacheIsFresh: Bool) -> Bool {
+        trigger != .appear || !cacheIsFresh
+    }
+
+    static func linksAfterFetch(current: [MyShareLink], fetched: [MyShareLink]?) -> [MyShareLink] {
+        fetched ?? current
+    }
+}
+
 // MARK: - ViewModel
 
 @MainActor
@@ -271,27 +293,35 @@ class ShareLinksViewModel: ObservableObject {
     @Published var stats: MyShareLinkStats? = nil
     @Published var isLoading = false
 
-    func load() async {
+    func load(_ trigger: ShareLinksReloadTrigger = .appear) async {
         let cached = await CacheCoordinator.shared.shareLinks.load(for: "list")
+        let cacheIsFresh: Bool
         switch cached {
         case .fresh(let data, _):
             links = data
-            return
+            cacheIsFresh = true
         case .stale(let data, _):
             links = data
-            await refreshFromAPI()
+            cacheIsFresh = false
         case .expired, .empty:
             isLoading = links.isEmpty
-            await refreshFromAPI()
+            cacheIsFresh = false
         }
+        guard ShareLinksReloadLaw.mustFetch(trigger, cacheIsFresh: cacheIsFresh) else {
+            if stats == nil { await loadStats() }
+            return
+        }
+        await refreshFromAPI()
     }
 
     private func refreshFromAPI() async {
         async let l = ShareLinkService.shared.listMyLinks()
         async let s = ShareLinkService.shared.fetchMyStats()
-        links = (try? await l) ?? []
-        stats = try? await s
-        try? await CacheCoordinator.shared.shareLinks.save(links, for: "list")
+        let fetched = try? await l
+        let fetchedStats = try? await s
+        links = ShareLinksReloadLaw.linksAfterFetch(current: links, fetched: fetched)
+        if let fetchedStats { stats = fetchedStats }
+        if let fetched { try? await CacheCoordinator.shared.shareLinks.save(fetched, for: "list") }
         isLoading = false
     }
 
