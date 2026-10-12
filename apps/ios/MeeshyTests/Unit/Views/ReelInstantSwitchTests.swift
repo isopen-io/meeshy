@@ -408,6 +408,13 @@ final class ReelResumeTests: XCTestCase {
         XCTAssertEqual(distances[key(reels[10])], 10)
     }
 
+    func test_prewarm_prerollsTheNeighbourAtItsResume() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelPrewarm.swift"))
+        XCTAssertTrue(source.contains("preloadAndCachePlayer(url: url, resume: resumePosition(of: post))"))
+        XCTAssertTrue(source.contains("MediaResumeResolver.resumePosition("),
+                      "la reprise du voisin se résout comme celle du moteur, par le résolveur partagé")
+    }
+
     /// Avec ces distances, le pool garde le réel quitté face à un préchauffage
     /// plus lointain arrivé après lui.
     func test_distancesFeedThePoolEviction_keepingTheReelJustLeft() {

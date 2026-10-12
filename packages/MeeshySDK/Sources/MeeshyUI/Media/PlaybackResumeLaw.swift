@@ -27,7 +27,7 @@ public nonisolated enum PlaybackResumeLaw {
     /// image-clé suffit, aucun décodage depuis l'image-clé précédente.
     public static let tolerance: TimeInterval = 0.5
 
-    public enum Action: Equatable, Sendable {
+    public nonisolated enum Action: Equatable, Sendable {
         /// La tête est déjà au bon endroit : `play()` seulement.
         case none
         /// Un `seek` tolérant vers cette position, avant `play()`.
