@@ -298,7 +298,7 @@ describe('ThreadHeader — les portes vers les détails (#7829)', () => {
 
   test('l’appui long sur l’avatar de l’en-tête (replié) ouvre le menu, pas la bascule', () => {
     const ouvertures = monteEnTete({ conversation: conversation(), title: 'Équipe Lyon', expanded: false });
-    const bascule = document.querySelector('button[aria-label="Déplier l’en-tête"]');
+    const bascule = document.querySelector('[data-thread-avatar-door]');
     act(() => {
       bascule?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
     });

@@ -10,6 +10,7 @@
 const enIdentity = {
   'a11y.avatar.profile': 'View {name}’s profile',
   'a11y.avatar.story': 'View {name}’s story',
+  'a11y.avatar.conversation': 'View the conversation {name}',
   'avatar.menu.label': 'Actions for {name}',
   'avatar.menu.view_profile': 'View profile',
   'userProfile.peek.openPage': 'Open full profile',

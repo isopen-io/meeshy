@@ -29,7 +29,8 @@ import { useConversationEngagement } from '@/lib/view/use-conversation-engagemen
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { isWide, subscribeWide } from '@/lib/view/split-query';
 import { useGuestFocus, useSpeaksAsGuest } from '@/lib/view/guest-focus';
-import { threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
+import { conversationAvatarDoor, threadCallOffer, threadHeaderSubtitle } from '@/lib/view/thread-header-offer';
+import { translate } from '@/lib/i18n-catalog';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -188,6 +189,21 @@ export function ThreadHeader({
      flamme du jour, les plus actifs), sans plus rien retirer. */
   const wide = useSyncExternalStore(subscribeWide, isWide, () => false);
   const besideIdentity = preview || wide || focus;
+  /* L'AVATAR OUVRE LA FICHE (#10300) : le profil du pair en direct, les
+     détails partout ailleurs ; un visiteur sans compte garde la bascule. Quand
+     l'avatar ouvre quelque chose, la bascule de l'en-tête passe à sa BANDE —
+     l'espace libre replié, la colonne d'identité dépliée. */
+  const avatarDoor = conversationAvatarDoor({
+    group,
+    guest: sessionIsGuest,
+    peerUsername: peer?.user?.username,
+    detailsAvailable: details !== undefined,
+  });
+  const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
+  const peerSignals = group
+    ? {}
+    : { presence: presenceOf(peer), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood }) };
+  const toggleLabel = expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête';
 
   return (
     /*
@@ -259,9 +275,19 @@ export function ThreadHeader({
         )}
 
         {besideIdentity || expanded ? (
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="relative flex min-w-0 flex-1 flex-col gap-0.5">
+            {bandToggles ? (
+              <button
+                type="button"
+                onClick={onToggleExpanded}
+                aria-expanded={expanded}
+                aria-label={toggleLabel}
+                data-thread-band-toggle
+                className="absolute inset-0"
+              />
+            ) : null}
             <h1
-              className={`${group && details !== undefined ? '' : 'truncate '}text-title font-bold`}
+              className={`${group && details !== undefined ? '' : 'truncate '}${bandToggles ? 'pointer-events-none relative ' : ''}text-title font-bold`}
               style={{ color: 'var(--color-ios-ink)' }}
             >
               {group && details !== undefined ? (
@@ -275,15 +301,17 @@ export function ThreadHeader({
                   onClick={details}
                   aria-haspopup="dialog"
                   data-thread-title-details
-                  className="block max-w-full truncate text-start"
+                  className="pointer-events-auto block max-w-full truncate text-start"
                   style={{ paddingBlock: 11, marginBlock: -11 }}
                 >
                   {title}
                 </button>
               ) : (
-                <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
-                  {sessionIsGuest ? title : <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />}
-                </AvatarMenuTrigger>
+                <span className="pointer-events-auto">
+                  <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
+                    {sessionIsGuest ? title : <PersonName name={title} username={peer?.user?.username} {...(peerRing === undefined ? {} : { storyRing: peerRing })} />}
+                  </AvatarMenuTrigger>
+                </span>
               )}
             </h1>
             {/* `--color-ios-ink` et non `-ink-2` (#6308) : l'encre secondaire, semi-
@@ -295,7 +323,7 @@ export function ThreadHeader({
             {/* LE CADENAS NE DIT QUE CE QUI EST VRAI (#10114) : une conversation
                 chiffrée de bout en bout. L'effectif ne se lit qu'en membre (#10205). */}
             {subtitle.locked || subtitle.label !== null ? (
-              <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink)' }}>
+              <p className={`${bandToggles ? 'pointer-events-none relative ' : ''}flex items-center gap-1 text-mini`} style={{ color: 'var(--color-ios-ink)' }}>
                 {subtitle.locked ? <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} /> : null}
                 {subtitle.label}
               </p>
@@ -312,7 +340,18 @@ export function ThreadHeader({
              En APERÇU (#8821), elle suit l'identité au lieu de la remplacer :
              c'est le titre qui prend la place, pas un espaceur. */
           <div className={`thread-header-actions flex ${besideIdentity ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
-            {besideIdentity ? null : <span className="flex-1" />}
+            {besideIdentity ? null : bandToggles ? (
+              <button
+                type="button"
+                onClick={onToggleExpanded}
+                aria-expanded={expanded}
+                aria-label={toggleLabel}
+                data-thread-band-toggle
+                className="flex-1 self-stretch"
+              />
+            ) : (
+              <span className="flex-1" />
+            )}
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il
@@ -391,28 +430,51 @@ export function ThreadHeader({
         {preview ? null : <ThreadShareButton conversation={conversation} title={title} />}
         <div className="relative shrink-0">
         <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={details}>
-          {/* En APERÇU (#8821), l'en-tête n'a rien à déplier : l'avatar y
-              ouvre les détails de la conversation, la porte que le titre
-              déplié offre dans le fil. */}
-          <button
-            type="button"
-            onClick={preview ? (details ?? onToggleExpanded) : onToggleExpanded}
-            {...(preview ? { 'aria-haspopup': 'dialog' as const } : { 'aria-expanded': expanded })}
-            aria-label={preview ? 'Détails de la conversation' : expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
-            className="shrink-0"
-          >
-            {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,
-                viewerId)` était déjà appelé À LA LIGNE SUIVANTE pour la
-                présence : la donnée arrivait jusqu'ici et l'en-tête de CHAQUE
-                conversation rendait des initiales. */}
-            <Avatar
-              initials={initialsOf(title)}
-              color={accent}
-              size={44}
-              {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood }) })}
-            />
-          </button>
+          {/* L'AVATAR OUVRE LA FICHE (#10300) — le profil du pair d'un direct
+              (le lien de profil de l'avatar, `Avatar.profileUsername`), les
+              détails de toute autre conversation. Sans fiche à ouvrir (un
+              visiteur sans compte, #10205), il garde la bascule ; en APERÇU
+              (#8821), l'en-tête n'a rien à déplier. */}
+          {avatarDoor.kind === 'profile' ? (
+            <span className="flex shrink-0" data-thread-avatar-door="profile">
+              <Avatar
+                initials={initialsOf(title)}
+                color={accent}
+                size={44}
+                name={title}
+                profileUsername={avatarDoor.username}
+                {...(photo === undefined ? {} : { src: photo })}
+                {...peerSignals}
+              />
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={avatarDoor.kind === 'details' ? details : preview ? (details ?? onToggleExpanded) : onToggleExpanded}
+              {...(avatarDoor.kind === 'details' || preview ? { 'aria-haspopup': 'dialog' as const } : { 'aria-expanded': expanded })}
+              aria-label={
+                avatarDoor.kind === 'details'
+                  ? translate(currentInterfaceLanguage(), 'a11y.avatar.conversation', { name: title })
+                  : preview
+                    ? 'Détails de la conversation'
+                    : toggleLabel
+              }
+              {...(avatarDoor.kind === 'details' ? { 'data-thread-avatar-door': 'details' } : {})}
+              className="shrink-0"
+            >
+              {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,
+                  viewerId)` était déjà appelé À LA LIGNE SUIVANTE pour la
+                  présence : la donnée arrivait jusqu'ici et l'en-tête de CHAQUE
+                  conversation rendait des initiales. */}
+              <Avatar
+                initials={initialsOf(title)}
+                color={accent}
+                size={44}
+                {...(photo === undefined ? {} : { src: photo })}
+                {...peerSignals}
+              />
+            </button>
+          )}
         </AvatarMenuTrigger>
         {showsFlame && onDismissFlame !== undefined ? (
           <HeaderFlame snapshot={engagement} replay={flameReplay} onDismiss={onDismissFlame} />

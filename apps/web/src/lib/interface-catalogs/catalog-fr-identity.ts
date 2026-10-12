@@ -10,6 +10,7 @@
 const frIdentity = {
   'a11y.avatar.profile': 'Voir le profil de {name}',
   'a11y.avatar.story': 'Voir la story de {name}',
+  'a11y.avatar.conversation': 'Voir la conversation {name}',
   'avatar.menu.label': 'Actions pour {name}',
   'avatar.menu.view_profile': 'Voir le profil',
   'userProfile.peek.openPage': 'Ouvrir le profil complet',

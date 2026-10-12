@@ -57,3 +57,29 @@ export function threadCallOffer(params: {
   if (params.viewerIsGuest) return 'none';
   return JOINABLE_TYPES.has(conversation.type.toLowerCase()) ? 'join-only' : 'none';
 }
+
+/**
+ * **CE QU'OUVRE L'AVATAR D'UNE CONVERSATION** (#10300, directive porteur du
+ * 2026-10-12) — même geste, même effet, dans l'en-tête du fil comme dans la
+ * liste : un direct mène au profil de son pair, toute autre conversation
+ * (groupe, public, global, communauté) ouvre sa fiche. Un visiteur sans compte
+ * n'ouvre ni l'un ni l'autre (#10205) : son avatar garde la bascule de
+ * l'en-tête, rien de plus. Sans porte vers les détails (un hôte qui ne sait
+ * pas les ouvrir, un pair sans compte), l'avatar garde aussi la bascule.
+ */
+export type ConversationAvatarDoor =
+  | { readonly kind: 'profile'; readonly username: string }
+  | { readonly kind: 'details' }
+  | { readonly kind: 'toggle' };
+
+export function conversationAvatarDoor(params: {
+  readonly group: boolean;
+  readonly guest: boolean;
+  readonly peerUsername: string | null | undefined;
+  readonly detailsAvailable: boolean;
+}): ConversationAvatarDoor {
+  if (params.guest) return { kind: 'toggle' };
+  const username = params.peerUsername;
+  if (!params.group && typeof username === 'string' && username !== '') return { kind: 'profile', username };
+  return params.detailsAvailable ? { kind: 'details' } : { kind: 'toggle' };
+}

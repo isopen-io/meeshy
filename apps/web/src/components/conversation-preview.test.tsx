@@ -171,7 +171,8 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
     expect(html).toContain('Chiffré de bout en bout');
     expect(html).toContain('data-thread-call');
     expect(html).toContain('class="thread-header glass');
-    expect(html).toContain('aria-label="Détails de la conversation"');
+    /* L'avatar ouvre la fiche (#10300) : ce pair n'a pas de compte, c'est donc celle de la conversation. */
+    expect(html).toContain('aria-label="Voir la conversation Kwame"');
   });
 });
 

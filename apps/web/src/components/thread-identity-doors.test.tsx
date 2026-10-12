@@ -208,7 +208,9 @@ describe('En direct, le titre déplié de l’en-tête est la porte du pair', ()
   });
 
   test('avec une story, il ouvre sa story', () => {
-    const html = header(direct, false, RING);
+    /* Le TITRE seul : l'avatar voisin mène, lui, au profil du pair (#10300). */
+    const page = header(direct, false, RING);
+    const html = page.slice(page.indexOf('<h1'), page.indexOf('</h1>'));
 
     expect(html).toContain('href="/story/story-amina-1"');
     expect(html).not.toContain('href="/u/amina.diallo"');
