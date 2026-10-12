@@ -24,6 +24,10 @@ describe('linkTrackingAuthorOf', () => {
     expect(linkTrackingAuthorOf({ type: 'user', userId: 'u-1' })).toEqual({ tracked: true, userId: 'u-1' });
   });
 
+  it('reconnaît un compte inscrit par sa seule relation user chargée', () => {
+    expect(linkTrackingAuthorOf({ type: 'user', user: { id: 'u-2' } })).toEqual({ tracked: true, userId: 'u-2' });
+  });
+
   it('ne suit jamais un participant anonyme, même porteur d’un userId', () => {
     expect(linkTrackingAuthorOf({ type: 'anonymous', userId: 'u-1' })).toEqual({ tracked: false });
   });

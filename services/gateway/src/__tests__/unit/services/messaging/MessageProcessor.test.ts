@@ -344,7 +344,7 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
     'ne suit aucune adresse d’un expéditeur non inscrit (%j)', async (sender) => {
     partFindUnique.mockResolvedValue(sender);
     mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://evil.example', token: 'tok-1' }]);
-    const content = 'regarde <https://evil.example> et https://evil.example';
+    const content = 'regarde <https://evil.example>, https://evil.example et m+abc12 tel quel';
     await processor.saveMessage({ ...baseData, content });
     expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
     expect(mockCollectContentTrackingLinks).not.toHaveBeenCalled();

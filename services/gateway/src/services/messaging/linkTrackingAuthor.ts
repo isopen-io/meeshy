@@ -22,17 +22,23 @@ export type LinkTrackingAuthor =
 
 export const UNTRACKED_LINK_AUTHOR: LinkTrackingAuthor = { tracked: false };
 
-/** Ce que la loi lit d'un participant expéditeur — `type` quand on l'a. */
+/**
+ * Ce que la loi lit d'un participant expéditeur — `type` quand on l'a, et le
+ * compte par la colonne `userId` OU la relation `user` chargée (certaines
+ * lectures, comme celle du lien de partage, ne chargent que la seconde).
+ */
 export interface LinkSenderFacts {
   readonly type?: string | null;
   readonly userId?: string | null;
+  readonly user?: { readonly id?: string | null } | null;
 }
 
 export function linkTrackingAuthorOf(sender: LinkSenderFacts | null | undefined): LinkTrackingAuthor {
   if (!sender) return UNTRACKED_LINK_AUTHOR;
   if (sender.type === 'anonymous') return UNTRACKED_LINK_AUTHOR;
-  if (typeof sender.userId !== 'string' || sender.userId.length === 0) return UNTRACKED_LINK_AUTHOR;
-  return { tracked: true, userId: sender.userId };
+  const userId = sender.userId ?? sender.user?.id;
+  if (typeof userId !== 'string' || userId.length === 0) return UNTRACKED_LINK_AUTHOR;
+  return { tracked: true, userId };
 }
 
 /**
