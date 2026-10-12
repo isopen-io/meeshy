@@ -179,6 +179,7 @@ const NOTIFICATION: Kinds<NotificationPreference> = {
   friendContentEnabled: 'flag',
   contactActivityEnabled: 'flag',
   gameEnabled: 'flag',
+  gamePhotoEnabled: 'flag',
   dndEnabled: 'flag',
   dndStartTime: 'clock',
   dndEndTime: 'clock',

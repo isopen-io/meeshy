@@ -139,9 +139,15 @@ describe('le registre des packs officiels, fail-closed par entrée', () => {
     expect(parsePackIndex({ pas: 'un tableau' })).toEqual({ entries: [], rejected: 0 });
   });
 
-  it('un pack de cadres porte l’usage de ses cadres ; sans usage lisible, il tombe', () => {
-    expect(parsePackIndex([entry({ usage: undefined })]).entries).toEqual([]);
+  it('un pack de cadres porte l’usage de ses cadres ; un usage illisible le fait tomber', () => {
     expect(parsePackIndex([entry({ usage: { kind: 'free', surfaces: [] } })]).entries).toEqual([]);
+    expect(parsePackIndex([entry({ domain: 'capture-frame', atmosphere: undefined, usage: undefined })]).entries).toEqual([]);
+  });
+
+  it('un pack de GLOIRE dont les cadres ne partagent pas un usage le laisse à chacun d’eux (le contrat le rend obligatoire par cadre)', () => {
+    const [afrique] = parsePackIndex([entry({ slug: 'afrique', atmosphere: 'afrique', installedByDefault: true, removable: false, usage: undefined })]).entries;
+    expect(afrique?.usage).toBeUndefined();
+    expect(frameUsageOf(afrique!)).toBeNull();
   });
 
   it('une atmosphère hors liste, ou portée par un autre domaine que la gloire, tombe', () => {

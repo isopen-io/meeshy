@@ -184,6 +184,14 @@ describe('l’envoi', () => {
     expect(w.events[0]).toMatchObject({ dayKey: '2026-10-15' });
   });
 
+  it('« Ne pas déranger » ACTIVÉ gouverne seul : hors de sa fenêtre, la nuit de la politique ne s’y ajoute pas', async () => {
+    const w = world({ user: { timezone: 'Asia/Tokyo' } });
+    w.db.userPreferences.rows.push({ id: 'p', userId: USER, notification: { dndEnabled: true, dndStartTime: '23:00', dndEndTime: '07:00', dndUtcOffsetMinutes: 540 } });
+    await crossFlameSeven(w);
+
+    expect(await w.service.deliver(new Date('2026-10-14T12:30:00Z'))).toEqual({ sent: 1, deferred: 0 });
+  });
+
   it('push photo coupé, ou « Jeu » coupé : rien ne part, le carnet garde tout', async () => {
     for (const notification of [{ gamePhotoEnabled: false }, { gameEnabled: false }]) {
       const w = world();

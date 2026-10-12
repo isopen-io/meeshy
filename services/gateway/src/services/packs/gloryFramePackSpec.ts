@@ -10,7 +10,9 @@
  * un cadre libre jamais un succès. Le client affiche ce libellé
  * (`describeFrameUsage`) sur chaque vignette, et l'applique (`canUseFrame`).
  *
- * Le registre reste VIDE jusqu'au L3. `removalGuard` est branché par les
+ * Le registre est celui de `packages/shared/design/glory-frames/packs.json`
+ * (L3, #10154) ; le pack d'exemple s'y ajoute sous `PACK_SAMPLES=1` (staging
+ * seulement), sans jamais le remplacer. `removalGuard` est branché par les
  * routes (#10162, L10a, `atmosphereRemovalGuard`) : le pack de l'atmosphère
  * choisie ne se retire pas tant qu'elle l'est (PP7).
  */

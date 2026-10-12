@@ -74,6 +74,16 @@ public actor ContentAddressedStore {
         readVerified(file) != nil
     }
 
+    /// Efface du magasin les fichiers nommés, sauf ceux qu'un téléchargement
+    /// écrit en ce moment ; rend ceux qui sont partis.
+    @discardableResult
+    public func prune(_ names: Set<String>) -> Set<String> {
+        let removable = names.filter { PackAssetName.isContentAddressed($0) && inFlight[$0] == nil }
+        return removable.filter { name in
+            (try? FileManager.default.removeItem(at: directory.appendingPathComponent(name))) != nil
+        }
+    }
+
     // MARK: - Interne
 
     /// Une seule requête pour des demandes simultanées du même nom ; chaque

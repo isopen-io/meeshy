@@ -21,6 +21,8 @@ on:
     paths:
       - 'packages/MeeshySDK/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-offer-vectors.json'
+      - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
       - 'packages/shared/design/packs/presence-vectors.json'
       - 'packages/shared/types/frame-usage.ts'
@@ -31,6 +33,8 @@ on:
     paths:
       - 'packages/MeeshySDK/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-offer-vectors.json'
+      - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
       - 'packages/shared/design/packs/presence-vectors.json'
       - 'packages/shared/types/frame-usage.ts'

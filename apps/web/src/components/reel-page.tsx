@@ -98,6 +98,7 @@ function ReelPlayable({
   soundOn,
   accent,
   language,
+  onSoundBlocked,
 }: {
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
@@ -105,9 +106,10 @@ function ReelPlayable({
   readonly soundOn: boolean;
   readonly accent: string;
   readonly language: InterfaceLanguage;
+  readonly onSoundBlocked: () => void;
 }) {
   const active = mode === 'active';
-  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
+  const { status, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn, onSoundBlocked });
   const poster = media.thumbnailSrc ?? media.placeholder;
   const preload = mode === 'warm' ? 'metadata' : 'auto';
   /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
@@ -156,7 +158,10 @@ function ReelPlayable({
         className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
         style={{ outlineColor: 'var(--color-on-media)', WebkitTapHighlightColor: 'transparent' }}
       >
-        {status === 'paused' ? (
+        {/* Le disque ▶ ne se pose que sur le réel VISIBLE : un voisin en pause
+            ne l'a pas été par le lecteur, et il glisserait dans le champ à
+            chaque balayage. */}
+        {active && status === 'paused' ? (
           <span aria-hidden="true" className={`${VIEWER_GLASS} grid size-18 place-items-center rounded-full`}>
             <Glyph name="fillPlay" size={34} className="text-on-media" />
           </span>
@@ -250,7 +255,7 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} />
+      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
     );
   }
   if (stage.kind === 'images') {
