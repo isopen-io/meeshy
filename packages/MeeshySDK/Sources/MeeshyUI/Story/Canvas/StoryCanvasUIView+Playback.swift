@@ -362,7 +362,10 @@ extension StoryCanvasUIView {
     /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
     func applyPlaybackCadence(to link: CADisplayLink) {
         let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
-        guard !link.preferredFrameRateRange.isEqual(to: range) else { return }
+        let current = link.preferredFrameRateRange
+        guard current.minimum != range.minimum
+                || current.maximum != range.maximum
+                || current.preferred != range.preferred else { return }
         link.preferredFrameRateRange = range
     }
 
