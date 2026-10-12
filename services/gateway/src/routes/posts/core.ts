@@ -38,7 +38,7 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
-import { heldAgainstAuthor } from '../../services/admin/publication-moderation';
+import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -431,6 +431,9 @@ export function registerCoreRoutes(
       if (alsoAsReel === true && (creation.type !== 'STORY' || creation.repostOfId)) {
         return sendBadRequest(reply, 'alsoAsReel requires an original story', { code: ALSO_AS_REEL_REQUIRES_STORY });
       }
+      if (creation.repostOfId?.trim() && !(await mayRepostSource(prisma, creation.repostOfId, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
       const authorId = authContext.registeredUser.id;
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
       let companionReel: (CreatedPost & { id: string }) | undefined;
@@ -636,10 +639,11 @@ export function registerCoreRoutes(
       }
 
       // #10315 — une publication mise hors ligne par la modération ne se
-      // rouvre pas par une édition de son auteur.
-      if (await heldAgainstAuthor(prisma, { postId, userId: authContext.registeredUser.id, requestedVisibility: parsed.data.visibility })) {
-        return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
-      }
+      // rouvre pas par une édition de son auteur, ni une republication au-delà
+      // de sa source.
+      const audience = await audienceChangeVerdict(prisma, { postId, userId: authContext.registeredUser.id, requestedVisibility: parsed.data.visibility });
+      if (audience.refusal === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
+      if (audience.refusal === 'repost-broader') return sendForbidden(reply, 'A repost cannot be broader than its source', { code: 'REPOST_AUDIENCE_BROADER' });
 
       // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
       // objet = remplacement validé par le MÊME parseSharedPlace que la
@@ -661,9 +665,21 @@ export function registerCoreRoutes(
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
       const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
+      // L'écriture porte la condition « pas hors ligne » (`updatePost`) : un retrait posé
+      // pendant la requête la fait échouer (P2025), et ce refus se dit comme le verdict.
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch((error: unknown) => {
+        if (parsed.data.visibility !== undefined && parsed.data.visibility !== 'PRIVATE' && (error as { code?: unknown } | null)?.code === 'P2025') return 'held' as const;
+        throw error;
+      });
+      if (post === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (audience.clearsPriorVisibility) {
+        await prisma.post.updateMany({
+          where: { id: postId, authorId: authContext.registeredUser.id, OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] },
+          data: { moderationPriorVisibility: null },
+        });
       }
 
       // Une édition RÉCONCILIE : elle retire les lignes des partants et ne

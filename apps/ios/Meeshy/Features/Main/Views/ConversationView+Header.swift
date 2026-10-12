@@ -58,6 +58,7 @@ extension ConversationView {
             headerPresenceState: headerPresenceState,
             showsIdentity: headerLayout.avatarShowsIdentity,
             isPreview: previewMode,
+            door: headerAvatarDoor,
             onSetExpanded: { setHeaderExpanded($0) },
             onDismissFlame: { dismissHeaderFlame() },
             onNavigateToDM: { userId, name in
@@ -71,6 +72,33 @@ extension ConversationView {
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
             }
+        ))
+    }
+
+    /// Ce que le toucher de l'avatar de l'en-tête ouvre (#10300) — lu sur la
+    /// conversation VIVANTE, comme la bande d'avatars.
+    var headerAvatarDoor: ConversationHeaderAvatarDoor {
+        .resolve(
+            isDirect: liveConversation?.type == .direct,
+            isGuest: anonymousSession != nil,
+            peerUserId: liveConversation?.participantUserId,
+            hasConversation: liveConversation != nil
+        )
+    }
+
+    /// Middle slot of the header band (between back button and avatar).
+    /// Frontière NOMINALE — `ConversationHeaderMidContent` (#6194) : c'est le
+    /// getter de ce maillon que la trace du crash désignait, sous
+    /// `__swift_instantiateConcreteTypeFromMangledNameV2`. Quand l'avatar ouvre
+    /// une fiche (#10300), la bascule de l'en-tête passe à la zone libre de la bande.
+    var expandedHeaderMidContent: AnyView {
+        AnyView(ConversationHeaderMidContent(
+            layout: headerLayout,
+            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            actionButtons: { headerButtonsCluster },
+            onToggleBand: headerAvatarDoor.bandToggles(isPreview: previewMode)
+                ? { setHeaderExpanded(!composerState.showOptions) }
+                : nil
         ))
     }
 
@@ -617,8 +645,10 @@ private struct ConversationHeaderAvatarView: View {
     /// L'IDENTITÉ — pile des plus actifs puis interlocuteur ou groupe — plutôt
     /// que l'avatar replié (`ConversationHeaderLayout.avatarShowsIdentity`).
     let showsIdentity: Bool
-    /// Dans l'aperçu, l'avatar ouvre les détails : il n'y a rien à replier.
+    /// Dans l'aperçu, il n'y a rien à replier.
     let isPreview: Bool
+    /// Ce que le toucher de l'avatar ouvre (#10300).
+    let door: ConversationHeaderAvatarDoor
     var onSetExpanded: (Bool) -> Void
     var onDismissFlame: () -> Void
     var onNavigateToDM: (String, String) -> Void
@@ -731,21 +761,54 @@ private struct ConversationHeaderAvatarView: View {
         return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
     }
 
-    /// Le toucher de l'identité : dans le fil il replie l'en-tête, dans
-    /// l'aperçu il ouvre les détails de la conversation (comme le web).
-    private func identityTap() {
+    /// Le toucher de l'avatar (#10300) : il OUVRE LA FICHE — le profil du pair
+    /// d'un direct, les détails de toute autre conversation, déplié comme replié
+    /// et dans l'aperçu. Sans fiche à ouvrir (visiteur sans compte, #10205), il
+    /// garde la bascule de l'en-tête, que la zone libre de la bande porte sinon.
+    private func openDoor() {
         HapticFeedback.light()
-        if isPreview {
+        switch door {
+        case .profile:
+            onViewProfile?()
+        case .details:
             composerState.showConversationInfo = true
-        } else {
-            onSetExpanded(false)
+        case .toggle:
+            guard !isPreview else { return }
+            onSetExpanded(!showsIdentity)
         }
+    }
+
+    private func toggleBand() {
+        HapticFeedback.light()
+        onSetExpanded(!showsIdentity)
+    }
+
+    private func doorAccessibility(menu: [AvatarContextMenuItem]) -> HeaderAvatarDoorAccessibility {
+        HeaderAvatarDoorAccessibility(
+            label: door.accessibilityLabel(name: conversation?.name ?? "?", expanded: showsIdentity),
+            toggleLabel: door.bandToggles(isPreview: isPreview) ? ConversationHeaderAvatarDoor.toggleLabel(expanded: showsIdentity) : nil,
+            menuItems: menu,
+            onOpen: openDoor,
+            onToggle: toggleBand
+        )
+    }
+
+    /// Les entrées du pair d'un direct pour VoiceOver : la story (que
+    /// `MeeshyAvatar` ajoute d'office à son menu) puis le menu d'appui long.
+    private var directAccessibilityMenu: [AvatarContextMenuItem] {
+        guard let userId = conversation?.participantUserId else { return [] }
+        guard memberStoryState(for: userId) != .none else { return directContextMenu }
+        let story = AvatarContextMenuItem(
+            label: String(localized: "bubble.avatar.viewStory", defaultValue: "Voir la story", bundle: .main),
+            icon: "play.circle.fill"
+        ) { openStory(of: userId) }
+        return [story] + directContextMenu
     }
 
     var body: some View {
         if showsIdentity {
-            // Identity: participant avatar(s) — tap collapses band (fil) or
-            // opens details (aperçu, #9031)
+            // Identity: participant avatar(s) — tap opens the profile (direct)
+            // or the conversation details (#10300)
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
@@ -757,7 +820,7 @@ private struct ConversationHeaderAvatarView: View {
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
                     isHere: isHere(userId),
-                    onTap: identityTap,
+                    onTap: openDoor,
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
@@ -765,6 +828,7 @@ private struct ConversationHeaderAvatarView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: userId),
                     contextMenuItems: directContextMenu
                 )
+                .modifier(doorAccessibility(menu: directAccessibilityMenu))
             } else {
                 HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
@@ -796,12 +860,14 @@ private struct ConversationHeaderAvatarView: View {
                         accentColor: accentColor,
                         secondaryColor: secondaryColor,
                         avatarURL: conversation?.avatar,
-                        onTap: identityTap
+                        onTap: openDoor
                     )
+                    .modifier(doorAccessibility(menu: []))
                 }
             }
         } else {
-            // Collapsed: avatar trigger — tap expands band, long press shows context menu
+            // Collapsed: tap opens the profile or the details (#10300) — the band's
+            // free space expands it — long press shows the context menu
             MeeshyAvatar(
                 name: conversation?.name ?? "?",
                 context: .conversationHeaderCollapsed,
@@ -812,10 +878,7 @@ private struct ConversationHeaderAvatarView: View {
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
                 isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
-                onTap: {
-                    HapticFeedback.light()
-                    onSetExpanded(true)
-                },
+                onTap: openDoor,
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {
                         headerState.storyUserIdForHeader = userId
@@ -825,6 +888,7 @@ private struct ConversationHeaderAvatarView: View {
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
+            .modifier(doorAccessibility(menu: isDirect ? directAccessibilityMenu : []))
             // La flamme du jour, sous l'avatar replié (#9031).
             .modifier(HeaderFlameDecoration(
                 conversationId: conversation?.id ?? "",

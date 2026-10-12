@@ -163,22 +163,6 @@ export function VisitorInvitationDialog({
   );
 }
 
-/**
- * **LE FOND D'UN CONTENU REFUSÉ** (#10314) — ce que le lecteur des réels montre
- * derrière la modale quand la passerelle refuse le réel nommé : un noir de
- * média, plein écran, et rien d'autre. La publication et la story s'y alignent :
- * un lien qu'on ne peut pas voir n'est jamais un écran vide, ni une page claire
- * dont l'en-tête parle d'une publication.
- *
- * Neutre PAR CONSTRUCTION : il ne prend aucune propriété, donc ne peut porter
- * ni texte, ni média, ni auteur — la passerelle n'en sert d'ailleurs aucun
- * (`anonymousPostGate` : le même 404 qu'un contenu inexistant, D-6). Un aperçu
- * flouté exigerait de servir le média à qui n'y a pas droit.
- */
-export function RefusedContentBackdrop() {
-  return <div aria-hidden="true" data-refused-backdrop className="fixed inset-0 bg-media-backdrop" />;
-}
-
 export type VisitorInvitation = {
   /** Aucun compte : ni session, ni l'invité d'un lien de conversation. */
   readonly visitor: boolean;

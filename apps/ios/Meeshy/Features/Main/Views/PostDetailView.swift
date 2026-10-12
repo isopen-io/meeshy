@@ -822,9 +822,7 @@ struct PostDetailView: View {
                 // Le second cas est un MENSONGE — l'écran affirme une
                 // suppression qui n'a pas eu lieu et n'offre que « Retour »,
                 // retirant la seule action utile : réessayer (#4903).
-                Spacer()
                 absenceState
-                Spacer()
             }
 
             // Le composeur ne survit pas à l'absence de post : commenter ce qui

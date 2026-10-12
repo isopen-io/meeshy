@@ -95,6 +95,8 @@ struct ComposerCapturePreview: View {
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
+                    .modifier(ComposerCameraSwitchVeilStyle(switching: editedSource == nil
+                                                            && session.camera.isSwitchingCamera))
                     .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
                     .adaptiveOnChange(of: proportions, initial: true) { _, vues in

@@ -527,6 +527,11 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     public let threshold: Int?
     /// Le RANG du niveau, déjà calculé par la passerelle (`levelIndexOf`).
     public let level: Int?
+    /// #10298 — le rang du palier atteint. Présent ⇒ titre (le palier) et corps (l'exploit chiffré) sont
+    /// composés par la passerelle, à la langue du lecteur ; absent sur les lignes d'avant.
+    public let tierRank: Int?
+    /// #10298 — la valeur franchie (1 000 commentaires…), que le corps servi dit déjà.
+    public let value: Int?
 
     // MARK: - Le jeu (#9490)
     //
@@ -588,6 +593,8 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         axisKey = try container.decodeIfPresent(String.self, forKey: .axisKey)
         threshold = try container.decodeIfPresent(Int.self, forKey: .threshold)
         level = try container.decodeIfPresent(Int.self, forKey: .level)
+        tierRank = try container.decodeIfPresent(Int.self, forKey: .tierRank)
+        value = try container.decodeIfPresent(Int.self, forKey: .value)
         route = try container.decodeIfPresent(String.self, forKey: .route)
         gameSection = try container.decodeIfPresent(String.self, forKey: .gameSection)
         duoId = try container.decodeIfPresent(String.self, forKey: .duoId)
@@ -606,7 +613,7 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
-        case achievementKey, axisKey, threshold, level
+        case achievementKey, axisKey, threshold, level, tierRank, value
         case route, gameSection, duoId, weekKey, league, outcome, cup, season, step, completed
     }
 }

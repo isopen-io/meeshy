@@ -234,6 +234,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         destination.colorSpace = ComposerLiveLookRule.colorSpace
         let toile = ComposerLookPainter.thumbnailCanvas
         let effectBase = Self.reducedInGraph(frame)
+        let fige = source is ComposerStillSource
         tiles.forEach { tile in
             let cle = ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)
             let scene = tile.look.frame == ComposerPhotoFrame.none
@@ -243,10 +244,11 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
             // Un effet cherche le visage sur une sonde : il se peint depuis la
             // trame réduite PAR LE GRAPHE, lisible tout de suite — la réduction
             // en texture n'est écrite qu'à la fin du passage (#10311).
-            let base = look.effect == .none ? petit : effectBase
+            // Une photo figée garde SON image : sonde et visage se calculent une fois.
+            let base = look.effect == .none ? petit : (fige ? frame : effectBase)
             let peinte = ComposerLookPainter.paint(base, look: look, framing: framing, scene: scene, canvas: toile,
                                                    declared: source.declaredSpace,
-                                                   still: source is ComposerStillSource)
+                                                   still: fige)
             let place = slot(of: tile)
             let cible = ComposerLookStripGeometry.pixelRect(
                 CGRect(x: CGFloat(place) * cell.width, y: 0, width: cell.width, height: cell.height),

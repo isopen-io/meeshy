@@ -521,6 +521,24 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                                      mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
     }
 
+    /// #10321 — la clé d'idempotence de chaque publication par canevas, dans l'ordre.
+    var createCanvasClientMutationIds: [String?] = []
+
+    func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?,
+                          visibility: String, visibilityUserIds: [String]?, originalLanguage: String?,
+                          mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?,
+                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                          mediaCaption: [String: String]?, alsoAsReel: Bool?,
+                          clientMutationId: String?) async throws -> APIPost {
+        createCanvasClientMutationIds.append(clientMutationId)
+        return try await createCanvasPost(type: type, content: content, storyEffects: storyEffects,
+                                          visibility: visibility, visibilityUserIds: visibilityUserIds,
+                                          originalLanguage: originalLanguage, mediaIds: mediaIds,
+                                          repostOfId: repostOfId, mentions: mentions,
+                                          allowSoundExtraction: allowSoundExtraction, mediaAlt: mediaAlt,
+                                          mediaCaption: mediaCaption)
+    }
+
     func createWithType(_ type: PostType, content: String, visibility: String,
                         moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost {
         createWithTypeCallCount += 1

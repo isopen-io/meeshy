@@ -167,13 +167,23 @@ async function buildApp(opts: {
 }
 
 describe('PUT /posts/:postId — publication mise hors ligne par la modération (#10315)', () => {
-  const heldPrisma = (moderationHiddenAt: Date | null) => ({
-    post: { findFirst: jest.fn<any>().mockResolvedValue({ authorId: USER_ID, moderationHiddenAt }) },
-  });
+  const prismaFor = (row: Record<string, unknown>) => {
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    return {
+      prisma: {
+        post: {
+          findFirst: jest.fn<any>().mockResolvedValue({ authorId: USER_ID, moderationHiddenAt: null, moderationPriorVisibility: null, repostOfId: null, ...row }),
+          updateMany,
+        },
+      },
+      updateMany,
+    };
+  };
 
   it("refuse à l'auteur de rouvrir l'audience, sans rien écrire", async () => {
     mockUpdatePost.mockClear();
-    const app = await buildApp({ prisma: heldPrisma(new Date('2026-10-11T00:00:00Z')) });
+    const { prisma } = prismaFor({ moderationHiddenAt: new Date('2026-10-11T00:00:00Z') });
+    const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { visibility: 'PUBLIC' } });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('POST_MODERATION_HELD');
@@ -183,10 +193,48 @@ describe('PUT /posts/:postId — publication mise hors ligne par la modération 
 
   it("laisse l'auteur rouvrir l'audience d'une publication en ligne", async () => {
     mockUpdatePost.mockClear();
-    const app = await buildApp({ prisma: heldPrisma(null) });
+    const { prisma, updateMany } = prismaFor({});
+    const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { visibility: 'PUBLIC' } });
     expect(res.statusCode).toBe(200);
     expect(mockUpdatePost).toHaveBeenCalledTimes(1);
+    expect(updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("un retrait posé pendant la requête refuse l'écriture conditionnelle : 403, jamais 500", async () => {
+    mockUpdatePost.mockRejectedValueOnce(Object.assign(new Error('Record not found'), { code: 'P2025' }));
+    const { prisma } = prismaFor({});
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { visibility: 'PUBLIC' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('POST_MODERATION_HELD');
+    await app.close();
+  });
+
+  it("efface l'audience retenue par une mise en privé dès que l'auteur choisit la sienne", async () => {
+    const { prisma, updateMany } = prismaFor({ moderationPriorVisibility: 'PUBLIC' });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'PUT', url: `/posts/${POST_ID}`, payload: { visibility: 'FRIENDS' } });
+    expect(res.statusCode).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: POST_ID, authorId: USER_ID, OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] },
+      data: { moderationPriorVisibility: null },
+    });
+    await app.close();
+  });
+});
+
+describe('POST /posts — republier une source hors ligne (#10315)', () => {
+  it('refuse sans rien créer : la republication ne rouvre pas un retrait', async () => {
+    mockCreatePost.mockClear();
+    const prisma = {
+      post: { findFirst: jest.fn<any>().mockResolvedValue({ visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z') }) },
+    };
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { type: 'POST', visibility: 'PRIVATE', repostOfId: '507f1f77bcf86cd799439033' } });
+    expect(res.statusCode).toBe(404);
+    expect(mockCreatePost).not.toHaveBeenCalled();
     await app.close();
   });
 });

@@ -242,6 +242,9 @@ describe('posts/postIncludes — canonical shared selects', () => {
           // inexistant que la validation serveur existe pour supprimer.
           // La forme partagée est verrouillée par `repostReferenceInclude.test.ts`.
           'postMentions',
+          // #10315 — lus pour décider si l'original se sert encore, retirés par la projection.
+          'visibility',
+          'moderationHiddenAt',
         ].sort(),
       );
     });

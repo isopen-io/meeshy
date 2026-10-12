@@ -669,7 +669,8 @@ public enum MessageTextRenderer {
             case .link(let written):
                 charOffset += written.sourceCount
                 if context.linksAreInert {
-                    var plain = AttributedString(written.sourceText)
+                    charOffset += written.inertText.count - written.sourceCount
+                    var plain = AttributedString(written.inertText)
                     plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
                     plain.foregroundColor = color
                     result.append(plain)
@@ -734,6 +735,16 @@ private extension WrittenLink {
     }
 
     var sourceCount: Int { sourceText.count }
+
+    /// #10286 — what an author without an account typed, the notation kept:
+    /// `[label](url)` keeps its address visible (a label alone would hide the
+    /// destination). Mirror of `writtenTextOf` (`apps/web/src/lib/links/link-display.ts`).
+    var inertText: String {
+        switch self {
+        case .labelled(let label, let url): return "[\(label)](\(url.absoluteString))"
+        default: return sourceText
+        }
+    }
 }
 
 private extension String {

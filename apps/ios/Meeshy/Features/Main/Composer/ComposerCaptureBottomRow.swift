@@ -102,6 +102,16 @@ struct ComposerCaptureBottomRow: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
+            .overlay(alignment: .bottomLeading) {
+                if ComposerCaptureGesture.offersRail(context) {
+                    ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                        session.toggleFamily(famille)
+                    }
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.bottom, ComposerLookStripRule.railBottomInset)
+                        .transition(.opacity)
+                }
+            }
             if showsHint {
                 Text(showsLock ? ComposerSceneCameraCopy.lockHint
                                : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
@@ -116,14 +126,6 @@ struct ComposerCaptureBottomRow: View {
             }
         }
         .padding(.bottom, MeeshySpacing.lg)
-        .overlay(alignment: .bottomLeading) {
-            if ComposerCaptureGesture.offersRail(context) {
-                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
-                    .transition(.opacity)
-            }
-        }
     }
 
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
@@ -150,12 +152,31 @@ struct ComposerCaptureBottomRow: View {
             switch panneau {
             case .trim:
                 if let trimClip {
-                    mediaTrack(.trim) {
+                    if session.takeHasAudio {
+                        // **Le son se pose PAR-DESSUS la bande vidéo** (#10341) :
+                        // spectre et volume quand « Son » est actif, le bouton du
+                        // son toujours au bord droit intérieur, avant la poignée.
                         ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                            .overlay(alignment: .bottom) {
+                                if session.editPanels.contains(.sound) {
+                                    ComposerSoundTrack(session: session, url: trimClip.url, overlaid: true)
+                                        .padding(.horizontal, ComposerTrimTrack.trackInset)
+                                }
+                            }
+                            .overlay(alignment: .bottomTrailing) {
+                                ComposerTakeMuteButton(muted: session.takeSound.muted) { session.toggleTakeMute() }
+                                    .frame(height: ComposerTrimTrack.height)
+                                    .padding(.trailing, ComposerTrimTrack.trackInset)
+                            }
+                            .transition(.opacity)
+                    } else {
+                        mediaTrack(.trim) {
+                            ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                        }
                     }
                 }
             case .sound:
-                if let trimClip {
+                if let trimClip, !session.editPanels.contains(.trim) {
                     mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
                 }
             case .presets:
@@ -176,9 +197,13 @@ struct ComposerCaptureBottomRow: View {
     /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
     /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
     private var familyRow: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
-            ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                .padding(.leading, MeeshySpacing.mdPlus)
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+            // Le haut de la colonne sur le haut des cases (#10339).
+            ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                session.toggleFamily(famille)
+            }
+            .padding(.leading, MeeshySpacing.mdPlus)
+            .padding(.top, ComposerTriggerOutline.outset)
             ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
         }
         .frame(height: ComposerEditScene.familyRow)

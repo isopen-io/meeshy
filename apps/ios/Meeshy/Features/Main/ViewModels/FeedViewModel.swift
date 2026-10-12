@@ -66,7 +66,7 @@ class FeedViewModel: ObservableObject {
 
     private var nextCursor: String?
     private let api: APIClientProviding
-    private let offlineQueue: OfflineQueueing
+    let offlineQueue: OfflineQueueing
     let feedCache: any FeedCacheStoring
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
@@ -776,68 +776,6 @@ class FeedViewModel: ObservableObject {
     /// from any isolation (matches `SyncPillViewModel.staleInflightThreshold`).
     nonisolated static let offlineStuckThreshold: TimeInterval = 60
 
-    /// Returns the last POST/REEL that got stuck offline (unsent for more than
-    /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
-    ///
-    /// **Une ligne dont un média est de l'AUDIO n'est jamais proposée, et c'est
-    /// une garde de CONTENU, pas une préférence d'ergonomie.**
-    ///
-    /// Le composer du feed ne sait pas rouvrir un enregistrement : sa
-    /// restauration ne traite que l'image et la vidéo
-    /// (`FeedView+Attachments.restoreRecoveredMedia`). Offrir la ligne quand
-    /// même produisait une chaîne complète de DESTRUCTION — brouillon
-    /// « restauré » VIDE (un vocal n'a pas de texte), `recoveredPostCmid` posé
-    /// malgré tout, puis, à la publication suivante quelle qu'elle soit,
-    /// `supersedeRecoveredPost` → `cancelCreatePost`, qui efface le fichier
-    /// relocalisé ET la ligne. L'enregistrement n'a alors JAMAIS été vu par son
-    /// auteur, et rien ne le lui dit.
-    ///
-    /// Le trou n'existait pas avant que les deux jumeaux audio entrent dans
-    /// cette file : `case .audio: break` y était juste, et son commentaire
-    /// (« audio offline posts aren't queued through this composer path yet »)
-    /// était vrai. Un lot qui fait CONVERGER une chaîne doit énumérer les
-    /// CONSOMMATEURS de la ligne qu'il vient de créer, pas seulement les
-    /// producteurs.
-    ///
-    /// Prix assumé : tant qu'un vocal est bloqué en file, aucun brouillon plus
-    /// ancien n'est proposé. Une affordance de reprise retardée n'est pas
-    /// comparable à un enregistrement détruit.
-    func recoverUnsentPost() async -> RecoveredOfflinePost? {
-        let draft = await offlineQueue.recoverLastUnsentPost(
-            matchingTypes: ["POST", "REEL"],
-            olderThan: Self.offlineStuckThreshold
-        )
-        guard let draft else { return nil }
-        let porteUneVoix = draft.localMediaURLs.contains { url in
-            AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)) == .audio
-        }
-        return porteUneVoix ? nil : draft
-    }
-
-    /// Supersedes a recovered post/reel when the user re-sends it from the
-    /// composer, so the resend replaces the stuck row (and reclaims its
-    /// pending-media files) instead of duplicating it on reconnect.
-    ///
-    /// Also drops the orphaned optimistic feed post keyed by this cmid: an
-    /// offline post/reel was inserted optimistically (id == cmid) when first
-    /// queued, and its `.createPost` row is what we're now deleting — without
-    /// this the optimistic card would linger in the feed forever (its row gone,
-    /// so it can never reconcile). The resend inserts a fresh optimistic card
-    /// under a new cmid.
-    func supersedeRecoveredPost(clientMutationId: String) async {
-        removeOptimisticPost(id: clientMutationId)
-        await offlineQueue.cancelCreatePost(clientMutationId: clientMutationId)
-    }
-
-    /// Removes an optimistic post by id (re-resolving the index since the feed
-    /// may mutate across an `await`). Rolls back a queued create the outbox
-    /// refused or exhausted.
-    private func removeOptimisticPost(id: String) {
-        guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
-        posts.remove(at: i)
-        debouncedCacheSave()
-    }
-
     /// U1b — durably publishes an OFFLINE media post. Inserts an optimistic post
     /// keyed by a fresh cmid (rendering the picked files as a local-URL preview)
     /// and routes the media through `enqueuePostMedia` (relocate + write-ahead
@@ -1270,6 +1208,7 @@ class FeedViewModel: ObservableObject {
     }
 
     func deletePost(_ postId: String) async {
+        guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
         let snapshot = posts
         posts.removeAll { $0.id == postId }
 

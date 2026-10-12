@@ -3855,6 +3855,9 @@ model Post {
   /// les portes de visibilité existantes) et, tant qu'il tient, l'auteur ne
   /// peut pas rouvrir l'audience (`PUT /posts/:postId` refuse `visibility`).
   moderationHiddenAt DateTime?
+  /// Qui a mis la publication hors ligne : la lever exige un rang au moins égal
+  /// au sien (un modérateur ne défait pas le retrait d'un administrateur).
+  moderationHiddenById String? @db.ObjectId
   /// L'audience que l'auteur avait choisie avant qu'un geste de modération ne
   /// la force en PRIVATE, rendue par « Remettre en ligne ». null = aucune
   /// audience retenue (rien à rendre).

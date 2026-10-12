@@ -11,7 +11,8 @@ import { CommentsSheetPortal } from '@/components/publication-comments-sheet-laz
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { StoryActionRail } from '@/components/story-action-rail';
 import { ViewerExitButton, type ViewerIdentityModel } from '@/components/viewer-chrome';
-import { isContentRefusal, RefusedContentBackdrop, useVisitorInvitation } from '@/components/visitor-invitation';
+import { RefusedContentBackdrop, RefusedContentNotice, refusalViewOf } from '@/components/refused-content';
+import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { useViewerSwipe } from '@/components/viewer-chrome-gestures';
 import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
@@ -638,9 +639,13 @@ export default function StoryScreen() {
      fermeture que l'effet ci-dessus est en train d'exécuter. L'afficher, même
      une image, ferait clignoter un refus là où le lecteur se referme. */
   const notFound = !loading && playablePosition !== 'close' && (currentStory === undefined || group === undefined);
-  /* Refusée par la passerelle (403/404) — jamais une panne : le visiteur garde
-     alors l'état « Réessayer » ci-dessous, et le refus n'a que la modale. */
-  const visitorRefused = visitor && notFound && isContentRefusal(fallback.error);
+  /* Refusée par la passerelle (403/404, D-6) — jamais une panne, qui garde
+     « Réessayer » ci-dessous. Un refus se présente comme un réel refusé
+     (#10314, #10318) : l'invitation pour un visiteur, la notice pour un membre,
+     sur le même noir. */
+  const refused = notFound && isContentRefusal(fallback.error);
+  const refusalView = refused ? refusalViewOf({ visitor }) : null;
+  const visitorRefused = refusalView === 'invitation';
   const invitation = useVisitorInvitation({ kind: 'story', state: currentStory !== undefined ? 'served' : visitorRefused ? 'refused' : 'pending' });
 
   /* L'IDENTITÉ DE L'AUTEUR — la photo (#6975, même source et même loi que la
@@ -707,6 +712,8 @@ export default function StoryScreen() {
         </div>
       ) : visitorRefused ? (
         <RefusedContentBackdrop />
+      ) : refusalView === 'notice' ? (
+        <RefusedContentNotice language={interfaceLanguage} onBack={closeViewer} />
       ) : notFound ? (
         <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={38} style={{ color: 'var(--color-on-media-3)' }} />
