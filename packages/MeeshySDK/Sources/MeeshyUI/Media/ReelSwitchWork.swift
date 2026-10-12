@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // MARK: - Le passage de réel à réel suit le doigt comme un rail (#10354)
@@ -116,5 +117,22 @@ public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
     /// élue ET posée. La perte de l'élection, elle, désengage tout de suite.
     public static func engages(isElected: Bool, isSettled: Bool) -> Bool {
         phase(isElected: isElected, isSettled: isSettled) == .settled
+    }
+}
+
+// MARK: - La barre de lecture ne vole plus le balayage vertical (#10354)
+
+/// **La barre de lecture d'un réel ne revendique que l'axe HORIZONTAL.**
+///
+/// Elle posait un `highPriorityGesture(DragGesture(minimumDistance: 0))` : tout
+/// balayage vertical qui partait du bas de l'écran — là où le pouce se pose —
+/// était avalé par la barre, et le pager ne défilait pas. Le glissement ne
+/// commence qu'après `minimumDistance`, et ne parcourt la vidéo que s'il est
+/// d'abord horizontal ; une fois parti, il garde la main jusqu'au relâcher.
+public enum ReelScrubAxis {
+    public static let minimumDistance: CGFloat = 6
+
+    public static func claims(translation: CGSize, alreadySeeking: Bool) -> Bool {
+        alreadySeeking || abs(translation.width) > abs(translation.height)
     }
 }

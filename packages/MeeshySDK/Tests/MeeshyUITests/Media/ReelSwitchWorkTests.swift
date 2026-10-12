@@ -151,3 +151,23 @@ final class SharedAVPlayerManagerDeferredPipTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(SharedAVPlayerManager.deferredPipDelay, .milliseconds(100))
     }
 }
+
+/// La barre de lecture ne revendique que l'axe horizontal (#10354).
+final class ReelScrubAxisTests: XCTestCase {
+
+    func test_horizontalDrag_scrubs() {
+        XCTAssertTrue(ReelScrubAxis.claims(translation: CGSize(width: 12, height: 3), alreadySeeking: false))
+    }
+
+    func test_verticalSwipe_isLeftToThePager() {
+        XCTAssertFalse(ReelScrubAxis.claims(translation: CGSize(width: 2, height: -40), alreadySeeking: false))
+    }
+
+    func test_onceScrubbing_keepsTheHandUntilRelease() {
+        XCTAssertTrue(ReelScrubAxis.claims(translation: CGSize(width: 1, height: 30), alreadySeeking: true))
+    }
+
+    func test_aTapNoLongerClaimsAnything() {
+        XCTAssertGreaterThanOrEqual(ReelScrubAxis.minimumDistance, 6)
+    }
+}
