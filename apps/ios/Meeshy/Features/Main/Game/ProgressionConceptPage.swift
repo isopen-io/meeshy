@@ -373,8 +373,7 @@ struct ProgressionConceptGestures: View {
                 GameMintPreviewView(
                     game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
-                    celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } },
-                    onMintWithFragments: { Task { await viewModel.mintWithFragments() } }
+                    celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
                 )
                 // Le palier du trésor : ce que les Meeshes gardées remplissent.
                 GameElementTile(detail: GameElementDetails.treasuryTier(game.treasury))

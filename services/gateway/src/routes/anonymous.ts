@@ -39,6 +39,8 @@ import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest, type LinkVisitRecorder } from './links/utils/link-visitor';
 import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
 import { guestAttachmentKindsOf } from '../services/attachments/ContentSignature';
+import { extractUserAgent } from '../services/GeoIPService';
+import { clientDecodesLegacyCounts, isGuestViewer } from '../services/guests/guestMemberVisibility';
 
 /**
  * Deux coutures injectables (#7794) : l'exécuteur post-réponse, pour qu'un
@@ -236,6 +238,7 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
         key: linkId,
         authContext: undefined,
         requestIp: resolveClientIp(request),
+        requestUserAgent: extractUserAgent(request),
         profile: {
           firstName: body.firstName,
           lastName: body.lastName,
@@ -743,6 +746,28 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
       const spokenLanguages = spokenLanguagesOf(allActiveParticipants);
       const languageCount = spokenLanguages.length;
 
+      // #10205 — un lecteur sans compte Meeshy ne lit ni le nombre de
+      // participants (effectifs, compteurs d'usage) ni la fiche de l'hôte :
+      // de lui ne restent que le nom affiché, le pseudo et l'avatar.
+      // RÉTROCOMPATIBILITÉ (#9223) : le SDK iOS publié décode `creator.id` et les
+      // trois effectifs en champs OBLIGATOIRES — à un client natif, une forme
+      // décodable aux effectifs NEUTRES (0), jamais le vrai chiffre.
+      const viewerIsGuest = isGuestViewer((request as UnifiedAuthRequest).authContext);
+      const legacyCounts = clientDecodesLegacyCounts(request.headers);
+      const guestCreator = shareLink.creator && {
+        ...(legacyCounts ? { id: shareLink.creator.id } : {}),
+        username: shareLink.creator.username,
+        displayName: shareLink.creator.displayName,
+        avatar: shareLink.creator.avatar,
+      };
+      const creator = viewerIsGuest ? guestCreator : shareLink.creator;
+      const guestStats = legacyCounts
+        ? { totalParticipants: 0, memberCount: 0, anonymousCount: 0, languageCount, spokenLanguages }
+        : { languageCount, spokenLanguages };
+      const stats = viewerIsGuest
+        ? guestStats
+        : { totalParticipants, memberCount, anonymousCount, languageCount, spokenLanguages };
+
       return sendSuccess(reply, {
           id: shareLink.id, // ID de la conversationShareLink pour les appels ulterieurs
           linkId: shareLink.linkId,
@@ -750,9 +775,9 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           description: shareLink.description,
           expiresAt: shareLink.expiresAt,
           maxUses: shareLink.maxUses,
-          currentUses: shareLink.currentUses,
+          ...(viewerIsGuest ? {} : { currentUses: shareLink.currentUses }),
           maxConcurrentUsers: shareLink.maxConcurrentUsers,
-          currentConcurrentUsers: shareLink.currentConcurrentUsers,
+          ...(viewerIsGuest ? {} : { currentConcurrentUsers: shareLink.currentConcurrentUsers }),
           requireAccount: shareLink.requireAccount,
           requireNickname: shareLink.requireNickname,
           requireEmail: shareLink.requireEmail,
@@ -764,15 +789,8 @@ export async function anonymousRoutes(fastify: FastifyInstance, options: Anonymo
           allowViewHistory: shareLink.allowViewHistory,
           allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
           conversation: shareLink.conversation,
-          creator: shareLink.creator,
-          // Nouvelles statistiques
-          stats: {
-            totalParticipants,
-            memberCount,
-            anonymousCount,
-            languageCount,
-            spokenLanguages
-          }
+          creator,
+          stats
         });
 
     } catch (error) {

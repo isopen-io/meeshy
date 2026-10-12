@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
@@ -12,11 +12,13 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { skipLinkLabel } from '@/lib/skip-link';
-import { showsFloatingMenus } from '@/lib/view/floating-gate';
+import { floatingMenusHost } from '@/lib/view/floating-gate';
+import { isWide, subscribeWide } from '@/lib/view/split-query';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
 import { CallLayer } from './call-layer';
+import { LazyFloatingMenus as FloatingMenus, loadFloatingMenus } from './floating-menus-lazy';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
@@ -80,18 +82,13 @@ const SyncPill = lazy(chargerPastille);
  * de l'application : les attendre au premier appui ferait clignoter la
  * navigation entière au démarrage.
  *
- * **`showsFloatingMenus` seul reste en statique**, exactement comme
+ * **`floatingMenusHost` seul reste en statique**, exactement comme
  * `useSyncPillArmed` : il ne connaît ni glyphe, ni libellé, ni géométrie — il
- * répond OUI ou NON sur une clé de route, et c'est son OUI qui rend le reste.
+ * répond OÙ (la fenêtre, la colonne de la liste, nulle part) sur une clé de
+ * route, et c'est sa réponse qui rend le reste. Leur chargement vit dans
+ * `floating-menus-lazy.ts` depuis #10117 : le cadre côte à côte pose les mêmes
+ * menus dans la colonne de la liste, sur le même chunk.
  */
-const chargerMenus = () =>
-  /* Les menus se disent dans la langue d'interface (#6206) : leur catalogue
-     est attendu avec leur chunk, en parallèle — `import()` comme le catalogue
-     sont idempotents, le préchargement ci-dessous ne paie rien deux fois. */
-  Promise.all([import('./floating-menus'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
-    default: m.FloatingMenus,
-  }));
-const FloatingMenus = lazy(chargerMenus);
 
 /**
  * ...ET LA BANNIÈRE DE MISE À JOUR (#6936), troisième exception à la minceur,
@@ -190,7 +187,12 @@ export default function Shell({ children }: { children: ReactNode }) {
   const invitationArmee = useActivationInviteArmed();
   const gardeEmail = useEmailGatePresenter();
   const routeKey = useRoute().key;
-  const menusArmes = showsFloatingMenus(routeKey);
+  /* SUR ORDINATEUR, LE CADRE CÔTE À CÔTE POSE LES MENUS DANS LA COLONNE DE LA
+     LISTE (#10117) : la coquille ne les pose sur la fenêtre que hors du cadre,
+     par la même règle — jamais deux couches. */
+  const large = useSyncExternalStore(subscribeWide, isWide, () => false);
+  const invite = useStore(sessionStore, (state) => state.session.status === 'guest');
+  const menusArmes = floatingMenusHost({ routeKey, wide: large, guest: invite }) === 'screen';
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -198,7 +200,7 @@ export default function Shell({ children }: { children: ReactNode }) {
      le module déjà résolu au lieu de rouvrir une requête. */
   useEffect(() => {
     void chargerPastille();
-    void chargerMenus();
+    void loadFloatingMenus();
   }, []);
 
   return (

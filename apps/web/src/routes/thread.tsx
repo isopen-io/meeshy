@@ -10,11 +10,12 @@ import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
-import { apiConfig } from '@/lib/api/config';
-import { webOriginOf } from '@/lib/links/web-origin';
+import { WorldParticipantCardHost } from '@/components/world-participant-card-host';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
 import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
 import { ThreadWriteLock } from '@/components/thread-write-lock';
+import { ThreadComposerChrome } from '@/components/thread-composer-chrome';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -72,6 +73,7 @@ import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
+import { selfSenderOf } from '@/lib/view/self-sender';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
@@ -113,10 +115,15 @@ import { ThreadModes } from './thread-modes';
  * depuis la bannière (`conversation-preview-host.tsx`) : la conversation vient
  * de l'aperçu et non de l'adresse, la racine remplit la feuille au lieu du
  * viewport, et l'en-tête se montre COMPLET, sans chevron retour.
+ *
+ * EN FOCUS (#10100, `focus`) — le fil de l'invité sur `/world` : la
+ * conversation vient de sa session, pas de l'adresse ; le reste est le fil.
  */
-export default function ThreadScreen({ preview }: { readonly preview?: { readonly conversationId: string } } = {}) {
+type ThreadScreenProps = { readonly preview?: { readonly conversationId: string }; readonly focus?: { readonly conversationId: string } };
+
+export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {}) {
   const route = useOptionalRoute();
-  const id = preview?.conversationId ?? route?.params['conversation'] ?? '';
+  const id = preview?.conversationId ?? focus?.conversationId ?? route?.params['conversation'] ?? '';
 
   /**
    * LA SOURCE (#5650, F2/F5/§5 étape 10) — `useThreadData(id)` compose
@@ -168,6 +175,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * rendu final ne montre pas encore le fil réel.
    */
   const viewerParticipant = useMemo(() => conversation?.participants.find((p) => p.userId === viewer.id), [conversation, viewer.id]);
+  /** L'auteur d'un envoi en vol : un invité y porte le nom qu'il a donné (#10120). */
+  const selfSender = useMemo(() => selfSenderOf({ participants: conversation?.participants, viewer }), [conversation, viewer]);
   const composerAccess = useComposerAccess({ session, conversationId, conversation, viewerId: viewer.id, rights: viewerParticipant?.permissions });
 
   /**
@@ -283,7 +292,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const { pending, deliveryOf, startedAtOf, reasonOf, permanentOf, send, retry } = useSend({
     conversationId,
     viewerId: viewer.id ?? '',
-    ...(viewerParticipant === undefined ? {} : { sender: viewerParticipant }),
+    ...(selfSender === undefined ? {} : { sender: selfSender }),
     announce: announcer.announce,
   });
   /**
@@ -566,7 +575,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
   /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
-  useEngagementRevalidation(conversationId);
+  useEngagementRevalidation({ conversationId, registered: !viewer.isAnonymous });
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
@@ -661,7 +670,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
   return (
-    /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
+    /* `h-app` (`100dvh` moins le clavier qui recouvre, #10005) +
+       `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
        difference entre une PAGE (le document entier defile, le composeur suit)
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
@@ -689,7 +699,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
-      className={`thread-root relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
+      className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
@@ -796,6 +806,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         */}
         <ConversationDetailsContext.Provider value={openDetails}>
           <AfterReadSeenContext.Provider value={afterRead.noteSeen}>
+          <WorldParticipantCardHost conversationIdentifier={conversation?.identifier}>
           <ThreadModes
             mode={reading.readingDecision.mode}
             viewer={viewer}
@@ -844,6 +855,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
             unreadCount={unreadBoundary?.unreadCount ?? 0}
           />
+          </WorldParticipantCardHost>
           </AfterReadSeenContext.Provider>
         </ConversationDetailsContext.Provider>
       </main>
@@ -903,7 +915,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
           l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
           jointes) ne désengage rien.
         */
-        /* `glass-prominent` — LE MATÉRIAU DU SITE UNIQUE (#7143, D-51). Cette
+        /* `glass-prominent` — LE MATÉRIAU DU SITE UNIQUE (#7143, D-51), posé
+            par `ThreadComposerChrome` : la bande au téléphone, le dock de la
+            colonne sur ordinateur (#10101). Cette
             bande flotte depuis #6213 et n'a JAMAIS rien porté : le fil
             transitait dessous et ses bulles restaient lisibles sous le rail et
             la pilule « Message… ». D-50 l'interdit déjà pour tout le chrome
@@ -916,11 +930,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             (#6537, « supprimer ces voiles, non pas simplement les rendre
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
-        <div
-          className="thread-composer-chrome thread-column glass-prominent"
-          onFocus={chrome.onComposerFocus}
-          onBlur={chrome.onComposerBlur}
-        >
+        <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             preferred={readerLanguages}
             onSend={sendAndReplayFlame}
@@ -934,7 +944,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
           />
-        </div>
+        </ThreadComposerChrome>
         </ThreadWriteLock>
       )}
       </div>
@@ -947,7 +957,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         viewerId={viewer.id ?? ''}
         storyRingOf={storyRingOf}
         deps={apiDeps}
-        origin={webOriginOf(apiConfig.base, window.location.origin)}
+        origin={publicWebOrigin(window.location.origin)}
         onClose={() => setDetailsOpen(false)}
         onJumpToMessage={(messageId) => {
           setDetailsOpen(false);

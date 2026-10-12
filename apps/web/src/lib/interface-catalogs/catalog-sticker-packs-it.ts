@@ -53,6 +53,17 @@ const itStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Un testo di lunghezza massima uscirebbe: allarga la zona o riduci la lunghezza',
   'stickerPacks.problem.count': 'Un pacchetto ha da 3 a 120 sticker',
   'stickerPacks.problem.packField': 'Dai al pacchetto un nome, una descrizione e una firma',
+  'packs.title': 'Pacchetti e download',
+  'packs.segments': 'Tipo di pacchetto',
+  'packs.segment.stickers': 'Sticker',
+  'packs.segment.frames': 'Cornici del gioco',
+  'packs.frames.tabs': 'Pacchetti di cornici',
+  'packs.frames.hint': 'Installa i pacchetti di cornici che immortalano le tue tappe del gioco. Ogni cornice indica dove si può usare.',
+  'packs.frames.empty': 'Ancora nessun pacchetto di cornici.',
+  'packs.frames.update': 'Questo pacchetto richiede una versione più recente di Meeshy. Aggiorna Meeshy per vedere le sue cornici.',
+  'packs.frames.failed': 'Impossibile caricare le cornici di questo pacchetto — riprova',
+  'packs.frames.count': '{count} cornici',
+  'packs.frames.weight': '{size} da scaricare',
 } satisfies StickerPacksCatalog;
 
 export default itStickerPacks;

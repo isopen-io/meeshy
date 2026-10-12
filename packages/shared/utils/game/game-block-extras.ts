@@ -28,16 +28,16 @@ import {
   type LeagueKey,
   type LeagueMemberPoints,
 } from './league.js';
+import { SEASON_SEAL_PRICE, SEASON_STEP_POINTS, SEASON_STEPS, seasonProgress, seasonStepReward } from './season.js';
 import {
-  SEASON_SEAL_PRICE,
-  SEASON_STEPS,
-  seasonCalendar,
-  seasonOfMoment,
-  seasonProgress,
-  seasonStepReward,
-  seasonWeek,
-  upcomingSeason,
-} from './season.js';
+  DEFAULT_SEASON_SCHEDULE,
+  scheduledSeasonCalendar,
+  scheduledSeasonOfMoment,
+  scheduledSeasonWeek,
+  scheduledUpcomingSeason,
+  seasonDefinitionOf,
+  type SeasonSchedule,
+} from './season-schedule.js';
 import { orderShowcase, type ShowcaseVisibility, type TrophyRecord } from './trophies.js';
 import type {
   GameAchievementRarities,
@@ -50,6 +50,7 @@ import type {
   GameUpcomingSeasonBlock,
   GameVisibility,
 } from '../../types/game-v2.js';
+import type { GamePhotoBlock } from '../../types/game-photo.js';
 
 export type GameBlockExtrasFacts = {
   readonly userId: string;
@@ -91,6 +92,8 @@ export type GameBlockExtrasFacts = {
     readonly claimedSteps: readonly number[];
     readonly sealOwned: boolean;
   };
+  /** Le calendrier des saisons SERVI (#10016) ; absent, la constante de `season.ts`. */
+  readonly schedule?: SeasonSchedule;
   readonly trophies: readonly TrophyRecord[];
   readonly showcaseOrder: readonly string[];
   readonly atlas: AtlasState;
@@ -118,6 +121,8 @@ export type GameBlockExtras = {
    * n'atteint le seuil d'affichage.
    */
   readonly achievementRarities?: GameAchievementRarities;
+  /** Les réglages et le registre des moments photo (#10162) : des faits du compte que la passerelle pose à côté. */
+  readonly photo?: GamePhotoBlock;
 };
 
 const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelForUnlocks({ score, levelRecord }));
@@ -198,16 +203,18 @@ function duoBlock(facts: GameBlockExtrasFacts, record: number): GameDuoBlock {
 }
 
 function seasonBlock(facts: GameBlockExtrasFacts): GameSeasonBlock | null {
-  const number = seasonOfMoment({ dayKey: facts.today, minuteOfDay: facts.minuteOfDay });
+  const schedule = facts.schedule ?? DEFAULT_SEASON_SCHEDULE;
+  const number = scheduledSeasonOfMoment(schedule, { dayKey: facts.today, minuteOfDay: facts.minuteOfDay });
   if (number === null) return null;
-  const calendar = seasonCalendar(number);
-  const week = seasonWeek(leagueWeekOfMoment({ dayKey: facts.today, minuteOfDay: facts.minuteOfDay }));
+  const calendar = scheduledSeasonCalendar(schedule, number);
+  const week = scheduledSeasonWeek(schedule, leagueWeekOfMoment({ dayKey: facts.today, minuteOfDay: facts.minuteOfDay }));
   if (calendar === null || week === null) return null;
 
   const progress = seasonProgress({ stars: facts.season.stars });
   const claimed = [...new Set(facts.season.claimedSteps)].filter((s) => s >= 1 && s <= SEASON_STEPS).sort((a, b) => a - b);
   const nextStep = Array.from({ length: progress.steps }, (_, i) => i + 1).find((step) => !claimed.includes(step));
-  const nextReward = nextStep === undefined ? null : seasonStepReward(nextStep);
+  const stepPoints = seasonDefinitionOf(schedule, number)?.stepPoints;
+  const nextReward = nextStep === undefined ? null : seasonStepReward(nextStep, stepPoints);
 
   return {
     number,
@@ -225,6 +232,7 @@ function seasonBlock(facts: GameBlockExtrasFacts): GameSeasonBlock | null {
     nextReward: nextStep === undefined || nextReward === null ? null : { step: nextStep, reward: nextReward },
     sealOwned: facts.season.sealOwned,
     sealPrice: SEASON_SEAL_PRICE,
+    stepPoints: stepPoints ?? SEASON_STEP_POINTS,
   };
 }
 
@@ -234,7 +242,7 @@ function seasonBlock(facts: GameBlockExtrasFacts): GameSeasonBlock | null {
  * la même pour tous, qui ne lit aucun fait du joueur ni d'autrui.
  */
 function upcomingSeasonBlock(facts: GameBlockExtrasFacts): GameUpcomingSeasonBlock | null {
-  const upcoming = upcomingSeason({ dayKey: facts.today, minuteOfDay: facts.minuteOfDay });
+  const upcoming = scheduledUpcomingSeason(facts.schedule ?? DEFAULT_SEASON_SCHEDULE, { dayKey: facts.today, minuteOfDay: facts.minuteOfDay });
   return upcoming === null
     ? null
     : { number: upcoming.number, themeKey: upcoming.themeKey, startDay: upcoming.startDay, endDay: upcoming.endDay };

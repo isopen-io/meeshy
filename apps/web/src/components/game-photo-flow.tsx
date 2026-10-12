@@ -101,7 +101,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   const [still, setStill] = useState<Blob | null>(null);
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
-  const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string } | null>(null);
+  const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string; readonly action?: 'save' } | null>(null);
   /* Le bandeau que porte l'image COMPOSÉE — pas celui que la carte porterait maintenant : un lien lu
      après la frappe ne change ni l'image qui part, ni son texte. */
   const [composedReferral, setComposedReferral] = useState<PhotoReferral | null>(null);
@@ -369,18 +369,29 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     announce(await env.save(outgoing[format]), gameText('game.photo.notice.save_failed'));
   }, [announce, env, format, outgoingFiles]);
 
+  /* La recette (#10161) : le 9:16 composé (en JPEG, #10238), la photo d'origine réduite (jamais pour une carte seule) et le miroir. */
   const keep = useCallback(async () => {
     if (state.step !== 'result') return;
     const outgoing = await outgoingFiles();
     if (outgoing === null) return;
-    const ok = await env.notebook.keep(moment, { story: outgoing.story, square: outgoing.square, mode: state.mode });
-    dispatch({ type: 'kept', ok });
+    const taken = state.mode === 'card' ? null : photo.current;
+    const source = taken === null ? null : await (env.developSource?.(taken) ?? Promise.resolve(null)).catch(() => null);
+    const story = await (env.keptStory?.(outgoing.story) ?? Promise.resolve(outgoing.story)).catch(() => outgoing.story);
+    const outcome = await env.notebook.keep(moment, {
+      story,
+      mode: state.mode,
+      source,
+      recipe: { ...(taken === null ? {} : { mirror: taken.mirror }), showLink: composedReferral !== null },
+    });
+    dispatch({ type: 'kept', ok: outcome === 'kept' });
     setNotice(
-      ok
+      outcome === 'kept'
         ? { tone: 'good', text: gameText('game.photo.notice.kept') }
-        : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
+        : outcome === 'no-space'
+          ? { tone: 'error', text: gameText('game.photo.notice.no_space'), action: 'save' }
+          : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
     );
-  }, [env, moment, outgoingFiles, state]);
+  }, [composedReferral, env, moment, outgoingFiles, state]);
 
   /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -547,9 +558,14 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
               {state.kept === true ? gameText('game.photo.kept') : gameText('game.photo.keep')}
             </Button>
             {notice === null ? null : (
-              <p role={notice.tone === 'error' ? 'alert' : 'status'} className="text-caption" style={{ color: notice.tone === 'error' ? GAME_ERROR : GAME_GOOD }}>
-                {notice.text}
-              </p>
+              <div role={notice.tone === 'error' ? 'alert' : 'status'} className="flex flex-col gap-2 text-caption" style={{ color: notice.tone === 'error' ? GAME_ERROR : GAME_GOOD }}>
+                <p>{notice.text}</p>
+                {notice.action === 'save' ? (
+                  <Button attr={{ 'data-photo-no-space-save': '' }} onClick={() => void save()}>
+                    {gameText('game.photo.notice.no_space_save')}
+                  </Button>
+                ) : null}
+              </div>
             )}
           </div>
         ) : null}

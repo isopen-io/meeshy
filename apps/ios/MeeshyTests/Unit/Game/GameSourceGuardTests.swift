@@ -117,6 +117,7 @@ final class GameSourceGuardTests: XCTestCase {
 
     /// Les seules clés dont l'anglais est légitimement identique au français.
     private let sameInEnglish: Set<String> = [
+        "game.constellation.title", "game.constellation.kind.halo",
         "game.chest.reward.points", "game.points.one", "game.points.other", "game.meeshes.one", "game.meeshes.other",
         "game.actions.one", "game.actions.other", "game.tier.constellation", "game.rank.oracle",
         "game.guide.speaker.mee", "game.guide.speaker.meo", "game.mission.progress", "game.photo.format.story",

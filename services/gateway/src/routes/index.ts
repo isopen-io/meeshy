@@ -14,7 +14,8 @@
  * est ici un champ REQUIS (pas de `?`) : une entrée qui l'omet ne COMPILE
  * PAS. Voir `src/__tests__/unit/routes/route-registration-table.test.ts`
  * pour la preuve — un `@ts-expect-error` qui devient inutilisé, donc rouge
- * sous ts-jest, dès que `prefix` (ou `module`, ou `name`) redevient
+ * au cliquet de types des tests (`tsc-never-loaded-tests-ratchet.test.ts`,
+ * depuis #10203), dès que `prefix` (ou `module`, ou `name`) redevient
  * optionnel.
  *
  * ## Une SEULE convention d'adressage — jamais trois
@@ -99,6 +100,7 @@ import { syncRoutes } from './sync';
 import { trackingLinksRoutes } from './tracking-links';
 import { anonymousRoutes } from './anonymous';
 import { worldRoutes } from './world';
+import { worldParticipantCardRoutes } from './world-participant-card';
 import { communityRoutes } from './communities';
 import { adminMePermissionsRoutes } from './admin/me-permissions';
 import { dashboardRoutes } from './admin/dashboard';
@@ -119,6 +121,7 @@ import { broadcastRoutes } from './admin/broadcasts';
 import { adminPostRoutes } from './admin/posts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
+import { gameSeasonsAdminRoutes } from './admin/game-seasons';
 import { routeUsageAdminRoutes } from './admin/route-usage';
 import { adminOversightRoutes } from './admin/oversight';
 import { userRoutes } from './users';
@@ -136,6 +139,8 @@ import { meBirthDateRoutes } from './me/birth-date';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
+import { gloryFramePacksRoutes } from './packs-glory-frame';
+import { packAssetsRoutes } from './pack-assets';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -253,6 +258,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // L'entrée PUBLIQUE de World Wide (#10000) — ce que la landing lit pour
   // faire entrer un visiteur sans compte par le lien `mshy_world`.
   { name: 'world', prefix: API_PREFIX, module: worldRoutes },
+  // La fiche de MODÉRATION d'un participant de World Wide (#10102) — réservée
+  // aux comptes dont le rôle global est au-delà de USER, chaque lecture tracée.
+  { name: 'world-participant-card', prefix: API_PREFIX, module: worldParticipantCardRoutes },
   { name: 'communities', prefix: API_PREFIX, module: communityRoutes },
 
   // ── Administration ────────────────────────────────────────────────────
@@ -278,6 +286,7 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-posts', prefix: `${API_PREFIX}/admin`, module: adminPostRoutes },
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
+  { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
   // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
   // communauté et supervision, sous le MÊME préfixe que `admin-content` /
@@ -334,6 +343,15 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // Les packs de stickers (#9141) — boutique, installation, proposition par
   // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
   { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
+  // Les packs de cadres de gloire (#10148, LP0) — le MÊME moteur que les
+  // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
+  // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
+  { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
+  // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
+  // lecture de base, seau de débit propre. Préfixe distinct de `/packs/` pour
+  // ne jamais croiser un segment `:slug`.
+  { name: 'pack-assets', prefix: `${API_PREFIX}/pack-assets`, module: packAssetsRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

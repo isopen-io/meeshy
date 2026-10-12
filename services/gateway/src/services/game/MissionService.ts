@@ -25,7 +25,8 @@ import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import type { GameChestReward, GameMission } from '@meeshy/shared/types/game';
 import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/shared/utils/game/boosts';
-import { dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import {
@@ -49,7 +50,7 @@ import { MeeshSpend } from './MeeshSpend';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
-import { meeshFragmentsHeld } from './MeeshFragments';
+import { starFragmentsOf } from './StarFragments';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MissionService' });
@@ -82,7 +83,7 @@ export type MissionServiceDeps = {
   /** Crédite des points de jeu au score et à un axe — `EngagementService.creditGamePoints`. */
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
   /** Le coffre du jour — la loi partagée par défaut ; `effort` est celui des trois missions du jour (#10011). */
-  readonly chest?: (params: { readonly userId: string; readonly dayKey: string; readonly effort: number }) => DailyChest;
+  readonly chest?: (params: { readonly userId: string; readonly dayKey: string; readonly effort: number; readonly nextMeeshPrice: number }) => DailyChest;
   readonly glory?: GloryService;
   /**
    * Une mission vient d'être ACHEVÉE ET PAYÉE (#9386) : la saison en tire ses
@@ -113,17 +114,36 @@ export type ChestResult = {
   readonly status: 'claimed' | 'already-claimed';
   readonly reward: GameChestReward;
   readonly score: number;
-  /** Les fragments de Meesh en poche après l'ouverture (#10011) — cinq paient une frappe gratuite. */
-  readonly meeshFragments?: { readonly held: number; readonly perMeesh: number };
+  /** Les fragments d'étoile collectés après l'ouverture (#10011) — absent quand la lecture tombe. */
+  readonly starFragments?: { readonly collected: number };
 };
 
-type ChestDayColumns = {
+export type ChestDayColumns = {
   chestPoints: number | null;
   chestFragment: boolean | null;
   chestFreeze: boolean | null;
   chestGlory?: number | null;
-  chestMeeshFragments?: number | null;
+  chestBonus?: string | null;
+  chestBonusPoints?: number | null;
 };
+
+const CHEST_BONUSES = ['none', 'fifth', 'whole'] as const;
+const isChestBonus = (value: unknown): value is (typeof CHEST_BONUSES)[number] =>
+  typeof value === 'string' && (CHEST_BONUSES as readonly string[]).includes(value);
+
+/**
+ * Le contenu GRAVÉ d'un coffre ouvert, tel qu'il se sert. Un coffre ouvert avant #10011 n'a ni Gloire ni prime :
+ * la prime n'est servie que si elle est gravée. `fragment: true` veut dire « un fragment d'étoile trouvé ».
+ */
+export function chestRewardOf(day: ChestDayColumns | null): GameChestReward {
+  return {
+    points: day?.chestPoints ?? 0,
+    fragment: day?.chestFragment ?? false,
+    freeze: day?.chestFreeze ?? false,
+    glory: day?.chestGlory ?? 0,
+    ...(isChestBonus(day?.chestBonus) ? { bonus: day.chestBonus, bonusPoints: day?.chestBonusPoints ?? 0 } : {}),
+  };
+}
 
 const CHEST_CLEARED = {
   chestClaimedAt: null,
@@ -131,7 +151,8 @@ const CHEST_CLEARED = {
   chestFragment: null,
   chestFreeze: null,
   chestGlory: null,
-  chestMeeshFragments: null,
+  chestBonus: null,
+  chestBonusPoints: null,
 } as const;
 
 /**
@@ -141,6 +162,9 @@ const CHEST_CLEARED = {
  */
 const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: false } }] };
 const CHEST_UNCLAIMED = { OR: [{ chestClaimedAt: null }, { chestClaimedAt: { isSet: false } }] };
+/** Un cours de prime pas encore gravé (#10219) : absent du document, ou `null`. */
+const MINT_BASE_UNSET = { OR: [{ chestMintBase: null }, { chestMintBase: { isSet: false } }] };
+
 
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -555,11 +579,13 @@ export class MissionService {
   /**
    * Ouvre le coffre du jour — réclamable une fois les trois missions faites.
    *
-   * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (100 à 10 000), de la Gloire et
-   * des fragments de Meesh. Comme une mission (`complete`), la réclamation est un `updateMany` conditionnel,
-   * puis la Gloire (idempotente, `chest:<jour>`) et les points se créditent ; si l'un échoue, le coffre est
-   * rendu et un nouvel essai ne paie la Gloire qu'une fois. Les fragments sont gravés sur la journée DANS la
-   * réclamation : rendre le coffre les efface avec lui. Cinq paient une frappe gratuite (`MeeshService`).
+   * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire, une
+   * prime en points au cours de la Meesh du compte FIGÉ au début du jour de jeu (`chestPriceBase`, #10219 : une
+   * frappe du jour ne la fait pas monter), UN fragment d'étoile une fois sur six et un gel une fois sur vingt. Comme une mission
+   * (`complete`), la réclamation est un `updateMany` conditionnel, puis la Gloire (idempotente, `chest:<jour>`) et
+   * les points (prime comprise) se créditent ; si l'un échoue, le coffre est rendu et un nouvel essai ne paie la
+   * Gloire qu'une fois. Le fragment d'étoile est gravé sur la journée DANS la réclamation : rendre le coffre
+   * l'efface avec lui, et le total collecté (`StarFragments`) le lit. Le coffre ne frappe aucune Meesh.
    */
   async claimChest(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<ChestResult> {
     const { userId } = params;
@@ -574,49 +600,56 @@ export class MissionService {
     if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
-    const reward = this.chestOf({ userId, dayKey, effort: dayEffort(rows) });
+    const mintBase = await this.chestPriceBase({ userId, now, dayKey });
+    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1) });
     const claimed = await this.prisma.gameDay.updateMany({
       where: { userId, dayKey, ...CHEST_UNCLAIMED },
       data: {
         chestClaimedAt: now,
-        chestPoints: reward.points,
-        chestFragment: reward.fragment,
-        chestFreeze: reward.freeze,
-        chestGlory: reward.glory,
-        chestMeeshFragments: reward.meeshFragments,
+        chestPoints: chest.points,
+        chestFragment: chest.fragment,
+        chestFreeze: chest.freeze,
+        chestGlory: chest.glory,
+        chestBonus: chest.bonus,
+        chestBonusPoints: chest.bonusPoints,
       },
     });
     if (claimed.count === 0) return this.alreadyClaimed(userId, await this.gameDay(userId, dayKey));
 
     try {
-      if (reward.glory > 0) {
+      if (chest.glory > 0) {
         await this.glory.credit({
           userId,
-          delta: reward.glory,
+          delta: chest.glory,
           reason: 'chest',
           requestId: `chest:${dayKey}`,
-          meta: { dayKey, points: reward.points },
+          meta: { dayKey, points: chest.points },
         });
       }
-      await this.deps.creditPoints(userId, reward.points, GAME_BONUS_AXIS);
+      await this.deps.creditPoints(userId, chest.points, GAME_BONUS_AXIS);
     } catch (error) {
       await this.prisma.gameDay.updateMany({ where: { userId, dayKey, chestClaimedAt: now }, data: CHEST_CLEARED });
       throw error;
     }
     // Les points sont PAYÉS : rendre le coffre maintenant les ferait payer deux
     // fois. Le gel offert est un appoint — son échec se journalise, sans plus.
-    if (reward.freeze) {
+    if (chest.freeze) {
       await this.grantFreeze(userId).catch((error: unknown) =>
         log.warn('chest freeze not granted', { userId, error: error instanceof Error ? error.message : String(error) }),
       );
     }
-    // Les fragments en poche : une LECTURE, qui ne retient jamais un coffre payé.
-    const fragments = await meeshFragmentsHeld(this.prisma, userId).catch(() => null);
     return {
       status: 'claimed',
-      reward,
+      reward: {
+        points: chest.points,
+        fragment: chest.fragment,
+        freeze: chest.freeze,
+        glory: chest.glory,
+        bonus: chest.bonus,
+        bonusPoints: chest.bonusPoints,
+      },
       score: (await this.userRow(userId))?.engagementScore ?? 0,
-      ...(fragments === null ? {} : { meeshFragments: fragments }),
+      ...(await this.starFragmentsServed(userId)),
     };
   }
 
@@ -640,18 +673,50 @@ export class MissionService {
     throw new Error('chest freeze contended');
   }
 
-  /** Rejouer rend le contenu GRAVÉ ; un coffre ouvert avant #10011 n'a ni Gloire ni fragments de Meesh. */
+  /**
+   * LE COURS DE LA PRIME DU JOUR (#10219) — les Meeshes frappées AVANT l'ouverture du jour de jeu (le tirage de ses
+   * missions, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` à la première lecture (le bloc `game` ou la
+   * réclamation) et relues ensuite telles quelles : l'affichage d'avant l'ouverture et la réclamation tirent la prime
+   * au MÊME cours, et une frappe du jour n'y change rien. Le compte est UNE requête bornée par l'instant d'ouverture :
+   * une frappe concurrente, postérieure, n'y entre pas ; le fuseau n'y entre pas non plus. La gravure est
+   * conditionnelle (`chestMintBase` absent) : la première gagne. Une journée sans gravure (ouverte avant #10219) se
+   * grave à sa lecture suivante.
+   */
+  async chestPriceBase(params: {
+    readonly userId: string;
+    readonly now?: Date;
+    readonly dayKey?: string;
+  }): Promise<number> {
+    const { userId } = params;
+    const now = params.now ?? new Date();
+    const dayKey = params.dayKey ?? (await this.gameDayKey(userId, (await this.userRow(userId))?.timezone, now));
+
+    const engraved = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    if (typeof engraved === 'number') return engraved;
+
+    const missions = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, select: { createdAt: true } });
+    const cutoff = chestPriceCutoff({ missionsOpenedAt: missions.map((row) => row.createdAt), now });
+    const base = await this.prisma.meeshLedger.count({ where: { userId, reason: 'mint', createdAt: { lt: cutoff } } });
+
+    await this.ensureGameDay(userId, dayKey);
+    await this.prisma.gameDay.updateMany({ where: { userId, dayKey, ...MINT_BASE_UNSET }, data: { chestMintBase: base } });
+    const settled = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    return typeof settled === 'number' ? settled : base;
+  }
+
+  /** Rejouer rend le contenu GRAVÉ, et le même total : une réclamation rejouée ne compte jamais deux fois. */
   private async alreadyClaimed(userId: string, day: ChestDayColumns | null): Promise<ChestResult> {
     return {
       status: 'already-claimed',
-      reward: {
-        points: day?.chestPoints ?? 0,
-        fragment: day?.chestFragment ?? false,
-        freeze: day?.chestFreeze ?? false,
-        glory: day?.chestGlory ?? 0,
-        meeshFragments: day?.chestMeeshFragments ?? 0,
-      },
+      reward: chestRewardOf(day),
       score: (await this.userRow(userId))?.engagementScore ?? 0,
+      ...(await this.starFragmentsServed(userId)),
     };
+  }
+
+  /** Le total collecté : une LECTURE, qui ne retient jamais un coffre payé. */
+  private async starFragmentsServed(userId: string): Promise<{ starFragments?: { collected: number } }> {
+    const collected = await starFragmentsOf(this.prisma, userId).catch(() => null);
+    return collected === null ? {} : { starFragments: { collected } };
   }
 }

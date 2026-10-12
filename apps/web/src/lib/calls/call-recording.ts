@@ -7,7 +7,7 @@ import {
   type CallRecordingStopReason,
 } from '@meeshy/shared/types/call-recording';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/call-recording-event-names';
-import { createStore, type StoreApi } from 'zustand/vanilla';
+import type { StoreApi } from 'zustand/vanilla';
 
 import type { CallStoreApi } from './call-store';
 import type { CallTransport } from './call-transport';
@@ -73,12 +73,6 @@ export type CallRecordingDeps = {
 export const CALL_RECORDING_SERVER_EVENT_NAMES: readonly string[] = Object.values(CALL_RECORDING_SERVER_EVENTS);
 
 const ACK_TIMEOUT_MS = 8_000;
-
-const IDLE: CallRecordingState = { view: { kind: 'idle' }, notice: null };
-
-export function createCallRecordingStore(): CallRecordingStoreApi {
-  return createStore<CallRecordingState>(() => IDLE);
-}
 
 type Payload = Readonly<Record<string, unknown>>;
 

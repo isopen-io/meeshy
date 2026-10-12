@@ -276,6 +276,10 @@ services:
       # World Wide (#10000) : le staging seme le salon public ; WORLD_ADMIN_EMAILS designe ses administrateurs par adresse verifiee.
       - WORLD_SEED_ENABLED=${WORLD_SEED_ENABLED:-true}
       - WORLD_ADMIN_EMAILS=${WORLD_ADMIN_EMAILS:-}
+      # Packs d'EXEMPLE (#10157, demande porteur 2026-10-11) : le registre
+      # packages/shared/design/packs/samples/ n'est lu QUE sous la valeur exacte 1.
+      # Staging seulement — JAMAIS en production (rien de fictif devant les utilisateurs).
+      - PACK_SAMPLES=1
       - ADMIN_SYSTEM_LANGUAGE=${ADMIN_SYSTEM_LANGUAGE}
       - ADMIN_REGIONAL_LANGUAGE=${ADMIN_REGIONAL_LANGUAGE}
       - ADMIN_CUSTOM_DESTINATION_LANGUAGE=${ADMIN_CUSTOM_DESTINATION_LANGUAGE}
@@ -302,6 +306,11 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      # L'AGENT de staging (#10269) — `server.ts` n'initialise son client que si
+      # `AGENT_HOST` est posée : sans elle, `agent-staging` tourne pour personne
+      # (« AGENT_HOST not set — agent service disabled »), sans rien rougir.
+      - AGENT_HOST=agent-staging
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
@@ -313,6 +322,11 @@ services:
       # unsetOrNull('liftedAt'), témoin sur documents Mongo vert). Production :
       # toujours désarmée, feu vert du porteur et sauvegarde vérifiée d'abord.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
+      # #10175 (L19) — le push d'une étape du jeu franchie app fermée : détection, ligne de
+      # base et UNE notification groupée par jour au plus. ARMÉ par la seule valeur exacte on ;
+      # toute autre valeur, absence comprise, le laisse éteint (relu à chaque passage du job).
+      # Staging : allumé pour la recette.
+      - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-on}
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
@@ -380,6 +394,19 @@ services:
       - "traefik.http.routers.frontend-staging-unfurl.service=gateway-staging"
       - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-staging-path.replacepathregex.replacement=/api/v1/links/$$1/og"
+      # #10192 — les mêmes robots qui déplient un lien SUIVI /l/<jeton> reçoivent
+      # l'aperçu de sa cible publique (GET /api/v1/tracking-links/<jeton>/og) : une
+      # adresse web extérieure d'un lien actif les y renvoie, une invitation ouverte
+      # se déplie, tout le reste rend l'aperçu générique. Sans ce routeur, nginx sert
+      # l'aperçu générique de la famille `link` (apps/web/nginx.conf, D-199).
+      - "traefik.http.routers.frontend-staging-track-unfurl.rule=Host(`staging.${DOMAIN:-meeshy.me}`) && PathRegexp(`^/l/[A-Za-z0-9_-]{2,50}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-staging-track-unfurl.priority=100"
+      - "traefik.http.routers.frontend-staging-track-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-staging-track-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-staging-track-unfurl.middlewares=track-unfurl-staging-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-staging-track-unfurl.service=gateway-staging"
+      - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
+      - "traefik.http.middlewares.track-unfurl-staging-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
       - "traefik.http.services.gateway-staging.loadbalancer.server.port=3000"
 
   # ===========================================================================
@@ -486,27 +513,28 @@ services:
       - ZMQ_PUB_PORT=5561
       - NODE_ENV=production
       - PORT=3200
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully
       redis-staging:
         condition: service_healthy
+    # Réseau PRIVÉ seulement (#10242) : la passerelle joint l'agent par son nom de
+    # service (`agent-staging`, ZMQ 5560/5561 et HTTP 3200) sur
+    # meeshy-staging-network. meeshy-network ne servait qu'à Traefik.
     networks:
       - meeshy-staging-network
-      - meeshy-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    # Jamais publié sur Internet, comme en production (#10242) : ses routes
+    # /api/agent/* lisent des résumés de conversations, arrêtent un agent et
+    # déclenchent des appels LLM payants.
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=meeshy_meeshy-network"
-      - "traefik.http.routers.agent-staging.rule=Host(`agent.staging.${DOMAIN:-meeshy.me}`)"
-      - "traefik.http.routers.agent-staging.entrypoints=websecure"
-      - "traefik.http.routers.agent-staging.tls.certresolver=letsencrypt"
-      - "traefik.http.services.agent-staging.loadbalancer.server.port=3200"
+      - "traefik.enable=false"
 
 # =============================================================================
 # VOLUMES - Tous préfixés "staging" pour isolation

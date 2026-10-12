@@ -70,6 +70,9 @@ export const gameFlameFreezes = '/api/v1/me/game/flame/freezes';
 /** POST /api/v1/me/game/flame/relight */
 export const gameFlameRelight = '/api/v1/me/game/flame/relight';
 
+/** PUT /api/v1/me/game/frames/atmosphere */
+export const gameFramesAtmosphere = '/api/v1/me/game/frames/atmosphere';
+
 /** POST /api/v1/me/game/guide/seen */
 export const gameGuideSeen = '/api/v1/me/game/guide/seen';
 
@@ -91,6 +94,12 @@ export const gameLeagueWeeksByWeekKey = (weekKey: string): string => `/api/v1/me
 /** POST /api/v1/me/game/missions/:missionId/reroll */
 export const gameMissionsByMissionIdReroll = (missionId: string): string => `/api/v1/me/game/missions/${encodeURIComponent(missionId)}/reroll`;
 
+/** PUT /api/v1/me/game/photo-moments/invitations */
+export const gamePhotoMomentsInvitations = '/api/v1/me/game/photo-moments/invitations';
+
+/** POST /api/v1/me/game/photo-moments/presented */
+export const gamePhotoMomentsPresented = '/api/v1/me/game/photo-moments/presented';
+
 /** POST /api/v1/me/game/prestige */
 export const gamePrestige = '/api/v1/me/game/prestige';
 
@@ -99,6 +108,9 @@ export const gamePrivacy = '/api/v1/me/game/privacy';
 
 /** GET /api/v1/me/game/seasons/:number */
 export const gameSeasonsByNumber = (number: string): string => `/api/v1/me/game/seasons/${encodeURIComponent(number)}`;
+
+/** GET /api/v1/me/game/seasons/calendar */
+export const gameSeasonsCalendar = '/api/v1/me/game/seasons/calendar';
 
 /** POST /api/v1/me/game/season/seal */
 export const gameSeasonSeal = '/api/v1/me/game/season/seal';

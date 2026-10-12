@@ -78,6 +78,10 @@ def gold_rim(card, d, metal=("#FFF4C2", "#E8B53C", "#8A5A12"), w=5, name="rim"):
 
 # ---------------------------------------------------------------- inscription
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, kicker, title, message=None, y=752, style="ebene", metal=("#FFF4C2", "#E8B53C", "#8A5A12"),
                 panel=("#2A140A", "#0E0503"), ink="#FFF4DC", accent=None, title_size=40, w=424, date=DATE, msg_color=None,
                 title_font=CINZEL, extra=""):

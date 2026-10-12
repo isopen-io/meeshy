@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { Glyph } from '@/components/glyph';
-import { GameProfileOwnSlot, GameProfileVisitorSlot } from '@/components/game-profile-slots';
+import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { ReportSheet } from '@/components/report-sheet';
 import { apiDeps } from '@/lib/api/deps';
@@ -31,7 +31,7 @@ import {
   ProfileSelfSection,
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
-import { ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -114,6 +114,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const {
     view,
     person,
+    seed,
     name,
     accent,
     presence,
@@ -182,7 +183,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
        `relative` PORTE la pastille d'annonce, posée `absolute` au bas de son
        hôte, exactement comme sur « Découvrir ». */
     <div data-user-profile={person?.username ?? ''} className="relative flex h-dvh flex-col overflow-hidden pt-safe">
-      <ProfileHeaderBar title={person === undefined ? translate(language, 'userProfile.title') : name} />
+      <ProfileHeaderBar title={person === undefined && seed === null ? translate(language, 'userProfile.title') : name} />
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
@@ -192,17 +193,19 @@ export function UserProfileView({ username }: { readonly username: string }) {
               name={name}
               accent={accent}
               presence={presence}
+              game={
+                /* LE JEU SUR LA BANNIÈRE (#10092) — niveau et rang ; sur celle d'un autre, ce que SA visibilité autorise, rien sinon. */
+                relation.kind === 'blocked' ? null : isSelf ? (
+                  <GameBannerOwnSlot enabled={signedIn} />
+                ) : signedIn ? (
+                  <GameBannerVisitorSlot userId={person.id} enabled />
+                ) : null
+              }
             />
             {relation.kind === 'blocked' ? (
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
               <>
-                {/* LE JEU (#9481) — sur SA fiche, tout ; sur celle d'un autre, ce que SA visibilité autorise (la vitrine), rien sinon. */}
-                {isSelf ? (
-                  <GameProfileOwnSlot enabled={signedIn} />
-                ) : signedIn ? (
-                  <GameProfileVisitorSlot userId={person.id} name={name} enabled />
-                ) : null}
                 <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
                 <ProfileTabPanel idBase={tabBase} tab={tab}>
                   {tab === 'posts' ? (
@@ -257,6 +260,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
                 </ProfileTabPanel>
               </>
             )}
+          </div>
+        ) : seed !== null ? (
+          <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
+            <ProfileHero profile={seed} name={name} accent={accent} presence={null} />
+            <ProfileBodySkeleton language={language} />
           </div>
         ) : view.isError ? (
           <ProfileFailureNotice language={language} failure={profileFailureOf(view.error, online)} onRetry={() => void view.refetch()} />

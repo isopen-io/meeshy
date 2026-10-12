@@ -5,7 +5,7 @@ import type { CameraResult } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
-import type { KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
+import type { KeepOutcome, KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
 import type { PhotoReferral } from '@/lib/game-photo/referral';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
@@ -54,11 +54,11 @@ const files = (): PhotoFiles => ({
   square: new File(['q'], 'meeshy-profil.png', { type: 'image/png' }),
 });
 
-function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
+function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; keepOutcome?: KeepOutcome; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
   const log: Log = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], outputs: [], rendered: [], closed: [] };
   const notebook: Notebook = {
     defer: async (moment) => (log.deferred.push(moment), true),
-    keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOk ?? true),
+    keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOutcome ?? (overrides.keepOk === false ? 'unavailable' : 'kept')),
     list: async () => [],
     remove: async () => true,
   };
@@ -417,15 +417,58 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(host.textContent).not.toContain('Image enregistrée');
   });
 
-  test('« Garder au carnet » garde LES DEUX images, avec le mode, et le dit', async () => {
+  test('« Garder au carnet » garde le 9:16, avec le mode, sans source pour une carte seule, et le dit', async () => {
     const { host, log } = await toResult();
     await click(by(host, 'data-photo-keep'));
     await settle();
     expect(log.kept).toHaveLength(1);
     expect(log.kept[0]?.photo.mode).toBe('card');
     expect((log.kept[0]?.photo.story as File).name).toBe('meeshy-story.png');
-    expect((log.kept[0]?.photo.square as File).name).toBe('meeshy-profil.png');
+    expect(log.kept[0]?.photo.source ?? null).toBeNull();
     expect(host.textContent).toContain('Gardée au carnet');
+  });
+
+  test('un selfie gardé emporte sa SOURCE réduite et sa recette (miroir) (#10161)', async () => {
+    const developed: unknown[] = [];
+    const source = new Blob(['jpeg'], { type: 'image/jpeg' });
+    const { env: e, log } = env({ developSource: async (photo) => (developed.push(photo), source) });
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await click(by(host, 'data-photo-shutter'));
+    await settle();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(developed).toHaveLength(1);
+    expect(log.kept[0]?.photo.source).toBe(source);
+    expect(log.kept[0]?.photo.recipe?.mirror).toBe(true);
+    expect(log.kept[0]?.photo.mode).toBe('selfie');
+  });
+
+  test('le carnet garde le 9:16 ré-encodé en JPEG ; le partage garde le PNG (#10238)', async () => {
+    const jpeg = new Blob(['jpeg'], { type: 'image/jpeg' });
+    const handed: Blob[] = [];
+    const { host, log } = await toResult({ keptStory: async (story) => (handed.push(story), jpeg) });
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(handed.map((story) => (story as File).name)).toEqual(['meeshy-story.png']);
+    expect(log.kept[0]?.photo.story).toBe(jpeg);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(log.shared.map((shared) => shared.file.type)).toEqual(['image/png']);
+  });
+
+  test('plus de place sur l’appareil : un état d’erreur DESSINÉ propose la galerie, rien n’est gardé (#10161)', async () => {
+    const { host, log } = await toResult({ keepOutcome: 'no-space' });
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('Plus de place sur cet appareil');
+    expect(host.textContent).not.toContain('Gardée au carnet');
+    expect((by(host, 'data-photo-keep') as HTMLButtonElement | null)?.disabled).toBe(false);
+    await click(alert?.querySelector<HTMLElement>('[data-photo-no-space-save]') ?? null);
+    await settle();
+    expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png']);
   });
 
   test('un carnet qui refuse : on le dit, et la photo reste partageable', async () => {

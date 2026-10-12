@@ -1,159 +1,183 @@
 [
  {
   "file": "neon-ambassadeur-1",
-  "overlap": 5795,
+  "overlap": 126,
   "face": 0,
-  "depth": 60,
+  "depth": 5,
   "bbox": [
    88,
-   635,
-   451,
-   715
+   684,
+   429,
+   716
   ],
-  "windowPx": 167291
+  "windowPx": 155546,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-ambassadeur-2",
-  "overlap": 4655,
+  "overlap": 157,
   "face": 0,
-  "depth": 62,
+  "depth": 5,
   "bbox": [
-   86,
-   643,
-   453,
-   715
+   109,
+   687,
+   454,
+   716
   ],
-  "windowPx": 164259
+  "windowPx": 156693,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-ambassadeur-3",
-  "overlap": 6258,
+  "overlap": 107,
   "face": 0,
-  "depth": 58,
+  "depth": 5,
   "bbox": [
-   35,
-   636,
-   501,
-   756
+   103,
+   708,
+   429,
+   718
   ],
-  "windowPx": 175514
+  "windowPx": 162092,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-ambassadeur-4",
-  "overlap": 67,
+  "overlap": 23,
   "face": 0,
-  "depth": 7,
+  "depth": 4,
   "bbox": [
-   92,
-   700,
-   101,
-   709
+   91,
+   701,
+   95,
+   710
   ],
-  "windowPx": 160097
+  "windowPx": 159666,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "neon-ambassadeur-5",
-  "overlap": 10216,
+  "overlap": 113,
   "face": 0,
-  "depth": 45,
+  "depth": 5,
   "bbox": [
-   63,
-   643,
-   476,
-   754
+   96,
+   694,
+   423,
+   708
   ],
-  "windowPx": 186522
+  "windowPx": 152699,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-legende-1",
-  "overlap": 7368,
+  "overlap": 150,
   "face": 0,
-  "depth": 44,
+  "depth": 5,
   "bbox": [
-   57,
-   641,
-   508,
-   755
+   95,
+   687,
+   445,
+   709
   ],
-  "windowPx": 172907
+  "windowPx": 150974,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-legende-2",
-  "overlap": 2847,
+  "overlap": 171,
   "face": 0,
-  "depth": 54,
+  "depth": 5,
   "bbox": [
    93,
-   644,
-   432,
-   706
+   689,
+   443,
+   711
   ],
-  "windowPx": 156114
+  "windowPx": 154979,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-legende-3",
-  "overlap": 5033,
+  "overlap": 89,
   "face": 0,
-  "depth": 58,
+  "depth": 5,
   "bbox": [
-   54,
-   646,
-   471,
-   757
+   112,
+   707,
+   427,
+   711
   ],
-  "windowPx": 171488
+  "windowPx": 155709,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-legende-4",
-  "overlap": 2116,
+  "overlap": 38,
   "face": 0,
-  "depth": 37,
+  "depth": 4,
   "bbox": [
-   369,
-   635,
-   500,
-   722
+   406,
+   676,
+   447,
+   711
   ],
-  "windowPx": 160984
+  "windowPx": 155725,
+  "layout": "duo",
+  "verdict": "ok"
  },
  {
   "file": "neon-legende-5",
-  "overlap": 6981,
+  "overlap": 82,
   "face": 0,
-  "depth": 51,
+  "depth": 5,
   "bbox": [
-   48,
-   638,
-   475,
-   754
+   111,
+   706,
+   440,
+   711
   ],
-  "windowPx": 175298
+  "windowPx": 158033,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-mythe-a",
-  "overlap": 6166,
+  "overlap": 62,
   "face": 0,
-  "depth": 76,
+  "depth": 5,
   "bbox": [
-   50,
-   631,
-   204,
-   710
+   156,
+   704,
+   178,
+   709
   ],
-  "windowPx": 156681
+  "windowPx": 150718,
+  "layout": "duo",
+  "verdict": "ok"
  },
  {
   "file": "neon-mythe-b",
-  "overlap": 6488,
+  "overlap": 145,
   "face": 0,
-  "depth": 56,
+  "depth": 5,
   "bbox": [
-   72,
-   644,
-   466,
-   757
+   95,
+   685,
+   423,
+   709
   ],
-  "windowPx": 163669
+  "windowPx": 151002,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-mythe-c",
@@ -161,84 +185,98 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 148455
+  "windowPx": 145571,
+  "layout": "duo",
+  "verdict": "ok"
  },
  {
   "file": "neon-oracle-a",
-  "overlap": 2615,
+  "overlap": 139,
   "face": 0,
-  "depth": 59,
+  "depth": 5,
   "bbox": [
-   91,
-   638,
-   447,
-   705
+   129,
+   705,
+   412,
+   709
   ],
-  "windowPx": 156327
+  "windowPx": 157520,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-oracle-b",
-  "overlap": 3186,
+  "overlap": 2103,
   "face": 0,
-  "depth": 47,
+  "depth": 46,
   "bbox": [
    395,
-   647,
-   537,
-   719
+   648,
+   444,
+   709
   ],
-  "windowPx": 163713
+  "windowPx": 157015,
+  "layout": "selfie",
+  "verdict": "ok"
  },
  {
   "file": "neon-oracle-c",
-  "overlap": 4875,
+  "overlap": 152,
   "face": 0,
-  "depth": 60,
+  "depth": 4,
   "bbox": [
-   86,
-   647,
-   453,
-   713
+   128,
+   693,
+   449,
+   709
   ],
-  "windowPx": 166377
+  "windowPx": 157466,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-orateur-a",
-  "overlap": 3093,
+  "overlap": 46,
   "face": 0,
-  "depth": 35,
+  "depth": 3,
   "bbox": [
-   32,
-   550,
-   487,
-   657
+   92,
+   587,
+   449,
+   600
   ],
-  "windowPx": 167016
+  "windowPx": 153482,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "neon-orateur-b",
-  "overlap": 2980,
+  "overlap": 67,
   "face": 0,
-  "depth": 50,
+  "depth": 5,
   "bbox": [
    86,
-   637,
-   453,
-   713
+   702,
+   430,
+   714
   ],
-  "windowPx": 158771
+  "windowPx": 152668,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "neon-orateur-c",
-  "overlap": 1388,
+  "overlap": 42,
   "face": 0,
-  "depth": 53,
+  "depth": 4,
   "bbox": [
-   100,
-   643,
-   439,
-   698
+   108,
+   706,
+   410,
+   709
   ],
-  "windowPx": 159617
+  "windowPx": 156714,
+  "layout": "pied",
+  "verdict": "ok"
  }
 ]

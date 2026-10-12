@@ -63,7 +63,23 @@ type AnonymousSessionDetails {
   sessionTokenHash  String
   country           String?
   deviceFingerprint String?
+  /// Le poste RÉDUIT relevé à l'entrée par lien (#10102) — absent sur toute
+  /// session antérieure, et sans User-Agent lisible. Voir `AnonymousClientDescriptor`.
+  client            AnonymousClientDescriptor?
   connectedAt       DateTime
+}
+
+/// Le poste d'un invité, RÉDUIT (#10102) : un nom et une version MAJEURE pour le
+/// navigateur et le système, la famille d'appareil. Jamais la chaîne User-Agent,
+/// ni le modèle, ni le fabricant (`describeGuestClient`,
+/// services/gateway/src/services/conversations/guestClient.ts). Lu par la seule
+/// fiche de modération de World Wide (`GET /world/participants/:participantId`).
+type AnonymousClientDescriptor {
+  browser        String?
+  browserVersion String?
+  os             String?
+  osVersion      String?
+  deviceType     String?
 }
 
 /// Profile info captured for an anonymous participant
@@ -5232,28 +5248,24 @@ model EngagementPostPoints {
 /// Aucune ligne n'est jamais modifiée ni supprimée : une correction s'écrit par
 /// une ligne INVERSE, qui se lit.
 model MeeshLedger {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String   @db.ObjectId
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
   /// Positif (frappe, don reçu, octroi) ou négatif (don envoyé, dépense,
   /// sanction) — jamais zéro.
-  delta          Int
+  delta     Int
   /// "mint" | "transfer_in" | "transfer_out" | "spend" | "sanction" | "grant"
-  reason         String
+  reason    String
   /// L'auteur de l'écriture quand ce n'est pas `userId` : l'expéditeur d'un
   /// don, le modérateur d'une sanction. Absent pour une frappe.
-  actorId        String?  @db.ObjectId
+  actorId   String?  @db.ObjectId
   /// Identifiant fourni par l'appelant — l'IDEMPOTENCE. Un double-tap, un retry
   /// réseau ou une reprise d'application ne frappent qu'une fois.
-  requestId      String
+  requestId String
   /// Le détail que la ligne doit pouvoir rendre plus tard : pour une frappe, les
   /// axes débités et ce qu'ils ont rendu — la MÉMOIRE de ce qui a été dépensé,
   /// dont les badges éteints ne gardent plus trace.
-  meta           Json?
-  /// Les fragments de Meesh qu'une frappe GRATUITE a consommés (#10011) : 5 sur sa ligne `mint`, absent
-  /// partout ailleurs (champ optionnel, aucun backfill). Les fragments en poche se LISENT : Σ
-  /// `GameDay.chestMeeshFragments` − Σ `fragmentsSpent` — jamais une colonne incrémentée.
-  fragmentsSpent Int?
-  createdAt      DateTime @default(now())
+  meta      Json?
+  createdAt DateTime @default(now())
 
   @@unique([userId, requestId])
   @@index([userId, createdAt])
@@ -5319,21 +5331,28 @@ model DailyMission {
 /// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de
 /// mission consommés et coffre du jour.
 model GameDay {
-  id                  String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId              String    @db.ObjectId
-  dayKey              String
-  rerollCount         Int       @default(0)
-  chestClaimedAt      DateTime?
-  chestPoints         Int?
-  /// Le fragment de Meesh EN PRIME (une chance sur six) — le seul que lisent les clients d'avant #10011.
-  chestFragment       Boolean?
-  chestFreeze         Boolean?
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String    @db.ObjectId
+  dayKey           String
+  rerollCount      Int       @default(0)
+  chestClaimedAt   DateTime?
+  /// Le TOTAL crédité, prime comprise.
+  chestPoints      Int?
+  /// UN fragment d'étoile trouvé (une chance sur six) — compté dans le total collecté du compte
+  /// (`star-fragments.ts`, lu, jamais incrémenté).
+  chestFragment    Boolean?
+  chestFreeze      Boolean?
   /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
-  chestGlory          Int?
-  /// Les fragments de Meesh du coffre, prime comprise (#10011). Leur somme sur les jours est le total gagné ;
-  /// cinq paient une frappe gratuite (`MeeshLedger.fragmentsSpent`).
-  chestMeeshFragments Int?
-  createdAt           DateTime  @default(now())
+  chestGlory       Int?
+  /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
+  /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
+  chestBonus       String?
+  chestBonusPoints Int?
+  /// Le cours de la prime (#10219) : les Meeshes frappées AVANT l'ouverture de ce jour de jeu (`chestPriceCutoff`), gravées une
+  /// fois à la première lecture du jour. Une frappe du jour ne fait plus monter la prime. Absent (journée ouverte
+  /// avant lui, ou ancienne passerelle) : calculé puis gravé à la lecture suivante — aucun backfill.
+  chestMintBase    Int?
+  createdAt        DateTime  @default(now())
 
   @@unique([userId, dayKey])
 }
@@ -5360,8 +5379,38 @@ model GameProfile {
   /// HÉRITÉ (« les 100 Légendes du moment », abandonné par #9636) : plus lu ni écrit.
   /// Le Mythe vit dans `MythicSeat`, définitif.
   mythicAt              DateTime?
+  /// L'atmosphère des cadres de gloire (#10162, `GLORY_ATMOSPHERES`) ; null = pas encore choisie.
+  /// La choisir installe aussi son pack (`PUT /me/game/frames/atmosphere`).
+  frameAtmosphere       String?
+  /// « Me proposer d'immortaliser » (`PHOTO_INVITATIONS`) ; null = chaque étape.
+  photoInvitations      String?
+  /// La ligne de base des alertes d'immortalisation (#10162, § 5.16.2) : sa date et la situation
+  /// `PhotoCatchUpStanding` à cette date — les étapes passées s'en déduisent sans une ligne par étape.
+  photoAlertsBaselineAt DateTime?
+  photoAlertsBaseline   Json?
+  /// Le plus haut palier du trésor jamais atteint (D14) : il ne redescend pas quand on dépense.
+  treasuryPeakTier      String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+}
+
+/// LE REGISTRE DES MOMENTS PHOTO (#10162, § 5.16.2) : une ligne par (compte, étape du jeu), qui dit
+/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil) et notifiée. `_id` est DÉRIVÉ
+/// de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la même étape se
+/// heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de lecture sont
+/// posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
+model GamePhotoMoment {
+  id          String    @id @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  stepId      String
+  detectedAt  DateTime?
+  presentedAt DateTime?
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, stepId])
+  @@index([userId, updatedAt])
 }
 
 /// UNE DES CENT PLACES DU MYTHE (#9636) : prise par le compte qui atteint
@@ -5540,6 +5589,58 @@ model GameSeason {
 
   @@unique([userId, number])
   @@index([number, settledAt])
+}
+
+/// LE CALENDRIER DES SAISONS (#10016) : une définition par saison PROGRAMMÉE par
+/// l'admin (ou proposée par l'IA puis validée). Ce qui n'y est pas se dérive de la
+/// loi (`packages/shared/utils/game/season-schedule.ts`) : saison 1 au
+/// 2026-12-21, saisons enchaînées de 56 jours. `startDay` est un lundi ; une
+/// saison en cours ou passée ne se réécrit pas. `revision` croît à chaque écriture
+/// (unique : deux écritures concurrentes ne peuvent pas prendre la même) et sert
+/// d'ETag au calendrier servi. Seed : migration
+/// `2026-10-11-game-season-calendar.mongodb.js`.
+model GameSeasonDefinition {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  number     Int      @unique
+  startDay   String
+  /// `scheduled` | `paused`
+  status     String   @default("scheduled")
+  themeKey   String
+  stepPoints Int      @default(100)
+  /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
+  copy       Json?
+  revision   Int      @unique
+  updatedBy  String?  @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Une PROPOSITION de saison faite par l'IA (`services/agent`, #10016) : thème,
+/// textes en sept langues, points d'étape. Elle reste `pending` tant qu'un
+/// administrateur ne l'a ni validée (`approved` → écrite dans
+/// `GameSeasonDefinition`, `appliedRevision`) ni rejetée. Rien n'est publié sans
+/// cette validation.
+model GameSeasonProposal {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  number          Int
+  /// `pending` | `approved` | `rejected`
+  status          String    @default("pending")
+  startDay        String
+  themeKey        String
+  stepPoints      Int
+  copy            Json
+  brief           String?
+  model           String?
+  createdBy       String    @db.ObjectId
+  reviewedBy      String?   @db.ObjectId
+  reviewedAt      DateTime?
+  rejectReason    String?
+  appliedRevision Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([number])
 }
 
 /// Un TROPHÉE de la vitrine (#9387) : coupe de ligue, coupe de saison, Prestige,

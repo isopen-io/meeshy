@@ -39,12 +39,7 @@ WHITE = "#FFFFFF"
 GOLD = "#F5C443"
 GOLD_HI = "#FFF2B8"
 
-_n = [0]
-
-
-def nid(prefix="k"):
-    _n[0] += 1
-    return f"{prefix}{_n[0]}"
+from base import nid  # noqa: E402,F401  le compteur des identifiants vit dans Card
 
 
 def rgb(c):
@@ -653,12 +648,16 @@ def birds(card, spots, glow=None):
     """Mee et Meo à des places libres : [(pose, x, y, size, flip, rot)]. `glow` : une lueur colorée sous chacun."""
     for pose, x, y, s, flip, rot in spots:
         if glow:
-            card.add(f'<ellipse cx="{f(x)}" cy="{f(y + s * 0.08)}" rx="{f(s * 0.42)}" ry="{f(s * 0.36)}" fill="{glow}" opacity="0.38" filter="{ublur(card, 12)}"/>')
+            card.add(f'<g data-follows-bird="{card.birds}"><ellipse cx="{f(x)}" cy="{f(y + s * 0.08)}" rx="{f(s * 0.42)}" ry="{f(s * 0.36)}" fill="{glow}" opacity="0.38" filter="{ublur(card, 12)}"/></g>')
         bird(card, pose, x, y, s, flip=flip, rotate=rot)
 
 
 # ---------------------------------------------------------------- la plaque néon
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def plaque(card, title, message=None, y=752, c1=MAGENTA, c2=CYAN, chrome_kind="cool", style="glass", kicker=KICK, date=DATE,
            badge=None, title_size=40, title_font=CINZEL, msg_color=YELLOW, panel=("#170B36", "#05020F"), split=True, x0=56, x1=484,
            kicker_color=None, bulbs=None):

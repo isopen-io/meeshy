@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 @MainActor
 final class GuestSessionTests: XCTestCase {
@@ -83,5 +84,102 @@ final class GuestSessionTests: XCTestCase {
             linkId: linkId,
             conversationId: conversationId
         )
+    }
+}
+
+/// #10206 — « Partager » transmet l'adresse publique `/chat/<lien>` : celle
+/// par laquelle l'invité est entré, ou celle que `GET /world` sert pour World
+/// Wide. Rien n'est écrit en dur.
+@MainActor
+final class ConversationShareTargetTests: XCTestCase {
+
+    private let world = WorldEntry(identifier: "world", title: "World Wide", shareLinkIdentifier: "mshy_world", memberCount: 3)
+
+    func test_url_guest_sharesTheLinkItEnteredBy() {
+        let url = ConversationShareTarget.url(
+            conversation: Conversation(id: "c1", identifier: "c1", type: .group),
+            guestLinkId: "mshy_abc",
+            world: nil,
+            webOrigin: "https://staging.meeshy.me"
+        )
+        XCTAssertEqual(url?.absoluteString, "https://staging.meeshy.me/chat/mshy_abc")
+    }
+
+    func test_url_memberOfWorldWide_sharesTheServedWorldLink() {
+        let url = ConversationShareTarget.url(
+            conversation: Conversation(id: "c1", identifier: "world", type: .global),
+            guestLinkId: nil,
+            world: world,
+            webOrigin: "https://meeshy.me"
+        )
+        XCTAssertEqual(url?.absoluteString, "https://meeshy.me/chat/mshy_world")
+    }
+
+    func test_url_anotherGlobalConversation_offersNoShare() {
+        XCTAssertNil(ConversationShareTarget.url(
+            conversation: Conversation(id: "c2", identifier: "meeshy", type: .global),
+            guestLinkId: "",
+            world: world,
+            webOrigin: "https://meeshy.me"
+        ))
+    }
+
+    func test_url_conversationWithoutPublicLink_offersNoShare() {
+        XCTAssertNil(ConversationShareTarget.url(
+            conversation: Conversation(id: "c1", identifier: "team", type: .group),
+            guestLinkId: nil,
+            world: world,
+            webOrigin: "https://meeshy.me"
+        ))
+    }
+
+    func test_url_linkKeyIsPercentEncodedAsOnePathSegment() {
+        let url = ConversationShareTarget.url(conversation: nil, guestLinkId: "a b/c", world: nil, webOrigin: "https://meeshy.me")
+        XCTAssertEqual(url?.absoluteString, "https://meeshy.me/chat/a%20b%2Fc")
+    }
+
+    func test_needsWorldEntry_onlyForAMemberOfAGlobalConversation() {
+        XCTAssertTrue(ConversationShareTarget.needsWorldEntry(conversation: Conversation(id: "c", identifier: "world", type: .global), guestLinkId: nil))
+        XCTAssertFalse(ConversationShareTarget.needsWorldEntry(conversation: Conversation(id: "c", identifier: "g", type: .group), guestLinkId: nil))
+        XCTAssertFalse(ConversationShareTarget.needsWorldEntry(conversation: Conversation(id: "c", identifier: "world", type: .global), guestLinkId: "mshy_world"))
+    }
+}
+
+/// #10205 — un invité sans compte n'ouvre aucune fiche : le routeur de son
+/// fil refuse toute fiche, quelle que soit la porte qui la demande.
+@MainActor
+final class GuestRouterProfileRefusalTests: XCTestCase {
+
+    func test_guestRouter_refusesAnAccountProfile_whateverTheDoor() {
+        let router = Router(refusesProfiles: true)
+        router.deepLinkProfileUser = ProfileSheetUser(username: "alice")
+        router.openProfile(ProfileSheetUser(username: "bob"), inConversation: "c1")
+        XCTAssertNil(router.deepLinkProfileUser)
+    }
+
+    func test_guestRouter_refusesAParticipantProfile() {
+        let router = Router(refusesProfiles: true)
+        router.participantProfileTarget = ParticipantProfileTarget(conversationId: "c1", participantId: "p1")
+        XCTAssertNil(router.participantProfileTarget)
+    }
+
+    func test_memberRouter_stillOpensProfiles() {
+        let router = Router()
+        router.openProfile(ProfileSheetUser(username: "bob"), inConversation: "c1")
+        XCTAssertEqual(router.deepLinkProfileUser?.username, "bob")
+    }
+}
+
+/// #10216 — « Qui a vu » rend 403 à un invité : la porte ne lui est pas offerte.
+@MainActor
+final class GuestViewerAccessTests: XCTestCase {
+
+    func test_offersWhoSaw_neverToAGuest() {
+        XCTAssertFalse(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: true, isGuest: true))
+    }
+
+    func test_offersWhoSaw_toAMemberWhoKeepsReadReceipts() {
+        XCTAssertTrue(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: true, isGuest: false))
+        XCTAssertFalse(GuestViewerAccess.offersWhoSaw(prefersReadReceipts: false, isGuest: false))
     }
 }

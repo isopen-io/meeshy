@@ -1,42 +1,48 @@
 [
  {
   "file": "egypte-ambassadeur-1",
-  "overlap": 2102,
+  "overlap": 68,
   "face": 0,
-  "depth": 34,
+  "depth": 4,
   "bbox": [
-   86,
-   453,
-   453,
-   526
+   84,
+   461,
+   456,
+   489
   ],
-  "windowPx": 147566
+  "windowPx": 151640,
+  "layout": "côtés",
+  "verdict": "ok"
  },
  {
   "file": "egypte-ambassadeur-2",
-  "overlap": 4871,
+  "overlap": 126,
   "face": 0,
-  "depth": 54,
+  "depth": 4,
   "bbox": [
-   110,
-   630,
-   429,
-   722
+   135,
+   643,
+   433,
+   727
   ],
-  "windowPx": 139252
+  "windowPx": 142530,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-ambassadeur-3",
-  "overlap": 1849,
+  "overlap": 36,
   "face": 0,
-  "depth": 35,
+  "depth": 3,
   "bbox": [
-   108,
-   607,
-   431,
-   698
+   105,
+   630,
+   435,
+   654
   ],
-  "windowPx": 132018
+  "windowPx": 136024,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-ambassadeur-4",
@@ -44,98 +50,114 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 138637
+  "windowPx": 141992,
+  "layout": "perchés",
+  "verdict": "ok"
  },
  {
   "file": "egypte-ambassadeur-5",
-  "overlap": 9999,
-  "face": 0,
-  "depth": 84,
-  "bbox": [
-   76,
-   634,
-   463,
-   724
-  ],
-  "windowPx": 170031
- },
- {
-  "file": "egypte-legende-1",
-  "overlap": 4591,
-  "face": 0,
-  "depth": 51,
-  "bbox": [
-   109,
-   656,
-   430,
-   726
-  ],
-  "windowPx": 114846
- },
- {
-  "file": "egypte-legende-2",
-  "overlap": 4870,
-  "face": 0,
-  "depth": 52,
-  "bbox": [
-   106,
-   632,
-   433,
-   726
-  ],
-  "windowPx": 124685
- },
- {
-  "file": "egypte-legende-3",
-  "overlap": 4393,
-  "face": 0,
-  "depth": 50,
-  "bbox": [
-   106,
-   637,
-   433,
-   726
-  ],
-  "windowPx": 124439
- },
- {
-  "file": "egypte-legende-4",
-  "overlap": 4849,
-  "face": 0,
-  "depth": 51,
-  "bbox": [
-   113,
-   637,
-   426,
-   726
-  ],
-  "windowPx": 122682
- },
- {
-  "file": "egypte-legende-5",
-  "overlap": 6154,
-  "face": 0,
-  "depth": 54,
-  "bbox": [
-   104,
-   643,
-   435,
-   726
-  ],
-  "windowPx": 138280
- },
- {
-  "file": "egypte-mythe-a",
-  "overlap": 102,
+  "overlap": 106,
   "face": 0,
   "depth": 4,
   "bbox": [
-   424,
-   622,
-   529,
-   655
+   102,
+   713,
+   466,
+   729
   ],
-  "windowPx": 117980
+  "windowPx": 173697,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-legende-1",
+  "overlap": 81,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   109,
+   719,
+   400,
+   731
+  ],
+  "windowPx": 118204,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-legende-2",
+  "overlap": 96,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   103,
+   676,
+   402,
+   731
+  ],
+  "windowPx": 128807,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-legende-3",
+  "overlap": 28,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   110,
+   723,
+   432,
+   729
+  ],
+  "windowPx": 128110,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-legende-4",
+  "overlap": 42,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   118,
+   647,
+   429,
+   729
+  ],
+  "windowPx": 126033,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-legende-5",
+  "overlap": 81,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   105,
+   721,
+   427,
+   732
+  ],
+  "windowPx": 142761,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "egypte-mythe-a",
+  "overlap": 1,
+  "face": 0,
+  "depth": 1,
+  "bbox": [
+   431,
+   631,
+   431,
+   631
+  ],
+  "windowPx": 118601,
+  "layout": "côtés",
+  "verdict": "ok"
  },
  {
   "file": "egypte-mythe-b",
@@ -143,97 +165,113 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 126207
+  "windowPx": 128229,
+  "layout": "duo",
+  "verdict": "ok"
  },
  {
   "file": "egypte-mythe-c",
-  "overlap": 861,
+  "overlap": 52,
   "face": 0,
-  "depth": 16,
+  "depth": 4,
   "bbox": [
-   94,
-   506,
-   514,
-   573
+   98,
+   512,
+   442,
+   525
   ],
-  "windowPx": 145600
+  "windowPx": 146797,
+  "layout": "côtés",
+  "verdict": "ok"
  },
  {
   "file": "egypte-oracle-a",
-  "overlap": 10849,
+  "overlap": 86,
   "face": 0,
-  "depth": 86,
+  "depth": 4,
   "bbox": [
-   76,
-   639,
-   463,
-   726
+   81,
+   726,
+   436,
+   731
   ],
-  "windowPx": 143294
+  "windowPx": 147667,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-oracle-b",
-  "overlap": 4206,
+  "overlap": 42,
   "face": 0,
-  "depth": 56,
+  "depth": 4,
   "bbox": [
-   105,
-   640,
-   434,
-   726
+   103,
+   652,
+   427,
+   730
   ],
-  "windowPx": 126103
+  "windowPx": 129933,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-oracle-c",
-  "overlap": 4652,
+  "overlap": 65,
   "face": 0,
-  "depth": 49,
+  "depth": 4,
   "bbox": [
-   105,
-   639,
-   434,
-   726
+   103,
+   659,
+   437,
+   700
   ],
-  "windowPx": 136006
+  "windowPx": 139896,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-orateur-a",
-  "overlap": 5053,
+  "overlap": 112,
   "face": 0,
-  "depth": 53,
+  "depth": 4,
   "bbox": [
-   104,
-   625,
-   435,
-   726
+   131,
+   723,
+   433,
+   731
   ],
-  "windowPx": 137788
+  "windowPx": 140048,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-orateur-b",
-  "overlap": 4149,
+  "overlap": 21,
   "face": 0,
-  "depth": 65,
+  "depth": 3,
   "bbox": [
-   116,
-   633,
-   423,
-   726
+   113,
+   654,
+   427,
+   661
   ],
-  "windowPx": 130104
+  "windowPx": 133412,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "egypte-orateur-c",
-  "overlap": 2566,
+  "overlap": 149,
   "face": 0,
-  "depth": 30,
+  "depth": 4,
   "bbox": [
-   125,
-   664,
-   413,
-   727
+   126,
+   673,
+   414,
+   713
   ],
-  "windowPx": 118501
+  "windowPx": 117080,
+  "layout": "pied",
+  "verdict": "ok"
  }
 ]

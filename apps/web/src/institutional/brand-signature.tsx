@@ -1,9 +1,10 @@
-import { BRAND_CREDIT, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '../lib/brand';
+import { BRAND_CREDIT, BRAND_CREDIT_HINT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '../lib/brand';
 
 /**
  * LE PIED DE MARQUE — miroir de `BrandSignature.swift`
  * (`apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift`) : la ligne
- * de version, le crédit « Services CEO », le glyphe `AppIconFooter` teinté
+ * de version, le crédit « by services.ceo » (un lien vers la plateforme,
+ * #10096), le glyphe `AppIconFooter` teinté
  * erreur, empilés avec le même interligne (`VStack(spacing: 4)` → `gap-1`) et
  * le même retrait de 2 px au-dessus du glyphe.
  *
@@ -42,22 +43,32 @@ import { BRAND_CREDIT, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '../li
  *    (utilitaire Tailwind natif, jamais dépendant d'un `@theme` de rôle).
  *
  * ACCESSIBILITÉ — POURQUOI IL N'Y A PAS D'`aria-label` ICI.
- * `.accessibilityElement(children: .combine)` existe sur iOS parce que SwiftUI
- * ferait sinon trois arrêts de balayage pour une seule information. Le web n'a
- * pas ce problème : deux `<p>` se lisent d'affilée, dans l'ordre, et le texte
- * VISIBLE est alors exactement le texte LU. Surtout, un `aria-label` posé sur
- * un conteneur SANS rôle est IGNORÉ — « ARIA in HTML » interdit le nommage sur
+ * La ligne de version et le crédit se lisent d'affilée, dans l'ordre, et le
+ * texte VISIBLE est exactement le texte LU. Un `aria-label` posé sur le
+ * conteneur SANS rôle serait IGNORÉ — « ARIA in HTML » interdit le nommage sur
  * le rôle `generic`, que `<div>` porte. La première version en posait un : il
- * avait la FORME d'une conformité sans en avoir l'EFFET, et aucun témoin lisant
- * le HTML ne pouvait le voir. Seul le glyphe, décoratif, est masqué.
+ * avait la FORME d'une conformité sans en avoir l'EFFET. Le crédit, devenu un
+ * lien (#10096), a un rôle et donc un nom : son texte, suivi d'une phrase
+ * réservée au lecteur d'écran (`BRAND_CREDIT_HINT`, `sr-only`) qui dit où il
+ * mène — le pendant de l'`accessibilityHint` d'iOS. Seul le glyphe, décoratif,
+ * est masqué.
  */
 export function BrandSignature({ version }: { version: string }) {
   return (
     <div className="mt-6 flex flex-col items-center gap-1 text-center text-sm">
       <p style={{ color: 'var(--color-ios-ink-2)' }}>{brandVersionLine(version)}</p>
-      <p className="font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+      {/* Le crédit est un LIEN (#10096) : 44 px de cible par `min-h`, rendus au
+          flux par une marge négative de 12 px de chaque côté — la ligne occupe
+          toujours ses 20 px (`text-sm`), rien du pied ne bouge. `relative`
+          le pose au-dessus du glyphe, qu'il chevauche de quelques pixels. */}
+      <a
+        {...BRAND_CREDIT_LINK}
+        className="relative -my-[12px] flex min-h-[44px] items-center px-3 font-medium"
+        style={{ color: 'var(--color-ios-ink-3)' }}
+      >
         {BRAND_CREDIT}
-      </p>
+        <span className="sr-only">{BRAND_CREDIT_HINT}</span>
+      </a>
       <span
         aria-hidden="true"
         style={{

@@ -25,12 +25,7 @@ BRASS = ("#FBE7B0", "#C9A24A", "#5E4614")
 STEEL = ("#F4F7FA", "#A9B3BF", "#4A5361")
 CHROME = ("#FFFFFF", "#C8D0DA", "#39424F")
 
-_COUNTER = [0]
-
-
-def nid(prefix):
-    _COUNTER[0] += 1
-    return f"{prefix}{_COUNTER[0]}"
+from base import nid  # noqa: E402,F401  le compteur des identifiants vit dans Card
 
 
 # ---------------------------------------------------------------- géométrie
@@ -435,6 +430,10 @@ COUNTS = {
 }
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer(title="palier")
 def inscription(card, palier, message=None, y=744, ink="#FFF4C2", accent="#E8B53C", sub_color=None, title_fill=None,
                 title_font=CINZEL_DECO, title_size=40, kicker="Trésor", date=DATE, panel=None, shadow=True, msg_color=None):
     """Le texte de la plaque (le support est dessiné par le cadre) : sur-titre, palier, sous-ligne, message, date."""

@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { partagerLien, portailDuNavigateur } from '@/lib/view/invitation';
 import { useLiveAnnouncer, type Announcer } from '@/lib/view/use-live-announcer';
 
 import { copyLinkText, LINK_ANNOUNCE_MS } from './link-copy';
-import { webOriginOf } from './web-origin';
 
 /**
  * **COPIER ET PARTAGER UNE ADRESSE, AVEC UN RETOUR VISIBLE** — le geste commun
@@ -36,7 +35,7 @@ export function useUrlSharing(language: InterfaceLanguage): UrlSharing {
   const { announce } = announcer;
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const origin = webOriginOf(apiConfig.base, window.location.origin);
+  const origin = publicWebOrigin(window.location.origin);
 
   useEffect(
     () => () => {

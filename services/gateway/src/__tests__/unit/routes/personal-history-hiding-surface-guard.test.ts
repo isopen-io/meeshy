@@ -637,14 +637,20 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    */
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
 
+  /**
+   * #10006 — le retrait du seed World Wide (`removeWorldSeed`,
+   * `scripts/world-seed-remove.ts`). Sa lecture unique est un `count` scopé à
+   * UNE conversation (le seed), qui ne sert à rien d'autre qu'à REFUSER la
+   * purge dès qu'un message existe — jamais à rendre un contenu, un auteur ou
+   * un aperçu. Même raison que `attachments/fileRouteVerdict.ts` ci-dessus :
+   * rien n'est SERVI, donc rien à masquer.
+   */
   'world/worldSeedOperations.ts': {
     kind: 'exempt',
     reads: 1,
     why:
-      "Retrait opérateur de World Wide (#10000) : `message.count` sur la conversation " +
-      "entière décide si la purge est permise (refusée dès qu'un message existe). " +
-      "Aucun contenu servi, aucun lecteur : masquer un historique personnel ici " +
-      "laisserait purger une conversation qui porte encore les messages des autres.",
+      "Compte les messages d'UNE conversation (le seed World Wide) pour décider " +
+      "si sa purge doit être refusée — aucun contenu, auteur ni aperçu servi.",
   },
 };
 

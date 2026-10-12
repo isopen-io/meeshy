@@ -112,7 +112,7 @@ enum GameDetailText {
         case .flameForm: String(localized: "game.detail.flame.how", defaultValue: "Plus elle est grande, plus tes récompenses de mission augmentent.", bundle: .main)
         case .freeze: String(localized: "game.detail.freeze.how", defaultValue: "Achète-le avec tes Meeshes, ou trouve-le dans le coffre du jour.", bundle: .main)
         case .mission: String(localized: "game.detail.mission.how", defaultValue: "Elle rapporte des points et te rapproche du coffre du jour.", bundle: .main)
-        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Des points, et parfois un fragment de Meesh ou un gel.", bundle: .main)
+        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel.", bundle: .main)
         case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec tes points dès que tu en as assez.", bundle: .main)
         case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Gagne des points : quand l’anneau est plein, tu montes d’un niveau.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant.", bundle: .main)

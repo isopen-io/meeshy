@@ -180,7 +180,7 @@ const ar = {
   'game.detail.mission.what': 'المهمة هدف صغير تبلغه اليوم.',
   'game.detail.mission.how': 'تمنح نقاطًا وتقرّبك من صندوق اليوم.',
   'game.detail.chest.what': 'صندوق اليوم يُفتح حين تُنجز مهامك.',
-  'game.detail.chest.how': 'نقاط حسب مهامك، ومجد، وأجزاء Meesh — خمسة تدفع ثمن سكّة — وأحيانًا تجميد.',
+  'game.detail.chest.how': 'نقاط حسب مهامك، ومجد، وأحيانًا مكافأة نقاط أو شظية نجم أو تجميد.',
   'game.detail.coin.what': '‏Meesh هي عملة Meeshy النادرة. كل عملة تحمل رقمها.',
   'game.detail.coin.how': 'اسكّها بنقاطك حين يصير لديك ما يكفي.',
   'game.detail.ring.what': 'الحلقة تُظهر مستواك: تمتلئ بنقاطك.',
@@ -259,6 +259,14 @@ const ar = {
   'game.badge.rung.next': 'النجمة التالية · يتبقى {missing}',
   'game.badge.upcoming_title': 'القادم',
   'game.badge.guide_link': 'فهم الشارات',
+  'game.notebook.legacy_quarantine': 'دفتر قديم على هذا الجهاز لا ينتمي إلى أي حساب معروف: لا يُعرض على أحد.',
+  'game.notebook.legacy_delete': 'احذف الدفتر القديم',
+  'game.notebook.device_only': 'صورك موجودة على هذا الجهاز.',
+  'game.notebook.size': 'يشغل الدفتر {size}.',
+  'game.constellation.next.one': 'بقيت {count} شظية نجم للنجمة التالية',
+  'game.constellation.next.other': 'بقي {count} من شظايا النجم للنجمة التالية',
+  'game.constellation.how': 'تضيء نجمة مع كل عشر شظايا نجم تجمعها. وكل نجمة تفتح زينة للملف الشخصي، دون أي أفضلية في اللعب.',
+  'game.constellation.visibility': 'تظهر كوكبتك وزيناتها حسب إعداد واجهتك.',
 } as const satisfies GameConceptCatalog;
 
 export default ar;

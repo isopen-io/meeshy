@@ -18,7 +18,7 @@ import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
-import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
+import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -279,6 +279,16 @@ const prerenderLanding = (): Plugin => {
             `Le prérendu de la landing a échoué (code ${r.status}). La construction s'arrête : ` +
               'sans `landing.html`, nginx ne servirait rien sur / et les robots ne liraient aucune balise.',
           );
+        }
+        /* LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192) — même horloge,
+           même variante : nginx sert ces copies de la coquille aux adresses
+           de l'application, et la coque n'a pas de nginx. */
+        const previews = spawnSync('bun', ['run', 'scripts/prerender-share-previews.ts', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (previews.status !== 0) {
+          throw new Error(`Le prérendu des aperçus d'adresse a échoué (code ${previews.status}). La construction s'arrête.`);
         }
       },
     },
@@ -601,8 +611,9 @@ export default defineConfig({
                  (aucun `screenOrientation`) et iOS (paysage déclaré, comme
                  l'app iOS) : `portrait` y verrouillait vidéos, reels et appels. */
               orientation: 'any',
-              background_color: '#0b0c14',
-              theme_color: '#0b0c14',
+              /* #10005 — la surface de l'écran (`--ios-surface` sombre). */
+              background_color: '#09090b',
+              theme_color: '#09090b',
               icons: [
                 { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
                 { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -701,6 +712,20 @@ export default defineConfig({
                    ~7 documents à chaque installation. `/` reste servie par la
                    coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
                 ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
+                /* LES APERÇUS D'ADRESSE (#10192) — des copies de la coquille
+                   pour les robots de messagerie, que nginx sert au premier
+                   chargement ; le précache garde la coquille nue. */
+                'shell-og/**',
+                /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
+                   démarrage du conteneur, donc JAMAIS précachée : son
+                   empreinte de build est celle du fichier par défaut, pas de
+                   celui que le conteneur sert. Elle a son seau (ci-dessous). */
+                'config.js',
+                /* L'AVATAR ET LA BANNIÈRE DE WORLD WIDE (#10204) — servis par
+                   adresse ABSOLUE dans la conversation et lus par le réseau
+                   comme n'importe quelle photo de conversation : ni leurs
+                   sources SVG ni leurs PNG n'ont à peser sur l'installation. */
+                'brand/world-wide/**',
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
@@ -758,6 +783,28 @@ export default defineConfig({
                * « Offline Graceful Degradation »).
                */
               runtimeCaching: [
+                {
+                  /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) en
+                     StaleWhileRevalidate : un démarrage sous service worker la
+                     lit dans son seau sans attendre le réseau (le script est
+                     bloquant), hors ligne compris, et la relit en fond — une
+                     origine changée au redémarrage du conteneur s'applique au
+                     lancement suivant. Fonction AUTONOME : Workbox la
+                     stringifie dans `dist/sw.js`.
+                     `index.html` la charge en script CLASSIQUE et bloquant
+                     (`<script src="/config.js">`, sans commentaire : chaque
+                     octet du document compte dans la première peinture) parce
+                     que `src/lib/api/config.ts` la lit à l'évaluation du
+                     module ; le défaut `public/config.js` est vide, et
+                     l'entrypoint du conteneur (`docker/runtime-config.sh`) le
+                     réécrit. */
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
+                  handler: 'StaleWhileRevalidate',
+                  options: {
+                    cacheName: SW_DEPLOYMENT_CONFIG_CACHE,
+                    expiration: { maxEntries: 1 },
+                  },
+                },
                 {
                   /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
                      (#6973) : le routeur de Workbox retient la PREMIÈRE route
@@ -1036,6 +1083,19 @@ export default defineConfig({
            * pour la même raison : dev était à 90,00 Ko pile, et la seule entropie
            * des empreintes faisait basculer le gate (mesuré : 90,01 → 89,9 Ko).
            */
+          /**
+           * LES LOIS PURES DU TRANSPORT MÉDIA (`lib/view/media-transport.ts`) —
+           * temps, vitesses, recherche : lues par le fil, ses visionneuses, le
+           * mini-lecteur, les accusés et le composant de barre de lecture.
+           * Quand Rollup les sort en morceau partagé (2026-10-11, après que la
+           * fiche de profil a monté la visionneuse, #10092), il le nommait
+           * d'après le fichier, `media-transport-…` : le motif du budget
+           * `media_transport` (`^assets/media-transport-`), réservé au
+           * COMPOSANT chargé par `import()`, le comptait alors, et ses importeurs
+           * statiques — légitimes, ce sont des fonctions pures — faisaient
+           * rougir `dynamic_only`. Un nom qui ne commence pas par ce préfixe.
+           */
+          if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },

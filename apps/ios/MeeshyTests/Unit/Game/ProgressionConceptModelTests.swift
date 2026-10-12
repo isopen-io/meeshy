@@ -63,12 +63,35 @@ final class ProgressionConceptModelTests: XCTestCase {
 
     func test_cards_beforeSeasonOne_saysWhenItOpens_neverAVoid() {
         let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
-        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game)
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game, now: localDate(2026, 10, 11, 12, 0))
 
         let season = cards.first { $0.concept == .season }
         XCTAssertEqual(season?.value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")),
                        "avant le lundi 2026-12-21 (#10014), la ligne annonce l'ouverture")
         XCTAssertNotEqual(season?.value, GameText.doorSeasonNone)
+    }
+
+    // MARK: - La porte bascule d'elle-même le jour de l'ouverture (#10224)
+
+    private func localDate(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+        Calendar.current.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute)) ?? Date()
+    }
+
+    func test_seasonDoor_offlineCopy_stillUpcoming_theMinuteBeforeSundayEightPm() {
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let value = ProgressionConceptModel.value(.season, progress: progress(game), game: game, now: localDate(2026, 12, 20, 19, 59))
+        XCTAssertEqual(value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")))
+    }
+
+    func test_seasonDoor_offlineCopy_opensItself_atTheSundayEightPmClose() {
+        // Hors ligne, le bloc gardé porte encore `seasonUpcoming` : la porte calcule son état (`GameSeason.liveTense`).
+        let game = GameWave2Fixture.game(season: nil, seasonUpcoming: GameWave2Fixture.upcoming)
+        let cards = ProgressionConceptModel.cards(progress: progress(game), game: game, now: localDate(2026, 12, 20, 20, 0))
+        let season = cards.first { $0.concept == .season }
+        XCTAssertEqual(season?.value, GameText.doorSeason(number: GameCopy.formatCount(1)), "le jour J, la porte dit la saison ouverte")
+        XCTAssertNotEqual(season?.value, GameText.doorSeasonUpcoming(date: GameWave2Format.day("2026-12-21")))
+        let monday = ProgressionConceptModel.value(.season, progress: progress(game), game: game, now: localDate(2026, 12, 21, 9, 0))
+        XCTAssertEqual(monday, GameText.doorSeason(number: GameCopy.formatCount(1)))
     }
 
     func test_upcomingSeasonLine_namesTheNumberAndTheMonday() {

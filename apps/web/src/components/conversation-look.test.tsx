@@ -20,7 +20,8 @@ import { LensRow, ROW_HEIGHT, VISUAL_HEIGHT } from './lens-row';
  * note « look » de la planche) : la lueur d'accent sous l'en-tête et le
  * composeur, le nom d'auteur teinté par personne en groupe, la pastille de
  * langue sur l'avatar de 22 px, le vocal en carte teintée par l'accent, le
- * fichier texte en carte « TXT », World Wide épinglée en carte. Le reste —
+ * fichier texte en carte « TXT », World Wide épinglée en tête (en rangée
+ * ordinaire depuis #10191). Le reste —
  * verre, rayons, tailles, focal — ne bouge pas.
  */
 
@@ -184,43 +185,55 @@ const world = {
   lastMessageAt: new Date('2026-10-10T09:43:00Z'),
 } as unknown as Conversation;
 
-describe('World Wide épinglée en carte en tête de liste (#10004)', () => {
-  test('la rangée en carte se marque, s’épingle et garde la pastille de non-lus', () => {
+/**
+ * WORLD WIDE ET MEESHY GLOBAL SONT DES RANGÉES DE LISTE (#10191) — retour
+ * porteur du 2026-10-11 : sur /chats, World Wide (épinglée en tête, #10004)
+ * et Meeshy Global (rangée ouverte à côté, #10073) se lisaient dans un cadre
+ * arrondi, une carte, au lieu d'une rangée comme les autres. World Wide garde
+ * sa place en tête et son épingle ; aucune rangée ne porte de cadre.
+ */
+describe('World Wide et Meeshy Global sont des rangées de liste ordinaires (#10191)', () => {
+  const rowCss = (): readonly { readonly selector: string; readonly body: string }[] =>
+    [...css('lens-row-meta.css').matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .map((match) => ({ selector: (match[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '').trim(), body: match[2] ?? '' }))
+      .filter((rule) => rule.selector.includes('.lens-row'));
+
+  test('World Wide en tête garde son épingle et ses non-lus, sans peau de carte', () => {
     const html = renderToStaticMarkup(
-      <LensRow conversation={world} languages={LANGUAGES} viewerId="u-viewer" flags={FLAGS} unreadCount={12} onRowAction={() => {}} card />,
+      <LensRow conversation={world} languages={LANGUAGES} viewerId="u-viewer" flags={FLAGS} unreadCount={12} onRowAction={() => {}} pinnedAtHead />,
     );
-    expect(html).toContain('data-world-card');
     expect(html).toContain('Épinglée');
     expect(html).toContain('12');
+    expect(html).not.toContain('lens-row--card');
+    expect(html).not.toContain('data-world-card');
   });
 
-  /**
-   * LA CARTE TIENT DANS SA CASE (revue #10004). Le conteneur visuel d'une
-   * rangée mesure 100 et déborde de 8 de chaque côté de sa case de 84 — un
-   * débord INVISIBLE tant que la rangée n'a pas de fond. Peinte sur ce
-   * conteneur, la carte faisait 100 de haut et mordait sur la barre de
-   * filtres au-dessus et sur le premier en-tête de section en dessous. La
-   * peau vit donc sur un pseudo-élément rentré dans la case : 76 de haut,
-   * comme la planche « List ».
-   */
-  test('la peau de la carte tient dans la case de la rangée, à la hauteur de la planche', () => {
-    const meta = css('lens-row-meta.css');
-    expect(ruleOf(meta, '.lens-row.lens-row--card')).not.toContain('background');
-    for (const selector of ['.lens-row.lens-row--card::before', ':root.light .lens-row.lens-row--card::before']) {
-      expect(ruleOf(meta, selector)).toContain('background');
+  test('aucune règle de rangée ne dessine de cadre : ni rayon, ni bordure, ni dégradé', () => {
+    const rules = rowCss();
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) {
+      expect(`${rule.selector} → ${rule.body}`).not.toMatch(/border-radius|border:|border-color|linear-gradient/);
+      expect(rule.selector).not.toContain('lens-row--card');
     }
-    const skin = ruleOf(meta, '.lens-row.lens-row--card::before');
-    const inset = Number(/inset-block:\s*(\d+)px/.exec(skin)?.[1]);
-    expect(VISUAL_HEIGHT - 2 * inset).toBe(76);
-    expect(inset).toBeGreaterThanOrEqual((VISUAL_HEIGHT - ROW_HEIGHT) / 2);
-    expect(skin).toContain('z-index: -1');
-    expect(skin).toContain('pointer-events: none');
   });
 
-  test('l’écran de liste pose la carte au-dessus des sections', () => {
+  test('la rangée ouverte à côté se marque d’une bande pleine largeur, à la hauteur de sa case', () => {
+    for (const selector of ['.lens-row[data-active]::before', ':root.light .lens-row[data-active]::before']) {
+      expect(ruleOf(css('lens-row-meta.css'), selector)).toContain('background');
+    }
+    const band = ruleOf(css('lens-row-meta.css'), '.lens-row[data-active]::before');
+    expect(band).toMatch(/inset-inline:\s*0;/);
+    const inset = Number(/inset-block:\s*(\d+)px/.exec(band)?.[1]);
+    expect(VISUAL_HEIGHT - 2 * inset).toBe(ROW_HEIGHT);
+    expect(band).toContain('z-index: -1');
+    expect(band).toContain('pointer-events: none');
+  });
+
+  test('l’écran de liste pose World Wide en tête, comme une rangée des sections', () => {
     const source = readFileSync(new URL('../routes/conversations.tsx', import.meta.url).pathname, 'utf8');
     expect(source).toContain('pinWorldWide(');
-    expect(source).toMatch(/<LensRow[\s\S]{0,400}\bcard\b/);
+    expect(source).toMatch(/<LensRow[\s\S]{0,400}\bpinnedAtHead\b/);
+    expect(source).not.toMatch(/\bcard=\{|\bcard = false/);
   });
 });
 

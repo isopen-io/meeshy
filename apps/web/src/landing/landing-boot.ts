@@ -11,14 +11,20 @@
  *     est l'`x-default` qu'il doit pouvoir lire) ;
  *  3. changer de langue depuis le sélecteur, en retenant le choix pour
  *     l'application ;
- *  4. lire `GET /world` (#10000) : l'effectif, la clé de jonction, ou
- *     l'absence d'entrée ouverte — et masquer alors l'entrée ;
- *  5. faire entrer dans World Wide en DEUX étapes (#10003, D-186) : le nom,
- *     puis la langue (celle de l'appareil proposée parmi les sept), avec un
- *     retour par le bouton, Échap et l'historique ; la langue choisie devient
- *     celle de l'interface d'un visiteur sans compte. Une soumission sans clé
+ *  4. lire `GET /world` (#10000) : la clé de jonction, ou l'absence d'entrée
+ *     ouverte — et masquer alors l'entrée. L'EFFECTIF ne se montre qu'à un
+ *     COMPTE (#10205, directive porteur du 2026-10-11 : pas de nombre de
+ *     participants pour qui n'est pas membre de Meeshy), et seulement s'il est
+ *     servi : son absence n'empêche jamais d'entrer ;
+ *  5. faire entrer dans World Wide d'UN clic (#10098, amende D-186) : le nom
+ *     et la langue de lecture, choisie dans la liste déroulante posée avant
+ *     « Rejoindre » (celle de la page par défaut) ; la langue choisie devient celle de l'interface d'un visiteur
+ *     sans compte. Une soumission sans clé
  *     RELANCE `GET /world` et dit l'échec s'il se répète (#10067) — jamais un
  *     bouton inerte ;
+ *     Juste avant de naviguer, un JETON DE PASSAGE est posé dans l'onglet
+ *     (`sessionStorage`, #10094) : sans lui, la jonction ne crée personne sans
+ *     geste — une adresse d'entrée forgée ailleurs n'ouvre qu'un formulaire ;
  *  5 bis. proposer « Revenir dans World Wide » à l'invité qui y est déjà ;
  *  6. rendre la LISTE à l'application INSTALLÉE (`appPath`) : une PWA posée
  *     avant #10002 garde `start_url: '/'` (iOS ne relit jamais le manifeste),
@@ -45,6 +51,8 @@ export type LandingBootConfig = {
   readonly languageKey: string;
   readonly entryTemplate: string;
   readonly threadTemplate: string;
+  /** La clé du jeton de passage posé dans l'onglet avant l'entrée (#10094, `WORLD_ENTRY_HANDOFF_KEY`). */
+  readonly handoffKey: string;
   readonly appPath: string;
   readonly presence: string;
 };
@@ -113,7 +121,7 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     win.location.replace(target + win.location.search + win.location.hash);
   };
 
-  const entryOf = (raw: unknown): { readonly link: string; readonly count: string } | null => {
+  const entryOf = (raw: unknown): { readonly link: string; readonly count: string | null } | null => {
     if (typeof raw !== 'object' || raw === null || Reflect.get(raw, 'success') !== true) return null;
     const data: unknown = Reflect.get(raw, 'data');
     if (typeof data !== 'object' || data === null) return null;
@@ -124,9 +132,8 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     const count: unknown = Reflect.get(data, 'memberCount');
     const capped: unknown = Reflect.get(data, 'memberCountCapped');
     if (!text('identifier') || !text('title') || !text('shareLinkIdentifier')) return null;
-    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) return null;
-    if (capped !== undefined && capped !== true) return null;
-    return { link: String(Reflect.get(data, 'shareLinkIdentifier')), count: capped === true ? `${count}+` : `${count}` };
+    const counted = typeof count === 'number' && Number.isInteger(count) && count >= 0 && (capped === undefined || capped === true);
+    return { link: String(Reflect.get(data, 'shareLinkIdentifier')), count: counted ? (capped === true ? `${count}+` : `${count}`) : null };
   };
 
   const unavailable = (status: number, raw: unknown): boolean =>
@@ -169,43 +176,14 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     let closed = false;
     let reading = false;
     let waiting: (() => void) | null = null;
-    let onLanguage = false;
-    let proposed = false;
     const form = scope.querySelector('[data-world-form]');
     const field = (): Element | null => scope.querySelector('[data-world-form] input[name="name"]');
-    const radios = (): HTMLInputElement[] =>
-      all('[data-world-form] input[name="language"]').filter((node): node is HTMLInputElement => node instanceof win.HTMLInputElement);
+    const chooser = scope.querySelector('[data-world-form] select[data-world-language]');
     const focus = (node: Element | null | undefined): void => {
       if (node instanceof win.HTMLInputElement) node.focus();
     };
 
-    const show = (language: boolean): void => {
-      onLanguage = language;
-      flag('[data-world-step="name"]', !language);
-      flag('[data-world-step="language"]', language);
-    };
-    const toName = (): void => {
-      if (!onLanguage) return;
-      show(false);
-      flag('[data-world-error]', false);
-      focus(field());
-    };
-    const toLanguage = (): void => {
-      if (!proposed) {
-        proposed = true;
-        const device: unknown = Reflect.get(win.navigator ?? {}, 'languages');
-        const codes = Array.isArray(device) ? device.map((tag) => String(tag).slice(0, 2).toLowerCase()) : [];
-        const match = codes.map((code) => radios().find((radio) => radio.value === code)).find((radio) => radio !== undefined);
-        if (match !== undefined) match.checked = true;
-      }
-      show(true);
-      try {
-        win.history.pushState({ worldStep: 1 }, '');
-      } catch {
-        /* Historique refusé : « Retour » et Échap suffisent. */
-      }
-      focus(radios().find((radio) => radio.checked));
-    };
+    if (chooser instanceof win.HTMLSelectElement) chooser.value = config.language;
 
     const enter = (name: string, language: string): void => {
       if (link === null) return;
@@ -215,6 +193,11 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
         } catch {
           /* Stockage refusé : la jonction porte la langue, l'interface suivra. */
         }
+      }
+      try {
+        win.sessionStorage.setItem(config.handoffKey, JSON.stringify({ link, name, language, at: Date.now() }));
+      } catch {
+        /* Onglet sans stockage : la jonction demandera le geste (fail-closed). */
       }
       win.location.assign(
         config.entryTemplate
@@ -248,8 +231,9 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
           }
           link = entry.link;
           offerReturn(link);
-          for (const slot of all('[data-world-count]')) slot.textContent = config.presence.replace('{count}', entry.count);
-          flag('[data-world-presence]', true);
+          const count = session === 'member' ? entry.count : null;
+          for (const slot of all('[data-world-count]')) slot.textContent = count === null ? '' : config.presence.replace('{count}', count);
+          flag('[data-world-presence]', count !== null);
           go?.();
         })
         .catch(failed);
@@ -259,29 +243,15 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
       event.preventDefault();
       const input = field();
       const name = input instanceof win.HTMLInputElement ? input.value.trim() : '';
-      if (name === '' || closed) return toName();
-      if (!onLanguage) return toLanguage();
-      const language = radios().find((radio) => radio.checked)?.value ?? config.language;
+      if (name === '' || closed) return focus(input);
+      const language = chooser instanceof win.HTMLSelectElement && chooser.value !== '' ? chooser.value : config.language;
       if (link !== null) return enter(name, language);
       waiting = () => enter(name, language);
       flag('[data-world-error]', false);
       if (!reading) readWorld();
     });
-    form?.addEventListener('keydown', (event) => {
-      if (Reflect.get(event, 'key') === 'Escape') toName();
-    });
-    for (const back of all('[data-world-back]')) {
-      back.addEventListener('click', () => {
-        if (Reflect.get(Object(win.history.state), 'worldStep') === 1) win.history.back();
-        toName();
-      });
-    }
-    win.addEventListener('popstate', toName);
     for (const cta of all('[data-world-cta]')) {
-      cta.addEventListener('click', () => {
-        toName();
-        focus(field());
-      });
+      cta.addEventListener('click', () => focus(field()));
     }
 
     readWorld();

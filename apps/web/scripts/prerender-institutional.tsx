@@ -28,6 +28,9 @@ import { fileURLToPath } from 'node:url';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import packageJson from '../package.json';
+import { OG_IMAGE_SIZE } from '../src/landing/landing-document';
+import { BRAND_OG_IMAGE_PATH } from '../src/share-preview/share-preview';
+import { SHARE_PREVIEW_COPY } from '../src/share-preview/share-preview-copy';
 import budgets from '../budgets.json';
 
 import { InstitutionalPage } from '../src/institutional/page';
@@ -146,8 +149,16 @@ function document(route: string, page: ContentPage, sheet: string): string {
 <meta property="og:title" content="${escape(title)}">
 <meta property="og:description" content="${escape(page.description)}">
 <meta property="og:url" content="${escape(url)}">
-<meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)">
+<meta property="og:image" content="${escape(`${ORIGIN}${BRAND_OG_IMAGE_PATH}`)}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="${OG_IMAGE_SIZE.width}">
+<meta property="og:image:height" content="${OG_IMAGE_SIZE.height}">
+<meta property="og:image:alt" content="${escape(SHARE_PREVIEW_COPY.fr.brandImageAlt)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escape(title)}">
+<meta name="twitter:description" content="${escape(page.description)}">
+<meta name="twitter:image" content="${escape(`${ORIGIN}${BRAND_OG_IMAGE_PATH}`)}">
+<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
 <style>${sheet}</style>
@@ -224,6 +235,11 @@ function check(route: string, html: string, page: ContentPage): void {
     failures.push("le script d'amorçage du schéma est absent ou altéré");
   }
   if (!html.includes('property="og:description"')) failures.push('og:description absent');
+  /* L'APERÇU D'UN LIEN PARTAGÉ (#10192) : une image 1200 × 630, servie par
+     l'image web (adresse ABSOLUE : la coque, qui ne l'embarque pas, la lit
+     aussi en ligne), et la grande carte qui la montre. */
+  if (!html.includes(`<meta property="og:image" content="${ORIGIN}${BRAND_OG_IMAGE_PATH}">`)) failures.push('og:image absent');
+  if (!html.includes('<meta name="twitter:card" content="summary_large_image">')) failures.push('twitter:card absent');
   // ZÉRO script externe : c'est la promesse de ces pages. Le seul `<script>`
   // toléré est le thème, inline.
   if (/<script[^>]+src=/.test(html)) failures.push('un script EXTERNE est référencé');

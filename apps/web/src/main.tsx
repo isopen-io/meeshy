@@ -152,6 +152,11 @@ createRoot(root).render(
   </StrictMode>,
 );
 
+/* Le clavier virtuel posé sur `<html>` (#10005) : Safari iOS le fait
+   RECOUVRIR la page, `h-app` le retire des écrans d'application. Aucun clavier
+   ne s'ouvre avant la première peinture : `import()` le tient hors d'elle. */
+void import('@/lib/view/keyboard-viewport').then(({ installKeyboardViewport }) => installKeyboardViewport(window));
+
 /**
  * LE TEMPS RÉEL S'AMORCE APRÈS LA PREMIÈRE PEINTURE (#5793) — `import()`,
  * motif `dev-harness.ts` ci-dessus, mais SANS garde `DEV` : le fil et la

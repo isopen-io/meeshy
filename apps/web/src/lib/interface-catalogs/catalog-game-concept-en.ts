@@ -180,7 +180,7 @@ const en = {
   'game.detail.mission.what': 'A mission is a small goal to reach today.',
   'game.detail.mission.how': 'It earns points and brings you closer to the daily chest.',
   'game.detail.chest.what': 'The daily chest opens when your missions are done.',
-  'game.detail.chest.how': 'Points depending on your missions, Glory, Meesh fragments — five pay for a mint — and sometimes a freeze.',
+  'game.detail.chest.how': 'Points depending on your missions, Glory, sometimes a points bonus, a star fragment or a freeze.',
   'game.detail.coin.what': 'The Meesh is Meeshy’s rare coin. Each coin carries its number.',
   'game.detail.coin.how': 'Mint it with your points as soon as you have enough.',
   'game.detail.ring.what': 'The ring shows your level: it fills up with your points.',
@@ -259,6 +259,14 @@ const en = {
   'game.badge.rung.next': 'Next star · {missing} to go',
   'game.badge.upcoming_title': 'Coming up',
   'game.badge.guide_link': 'Understand badges',
+  'game.notebook.legacy_quarantine': 'An old notebook on this device belongs to no known account: it is shown to no one.',
+  'game.notebook.legacy_delete': 'Delete the old notebook',
+  'game.notebook.device_only': 'Your photos live on this device.',
+  'game.notebook.size': 'The notebook takes up {size}.',
+  'game.constellation.next.one': '{count} more star fragment to the next star',
+  'game.constellation.next.other': '{count} more star fragments to the next star',
+  'game.constellation.how': 'A star lights up for every ten star fragments collected. Each one unlocks a profile cosmetic, with no gameplay advantage.',
+  'game.constellation.visibility': 'Your constellation and its cosmetics are shown according to your showcase setting.',
 } as const satisfies GameConceptCatalog;
 
 export default en;

@@ -5,6 +5,10 @@
       "id": "hors-norme.pop-art",
       "mood": "hors-norme",
       "name": "Pop Art",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -244,6 +248,10 @@
       "id": "hors-norme.collage",
       "mood": "hors-norme",
       "name": "Collage",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -449,6 +457,10 @@
       "id": "hors-norme.vitrail",
       "mood": "hors-norme",
       "name": "Vitrail",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "column",
@@ -660,6 +672,9 @@
       "id": "hors-norme.tete-d-affiche",
       "mood": "hors-norme",
       "name": "Tête d’affiche",
+      "surfaces": [
+        "capture"
+      ],
       "base": {
         "layout": {
           "arrangement": "arch",

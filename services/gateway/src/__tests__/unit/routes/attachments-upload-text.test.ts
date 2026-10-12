@@ -1,6 +1,8 @@
 /**
  * Unit tests for attachments/upload.ts — POST /attachments/upload-text
- * (scindé de attachments-upload.test.ts, budget de taille #4531)
+ * (le texte joint : garde d'authentification, autorisation anonyme du lien,
+ * plafond de taille en octets). POST /attachments/upload vit dans
+ * attachments-upload.test.ts.
  *
  * @jest-environment node
  */
@@ -103,9 +105,6 @@ async function buildApp({
   await app.ready();
   return app;
 }
-
-
-// ─── POST /attachments/upload-text ────────────────────────────────────────────
 
 describe('POST /attachments/upload-text — not authenticated', () => {
   let app: FastifyInstance;

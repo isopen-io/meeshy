@@ -26,6 +26,7 @@ import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
 import { attachmentFullSelect, attachmentSocketSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import {
@@ -484,6 +485,7 @@ export class MessageProcessor {
                 type: true,
                 nickname: true,
                 userId: true,
+                ...ANONYMOUS_SENDER_NAME_SELECT,
                 user: {
                   select: {
                     id: true,

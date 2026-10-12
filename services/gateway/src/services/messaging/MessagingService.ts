@@ -34,6 +34,8 @@ import {
 } from './conversationWriteAdmission';
 import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
 import { resolveParticipantRights, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
 import {
   attachmentSendRefusal,
   carriesAttachments,
@@ -191,6 +193,7 @@ export class MessagingService {
                 select: {
                   id: true, displayName: true, avatar: true, type: true,
                   nickname: true, userId: true,
+                  ...ANONYMOUS_SENDER_NAME_SELECT,
                   user: {
                     select: {
                       id: true, username: true, displayName: true,
@@ -736,6 +739,9 @@ export class MessagingService {
       success: true,
       data: {
         ...message,
+        // #10120 — l'auteur tel que la liste le sert : un invité y porte son
+        // nom donné, son pseudo en handle, jamais son profil de session.
+        ...(senderObj ? { sender: servedMessageSender(senderObj) } : {}),
         senderId: resolvedSenderId,
         senderParticipantId: message.senderId,
         timestamp: message.createdAt

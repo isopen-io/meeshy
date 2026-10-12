@@ -5,6 +5,7 @@ import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
 import type { MessageStarEntry } from '@/lib/view/use-message-star';
 
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { hasServerMessageId } from '@/lib/view/message-receipts';
 
 import { GlyphSvg } from './glyph';
@@ -86,6 +87,7 @@ export function MessageDetailSheet({
   readonly onPickLanguage: (code: string) => void;
   readonly onClose: () => void;
 }) {
+  const speaksAsGuest = useSpeaksAsGuest();
   const fullDate = new Intl.DateTimeFormat(locale, { dateStyle: 'full', timeStyle: 'short' }).format(sentAt);
   const language = currentInterfaceLanguage();
 
@@ -184,7 +186,9 @@ export function MessageDetailSheet({
         {delivery !== null ? <span style={{ color: 'var(--color-ios-ink-2)' }}> · {STATUS_LABEL[delivery]}</span> : null}
       </li>
 
-      {delivery !== null && hasServerMessageId(messageId) ? (
+      {/* Les accusés PAR PERSONNE sont refusés à un invité (#10205, 403
+          ACCOUNT_REQUIRED) : la feuille ne les demande pas. */}
+      {delivery !== null && hasServerMessageId(messageId) && !speaksAsGuest ? (
         <MessageReceiptsSheet conversationId={conversationId} messageId={messageId} attachments={attachments} />
       ) : null}
     </Sheet>

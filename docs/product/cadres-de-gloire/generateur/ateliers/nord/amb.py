@@ -324,6 +324,7 @@ def amb2():
     c.add(outer_frame(c, OR, 12, 3.5))
     crest_block(c, 270, 150, 0.86, "gold", 2, GEM_AURORE, glow="#FFD36E", glow_r=90)
     inscription(c, "Ambassadeur II", "Le voyage continue", y=786, style="nuit", metal=OR, panel=("#101C30", "#04070E"), kicker=kicker(), w=400)
+    c.motif("afrique")
     save(c, "ambassadeur-2", "Ambassadeur", 2, "II", "Le Drakkar au kente",
          "La photo devient la voile d'un drakkar qui file sous l'aurore, tête de dragon d'or à la proue et girouette viking au mât. "
          "L'Afrique est montée à bord : la voile est bordée de kente tissé (or, vert, rouge, noir) et, entre les boucliers peints, "

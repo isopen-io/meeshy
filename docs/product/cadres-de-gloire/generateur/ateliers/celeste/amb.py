@@ -240,6 +240,7 @@ def amb2():
     crest(c, 270, 140, 0.8, "gold", division=2, gem=GEM)
     plate(c, "Ambassadeur II", message="Le voyage continue", y=760, style="laque")
     duo(c, [(70, 742, 116, False, -6), (478, 750, 110, True, 6)], "mee-coucou", "meo-selfie")
+    c.motif("afrique")
     finish(c, "ambassadeur-2", "ambassadeur", 2, "II", "L'Ambassade de Malindi",
            "En 1414, l'ambassade de Malindi, sur la côte swahilie, offrit une girafe à la cour Ming, qui la salua comme un qilin. "
            "La photo passe une porte sculptée de Lamu et de Zanzibar — chaînes, rosaces, tympan rayonnant, clous de laiton — "

@@ -32,3 +32,17 @@ describe('notification.gameEnabled', () => {
     }
   });
 });
+
+describe('notification.gamePhotoEnabled (#10175, D8)', () => {
+  it('coupée, elle ferme le seul push photo', () => {
+    const off = prefs({ gamePhotoEnabled: false });
+    expect(isNotificationTypeEnabledByPreference(off, 'game_photo_moment')).toBe(false);
+    for (const type of GAME_NOTIFICATION_TYPES.filter((t) => t !== 'game_photo_moment')) expect(isNotificationTypeEnabledByPreference(off, type)).toBe(true);
+  });
+
+  it('ABSENTE d’un document antérieur : reçu ; « Jeu » coupé la ferme aussi', () => {
+    const legacy = { ...prefs({}), gamePhotoEnabled: undefined } as unknown as NotificationPreference;
+    expect(isNotificationTypeEnabledByPreference(legacy, 'game_photo_moment')).toBe(true);
+    expect(isNotificationTypeEnabledByPreference(prefs({ gameEnabled: false, gamePhotoEnabled: true }), 'game_photo_moment')).toBe(false);
+  });
+});

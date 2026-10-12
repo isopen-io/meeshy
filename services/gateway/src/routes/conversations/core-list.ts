@@ -10,6 +10,7 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -837,13 +838,14 @@ export function registerConversationListRoute(
           // admin de groupe administrait 250 personnes sans jamais pouvoir en
           // lire l'effectif. `currentUserRoleMap` porte déjà son rôle, résolu
           // plus haut par le top-5 et son repli batché — aucune requête de plus.
-          ...presentMemberCount(activeMembers.participants, {
+          // #10205 — un invité (sans compte) : aucun effectif, sa seule ligne.
+          ...memberCountServedToViewer(presentMemberCount(activeMembers.participants, {
             viewerSeesExactCount: canViewExactMemberCount({
               platformRole: authRequest.authContext.registeredUser?.role ?? null,
               conversationRole: currentUserRoleMap.get(conversation.id) ?? null
             })
-          }),
-          participants: membersWithUser,
+          }), authRequest.authContext),
+          participants: membersServedToViewer(membersWithUser, authRequest.authContext),
           title: displayTitle,
           // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
           // au niveau CONVERSATION et non dans `lastMessage` parce que c'est là

@@ -5,6 +5,10 @@
       "id": "glauque.vhs",
       "mood": "glauque",
       "name": "VHS",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -121,6 +125,10 @@
       "id": "glauque.videosurveillance",
       "mood": "glauque",
       "name": "Vidéosurveillance",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -263,6 +271,10 @@
       "id": "glauque.sous-sol",
       "mood": "glauque",
       "name": "Sous-sol",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -391,6 +403,9 @@
       "id": "glauque.disparus",
       "mood": "glauque",
       "name": "Disparus",
+      "surfaces": [
+        "capture"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",

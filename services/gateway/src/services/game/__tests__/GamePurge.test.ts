@@ -94,6 +94,7 @@ describe('purgeGameData', () => {
       gameTrophy: [{ id: 'l', userId: USER }],
       atlasStamp: [{ id: 'm', userId: USER }],
       engagementPostPoints: [{ id: 'o', userId: USER, postId: 'p1', totalPoints: 4 }, { id: 'o2', userId: OTHER, postId: 'p1', totalPoints: 7 }],
+      gamePhotoMoment: [{ id: 'q', userId: USER, stepId: 'start' }, { id: 'q2', userId: OTHER, stepId: 'start' }],
       gameDuo: [{ id: 'n', inviterId: USER, inviteeId: OTHER }, { id: 'n2', inviterId: OTHER, inviteeId: USER }, { id: 'n3', inviterId: OTHER, inviteeId: '68a0000000000000000000ff' }],
     })) (db as unknown as Record<string, { rows: unknown[] }>)[model]!.rows.push(...rows);
     return db;
@@ -111,6 +112,7 @@ describe('purgeGameData', () => {
     expect(db.dailyMission.rows.map((r) => r.id)).toEqual(['a2']);
     expect(db.leagueMembership.rows.map((r) => r.id)).toEqual(['h2']);
     expect(db.gameDuo.rows.map((r) => r.id)).toEqual(['n3']);
+    expect(db.gamePhotoMoment.rows.map((r) => r.id)).toEqual(['q2']);
   });
 
   it('retire ce que les posts ont rapporté au compte (#9569) — la trace de ses gestes post par post —, pas ce qu’ils ont rapporté aux autres', async () => {

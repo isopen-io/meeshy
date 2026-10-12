@@ -11,6 +11,7 @@ import auditReglagesPt from './admin/audit-reglages-pt';
 import personnesPt from './admin/personnes-pt';
 import conversationsAgentPt from './admin/conversations-agent-pt';
 import engagementScalePt from './admin/engagement-scale-pt';
+import gameSeasonsPt from './admin/game-seasons-pt';
 
 const pt = {
   'admin.role': 'Seu papel: {role}',
@@ -377,6 +378,7 @@ const pt = {
   ...personnesPt,
   ...conversationsAgentPt,
   ...engagementScalePt,
+  ...gameSeasonsPt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

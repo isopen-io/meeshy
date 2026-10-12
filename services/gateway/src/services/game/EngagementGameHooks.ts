@@ -27,6 +27,8 @@ import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignal
 import { MissionService, type SignalOptions } from './MissionService';
 import { GameWeekPointsRecorder } from './GameWeekPoints';
 import type { StreakPlan } from './FlameService';
+import { getPhotoMomentMarks, type PhotoMomentMarks } from './PhotoMomentMarks';
+import { isGamePhotoPushOn } from './photoPushFlag';
 
 const log = enhancedLogger.child({ module: 'EngagementGameHooks' });
 
@@ -67,10 +69,15 @@ export class EngagementGameHooks {
 
   private readonly signals: MessageGameSignals;
 
+  private readonly photo: { readonly marks: () => PhotoMomentMarks; readonly on: () => boolean };
+
   constructor(
     prisma: PrismaClient,
     creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>,
+    /** Les comptes « à évaluer » des étapes franchies app fermée (#10175) ; remplaçables en test. */
+    deps: { readonly photoMarks?: PhotoMomentMarks; readonly photoPushOn?: () => boolean } = {},
   ) {
+    this.photo = { marks: () => deps.photoMarks ?? getPhotoMomentMarks(), on: deps.photoPushOn ?? (() => isGamePhotoPushOn()) };
     this.glory = new GloryService(prisma);
     this.trophies = new TrophyService(prisma);
     this.missions = new MissionService(prisma, {
@@ -125,11 +132,13 @@ export class EngagementGameHooks {
    */
   async onPointsGained(userId: string, points: number): Promise<void> {
     await this.isolated('week points', () => this.weekPoints.record(userId, points));
+    await this.markPhotoMoment(userId);
   }
 
   /** Un succès vient d'être obtenu : sa Gloire, figée à sa rareté du moment (#9390). */
   async onAchievement(userId: string, milestoneKey: string): Promise<void> {
     await this.isolated('achievement glory', () => this.glory.creditAchievement(userId, milestoneKey).then(() => undefined));
+    await this.markPhotoMoment(userId);
   }
 
   /**
@@ -139,6 +148,7 @@ export class EngagementGameHooks {
    * plafond du rang et le palier des étapes.
    */
   async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
+    await this.markPhotoMoment(userId);
     if (levelFromScore(score, NO_LEVEL_CAP) <= (levelRecord ?? 1)) return;
     await this.isolated('level glory', () => this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord }).then(() => undefined));
   }
@@ -148,6 +158,7 @@ export class EngagementGameHooks {
    * 7 ou 30 jours, l'étape des niveaux 40 ou 90 (#9706) : le niveau qui l'attendait monte d'un coup.
    */
   async onStreak(userId: string, plan: StreakPlan): Promise<void> {
+    await this.markPhotoMoment(userId);
     if (plan.longest <= plan.previousLongest) return;
     await this.isolated('flame record glory', () =>
       this.glory.creditFlameRecords({ userId, previousLongest: plan.previousLongest, longest: plan.longest }).then(() => undefined),
@@ -166,6 +177,15 @@ export class EngagementGameHooks {
   /** Une conversation créée vide vient d'être démarrée (#9635) : sous la garde d'un message. */
   recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
     return this.signals.recordConversationStarted(input);
+  }
+
+  /**
+   * Une écriture du jeu a pu faire franchir une étape app fermée : le compte est « à évaluer » par le job des
+   * étapes (#10175). Seulement l'interrupteur allumé ; une marque qui tombe ne retient jamais le geste.
+   */
+  private async markPhotoMoment(userId: string): Promise<void> {
+    if (!this.photo.on()) return;
+    await this.isolated('photo moment mark', () => this.photo.marks().mark(userId));
   }
 
   private async isolated(label: string, work: () => Promise<void>): Promise<void> {

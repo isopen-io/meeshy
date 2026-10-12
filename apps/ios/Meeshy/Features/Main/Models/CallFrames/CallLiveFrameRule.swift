@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 /// Pourquoi un cadre choisi n'est pas montré : l'appareil se protège, ou le cadre bouge
 /// alors que l'utilisateur a demandé moins d'animations.
@@ -41,12 +42,11 @@ nonisolated enum CallLiveFrameRule {
     static let paintLongestSide: CGFloat = 2048
     private static let idAlphabet = Set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
-    /// Un cadre se propose en direct s'il sert un duo et qu'il le déclare — ou, tant que le
-    /// catalogue ne déclare pas encore ses surfaces, s'il est léger ou sans coût déclaré.
+    /// Un cadre se propose en direct s'il sert un duo et que la loi d'usage lui ouvre l'appel —
+    /// c'est-à-dire s'il DÉCLARE `live` (#10195). Un cadre de capture seule ne sert jamais
+    /// l'appel, quel que soit son coût (directive porteur 2026-10-11).
     static func isEligible(_ design: CallFrameDesign) -> Bool {
-        guard design.serves(people: people) else { return false }
-        if design.isOffered(on: .live) { return true }
-        return design.cost == nil || design.cost == .light
+        design.serves(people: people) && FrameUsageLaw.canUseFrame(design.usage, .call)
     }
 
     static func frames(mood: CallFrameMood? = nil, in catalogue: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallFrameDesign] {

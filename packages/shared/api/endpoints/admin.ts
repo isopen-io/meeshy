@@ -177,6 +177,30 @@ export const dashboardInvalidateCache = '/api/v1/admin/dashboard/invalidate-cach
 /** GET · PUT /api/v1/admin/engagement-scale */
 export const engagementScale = '/api/v1/admin/engagement-scale';
 
+/** GET /api/v1/admin/game/seasons */
+export const gameSeasons = '/api/v1/admin/game/seasons';
+
+/** GET /api/v1/admin/game/seasons/app-events */
+export const gameSeasonsAppEvents = '/api/v1/admin/game/seasons/app-events';
+
+/** GET /api/v1/admin/game/seasons/app-events.yaml */
+export const gameSeasonsAppEventsYaml = '/api/v1/admin/game/seasons/app-events.yaml';
+
+/** PUT /api/v1/admin/game/seasons/:number */
+export const gameSeasonsByNumber = (number: string): string => `/api/v1/admin/game/seasons/${encodeURIComponent(number)}`;
+
+/** POST /api/v1/admin/game/seasons/:number/proposals */
+export const gameSeasonsByNumberProposals = (number: string): string => `/api/v1/admin/game/seasons/${encodeURIComponent(number)}/proposals`;
+
+/** GET /api/v1/admin/game/seasons/proposals */
+export const gameSeasonsProposals = '/api/v1/admin/game/seasons/proposals';
+
+/** POST /api/v1/admin/game/seasons/proposals/:id/approve */
+export const gameSeasonsProposalsByIdApprove = (id: string): string => `/api/v1/admin/game/seasons/proposals/${encodeURIComponent(id)}/approve`;
+
+/** POST /api/v1/admin/game/seasons/proposals/:id/reject */
+export const gameSeasonsProposalsByIdReject = (id: string): string => `/api/v1/admin/game/seasons/proposals/${encodeURIComponent(id)}/reject`;
+
 /** GET /api/v1/admin/invitations */
 export const invitations = '/api/v1/admin/invitations';
 

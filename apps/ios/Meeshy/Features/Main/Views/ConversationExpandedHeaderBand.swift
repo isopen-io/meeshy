@@ -59,12 +59,16 @@ struct ConversationExpandedHeaderBand: View {
     let midContent: () -> AnyView
     let avatar: () -> AnyView
     let background: () -> AnyView
+    /// « Partager » à côté de l'avatar (#10206) — vide quand la conversation
+    /// n'a pas d'adresse publique.
+    var share: () -> AnyView = { AnyView(EmptyView()) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: MeeshySpacing.sm) {
                 if layout.showsBackButton { backButton() }
                 midContent()
+                share()
                 avatar()
             }
             .padding(.leading, layout.showsBackButton ? 0 : MeeshySpacing.xs)

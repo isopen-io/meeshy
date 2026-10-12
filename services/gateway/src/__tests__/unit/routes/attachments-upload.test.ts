@@ -1,6 +1,6 @@
 /**
  * Unit tests for attachments/upload.ts
- * Tests POST /attachments/upload (upload-text : attachments-upload-text.test.ts)
+ * Tests POST /attachments/upload (POST /attachments/upload-text : attachments-upload-text.test.ts)
  *
  * @jest-environment node
  */
@@ -183,10 +183,7 @@ async function buildApp({
   participantId?: string | null;
   prisma?: any;
 } = {}): Promise<FastifyInstance> {
-  // `bodyLimit` aligné sur `server.ts` (50MB) — sans lui, le `bodyLimit` PAR
-  // DÉFAUT de Fastify (1MB) rejetterait déjà les payloads de test du plafond
-  // `MAX_TEXT_ATTACHMENT_LENGTH` (10MB) avant même d'atteindre la validation
-  // de schéma (`maxLength`) que ces tests vérifient.
+  // `bodyLimit` aligné sur `server.ts` (50MB), comme en production.
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } }, bodyLimit: 50 * 1024 * 1024 });
 
   const authOptional = async (req: any) => {

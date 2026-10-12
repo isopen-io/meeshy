@@ -4,10 +4,9 @@ import { Glyph } from '@/components/glyph';
 import { RailTitleSlot } from '@/components/rail-title-slot';
 import { ShareLinkSheet } from '@/components/share-link-sheet';
 import type { StoryRailProps } from '@/components/story-rail';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import type { Conversation } from '@/lib/api/types';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -53,7 +52,12 @@ export function ListHeader({
   const [feedback, setFeedback] = useState<string | null>(null);
 
   return (
-    <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
+    /* `gap-1` ET NON `gap-3` (#10101) : chaque porte fait déjà 44 px autour
+       d'un disque de 32, et ses 6 px d'air suffisent à séparer les disques —
+       la planche « List » les pose sans écart. Les 24 px rendus au titre le
+       font tenir entier dans la colonne de 24rem du cadre côte à côte (il y
+       manquait 7 px : « Meeshy Ch… ») et sur un téléphone de 375 px. */
+    <header className="flex shrink-0 items-center gap-1 px-4 pt-3 pb-2">
       <RailTitleSlot title="Meeshy Chats" pinned={pinned} railProps={railProps} />
       <button
         type="button"
@@ -114,7 +118,7 @@ export function ListHeader({
           conversations={conversations}
           viewerId={viewerId}
           deps={apiDeps}
-          origin={webOriginOf(apiConfig.base, window.location.origin)}
+          origin={publicWebOrigin(window.location.origin)}
           onClose={() => setShareSheetOpen(false)}
           onFeedback={setFeedback}
         />

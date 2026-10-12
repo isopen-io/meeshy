@@ -3,7 +3,7 @@ import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { endRevokedSession } from '@/lib/api/account-caches';
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
@@ -28,12 +28,14 @@ import { translateInvite, type InviteCatalogKey } from '@/lib/i18n-invite-catalo
 import { currentInterfaceLanguage, interfaceLanguageOf, setInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { ANONYMOUS_MODE, joinChoicesOf } from '@/lib/links/invitation-view';
 import { copyLinkText, LINK_ANNOUNCE_MS, type CopyOutcome } from '@/lib/links/link-copy';
-import { shareLinkUrl, webOriginOf } from '@/lib/links/web-origin';
+import { shareLinkUrl } from '@/lib/links/web-origin';
 import { useOnline } from '@/lib/net/online';
 import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
+import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
+import { focusGuestOf } from '@/lib/view/guest-focus';
 import {
   GroupCard,
   INK,
@@ -127,6 +129,9 @@ export type ChatJoinDeps = {
    * l'origine virtuelle d'une coque. */
   readonly origin: () => string;
   readonly now: () => Date;
+  /** L'onglet où la landing pose son jeton de passage (#10094) — `sessionStorage`,
+   * dont l'accès peut LEVER (navigation privée) : la jonction le lit sous garde. */
+  readonly handoff: () => HandoffStorage;
 };
 
 const DEFAULT_DEPS: ChatJoinDeps = {
@@ -153,8 +158,9 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   expireSession: () => endRevokedSession(sessionStore),
   copyText: (url) => copyLinkText(url, portailDuNavigateur()),
   shareUrl: (data) => partagerLien(data),
-  origin: () => webOriginOf(apiConfig.base, window.location.origin),
+  origin: () => publicWebOrigin(window.location.origin),
   now: () => new Date(),
+  handoff: () => window.sessionStorage,
 };
 
 type LoadState =
@@ -235,9 +241,22 @@ export function ChatJoin({
   const [focused, setFocused] = useState<GuestField | null>(null);
   const [input, setInput] = useState<InputRefusal | null>(null);
   /* L'ENTRÉE de la landing est lue UNE fois, au montage : l'adresse qui la
-     porte ne change pas, et une revalidation ne doit jamais la rejouer. */
+     porte ne change pas, et une revalidation ne doit jamais la rejouer. Son
+     JETON DE PASSAGE aussi (#10094) — lu et effacé au montage, une seule fois :
+     sans lui, l'adresse ne fait que PRÉ-REMPLIR le formulaire. */
   const [arrival] = useState(entry);
+  const [handedOff] = useState(() => arrival !== null && takeLandingHandoff({ storage: deps.handoff, link, entry: arrival, now: deps.now().getTime() }));
   const [entering, setEntering] = useState(arrival !== null);
+  /* L'INVITÉ DÉJÀ ENTRÉ PAR CE LIEN (#10100) — un ancien lien rouvert ne lui
+     repropose pas d'entrer : il rouvre son fil, en focus. Lu au montage : une
+     jonction réussie ici navigue d'elle-même. */
+  const [returning] = useState(() => {
+    const held = focusGuestOf(sessionStore.getState().session);
+    return held !== null && held.link === link ? held.conversationId : null;
+  });
+  useEffect(() => {
+    if (returning !== null) deps.go(href('thread', { conversation: returning }), true);
+  }, [deps, returning]);
 
   /**
    * LA LECTURE — relancée au retour du réseau.
@@ -289,6 +308,10 @@ export function ChatJoin({
    * pas peinte entre-temps. Un lien qui exige plus (e-mail, date de naissance),
    * un nom refusé ou un refus du lien rendent la main au formulaire, PRÉ-REMPLI,
    * avec la cause dite — jamais une garde contournée.
+   *
+   * SANS JETON DE PASSAGE (#10094) — adresse forgée, ancien gabarit, autre
+   * onglet, jeton périmé ou stockage refusé — rien ne part : le formulaire
+   * s'ouvre PRÉ-REMPLI du nom et de la langue de l'adresse, et attend le geste.
    */
   useEffect(() => {
     if (!entering || arrival === null || load.kind === 'loading') return;
@@ -302,6 +325,10 @@ export function ChatJoin({
     const chosen = arrival.language !== null && guestLanguageOptions(terms).includes(arrival.language) ? arrival.language : defaultGuestLanguage(terms, language);
     const seeded: GuestDraft = { ...EMPTY_DRAFT, nickname: arrival.nickname, language: chosen };
     setDraft(seeded);
+    if (!handedOff) {
+      setEntering(false);
+      return;
+    }
     void handleGuestJoin(seeded).finally(() => setEntering(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- l'entrée part une fois, quand l'invitation arrive
   }, [load]);
@@ -381,8 +408,14 @@ export function ChatJoin({
     /* LA LANGUE CHOISIE EST CELLE DE L'INVITÉ (#9710) : elle vient de passer au
        rang 1 de son Prisme avec son identité ; elle devient aussi la langue de
        son interface. Un COMPTE qui rejoint en anonyme garde la sienne (#8816). */
-    if (heldAccountOf(session) === null) deps.adoptInterfaceLanguage(validated.body.language);
-    deps.go(href('thread', { conversation: result.data.conversationId }), true);
+    const guestOnly = heldAccountOf(session) === null;
+    if (guestOnly) deps.adoptInterfaceLanguage(validated.body.language);
+    /* LA LANDING NE FAIT ENTRER QUE DANS WORLD WIDE, qui se lit sur `/world`
+       (#10100) : une entrée portée par son jeton y mène, même par l'ancienne
+       adresse de jonction qu'une page de la landing en cache vise encore. Pas
+       un COMPTE entré sous son identité anonyme : `/world` le renverrait à la
+       jonction, il ouvre le fil rejoint, dans son application. */
+    deps.go(handedOff && guestOnly ? href('world') : href('thread', { conversation: result.data.conversationId }), true);
     deps.joined();
   }
 
@@ -440,6 +473,8 @@ export function ChatJoin({
     ) : choices.accountRequired ? (
       <GuestExits language={language} next={next} withSeparator={false} accountRequired />
     ) : null;
+
+  if (returning !== null) return <InvitationPending language={language} />;
 
   return (
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>

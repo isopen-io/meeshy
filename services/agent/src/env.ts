@@ -17,6 +17,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string(),
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
+  /** Secret partagé passerelle → agent des routes internes coûteuses (#10234). Absent : ces routes refusent tout. */
+  AGENT_INTERNAL_TOKEN: z.string().optional(),
+
   AGENT_SLIDING_WINDOW_SIZE: z.coerce.number().int().min(5).max(500).default(50),
   AGENT_ROLE_LOCK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),
   AGENT_DEFAULT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(600).default(300),

@@ -315,11 +315,16 @@ export async function syncConversations(opts: {
   // ne doivent compter des octets qu'aucun client ne recevra jamais. `row.participants`
   // est `undefined` quand `?fields=` l'a exclu de la requête (voir
   // `selectForFields`) — un type déclaré ne garantit pas la présence RUNTIME.
-  const changedRows = changedRowsRaw.map((row) =>
-    row.type === 'direct' || row.participants === undefined
+  // #10205 — un invité (sans compte) ne reçoit ni effectif ni membres.
+  const viewerIsGuest = identity.kind === 'anonymous';
+  const changedRows = changedRowsRaw.map((row) => {
+    const scoped = (row.type === 'direct' && !viewerIsGuest) || row.participants === undefined
       ? row
-      : { ...row, participants: [] as typeof row.participants },
-  );
+      : { ...row, participants: [] as typeof row.participants };
+    if (!viewerIsGuest) return scoped;
+    const { memberCount: _memberCount, ...withoutCount } = scoped;
+    return withoutCount as typeof scoped;
+  });
   const capTruncated = changedRows.length > cap;
   const cappedRows = capTruncated ? changedRows.slice(0, cap) : changedRows;
 

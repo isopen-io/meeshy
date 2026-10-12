@@ -42,6 +42,7 @@ import { gameBlockExtensionShape } from './game-v2.js';
 
 export * from './game-routes.js';
 export * from './game-v2.js';
+export * from './game-photo.js';
 
 export { requestIdSchema };
 
@@ -152,14 +153,6 @@ export const mintPreviewSchema = z.object({
   gloryGained: nonNegativeInt,
   /** Les niveaux ouverts par le rang (#9688) — absents devant un serveur antérieur. */
   ladder: z.object({ levelBefore: level, levelAfter: level, levelsLost: nonNegativeInt }).optional(),
-  /**
-   * La frappe GRATUITE par fragments de Meesh (#10011) : cinq fragments au lieu des points. Tolérante : absente
-   * devant un serveur antérieur, illisible elle tombe seule.
-   */
-  withFragments: z
-    .object({ cost: z.number().int().min(1), held: nonNegativeInt, canMint: z.boolean(), missingFragments: nonNegativeInt })
-    .optional()
-    .catch(undefined),
 });
 
 export const gameMissionSchema = z.object({
@@ -198,43 +191,50 @@ export const gameMissionsSchema = z.object({
 });
 
 /**
- * Le contenu du coffre (#9373, #10011). `points`, `fragment` (le fragment EN PRIME, une chance sur six) et
- * `freeze` sont ceux que lisent les clients d'avant #10011 ; la Gloire et les fragments de Meesh (prime
- * comprise) S'AJOUTENT, optionnels à la lecture : un coffre ouvert avant eux n'en porte pas.
+ * Le contenu du coffre (#9373, #10011). `points` (le TOTAL crédité, prime comprise), `fragment` (UN fragment
+ * d'étoile, une chance sur six) et `freeze` sont ceux que lisent les clients d'avant #10011 ; la Gloire et la
+ * prime S'AJOUTENT, optionnelles à la lecture : un coffre ouvert avant elles n'en porte pas.
  */
 const chestRewardSchema = z.object({
   points: nonNegativeInt,
   fragment: z.boolean(),
   freeze: z.boolean(),
   glory: nonNegativeInt.optional(),
-  meeshFragments: nonNegativeInt.optional(),
+  /** La prime tombée, en points au cours de la Meesh du compte — déjà comprise dans `points`. */
+  bonus: z.enum(['none', 'fifth', 'whole']).optional().catch(undefined),
+  bonusPoints: nonNegativeInt.optional().catch(undefined),
 });
 
-/** Le contenu CERTAIN du coffre du jour, dit avant l'ouverture : il suit l'effort des missions tirées. */
-const chestContentSchema = z.object({ points: nonNegativeInt, glory: nonNegativeInt, meeshFragments: nonNegativeInt });
+/** Le contenu CERTAIN du coffre du jour et ses deux primes possibles, en points, dits avant l'ouverture. */
+const chestContentSchema = z.object({
+  points: nonNegativeInt,
+  glory: nonNegativeInt,
+  bonusWhole: nonNegativeInt.optional(),
+  bonusFifth: nonNegativeInt.optional(),
+});
 
-/** Les fragments de Meesh en poche : `held`, sur les `perMeesh` (cinq) d'une frappe gratuite. */
-const meeshFragmentsSchema = z.object({ held: nonNegativeInt, perMeesh: z.number().int().min(1) });
+/** Les fragments d'étoile collectés à vie, toutes sources confondues — le serveur seul les compte. */
+const starFragmentsSchema = z.object({ collected: nonNegativeInt });
 
 export const gameChestSchema = z.object({
   status: z.enum(['locked', 'ready', 'claimed']),
-  /** Contenu et probabilités, affichés AVANT l'ouverture. Les bornes de Gloire et de fragments s'ajoutent (#10011). */
+  /** Contenu et probabilités, affichés AVANT l'ouverture. Les bornes de Gloire et la prime s'ajoutent (#10011). */
   odds: z.object({
     minPoints: nonNegativeInt,
     maxPoints: nonNegativeInt,
+    /** UN fragment d'étoile. */
     fragment: fraction,
     freeze: fraction,
     minGlory: nonNegativeInt.optional(),
     maxGlory: nonNegativeInt.optional(),
-    minMeeshFragments: nonNegativeInt.optional(),
-    maxMeeshFragments: nonNegativeInt.optional(),
-    meeshFragmentsPerMeesh: z.number().int().min(1).optional(),
+    /** La prime entière (le prix de la prochaine Meesh, en points), puis — sinon — celle d'un cinquième. */
+    bonusWhole: fraction.optional(),
+    bonusFifth: fraction.optional(),
   }),
   /** Révélé une fois ouvert ; `null` avant. */
   reward: chestRewardSchema.nullable(),
   /** Tolérant : un contenu du jour illisible tombe seul, sans emporter le bloc. Absent devant un serveur antérieur. */
   today: chestContentSchema.nullable().optional().catch(undefined),
-  meeshFragments: meeshFragmentsSchema.optional().catch(undefined),
 });
 
 export const gameFlameSchema = z.object({
@@ -272,6 +272,8 @@ export const gameBlockSchema = z.object({
    * extension que ce client ne sait pas lire tombe seule (`undefined`) sans emporter le bloc.
    */
   ...gameBlockExtensionShape,
+  /** Les fragments d'étoile collectés (#10011). Tolérant : absent devant un serveur antérieur, illisible il tombe seul. */
+  starFragments: starFragmentsSchema.optional().catch(undefined),
 });
 
 export type GameLevel = z.infer<typeof gameLevelSchema>;
@@ -286,7 +288,7 @@ export type GameMissions = z.infer<typeof gameMissionsSchema>;
 export type GameChest = z.infer<typeof gameChestSchema>;
 export type GameChestReward = z.infer<typeof chestRewardSchema>;
 export type GameChestContent = z.infer<typeof chestContentSchema>;
-export type GameMeeshFragments = z.infer<typeof meeshFragmentsSchema>;
+export type GameStarFragments = z.infer<typeof starFragmentsSchema>;
 export type GameFlame = z.infer<typeof gameFlameSchema>;
 export type GameBoosts = z.infer<typeof gameBoostsSchema>;
 export type GameBlock = z.infer<typeof gameBlockSchema>;
@@ -309,8 +311,8 @@ export const chestClaimResponseSchema = z.object({
   reward: chestRewardSchema,
   /** Le score en poche après le crédit. */
   score: nonNegativeInt,
-  /** Les fragments en poche après l'ouverture (#10011) — absent devant un serveur antérieur. */
-  meeshFragments: meeshFragmentsSchema.optional(),
+  /** Les fragments d'étoile collectés après l'ouverture (#10011) — absent devant un serveur antérieur. */
+  starFragments: starFragmentsSchema.optional(),
 });
 
 export const flameFreezeRequestSchema = writeRequest;
@@ -345,21 +347,20 @@ export const meeshMintResponseSchema = z.object({
   /** Le numéro gravé sur la pièce. */
   number: z.number().int().min(1).optional(),
   edition: z.enum(['silver', 'gold', 'prism']).optional(),
-  /** `0` pour une frappe payée en fragments (#10011) — son prix courant est ignoré. */
+  /** Le prix débité, en points : une frappe se paie toujours en points (#10011). */
   price: nonNegativeInt.optional(),
   gloryGained: nonNegativeInt.optional(),
   levelBefore: legacyLevel.optional(),
   levelAfter: legacyLevel.optional(),
   /** Les niveaux ouverts par le rang (#9688) : les deux champs voisins restent bornés à 100. */
   ladder: z.object({ levelBefore: level, levelAfter: level }).optional(),
-  /** Une frappe payée en fragments (#10011) le dit, avec les fragments consommés et ceux qui restent. */
-  paidWith: z.enum(['points', 'fragments']).optional(),
-  fragmentsSpent: nonNegativeInt.optional(),
-  meeshFragments: meeshFragmentsSchema.optional(),
 });
 
-/** Le corps de `POST /me/meesh/mint` : `payWith` S'AJOUTE (#10011) — absent, la frappe se paie en points, comme hier. */
-export const meeshMintRequestSchema = writeRequest.extend({ payWith: z.enum(['points', 'fragments']).optional() });
+/**
+ * Le corps de `POST /me/meesh/mint`. Une frappe ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : `payWith`
+ * n'admet que `points` — un client qui demanderait un autre moyen est refusé à la lecture, sans aucune écriture.
+ */
+export const meeshMintRequestSchema = writeRequest.extend({ payWith: z.literal('points').optional() });
 export type MeeshMintRequest = z.infer<typeof meeshMintRequestSchema>;
 
 export type MissionRerollRequest = z.infer<typeof missionRerollRequestSchema>;

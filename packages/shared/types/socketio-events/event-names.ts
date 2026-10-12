@@ -556,6 +556,9 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
   USER_PREFERENCES_COMMUNITY_REORDERED: 'user:preferences-community-reordered',
 
+  // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
+  PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
+
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
 

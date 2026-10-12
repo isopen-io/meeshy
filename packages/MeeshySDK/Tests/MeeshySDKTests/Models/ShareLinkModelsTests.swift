@@ -132,6 +132,20 @@ final class ShareLinkModelsTests: XCTestCase {
 
     // MARK: - ShareLinkCreator
 
+    func test_shareLinkStats_withoutCounts_decodesToZero_forAVisitorWithoutAccount() throws {
+        let stats = try makeDecoder().decode(ShareLinkStats.self, from: Data(#"{}"#.utf8))
+        XCTAssertEqual(stats.totalParticipants, 0)
+        XCTAssertEqual(stats.memberCount, 0)
+        XCTAssertEqual(stats.languageCount, 0)
+        XCTAssertEqual(stats.spokenLanguages, [])
+    }
+
+    func test_shareLinkCreator_withoutId_stillDecodes() throws {
+        let creator = try makeDecoder().decode(ShareLinkCreator.self, from: Data(#"{"username":"meeshy","displayName":"Meeshy"}"#.utf8))
+        XCTAssertEqual(creator.id, "")
+        XCTAssertEqual(creator.name, "Meeshy")
+    }
+
     func test_shareLinkCreator_nameFallbackPriority() throws {
         let jsonDisplayName = """
         { "id": "u1", "username": "alice", "firstName": "Alice", "lastName": "M", "displayName": "Alice Display", "avatar": null }

@@ -9,6 +9,7 @@ import {
   eraseSharedTranslationsOfAccount,
   type SharedTranslationAccountErasureClient,
 } from './messaging/sharedTranslationErasure';
+import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -23,6 +24,12 @@ export type AccountPurgeSummary = {
   /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
   readonly sharedTranslationsDeleted: number;
   readonly game: GamePurgeSummary;
+  readonly packs: PackPurgeSummary;
+};
+
+export type AccountPurgeOptions = {
+  /** Le volume des téléversements vu par la purge des packs ; le disque réel par défaut. */
+  readonly packFiles?: PackFileStore;
 };
 
 /**
@@ -57,6 +64,11 @@ export type AccountPurgeSummary = {
  *    `reclaimPostMediaBytes`) qu'un lot dédié doit réutiliser, jamais dupliquer
  *    (#5690, livré).
  *
+ * Les PACKS (#10151, LP3, suivi distinct de #9141 avec sa propre revue) :
+ * choix d'installation, bibliothèque de stickers et ses fichiers, propositions
+ * non publiées — le périmètre et ses raisons vivent dans
+ * `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs.
+ *
  * L'anonymisation de l'IDENTITÉ (`User.username`/`email`/`displayName`/…) est
  * livrée par `anonymizeUserIdentity`, ci-dessous — voir son doc-comment pour la
  * décision produit sur `Participant.displayName` (#5691, partagée avec #5689).
@@ -67,24 +79,28 @@ export async function purgeAccountIsolatedData(
     'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
   > &
     SharedTranslationAccountErasureClient &
-    Parameters<typeof purgeGameData>[0],
+    Parameters<typeof purgeGameData>[0] &
+    Parameters<typeof purgePackData>[0],
   userId: string,
+  options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game] = await Promise.all([
-    prisma.userSession.deleteMany({ where: { userId } }),
-    prisma.userVoiceModel.deleteMany({ where: { userId } }),
-    prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
-    prisma.notification.deleteMany({ where: { userId } }),
-    eraseAddressBookOf(prisma, userId),
-    // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
-    // appelants la journalisent. Aucune passe ne la rejoue aujourd'hui — la
-    // demande est déjà `GRACE_PERIOD_EXPIRED`, que l'élection horaire ne relit
-    // plus (rejeu jusqu'au succès : #10021) ; l'idempotence de la purge
-    // l'autorise, elle ne la déclenche pas. La taire ferait compter comme purgé
-    // un compte dont des contributions subsistent.
-    eraseSharedTranslationsOfAccount(prisma, userId),
-    purgeGameData(prisma, userId),
-  ]);
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs] =
+    await Promise.all([
+      prisma.userSession.deleteMany({ where: { userId } }),
+      prisma.userVoiceModel.deleteMany({ where: { userId } }),
+      prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
+      prisma.notification.deleteMany({ where: { userId } }),
+      eraseAddressBookOf(prisma, userId),
+      // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
+      // appelants la journalisent. Aucune passe ne la rejoue aujourd'hui — la
+      // demande est déjà `GRACE_PERIOD_EXPIRED`, que l'élection horaire ne relit
+      // plus (rejeu jusqu'au succès : #10021) ; l'idempotence de la purge
+      // l'autorise, elle ne la déclenche pas. La taire ferait compter comme purgé
+      // un compte dont des contributions subsistent.
+      eraseSharedTranslationsOfAccount(prisma, userId),
+      purgeGameData(prisma, userId),
+      purgePackData(prisma, userId, { files: options.packFiles }),
+    ]);
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
@@ -96,6 +112,7 @@ export async function purgeAccountIsolatedData(
     arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
     sharedTranslationsDeleted: sharedTranslations,
     game,
+    packs,
   };
 
   logger.info(
@@ -103,7 +120,9 @@ export async function purgeAccountIsolatedData(
       `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
-      `gameDuos=${summary.game.duosDeleted}`
+      `gameDuos=${summary.game.duosDeleted} ` +
+      `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted}`
   );
 
   return summary;
@@ -117,8 +136,12 @@ export type AccountIdentityAnonymizeSummary = {
 /** Préfixe des valeurs de repli — jamais une constante seule (collision `@unique`). */
 const ANONYMIZED_MARKER = 'compte-supprime';
 
-function anonymizedUsername(userId: string): string {
-  return `${ANONYMIZED_MARKER}-${userId}`;
+/** Le préfixe du `username` d'un compte anonymisé — ce par quoi un rattrapage retrouve les comptes déjà purgés. */
+export const ANONYMIZED_USERNAME_PREFIX = `${ANONYMIZED_MARKER}-`;
+
+/** Le pseudo EXACT d'un compte anonymisé : préfixe + ses 24 hex, hors de portée de toute validation de pseudo (≤ 32). */
+export function anonymizedUsername(userId: string): string {
+  return `${ANONYMIZED_USERNAME_PREFIX}${userId}`;
 }
 
 function anonymizedEmail(userId: string): string {

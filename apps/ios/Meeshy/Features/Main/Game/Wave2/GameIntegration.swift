@@ -53,10 +53,13 @@ struct GameVisitorRead: Equatable {
     let userId: String
     let entries: [GameVisitorShowcase.Entry]
     let standing: GameStandingContent?
+    /// Les étoiles de sa constellation (#10053), selon sa vitrine et figées au mois ; `nil` : rien à montrer.
+    var constellationStars: Int? = nil
 
     /// Ce qui se peint pour `userId` : rien sous « Jeu masqué », rien d'un autre membre, rien de vide.
     static func shown(_ read: GameVisitorRead?, for userId: String, hidden: Bool) -> GameVisitorRead? {
-        guard !hidden, let read, read.userId == userId, !read.entries.isEmpty || read.standing != nil else { return nil }
+        guard !hidden, let read, read.userId == userId,
+              !read.entries.isEmpty || read.standing != nil || read.constellationStars != nil else { return nil }
         return read
     }
 }

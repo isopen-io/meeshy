@@ -147,6 +147,34 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertEqual(rig.sut.notice?.tone, .error)
     }
 
+    func test_keep_aFullDisk_drawsNoSpace_offersTheLibrary_andKeepsNothing() async {
+        let rig = makeRig()
+        rig.notebook.keepOutcome = .noSpace
+        await rig.sut.chooseCard()
+        await rig.sut.keep()
+        XCTAssertEqual(rig.sut.state, .result(.card, kept: false))
+        XCTAssertEqual(rig.sut.notice?.tone, .error)
+        XCTAssertEqual(rig.sut.notice?.action, .saveToLibrary)
+        XCTAssertTrue(rig.notebook.kept.isEmpty)
+    }
+
+    func test_keep_aSelfie_carriesItsReducedSource_andItsMirror() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.shutter()
+        await rig.sut.keep()
+        XCTAssertNotNil(rig.notebook.kept.first?.photo.source)
+        XCTAssertEqual(rig.notebook.kept.first?.photo.recipe.mirror, true)
+    }
+
+    func test_keep_aCardAlone_hasNoSource() async {
+        let rig = makeRig()
+        await rig.sut.chooseCard()
+        await rig.sut.keep()
+        XCTAssertNil(rig.notebook.kept.first?.photo.source)
+        XCTAssertNil(rig.notebook.kept.first?.photo.recipe.mirror)
+    }
+
     func test_save_writesTheChosenFormatToThePhotoLibrary() async {
         let rig = makeRig()
         await rig.sut.chooseCard()

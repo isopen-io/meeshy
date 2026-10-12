@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "lib"))
 sys.path.insert(0, str(HERE))
 
 from base import (  # noqa: E402
-    CINZEL, GARAMOND, HAND, SANS, W, H, Card, adinkrahene, bird, crest, esc, f, photo, pt, shield_path, signature, sparkle,
+    CINZEL, GARAMOND, HAND, SANS, W, H, Card, adinkrahene, anchored_spot, bird, crest, esc, f, photo, pt, shield_path, signature, sparkle,
     stars, window_mask,
 )
 from afrique import (  # noqa: E402
@@ -55,23 +55,25 @@ def rake_top(x):
 # ---------------------------------------------------------------- la photo à trois
 
 def photo3(c, top="#3A2A1E", bottom="#120C08", rim="#FFC27A", glow=0.22):
-    c.add(f'<rect width="{W}" height="{H}" fill="{c.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
-    c.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{c.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
-    rnd = random.Random(7)
-    bokeh = "".join(
-        f'<circle cx="{f(rnd.uniform(60, 480))}" cy="{f(rnd.uniform(260, 700))}" r="{f(rnd.uniform(8, 26))}" fill="{rim}" opacity="{f(rnd.uniform(0.05, 0.16))}"/>'
-        for _ in range(16)
-    )
-    c.add(f'<g filter="{c.blur("ph-bokeh", 3)}">{bokeh}</g>')
-    figs = [(168, 488, 50, 76, 258), (380, 494, 48, 290, 470), (272, 446, 58, 172, 372)]
-    for cx, cy, r, x0, x1 in figs:
-        body = f"M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78} Q{x1 - 8} {cy + 88} {x1} 760 Z"
-        c.add(
-            f'<g><circle cx="{cx}" cy="{cy}" r="{r}" fill="#0C0806" opacity="0.62"/>'
-            f'<path d="{body}" fill="#0C0806" opacity="0.62"/>'
-            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{rim}" stroke-width="2.5" opacity="0.55"/>'
-            f'<path d="M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78}" fill="none" stroke="{rim}" stroke-width="2" opacity="0.45"/></g>'
+    with c.layer("photo-bg"):
+        c.add(f'<rect width="{W}" height="{H}" fill="{c.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
+        c.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{c.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
+    with c.layer("photo"):
+        rnd = random.Random(7)
+        bokeh = "".join(
+            f'<circle cx="{f(rnd.uniform(60, 480))}" cy="{f(rnd.uniform(260, 700))}" r="{f(rnd.uniform(8, 26))}" fill="{rim}" opacity="{f(rnd.uniform(0.05, 0.16))}"/>'
+            for _ in range(16)
         )
+        c.add(f'<g filter="{c.blur("ph-bokeh", 3)}">{bokeh}</g>')
+        figs = [(168, 488, 50, 76, 258), (380, 494, 48, 290, 470), (272, 446, 58, 172, 372)]
+        for cx, cy, r, x0, x1 in figs:
+            body = f"M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78} Q{x1 - 8} {cy + 88} {x1} 760 Z"
+            c.add(
+                f'<g><circle cx="{cx}" cy="{cy}" r="{r}" fill="#0C0806" opacity="0.62"/>'
+                f'<path d="{body}" fill="#0C0806" opacity="0.62"/>'
+                f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{rim}" stroke-width="2.5" opacity="0.55"/>'
+                f'<path d="M{x0} 760 Q{x0 + 8} {cy + 88} {cx} {cy + 78}" fill="none" stroke="{rim}" stroke-width="2" opacity="0.45"/></g>'
+            )
 
 
 # ---------------------------------------------------------------- le ciel de l'aube
@@ -487,6 +489,10 @@ def frame(c, people=2):
 
 # ---------------------------------------------------------------- inscriptions
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def text_block(c, y_kicker, y_title, y_msg, y_date, message, ink, accent, title_fill, msg_fill, halo=None, size=40):
     if halo:
         c.add(f'<text x="270" y="{y_title}" text-anchor="middle" font-family="{CINZEL}" font-weight="700" font-size="{size}" fill="none" stroke="{halo}" stroke-width="5" opacity="0.55" filter="{c.blur("txt-h", 2)}">{esc(TITLE)}</text>')
@@ -510,6 +516,7 @@ def ansa(x0, y, h, m):
     return outer, inner
 
 
+@plate_layer
 def cartouche(c, message=None, adinkra=False):
     """Tabula ansata : une table de lapis-lazuli piquée de pyrite, cerclée d'or, à deux anses en queue d'aronde.
 
@@ -559,6 +566,7 @@ RIB_CY = 832
 RIB_X = (92, 448)
 
 
+@plate_layer
 def ribbon(c, message=None, held=False):
     """Banderole de pourpre bordée d'or ; quand `held`, ses bouts remontent jusqu'au bec de Mee et Meo."""
     rib = c.grad("ban", [(0, "#A3388A"), (0.45, "#74205F"), (1, "#3A0B32")])
@@ -625,6 +633,7 @@ def k_bot(x):
     return (1 - t) ** 2 * K_BOT[0] + 2 * (1 - t) * t * K_BOT[1] + t * t * K_BOT[0]
 
 
+@plate_layer
 def ribbon_kente(c, message=None):
     """L'étoffe d'honneur : une bande de kente tissée — lisières de blocs or, vert, rouge et noir, champ d'ébène
     au fil d'or — que Mee et Meo tiennent au bec. Le présent qu'on offre à l'hôte d'honneur, porté jusqu'à l'Olympe."""
@@ -678,6 +687,7 @@ def kente_tails_to_beaks(c, beaks):
         c.add(f'<path d="M{f(bx - 7)} {f(by + 1)} L{f(bx + 7)} {f(by + 1)} L{f(bx + 5)} {f(by + 7)} L{f(bx - 5)} {f(by + 7)} Z" fill="{K_GOLD}" stroke="{GOLD_LO}" stroke-width="0.8"/>')
 
 
+@plate_layer
 def parchment(c, message=None):
     """Un volumen déroulé : papyrus doré, bâtons d'ébène aux pommeaux d'or."""
     h = 146 if message else 114
@@ -776,20 +786,34 @@ VARIANTS = [
 ]
 
 
+def held_spots(v):
+    """Les places des oiseaux qui tiennent le ruban, ancres corrigées comprises (lib/anchors.json) : le bec bouge,
+    la queue suit."""
+    return [(pose, *anchored_spot(v["file"], i, x, y, s), flip, rot) for i, (pose, x, y, s, flip, rot) in enumerate(POSES[v["layout"]](v["mee"], v["meo"]))]
+
+
+def held(c, draw):
+    """Les queues du ruban tenues au bec SUIVENT les oiseaux (`data-follows-bird`) : elles ne sont pas du décor."""
+    start = len(c.body)
+    draw()
+    inner = "".join(c.body[start:])
+    del c.body[start:]
+    c.add(f'<g data-follows-bird="ruban">{inner}</g>')
+
+
 def build(v):
     c = Card("p-" + v["file"].replace("poses-", ""))
+    c.slots(kicker=KICKER, title=TITLE, message=v["message"], date=DATE)
     frame(c, v.get("people", 2))
     style = v["style"]
     if style == "ruban-tenu":
         ribbon(c, v["message"], held=True)
         birds(c, v["layout"], v["mee"], v["meo"])
-        spots = POSES[v["layout"]](v["mee"], v["meo"])
-        ribbon_tails_to_beaks(c, [beak(*sp) for sp in spots])
+        held(c, lambda: ribbon_tails_to_beaks(c, [beak(*sp) for sp in held_spots(v)]))
     elif style == "kente-tenu":
         ribbon_kente(c, v["message"])
         birds(c, v["layout"], v["mee"], v["meo"])
-        spots = POSES[v["layout"]](v["mee"], v["meo"])
-        kente_tails_to_beaks(c, [beak(*sp) for sp in spots])
+        held(c, lambda: kente_tails_to_beaks(c, [beak(*sp) for sp in held_spots(v)]))
     elif style == "cartouche-adinkra":
         cartouche(c, v["message"], adinkra=True)
         birds(c, v["layout"], v["mee"], v["meo"])

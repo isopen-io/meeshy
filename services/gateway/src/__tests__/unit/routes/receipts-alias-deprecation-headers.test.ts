@@ -47,9 +47,11 @@ jest.mock('../../../middleware/auth', () => ({
     }
     request.authContext = {
       userId: AUTH_USER_ID,
-      type: 'registered',
+      type: 'user',
+      isAuthenticated: true,
       isAnonymous: false,
       hasFullAccess: true,
+      registeredUser: { id: AUTH_USER_ID, role: 'USER' },
     };
   },
 }));

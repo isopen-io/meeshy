@@ -25,7 +25,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#1A1A1A", fill: nil),
                 title: CallFrameTitle(source: .names, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.comite",
@@ -46,7 +47,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#1A1A1A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.faire-part.groupe",
@@ -67,7 +69,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .list, font: .elegant, color: "#1A1A1A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#4A4A4A", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.memento.duo",
@@ -91,7 +94,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .ribbon, font: .classic, color: "#1A0205", fill: "#E8C9A0"),
                 title: CallFrameTitle(source: .names, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.memento.comite",
@@ -115,7 +119,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.memento.groupe",
@@ -138,7 +143,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.memento.tablee",
@@ -162,7 +168,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .plate, font: .classic, color: "#E8C9A0", fill: "#1A0205D9"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#E8C9A0", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#B08D57", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.crypte.duo",
@@ -186,7 +193,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#D8DEE9", fill: "#05070CCC"),
                 title: CallFrameTitle(source: .names, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.crypte.comite",
@@ -210,7 +218,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .classic, color: "#AEB8C8", fill: nil),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.crypte.groupe",
@@ -234,7 +243,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .classic, color: "#D8DEE9", fill: "#05070CCC"),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.crypte.tablee",
@@ -258,7 +268,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .classic, color: "#D8DEE9", fill: nil),
                 title: CallFrameTitle(source: .group, font: .fantasy, color: "#D8DEE9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "morbide.veillee.duo",
@@ -281,7 +292,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .elegant, color: "#EAD9B8", fill: nil),
                 title: CallFrameTitle(source: .names, font: .elegant, color: "#F3E3C3", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .classic, color: "#C9A56B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

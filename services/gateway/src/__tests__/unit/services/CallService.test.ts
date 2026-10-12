@@ -402,9 +402,9 @@ describe('CallService', () => {
       );
     });
 
-    it('should throw error for PUBLIC conversation type', async () => {
+    it('should throw error for BROADCAST conversation type (public is gated by canStartCall — CallService.startPermission.test.ts)', async () => {
       mockPrisma.conversation.findUnique.mockResolvedValue(
-        createMockConversation({ type: 'public' })
+        createMockConversation({ type: 'broadcast' })
       );
 
       await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
@@ -2653,7 +2653,7 @@ describe('CallService - Error Code Verification', () => {
 
   it('should use VIDEO_CALLS_NOT_SUPPORTED error code', async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue(
-      createMockConversation({ type: 'public' })
+      createMockConversation({ type: 'global' })
     );
 
     await expect(

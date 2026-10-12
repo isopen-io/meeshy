@@ -42,6 +42,10 @@ def wrap_since(card, n, filt):
     card.add(f'<g filter="{filt}">{seg}</g>')
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, kicker, title, message=None, y=748, style="nu", shadow=True, **kw):
     """La plaque de base, avec une ombre portée sur le texte pour qu'il tienne sur n'importe quel fond."""
     n = len(card.body)

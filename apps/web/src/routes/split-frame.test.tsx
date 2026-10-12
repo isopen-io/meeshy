@@ -6,9 +6,12 @@ import { LensRow, type LensRowProps } from '@/components/lens-row';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
 import { createRouter, navigate, useParams } from '@/lib/router';
+import { floatingMenusReady } from '@/test-support/floating-menus-ready';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { SPLIT_QUERY, SplitFrame, splitPaneOf } from './split-frame';
+import { SPLIT_QUERY, splitPaneOf } from '@/lib/view/split-query';
+
+import { DeferredSplitFrame } from './route-table';
 import { emptyPaneLabels } from './split-empty-pane';
 
 /**
@@ -16,6 +19,11 @@ import { emptyPaneLabels } from './split-empty-pane';
  * 1024 px, `/chats` et `/c/:id` se rendent dans UN cadre : la liste à gauche,
  * MONTÉE UNE FOIS, le fil (ou l'état « choisissez une conversation ») à
  * droite. Les adresses ne changent pas ; sous 1024 px, rien ne change.
+ *
+ * Le routeur est monté avec le cadre que la table des routes lui remet
+ * VRAIMENT (`DeferredSplitFrame`, #10086) : le cadre arrive par un import
+ * différé, et chaque scénario ci-dessous prouve que ce détour ne change rien
+ * à ce que le lecteur voit.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -24,7 +32,7 @@ type Listener = (event: { matches: boolean }) => void;
 const media = { wide: true, listeners: new Set<Listener>() };
 let originalMatchMedia: typeof window.matchMedia;
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   originalMatchMedia = window.matchMedia;
@@ -36,6 +44,7 @@ beforeAll(() => {
     addEventListener: (_: string, listener: Listener) => media.listeners.add(listener),
     removeEventListener: (_: string, listener: Listener) => media.listeners.delete(listener),
   })) as unknown as typeof window.matchMedia;
+  await floatingMenusReady();
 });
 
 afterAll(async () => {
@@ -91,7 +100,7 @@ async function settle(): Promise<void> {
 
 async function mountAt(path: string): Promise<HTMLDivElement> {
   navigate(path, true);
-  const { Router } = createRouter(TABLE, NotFound, { frame: SplitFrame });
+  const { Router } = createRouter(TABLE, NotFound, { frame: DeferredSplitFrame });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);

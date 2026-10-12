@@ -15,8 +15,15 @@ Polices disponibles (chargées par render.mjs) : 'Cinzel', 'Cinzel Decorative', 
 """
 
 import base64
+import functools
+import inspect
+import json
 import math
+import os
 import random
+import re
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 W, H = 540, 960
@@ -47,14 +54,88 @@ def esc(text):
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+DATE_TEXT = "10 octobre 2026"
+TEXT_RE = re.compile(r"<text(\s[^>]*)?>(.*?)</text>", re.S)
+TAG_RE = re.compile(r"<[^>]+>")
+
+# Les modules d'atelier dont l'appel ÉTIQUETTE le cadre en cours : un cadre qui dessine avec la bibliothèque
+# africaine d'un atelier porte le motif « afrique », avec sa bibliothèque cosmique le motif « cosmos ».
+MOTIF_MODULES = {"afrique": "afrique", "afro": "afrique", "cosmos": "cosmos", "infini": "cosmos", "infime": "cosmos", "infinis": "cosmos"}
+
+
 class Card:
-    """Un cadre en cours de dessin. `uid` préfixe les ids pour qu'aucun dégradé ne collisionne."""
+    """Un cadre en cours de dessin. `uid` préfixe les ids pour qu'aucun dégradé ne collisionne.
+
+    Le cadre porte aussi ce que l'export (`lib/export.mjs`) relit : ses couches (`layer`, attribut `data-layer`),
+    ses emplacements de texte (`data-slot` sur chaque `<text>`), ses motifs (`data-motifs`) et le compteur `nid`
+    de ses identifiants — par cadre, pour qu'une régénération partielle rende des SVG identiques à l'octet.
+    """
+
+    current = None
 
     def __init__(self, uid="c"):
         self.uid = uid
         self.defs = []
         self.body = []
         self._ids = set()
+        self._n = 0
+        self._slots = {esc(DATE_TEXT): "date"}
+        self._decor_texts = 0
+        self._decor_keys = {}
+        self.motifs = set()
+        self.birds = 0
+        Card.current = self
+
+    def nid(self, prefix="k"):
+        self._n += 1
+        return f"{prefix}{self._n}"
+
+    def motif(self, *names):
+        self.motifs.update(names)
+        return self
+
+    def slots(self, **texts):
+        """Déclare le contenu des emplacements vivants (kicker, title, message, date) : chaque `<text>` qui le porte
+        reçoit `data-slot="<clé>"`."""
+        for key, value in texts.items():
+            if isinstance(value, str) and value:
+                self._slots[esc(value)] = key
+                self._slots[esc(value.upper())] = key
+        return self
+
+    @contextmanager
+    def layer(self, kind):
+        """Tout ce qui est ajouté dans le bloc tombe dans `<g data-layer="kind">` (un groupe sans attribut de rendu)."""
+        start = len(self.body)
+        yield self
+        inner = "".join(self.body[start:])
+        del self.body[start:]
+        if inner:
+            if kind == "plate":
+                inner = self._tag_texts(inner, "plate")
+            self.body.append(f'<g data-layer="{kind}">{inner}</g>')
+
+    def _tag_texts(self, markup, scope):
+        counter = [0]
+
+        def tag(m):
+            attrs, inner = m.group(1) or "", m.group(2)
+            if "data-slot=" in attrs:
+                return m.group(0)
+            key = self._slots.get(TAG_RE.sub("", inner).strip()) if scope == "plate" else None
+            if key is None:
+                if scope == "plate":
+                    counter[0] += 1
+                    key = f"plate.{counter[0]}"
+                else:
+                    where = (TAG_RE.sub("", inner).strip(), *re.findall(r'\s(?:x|y|transform)="([^"]*)"', attrs))
+                    if where not in self._decor_keys:
+                        self._decor_texts += 1
+                        self._decor_keys[where] = f"decor.{self._decor_texts}"
+                    key = self._decor_keys[where]
+            return f'<text data-slot="{key}"{attrs}>{inner}</text>'
+
+        return TEXT_RE.sub(tag, markup)
 
     def id(self, name):
         return f"{self.uid}-{name}"
@@ -102,15 +183,110 @@ class Card:
         return self.grad(name, [(0, "#FF6FB1"), (0.2, "#FFD36E"), (0.42, "#6EF0C2"), (0.62, "#6EA8FF"), (0.82, "#B36EFF"), (1, "#FF6FB1")], x1, y1, x2, y2)
 
     def svg(self):
+        motifs = f' data-motifs="{" ".join(sorted(self.motifs))}"' if self.motifs else ""
+        body = self._tag_texts("".join(self.body), "decor")
         return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {W} {H}" width="{W}" height="{H}">'
+            f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 {W} {H}" width="{W}" height="{H}"{motifs}>'
             f'<defs><clipPath id="{self.id("win")}"><rect width="{W}" height="{H}" rx="28"/></clipPath>{"".join(self.defs)}</defs>'
-            f'<g clip-path="url(#{self.id("win")})">{"".join(self.body)}</g></svg>'
+            f'<g clip-path="url(#{self.id("win")})" data-layer="root">{body}</g></svg>'
         )
 
     def save(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(self.svg())
+        Path(path).write_text(anchored(self.svg(), ANCHORS.get(Path(path).stem, [])))
+
+
+# Les ancres corrigées de Mee et Meo (lot L2, règle d'empiètement) : `lib/anchors.json` donne, par cadre, un
+# déplacement `dx`, `dy` (repère de design) et une échelle `scale` par oiseau, repéré par l'ordre de ses appels à
+# bird() (`data-bird`). Ce qui suit un oiseau (`data-follows-bird`, la lueur posée sous lui) bouge avec lui. Le décor
+# ne bouge pas. `lib/anchors.mjs` les calcule ; CADRES_ANCHORS=off rend le dessin validé du 2026-10-10 (référence L0).
+ANCHORS = {} if os.environ.get("CADRES_ANCHORS") == "off" else json.loads((HERE / "anchors.json").read_text())
+BIRD_TR = re.compile(r'(<g data-layer="birds" data-bird="(\d+)"[^>]*? transform=")translate\(([-\d.]+) ([-\d.]+)\)([^"]*)"')
+FOLLOW_TR = re.compile(r'<g data-follows-bird="(\d+)">')
+
+
+def anchored_spot(stem, index, x, y, size):
+    """La place corrigée d'un oiseau, pour un atelier qui accroche quelque chose à lui (les queues du ruban tenues au
+    bec) : ce qui s'accroche suit l'oiseau."""
+    fix = next((f for f in ANCHORS.get(stem, []) if f["bird"] == index), {})
+    return x + fix.get("dx", 0), y + fix.get("dy", 0), size * fix.get("scale", 1)
+
+
+def anchored(svg, fixes):
+    by_bird = {fix["bird"]: fix for fix in fixes}
+    if not by_bird:
+        return svg
+
+    def bird_tr(m):
+        fix = by_bird.get(int(m.group(2)))
+        if not fix:
+            return m.group(0)
+        x, y = float(m.group(3)) + fix.get("dx", 0), float(m.group(4)) + fix.get("dy", 0)
+        scale = fix.get("scale", 1)
+        return f'{m.group(1)}translate({f(x)} {f(y)}){m.group(5)}{f" scale({scale})" if scale != 1 else ""}"'
+
+    def follow_tr(m):
+        fix = by_bird.get(int(m.group(1)))
+        if not fix:
+            return m.group(0)
+        return f'<g data-follows-bird="{m.group(1)}" transform="translate({f(fix.get("dx", 0))} {f(fix.get("dy", 0))})">'
+
+    return FOLLOW_TR.sub(follow_tr, BIRD_TR.sub(bird_tr, svg))
+
+
+def nid(prefix="k"):
+    """L'identifiant suivant du cadre en cours : le compteur vit dans `Card`, plus dans les ateliers."""
+    if Card.current is None:
+        raise RuntimeError("nid() appelé hors d'un cadre : créer la Card d'abord.")
+    return Card.current.nid(prefix)
+
+
+PLATE_VARIANT = os.environ.get("CADRES_PLATE")
+PLATE_SAMPLE_MESSAGE = "On brille ensemble"
+
+
+def plate_layer(fn=None, **aliases):
+    """Une fonction d'inscription ou de panneau de plaque : tout ce qu'elle dessine — qu'elle l'ajoute au cadre ou
+    qu'elle le RENDE en balisage — tombe dans la couche `plate`, et ses arguments `kicker`, `title`, `message`, `date`
+    nomment les emplacements de texte qu'elle pose. `aliases` relie une clé à un autre argument :
+    `@plate_layer(title="palier")`.
+
+    `CADRES_PLATE=plain|message` rejoue la plaque dans l'AUTRE variante que celle du cadre (§ 5.1 : la hauteur du
+    panneau change avec le message) : `plain` retire le message, `message` garde celui du cadre ou pose
+    PLATE_SAMPLE_MESSAGE. Seule la plaque change ; l'exportateur vérifie que le décor reste identique au pixel."""
+    if fn is None:
+        return lambda f_: plate_layer(f_, **aliases)
+    sig = inspect.signature(fn)
+    names = {key: aliases.get(key, key) for key in ("kicker", "title", "message", "date")}
+    message_arg = names["message"] if names["message"] in sig.parameters else None
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        if PLATE_VARIANT and message_arg:
+            current = bound.arguments.get(message_arg)
+            bound.arguments[message_arg] = None if PLATE_VARIANT == "plain" else (current or PLATE_SAMPLE_MESSAGE)
+            args, kwargs = bound.args, bound.kwargs
+        card = args[0]
+        card.slots(**{key: bound.arguments.get(arg) for key, arg in names.items()})
+        with card.layer("plate"):
+            result = fn(*args, **kwargs)
+        if isinstance(result, str) and result.lstrip().startswith("<"):
+            return f'<g data-layer="plate">{card._tag_texts(result, "plate")}</g>'
+        return result
+
+    return wrapper
+
+
+def _motif_probe(frame, event, arg):
+    if event == "call" and Card.current is not None:
+        motif = MOTIF_MODULES.get(frame.f_globals.get("__name__"))
+        if motif:
+            Card.current.motifs.add(motif)
+
+
+sys.setprofile(_motif_probe)
 
 
 METALS = {
@@ -132,8 +308,14 @@ METALS = {
 
 def photo(card, top="#3A2A1E", bottom="#120C08", rim="#FFC27A", people=2, glow=0.22):
     """Le placeholder de la photo : deux silhouettes éclairées par l'arrière, un halo, du bokeh."""
-    card.add(f'<rect width="{W}" height="{H}" fill="{card.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
-    card.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{card.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
+    with card.layer("photo-bg"):
+        card.add(f'<rect width="{W}" height="{H}" fill="{card.grad("ph-bg", [(0, top), (1, bottom)])}"/>')
+        card.add(f'<ellipse cx="270" cy="470" rx="250" ry="290" fill="{card.rgrad("ph-halo", [(0, "#FFFFFF", glow), (1, "#FFFFFF", 0)])}"/>')
+    with card.layer("photo"):
+        _photo_people(card, rim, people)
+
+
+def _photo_people(card, rim, people):
     rnd = random.Random(7)
     bokeh = "".join(
         f'<circle cx="{f(rnd.uniform(60, 480))}" cy="{f(rnd.uniform(260, 700))}" r="{f(rnd.uniform(8, 26))}" fill="{rim}" opacity="{f(rnd.uniform(0.05, 0.16))}"/>'
@@ -167,8 +349,10 @@ def bird(card, pose, x, y, size, flip=False, rotate=0, shadow=True):
     """Pose une image de Mee ou Meo, centrée en (x, y), largeur `size`."""
     tr = f"translate({f(x)} {f(y)}) rotate({rotate})" + (" scale(-1 1)" if flip else "")
     filt = f' filter="{card.shadow("bird", 0, 6, 6, "#000000", 0.45)}"' if shadow else ""
+    index = card.birds
+    card.birds += 1
     card.add(
-        f'<g transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
+        f'<g data-layer="birds" data-bird="{index}" data-pose="{pose}" transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
         f'width="{f(size)}" height="{f(size)}" preserveAspectRatio="xMidYMid meet"/></g>'
     )
 
@@ -216,7 +400,12 @@ def shield_path(cx, cy, s):
 
 
 def crest(card, cx=270, cy=150, s=1.0, metal="gold", division=None, gem="#E04848", ink=None, edge=None):
-    """Le blason du rang : écu de la matière, Signature gravée, division en gemmes sous la pointe."""
+    """Le blason du rang : écu de la matière, Signature gravée, division en gemmes sous la pointe (couche `crest`)."""
+    with card.layer("crest"):
+        return _crest(card, cx, cy, s, metal, division, gem, ink, edge)
+
+
+def _crest(card, cx, cy, s, metal, division, gem, ink, edge):
     fill, hi, mid, lo = card.metal(metal)
     card.add(f'<path d="{shield_path(cx, cy + 4 * s, s)}" fill="#000000" opacity="0.35" filter="{card.blur("crest-sh", 6)}"/>')
     card.add(f'<path d="{shield_path(cx, cy, s)}" fill="{fill}" stroke="{edge or hi}" stroke-width="{f(3 * s)}"/>')
@@ -237,6 +426,7 @@ def crest(card, cx=270, cy=150, s=1.0, metal="gold", division=None, gem="#E04848
 
 # ---------------------------------------------------------------- l'inscription
 
+@plate_layer
 def plaque(card, kicker, title, date="10 octobre 2026", message=None, y=748, style="cartouche",
            ink="#FFF4C2", accent="#E8B53C", panel="#0B0A1A", title_font=CINZEL, title_size=40, message_color=None):
     """L'inscription du moment. `style` : cartouche | ruban | parchemin | nu. `message` : la phrase de l'auteur."""

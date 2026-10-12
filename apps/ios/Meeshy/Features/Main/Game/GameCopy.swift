@@ -163,6 +163,14 @@ enum GameCopy {
         return String(localized: "game.level.cap.short", defaultValue: "s’ouvre au rang \(name)", bundle: .main)
     }
 
+    /// « Encore 624 points avant le niveau 4 » — la ligne du héros de Progression, et ce que VoiceOver lit des points
+    /// posés sur la bannière d'une fiche (#10231).
+    static func levelToNext(remaining: Int, nextLevel: Int) -> String {
+        let pointsText = points(remaining)
+        let levelText = formatCount(nextLevel)
+        return String(localized: "game.level.to_next", defaultValue: "Encore \(pointsText) avant le niveau \(levelText)", bundle: .main)
+    }
+
     /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».
     static func levelRingAccessibility(level: Int, tier: LevelTierKey) -> String {
         String(

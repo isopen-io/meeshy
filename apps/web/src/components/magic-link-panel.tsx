@@ -58,6 +58,11 @@ export const defaultMagicLinkDeps: MagicLinkPanelDeps = {
   now: () => Date.now(),
 };
 
+/** Les espaces PLIENT avec la hauteur (#8418, #10007) : 24 px dès 700 px de
+ * haut, 12 px à 676 px et en dessous — sans règle de média dans la feuille de
+ * la première peinture. */
+const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
+
 const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
 
 /**
@@ -253,7 +258,8 @@ export function MagicLinkPanel({
         e.preventDefault();
         void send();
       }}
-      className="flex flex-1 flex-col content-center justify-center gap-6 px-8"
+      className="flex flex-1 flex-col content-center justify-center px-8"
+      style={{ gap: SECTION_GAP }}
       noValidate
     >
       <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>

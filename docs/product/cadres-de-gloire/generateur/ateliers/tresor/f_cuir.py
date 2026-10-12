@@ -140,6 +140,7 @@ def adire(card, key="ad"):
 
 def bourse_b():
     c = start("bb", "#211C3E", "#0A0816", "#FFD08A", 0.22)
+    c.motif("afrique")
     x0, x1, spring, y1 = 82, 458, 434, 722
     win = arch(x0, x1, spring, y1, 22)
     with masked(c, win, "w"):

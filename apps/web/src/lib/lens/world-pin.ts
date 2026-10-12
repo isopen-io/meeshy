@@ -1,5 +1,5 @@
 /**
- * WORLD WIDE ÉPINGLÉE EN CARTE EN TÊTE DE LISTE (#10004).
+ * WORLD WIDE ÉPINGLÉE EN TÊTE DE LISTE (#10004), en rangée ordinaire (#10191).
  *
  * `WORLD_IDENTIFIER` est la JUMELLE GARDÉE de `WORLD_CONVERSATION_IDENTIFIER`
  * (`@meeshy/shared/types/world`) : ce module partagé construit au niveau

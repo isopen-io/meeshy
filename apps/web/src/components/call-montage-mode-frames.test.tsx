@@ -9,6 +9,7 @@ import type { CallMember } from '@/lib/calls/call-store';
 import { inked, recorder } from '@/lib/calls/frames/frame-recorder.test-support';
 import type { FrameStudioModule } from '@/components/use-montage-frames';
 import { loadCallStudioCatalog } from '@/lib/i18n-call-studio-catalog';
+import { loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallMontageMode } from './call-montage-mode';
@@ -50,6 +51,7 @@ describe('CallMontageMode — les cadres', () => {
 
   beforeAll(async () => {
     await loadCallStudioCatalog('fr');
+    await loadFrameUsageCatalog('fr');
     loaded.module = await import('@/lib/calls/frames/frame-studio');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
@@ -166,6 +168,36 @@ describe('CallMontageMode — les cadres', () => {
     expect(rendered()).toEqual(ids.slice(1, 8));
     await view.press(`[data-carousel-item="${ids[8] ?? ''}"]`);
     expect(rendered()).toEqual(ids.slice(5));
+    view.done();
+  });
+
+  test('la capture propose le cadre du direct ET le cadre de capture seule, et chaque vignette dit où elle sert (#10146)', async () => {
+    const module = loaded.module as FrameStudioModule;
+    const base = module.createFrameStudio({ fonts: undefined }).frames.find((frame) => frame.mood === 'jovial' && frame.bucket === 'duo');
+    if (base === undefined) throw new Error('aucun cadre jovial de duo');
+    const { surfaces: _ignored, ...plain } = base;
+    const pair = [
+      { ...plain, id: 'jovial.photo.duo', motif: 'jovial.photo', name: 'Photo', surfaces: ['capture' as const] },
+      { ...plain, id: 'jovial.direct.duo', motif: 'jovial.direct', name: 'Direct', surfaces: ['capture' as const, 'live' as const] },
+    ];
+    const view = await mount(duo, { module: { createFrameStudio: (options) => module.createFrameStudio({ ...(options ?? {}), frames: pair, fonts: undefined }) } });
+    await view.press('[data-call-frame-mood="jovial"]');
+    expect(view.items()).toEqual(['jovial.photo.duo', 'jovial.direct.duo']);
+    const detail = (id: string) => view.find(`[data-carousel-item="${id}"]`)?.getAttribute('title');
+    expect(detail('jovial.photo.duo')).toBe('Capture photo et vidéo uniquement');
+    expect(detail('jovial.direct.duo')).toBe('Utilisable : appels vidéo et captures');
+    expect(view.find('[data-call-mode-detail]')?.textContent).toBe('Capture photo et vidéo uniquement');
+    await view.press('[data-carousel-item="jovial.direct.duo"]');
+    expect(view.find('[data-call-mode-detail]')?.textContent).toBe('Utilisable : appels vidéo et captures');
+    const described = view.find('[data-carousel-item="jovial.direct.duo"]')?.getAttribute('aria-describedby') ?? '';
+    expect(described.split(' ').map((id) => view.find(`[id="${id}"]`)?.textContent)).toContain('Utilisable : appels vidéo et captures');
+    view.done();
+  });
+
+  test('les classiques ne portent aucun libellé d’usage', async () => {
+    const view = await mount(duo);
+    expect(view.find('[data-call-mode-detail]')).toBeNull();
+    expect(view.find('[data-carousel-item="grid"]')?.getAttribute('title')).toBeNull();
     view.done();
   });
 

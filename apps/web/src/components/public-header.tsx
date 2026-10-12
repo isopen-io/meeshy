@@ -77,7 +77,7 @@ export function InterfaceLanguageSelect({ language }: { readonly language: Inter
         data-interface-language
         value={shown}
         onChange={choose}
-        className="bg-transparent font-semibold outline-none"
+        className="bg-transparent text-input font-semibold outline-none"
         style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}
       >
         {SUPPORTED_INTERFACE_LANGUAGES.map((code) => (

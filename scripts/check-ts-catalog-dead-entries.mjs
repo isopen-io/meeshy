@@ -432,10 +432,37 @@ export const callersIn = (contents, nsNames) => {
 // comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
 // (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
 // Valeur MESURÉE le 2026-10-11.
-// 277 → 276 (2026-10-11) : une entrée morte de moins sur `dev` lui-même (même
-// liste, mesurée sur `dev` et sur la PR #9902 qui le fusionne) — la référence
-// n'avait pas été abaissée. Valeur MESURÉE le 2026-10-11.
-const BASELINE_DEAD_ENTRIES = 276;
+// 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
+// l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
+// 276 → 275 (2026-10-11, #10103) : `me.categories` et `me.categoriesByCategoryId` ont leur
+// appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
+// Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
+// Valeur MESURÉE le 2026-10-11.
+// 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
+// la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
+// ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
+// 274 → 278 (#10201, 2026-10-11) : `packs.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP1 #10149 (« le web installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`apps/web/src/lib/api/packs.ts`)
+// et ramènera la référence à 274. Valeur MESURÉE le 2026-10-11 sur dev 4c4c56ebd8 (CI run
+// 38150253397 rouge sur 278).
+// 278 -> 279 (#10157, 2026-10-11) : `packAssets.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP1 #10149 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 279 -> 274 (2026-10-11) : plusieurs lots partis de bases différentes (packs, aperçus
+// Open Graph #10192, accueil des visiteurs sans compte) ont donné leur appelant à cinq
+// entrées sur dev sans relever le cliquet. Valeur MESURÉE sur dev 827ee17789.
+// 274 -> 277 (#10162, 2026-10-11) : `me.gameFramesAtmosphere`, `me.gamePhotoMomentsInvitations` et
+// `me.gamePhotoMomentsPresented` (L10a, `GAME_PHOTO_ROUTES`), GÉNÉRÉES avec leurs routes — comme les
+// autres `me.game*`, le web les lira par leur table partagée (`packages/shared/types/game-routes.ts`),
+// jamais par le catalogue (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+// 277 -> 278 (#10235, 2026-10-12) : `admin.gameSeasonsAppEventsYaml` (`GET /api/v1/admin/game/seasons/app-events.yaml`),
+// le téléchargement DIRECT du bloc `store.app_events` d'andp, pour un script ou un `curl` d'administrateur — l'écran
+// web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
+// `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
+// `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
+const BASELINE_DEAD_ENTRIES = 278;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

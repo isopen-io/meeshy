@@ -180,7 +180,7 @@ const es = {
   'game.detail.mission.what': 'Una misión es una pequeña meta para hoy.',
   'game.detail.mission.how': 'Da puntos y te acerca al cofre del día.',
   'game.detail.chest.what': 'El cofre del día se abre cuando tus misiones están hechas.',
-  'game.detail.chest.how': 'Puntos según tus misiones, Gloria, fragmentos de Meesh —cinco pagan una acuñación— y a veces un congelador.',
+  'game.detail.chest.how': 'Puntos según tus misiones, Gloria y a veces una prima en puntos, un fragmento de estrella o un congelador.',
   'game.detail.coin.what': 'La Meesh es la moneda rara de Meeshy. Cada moneda lleva su número.',
   'game.detail.coin.how': 'Acúñala con tus puntos en cuanto tengas suficientes.',
   'game.detail.ring.what': 'El anillo muestra tu nivel: se llena con tus puntos.',
@@ -259,6 +259,14 @@ const es = {
   'game.badge.rung.next': 'Próxima estrella · faltan {missing}',
   'game.badge.upcoming_title': 'Lo que viene',
   'game.badge.guide_link': 'Entender las insignias',
+  'game.notebook.legacy_quarantine': 'Un antiguo cuaderno de este dispositivo no pertenece a ninguna cuenta conocida: no se muestra a nadie.',
+  'game.notebook.legacy_delete': 'Eliminar el antiguo cuaderno',
+  'game.notebook.device_only': 'Tus fotos viven en este dispositivo.',
+  'game.notebook.size': 'El cuaderno ocupa {size}.',
+  'game.constellation.next.one': 'Falta {count} fragmento de estrella para la próxima estrella',
+  'game.constellation.next.other': 'Faltan {count} fragmentos de estrella para la próxima estrella',
+  'game.constellation.how': 'Se enciende una estrella por cada diez fragmentos de estrella reunidos. Cada una desbloquea un cosmético de perfil, sin ventaja de juego.',
+  'game.constellation.visibility': 'Tu constelación y sus cosméticos se muestran según el ajuste de tu vitrina.',
 } as const satisfies GameConceptCatalog;
 
 export default es;

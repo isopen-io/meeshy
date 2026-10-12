@@ -11,11 +11,25 @@ struct InviteGroupFacts: View {
         max(stats.languageCount, shares.count)
     }
 
+    /// Un effectif tu ou neutre (visiteur sans compte, #10205, #10216) ne
+    /// s'affiche pas : jamais « 0 personnes ».
+    static func shownCount(_ count: Int) -> Int? {
+        count > 0 ? count : nil
+    }
+
     var body: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
-            HStack(spacing: MeeshySpacing.smPlus) {
-                tile(value: stats.totalParticipants, label: InviteLandingCopy.peopleLabel(stats.totalParticipants))
-                tile(value: languageCount, label: InviteLandingCopy.languagesLabel(languageCount))
+            let people = Self.shownCount(stats.totalParticipants)
+            let languages = Self.shownCount(languageCount)
+            if people != nil || languages != nil {
+                HStack(spacing: MeeshySpacing.smPlus) {
+                    if let people {
+                        tile(value: people, label: InviteLandingCopy.peopleLabel(people))
+                    }
+                    if let languages {
+                        tile(value: languages, label: InviteLandingCopy.languagesLabel(languages))
+                    }
+                }
             }
             if !shares.isEmpty {
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {

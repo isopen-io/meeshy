@@ -141,3 +141,15 @@ describe('MeeshService.mint — le record de niveau est posé AVANT le débit', 
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
   });
 });
+
+describe('MeeshService.mint — le plus haut palier du trésor (D14, #10162)', () => {
+  it('une frappe qui fait franchir un palier le grave sur GameProfile, sans rien changer en deçà', async () => {
+    const db = fakeGameDb();
+    richAccount(db, { score: 5000 });
+    withMints(db, 9);
+
+    await new MeeshService(db.prisma).mint(USER, 'frappe-0010');
+
+    expect(db.gameProfile.rows.find((row) => row.userId === USER)?.treasuryPeakTier).toBe('escarcelle');
+  });
+});

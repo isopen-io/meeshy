@@ -150,58 +150,13 @@ body {
   border: 0;
   min-width: 0;
 }
-/* L'ÉTAPE DE LA LANGUE (#10003) — glisse depuis le sens de lecture, et ne
- * bouge pas pour qui a demandé moins de mouvement. */
-.ld-step--language {
-  --ld-slide: 32px;
-  animation: ld-slide 0.28s ease-out;
-}
-[dir='rtl'] .ld-step--language {
-  --ld-slide: -32px;
-}
-@keyframes ld-slide {
-  from {
-    opacity: 0;
-    transform: translateX(var(--ld-slide));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ld-step--language {
-    animation: none;
-  }
-}
-.ld-step legend {
-  font-size: 20px;
-  font-weight: 700;
-}
-.ld-step .ld-note {
+.ld-step .ld-field {
   flex-basis: 100%;
-  margin: 0;
 }
-.ld-langs {
-  flex-basis: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 8px;
-}
-.ld-lang {
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 30%, transparent);
-  background: var(--ios-surface-card);
-  cursor: pointer;
-}
-.ld-lang:has(input:checked) {
-  border-color: var(--ios-indigo-500);
-  background: color-mix(in srgb, var(--ios-indigo-500) 14%, var(--ios-surface-card));
-}
-.ld-lang input {
-  accent-color: var(--ios-indigo-500);
-  margin: 0;
+/* LA LANGUE DE LECTURE (#10098) — la liste déroulante de l'en-tête, posée
+ * entre le nom et « Rejoindre », à la hauteur du champ et du bouton. */
+.ld-form .ld-language {
+  height: 52px;
 }
 .ld-error {
   color: var(--ios-error);
@@ -231,6 +186,7 @@ body {
   color: var(--ios-ink-3);
 }
 .ld-form .ld-btn {
+  flex: 1 1 auto;
   align-self: flex-end;
 }
 .ld-note {
@@ -402,7 +358,7 @@ body {
   background: var(--ios-surface-card);
   border: 0.5px solid var(--ios-edge);
 }
-.ld-step {
+.ld-step-num {
   width: 32px;
   height: 32px;
   border-radius: 50%;

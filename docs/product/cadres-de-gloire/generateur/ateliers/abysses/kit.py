@@ -427,6 +427,10 @@ def halo(card, name, cx, cy, r, color, op=0.6):
 
 # ---------------------------------------------------------------- l'inscription
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def inscription(card, title, message=None, y=752, style="nacre", metal=GOLD, panel=("#0A2438", "#030E19"), ink="#FFF6DA",
                 accent=None, kicker=KICK, title_size=40, w=424, date=DATE, msg_color=None, title_font=CINZEL, medal=None, numero=None,
                 panel_op=0.9):

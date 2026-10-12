@@ -105,12 +105,6 @@ export const EXEMPTIONS: Readonly<Record<string, string>> = {
     'sort du fichier. Sa requête, `loadLinkUnfurlSource`, vit dans le même fichier et ' +
     'étale `...RECIPIENT_LANG_SELECT` sous `creator` — le témoin de cette exemption ' +
     'le relit dans la source.',
-  'services/world/worldConversation.ts':
-    "le seed de World Wide inscrit ses membres réservés depuis un compte reçu en " +
-    "paramètre d'`ensureMember`, que l'appelant tire d'une désignation " +
-    "(`entry.account`) rendue par `designateWorldReservedAccounts` : la chaîne sort " +
-    'du fichier. Sa requête, dans `services/world/worldReservedMembers.ts`, étale ' +
-    '`...RECIPIENT_LANG_SELECT` — le témoin de cette exemption le relit dans la source.',
 };
 
 export type VerdictDeProjection = 'complete' | 'etroite' | 'non-resolue';

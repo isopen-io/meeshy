@@ -11,6 +11,7 @@ import auditReglagesEn from './admin/audit-reglages-en';
 import personnesEn from './admin/personnes-en';
 import conversationsAgentEn from './admin/conversations-agent-en';
 import engagementScaleEn from './admin/engagement-scale-en';
+import gameSeasonsEn from './admin/game-seasons-en';
 
 const en = {
   'admin.role': 'Your role: {role}',
@@ -377,6 +378,7 @@ const en = {
   ...personnesEn,
   ...conversationsAgentEn,
   ...engagementScaleEn,
+  ...gameSeasonsEn,
 } satisfies AdminInterfaceCatalog;
 
 export default en;

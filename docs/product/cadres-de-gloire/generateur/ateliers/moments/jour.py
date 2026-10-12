@@ -108,6 +108,10 @@ def doodle_star(x, y, s, ink, w=1.6):
     return f'<path d="M{" L".join(f"{f(px)} {f(py)}" for px, py in pts)} Z" fill="none" stroke="{ink}" stroke-width="{w}" stroke-linejoin="round"/>'
 
 
+from base import plate_layer  # noqa: E402  la couche « plate » et ses emplacements de texte
+
+
+@plate_layer
 def paper_label(card, kicker_text, title, message=None, y=752):
     """L'étiquette de kraft collée au bas de la page : sur-titre tamponné, titre à l'encre, mot manuscrit, date."""
     h = 134 if message else 112
@@ -333,6 +337,7 @@ def contours(card, cx, cy, n, seed, step=14):
 
 def explorateur():
     c = Card("jb")
+    c.motif("afrique")
     photo(c, top="#33261A", bottom="#120C08", rim="#FFD9A8", glow=0.22)
     win = rrect(84, 296, 456, 726, 14)
     with group(c, f'mask="{deco_mask(c, win)}"'):

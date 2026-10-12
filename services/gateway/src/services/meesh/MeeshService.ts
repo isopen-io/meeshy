@@ -32,13 +32,12 @@ import {
 import { computeMeeshMintPlan, type MeeshMintPlan } from '@meeshy/shared/utils/meesh';
 import { GLORY_POINTS, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { legacyLevel } from '@meeshy/shared/utils/game/levels';
-import { MEESH_FRAGMENT_MINT_COST, meeshEdition, meeshPrice, previewFragmentMint, previewMint, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
-import type { MeeshFragmentProgress } from '@meeshy/shared/utils/game/chest';
+import { meeshEdition, meeshPrice, previewMint, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { GloryService, gloryTotalFromLedger } from '../game/GloryService';
+import { GamePhotoService } from '../game/GamePhotoService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from '../game/LevelStepFacts';
-import { meeshFragmentsHeld } from '../game/MeeshFragments';
 
 const log = enhancedLogger.child({ module: 'MeeshService' });
 
@@ -69,21 +68,12 @@ export type MintReceipt = {
   readonly gloryGained: number;
   readonly levelBefore: number;
   readonly levelAfter: number;
-  /** Une frappe GRATUITE (#10011) le dit : payée de cinq fragments de Meesh, son `price` vaut 0. */
-  readonly paidWith?: 'fragments';
-  readonly fragmentsSpent?: number;
 };
 
 export type MeeshMintOutcome =
   | ({ readonly status: 'minted'; readonly plan: MeeshMintPlan; readonly receipt: MintReceipt } & MeeshTotals)
   | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals)
   | { readonly status: 'insufficient'; readonly plan: MeeshMintPlan };
-
-/** La frappe par fragments (#10011) : ses fragments en poche voyagent avec elle. */
-export type FragmentMintOutcome =
-  | ({ readonly status: 'minted'; readonly receipt: MintReceipt; readonly fragments: MeeshFragmentProgress } & MeeshTotals)
-  | ({ readonly status: 'already-minted'; readonly receipt: MintReceipt | null } & MeeshTotals)
-  | { readonly status: 'insufficient-fragments'; readonly fragments: MeeshFragmentProgress; readonly missingFragments: number };
 
 const EDITIONS: readonly string[] = ['silver', 'gold', 'prism'];
 
@@ -94,7 +84,6 @@ export function receiptFromMeta(meta: unknown): MintReceipt | null {
   const ints = [m.number, m.price, m.gloryGained, m.levelBefore, m.levelAfter];
   if (!ints.every((v) => typeof v === 'number' && Number.isInteger(v))) return null;
   if (typeof m.edition !== 'string' || !EDITIONS.includes(m.edition)) return null;
-  const paidWithFragments = m.paidWith === 'fragments' && typeof m.fragmentsSpent === 'number' && Number.isInteger(m.fragmentsSpent);
   return {
     number: m.number as number,
     edition: m.edition as MeeshEdition,
@@ -102,7 +91,6 @@ export function receiptFromMeta(meta: unknown): MintReceipt | null {
     gloryGained: m.gloryGained as number,
     levelBefore: m.levelBefore as number,
     levelAfter: m.levelAfter as number,
-    ...(paidWithFragments ? { paidWith: 'fragments' as const, fragmentsSpent: m.fragmentsSpent as number } : {}),
   };
 }
 
@@ -148,14 +136,6 @@ export async function meeshTotalsFromLedger(
 }
 
 /** Une frappe qui ferait passer le score sous zéro (#9675) : annulée en bloc, rendue comme insuffisante. */
-/** Les fragments ont fondu entre la lecture et l'écriture (une autre frappe gratuite) : annulée en bloc. */
-class FragmentsWouldGoNegative extends Error {
-  constructor() {
-    super('fragment mint would spend fragments that are no longer held');
-    this.name = 'FragmentsWouldGoNegative';
-  }
-}
-
 class ScoreWouldGoNegative extends Error {
   constructor() {
     super('mint would take the score below zero');
@@ -357,6 +337,13 @@ export class MeeshService {
 
       // La frappe a pu faire une étape des niveaux (#9706) : le niveau qui attendait monte d'un coup.
       await new GloryService(this.prisma).openLevels(userId);
+      // Le trésor a pu franchir un palier : le plus haut atteint se garde (D14, #10162) — au mieux, une
+      // panne ne coûte que l'écriture, rattrapée par la lecture qui sert le plus haut du gardé et du courant.
+      try {
+        await new GamePhotoService(this.prisma).notePeakTreasury(userId, totaux.balance);
+      } catch (error) {
+        log.warn('treasury peak not recorded', { userId, error: error instanceof Error ? error.message : String(error) });
+      }
 
       log.info('Meesh frappée', {
         userId,
@@ -386,110 +373,6 @@ export class MeeshService {
           receipt: receiptFromMeta(gravee?.meta),
           ...(await meeshTotalsFromLedger(this.prisma, userId)),
         };
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * La frappe GRATUITE (#10011, porteur 2026-10-10) : cinq fragments de Meesh au lieu des points, au prix courant
-   * IGNORÉ. Aucun axe débité, aucun point, aucun niveau perdu ; c'est une frappe pour le reste — numéro, édition,
-   * Gloire de frappe, et elle compte dans les frappes à vie (la suivante en points coûte le prix de son rang).
-   *
-   * Même loi que `mint` : idempotente par `requestId` (un rejeu rend la même pièce), atomique (la ligne `mint` porte
-   * `fragmentsSpent: 5`, gravée avec la Gloire et les totaux dans UNE transaction), rejouée sur conflit d'écriture.
-   */
-  async mintWithFragments(userId: string, requestId: string): Promise<FragmentMintOutcome> {
-    return withRetry(() => this.mintWithFragmentsOnce(userId, requestId));
-  }
-
-  private async alreadyMinted(userId: string, requestId: string): Promise<FragmentMintOutcome | null> {
-    const gravee = await this.prisma.meeshLedger.findUnique({ where: { userId_requestId: { userId, requestId } }, select: { id: true, meta: true } });
-    if (!gravee) return null;
-    return { status: 'already-minted', receipt: receiptFromMeta(gravee.meta), ...(await meeshTotalsFromLedger(this.prisma, userId)) };
-  }
-
-  private async mintWithFragmentsOnce(userId: string, requestId: string): Promise<FragmentMintOutcome> {
-    const rejeu = await this.alreadyMinted(userId, requestId);
-    if (rejeu) return rejeu;
-
-    const fragments = await meeshFragmentsHeld(this.prisma, userId);
-    if (fragments.held < MEESH_FRAGMENT_MINT_COST) {
-      return { status: 'insufficient-fragments', fragments, missingFragments: MEESH_FRAGMENT_MINT_COST - fragments.held };
-    }
-
-    const avant = await meeshTotalsFromLedger(this.prisma, userId);
-    const number = avant.mintedLifetime + 1;
-    const compteAvant = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { engagementScore: true, levelRecord: true, ...LEVEL_STEP_USER_SELECT },
-    });
-    const score = compteAvant?.engagementScore ?? 0;
-    await new GloryService(this.prisma).creditLevelProgress({ userId, score, previousRecord: compteAvant?.levelRecord ?? null });
-    const [missionsDone, gloryAvant] = await Promise.all([countMissionsDone(this.prisma, userId), gloryTotalFromLedger(this.prisma, userId)]);
-    const steps = levelStepFactsOf({ row: { ...compteAvant, meeshMintedLifetime: avant.mintedLifetime }, missionsDone, glory: gloryAvant });
-    const { levelBefore, levelAfter, edition, gloryGained } = previewFragmentMint({
-      score,
-      mintedLifetime: avant.mintedLifetime,
-      fragmentsHeld: fragments.held,
-      levelCap: levelCapForRank(steps.rank),
-      steps,
-    });
-    const receipt: MintReceipt = {
-      number,
-      edition,
-      price: 0,
-      gloryGained,
-      levelBefore,
-      levelAfter,
-      paidWith: 'fragments',
-      fragmentsSpent: MEESH_FRAGMENT_MINT_COST,
-    };
-
-    try {
-      const totaux = await this.prisma.$transaction(async (tx) => {
-        const concurrentes = await tx.meeshLedger.count({ where: { userId, reason: 'mint' } });
-        if (concurrentes !== avant.mintedLifetime) throw Object.assign(new Error('mint number moved'), { code: 'P2034' });
-        // Relue DANS la transaction : une autre frappe gratuite a pu consommer ces fragments entre-temps.
-        if ((await meeshFragmentsHeld(tx, userId)).held < MEESH_FRAGMENT_MINT_COST) throw new FragmentsWouldGoNegative();
-
-        await tx.meeshLedger.create({
-          data: {
-            userId,
-            delta: 1,
-            reason: 'mint',
-            requestId,
-            fragmentsSpent: MEESH_FRAGMENT_MINT_COST,
-            meta: { cost: 0, debits: [], ...receipt },
-          },
-        });
-        const apres = await meeshTotalsFromLedger(tx, userId);
-        await tx.user.update({
-          where: { id: userId },
-          data: { meeshBalance: apres.balance, meeshMintedLifetime: apres.mintedLifetime },
-        });
-        await tx.gloryLedger.create({
-          data: { userId, delta: gloryGained, reason: 'mint', requestId: `mint:${requestId}`, meta: { number, edition, price: 0, paidWith: 'fragments', levelBefore, levelAfter } },
-        });
-        return apres;
-      });
-
-      await new GloryService(this.prisma).openLevels(userId);
-      log.info('Meesh frappée par fragments', { userId, number, balance: totaux.balance });
-      return {
-        status: 'minted',
-        ...totaux,
-        receipt,
-        fragments: { ...fragments, held: fragments.held - MEESH_FRAGMENT_MINT_COST },
-      };
-    } catch (err) {
-      if (err instanceof FragmentsWouldGoNegative) {
-        const now = await meeshFragmentsHeld(this.prisma, userId);
-        return { status: 'insufficient-fragments', fragments: now, missingFragments: Math.max(0, MEESH_FRAGMENT_MINT_COST - now.held) };
-      }
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
-        const rejoue = await this.alreadyMinted(userId, requestId);
-        if (rejoue) return rejoue;
       }
       throw err;
     }

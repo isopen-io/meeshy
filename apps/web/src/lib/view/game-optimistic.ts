@@ -141,10 +141,17 @@ export function afterChestOpening(view: EngagementWithGame): EngagementWithGame 
 }
 
 /** Le contenu servi s'y pose, et le score en poche après le crédit. */
-export function withChestReward(view: EngagementWithGame, reward: GameChestReward, score: number): EngagementWithGame {
+export function withChestReward(
+  view: EngagementWithGame,
+  reward: GameChestReward,
+  score: number,
+  starFragments?: { readonly collected: number },
+): EngagementWithGame {
   return onGame(view, (game) => ({
     ...game,
     chest: { ...game.chest, status: 'claimed', reward },
+    // Le total collecté, tel que la passerelle le sert après l'ouverture (#10011) — le client ne le calcule pas.
+    ...(starFragments === undefined ? {} : { starFragments: { collected: starFragments.collected } }),
     level: levelOnTheWire({
       score,
       levelCap: levelCapForRank(game.glory.rank),

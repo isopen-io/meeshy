@@ -442,11 +442,47 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // leurs routes — PRÉMATURÉES : les écrans iOS d'une saison passée ou future et d'une semaine
 // passée les appelleront avec #10018, qui ramène la référence à 292. Valeur MESURÉE le 2026-10-11.
 //
-// 294 -> 292 (2026-10-11) : `WorldEndpoint.root` n'est plus morte — `WorldService`
-// (#10006, arrivé sur `dev`) la lit pour l'entrée invité de World Wide. Valeur
-// MESURÉE sur l'arbre de la PR #9902 fusionné avec `dev` du 2026-10-11 (dont
-// `ConversationsEndpoint.byIdSharedTranslations`, générée ET appelée par la PR).
-const BASELINE_DEAD_ENTRIES = 292;
+// 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
+// l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
+// dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
+//
+// 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
+// `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
+// `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11.
+//
+// 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
+// (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
+// Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
+// en touchant un auteur est #10125, qui ramène la référence à 292. Valeur MESURÉE le
+// 2026-10-11.
+//
+// 293 -> 291 (2026-10-11) : les deux mouvements ci-dessus, partis chacun de 292, se sont
+// croisés sur dev — #10018 (−2) et #10102 (+1) donnent 291, et non 293. Valeur MESURÉE
+// le 2026-10-11 sur dev 33e24c995c (CI run 38133983531 rouge sur 293).
+//
+// 291 -> 295 (#10200, 2026-10-11) : `PacksEndpoint.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP2 #10150 (« iOS installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`PackServiceProviding`)
+// et ramènera la référence à 291. Valeur MESURÉE le 2026-10-11 sur dev 8a68ca00fe (CI run
+// 38147814970 rouge sur 295).
+// 295 -> 296 (#10157, 2026-10-11) : `PackAssetsEndpoint.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP2 #10150 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 296 -> 290 (2026-10-11) : LP2 (6046fcc6cd, la Boutique des cadres dans Réglages ›
+// Packs et téléchargements) donne leur appelant aux entrées de packs prématurées
+// ci-dessus ; trois relèvements partis de bases différentes s'étaient croisés sur dev.
+// Valeur MESURÉE le 2026-10-11 sur dev efee739ae5 (CI run 38160460790 rouge sur 296).
+// 290 -> 293 (#10162, 2026-10-11) : `MeEndpoint.gameFramesAtmosphere`, `.gamePhotoMomentsInvitations` et
+// `.gamePhotoMomentsPresented` (L10a), générées depuis le manifeste — PRÉMATURÉES : iOS les appellera par
+// `GameRoutes.swift` et ses lots (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+// 293 -> 301 (#10233, 2026-10-12) : les huit `AdminEndpoint.gameSeasons*` (`/api/v1/admin/game/seasons…` —
+// lecture, édition, propositions de l'IA, validation, rejet, export `store.app_events`), générées depuis le
+// manifeste — l'administration du calendrier des saisons n'a pas d'écran iOS (web seulement), même raison que les
+// dizaines d'autres `AdminEndpoint.*` ci-dessus. `MeEndpoint.gameSeasonsCalendar` a, lui, son appelant
+// (`GameEndpointPolicy.gameSeasonCalendar`). Valeur MESURÉE le 2026-10-12 en CI (run 38190033361 rouge sur 301).
+const BASELINE_DEAD_ENTRIES = 301;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

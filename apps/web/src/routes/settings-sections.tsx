@@ -57,6 +57,8 @@ export const SETTINGS_HEADER_HEIGHT = 64;
 /** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
 export const SECURITY_PANEL_PARAM = 'volet';
 export const SECURITY_PANEL = 'securite';
+/** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
+export const PACKS_PANEL = 'packs';
 
 /**
  * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
@@ -259,6 +261,25 @@ function LocalToggleRow({
         <Switch checked={enabled} />
       </button>
     </div>
+  );
+}
+
+/* LES PACKS ET TÉLÉCHARGEMENTS (#10149, demande porteur 2026-10-11) — la
+   Boutique des stickers et celle des cadres du jeu, dans un volet des réglages
+   (`?volet=packs`) chargé à la demande : aucune route neuve, rien dans la
+   première peinture. La Boutique des stickers reste AUSSI le dernier onglet de
+   la feuille de stickers, là où on la cherche en écrivant. */
+export function PacksSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-packs" title={upper(language, 'settings.section.packs')} icon={SECTION_ICON({ set: 'ecran', name: 'hardDrives' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: PACKS_PANEL }} data-settings-packs className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <IconOf icon={{ set: 'ecran', name: 'sparkle' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.packs.shop')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
   );
 }
 

@@ -180,7 +180,7 @@ const it = {
   'game.detail.mission.what': 'Una missione è un piccolo obiettivo per oggi.',
   'game.detail.mission.how': 'Dà punti e ti avvicina al forziere del giorno.',
   'game.detail.chest.what': 'Il forziere del giorno si apre quando le tue missioni sono fatte.',
-  'game.detail.chest.how': 'Punti secondo le tue missioni, Gloria, frammenti di Meesh — cinque pagano un conio — e a volte un gelo.',
+  'game.detail.chest.how': 'Punti secondo le tue missioni, Gloria, a volte un premio in punti, un frammento di stella o un gelo.',
   'game.detail.coin.what': 'La Meesh è la moneta rara di Meeshy. Ogni moneta porta il suo numero.',
   'game.detail.coin.how': 'Coniala con i tuoi punti appena ne hai abbastanza.',
   'game.detail.ring.what': 'L’anello mostra il tuo livello: si riempie con i tuoi punti.',
@@ -259,6 +259,14 @@ const it = {
   'game.badge.rung.next': 'Prossima stella · ancora {missing}',
   'game.badge.upcoming_title': 'In arrivo',
   'game.badge.guide_link': 'Capire i badge',
+  'game.notebook.legacy_quarantine': 'Un vecchio quaderno di questo dispositivo non appartiene a nessun account noto: non viene mostrato a nessuno.',
+  'game.notebook.legacy_delete': 'Elimina il vecchio quaderno',
+  'game.notebook.device_only': 'Le tue foto vivono su questo dispositivo.',
+  'game.notebook.size': 'Il quaderno occupa {size}.',
+  'game.constellation.next.one': 'Ancora {count} frammento di stella per la prossima stella',
+  'game.constellation.next.other': 'Ancora {count} frammenti di stella per la prossima stella',
+  'game.constellation.how': 'Si accende una stella ogni dieci frammenti di stella raccolti. Ognuna sblocca un cosmetico del profilo, senza vantaggi di gioco.',
+  'game.constellation.visibility': 'La tua costellazione e i suoi cosmetici si mostrano secondo l’impostazione della vetrina.',
 } as const satisfies GameConceptCatalog;
 
 export default it;

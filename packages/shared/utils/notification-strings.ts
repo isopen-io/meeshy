@@ -31,6 +31,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'game.leaguePromoted', 'game.leagueStayed', 'game.leagueRelegated',
   'game.leagueCupGold', 'game.leagueCupSilver', 'game.leagueCupBronze',
   'game.seasonStep', 'game.seasonDone', 'game.missionWindow',
+  'game.photoMoment', 'game.photoMoments',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',

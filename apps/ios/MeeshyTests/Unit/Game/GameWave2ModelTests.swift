@@ -30,7 +30,7 @@ final class GameWave2ModelTests: XCTestCase {
         let userId: String
     }
 
-    private func makeSUT(game: GameBlock = GameWave2Fixture.game()) -> Rig {
+    private func makeSUT(game: GameBlock = GameWave2Fixture.game(), seasonSchedule: GameSeasonScheduleProviding? = nil) -> Rig {
         let userId = "me-\(UUID().uuidString)"
         let progression = ProgressionViewModel(
             service: {
@@ -49,7 +49,7 @@ final class GameWave2ModelTests: XCTestCase {
         let prefs = GameDevicePrefsStore(userId: userId, defaults: UserDefaults(suiteName: userId) ?? .standard)
         let sut = GameWave2Model(
             progression: progression, service: service, integration: integration, cache: cache, friends: NoFriends(),
-            prefs: prefs, currentUserId: userId
+            prefs: prefs, seasonSchedule: seasonSchedule, currentUserId: userId
         )
         return Rig(sut: sut, service: service, integration: integration, cache: cache, prefs: prefs, userId: userId)
     }
@@ -64,6 +64,32 @@ final class GameWave2ModelTests: XCTestCase {
 
     private func refusal(_ code: GameErrorCode) -> Error {
         MeeshyError.rejected(APIRejection(statusCode: 409, code: code.rawValue, message: "refus"))
+    }
+
+    // MARK: - Le calendrier des saisons servi (#10232)
+
+    private final class FakeSeasonSchedule: GameSeasonScheduleProviding, @unchecked Sendable {
+        let served: SeasonSchedule
+        private(set) var loads = 0
+        init(served: SeasonSchedule) { self.served = served }
+        var current: SeasonSchedule { .default }
+        func load() async -> SeasonSchedule {
+            loads += 1
+            return served
+        }
+    }
+
+    func test_loadSeasonSchedule_publishesTheServedCalendar_andStartsFromTheKnownOne() async {
+        let served = SeasonSchedule.normalize(["revision": 7, "seasons": [
+            ["number": 2, "startDay": "2027-03-01", "status": "scheduled", "themeKey": "language:ja", "stepPoints": 150, "copy": NSNull()],
+        ]])
+        let schedule = FakeSeasonSchedule(served: served)
+        let sut = makeSUT(seasonSchedule: schedule).sut
+        XCTAssertEqual(sut.seasonSchedule, .default, "avant toute lecture : la constante, jamais un vide")
+        await sut.loadSeasonSchedule()
+        XCTAssertEqual(sut.seasonSchedule.revision, 7)
+        XCTAssertEqual(sut.seasonSchedule.calendar(number: 2)?.startDay, "2027-03-01")
+        XCTAssertEqual(schedule.loads, 1)
     }
 
     // MARK: - La saison
@@ -401,13 +427,15 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertNotNil(GameStandingContent.of(UserGameProfileResponse(visible: true, standing: nil, treasury: GameShownTreasury(tier: .bourse))))
     }
 
-    func test_standingContent_isReadAsOneSentence_levelRankFlameAndTreasury() throws {
+    /// #10093 — la Flamme n'a aucun réglage de visibilité : son propriétaire ne peut pas choisir de la montrer, elle
+    /// n'est donc jamais lue, même quand le serveur sert sa forme.
+    func test_standingContent_isReadAsOneSentence_levelRankAndTreasury_neverTheFlame() throws {
         let content = try XCTUnwrap(GameStandingContent.of(otherGame()))
 
         let label = content.accessibilityLabel
         XCTAssertTrue(label.contains(GameCopy.tierName(.eclat)), label)
         XCTAssertTrue(label.contains(GameCopy.rankLabel(.voix, division: .ii)), label)
-        XCTAssertTrue(label.contains(GameCopy.flameFormName(.brasier)), label)
+        XCTAssertFalse(label.contains(GameCopy.flameFormName(.brasier)), label)
         XCTAssertTrue(label.contains(GameCopy.treasuryName(.coffre)), label)
     }
 

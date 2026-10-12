@@ -12,18 +12,55 @@ public struct WorldEntry: Decodable, Sendable, Equatable {
     public let shareLinkIdentifier: String
     public let memberCount: Int
     public let memberCountCapped: Bool?
+    /// L'avatar et la bannière de World Wide (#10204), en adresses absolues.
+    /// Optionnels : un serveur qui ne les sert pas laisse les initiales et le
+    /// dégradé, jamais une erreur de décodage.
+    public let avatar: String?
+    public let banner: String?
 
-    public init(identifier: String, title: String, shareLinkIdentifier: String, memberCount: Int, memberCountCapped: Bool? = nil) {
+    public init(
+        identifier: String,
+        title: String,
+        shareLinkIdentifier: String,
+        memberCount: Int,
+        memberCountCapped: Bool? = nil,
+        avatar: String? = nil,
+        banner: String? = nil
+    ) {
         self.identifier = identifier
         self.title = title
         self.shareLinkIdentifier = shareLinkIdentifier
         self.memberCount = memberCount
         self.memberCountCapped = memberCountCapped
+        self.avatar = avatar
+        self.banner = banner
     }
 
     /// `formatMemberCount(count, capped)` : « 199+ » au-delà du plafond.
     public var formattedMemberCount: String {
         memberCountCapped == true ? "\(memberCount)+" : "\(memberCount)"
+    }
+}
+
+/// L'effectif n'est plus servi à un visiteur sans compte (#10205, #10216) :
+/// absent, il vaut 0 et ne s'affiche nulle part — jamais une entrée World Wide
+/// perdue parce qu'un agrégat manque.
+extension WorldEntry {
+    enum CodingKeys: String, CodingKey {
+        case identifier, title, shareLinkIdentifier, memberCount, memberCountCapped, avatar, banner
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            identifier: try c.decode(String.self, forKey: .identifier),
+            title: try c.decode(String.self, forKey: .title),
+            shareLinkIdentifier: try c.decode(String.self, forKey: .shareLinkIdentifier),
+            memberCount: try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0,
+            memberCountCapped: try c.decodeIfPresent(Bool.self, forKey: .memberCountCapped),
+            avatar: try c.decodeIfPresent(String.self, forKey: .avatar),
+            banner: try c.decodeIfPresent(String.self, forKey: .banner)
+        )
     }
 }
 

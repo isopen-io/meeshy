@@ -201,6 +201,13 @@ const BAND_MARGIN = 12;
  * LA HAUTEUR DU BANDEAU, MESURÉE — avant la peinture (`useLayoutEffect`) : un
  * écran qui arrive ne se peint jamais une image sous un bandeau qu'il ignore.
  * Un bandeau vide ne réserve rien.
+ *
+ * Une bannière qui ARRIVE (morceau paresseux, donnée du jeu) se réserve dans la
+ * même passe de micro-tâches que son insertion (`MutationObserver`) : le
+ * `ResizeObserver` seul attendait l'étape de rendu suivante, et entre les deux
+ * une tâche — un toucher, une mesure — trouvait la bannière posée SUR
+ * « Lancer les Réels » (gate Réels, 2026-10-11). Le `ResizeObserver` reste
+ * pour ce qui change de taille sans changer d'arbre (police, image).
  */
 function useBandInset(column: { readonly current: HTMLDivElement | null }, reserves: boolean, onInset: ((pixels: number) => void) | undefined): void {
   useLayoutEffect(() => {
@@ -215,11 +222,13 @@ function useBandInset(column: { readonly current: HTMLDivElement | null }, reser
       onInset(height > 0 ? Math.ceil(height) + BAND_MARGIN : 0);
     };
     apply();
-    if (typeof ResizeObserver === 'undefined') return () => onInset(0);
-    const observer = new ResizeObserver(apply);
-    observer.observe(node);
+    const arrivals = typeof MutationObserver === 'undefined' ? null : new MutationObserver(apply);
+    arrivals?.observe(node, { childList: true, subtree: true });
+    const resizes = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(apply);
+    resizes?.observe(node);
     return () => {
-      observer.disconnect();
+      arrivals?.disconnect();
+      resizes?.disconnect();
       onInset(0);
     };
   }, [column, reserves, onInset]);

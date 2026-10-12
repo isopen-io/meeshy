@@ -55,9 +55,6 @@ export type LandingCopy = {
   readonly partners: string;
   readonly unavailable: string;
   readonly languageTitle: string;
-  readonly languageHint: string;
-  readonly back: string;
-  readonly enter: string;
   readonly entryFailed: string;
   readonly returnToWorld: string;
 };
@@ -83,7 +80,7 @@ const fr: LandingCopy = {
   nameLabel: 'Votre prénom ou pseudo',
   namePlaceholder: 'Ex. Awa',
   join: 'Rejoindre World Wide',
-  joinNote: 'Sans compte, sans e-mail. Vous choisirez votre langue juste après.',
+  joinNote: 'Sans compte, sans e-mail. Tout ce que vous lirez y arrivera dans la langue choisie.',
   previewLabel: 'Aperçu de World Wide',
   previewSubtitle: 'Traduit pour vous',
   previewKenji: "Bonjour à tous ! Quelqu'un ici apprend le japonais ?",
@@ -118,9 +115,6 @@ const fr: LandingCopy = {
   partners: 'Partenaires',
   unavailable: 'World Wide est momentanément fermée. Connectez-vous pour retrouver vos conversations.',
   languageTitle: 'Votre langue',
-  languageHint: 'Tout ce que vous lirez dans World Wide arrivera dans cette langue.',
-  back: 'Retour',
-  enter: 'Entrer dans World Wide',
   entryFailed: "L'entrée de World Wide n'a pas pu s'ouvrir. Vérifiez votre connexion, puis réessayez.",
   returnToWorld: 'Revenir dans World Wide',
 };
@@ -146,7 +140,7 @@ const en: LandingCopy = {
   nameLabel: 'Your first name or nickname',
   namePlaceholder: 'e.g. Awa',
   join: 'Join World Wide',
-  joinNote: 'No account, no e-mail. You will pick your language right after.',
+  joinNote: 'No account, no e-mail. Everything you read there will arrive in the language you pick.',
   previewLabel: 'World Wide preview',
   previewSubtitle: 'Translated for you',
   previewKenji: 'Hello everyone! Is anyone here learning Japanese?',
@@ -181,9 +175,6 @@ const en: LandingCopy = {
   partners: 'Partners',
   unavailable: 'World Wide is closed for now. Sign in to find your conversations.',
   languageTitle: 'Your language',
-  languageHint: 'Everything you read in World Wide will arrive in this language.',
-  back: 'Back',
-  enter: 'Enter World Wide',
   entryFailed: 'World Wide could not be opened. Check your connection, then try again.',
   returnToWorld: 'Back to World Wide',
 };
@@ -209,7 +200,7 @@ const es: LandingCopy = {
   nameLabel: 'Tu nombre o apodo',
   namePlaceholder: 'Ej. Awa',
   join: 'Unirme a World Wide',
-  joinNote: 'Sin cuenta, sin correo. Elegirás tu idioma justo después.',
+  joinNote: 'Sin cuenta, sin correo. Todo lo que leas llegará en el idioma que elijas.',
   previewLabel: 'Vista previa de World Wide',
   previewSubtitle: 'Traducido para ti',
   previewKenji: '¡Hola a todos! ¿Alguien aquí aprende japonés?',
@@ -244,9 +235,6 @@ const es: LandingCopy = {
   partners: 'Socios',
   unavailable: 'World Wide está cerrada por ahora. Inicia sesión para encontrar tus conversaciones.',
   languageTitle: 'Tu idioma',
-  languageHint: 'Todo lo que leas en World Wide llegará en este idioma.',
-  back: 'Atrás',
-  enter: 'Entrar en World Wide',
   entryFailed: 'No se pudo abrir la entrada de World Wide. Comprueba tu conexión y vuelve a intentarlo.',
   returnToWorld: 'Volver a World Wide',
 };
@@ -272,7 +260,7 @@ const pt: LandingCopy = {
   nameLabel: 'Seu nome ou apelido',
   namePlaceholder: 'Ex. Awa',
   join: 'Entrar no World Wide',
-  joinNote: 'Sem conta, sem e-mail. Você escolhe seu idioma logo depois.',
+  joinNote: 'Sem conta, sem e-mail. Tudo o que você ler chegará no idioma escolhido.',
   previewLabel: 'Prévia do World Wide',
   previewSubtitle: 'Traduzido para você',
   previewKenji: 'Olá a todos! Alguém aqui está aprendendo japonês?',
@@ -307,9 +295,6 @@ const pt: LandingCopy = {
   partners: 'Parceiros',
   unavailable: 'O World Wide está fechado no momento. Entre para encontrar suas conversas.',
   languageTitle: 'Seu idioma',
-  languageHint: 'Tudo o que você ler no World Wide chegará neste idioma.',
-  back: 'Voltar',
-  enter: 'Entrar no World Wide',
   entryFailed: 'Não foi possível abrir a entrada do World Wide. Verifique sua conexão e tente de novo.',
   returnToWorld: 'Voltar ao World Wide',
 };
@@ -335,7 +320,7 @@ const de: LandingCopy = {
   nameLabel: 'Dein Vorname oder Spitzname',
   namePlaceholder: 'z. B. Awa',
   join: 'World Wide beitreten',
-  joinNote: 'Ohne Konto, ohne E-Mail. Deine Sprache wählst du gleich danach.',
+  joinNote: 'Ohne Konto, ohne E-Mail. Alles, was du dort liest, kommt in der gewählten Sprache an.',
   previewLabel: 'Vorschau von World Wide',
   previewSubtitle: 'Für dich übersetzt',
   previewKenji: 'Hallo zusammen! Lernt hier jemand Japanisch?',
@@ -370,9 +355,6 @@ const de: LandingCopy = {
   partners: 'Partner',
   unavailable: 'World Wide ist gerade geschlossen. Melde dich an, um deine Unterhaltungen zu finden.',
   languageTitle: 'Deine Sprache',
-  languageHint: 'Alles, was du in World Wide liest, kommt in dieser Sprache an.',
-  back: 'Zurück',
-  enter: 'World Wide betreten',
   entryFailed: 'Der Eingang zu World Wide konnte nicht geöffnet werden. Prüfe deine Verbindung und versuche es erneut.',
   returnToWorld: 'Zurück zu World Wide',
 };
@@ -398,7 +380,7 @@ const it: LandingCopy = {
   nameLabel: 'Il tuo nome o soprannome',
   namePlaceholder: 'Es. Awa',
   join: 'Unisciti a World Wide',
-  joinNote: 'Senza account, senza e-mail. Sceglierai la tua lingua subito dopo.',
+  joinNote: 'Senza account, senza e-mail. Tutto ciò che leggerai arriverà nella lingua scelta.',
   previewLabel: 'Anteprima di World Wide',
   previewSubtitle: 'Tradotto per te',
   previewKenji: 'Ciao a tutti! Qualcuno qui studia il giapponese?',
@@ -433,9 +415,6 @@ const it: LandingCopy = {
   partners: 'Partner',
   unavailable: 'World Wide è chiusa per ora. Accedi per ritrovare le tue conversazioni.',
   languageTitle: 'La tua lingua',
-  languageHint: 'Tutto ciò che leggerai in World Wide arriverà in questa lingua.',
-  back: 'Indietro',
-  enter: 'Entra in World Wide',
   entryFailed: "Non è stato possibile aprire l'ingresso di World Wide. Controlla la connessione e riprova.",
   returnToWorld: 'Torna in World Wide',
 };
@@ -461,7 +440,7 @@ const ar: LandingCopy = {
   nameLabel: 'اسمك أو لقبك',
   namePlaceholder: 'مثلًا: آوا',
   join: 'انضم إلى World Wide',
-  joinNote: 'دون حساب ودون بريد إلكتروني. ستختار لغتك مباشرةً بعد ذلك.',
+  joinNote: 'دون حساب ودون بريد إلكتروني. كل ما تقرؤه هناك سيصلك باللغة التي تختارها.',
   previewLabel: 'معاينة World Wide',
   previewSubtitle: 'مترجم لك',
   previewKenji: 'مرحبًا بالجميع! هل يتعلم أحد هنا اليابانية؟',
@@ -496,9 +475,6 @@ const ar: LandingCopy = {
   partners: 'الشركاء',
   unavailable: 'World Wide مغلقة حاليًا. سجّل الدخول للعثور على محادثاتك.',
   languageTitle: 'لغتك',
-  languageHint: 'كل ما تقرؤه في World Wide سيصلك بهذه اللغة.',
-  back: 'رجوع',
-  enter: 'ادخل إلى World Wide',
   entryFailed: 'تعذّر فتح مدخل World Wide. تحقّق من اتصالك ثم أعد المحاولة.',
   returnToWorld: 'العودة إلى World Wide',
 };

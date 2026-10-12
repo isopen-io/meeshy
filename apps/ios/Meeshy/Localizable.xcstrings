@@ -19916,6 +19916,570 @@
         }
       }
     },
+    "game.constellation.cosmetic": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · النجمة %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · Stern %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · star %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · estrella %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · étoile %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · stella %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ · estrela %2$@"
+          }
+        }
+      }
+    },
+    "game.constellation.cosmetics": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزينات المفتوحة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freigeschaltete Kosmetik"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlocked cosmetics"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosméticos desbloqueados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmétiques débloqués"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosmetici sbloccati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosméticos desbloqueados"
+          }
+        }
+      }
+    },
+    "game.constellation.how": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تضيء نجمة مع كل عشر شظايا نجم تجمعها. وكل نجمة تفتح زينة للملف الشخصي، دون أي أفضلية في اللعب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je zehn gesammelte Sternfragmente lassen einen Stern aufleuchten. Jeder schaltet ein Profil-Kosmetikum frei, ohne Spielvorteil."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A star lights up for every ten star fragments collected. Each one unlocks a profile cosmetic, with no gameplay advantage."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se enciende una estrella por cada diez fragmentos de estrella reunidos. Cada una desbloquea un cosmético de perfil, sin ventaja de juego."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une étoile s’allume tous les dix fragments d’étoile collectés. Chacune débloque un cosmétique de profil, sans avantage de jeu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si accende una stella ogni dieci frammenti di stella raccolti. Ognuna sblocca un cosmetico del profilo, senza vantaggi di gioco."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma estrela se acende a cada dez fragmentos de estrela coletados. Cada uma desbloqueia um cosmético de perfil, sem vantagem de jogo."
+          }
+        }
+      }
+    },
+    "game.constellation.kind.frame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cornice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moldura"
+          }
+        }
+      }
+    },
+    "game.constellation.kind.halo": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هالة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alone"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo"
+          }
+        }
+      }
+    },
+    "game.constellation.kind.sparkle": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بريق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funkeln"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparkle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destello"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scintillement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scintillio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brilho"
+          }
+        }
+      }
+    },
+    "game.constellation.next.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بقيت %@ شظية نجم للنجمة التالية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch %@ Sternfragment bis zum nächsten Stern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ more star fragment to the next star"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta %@ fragmento de estrella para la próxima estrella"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encore %@ fragment d’étoile pour la prochaine étoile"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora %@ frammento di stella per la prossima stella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falta %@ fragmento de estrela para a próxima estrela"
+          }
+        }
+      }
+    },
+    "game.constellation.next.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بقي %@ من شظايا النجم للنجمة التالية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch %@ Sternfragmente bis zum nächsten Stern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ more star fragments to the next star"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltan %@ fragmentos de estrella para la próxima estrella"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encore %@ fragments d’étoile pour la prochaine étoile"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancora %@ frammenti di stella per la prossima stella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltam %@ fragmentos de estrela para a próxima estrela"
+          }
+        }
+      }
+    },
+    "game.constellation.stars.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ نجمة مضيئة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Stern leuchtet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ star lit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ estrella encendida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ étoile allumée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ stella accesa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ estrela acesa"
+          }
+        }
+      }
+    },
+    "game.constellation.stars.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ نجوم مضيئة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Sterne leuchten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ stars lit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ estrellas encendidas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ étoiles allumées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ stelle accese"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ estrelas acesas"
+          }
+        }
+      }
+    },
+    "game.constellation.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الكوكبة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sternbild"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Constellation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Constelación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Constellation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Costellazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Constelação"
+          }
+        }
+      }
+    },
+    "game.constellation.visibility": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تظهر كوكبتك وزيناتها حسب إعداد واجهتك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Sternbild und seine Kosmetik sind so sichtbar, wie du deine Vitrine eingestellt hast."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your constellation and its cosmetics are shown according to your showcase setting."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu constelación y sus cosméticos se muestran según el ajuste de tu vitrina."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta constellation et ses cosmétiques se montrent selon le réglage de la vitrine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua costellazione e i suoi cosmetici si mostrano secondo l’impostazione della vetrina."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua constelação e seus cosméticos aparecem conforme o ajuste da sua vitrine."
+          }
+        }
+      }
+    },
     "location.nearby": {
       "extractionState": "manual",
       "localizations": {
@@ -49423,90 +49987,90 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "‏Meeshy الإصدار %1$@، البنية %2$@. من Services CEO."
+            "value": "‏Meeshy الإصدار %1$@، البنية %2$@."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy Version %1$@, Build %2$@. Von Services CEO."
+            "value": "Meeshy Version %1$@, Build %2$@."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy version %1$@, build %2$@. By Services CEO."
+            "value": "Meeshy version %1$@, build %2$@."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versión %1$@, compilación %2$@. Por Services CEO."
+            "value": "Meeshy versión %1$@, compilación %2$@."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy version %1$@, build %2$@. Par Services CEO."
+            "value": "Meeshy version %1$@, build %2$@."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versione %1$@, build %2$@. Da Services CEO."
+            "value": "Meeshy versione %1$@, build %2$@."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshy versão %1$@, compilação %2$@. Por Services CEO."
+            "value": "Meeshy versão %1$@, compilação %2$@."
           }
         }
       }
     },
-    "brand.signature.credit": {
+    "brand.signature.credit.accessibilityHint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "يفتح منصة services.ceo في المتصفح"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Öffnet die Plattform services.ceo im Browser"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Opens the services.ceo platform in the browser"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Abre la plataforma services.ceo en el navegador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Ouvre la plateforme services.ceo dans le navigateur"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Apre la piattaforma services.ceo nel browser"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Services CEO"
+            "value": "Abre a plataforma services.ceo no navegador"
           }
         }
       }
@@ -162425,6 +162989,288 @@
         }
       }
     },
+    "settings.packs.domain": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نوع الحزمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakettyp"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pack type"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipo de paquete"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type de pack"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipo di pacchetto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipo de pacote"
+          }
+        }
+      }
+    },
+    "settings.packs.frames": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطارات اللعبة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spielrahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcos del juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadres du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cornici del gioco"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Molduras do jogo"
+          }
+        }
+      }
+    },
+    "settings.packs.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ثبّت أو أزِل حزم الملصقات وإطارات اللعبة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sticker- und Spielrahmen-Pakete installieren oder entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install or remove sticker packs and game frame packs"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instala o quita paquetes de stickers y de marcos del juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installe ou retire des packs de stickers et de cadres du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installa o rimuovi pacchetti di sticker e di cornici del gioco"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instale ou remova pacotes de figurinhas e de molduras do jogo"
+          }
+        }
+      }
+    },
+    "settings.packs.shop": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المتجر"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shop"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shop"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tienda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boutique"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Negozio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loja"
+          }
+        }
+      }
+    },
+    "settings.packs.stickers": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الملصقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sticker"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sticker"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Figurinhas"
+          }
+        }
+      }
+    },
+    "settings.packs.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحزم والتنزيلات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pakete und Downloads"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Packs and downloads"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paquetes y descargas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Packs et téléchargements"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pacchetti e download"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pacotes e downloads"
+          }
+        }
+      }
+    },
     "settings.privacy.a11y": {
       "extractionState": "manual",
       "localizations": {
@@ -232574,6 +233420,53 @@
         }
       }
     },
+    "game.chest.bonusOdds": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكافأة: %1$@ لـ %2$@، وإلا %3$@ لـ %4$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: %1$@ auf %2$@, sonst %3$@ auf %4$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: %1$@ of %2$@, otherwise %3$@ of %4$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prima: %1$@ de %2$@; si no, %3$@ de %4$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prime : %1$@ de %2$@, sinon %3$@ de %4$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Premio: %1$@ per %2$@, altrimenti %3$@ per %4$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bônus: %1$@ de %2$@; senão, %3$@ de %4$@"
+          }
+        }
+      }
+    },
     "game.badge.guide_link": {
       "extractionState": "manual",
       "localizations": {
@@ -233332,43 +234225,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "جزء من Meesh"
+            "value": "شظية نجم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Meesh-Fragment"
+            "value": "Ein Sternfragment"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A Meesh fragment"
+            "value": "A star fragment"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un fragmento de Meesh"
+            "value": "Un fragmento de estrella"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un fragment de Meesh"
+            "value": "Un fragment d’étoile"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un frammento di Meesh"
+            "value": "Un frammento di stella"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um fragmento de Meesh"
+            "value": "Um fragmento de estrela"
           }
         }
       }
@@ -233651,100 +234544,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ pontos conversíveis"
-          }
-        }
-      }
-    },
-    "game.meeshFragments.one": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ جزء من Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Meesh-Fragment"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Meesh fragment"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragmento de Meesh"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragment de Meesh"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ frammento di Meesh"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragmento de Meesh"
-          }
-        }
-      }
-    },
-    "game.meeshFragments.other": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ أجزاء من Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Meesh-Fragmente"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Meesh fragments"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragmentos de Meesh"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragments de Meesh"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ frammenti di Meesh"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ fragmentos de Meesh"
           }
         }
       }
@@ -245687,100 +246486,6 @@
         }
       }
     },
-    "game.mint.fragments.action": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "اسكّ بـ %@ أجزاء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit %@ Fragmenten prägen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mint with %@ fragments"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Acuñar con %@ fragmentos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Frapper avec %@ fragments"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conia con %@ frammenti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cunhar com %@ fragmentos"
-          }
-        }
-      }
-    },
-    "game.mint.fragments.counter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ أجزاء من Meesh"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ Meesh-Fragmente"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ Meesh fragments"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragmentos de Meesh"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragments de Meesh"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ frammenti di Meesh"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragmentos de Meesh"
-          }
-        }
-      }
-    },
     "game.mint.minted_line": {
       "extractionState": "manual",
       "localizations": {
@@ -246909,53 +247614,6 @@
         }
       }
     },
-    "game.chest.fragmentsProgress": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ أجزاء لسكّ مجاني"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ Fragmente für eine Gratis-Prägung"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragments toward a free mint"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragmentos para una acuñación gratis"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragments pour une frappe gratuite"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ frammenti per un conio gratuito"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ / %2$@ fragmentos para uma cunhagem grátis"
-          }
-        }
-      }
-    },
     "game.chest.locked": {
       "extractionState": "manual",
       "localizations": {
@@ -247046,6 +247704,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Abrindo…"
+          }
+        }
+      }
+    },
+    "game.chest.reward.bonus.fifth": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكافأة: ‎+%@، خُمس Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: +%@, ein Fünftel einer Meesh"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: +%@, a fifth of a Meesh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prima: +%@, un quinto de Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prime : +%@, un cinquième de Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Premio: +%@, un quinto di Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bônus: +%@, um quinto de Meesh"
+          }
+        }
+      }
+    },
+    "game.chest.reward.bonus.whole": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مكافأة: ‎+%@، سعر Meesh"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: +%@, der Preis einer Meesh"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bonus: +%@, the price of a Meesh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prima: +%@, el precio de una Meesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prime : +%@, le prix d’une Meesh"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Premio: +%@, il prezzo di una Meesh"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bônus: +%@, o preço de uma Meesh"
           }
         }
       }
@@ -247150,43 +247902,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ إلى %2$@ حسب مهامك · %3$@ لجزء Meesh إضافي · %4$@ لتجميد"
+            "value": "%1$@ إلى %2$@ حسب مهامك · %3$@ لشظية نجم · %4$@ لتجميد"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ bis %2$@ je nach Missionen · %3$@ auf ein Bonus-Meesh-Fragment · %4$@ auf ein Eis"
+            "value": "%1$@ bis %2$@ je nach Missionen · %3$@ auf ein Sternfragment · %4$@ auf ein Eis"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ to %2$@ depending on your missions · %3$@ for a bonus Meesh fragment · %4$@ for a freeze"
+            "value": "%1$@ to %2$@ depending on your missions · %3$@ for a star fragment · %4$@ for a freeze"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ a %2$@ según tus misiones · %3$@ de un fragmento de Meesh extra · %4$@ de un congelador"
+            "value": "%1$@ a %2$@ según tus misiones · %3$@ de un fragmento de estrella · %4$@ de un congelador"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ à %2$@ selon tes missions · %3$@ d’un fragment de Meesh en prime · %4$@ d’un gel"
+            "value": "%1$@ à %2$@ selon tes missions · %3$@ d’un fragment d’étoile · %4$@ d’un gel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Da %1$@ a %2$@ secondo le tue missioni · %3$@ per un frammento di Meesh in più · %4$@ per un gelo"
+            "value": "Da %1$@ a %2$@ secondo le tue missioni · %3$@ per un frammento di stella · %4$@ per un gelo"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ a %2$@ conforme tuas missões · %3$@ de um fragmento de Meesh bônus · %4$@ de um congelamento"
+            "value": "%1$@ a %2$@ conforme tuas missões · %3$@ de um fragmento de estrela · %4$@ de um congelamento"
           }
         }
       }
@@ -247892,6 +248644,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "As sete etapas"
+          }
+        }
+      }
+    },
+    "game.starFragments.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ شظية نجم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Sternfragment"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ star fragment"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmento de estrella"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragment d’étoile"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ frammento di stella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmento de estrela"
+          }
+        }
+      }
+    },
+    "game.starFragments.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ شظايا نجم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Sternfragmente"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ star fragments"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmentos de estrella"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragments d’étoile"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ frammenti di stella"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fragmentos de estrela"
           }
         }
       }
@@ -263318,43 +264164,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "شظية"
+            "value": "شظية نجم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Fragment"
+            "value": "Ein Sternfragment"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A fragment"
+            "value": "A star fragment"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un fragmento"
+            "value": "Un fragmento de estrella"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un fragment"
+            "value": "Un fragment d’étoile"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un frammento"
+            "value": "Un frammento di stella"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um fragmento"
+            "value": "Um fragmento de estrela"
           }
         }
       }
@@ -268995,53 +269841,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "الكنز: %@"
-          }
-        }
-      }
-    },
-    "game2.profile.visitor_flame": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flamme : %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flame: %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Llama: %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flamme: %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fiamma: %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chama: %@"
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الشعلة: %@"
           }
         }
       }
@@ -276854,43 +277653,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الصندوق: %1$@ · %2$@ · %3$@"
+            "value": "هذا الصندوق: %1$@ · %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Truhe: %1$@ · %2$@ · %3$@"
+            "value": "Diese Truhe: %1$@ · %2$@"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This chest: %1$@ · %2$@ · %3$@"
+            "value": "This chest: %1$@ · %2$@"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este cofre: %1$@ · %2$@ · %3$@"
+            "value": "Este cofre: %1$@ · %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce coffre : %1$@ · %2$@ · %3$@"
+            "value": "Ce coffre : %1$@ · %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo forziere: %1$@ · %2$@ · %3$@"
+            "value": "Questo forziere: %1$@ · %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este baú: %1$@ · %2$@ · %3$@"
+            "value": "Este baú: %1$@ · %2$@"
           }
         }
       }
@@ -279345,43 +280144,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "نقاط حسب مهامك، ومجد، وأجزاء Meesh — خمسة تدفع ثمن سكّة — وأحيانًا تجميد."
+            "value": "نقاط حسب مهامك، ومجد، وأحيانًا مكافأة نقاط أو شظية نجم أو تجميد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Punkte je nach Missionen, Ruhm, Meesh-Fragmente – fünf bezahlen eine Prägung – und manchmal ein Eis."
+            "value": "Punkte je nach Missionen, Ruhm, manchmal ein Punktebonus, ein Sternfragment oder ein Eis."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Points depending on your missions, Glory, Meesh fragments — five pay for a mint — and sometimes a freeze."
+            "value": "Points depending on your missions, Glory, sometimes a points bonus, a star fragment or a freeze."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Puntos según tus misiones, Gloria, fragmentos de Meesh —cinco pagan una acuñación— y a veces un congelador."
+            "value": "Puntos según tus misiones, Gloria y a veces una prima en puntos, un fragmento de estrella o un congelador."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des points selon tes missions, de la Gloire, des fragments de Meesh — cinq paient une frappe —, et parfois un gel."
+            "value": "Des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Punti secondo le tue missioni, Gloria, frammenti di Meesh — cinque pagano un conio — e a volte un gelo."
+            "value": "Punti secondo le tue missioni, Gloria, a volte un premio in punti, un frammento di stella o un gelo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pontos conforme tuas missões, Glória, fragmentos de Meesh — cinco pagam uma cunhagem — e às vezes um congelamento."
+            "value": "Pontos por suas missões, Glória, às vezes um bônus em pontos, um fragmento de estrela ou um congelamento."
           }
         }
       }
@@ -285774,6 +286573,1369 @@
           "stringUnit": {
             "state": "translated",
             "value": "Este arquivo é grande demais aqui: no máximo %@."
+          }
+        }
+      }
+    },
+    "game2.archive.season.past_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم ⁦%@⁩ · انتهى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · beendet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %@ · ended"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · terminada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · terminée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stagione %@ · conclusa"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · encerrada"
+          }
+        }
+      }
+    },
+    "game2.archive.season.current_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم ⁦%@⁩ · جارٍ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · läuft"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season %@ · in progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · en curso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saison %@ · en cours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stagione %@ · in corso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporada %@ · em andamento"
+          }
+        }
+      }
+    },
+    "game2.archive.season.opened_note": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموسم مفتوح: يظهر مسارك فور إعادة تحميله."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Saison ist eröffnet: Dein Weg erscheint, sobald sie neu geladen ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The season is open: your path shows up as soon as it’s reloaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La temporada está abierta: tu recorrido aparece en cuanto se vuelva a cargar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La saison est ouverte : ton parcours s’affiche dès qu’elle est relue."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La stagione è aperta: il tuo percorso appare appena viene ricaricata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A temporada está aberta: seu percurso aparece assim que ela for recarregada."
+          }
+        }
+      }
+    },
+    "game2.archive.season.dates": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من ⁦%1$@⁩ إلى ⁦%2$@⁩"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom %1$@ bis %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From %1$@ to %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Del %1$@ al %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du %1$@ au %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dal %1$@ al %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De %1$@ a %2$@"
+          }
+        }
+      }
+    },
+    "game2.archive.season.rewards.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⁦%@⁩ مكافأة مُستلمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Belohnung abgeholt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ reward claimed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ recompensa reclamada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ récompense réclamée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ricompensa riscattata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ recompensa resgatada"
+          }
+        }
+      }
+    },
+    "game2.archive.season.rewards.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⁦%@⁩ مكافآت مُستلمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Belohnungen abgeholt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ rewards claimed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ recompensas reclamadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ récompenses réclamées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ricompense riscattate"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ recompensas resgatadas"
+          }
+        }
+      }
+    },
+    "game2.archive.season.cup_won": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اكتمل المسار: كأس الموسم لك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pfad abgeschlossen: Der Saisonpokal gehört dir."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Path completed: the season cup is yours."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorrido completado: la copa de temporada es tuya."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcours terminé : la coupe de saison est à toi."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percorso completato: la coppa della stagione è tua."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percurso concluído: a taça da temporada é sua."
+          }
+        }
+      }
+    },
+    "game2.archive.season.cup_missed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يكتمل المسار: لم تُربح كأس الموسم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pfad nicht abgeschlossen: Der Saisonpokal wurde nicht gewonnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Path not completed: the season cup was not won."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorrido sin completar: la copa de temporada no se ganó."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parcours non terminé : la coupe de saison n’a pas été gagnée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percorso non completato: la coppa della stagione non è stata vinta."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Percurso não concluído: a taça da temporada não foi conquistada."
+          }
+        }
+      }
+    },
+    "game2.archive.season.seal_owned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم الحصول على ختم الموسم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisonsiegel erhalten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Season Seal obtained."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sello de la temporada conseguido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sceau de la saison obtenu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sigillo della stagione ottenuto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selo da temporada obtido."
+          }
+        }
+      }
+    },
+    "game2.archive.season.not_played": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تلعب في هذا الموسم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast in dieser Saison nicht gespielt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You didn’t play this season."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No jugaste esta temporada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu n’as pas joué cette saison."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non hai giocato in questa stagione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você não jogou nesta temporada."
+          }
+        }
+      }
+    },
+    "game2.archive.week.rank": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الترتيب النهائي: ⁦%@⁩"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endplatzierung: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final rank: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puesto final: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rang final : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posizione finale: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posição final: %@"
+          }
+        }
+      }
+    },
+    "game2.archive.week.points": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مجموع الأسبوع: ⁦%@⁩"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wochensumme: %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Week total: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total de la semana: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total de la semaine : %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Totale della settimana: %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total da semana: %@"
+          }
+        }
+      }
+    },
+    "game2.archive.week.no_cup": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا كأس في ذلك الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Pokal in dieser Woche."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cup that week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin copa esa semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas de coupe cette semaine-là."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna coppa quella settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem taça naquela semana."
+          }
+        }
+      }
+    },
+    "game2.archive.week.unsettled": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُثبَّت النتيجة عند إغلاق الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Ergebnis wird beim Wochenabschluss festgeschrieben."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The result is engraved when the week closes."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El resultado se graba al cierre de la semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le résultat se grave à la clôture de la semaine."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il risultato si incide alla chiusura della settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O resultado é gravado no fechamento da semana."
+          }
+        }
+      }
+    },
+    "game2.archive.week.not_placed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يكن لك مكان في الدوري ذلك الأسبوع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du warst in dieser Woche in keiner Liga eingeteilt."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You had no place in a league that week."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tenías plaza en una liga esa semana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu n’avais pas de place en ligue cette semaine-là."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non avevi un posto in lega quella settimana."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você não tinha vaga em uma liga naquela semana."
+          }
+        }
+      }
+    },
+    "game2.archive.week.purged": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الأسبوع قديم جدًا: حُذفت نتيجته كما هو مقرر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Woche liegt zu weit zurück: Ihr Ergebnis wurde wie vorgesehen gelöscht."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This week is too old: its result was erased, as planned."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta semana es demasiado antigua: su resultado se borró, como estaba previsto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette semaine est trop ancienne : son résultat a été effacé, comme prévu."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa settimana è troppo vecchia: il suo risultato è stato cancellato, come previsto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta semana é antiga demais: o resultado foi apagado, como previsto."
+          }
+        }
+      }
+    },
+    "game2.archive.week.upcoming": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يبدأ هذا الأسبوع بعد."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Woche hat noch nicht begonnen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This week hasn’t started yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta semana aún no ha empezado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette semaine n’a pas encore commencé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa settimana non è ancora iniziata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta semana ainda não começou."
+          }
+        }
+      }
+    },
+    "game2.archive.week.privacy": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُحفظ نتيجتك وحدها: لا يمكن الاطلاع على بقية أعضاء المجموعة مجددًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur dein Ergebnis wird aufbewahrt: Die anderen Gruppenmitglieder lassen sich nicht mehr einsehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only your result is kept: the other members of the group can’t be looked up again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo se guarda tu resultado: los demás miembros del grupo no se pueden volver a consultar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seul ton résultat est gardé : les autres membres du groupe ne se relisent pas."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Si conserva solo il tuo risultato: gli altri membri del gruppo non si possono più consultare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Só o seu resultado é guardado: os outros membros do grupo não podem ser consultados de novo."
+          }
+        }
+      }
+    },
+    "conversation.header.share": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشاركة المحادثة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung teilen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share the conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir la conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager la conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condividi la conversazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartilhar a conversa"
+          }
+        }
+      }
+    },
+    "game.frame.family.day": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إنجاز اليوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leistung des Tages"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feat of the day"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logro del día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réalisation du jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impresa del giorno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conquista do dia"
+          }
+        }
+      }
+    },
+    "game.frame.family.flame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اللهب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flamme"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llama"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flamme"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fiamma"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chama"
+          }
+        }
+      }
+    },
+    "game.frame.family.level-100": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المستوى 100"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level 100"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level 100"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel 100"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau 100"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello 100"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nível 100"
+          }
+        }
+      }
+    },
+    "game.frame.family.meesh": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meesh مسكوكة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geprägte Meesh"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minted Meesh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meesh acuñada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meesh frappée"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meesh coniata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meesh cunhada"
+          }
+        }
+      }
+    },
+    "game.frame.family.tier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرحلة المستوى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Levelstufe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level tier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escalón de nivel"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palier de niveau"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gradino di livello"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patamar de nível"
+          }
+        }
+      }
+    },
+    "game.frame.family.treasury": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مرحلة الكنز"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schatzstufe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treasury tier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel del tesoro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Palier du trésor"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Livello del tesoro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Patamar do tesouro"
+          }
+        }
+      }
+    },
+    "game.photo.notice.no_space": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا توجد مساحة كافية على هذا الجهاز: لم يتم حفظ الصورة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Speicherplatz mehr auf diesem Gerät: Das Foto wurde nicht gespeichert."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No space left on this device: the photo was not kept."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No queda espacio en este dispositivo: la foto no se guardó."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus de place sur cet appareil : la photo n’a pas été gardée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spazio esaurito su questo dispositivo: la foto non è stata conservata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem espaço neste aparelho: a foto não foi guardada."
+          }
+        }
+      }
+    },
+    "game.photo.notice.no_space_save": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احفظها في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In Fotos sichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save it to Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardarla en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’enregistrer dans Photos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvala in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvar em Fotos"
+          }
+        }
+      }
+    },
+    "game.notebook.device_only": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صورك موجودة على هذا الجهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Fotos leben auf diesem Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your photos live on this device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus fotos viven en este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tes photos vivent sur cet appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tue foto vivono su questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suas fotos ficam neste aparelho."
+          }
+        }
+      }
+    },
+    "game.notebook.size": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يشغل الدفتر %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Heft belegt %@."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The notebook takes up %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cuaderno ocupa %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le carnet occupe %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il quaderno occupa %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O caderno ocupa %@."
           }
         }
       }

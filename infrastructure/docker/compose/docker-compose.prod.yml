@@ -238,6 +238,12 @@ services:
       # PRODUCTION : la première passe efface l'arriéré — feu vert du porteur et
       # sauvegarde vérifiée AVANT de poser RETENTION_PURGE_ENABLED=true sur l'hôte.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
+      # #10175 (L19) — le push d'une étape du jeu franchie app fermée : détection, ligne de
+      # base et UNE notification groupée par jour au plus. ARMÉ par la seule valeur exacte on ;
+      # toute autre valeur, absence comprise, le laisse éteint (relu à chaque passage du job).
+      # PRODUCTION : livré ÉTEINT ; il s'allume après la recette de staging, par la seule
+      # valeur exacte on sur l'hôte puis un redémarrage de la passerelle (aucun code à redéployer).
+      - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-off}
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
@@ -330,6 +336,7 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
       - AGENT_HOST=agent
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}
       - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
@@ -397,6 +404,19 @@ services:
       - "traefik.http.routers.frontend-unfurl.service=gateway"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.replacement=/api/v1/links/$$1/og"
+      # #10192 — les mêmes robots qui déplient un lien SUIVI /l/<jeton> reçoivent
+      # l'aperçu de sa cible publique (GET /api/v1/tracking-links/<jeton>/og) : une
+      # adresse web extérieure d'un lien actif les y renvoie, une invitation ouverte
+      # se déplie, tout le reste rend l'aperçu générique. Sans ce routeur, nginx sert
+      # l'aperçu générique de la famille `link` (apps/web/nginx.conf, D-199).
+      - "traefik.http.routers.frontend-track-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/l/[A-Za-z0-9_-]{2,50}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-track-unfurl.priority=100"
+      - "traefik.http.routers.frontend-track-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-track-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-track-unfurl.middlewares=track-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-track-unfurl.service=gateway"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
@@ -476,6 +496,7 @@ services:
       - ZMQ_PUB_PORT=5561
       - NODE_ENV=production
       - PORT=3200
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
     depends_on:
       - database
       - redis

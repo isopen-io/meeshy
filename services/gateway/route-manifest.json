@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 658,
+  "routeCount": 678,
   "routes": [
     {
       "method": "DELETE",
@@ -772,6 +772,20 @@
       "path": "/api/v1/notifications/read",
       "module": "notificationRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/packs/glory-frame/:slug/install",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -1678,6 +1692,62 @@
         "S6"
       ],
       "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/app-events",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/app-events.yaml",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/game/seasons/proposals",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -3632,6 +3702,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/me/game/seasons/calendar",
+      "module": "meGameSeasonCalendarRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/me/onboarding",
       "module": "meOnboardingRoutes",
       "mountPrefix": "/api/v1/me",
@@ -3999,6 +4083,62 @@
       "path": "/api/v1/notifications/unread-count",
       "module": "notificationRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/pack-assets/:file",
+      "module": "packAssetsRoutes",
+      "mountPrefix": "/api/v1/pack-assets",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame/:slug",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/packs/glory-frame/installed",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4575,6 +4715,20 @@
         "S3"
       ],
       "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tracking-links/:token/og",
+      "module": "linksRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5185,6 +5339,20 @@
         "S1"
       ],
       "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/world/participants/:participantId",
+      "module": "worldParticipantCardRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6191,6 +6359,48 @@
       "path": "/api/v1/admin/dashboard/invalidate-cache",
       "module": "dashboardRoutes",
       "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/game/seasons/:number/proposals",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/game/seasons/proposals/:id/approve",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/game/seasons/proposals/:id/reject",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S4",
@@ -7765,6 +7975,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/me/game/photo-moments/presented",
+      "module": "meGamePhotoRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/me/game/prestige",
       "module": "meGameWave2Routes",
       "mountPrefix": "/api/v1/me",
@@ -8919,6 +9143,20 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/admin/game/seasons/:number",
+      "module": "gameSeasonsAdminRoutes",
+      "mountPrefix": "/api/v1/admin/game",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/admin/users/:userId/profile-images/:kind",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -9045,8 +9283,36 @@
     },
     {
       "method": "PUT",
+      "path": "/api/v1/me/game/frames/atmosphere",
+      "module": "meGamePhotoRoutes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
       "path": "/api/v1/me/game/league/pseudonym",
       "module": "meGameWave2Routes",
+      "mountPrefix": "/api/v1/me",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/me/game/photo-moments/invitations",
+      "module": "meGamePhotoRoutes",
       "mountPrefix": "/api/v1/me",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -9230,6 +9496,20 @@
       "path": "/api/v1/messages/:messageId",
       "module": "messageRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/packs/glory-frame/:slug/install",
+      "module": "gloryFramePacksRoutes",
+      "mountPrefix": "/api/v1/packs/glory-frame",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
