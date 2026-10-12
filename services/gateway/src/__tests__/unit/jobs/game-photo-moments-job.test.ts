@@ -23,7 +23,7 @@ const world = (on: boolean) => {
   const marks = memoryPhotoMomentMarks();
   const service = {
     detect: jest.fn(async (userId: string) => (userId === 'boom' ? Promise.reject(new Error('boom')) : { kind: 'baseline' as const })),
-    deliver: jest.fn(async () => ({ sent: 1, deferred: 0 })),
+    deliver: jest.fn(async (_now: Date) => ({ sent: 1, deferred: 0 })),
   };
   const job = new GamePhotoMomentsJob({} as never, { service, marks, enabled: () => on });
   return { job, marks, service };
