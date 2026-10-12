@@ -10,6 +10,8 @@
  *
  * - zone `frame` : la case du cadre choisi (toucher = photo, appui long = vidéo).
  * - zone `outside` : la scène, ou le déclencheur rond quand AUCUN cadre n'est choisi.
+ * - « déjà enregistré » se lit par VERSION, la paire (cadre, format) : changer de
+ *   format (story, carré) fait réapparaître « Enregistrer » comme changer de cadre (#10296).
  *
  * La directive fixe des DÉFAUTS ; le réglage de l'utilisateur prime (correction
  * porteur 2026-10-12 : « il faut respecter la consigne et reglage utilisateur.
@@ -34,18 +36,29 @@ export type CaptureDestination =
 /** L'identifiant du cadre posé sur la prise ; `null` = aucun cadre. */
 export type FrameChoice = string | null;
 
-/** Une prise par la zone cadre a, par construction, un cadre choisi. */
-export type CaptureOrigin =
-  | { readonly zone: 'frame'; readonly frameId: string }
-  | { readonly zone: 'outside'; readonly frameId: FrameChoice };
+/** Le format de l'image écrite (`story`, `square`, une proportion…) : opaque pour la loi. */
+export type CaptureFormat = string;
 
 /**
- * L'état d'enregistrement d'une prise en retouche : le cadre courant, et les
- * cadres avec lesquels elle est (ou part) en galerie — « aucun cadre » compris.
+ * Une VERSION de la prise : la paire (cadre, format). Changer l'un ou l'autre
+ * produit une autre image, donc une autre version à enregistrer (#10296,
+ * porteur 2026-10-12 : « Oui ce doit faire apparaitre Enregistrer »).
+ */
+export type SavedVersion = { readonly frameId: FrameChoice; readonly format: CaptureFormat };
+
+/** Une prise par la zone cadre a, par construction, un cadre choisi. */
+export type CaptureOrigin =
+  | { readonly zone: 'frame'; readonly frameId: string; readonly format: CaptureFormat }
+  | { readonly zone: 'outside'; readonly frameId: FrameChoice; readonly format: CaptureFormat };
+
+/**
+ * L'état d'enregistrement d'une prise en retouche : la version courante (cadre,
+ * format), et les versions déjà (ou en train d'être) en galerie — « aucun cadre » compris.
  */
 export type TakeSaveState = {
   readonly currentFrame: FrameChoice;
-  readonly savedWith: readonly FrameChoice[];
+  readonly currentFormat: CaptureFormat;
+  readonly savedWith: readonly SavedVersion[];
 };
 
 const FRAME_DESTINATION: CaptureDestination = { gallery: true, then: 'edit', keptInApp: false };
@@ -57,26 +70,37 @@ export type CaptureDestinationOptions = { readonly savesOriginal?: boolean };
 export const captureDestination = (zone: CaptureZone, { savesOriginal = false }: CaptureDestinationOptions = {}): CaptureDestination =>
   zone === 'frame' || savesOriginal ? FRAME_DESTINATION : OUTSIDE_DESTINATION;
 
-/** L'état juste après la prise : une prise par le cadre part déjà en galerie (mise à jour optimiste). */
+const currentVersion = (state: TakeSaveState): SavedVersion => ({ frameId: state.currentFrame, format: state.currentFormat });
+
+const sameVersion = (a: SavedVersion, b: SavedVersion): boolean => a.frameId === b.frameId && a.format === b.format;
+
+/** L'état juste après la prise : une prise par le cadre part déjà en galerie, au format de la prise (mise à jour optimiste). */
 export const beginTake = (origin: CaptureOrigin): TakeSaveState => ({
   currentFrame: origin.frameId,
-  savedWith: origin.zone === 'frame' ? [origin.frameId] : [],
+  currentFormat: origin.format,
+  savedWith: origin.zone === 'frame' ? [{ frameId: origin.frameId, format: origin.format }] : [],
 });
 
-/** « Enregistrer » est visible tant que la prise n'est pas en galerie AVEC le cadre courant. */
-export const saveButtonVisible = (state: TakeSaveState): boolean => !state.savedWith.includes(state.currentFrame);
+/** « Enregistrer » est visible tant que la prise n'est pas en galerie dans la version courante (cadre, format). */
+export const saveButtonVisible = (state: TakeSaveState): boolean =>
+  !state.savedWith.some((saved) => sameVersion(saved, currentVersion(state)));
 
-/** « Enregistrer » touché : la prise part en galerie avec le cadre courant (optimiste). */
+/** « Enregistrer » touché : la version courante part en galerie (optimiste). */
 export const applySaved = (state: TakeSaveState): TakeSaveState =>
-  saveButtonVisible(state) ? { ...state, savedWith: [...state.savedWith, state.currentFrame] } : state;
+  saveButtonVisible(state) ? { ...state, savedWith: [...state.savedWith, currentVersion(state)] } : state;
 
-/** L'écriture en galerie avec `frameId` a échoué : ce cadre redevient à enregistrer. */
-export const applySaveFailed = (state: TakeSaveState, frameId: FrameChoice): TakeSaveState => ({
+/** L'écriture en galerie de `version` a échoué : CETTE version redevient à enregistrer, qui peut ne plus être la courante. */
+export const applySaveFailed = (state: TakeSaveState, version: SavedVersion): TakeSaveState => ({
   ...state,
-  savedWith: state.savedWith.filter((saved) => saved !== frameId),
+  savedWith: state.savedWith.filter((saved) => !sameVersion(saved, version)),
 });
 
 export const applyFrameChange = (state: TakeSaveState, frameId: FrameChoice): TakeSaveState => ({
   ...state,
   currentFrame: frameId,
+});
+
+export const applyFormatChange = (state: TakeSaveState, format: CaptureFormat): TakeSaveState => ({
+  ...state,
+  currentFormat: format,
 });

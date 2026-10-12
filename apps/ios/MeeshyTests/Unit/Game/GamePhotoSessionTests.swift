@@ -175,20 +175,47 @@ final class GamePhotoSessionTests: XCTestCase {
         XCTAssertNil(rig.notebook.kept.first?.photo.recipe.mirror)
     }
 
-    func test_save_writesTheChosenFormatToThePhotoLibrary_onceForThisFrame() async {
+    func test_save_writesTheChosenFormatToThePhotoLibrary_oncePerFrameAndFormat() async {
         let rig = makeRig()
         await rig.sut.chooseCard()
-        await rig.sut.save(square: true)
-        await rig.sut.save(square: false)
-        XCTAssertEqual(rig.library.savedImages, [Data("square".utf8)], "déjà en galerie avec ce cadre : rien de plus")
+        rig.sut.chooseFormat(square: true)
+        await rig.sut.save()
+        await rig.sut.save()
+        XCTAssertEqual(rig.library.savedImages, [Data("square".utf8)], "déjà en galerie avec ce cadre et ce format : rien de plus")
         XCTAssertEqual(rig.sut.notice?.tone, .good)
+    }
+
+    /// #10296 (porteur 2026-10-12) : le carré est une AUTRE image — après une story
+    /// enregistrée, passer au carré fait réapparaître « Enregistrer ».
+    func test_aStorySavedByTheFrame_thenSquare_bringsSaveBack_andWritesTheSquare() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .frame)
+        XCTAssertFalse(rig.sut.showsSave)
+        rig.sut.chooseFormat(square: true)
+        XCTAssertTrue(rig.sut.showsSave, "le carré n'est pas encore dans Photos")
+        await rig.sut.save()
+        XCTAssertEqual(rig.library.savedImages, [Data("story".utf8), Data("square".utf8)])
+        XCTAssertFalse(rig.sut.showsSave)
+    }
+
+    func test_squareSaved_thenBackToTheSavedStory_hidesSave_withoutADuplicate() async {
+        let rig = makeRig()
+        await rig.sut.chooseSelfie()
+        await rig.sut.take(from: .frame)
+        rig.sut.chooseFormat(square: true)
+        await rig.sut.save()
+        rig.sut.chooseFormat(square: false)
+        XCTAssertFalse(rig.sut.showsSave, "la story est déjà dans Photos avec ce cadre")
+        await rig.sut.save()
+        XCTAssertEqual(rig.library.savedImages.count, 2, "aucun doublon")
     }
 
     func test_save_aRefusedLibrary_isAnErrorNotice() async {
         let rig = makeRig()
         rig.library.fails = true
         await rig.sut.chooseCard()
-        await rig.sut.save(square: false)
+        await rig.sut.save()
         XCTAssertEqual(rig.sut.notice?.tone, .error)
     }
 
@@ -319,7 +346,7 @@ final class GamePhotoSessionTests: XCTestCase {
         await rig.sut.chooseCard()
         XCTAssertEqual(rig.sut.referral?.isPlaceholder, true)
 
-        await rig.sut.save(square: false)
+        await rig.sut.save()
         XCTAssertNil(rig.composer.composed.last?.referral, "l'image enregistrée est recomposée sans l'emplacement")
         XCTAssertEqual(rig.library.savedImages.count, 1)
 
@@ -443,7 +470,7 @@ final class GamePhotoSessionTests: XCTestCase {
         let rig = makeRig()
         await rig.sut.chooseSelfie()
         await rig.sut.take(from: .outside)
-        await rig.sut.save(square: false)
+        await rig.sut.save()
         XCTAssertFalse(rig.sut.showsSave)
 
         rig.sut.chooseFrame("afrique.savane.voix")

@@ -18,7 +18,7 @@ struct GamePhotoFlowView: View {
 
     @State private var pickerItem: PhotosPickerItem?
     @State private var showsShare = false
-    @State private var squareFormat = false
+    private var squareFormat: Bool { session.squareFormat }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -304,7 +304,7 @@ struct GamePhotoFlowView: View {
                     .accessibilityLabel(String(localized: "game.photo.preview", defaultValue: "Aperçu : \(session.moment.title)", bundle: .main))
                     .overlay { referralQRMark(squareFormat ? .square : .story) }
                     .padding(.horizontal, MeeshySpacing.lg)
-                Picker("", selection: $squareFormat) {
+                Picker("", selection: Binding(get: { session.squareFormat }, set: { session.chooseFormat(square: $0) })) {
                     Text(String(localized: "game.photo.format.story", defaultValue: "9:16 · story", bundle: .main)).tag(false)
                     Text(String(localized: "game.photo.format.square", defaultValue: "1:1 · profil", bundle: .main)).tag(true)
                 }
@@ -344,7 +344,7 @@ struct GamePhotoFlowView: View {
                 if notice.action == .saveToLibrary, session.showsSave {
                     Button {
                         HapticFeedback.light()
-                        Task { await session.save(square: squareFormat) }
+                        Task { await session.save() }
                     } label: {
                         Text(String(localized: "game.photo.notice.no_space_save", defaultValue: "L’enregistrer dans Photos", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -360,7 +360,7 @@ struct GamePhotoFlowView: View {
                 // « Enregistrer » n'existe que s'il sert : une prise déjà dans Photos avec ce cadre ne le montre pas (#10284).
                 if session.showsSave {
                     resultButton(String(localized: "game.photo.save", defaultValue: "Enregistrer", bundle: .main), "square.and.arrow.down", id: "game.photo.save") {
-                        Task { await session.save(square: squareFormat) }
+                        Task { await session.save() }
                     }
                 }
                 resultButton(String(localized: "game.photo.share", defaultValue: "Partager", bundle: .main), "square.and.arrow.up", id: "game.photo.share") {

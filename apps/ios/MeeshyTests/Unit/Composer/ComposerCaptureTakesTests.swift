@@ -65,6 +65,28 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertEqual(session.photoInFlightIntent, .gallery)
     }
 
+    /// #10296 (porteur 2026-10-12) : une version enregistrée est une PAIRE
+    /// (cadre, format). Le recadrage au carré fait réapparaître « Enregistrer » ;
+    /// revenir au format déjà écrit le masque, sans doublon.
+    func test_frameTake_cropToSquare_offersTheSaveAgain_andBackToTheSavedFormatHidesIt() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.photoInFlightIntent = .gallery
+        Self.publishPhoto(on: session)
+        await Self.waitUntil { galerie.saveImageCount == 1 && session.takeWrite == nil }
+        let formatDeLaPrise = session.cropPreset
+        XCTAssertEqual(session.takeSaveState, .saved)
+        session.applyCropPreset(.square)
+        XCTAssertEqual(session.takeSaveState, .idle, "le carré n'est pas dans Photos : « Enregistrer » revient")
+        session.saveTakeToPhotos()
+        await Self.waitUntil { galerie.saveImageCount == 2 && session.takeWrite == nil }
+        XCTAssertEqual(session.takeSaveState, .saved)
+        if let formatDeLaPrise { session.applyCropPreset(formatDeLaPrise) } else { XCTFail("la prise a un format") }
+        XCTAssertEqual(session.takeSaveState, .saved, "le format de la prise est déjà dans Photos")
+        XCTAssertEqual(galerie.saveImageCount, 2, "aucun doublon")
+    }
+
     /// Photos refuse (permis refusé, la notice l'a dit) : la retouche reste
     /// ouverte, et « Enregistrer » revient.
     func test_photoArrived_frameTake_photosRefuses_staysInTheRetouch_andOffersTheSaveAgain() async {

@@ -16,17 +16,21 @@ struct CaptureSaveLawVectorTests {
 
     private enum Step: Decodable {
         case save
-        case saveFailed(String?)
+        case saveFailed(SavedVersion)
         case frame(String?)
+        case format(String)
 
-        private enum CodingKeys: String, CodingKey { case op, frameId }
+        private enum CodingKeys: String, CodingKey { case op, frameId, format }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             switch try container.decode(String.self, forKey: .op) {
             case "save": self = .save
-            case "saveFailed": self = .saveFailed(try container.decodeIfPresent(String.self, forKey: .frameId))
+            case "saveFailed":
+                self = .saveFailed(SavedVersion(frameId: try container.decodeIfPresent(String.self, forKey: .frameId),
+                                                format: try container.decode(String.self, forKey: .format)))
             case "frame": self = .frame(try container.decodeIfPresent(String.self, forKey: .frameId))
+            case "format": self = .format(try container.decode(String.self, forKey: .format))
             case let other:
                 throw DecodingError.dataCorruptedError(forKey: .op, in: container, debugDescription: "étape inconnue « \(other) »")
             }
@@ -35,8 +39,9 @@ struct CaptureSaveLawVectorTests {
         func apply(to state: TakeSaveState) -> TakeSaveState {
             switch self {
             case .save: return CaptureSaveLaw.applySaved(state)
-            case .saveFailed(let frameId): return CaptureSaveLaw.applySaveFailed(state, frameId: frameId)
+            case .saveFailed(let version): return CaptureSaveLaw.applySaveFailed(state, version: version)
             case .frame(let frameId): return CaptureSaveLaw.applyFrameChange(state, frameId: frameId)
+            case .format(let format): return CaptureSaveLaw.applyFormatChange(state, format: format)
             }
         }
     }
@@ -96,9 +101,19 @@ struct CaptureSaveLawVectorTests {
         #expect(failures.isEmpty, "\(failures.count) séquence(s) divergente(s) :\n\(failures.joined(separator: "\n"))")
     }
 
-    @Test("réenregistrer avec le même cadre n'empile pas de doublon")
+    @Test("réenregistrer avec le même cadre et le même format n'empile pas de doublon")
     func savingTwiceKeepsOneMark() {
-        let start = CaptureSaveLaw.beginTake(.outside(frameId: nil))
-        #expect(CaptureSaveLaw.applySaved(CaptureSaveLaw.applySaved(start)).savedWith == [nil])
+        let start = CaptureSaveLaw.beginTake(.outside(frameId: nil, format: "story"))
+        #expect(CaptureSaveLaw.applySaved(CaptureSaveLaw.applySaved(start)).savedWith == [SavedVersion(frameId: nil, format: "story")])
+    }
+
+    @Test("#10296 : story enregistrée, carré enregistré, retour à la story — deux versions, aucun doublon")
+    func eachFormatIsAVersion() {
+        let story = CaptureSaveLaw.beginTake(.frame(frameId: "or-royal", format: "story"))
+        let carre = CaptureSaveLaw.applyFormatChange(story, format: "square")
+        #expect(CaptureSaveLaw.saveButtonVisible(carre))
+        let retour = CaptureSaveLaw.applySaved(CaptureSaveLaw.applyFormatChange(CaptureSaveLaw.applySaved(carre), format: "story"))
+        #expect(!CaptureSaveLaw.saveButtonVisible(retour))
+        #expect(retour.savedWith == [SavedVersion(frameId: "or-royal", format: "story"), SavedVersion(frameId: "or-royal", format: "square")])
     }
 }

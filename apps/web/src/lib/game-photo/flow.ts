@@ -1,4 +1,14 @@
-import { applyFrameChange, applySaved, applySaveFailed, beginTake, type CaptureZone, type FrameChoice, type TakeSaveState } from '@meeshy/shared/utils/capture/capture-save';
+import {
+  applyFormatChange,
+  applyFrameChange,
+  applySaved,
+  applySaveFailed,
+  beginTake,
+  type CaptureFormat,
+  type CaptureZone,
+  type FrameChoice,
+  type TakeSaveState,
+} from '@meeshy/shared/utils/capture/capture-save';
 
 import type { CameraFailure } from './camera';
 import type { NotebookMode } from './notebook';
@@ -19,8 +29,9 @@ import type { ShareOutcome } from './share';
  * déclenchée — la case du cadre (`frame`) ou la scène (`outside`) ; une photo
  * importée et la carte seule sont hors cadre. Le résultat porte l'état
  * d'enregistrement de la loi partagée (`capture-save`) : une prise par le
- * cadre y arrive déjà en galerie avec ce cadre, « Enregistrer » se lit par
- * `saveButtonVisible(state.save)`.
+ * cadre y arrive déjà en galerie avec ce cadre, au format de la prise ;
+ * « Enregistrer » se lit par `saveButtonVisible(state.save)`. Changer de cadre
+ * OU de format (story, carré) fait réapparaître « Enregistrer » (#10296).
  */
 
 export type FlowState =
@@ -46,16 +57,17 @@ export type FlowEvent =
   | { readonly type: 'camera-failed'; readonly reason: CameraFailure }
   | { readonly type: 'shutter'; readonly zone: CaptureZone }
   | { readonly type: 'gallery' }
-  | { readonly type: 'composed'; readonly frame: string }
+  | { readonly type: 'composed'; readonly frame: string; readonly format: CaptureFormat }
   | { readonly type: 'compose-failed' }
   | { readonly type: 'kept'; readonly ok: boolean }
   | { readonly type: 'shared'; readonly outcome: ShareOutcome }
   | { readonly type: 'saved' }
-  | { readonly type: 'save-failed'; readonly frame: FrameChoice }
-  | { readonly type: 'frame'; readonly frame: FrameChoice };
+  | { readonly type: 'save-failed'; readonly frame: FrameChoice; readonly format: CaptureFormat }
+  | { readonly type: 'frame'; readonly frame: FrameChoice }
+  | { readonly type: 'format'; readonly format: CaptureFormat };
 
-const takeOf = (zone: CaptureZone, frame: string): TakeSaveState =>
-  beginTake(zone === 'frame' ? { zone: 'frame', frameId: frame } : { zone: 'outside', frameId: frame });
+const takeOf = (zone: CaptureZone, frame: string, format: CaptureFormat): TakeSaveState =>
+  beginTake(zone === 'frame' ? { zone: 'frame', frameId: frame, format } : { zone: 'outside', frameId: frame, format });
 
 export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
   if (state.step === 'done') return state;
@@ -75,15 +87,16 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
       if (event.type === 'card') return { step: 'striking', mode: 'card', zone: 'outside' };
       return state;
     case 'striking':
-      if (event.type === 'composed') return { step: 'result', mode: state.mode, kept: null, shared: null, save: takeOf(state.zone, event.frame) };
+      if (event.type === 'composed') return { step: 'result', mode: state.mode, kept: null, shared: null, save: takeOf(state.zone, event.frame, event.format) };
       if (event.type === 'compose-failed') return { step: 'failed' };
       return state;
     case 'result':
       if (event.type === 'kept') return { ...state, kept: event.ok };
       if (event.type === 'shared') return { ...state, shared: event.outcome };
       if (event.type === 'saved') return { ...state, save: applySaved(state.save) };
-      if (event.type === 'save-failed') return { ...state, save: applySaveFailed(state.save, event.frame) };
+      if (event.type === 'save-failed') return { ...state, save: applySaveFailed(state.save, { frameId: event.frame, format: event.format }) };
       if (event.type === 'frame') return { ...state, save: applyFrameChange(state.save, event.frame) };
+      if (event.type === 'format') return { ...state, save: applyFormatChange(state.save, event.format) };
       return state;
     case 'failed':
       return state;

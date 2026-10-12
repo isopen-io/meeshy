@@ -66,6 +66,8 @@ final class GamePhotoSession: ObservableObject {
     @Published private(set) var linkOnCard = true
     /// L'enregistrement de la prise dans Photos, loi partagée (#10284) : `nil` tant qu'aucune prise n'est composée.
     @Published private(set) var takeSave: TakeSaveState?
+    /// Le format montré et enregistré : la story (9:16) ou le carré (1:1) — une autre version (#10296).
+    @Published private(set) var squareFormat = false
 
     let moment: PhotoMoment
     let camera: GamePhotoCameraProviding
@@ -274,7 +276,7 @@ final class GamePhotoSession: ObservableObject {
     /// des cadres décorés (#10160) n'existe pas — même identité que le web (`moment.id`).
     var momentFrameId: String { moment.id }
 
-    /// « Enregistrer » ne se montre que si la prise n'est pas déjà dans Photos AVEC le cadre courant.
+    /// « Enregistrer » ne se montre que si la prise n'est pas déjà dans Photos dans la version courante (cadre, format).
     var showsSave: Bool { takeSave.map(CaptureSaveLaw.saveButtonVisible) ?? false }
 
     /// Le contexte que lit la table des gestes du composer : un viseur armé seulement quand la caméra vit,
@@ -296,6 +298,16 @@ final class GamePhotoSession: ObservableObject {
         default: return
         }
     }
+
+    /// Changer de format sur le résultat : le carré est une autre image, « Enregistrer » revient s'il
+    /// n'est pas en galerie avec ce cadre (#10296, porteur 2026-10-12).
+    func chooseFormat(square: Bool) {
+        squareFormat = square
+        guard let takeSave else { return }
+        self.takeSave = CaptureSaveLaw.applyFormatChange(takeSave, format: Self.format(square: square))
+    }
+
+    static func format(square: Bool) -> String { (square ? PhotoFormat.square : PhotoFormat.story).rawValue }
 
     /// Changer de cadre après la prise : « Enregistrer » revient si la prise n'est pas en galerie avec lui.
     func chooseFrame(_ frameId: String?) {
@@ -347,9 +359,10 @@ final class GamePhotoSession: ObservableObject {
         composed = result
         send(.composed)
         let frame = momentFrameId
-        takeSave = CaptureSaveLaw.beginTake(zone == .frame ? .frame(frameId: frame) : .outside(frameId: frame))
-        guard CaptureSaveLaw.destination(for: zone).gallery else { return }
-        await writeToLibrary(square: false, frameId: frame)
+        let format = Self.format(square: squareFormat)
+        takeSave = CaptureSaveLaw.beginTake(zone == .frame ? .frame(frameId: frame, format: format) : .outside(frameId: frame, format: format))
+        guard CaptureSaveLaw.destination(for: zone).gallery, let takeSave else { return }
+        await writeToLibrary(takeSave.currentVersion)
     }
 
     // MARK: - Étape 4 : le résultat
@@ -384,23 +397,22 @@ final class GamePhotoSession: ObservableObject {
         }
     }
 
-    /// « Enregistrer » : la prise part dans Photos (autorisation en ajout seul) avec le cadre courant, dans le
-    /// format choisi. Déjà enregistrée avec ce cadre, rien ne part — le bouton est d'ailleurs masqué.
-    func save(square: Bool) async {
+    /// « Enregistrer » : la prise part dans Photos (autorisation en ajout seul) avec le cadre et le format
+    /// courants. Déjà enregistrée dans cette version, rien ne part — le bouton est d'ailleurs masqué.
+    func save() async {
         guard case .result = state, showsSave, let takeSave else { return }
-        let frame = takeSave.currentFrame
         self.takeSave = CaptureSaveLaw.applySaved(takeSave)
-        await writeToLibrary(square: square, frameId: frame)
+        await writeToLibrary(takeSave.currentVersion)
     }
 
-    /// L'écriture dans Photos, déjà comptée par l'état (optimiste) : un échec rend le cadre à enregistrer.
-    private func writeToLibrary(square: Bool, frameId: String?) async {
+    /// L'écriture dans Photos, déjà comptée par l'état (optimiste) : un échec rend CETTE version à enregistrer.
+    private func writeToLibrary(_ version: SavedVersion) async {
         do {
             guard let outgoing = exportable() else { throw MediaSaveError.sourceUnavailable }
-            try await library.saveImage(square ? outgoing.squareData : outgoing.storyData)
+            try await library.saveImage(version.format == PhotoFormat.square.rawValue ? outgoing.squareData : outgoing.storyData)
             notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.saved", defaultValue: "Image enregistrée dans Photos.", bundle: .main))
         } catch {
-            if let takeSave { self.takeSave = CaptureSaveLaw.applySaveFailed(takeSave, frameId: frameId) }
+            if let takeSave { self.takeSave = CaptureSaveLaw.applySaveFailed(takeSave, version: version) }
             notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.save_failed", defaultValue: "L’enregistrement n’a pas pu aboutir.", bundle: .main))
         }
     }

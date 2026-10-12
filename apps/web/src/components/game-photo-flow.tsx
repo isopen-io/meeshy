@@ -119,6 +119,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   const [still, setStill] = useState<Blob | null>(null);
   const [files, setFiles] = useState<PhotoFiles | null>(null);
   const [format, setFormat] = useState<PhotoFormat>('story');
+  /* Le format au moment de la composition : la prise par le cadre part dans la galerie dans CE format (#10296). */
+  const formatAtCompose = useRef<PhotoFormat>(format);
+  formatAtCompose.current = format;
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string; readonly action?: 'save'; readonly transient?: boolean } | null>(null);
   /* Le cadre posé sur la prise : celui du moment, seul proposé tant que la bande n'existe pas (#10164). */
   const frameId = moment.id;
@@ -282,7 +285,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
         setFiles(rendered);
         setComposedReferral(banner);
         galleryOnCompose.current = strikingZone === 'frame';
-        dispatch({ type: 'composed', frame: frameId });
+        dispatch({ type: 'composed', frame: frameId, format: formatAtCompose.current });
       })
       .catch(() => {
         if (live) dispatch({ type: 'compose-failed' });
@@ -421,20 +424,20 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   }, [announce, env, files, format, moment.title, prepareShare]);
 
   /* L'écriture dans la galerie (la galerie de la coque Android, sinon un fichier, sinon la feuille du
-     système) avec le cadre `frame` ; l'état l'a déjà comptée (optimiste), un échec la rend. */
+     système) de la version (`frame`, `photoFormat`) ; l'état l'a déjà comptée (optimiste), un échec la rend. */
   const writeGallery = useCallback(
-    async (frame: FrameChoice) => {
+    async (frame: FrameChoice, photoFormat: PhotoFormat) => {
       const outgoing = await outgoingFiles();
-      const outcome = outgoing === null ? 'failed' : await env.save(outgoing[format]);
+      const outcome = outgoing === null ? 'failed' : await env.save(outgoing[photoFormat]);
       if (!alive.current) return;
       if (reachedGallery(outcome)) {
         setNotice({ tone: 'good', text: gameText('game.photo.notice.saved_file'), transient: true });
         return;
       }
-      dispatch({ type: 'save-failed', frame });
+      dispatch({ type: 'save-failed', frame, format: photoFormat });
       setNotice(outcome === 'cancelled' || outcome === 'shared' ? null : { tone: 'error', text: gameText('game.photo.notice.save_failed') });
     },
-    [env, format, outgoingFiles],
+    [env, outgoingFiles],
   );
 
   const canSave = state.step === 'result' && saveButtonVisible(state.save);
@@ -442,16 +445,22 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   const save = useCallback(() => {
     if (!canSave) return;
     dispatch({ type: 'saved' });
-    void writeGallery(currentFrame);
-  }, [canSave, currentFrame, writeGallery]);
+    void writeGallery(currentFrame, format);
+  }, [canSave, currentFrame, format, writeGallery]);
+
+  /* Changer de format est changer de version : « Enregistrer » revient si celle-ci n'est pas en galerie (#10296). */
+  const chooseFormat = useCallback((next: PhotoFormat) => {
+    setFormat(next);
+    dispatch({ type: 'format', format: next });
+  }, []);
 
   /* Une prise par la case du cadre part dans la galerie dès qu'elle est composée, puis le résultat
      s'affiche sans « Enregistrer » (l'état l'y a déjà rangée avec ce cadre). */
   useEffect(() => {
     if (state.step !== 'result' || files === null || !galleryOnCompose.current) return;
     galleryOnCompose.current = false;
-    void writeGallery(state.save.currentFrame);
-  }, [state, files, writeGallery]);
+    void writeGallery(state.save.currentFrame, format);
+  }, [state, files, format, writeGallery]);
 
   /* La pastille « Image enregistrée » s'efface seule : elle ne prend jamais le focus. */
   useEffect(() => {
@@ -643,10 +652,10 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
         {state.step === 'result' ? (
           <div className="flex flex-col gap-3">
             <div className="flex gap-2" role="group" aria-label={gameText('game.photo.format.group')}>
-              <Button attr={{ 'data-photo-format': 'story' }} primary={format === 'story'} onClick={() => setFormat('story')}>
+              <Button attr={{ 'data-photo-format': 'story' }} primary={format === 'story'} onClick={() => chooseFormat('story')}>
                 {gameText('game.photo.format.story')}
               </Button>
-              <Button attr={{ 'data-photo-format': 'square' }} primary={format === 'square'} onClick={() => setFormat('square')}>
+              <Button attr={{ 'data-photo-format': 'square' }} primary={format === 'square'} onClick={() => chooseFormat('square')}>
                 {gameText('game.photo.format.square')}
               </Button>
             </div>
