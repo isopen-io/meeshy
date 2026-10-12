@@ -1,4 +1,4 @@
-import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publications';
+import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publication-states';
 
 import { defineListSpec, type ListState } from './list-state';
 

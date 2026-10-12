@@ -1,4 +1,4 @@
-import { adminGesturesFor, type AdminPostGestureName, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publications';
+import { adminGesturesFor, type AdminPostGestureName, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publication-states';
 
 import type { AdminPostView } from '@/lib/api/admin-post-gestures';
 

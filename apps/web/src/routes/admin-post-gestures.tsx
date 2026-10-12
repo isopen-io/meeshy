@@ -1,7 +1,7 @@
 import type { QueryKey } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
-import { ADMIN_SETTABLE_VISIBILITIES, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publications';
+import { ADMIN_SETTABLE_VISIBILITIES, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publication-states';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';

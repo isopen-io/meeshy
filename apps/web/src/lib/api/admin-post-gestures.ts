@@ -1,5 +1,5 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
-import { ADMIN_POST_STATES, type AdminPostState, type AdminReportAction } from '@meeshy/shared/types/admin-publications';
+import { ADMIN_POST_STATES, type AdminPostState, type AdminReportAction } from '@meeshy/shared/types/admin-publication-states';
 
 import type { PostGestureIntent } from '@/lib/admin/post-gestures';
 

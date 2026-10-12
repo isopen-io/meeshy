@@ -21,7 +21,7 @@ import { periodOf, POST_LIST_SPEC, POST_PERIODS, POST_TABS, POST_VISIBILITIES, p
 import { postExcerptOf } from '@/lib/admin/post-phrases';
 import { applyGestureToRows } from '@/lib/admin/post-gestures';
 import { postStateOf } from '@/lib/admin/post-state';
-import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publications';
+import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publication-states';
 import { useAdminList } from '@/lib/admin/use-admin-list';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
