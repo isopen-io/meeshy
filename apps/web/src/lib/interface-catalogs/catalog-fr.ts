@@ -49,6 +49,7 @@ import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
+import frContentRefused from './catalog-fr-content-refused';
 import frPublicEntry from './catalog-fr-public-entry';
 
 const fr = {
@@ -801,6 +802,8 @@ const fr = {
   'story.studio.kind.reel': 'Réel',
   'story.studio.refusal.reel': 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.',
   'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
+  'story.studio.pending.sending': 'Publication en cours d’envoi.',
+  'story.studio.pending.cancel': 'Annuler l’envoi',
   'story.studio.stage': 'Aperçu de la story',
   'story.studio.background.add': 'Ajouter une photo ou une vidéo',
   'story.studio.background.label': 'Fond',
@@ -1133,6 +1136,7 @@ const fr = {
   ...frCommentRow,
   ...frContactDiscovery,
   ...frUserProfile,
+  ...frContentRefused,
   ...frPublicEntry,
 } as const;
 

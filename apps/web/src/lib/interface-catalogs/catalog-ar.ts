@@ -38,6 +38,7 @@ import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
+import arContentRefused from './catalog-ar-content-refused';
 import arPublicEntry from './catalog-ar-public-entry';
 
 const ar = {
@@ -787,6 +788,8 @@ const ar = {
   'story.studio.kind.reel': 'ريل',
   'story.studio.refusal.reel': 'يحتاج الريل إلى فيديو أو صوت لا يقل عن 3 ثوانٍ، أو صورتين على الأقل.',
   'story.studio.offline': 'غير متصل — ستُنشر القصة عند عودة الشبكة.',
+  'story.studio.pending.sending': 'جارٍ إرسال المنشور.',
+  'story.studio.pending.cancel': 'إلغاء الإرسال',
   'story.studio.stage': 'معاينة القصة',
   'story.studio.background.add': 'إضافة صورة أو فيديو',
   'story.studio.background.label': 'الخلفية',
@@ -1110,6 +1113,7 @@ const ar = {
   ...arCommentRow,
   ...arContactDiscovery,
   ...arUserProfile,
+  ...arContentRefused,
   ...arPublicEntry,
 } satisfies InterfaceCatalog;
 

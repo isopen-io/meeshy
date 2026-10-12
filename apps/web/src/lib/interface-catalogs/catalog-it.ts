@@ -38,6 +38,7 @@ import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
+import itContentRefused from './catalog-it-content-refused';
 import itPublicEntry from './catalog-it-public-entry';
 
 const it = {
@@ -790,6 +791,8 @@ const it = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel richiede un video o un suono di almeno 3 secondi, o almeno due immagini.',
   'story.studio.offline': 'Offline — la story verrà pubblicata al ritorno della rete.',
+  'story.studio.pending.sending': 'Il post è in invio.',
+  'story.studio.pending.cancel': 'Annulla l’invio',
   'story.studio.stage': 'Anteprima della story',
   'story.studio.background.add': 'Aggiungi una foto o un video',
   'story.studio.background.label': 'Sfondo',
@@ -1113,6 +1116,7 @@ const it = {
   ...itCommentRow,
   ...itContactDiscovery,
   ...itUserProfile,
+  ...itContentRefused,
   ...itPublicEntry,
 } satisfies InterfaceCatalog;
 

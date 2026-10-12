@@ -38,6 +38,7 @@ import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
+import enContentRefused from './catalog-en-content-refused';
 import enPublicEntry from './catalog-en-public-entry';
 
 const en = {
@@ -790,6 +791,8 @@ const en = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'A reel needs a video or a sound of at least 3 seconds, or at least two images.',
   'story.studio.offline': 'Offline — the story will publish when the network is back.',
+  'story.studio.pending.sending': 'Your post is being sent.',
+  'story.studio.pending.cancel': 'Cancel sending',
   'story.studio.stage': 'Story preview',
   'story.studio.background.add': 'Add a photo or video',
   'story.studio.background.label': 'Background',
@@ -1113,6 +1116,7 @@ const en = {
   ...enCommentRow,
   ...enContactDiscovery,
   ...enUserProfile,
+  ...enContentRefused,
   ...enPublicEntry,
 } satisfies InterfaceCatalog;
 

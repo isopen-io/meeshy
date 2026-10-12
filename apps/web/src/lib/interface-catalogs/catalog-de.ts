@@ -38,6 +38,7 @@ import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
+import deContentRefused from './catalog-de-content-refused';
 import dePublicEntry from './catalog-de-public-entry';
 
 const de = {
@@ -790,6 +791,8 @@ const de = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Ein Reel braucht ein Video oder einen Ton von mindestens 3 Sekunden oder mindestens zwei Bilder.',
   'story.studio.offline': 'Offline — die Story wird veröffentlicht, sobald das Netzwerk zurück ist.',
+  'story.studio.pending.sending': 'Der Beitrag wird gesendet.',
+  'story.studio.pending.cancel': 'Senden abbrechen',
   'story.studio.stage': 'Story-Vorschau',
   'story.studio.background.add': 'Foto oder Video hinzufügen',
   'story.studio.background.label': 'Hintergrund',
@@ -1113,6 +1116,7 @@ const de = {
   ...deCommentRow,
   ...deContactDiscovery,
   ...deUserProfile,
+  ...deContentRefused,
   ...dePublicEntry,
 } satisfies InterfaceCatalog;
 

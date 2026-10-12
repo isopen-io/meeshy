@@ -38,6 +38,7 @@ import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
+import esContentRefused from './catalog-es-content-refused';
 import esPublicEntry from './catalog-es-public-entry';
 
 const es = {
@@ -790,6 +791,8 @@ const es = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel necesita un vídeo o un sonido de al menos 3 segundos, o al menos dos imágenes.',
   'story.studio.offline': 'Sin conexión — la historia se publicará cuando vuelva la red.',
+  'story.studio.pending.sending': 'La publicación se está enviando.',
+  'story.studio.pending.cancel': 'Cancelar el envío',
   'story.studio.stage': 'Vista previa de la historia',
   'story.studio.background.add': 'Añadir una foto o un vídeo',
   'story.studio.background.label': 'Fondo',
@@ -1113,6 +1116,7 @@ const es = {
   ...esCommentRow,
   ...esContactDiscovery,
   ...esUserProfile,
+  ...esContentRefused,
   ...esPublicEntry,
 } satisfies InterfaceCatalog;
 

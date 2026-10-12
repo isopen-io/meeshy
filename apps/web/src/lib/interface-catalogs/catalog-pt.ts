@@ -38,6 +38,7 @@ import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
+import ptContentRefused from './catalog-pt-content-refused';
 import ptPublicEntry from './catalog-pt-public-entry';
 
 /**
@@ -794,6 +795,8 @@ const pt = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Um reel precisa de um vídeo ou de um som de pelo menos 3 segundos, ou de pelo menos duas imagens.',
   'story.studio.offline': 'Sem ligação — a story será publicada quando a rede voltar.',
+  'story.studio.pending.sending': 'A publicação está a ser enviada.',
+  'story.studio.pending.cancel': 'Cancelar o envio',
   'story.studio.stage': 'Pré-visualização da story',
   'story.studio.background.add': 'Adicionar uma foto ou um vídeo',
   'story.studio.background.label': 'Fundo',
@@ -1117,6 +1120,7 @@ const pt = {
   ...ptCommentRow,
   ...ptContactDiscovery,
   ...ptUserProfile,
+  ...ptContentRefused,
   ...ptPublicEntry,
 } satisfies InterfaceCatalog;
 
