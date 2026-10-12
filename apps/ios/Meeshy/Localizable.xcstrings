@@ -74103,43 +74103,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنهاء الوصف"
+            "value": "إنهاء التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beschreibung abschließen"
+            "value": "Bildunterschrift abschließen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finish the description"
+            "value": "Finish the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terminar la descripción"
+            "value": "Terminar el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terminer la description"
+            "value": "Terminer la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termina la descrizione"
+            "value": "Termina la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Concluir a descrição"
+            "value": "Concluir a legenda"
           }
         }
       }
@@ -74150,43 +74150,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر لتعديل الوصف"
+            "value": "انقر لتعديل التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Bearbeiten der Beschreibung tippen"
+            "value": "Zum Bearbeiten der Bildunterschrift tippen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to edit the description"
+            "value": "Tap to edit the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para editar la descripción"
+            "value": "Toca para editar el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour modifier la description"
+            "value": "Touchez pour modifier la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per modificare la descrizione"
+            "value": "Tocca per modificare la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para editar a descrição"
+            "value": "Toque para editar a legenda"
           }
         }
       }
@@ -74197,43 +74197,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كتابة الوصف"
+            "value": "كتابة التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beschreibung schreiben"
+            "value": "Bildunterschrift schreiben"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Write the description"
+            "value": "Write the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir la descripción"
+            "value": "Escribir el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire la description"
+            "value": "Écrire la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivi la descrizione"
+            "value": "Scrivi la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever a descrição"
+            "value": "Escrever a legenda"
           }
         }
       }
@@ -74244,43 +74244,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر للكتابة"
+            "value": "إضافة تعليق توضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Schreiben tippen"
+            "value": "Bildunterschrift hinzufügen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to write"
+            "value": "Add a caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para escribir"
+            "value": "Añadir un pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour écrire"
+            "value": "Ajouter une légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per scrivere"
+            "value": "Aggiungi una didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para escrever"
+            "value": "Adicionar uma legenda"
           }
         }
       }
@@ -74375,53 +74375,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar a descrição"
-          }
-        }
-      }
-    },
-    "composer.description.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إضافة وصف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beschreibung hinzufügen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a description"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir una descripción"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une description"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggiungi una descrizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adicionar uma descrição"
           }
         }
       }
