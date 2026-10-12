@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// Le réel suivant joue dès qu'on y arrive (#9837) : quand il devient actif,
 /// quelle image sa page montre, quel son on lui précharge, et ce qu'on mesure.
@@ -137,5 +138,59 @@ final class ReelInstantSwitchTests: XCTestCase {
         meter.elect("r3", at: 11)
         XCTAssertNil(meter.mediaStarted("r2", at: 11.1), "une nouvelle élection remplace la mesure en cours")
         XCTAssertEqual(meter.mediaStarted("r3", at: 11.5), 500)
+    }
+}
+
+// MARK: - Élu n'est pas posé (#10354)
+
+@MainActor
+final class ReelPlaybackRestingTests: XCTestCase {
+
+    func test_majorityMidGesture_doesNotSettleTheIncomingReel() {
+        var election = ReelPlaybackElection(activeId: "r1")
+        election.scrolling(true)
+        election.majority("r2")
+        XCTAssertEqual(election.activeId, "r2")
+        XCTAssertEqual(election.restingId, "r1", "à mi-course, le réel entrant ne fait que play() : il n'est pas posé")
+    }
+
+    func test_scrollEnd_settlesTheElectedReel() {
+        var election = ReelPlaybackElection(activeId: "r1")
+        election.scrolling(true)
+        election.majority("r2")
+        election.scrolling(false)
+        XCTAssertEqual(election.restingId, "r2")
+    }
+
+    func test_positionChangeWhileStillScrolling_waitsForTheEnd() {
+        var election = ReelPlaybackElection(activeId: "r1")
+        election.scrolling(true)
+        election.settled("r2")
+        XCTAssertEqual(election.restingId, "r1", "l'inertie n'est pas finie : rien de lourd encore")
+        election.scrolling(false)
+        XCTAssertEqual(election.restingId, "r2")
+    }
+
+    func test_withoutScrollPhase_positionChangeSettles() {
+        var election = ReelPlaybackElection(activeId: "r1")
+        election.majority("r2")
+        election.settled("r2")
+        XCTAssertEqual(election.restingId, "r2", "iOS 17 : currentPageID ne bascule qu'une fois le paging posé")
+    }
+
+    func test_draggingBackUnderHalf_keepsTheOriginalSettled() {
+        var election = ReelPlaybackElection(activeId: "r1")
+        election.scrolling(true)
+        election.majority("r2")
+        election.majority("r1")
+        election.scrolling(false)
+        XCTAssertEqual(election.restingId, "r1")
+        XCTAssertTrue(ReelSwitchWork.engages(isElected: election.activeId == "r1", isSettled: election.restingId == "r1"))
+    }
+
+    func test_seedSettlesAtOnce() {
+        var election = ReelPlaybackElection()
+        election.settled("r7")
+        XCTAssertEqual(election.restingId, "r7")
     }
 }
