@@ -45,111 +45,6 @@ export type GloryFramePlateVariant = (typeof GLORY_FRAME_PLATE_VARIANTS)[number]
 export const GLORY_FRAME_BIRD_LAYOUTS = ['pied', 'perches', 'cotes', 'ruban', 'duo', 'libre', 'selfie'] as const;
 export type GloryFrameBirdLayout = (typeof GLORY_FRAME_BIRD_LAYOUTS)[number];
 
-/** `x, y, largeur, hauteur`, en pixels de l'image finale. */
-export type GloryFrameBox = readonly [number, number, number, number];
-
-export type GloryFrameColor = string;
-
-export type GloryFramePaint =
-  | { readonly solid: GloryFrameColor }
-  | {
-      readonly linear: {
-        readonly x1: number;
-        readonly y1: number;
-        readonly x2: number;
-        readonly y2: number;
-        readonly stops: readonly { readonly offset: number; readonly color: GloryFrameColor }[];
-      };
-    };
-
-/** Une primitive de filtre SVG telle que l'export l'a lue (`op` + ses attributs), que chaque peintre traduit. */
-export type GloryFrameFilterOp = Readonly<Record<string, string>>;
-export type GloryFrameFilter = readonly (readonly GloryFrameFilterOp[])[];
-
-export type GloryFrameStroke = { readonly paint: GloryFramePaint; readonly width: number };
-
-/** Une copie du texte, décalée, posée sous (`under`) ou sur lui : lueur, relief, double tracé. */
-export type GloryFrameTextEffect = {
-  readonly dx: number;
-  readonly dy: number;
-  readonly fill: GloryFramePaint;
-  readonly stroke: GloryFrameStroke | null;
-  readonly opacity: number;
-  readonly under: boolean;
-  readonly filter: GloryFrameFilter | null;
-};
-
-export type GloryFrameTextSlot = {
-  readonly x: number;
-  readonly baseline: number;
-  readonly anchor: 'start' | 'middle' | 'end';
-  /** Absente pour l'identité. */
-  readonly matrix?: readonly [number, number, number, number, number, number];
-  readonly font: {
-    readonly family: GloryFrameFont;
-    readonly weight: number;
-    readonly style: 'normal' | 'italic';
-    readonly size: number;
-    readonly tracking: number;
-  };
-  readonly fill: GloryFramePaint;
-  readonly stroke: GloryFrameStroke | null;
-  readonly opacity: number;
-  readonly effects: readonly GloryFrameTextEffect[];
-  readonly filter: GloryFrameFilter | null;
-  /** Le texte courbe (légendes des médailles, des pièces) : le chemin, et le décalage de départ (`startOffset` SVG : longueur ou pourcentage). */
-  readonly path: { readonly d: string; readonly startOffset: string } | null;
-  /** La boîte du texte d'EXEMPLE rendu à l'export : la place que le peintre ne doit pas déborder. */
-  readonly bbox: GloryFrameBox;
-  /** Le pire contraste WCAG mesuré à l'export contre les pixels réellement dessous. */
-  readonly contrast: number;
-  /** Le texte d'exemple de l'export (le français des planches) ; les emplacements vivants le remplacent. */
-  readonly sample: string;
-};
-
-export type GloryFrameLayer = PackAssetRef & { readonly box: GloryFrameBox };
-export type GloryFrameGradeLayer = GloryFrameLayer & { readonly blend: GloryFrameBlend };
-
-export type GloryFrameBirdAnchor = {
-  /** Une pose de Mee ou de Meo de la liste embarquée (`mee-…`, `meo-…`, `duo-…`), jamais un sticker de tiers. */
-  readonly sticker: string;
-  readonly box: GloryFrameBox;
-  readonly rotate: number;
-  readonly flip: boolean;
-  readonly opacity: number;
-};
-
-/** Deux oiseaux, ou une paire dans un seul sticker, ou Meo seul (il tient l'appareil : la mise en page `selfie`). */
-export type GloryFrameBirds =
-  | { readonly mee: GloryFrameBirdAnchor; readonly meo: GloryFrameBirdAnchor }
-  | { readonly pair: GloryFrameBirdAnchor }
-  | { readonly meo: GloryFrameBirdAnchor };
-
-export type GloryFrameFormat = {
-  readonly size: readonly [number, number];
-  readonly window: {
-    readonly box: GloryFrameBox;
-    /** La fenêtre photo, masque sans perte adressé par contenu ; `path` vectoriel au suivi #10254. */
-    readonly mask: GloryFrameLayer;
-    readonly veilMaxAlpha: number;
-  };
-  readonly stack: readonly string[];
-  readonly layers: {
-    readonly decor: GloryFrameLayer;
-    readonly windowFill: GloryFrameLayer;
-    readonly grade: readonly GloryFrameGradeLayer[];
-    readonly front: { readonly [R in GloryFrameFrontRank]?: GloryFrameLayer };
-    readonly plate: { readonly [V in GloryFramePlateVariant]?: GloryFrameLayer };
-  };
-  readonly crest: { readonly box: GloryFrameBox } | null;
-  readonly text: Readonly<Record<string, GloryFrameTextSlot>>;
-  readonly birds: {
-    readonly default: GloryFrameBirdLayout;
-    readonly layouts: { readonly [L in GloryFrameBirdLayout]?: GloryFrameBirds };
-  };
-  readonly banner: { readonly box: GloryFrameBox } | null;
-};
-
 export const GLORY_FRAME_COLOR_PATTERN = /^#[0-9A-F]{8}$/;
 const STACK_TOKEN = /^(?:photo|decor|crest|plate|birds|text|banner|grade:\d{1,2}|front:(?:under-birds|over-birds))$/;
 const STICKER_ID = /^(?:mee|meo|duo)-[a-z0-9-]+$/;
@@ -159,10 +54,10 @@ const MAX_TEXT_LENGTH = 400;
 const finite = z.number().check(z.refine(Number.isFinite));
 const nonNegative = finite.check(z.minimum(0));
 const unit = finite.check(z.minimum(0), z.maximum(1));
-const box: z.ZodMiniType<GloryFrameBox> = z.tuple([finite, finite, nonNegative, nonNegative]);
+const box = z.tuple([finite, finite, nonNegative, nonNegative]);
 const color = z.string().check(z.regex(GLORY_FRAME_COLOR_PATTERN));
 
-const paint: z.ZodMiniType<GloryFramePaint> = z.union([
+const paint = z.union([
   z.object({ solid: color }),
   z.object({
     linear: z.object({
@@ -175,13 +70,14 @@ const paint: z.ZodMiniType<GloryFramePaint> = z.union([
   }),
 ]);
 
-const filter: z.ZodMiniType<GloryFrameFilter> = z
+const filter = z
   .array(z.array(z.record(z.string(), z.string()).check(z.refine((op) => typeof op.op === 'string' && op.op.startsWith('fe')))).check(z.maxLength(12)))
   .check(z.maxLength(8));
 
-const stroke: z.ZodMiniType<GloryFrameStroke> = z.object({ paint, width: nonNegative });
+const stroke = z.object({ paint, width: nonNegative });
 
-const effect: z.ZodMiniType<GloryFrameTextEffect> = z.object({
+/** Une copie du texte, décalée, posée sous (`under`) ou sur lui : lueur, relief, double tracé. */
+const effect = z.object({
   dx: finite,
   dy: finite,
   fill: paint,
@@ -191,10 +87,11 @@ const effect: z.ZodMiniType<GloryFrameTextEffect> = z.object({
   filter: z.nullable(filter),
 });
 
-const textSlot: z.ZodMiniType<GloryFrameTextSlot> = z.object({
+const textSlot = z.object({
   x: finite,
   baseline: finite,
   anchor: z.enum(['start', 'middle', 'end']),
+  /** Absente pour l'identité. */
   matrix: z.optional(z.tuple([finite, finite, finite, finite, finite, finite])),
   font: z.object({
     family: z.enum(GLORY_FRAME_FONTS),
@@ -208,16 +105,21 @@ const textSlot: z.ZodMiniType<GloryFrameTextSlot> = z.object({
   opacity: unit,
   effects: z.array(effect).check(z.maxLength(8)),
   filter: z.nullable(filter),
+  /** Le texte courbe (légendes des médailles, des pièces) : le chemin et son `startOffset` SVG (longueur ou pourcentage). */
   path: z.nullable(z.object({ d: z.string().check(z.minLength(1), z.maxLength(4_000)), startOffset: z.string().check(z.regex(/^-?\d+(?:\.\d+)?%?$/)) })),
+  /** La boîte du texte d'EXEMPLE rendu à l'export : la place que le peintre ne doit pas déborder. */
   bbox: box,
+  /** Le pire contraste WCAG mesuré à l'export contre les pixels réellement dessous. */
   contrast: nonNegative,
+  /** Le texte d'exemple de l'export (le français des planches) ; les emplacements vivants le remplacent. */
   sample: z.string().check(z.maxLength(MAX_TEXT_LENGTH)),
 });
 
-const layer: z.ZodMiniType<GloryFrameLayer> = z.intersection(PackAssetRefSchema, z.object({ box }));
-const gradeLayer: z.ZodMiniType<GloryFrameGradeLayer> = z.intersection(layer, z.object({ blend: z.enum(GLORY_FRAME_BLENDS) }));
+const layer = z.intersection(PackAssetRefSchema, z.object({ box }));
+const gradeLayer = z.intersection(layer, z.object({ blend: z.enum(GLORY_FRAME_BLENDS) }));
 
-const anchor: z.ZodMiniType<GloryFrameBirdAnchor> = z.object({
+const anchor = z.object({
+  /** Une pose de Mee ou de Meo de la liste embarquée (`mee-…`, `meo-…`, `duo-…`), jamais un sticker de tiers. */
   sticker: z.string().check(z.regex(STICKER_ID), z.maxLength(48)),
   box,
   rotate: finite,
@@ -225,10 +127,13 @@ const anchor: z.ZodMiniType<GloryFrameBirdAnchor> = z.object({
   opacity: unit,
 });
 
-const isPrefixed = (anchorOf: GloryFrameBirdAnchor, prefix: 'mee-' | 'meo-'): boolean => anchorOf.sticker.startsWith(prefix);
+const isPrefixed = (anchorOf: z.infer<typeof anchor>, prefix: 'mee-' | 'meo-'): boolean => anchorOf.sticker.startsWith(prefix);
 
-/** Deux ancres OU une paire OU Meo seul, jamais un mélange : une clé en trop rend la mise en page illisible. */
-const birds: z.ZodMiniType<GloryFrameBirds> = z.union([
+/**
+ * Deux oiseaux, OU une paire dans un seul sticker, OU Meo seul (il tient l'appareil : la mise en page `selfie`) —
+ * jamais un mélange : une clé en trop rend la mise en page illisible.
+ */
+const birds = z.union([
   z.strictObject({ mee: anchor, meo: anchor }).check(z.refine((two) => isPrefixed(two.mee, 'mee-') && isPrefixed(two.meo, 'meo-'))),
   z.strictObject({ pair: anchor }).check(z.refine((one) => one.pair.sticker.startsWith('duo-'))),
   z.strictObject({ meo: anchor }).check(z.refine((one) => isPrefixed(one.meo, 'meo-'))),
@@ -238,33 +143,52 @@ const layoutKeys = Object.fromEntries(GLORY_FRAME_BIRD_LAYOUTS.map((name) => [na
   [L in GloryFrameBirdLayout]: z.ZodMiniOptional<typeof birds>;
 };
 
-const sameStackLayers = (format: GloryFrameFormat): boolean => {
+const formatObject = z.object({
+  size: z.tuple([z.int().check(z.minimum(1)), z.int().check(z.minimum(1))]),
+  /** La fenêtre photo, masque sans perte adressé par contenu ; `path` vectoriel au suivi #10254. */
+  window: z.object({ box, mask: layer, veilMaxAlpha: unit }),
+  stack: z.array(z.string().check(z.regex(STACK_TOKEN))).check(z.minLength(2), z.maxLength(24)),
+  layers: z.object({
+    decor: layer,
+    windowFill: layer,
+    grade: z.array(gradeLayer).check(z.maxLength(12)),
+    front: z.object({ 'under-birds': z.optional(layer), 'over-birds': z.optional(layer) }),
+    plate: z.object({ plain: z.optional(layer), message: z.optional(layer) }),
+  }),
+  crest: z.nullable(z.object({ box })),
+  text: z.record(z.string().check(z.regex(SLOT_KEY)), textSlot),
+  birds: z
+    .object({ default: z.enum(GLORY_FRAME_BIRD_LAYOUTS), layouts: z.object(layoutKeys) })
+    .check(z.refine((value) => value.layouts[value.default] !== undefined)),
+  banner: z.nullable(z.object({ box })),
+});
+
+/** Chaque passe de `grade` et chaque rang de `front` déclaré a sa place dans `stack`, et inversement ; `photo` et `decor` y sont. */
+const sameStackLayers = (format: z.infer<typeof formatObject>): boolean => {
   const grades = format.stack.filter((token) => token.startsWith('grade:')).map((token) => Number(token.slice(6)));
   const gradesDeclared = grades.length === format.layers.grade.length && grades.every((index, at) => index === at);
   const fronts = GLORY_FRAME_FRONT_RANKS.every((rank) => format.stack.includes(`front:${rank}`) === (format.layers.front[rank] !== undefined));
   return gradesDeclared && fronts && format.stack.includes('photo') && format.stack.includes('decor') && new Set(format.stack).size === format.stack.length;
 };
 
-export const GloryFrameFormatSchema: z.ZodMiniType<GloryFrameFormat> = z
-  .object({
-    size: z.tuple([z.int().check(z.minimum(1)), z.int().check(z.minimum(1))]),
-    window: z.object({ box, mask: layer, veilMaxAlpha: unit }),
-    stack: z.array(z.string().check(z.regex(STACK_TOKEN))).check(z.minLength(2), z.maxLength(24)),
-    layers: z.object({
-      decor: layer,
-      windowFill: layer,
-      grade: z.array(gradeLayer).check(z.maxLength(12)),
-      front: z.object({ 'under-birds': z.optional(layer), 'over-birds': z.optional(layer) }),
-      plate: z.object({ plain: z.optional(layer), message: z.optional(layer) }),
-    }),
-    crest: z.nullable(z.object({ box })),
-    text: z.record(z.string().check(z.regex(SLOT_KEY)), textSlot),
-    birds: z
-      .object({ default: z.enum(GLORY_FRAME_BIRD_LAYOUTS), layouts: z.object(layoutKeys) })
-      .check(z.refine((value) => value.layouts[value.default] !== undefined)),
-    banner: z.nullable(z.object({ box })),
-  })
-  .check(z.refine(sameStackLayers));
+export const GloryFrameFormatSchema = formatObject.check(z.refine(sameStackLayers));
+
+/**
+ * Les types DÉRIVENT des schémas : la passerelle compile ce fichier sans `strictNullChecks`, où un type écrit à la
+ * main diverge de ce que `zod/mini` infère (nullables, tuples) — une seule source, lue pareil dans les deux modes.
+ */
+export type GloryFrameBox = z.infer<typeof box>;
+export type GloryFrameColor = string;
+export type GloryFramePaint = z.infer<typeof paint>;
+export type GloryFrameFilter = z.infer<typeof filter>;
+export type GloryFrameStroke = z.infer<typeof stroke>;
+export type GloryFrameTextEffect = z.infer<typeof effect>;
+export type GloryFrameTextSlot = z.infer<typeof textSlot>;
+export type GloryFrameLayer = z.infer<typeof layer>;
+export type GloryFrameGradeLayer = z.infer<typeof gradeLayer>;
+export type GloryFrameBirdAnchor = z.infer<typeof anchor>;
+export type GloryFrameBirds = z.infer<typeof birds>;
+export type GloryFrameFormat = z.infer<typeof GloryFrameFormatSchema>;
 
 /** Tous les fichiers qu'un format référence : masque, couches, passes — ce que le magasin doit pouvoir servir. */
 export function gloryFrameFormatAssets(format: GloryFrameFormat): readonly PackAssetRef[] {

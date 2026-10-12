@@ -147,7 +147,7 @@ export type RawTextSlot = {
   readonly opacity: number;
   readonly filter: RawFilter;
   readonly path: { readonly d: string; readonly startOffset: string | number } | null;
-  readonly bbox: readonly [number, number, number, number];
+  readonly bbox: [number, number, number, number];
   readonly effects: readonly RawEffect[];
   readonly contrast: number;
 };
@@ -156,7 +156,8 @@ const IDENTITY = [1, 0, 0, 1, 0, 0];
 const isIdentity = (matrix: readonly number[]): boolean => matrix.length === 6 && matrix.every((value, at) => value === IDENTITY[at]);
 
 export function normalizeTextSlot(raw: RawTextSlot): GloryFrameTextSlot {
-  const matrix = isIdentity(raw.matrix) ? {} : { matrix: raw.matrix as unknown as readonly [number, number, number, number, number, number] };
+  const [a = 1, b = 0, c = 0, d = 1, e = 0, f = 0] = raw.matrix;
+  const matrix = isIdentity(raw.matrix) ? {} : { matrix: [a, b, c, d, e, f] as [number, number, number, number, number, number] };
   return {
     x: raw.x,
     baseline: raw.baseline,
@@ -184,7 +185,7 @@ export function birdLayoutOf(prose: string, birdCount: number): GloryFrameBirdLa
   return known[word] ?? 'libre';
 }
 
-type RawBird = { readonly pose: string; readonly box: readonly [number, number, number, number]; readonly rotate: number; readonly flip: boolean; readonly opacity: number };
+type RawBird = { readonly pose: string; readonly box: [number, number, number, number]; readonly rotate: number; readonly flip: boolean; readonly opacity: number };
 
 const anchorOf = (bird: RawBird): GloryFrameBirdAnchor => ({ sticker: bird.pose, box: bird.box, rotate: bird.rotate, flip: bird.flip, opacity: bird.opacity });
 
@@ -198,15 +199,15 @@ export function birdsOf(raw: readonly RawBird[]): GloryFrameBirds {
   throw new Error(`oiseaux illisibles : ${raw.map((bird) => bird.pose).join(', ')}`);
 }
 
-export type RawRef = { readonly src: string; readonly bytes: number; readonly sha256: string; readonly box?: readonly [number, number, number, number]; readonly blend?: string };
+export type RawRef = { readonly src: string; readonly bytes: number; readonly sha256: string; readonly box?: [number, number, number, number]; readonly blend?: string };
 
 export type RawExportFrame = {
   readonly frame: string;
-  readonly size: readonly [number, number];
+  readonly size: [number, number];
   readonly motifs: readonly string[];
   readonly stack: readonly string[];
-  readonly window: { readonly box: readonly [number, number, number, number]; readonly mask: RawRef; readonly veilMaxAlpha: number };
-  readonly banner: { readonly box: readonly [number, number, number, number] } | null;
+  readonly window: { readonly box: [number, number, number, number]; readonly mask: RawRef; readonly veilMaxAlpha: number };
+  readonly banner: { readonly box: [number, number, number, number] } | null;
   readonly layers: {
     readonly decor: RawRef;
     readonly windowFill: RawRef;
@@ -215,7 +216,7 @@ export type RawExportFrame = {
     readonly plate: { readonly plain?: RawRef | null; readonly message?: RawRef | null };
   };
   readonly thumb: RawRef;
-  readonly crest: { readonly box: readonly [number, number, number, number] } | null;
+  readonly crest: { readonly box: [number, number, number, number] } | null;
   readonly birds: readonly RawBird[];
   readonly text: Readonly<Record<string, RawTextSlot>>;
 };
@@ -238,7 +239,7 @@ const definedEntries = <V>(record: Readonly<Record<string, V | undefined>>): Rea
   Object.fromEntries(Object.entries(record).filter((entry): entry is [string, V] => entry[1] !== undefined));
 
 /** L'ordre des couches : les passes de `grade` renumérotées sans trou, le bandeau en dernier quand le cadre l'a. */
-export function normalizeStack(raw: RawExportFrame): readonly string[] {
+export function normalizeStack(raw: RawExportFrame): string[] {
   const present = raw.layers.grade.map((ref, index) => (ref === null ? null : index)).filter((index): index is number => index !== null);
   const stack = raw.stack.map((token) => (token.startsWith('grade:') ? `grade:${present.indexOf(Number(token.slice(6)))}` : token));
   return raw.banner === null || stack.includes('banner') ? stack : [...stack, 'banner'];

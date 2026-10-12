@@ -25,13 +25,13 @@
  * retire jamais : il se masque (`hidden`), parce qu'une entrée de carnet le cite.
  */
 import * as z from 'zod/mini';
-import { ACHIEVEMENT_RARITIES, GLORY_DIVISIONS, GLORY_RANKS, type AchievementRarity, type GloryDivision5, type GloryRankOrMythic } from '../utils/game/glory.js';
-import { LEVEL_TIER_KEYS, type LevelTierKey } from '../utils/game/levels.js';
+import { ACHIEVEMENT_RARITIES, GLORY_DIVISIONS, GLORY_RANKS } from '../utils/game/glory.js';
+import { LEVEL_TIER_KEYS } from '../utils/game/levels.js';
 import { PHOTO_FLAME_THRESHOLDS } from '../utils/game/photo-catch-up.js';
 import { TREASURY_TIERS, type TreasuryTierKey } from '../utils/game/treasury.js';
 import type { PackAssetRef } from './content-pack.js';
 import type { FrameUsage } from './frame-usage.js';
-import { GloryFrameFormatSchema, gloryFrameFormatAssets, type GloryFrameFormat } from './glory-frame-format.js';
+import { GloryFrameFormatSchema, gloryFrameFormatAssets } from './glory-frame-format.js';
 import { GLORY_FRAME_PACK_SCHEMA, readGloryFramePackFrame, type GloryFramePackFrame } from './glory-frame-pack.js';
 import { GLORY_ATMOSPHERES, type GloryAtmosphere } from './glory-atmospheres.js';
 
@@ -43,27 +43,6 @@ export const MEESH_FRAME_EDITIONS = ['first', 'silver', 'gold', 'prism'] as cons
 export type MeeshFrameEdition = (typeof MEESH_FRAME_EDITIONS)[number];
 
 export type PhotoFlameThreshold = (typeof PHOTO_FLAME_THRESHOLDS)[number];
-
-export type GloryFrameAppliesTo =
-  | { readonly family: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null }
-  | { readonly family: 'tier'; readonly tier: LevelTierKey }
-  | { readonly family: 'meesh'; readonly edition: MeeshFrameEdition }
-  | { readonly family: 'treasury'; readonly treasury: TreasuryTierKey }
-  | { readonly family: 'flame'; readonly days: PhotoFlameThreshold }
-  | { readonly family: 'day' }
-  | { readonly family: 'achievement'; readonly rarity: AchievementRarity | null };
-
-export type GloryFrame = GloryFramePackFrame & {
-  readonly collection: string;
-  readonly appliesTo: GloryFrameAppliesTo;
-  /** La décoration dans sa famille (`V`…`I`, `A`/`B`/`C`, `a`/`b`/`c`) ; `null` quand il n'y en a qu'une. */
-  readonly option: string | null;
-  /** Ce que le cadre porte (`afrique`, `cosmos`…) : l'invariant « un peu d'Afrique dans chaque atmosphère ». */
-  readonly motifs: readonly string[];
-  /** Sorti des suggestions, jamais retiré : une photo gardée le cite encore. */
-  readonly hidden: boolean;
-  readonly formats: { readonly story: GloryFrameFormat; readonly square: GloryFrameFormat | null };
-};
 
 export type GloryFrameContract = { readonly schema: typeof GLORY_FRAME_PACK_SCHEMA; readonly frames: readonly GloryFrame[] };
 
@@ -79,7 +58,11 @@ const SLUG = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 const slug = z.string().check(z.regex(SLUG), z.maxLength(24));
 const RANK_KEYS = [...GLORY_RANKS.map((rank) => rank.key), 'mythe'] as const;
 
-const appliesToSchema: z.ZodMiniType<GloryFrameAppliesTo> = z.discriminatedUnion('family', [
+/**
+ * La cible d'un cadre : rang et division (`null` : toutes les divisions, et le Mythe), palier, édition de Meesh,
+ * palier du trésor, seuil de Flamme, réalisation du jour, rareté d'un succès (`null` : le cadre neutre).
+ */
+const appliesToSchema = z.discriminatedUnion('family', [
   z
     .object({ family: z.literal('rank'), rank: z.enum(RANK_KEYS), division: z.nullable(z.literal(GLORY_DIVISIONS)) })
     .check(z.refine((target) => target.rank !== 'mythe' || target.division === null)),
@@ -94,11 +77,18 @@ const appliesToSchema: z.ZodMiniType<GloryFrameAppliesTo> = z.discriminatedUnion
 const placementSchema = z.object({
   collection: slug,
   appliesTo: appliesToSchema,
+  /** La décoration dans sa famille (`V`…`I`, `A`/`B`/`C`, `a`/`b`/`c`) ; `null` quand il n'y en a qu'une. */
   option: z.nullable(z.string().check(z.regex(/^[A-Za-z0-9]{1,4}$/))),
+  /** Ce que le cadre porte (`afrique`, `cosmos`…) : l'invariant « un peu d'Afrique dans chaque atmosphère ». */
   motifs: z.array(slug).check(z.maxLength(8)),
+  /** Sorti des suggestions, jamais retiré : une photo gardée le cite encore. */
   hidden: z.boolean(),
   formats: z.object({ story: GloryFrameFormatSchema, square: z.nullable(GloryFrameFormatSchema) }),
 });
+
+/** Les types DÉRIVENT des schémas (la passerelle compile sans `strictNullChecks`, cf. `glory-frame-format.ts`). */
+export type GloryFrameAppliesTo = z.infer<typeof appliesToSchema>;
+export type GloryFrame = GloryFramePackFrame & z.infer<typeof placementSchema>;
 
 /** La cible d'un cadre et son usage disent-ils la même chose ? Un cadre de rang ne sert que son rang, un cadre de moment que sa famille. */
 export function usageFitsAppliesTo(usage: FrameUsage, target: GloryFrameAppliesTo): boolean {
