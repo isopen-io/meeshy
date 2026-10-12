@@ -38,6 +38,24 @@ describe('la règle anti-répétition', () => {
     expect(repeatsText('« Superbe features qui vient avec tellement d’… »', 'Superbe features qui vient avec tellement d’options')).toBe(true);
     expect(repeatsText('BONJOUR  à tous', 'bonjour à tous')).toBe(true);
     expect(repeatsText('Le lac', 'Superbe')).toBe(false);
+  });
+
+  test('l’action seule répète le titre « acteur + action » qui la porte (#10299)', () => {
+    expect(repeatsText('a rejoint Les Amis', 'Awa a rejoint Les Amis')).toBe(true);
+    expect(repeatsText('Les Amis', 'Awa a rejoint Les Amis')).toBe(true);
+  });
+
+  test('une arrivée de membre se lit en UNE ligne : qui, et dans quelle conversation (#10299)', () => {
+    const row = present(
+      record({
+        type: 'member_joined',
+        title: 'Awa a rejoint Les Amis',
+        content: 'a rejoint Les Amis',
+        actor: { id: 'u-awa', username: 'awa', displayName: 'Awa', avatar: null },
+        context: { conversationId: 'c1', conversationTitle: 'Les Amis', conversationType: 'group' },
+      }),
+    );
+    expect(row).toMatchObject({ title: 'Awa a rejoint Les Amis', body: null, footer: null });
     expect(repeatsText('', 'Superbe')).toBe(false);
   });
 });
@@ -178,6 +196,24 @@ describe('les paliers — la ligne dit QUEL badge', () => {
     expect(achievement.body).toBe('Un premier message ou commentaire vocal');
     expect(level).toMatchObject({ leading: { kind: 'milestone', glyph: 'star' }, title: 'Niveau 3', body: null });
     expect(streak).toMatchObject({ leading: { kind: 'milestone', glyph: 'fire' }, title: '7 jours d’affilée' });
+  });
+
+  test('un palier composé par le serveur (#10298) se rend tel quel : le palier en titre, l’exploit en corps', () => {
+    const badge = present(
+      record({
+        type: 'badge_earned',
+        title: '🏆 Palier 6 atteint',
+        content: 'Commentaires écrits : 1 000 — bravo, vous êtes au palier 6 !',
+        actor: null,
+        metadata: { axisKey: 'comment.text', threshold: 1000, tierRank: 6 },
+      }),
+    );
+    const level = present(
+      record({ type: 'level_up', title: '⭐ Niveau 3 atteint !', content: '150 points — bravo, vous êtes au niveau 3 !', actor: null, metadata: { threshold: 150, level: 3, tierRank: 3 } }),
+    );
+    expect(badge).toMatchObject({ title: '🏆 Palier 6 atteint', body: 'Commentaires écrits : 1 000 — bravo, vous êtes au palier 6 !' });
+    expect(badge.leading.kind).toBe('milestone');
+    expect(level).toMatchObject({ title: '⭐ Niveau 3 atteint !', body: '150 points — bravo, vous êtes au niveau 3 !' });
   });
 
   test('un axe inconnu retombe sur la ligne ordinaire, jamais sur une clé', () => {

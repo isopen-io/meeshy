@@ -377,6 +377,11 @@ const NUMBER_LOCALES: Record<NotificationLanguage, string> = {
   'zh-Hans': 'zh-Hans-CN',
 };
 
+/** Un nombre formaté à la locale du LECTEUR — « 1 000 », « 1,000 », « ١٬٠٠٠ ». */
+export function formatNotificationNumber(language: string | null | undefined, value: number): string {
+  return new Intl.NumberFormat(NUMBER_LOCALES[normalizeNotificationLanguage(language)]).format(value);
+}
+
 /**
  * Le libellé d'un succès, dans la langue du LECTEUR.
  *

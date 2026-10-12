@@ -44,6 +44,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
   'engagement.achievementUnlocked',
+  'engagement.tierTitle', 'engagement.tierBody', 'engagement.badgeExploit', 'engagement.levelUpBody',
+  'member.joinedAction', 'member.joinedConversationAction',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -90,6 +92,8 @@ export type NotificationStringParams = {
   readonly mission?: string;
   readonly start?: string;
   readonly end?: string;
+  /** Une grandeur déjà formatée à la locale du lecteur (« 1 000 ») — l'exploit d'un palier (#10298). */
+  readonly value?: string;
   /**
    * L'entité nommée par le libellé. Typée en clé de PROSE, pas en valeur de
    * fil : le catalogue est un dictionnaire, il RENDRA ce qu'on lui donne — y
@@ -317,6 +321,7 @@ export function notificationString(
     mission: params.mission ?? '',
     start: params.start ?? '',
     end: params.end ?? '',
+    value: params.value ?? '',
   };
 
   if (params.postType) {
@@ -384,6 +389,11 @@ export type NotificationDisplayInput = {
    * votre réel de Windie Nh » désignerait deux propriétaires.
    */
   readonly authorName?: string | null;
+  /**
+   * Nom CANONIQUE de la conversation visée, quand la phrase doit la nommer —
+   * « a rejoint Les Amis » (#10299). Absent ou vide ⇒ « la conversation ».
+   */
+  readonly conversationTitle?: string | null;
 };
 
 export type NotificationDisplay = {
@@ -448,6 +458,18 @@ function normalizePostKind(value?: string | null): NotificationPostLabelKind | u
  */
 const wirePostKind = (kind: NotificationPostLabelKind): NotificationPostKind =>
   kind === 'MOOD' ? 'STATUS' : kind;
+
+/**
+ * L'action d'une arrivée de membre, SANS l'acteur — « a rejoint Les Amis ».
+ * Site UNIQUE : le titre persisté (`buildNotificationDisplay`) et le corps de
+ * push (`fanout/member-joined.ts`) la composent ici, donc ne divergent pas.
+ */
+export function memberJoinedAction(lang: string | null | undefined, conversationTitle?: string | null): string {
+  const title = conversationTitle?.trim();
+  return title
+    ? notificationString(lang, 'member.joinedAction', { title })
+    : notificationString(lang, 'member.joinedConversationAction');
+}
 
 export function buildNotificationDisplay(
   lang: string | null | undefined,
@@ -556,6 +578,15 @@ export function buildNotificationDisplay(
       return framed(notificationString(L, 'game.duoInvitedAction'), null);
     case 'game_duo_accepted':
       return framed(notificationString(L, 'game.duoAcceptedAction'), null);
+
+    // ── Un membre arrive dans une conversation (#10299) : « Awa a rejoint Les Amis » ──
+    //
+    // La phrase NOMME la conversation, comme le sous-titre d'un message de
+    // groupe. L'action est aussi le CORPS que l'éventail pousse
+    // (`memberJoinedAction`) : la bannière iOS la dédoublonne contre le corps,
+    // FCM et WebPush — sans sous-titre — la lisent dans le corps.
+    case 'member_joined':
+      return framed(memberJoinedAction(L, input.conversationTitle), null);
 
     // ── Partage / repost ──
     case 'post_repost':

@@ -243,9 +243,10 @@ describe('EngagementService.recordActivity', () => {
       // Le MOT du lecteur, jamais la clé stable : « conversation.private ·
       // palier 10 » a été servi en production (2026-09-08). `route` dit où le
       // tap mène — l'écran « Progression ».
-      content: '🏅 Badge débloqué : Publications · palier 10',
+      title: '🏆 Palier 2 atteint',
+      content: 'Publications : 10 — bravo, vous êtes au palier 2 !',
       context: {},
-      metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10 },
+      metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10, tierRank: 2, value: 10 },
     });
   });
 
@@ -777,9 +778,10 @@ describe('EngagementService level tracking (#5545)', () => {
       priority: 'normal',
       // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
       // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
-      content: '⭐ Niveau 1 atteint !',
+      title: '⭐ Niveau 1 atteint !',
+      content: '10 points — bravo, vous êtes au niveau 1 !',
       context: {},
-      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1 },
+      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1, tierRank: 1, value: 10 },
     });
   });
 
