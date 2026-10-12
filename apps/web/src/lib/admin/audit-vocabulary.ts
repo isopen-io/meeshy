@@ -106,6 +106,7 @@ export const AUDIT_ACTIONS = {
   // ── Contenus, diffusions, agent, signalements ──────────────────────────────
   DELETE_POST: entry('posts', 'trash', 'danger'),
   MODERATE_POST: entry('posts', 'eyeSlash', 'warning'),
+  REMOVE_CONTENT: entry('reports', 'trash', 'danger'),
   ADMIN_POST_VIEWERS_VIEWED: entry('posts', 'eye', 'info', true),
   CREATE_BROADCAST: entry('broadcasts', 'plus', 'neutral'),
   SEND_BROADCAST: entry('broadcasts', 'paperPlaneTilt', 'info'),
@@ -134,6 +135,8 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
   // ── Réglages de la plateforme ──────────────────────────────────────────────
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
+  // ── Les opérations du serveur (#10396) : sauvegarde, purge des images ─────
+  TRIGGER_SERVER_OPERATION: entry('settings', 'database', 'warning'),
   // ── Le calendrier des saisons du Jeu (#10232, #10233) ──────────────────────
   GAME_SEASON_UPDATE: entry('settings', 'calendarBlank', 'warning'),
   GAME_SEASON_PROPOSAL_REQUEST: entry('settings', 'robot', 'info'),

@@ -97,7 +97,7 @@ final class ComposerRailDoorLongPressTests: XCTestCase {
         let rail = try Self.source("ComposerLeadingRail.swift")
         XCTAssertTrue(rail.contains("LongPressGesture(minimumDuration: ComposerRailDoorPress.minimumDuration)"))
         XCTAssertTrue(rail.contains("longPress.begin()"), "l'appui long présente le choix")
-        XCTAssertTrue(rail.contains("ForEach(longPress.actions) { named in"),
+        XCTAssertTrue(rail.contains("ForEach(longPress.actions.map { named in"),
                       "VoiceOver reçoit chaque source en action nommée")
         XCTAssertTrue(rail.contains("label: ComposerMediaSourcePolicy.longPressLabel(source)"))
         XCTAssertTrue(rail.contains("press.admitsTap(id: id, at: Date()) else { return }"))
