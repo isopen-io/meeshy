@@ -156,9 +156,6 @@ struct GamePhotoFlowView: View {
                         Color(white: 0.12)
                     }
                     overlay(size: size, background: .clear)
-                    if case .failed(let failure) = phase {
-                        failureNote(failure)
-                    }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) {
@@ -170,6 +167,10 @@ struct GamePhotoFlowView: View {
                 .composerCaptureAccessibilityActions(zone: .scene, context: session.captureContext) { action in
                     Task { await session.perform(action) }
                 }
+            }
+            // Hors du cadre : posée sur l'aperçu, la note recouvrait le titre et la date du moment (#10295).
+            if case .failed(let failure) = phase {
+                failureNote(failure)
             }
             HStack(alignment: .top, spacing: MeeshySpacing.xl) {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
@@ -263,7 +264,8 @@ struct GamePhotoFlowView: View {
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
             .foregroundColor(.white)
             .multilineTextAlignment(.center)
-            .padding(MeeshySpacing.lg)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, MeeshySpacing.xl)
             .accessibilityIdentifier("game.photo.camera.failure")
     }
 

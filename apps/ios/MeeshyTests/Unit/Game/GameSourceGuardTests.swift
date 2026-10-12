@@ -83,6 +83,23 @@ final class GameSourceGuardTests: XCTestCase {
                        "l'apparence se fixe pour le déroulé seul, jamais pour la fenêtre qui le présente")
     }
 
+    // MARK: - La note de caméra refusée ne recouvre pas le cadre (#10295)
+
+    /// La note de refus était posée au centre de l'aperçu, PAR-DESSUS le titre et la date du cadre du moment :
+    /// les deux textes se chevauchaient. Elle vit désormais HORS du cadre, sous lui, et la scène ne la porte plus.
+    func test_theCameraFailureNoteLivesOutsideTheFrame() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        let camera = try XCTUnwrap(view.components(separatedBy: "private func camera(_ phase: PhotoCameraPhase)").dropFirst().first?
+            .components(separatedBy: "private func sideGlyph").first)
+        let scene = try XCTUnwrap(camera.components(separatedBy: "framed { size in").dropFirst().first?
+            .components(separatedBy: ".accessibilityIdentifier(\"game.photo.scene\")").first)
+        XCTAssertFalse(scene.contains("failureNote("), "la note ne se pose plus sur le cadre du moment")
+        let belowTheFrame = try XCTUnwrap(camera.components(separatedBy: ".accessibilityIdentifier(\"game.photo.scene\")").dropFirst().first?
+            .components(separatedBy: "HStack(alignment: .top").first)
+        XCTAssertTrue(belowTheFrame.contains("failureNote("), "la note se dit sous le cadre, avant la bande des déclencheurs")
+    }
+
     // MARK: - Les clés d'usage et la fréquence d'images
 
     private func infoPlist() throws -> [String: Any] {
