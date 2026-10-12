@@ -67,6 +67,8 @@ const de = {
   'game.concept.elans.tip.2': 'Komm mehrere Tage in Folge wieder, um ihn zu halten.',
   'game.concept.elans.families.one': '{count} aktive Familie',
   'game.concept.elans.families.other': '{count} aktive Familien',
+  'game.concept.elans.title': 'Dein Schwung',
+  'game.concept.elans.factor': 'Schwung ×{factor}',
   'game.concept.badges.name': 'Abzeichen',
   'game.concept.badges.why': 'Ein Abzeichen zeigt, was du auf Meeshy am meisten machst.',
   'game.concept.badges.how': 'Wiederhole eine Aktion: Ihr Abzeichen wechselt das Material.',

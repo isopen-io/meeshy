@@ -67,6 +67,8 @@ const it = {
   'game.concept.elans.tip.2': 'Torna più giorni di fila per mantenerlo.',
   'game.concept.elans.families.one': '{count} famiglia attiva',
   'game.concept.elans.families.other': '{count} famiglie attive',
+  'game.concept.elans.title': 'I tuoi slanci',
+  'game.concept.elans.factor': 'Slancio ×{factor}',
   'game.concept.badges.name': 'Badge',
   'game.concept.badges.why': 'Un badge mostra ciò che fai di più su Meeshy.',
   'game.concept.badges.how': 'Ripeti un gesto: il suo badge cambia materiale, dal rame al prisma.',

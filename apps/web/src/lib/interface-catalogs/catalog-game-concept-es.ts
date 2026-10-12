@@ -67,6 +67,8 @@ const es = {
   'game.concept.elans.tip.2': 'Vuelve varios días seguidos para mantenerlo.',
   'game.concept.elans.families.one': '{count} familia activa',
   'game.concept.elans.families.other': '{count} familias activas',
+  'game.concept.elans.title': 'Tus impulsos',
+  'game.concept.elans.factor': 'Impulso ×{factor}',
   'game.concept.badges.name': 'Insignias',
   'game.concept.badges.why': 'Una insignia muestra lo que más haces en Meeshy.',
   'game.concept.badges.how': 'Repite un gesto: su insignia cambia de material, del cobre al prisma.',
