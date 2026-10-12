@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 
 /// **Les gardes de source de la refonte de Progression** (#9564) — ce qu'aucun rendu ne peut dire à la place du code :
 /// aucune pastille ne se coupe, la première page ne monte aucune vue de geste, les textes des concepts existent dans
@@ -113,12 +114,12 @@ final class ProgressionConceptGuardTests: XCTestCase {
 
     // MARK: - Sept langues, une source par concept
 
-    private func catalog() throws -> [String: [String: String]] {
+    private func catalog(prefix: String = "game.concept.") throws -> [String: [String: String]] {
         let data = try Data(contentsOf: iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings"))
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let strings = root["strings"] as? [String: Any] else { return [:] }
         var table: [String: [String: String]] = [:]
-        for (key, value) in strings where key.hasPrefix("game.concept.") {
+        for (key, value) in strings where key.hasPrefix(prefix) {
             guard let localizations = (value as? [String: Any])?["localizations"] as? [String: Any] else { continue }
             table[key] = localizations.reduce(into: [:]) { acc, pair in
                 if let unit = (pair.value as? [String: Any])?["stringUnit"] as? [String: Any], let text = unit["value"] as? String {
@@ -140,6 +141,28 @@ final class ProgressionConceptGuardTests: XCTestCase {
                 }
             }
         }
+    }
+
+    /// #7757 — le titre de la carte des élans se lit dans la langue du lecteur : il passe par une clé du catalogue,
+    /// présente dans les sept langues, et seul le français dit « Élan » (la phrase juste dessous dit déjà « Momentum ×3 »,
+    /// « Schwung ×3 », « الزخم ×3 »). Une capture `en-US` de Progression ne montre plus un mot français en tête.
+    func test_theElansCardTitle_isLocalized_inTheSevenLanguages_neverAHardcodedFrenchWord() throws {
+        let entry = try XCTUnwrap(try catalog(prefix: "progression.elan.")["progression.elan.factor"],
+                                  "progression.elan.factor : absente du catalogue")
+        for locale in locales {
+            let text = entry[locale] ?? ""
+            XCTAssertTrue(text.contains("×%lld"), "progression.elan.factor [\(locale)] : le facteur doit y figurer — « \(text) »")
+            if locale != "fr" {
+                XCTAssertFalse(text.contains("Élan"), "progression.elan.factor [\(locale)] : mot français — « \(text) »")
+            }
+        }
+        XCTAssertTrue(ProgressionCopy.elanTitle(factor: 3).contains("×3"), "le titre porte le facteur entier")
+        XCTAssertFalse(ProgressionCopy.elanTitle(factor: 2).contains("×2.0"), "jamais une précision inexistante")
+
+        let hero = try body(of: "struct ProgressionElansHero: View {",
+                            in: try source("Meeshy/Features/Main/Views/ProgressionHub.swift"))
+        XCTAssertFalse(hero.contains("\"Élan"), "aucune chaîne en dur dans la carte des élans")
+        XCTAssertTrue(hero.contains("ProgressionCopy.elanTitle(factor:"), "le titre passe par la copie localisée")
     }
 
     /// Une phrase de carte tient en deux lignes à 320 pt de large : 72 caractères au plus, la borne que le lot web a
