@@ -462,7 +462,6 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertFalse(politique.savesOriginal, "par défaut, l'original ne rejoint pas Photos")
         XCTAssertEqual(politique.renderedMode, .manual, "par défaut, la flèche ⬇︎ enregistre le rendu")
         XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: false), "« Terminé » n'enregistre rien de lui-même")
-        XCTAssertTrue(politique.writesUntouchedTake, "une prise sans effet s'écrit : l'original n'y est pas")
     }
 
     func test_savePolicy_readsTheUserSettings() {
@@ -474,7 +473,6 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(politique.renderedMode, .automatic)
         XCTAssertTrue(politique.savesRenderOnFinish(alreadySaved: false))
         XCTAssertFalse(politique.savesRenderOnFinish(alreadySaved: true), "jamais deux fois la même prise")
-        XCTAssertFalse(politique.writesUntouchedTake, "l'original y est déjà : une prise sans effet ne se double pas")
     }
 
     func test_savePolicy_unknownStoredMode_fallsBackToManual() {
@@ -596,7 +594,10 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(galerie.saveVideoCount, 1, "sans effet ni cadre, l'original rejoint Photos")
     }
 
-    func test_saveTakeToPhotos_untouchedVideo_originalAlreadySaved_writesNothingMore() async {
+    /// #10284 : une prise HORS cadre garde son original dans l'app, même quand
+    /// Réglages › Médias demande l'original — « Enregistrer » doit donc l'ÉCRIRE,
+    /// jamais conclure qu'il est déjà dans Photos.
+    func test_saveTakeToPhotos_untouchedOutsideVideo_savesOriginalSetting_stillWritesTheTake() async {
         let galerie = MockComposerGallery()
         let lecteur = MockComposerLoopPlayer(duration: 3)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
@@ -605,7 +606,33 @@ final class ComposerCaptureEditTests: XCTestCase {
         await session.beginEditing(video: Self.clip())
         session.saveTakeToPhotos()
         await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
-        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original y est déjà : la prise est dans Photos")
+        XCTAssertEqual(galerie.saveVideoCount, 1, "l'original d'une prise hors cadre n'est pas dans Photos : la prise s'y écrit")
+    }
+
+    func test_finishEditingVideo_untouchedOutside_automatic_savesOriginalSetting_stillWritesTheTake() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .automatic) },
+                                             loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        var remis = false
+        session.onDeliver = { _ in remis = true }
+        session.finishEditing()
+        await ComposerCaptureTakesTests.waitUntil { remis }
+        XCTAssertEqual(galerie.saveVideoCount, 1, "« Terminé » automatique écrit la prise hors cadre : son original est resté dans l'app")
+    }
+
+    func test_frameTake_untouchedVideo_originalAlreadyInPhotos_writesNothingMore() async {
+        let galerie = MockComposerGallery()
+        let lecteur = MockComposerLoopPlayer(duration: 3)
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
+                                             savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) },
+                                             loopPlayerFactory: { _ in lecteur })
+        session.camera.librarySave = Task { true }
+        session.openFrameTake(video: Self.clip())
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved && session.takeWrite == nil }
+        XCTAssertEqual(galerie.saveVideoCount, 0, "l'original de la prise par le cadre est dans Photos : rien ne se double")
     }
 
     func test_finishEditingVideo_untouched_automatic_withoutOriginal_writesTheTake() async {

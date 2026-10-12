@@ -617,6 +617,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie,
                                              savePolicy: { CaptureSavePolicy(savesOriginal: true, renderedMode: .manual) })
+        session.camera.librarySave = Task { true }
         let url = try Self.tempFile()
         session.saveRenderedVideo(url)
         await Self.waitUntil { session.pendingGallerySaves == 0 }
