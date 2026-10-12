@@ -106,3 +106,22 @@ describe('useStudioQuickCapture — le flux demandé au geste (#10307)', () => {
     expect(journal).toEqual(['open:environment', 'release']);
   });
 });
+
+function ArmedProbe() {
+  const quick = useStudioQuickCapture({
+    lang: 'fr',
+    kind: 'STORY',
+    scene: { pageBlank: true, toolOpen: false, timelineOpen: false, retouching: false, locked: false },
+    onTake: () => undefined,
+    armsOnOpen: true,
+  });
+  return <div>{quick.cameraLayer}</div>;
+}
+
+describe('useStudioQuickCapture — le moteur du navigateur, chargé à la demande (#10322)', () => {
+  test('sans moteur injecté, la caméra ouverte armée se monte une fois le moteur chargé', async () => {
+    await mounter.mount(<ArmedProbe />);
+    for (let i = 0; i < 40 && document.querySelector('[data-story-camera]') === null; i += 1) await settle();
+    expect(document.querySelector('[data-story-camera]')).not.toBeNull();
+  });
+});
