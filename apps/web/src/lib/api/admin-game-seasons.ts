@@ -1,3 +1,4 @@
+import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 import { SEASON_COPY_LOCALES, type SeasonCopy, type SeasonCopyByLocale, type SeasonDefinitionStatus, type SeasonEditRefusal } from '@meeshy/shared/utils/game/season-schedule';
 import type { SeasonAppEvent } from '@meeshy/shared/utils/game/season-app-events';
 
@@ -20,9 +21,9 @@ import type { ApiFailure, ApiResult } from './http';
  * | `POST …/proposals/:id/reject` | l'humain rejette (raison ≤ 280) |
  * | `GET /admin/game/seasons/app-events?count=` | les événements App Store, leurs défauts et le YAML `store.app_events` |
  *
- * Les adresses sont posées à la main, sous `API_PREFIX` comme `game-archive.ts` : le catalogue généré depuis le
- * manifeste de la passerelle (`packages/shared/api/endpoints/admin.ts`) ne les porte pas encore, et la passerelle
- * s'écrit en parallèle. Quand le manifeste les sert, ce module les y lira.
+ * Les adresses viennent du catalogue généré depuis le manifeste de la passerelle
+ * (`packages/shared/api/endpoints/admin.ts`). `GET …/app-events.yaml` (téléchargement direct, pour un script) n'a pas
+ * d'appelant web : l'écran télécharge le champ `yaml` de la réponse JSON.
  *
  * ## Les refus sont des CODES
  *
@@ -35,8 +36,6 @@ import type { ApiFailure, ApiResult } from './http';
  * Aucun spread : un champ voisin qu'une version future de la passerelle ajouterait n'entre pas dans le cache.
  * Une ligne ou une proposition illisible est écartée, jamais devinée.
  */
-const API_PREFIX = '/api/v1';
-const ROOT = `${API_PREFIX}/admin/game/seasons`;
 
 export const ADMIN_GAME_SEASONS_QUERY_KEY = ['admin', 'game-seasons'] as const;
 export const adminSeasonsQueryKey = () => [...ADMIN_GAME_SEASONS_QUERY_KEY, 'list'] as const;
@@ -213,7 +212,7 @@ const withSignal = (signal: AbortSignal | undefined) => (signal === undefined ? 
 
 export async function loadAdminSeasons(params: AdminDeps & { readonly from?: number; readonly count?: number; readonly signal?: AbortSignal }): Promise<ApiResult<AdminSeasonList>> {
   const query = [params.from === undefined ? null : `from=${params.from}`, params.count === undefined ? null : `count=${params.count}`].filter((part) => part !== null).join('&');
-  const result = await params.transport.request<unknown>({ method: 'GET', path: query === '' ? ROOT : `${ROOT}?${query}`, ...withSignal(params.signal) });
+  const result = await params.transport.request<unknown>({ method: 'GET', path: query === '' ? adminEndpoints.gameSeasons : `${adminEndpoints.gameSeasons}?${query}`, ...withSignal(params.signal) });
   if (!result.ok) return result;
   const data = asRecord(result.data);
   const now = asRecord(data?.['now']);
@@ -228,7 +227,7 @@ export async function loadAdminSeasons(params: AdminDeps & { readonly from?: num
 export type SavedSeason = { readonly revision: number; readonly season: AdminSeasonRow };
 
 export async function saveAdminSeason(params: AdminDeps & { readonly number: number; readonly body: SeasonEditBody }): Promise<ApiResult<SavedSeason>> {
-  const result = await params.transport.request<unknown>({ method: 'PUT', path: `${ROOT}/${params.number}`, body: params.body });
+  const result = await params.transport.request<unknown>({ method: 'PUT', path: adminEndpoints.gameSeasonsByNumber(String(params.number)), body: params.body });
   if (!result.ok) return result;
   const data = asRecord(result.data);
   const revision = intOf(data?.['revision']);
@@ -241,7 +240,7 @@ export async function proposeSeason(params: AdminDeps & { readonly number: numbe
   const brief = params.brief?.trim() ?? '';
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `${ROOT}/${params.number}/proposals`,
+    path: adminEndpoints.gameSeasonsByNumberProposals(String(params.number)),
     body: brief === '' ? {} : { brief },
   });
   if (!result.ok) return result;
@@ -250,7 +249,7 @@ export async function proposeSeason(params: AdminDeps & { readonly number: numbe
 }
 
 export async function loadSeasonProposals(params: AdminDeps & { readonly status: ProposalStatusFilter; readonly signal?: AbortSignal }): Promise<ApiResult<readonly SeasonProposal[]>> {
-  const result = await params.transport.request<unknown>({ method: 'GET', path: `${ROOT}/proposals?status=${params.status}`, ...withSignal(params.signal) });
+  const result = await params.transport.request<unknown>({ method: 'GET', path: `${adminEndpoints.gameSeasonsProposals}?status=${params.status}`, ...withSignal(params.signal) });
   if (!result.ok) return result;
   const items = asRecord(result.data)?.['items'];
   if (!Array.isArray(items)) return MALFORMED('liste des propositions');
@@ -260,7 +259,7 @@ export async function loadSeasonProposals(params: AdminDeps & { readonly status:
 export async function approveSeasonProposal(
   params: AdminDeps & { readonly id: string; readonly body: SeasonApprovalBody },
 ): Promise<ApiResult<{ readonly revision: number; readonly season: AdminSeasonRow; readonly proposal: SeasonProposal }>> {
-  const result = await params.transport.request<unknown>({ method: 'POST', path: `${ROOT}/proposals/${encodeURIComponent(params.id)}/approve`, body: params.body });
+  const result = await params.transport.request<unknown>({ method: 'POST', path: adminEndpoints.gameSeasonsProposalsByIdApprove(params.id), body: params.body });
   if (!result.ok) return result;
   const data = asRecord(result.data);
   const revision = intOf(data?.['revision']);
@@ -273,7 +272,7 @@ export async function rejectSeasonProposal(params: AdminDeps & { readonly id: st
   const reason = params.reason?.trim() ?? '';
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `${ROOT}/proposals/${encodeURIComponent(params.id)}/reject`,
+    path: adminEndpoints.gameSeasonsProposalsByIdReject(params.id),
     body: reason === '' ? {} : { reason },
   });
   if (!result.ok) return result;
@@ -294,7 +293,7 @@ export type SeasonAppEventsExport = {
 export async function exportSeasonAppEvents(params: AdminDeps & { readonly count?: number; readonly signal?: AbortSignal }): Promise<ApiResult<SeasonAppEventsExport>> {
   const result = await params.transport.request<unknown>({
     method: 'GET',
-    path: params.count === undefined ? `${ROOT}/app-events` : `${ROOT}/app-events?count=${params.count}`,
+    path: params.count === undefined ? adminEndpoints.gameSeasonsAppEvents : `${adminEndpoints.gameSeasonsAppEvents}?count=${params.count}`,
     ...withSignal(params.signal),
   });
   if (!result.ok) return result;

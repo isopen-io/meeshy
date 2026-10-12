@@ -457,7 +457,12 @@ export const callersIn = (contents, nsNames) => {
 // `me.gamePhotoMomentsPresented` (L10a, `GAME_PHOTO_ROUTES`), GÉNÉRÉES avec leurs routes — comme les
 // autres `me.game*`, le web les lira par leur table partagée (`packages/shared/types/game-routes.ts`),
 // jamais par le catalogue (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 -> 278 (#10235, 2026-10-12) : `admin.gameSeasonsAppEventsYaml` (`GET /api/v1/admin/game/seasons/app-events.yaml`),
+// le téléchargement DIRECT du bloc `store.app_events` d'andp, pour un script ou un `curl` d'administrateur — l'écran
+// web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
+// `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
+// `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
+const BASELINE_DEAD_ENTRIES = 278;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

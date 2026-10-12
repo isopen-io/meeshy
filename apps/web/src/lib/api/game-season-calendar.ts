@@ -1,3 +1,4 @@
+import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import { useQuery } from '@tanstack/react-query';
 import { useSyncExternalStore } from 'react';
 
@@ -30,8 +31,6 @@ import { SEASON_CALENDAR_QUERY_KEY } from './game-v2-queries';
  * calendrier. Rien de la présence d'autrui n'y passe.
  */
 
-const API_PREFIX = '/api/v1';
-const CALENDAR_ROUTE = '/me/game/seasons/calendar';
 export const SEASON_CALENDAR_STORAGE_KEY = 'meeshy.game.season-calendar.v1';
 export const seasonCalendarQueryKey = SEASON_CALENDAR_QUERY_KEY;
 
@@ -52,7 +51,7 @@ export async function fetchSeasonCalendar(
 ): Promise<ApiResult<SeasonCalendarRead>> {
   const result = await transport.request<unknown>({
     method: 'GET',
-    path: `${API_PREFIX}${CALENDAR_ROUTE}`,
+    path: meEndpoints.gameSeasonsCalendar,
     ...(params.knownRevision === null ? {} : { headers: { 'If-None-Match': seasonScheduleEtag(params.knownRevision) } }),
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
