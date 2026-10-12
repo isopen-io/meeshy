@@ -107,6 +107,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
   useBackDismiss(close, { escape: true });
   const { ref: stage, play } = useChoreography<HTMLDivElement>(env.playOptions);
   const video = useRef<HTMLVideoElement>(null);
+  /* La case du cadre peint le direct à travers son cadre, comme les cases du composer. */
+  const tileVideo = useRef<HTMLVideoElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const session = useRef<CameraSession | null>(null);
   const photo = useRef<PhotoSource | null>(null);
@@ -250,6 +252,10 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
     if (!cameraLive || element === null || session.current === null) return;
     element.srcObject = session.current.stream;
     void element.play?.()?.catch(() => undefined);
+    const tile = tileVideo.current;
+    if (tile === null) return;
+    tile.srcObject = session.current.stream;
+    void tile.play?.()?.catch(() => undefined);
   }, [cameraLive]);
 
   useEffect(() => {
@@ -565,6 +571,29 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
           </div>
         ) : null}
 
+        {cameraLive ? (
+          <button
+            type="button"
+            data-photo-take="frame"
+            aria-label={gameText('game.photo.take.frame', { title: moment.title })}
+            onClick={() => shoot('frame')}
+            className="mx-auto flex shrink-0 flex-col items-center gap-1 rounded-tile p-1"
+            style={{ minHeight: 44, minWidth: 44 }}
+          >
+            <span
+              aria-hidden="true"
+              className="relative block shrink-0 overflow-hidden rounded-tile"
+              style={{ width: 72, aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)', boxShadow: `0 0 0 3px ${GAME_BRAND}` }}
+            >
+              <video ref={tileVideo} playsInline muted autoPlay className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+              <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={null} />
+            </span>
+            <span data-photo-take-label="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
+              {moment.title}
+            </span>
+          </button>
+        ) : null}
+
         {state.step === 'camera' ? (
           <div className="flex flex-col gap-2">
             {state.camera === 'opening' ? (
@@ -586,27 +615,6 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
               {gameText('game.photo.image_right')}
             </p>
             {options}
-            {state.camera === 'live' ? (
-              <button
-                type="button"
-                data-photo-take="frame"
-                aria-label={gameText('game.photo.take.frame', { title: moment.title })}
-                onClick={() => shoot('frame')}
-                className="mx-auto flex flex-col items-center gap-1 rounded-card p-1"
-                style={{ minHeight: 44, minWidth: 44 }}
-              >
-                <span
-                  aria-hidden="true"
-                  className="relative block overflow-hidden rounded-chip"
-                  style={{ width: 72, aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)', boxShadow: `0 0 0 3px ${GAME_BRAND}` }}
-                >
-                  <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={null} />
-                </span>
-                <span data-photo-take-label="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
-                  {moment.title}
-                </span>
-              </button>
-            ) : null}
             <Button attr={{ 'data-photo-gallery': '' }} onClick={() => picker.current?.click()}>
               {gameText('game.photo.gallery')}
             </Button>
