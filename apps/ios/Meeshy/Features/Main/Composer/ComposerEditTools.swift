@@ -105,8 +105,9 @@ nonisolated enum ComposerEditTools {
 /// muet qui le coupe tout à fait sans l'oublier — réactiver rend le gain d'avant.
 /// L'aperçu l'entend et le rendu final le grave (`videoRender`, une seule recette).
 ///
-/// Le gain va de 0 à 100 % : `AVAudioMix` et `AVPlayer` ne savent pas amplifier
-/// au-delà du niveau enregistré.
+/// Le gain va de 0 à 200 % : `AVAudioMix` et `AVPlayer` ne savent pas amplifier
+/// au-delà du niveau enregistré — la part au-dessus de 100 % passe par
+/// `ComposerTakeGain`, la même loi dans l'aperçu et dans le rendu (#10360).
 nonisolated struct ComposerTakeSound: Equatable, Sendable {
     /// **100 % au MILIEU de la piste, de 0 à 200 %** (porteur 2026-10-12, #10341).
     static let range: ClosedRange<Double> = 0...2
@@ -147,6 +148,43 @@ nonisolated struct ComposerTakeSound: Equatable, Sendable {
 
     static func percent(_ gain: Double) -> Int {
         Int((clamped(gain) * 100).rounded())
+    }
+}
+
+/// **Le gain qu'on entend est celui qui part** (#10360) : un gain se sépare en
+/// une ATTÉNUATION (0…1, le volume que `AVPlayer` et `AVAudioMix` savent poser)
+/// et une AMPLIFICATION (1…2, que seul un tap sur les échantillons sait faire,
+/// `ComposerTakeBoostTap`). L'aperçu et le rendu servent cette loi, et elle seule.
+///
+/// L'amplification s'écrête en DOUCEUR : linéaire jusqu'au genou, puis une
+/// tangente hyperbolique qui tend vers la pleine échelle sans jamais l'atteindre —
+/// un cri amplifié sature avec rondeur au lieu de craquer.
+nonisolated enum ComposerTakeGain {
+    /// Au-dessous du genou, l'échantillon amplifié reste tel quel.
+    static let knee: Float = 0.8
+
+    /// La part que le volume du lecteur ou du mixage pose : 0…1.
+    static func volume(_ gain: Float) -> Float {
+        guard gain.isFinite else { return 1 }
+        return min(1, max(0, gain))
+    }
+
+    /// La part que le tap pose : 1 (rien) … 2.
+    static func boost(_ gain: Float) -> Float {
+        guard gain.isFinite else { return 1 }
+        return max(1, min(Float(ComposerTakeSound.range.upperBound), gain))
+    }
+
+    /// Un échantillon amplifié, écrêté en douceur au-delà du genou. Sans
+    /// amplification, l'échantillon passe intact.
+    static func amplified(_ sample: Float, boost: Float) -> Float {
+        guard boost > 1, sample.isFinite else { return sample }
+        let porte = sample * boost
+        let amplitude = abs(porte)
+        guard amplitude > knee else { return porte }
+        let marge = 1 - knee
+        let doux = knee + marge * tanh((amplitude - knee) / marge)
+        return porte < 0 ? -doux : doux
     }
 }
 
