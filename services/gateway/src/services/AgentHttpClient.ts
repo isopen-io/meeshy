@@ -10,14 +10,20 @@ type AgentApiResponse<T> = {
 /** L'en-tête du secret interne passerelle → agent (`services/agent/src/routes/internal-auth.ts`). */
 export const AGENT_INTERNAL_TOKEN_HEADER = 'x-meeshy-internal-token';
 
+/** Le même minimum que l'agent (`INTERNAL_TOKEN_MIN_LENGTH`) : plus court, il refuserait tout. */
+export const AGENT_INTERNAL_TOKEN_MIN_LENGTH = 32;
+
 /**
  * #10242 — le secret interne que l'agent exige sur toute route sauf /health
- * (`services/agent/src/routes/internal-guard.ts`). Lu à chaque appel : absent, rien ne part.
+ * (`services/agent/src/routes/internal-guard.ts`). Lu à chaque appel : absent ou trop court, rien ne part.
  */
 function internalToken(): string | null {
   const token = (process.env.AGENT_INTERNAL_TOKEN ?? '').trim();
-  return token.length > 0 ? token : null;
+  return token.length >= AGENT_INTERNAL_TOKEN_MIN_LENGTH ? token : null;
 }
+
+/** Le signal de démarrage : la passerelle peut-elle joindre l'agent ? (journalisé une fois par `server.ts`). */
+export const agentInternalTokenConfigured = (): boolean => internalToken() !== null;
 
 export class AgentUnavailableError extends Error {
   constructor(message: string) {
