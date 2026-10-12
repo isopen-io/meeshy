@@ -64,6 +64,23 @@ nonisolated enum PostDetailSceneFraming {
             relevees.sceneTop = minY.rounded()
             return relevees
         }
+
+        /// **Le clavier ne rétrécit pas la scène** (#8647). Pendant la saisie
+        /// d'un commentaire, le clavier pousse le composer et raccourcit la zone
+        /// de défilement : relevée telle quelle, la scène se recalculait plus
+        /// petite sous les doigts. Tant que le composer a le focus, la hauteur ne
+        /// descend plus ; ce qui grandit, ce qui change de largeur et la toute
+        /// première mesure se relèvent toujours.
+        func recordingViewport(_ size: CGSize, composerIsFocused: Bool) -> Measures {
+            let clavier = composerIsFocused
+                && viewport.height > 0
+                && abs(size.width - viewport.width) < PostDetailSceneFraming.restTolerance
+                && size.height < viewport.height
+            guard !clavier else { return self }
+            var relevees = self
+            relevees.viewport = size
+            return relevees
+        }
     }
 
     /// La taille du canvas de la scène, ou `nil` tant que la page n'est pas

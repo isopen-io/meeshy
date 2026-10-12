@@ -776,7 +776,7 @@ struct PostDetailView: View {
                         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
                         .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         // Par `onGeometryChange` : une préférence ne délivrait ici que `.zero` (#6708).
-                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures.viewport = $0 }
+                        .onGeometryChange(for: CGSize.self) { $0.size } action: { sceneMeasures = sceneMeasures.recordingViewport($0, composerIsFocused: composerIsFocused) }
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
