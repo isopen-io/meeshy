@@ -140,14 +140,6 @@ extension GameText {
         String(localized: "game2.showcase.awarded", defaultValue: "Obtenu le \(date)", bundle: .main)
     }
 
-    static func showcaseAwardedMonth(month: String) -> String {
-        String(localized: "game2.showcase.awarded_month", defaultValue: "Obtenu en \(month)", bundle: .main)
-    }
-
-    static func showcaseAwardedMonthCount(month: String, count: String) -> String {
-        String(localized: "game2.showcase.awarded_month_count", defaultValue: "Obtenu en \(month) · ×\(count)", bundle: .main)
-    }
-
     static var showcaseVisibility: String { String(localized: "game2.showcase.visibility", defaultValue: "Qui voit ta vitrine", bundle: .main) }
 
     static var showcaseVisibilityHint: String { String(localized: "game2.showcase.visibility_hint", defaultValue: "Un visiteur ne voit que le mois d’obtention, jamais la date exacte. « Moi seul » ferme la vitrine à tous les autres.", bundle: .main) }

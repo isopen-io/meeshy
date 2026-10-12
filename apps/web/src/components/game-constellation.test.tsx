@@ -1,20 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import type { UserShowcaseResponse } from '@meeshy/shared/types/game';
-
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES as INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { visitorConstellation } from './game-constellation';
 import { GameConstellationOwn as GameConstellation } from './game-constellation-own';
-import { GameProfileVisitor } from './game-profile-visitor';
 
 /**
  * LA CONSTELLATION (#10053) — une étoile tous les dix fragments d'étoile, un cosmétique de profil par étoile.
- * Le membre voit la suivante se remplir ; un visiteur ne voit que les étoiles (figées au mois par le serveur).
+ * Le membre voit la suivante se remplir.
  * Aucun mot de points, de Meesh ni d'argent.
  */
 const setInterfaceLanguage = (language: InterfaceLanguage): void => {
@@ -66,25 +62,5 @@ describe('la constellation du membre', () => {
       expect(html).toContain('rtl:-scale-x-100');
     }
     setInterfaceLanguage('fr');
-  });
-});
-
-describe('la constellation d’un autre membre', () => {
-  const showcase = (over: Partial<UserShowcaseResponse> = {}): UserShowcaseResponse => ({ visible: true, items: [], order: [], ...over });
-
-  test('se lit sur les seules étoiles servies, sans progression vers la suivante', () => {
-    expect(visitorConstellation(showcase({ constellation: { stars: 3 } }))).toBe(3);
-    const t = text(renderToStaticMarkup(<GameProfileVisitor showcase={showcase({ constellation: { stars: 3 } })} name="Nour" />));
-    expect(t).toContain('3 étoiles allumées');
-    expect(t).toContain('Scintillement · étoile 3');
-    expect(t).not.toContain('Encore');
-  });
-
-  test('vitrine fermée, ancien serveur ou constellation éteinte : rien ne se dessine', () => {
-    expect(visitorConstellation(showcase({ visible: false, constellation: { stars: 3 } }))).toBeNull();
-    expect(visitorConstellation(showcase())).toBeNull();
-    expect(visitorConstellation(showcase({ constellation: { stars: 0 } }))).toBeNull();
-    expect(visitorConstellation(undefined)).toBeNull();
-    expect(renderToStaticMarkup(<GameProfileVisitor showcase={showcase({ constellation: { stars: 0 } })} name="Nour" />)).toBe('');
   });
 });

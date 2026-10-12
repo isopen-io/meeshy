@@ -14,7 +14,7 @@ import { shownLevelOf, shownStanding } from '@/lib/game/ladder';
 import { shownRank } from '@/lib/view/game-copy';
 
 import { GameProfileBanner, type BannerStanding } from './game-profile-banner';
-import { ContactGameStrip } from './game-profile-visitor';
+import { ContactGameStrip } from './game-contact-strip';
 
 /**
  * LE JEU DES PROFILS, BRANCHÉ (#9481) — le morceau CHARGÉ À LA DEMANDE : les

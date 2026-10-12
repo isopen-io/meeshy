@@ -23,7 +23,7 @@ public final class JoinFlowViewModel: ObservableObject {
     @Published public var username = ""
     @Published public var email = ""
     @Published public var birthday = Date()
-    @Published public var language = "fr"
+    @Published public var language: String
     @Published public var isSubmitting = false
 
     public enum Phase {
@@ -59,9 +59,51 @@ public final class JoinFlowViewModel: ObservableObject {
 
     // MARK: - Init
 
-    public init(identifier: String, entry: Entry = .landing) {
+    public init(
+        identifier: String,
+        entry: Entry = .landing,
+        deviceLanguages: [String] = Locale.preferredLanguages + [Locale.current.identifier]
+    ) {
         self.identifier = identifier
         self.entry = entry
+        self.language = Self.defaultLanguage(for: deviceLanguages)
+    }
+
+    // MARK: - Languages
+
+    nonisolated public struct LanguageOption: Sendable, Hashable {
+        public let code: String
+        public let endonym: String
+    }
+
+    /// Les langues que le sélecteur du formulaire propose, chacune sous son
+    /// endonyme — jamais localisé.
+    nonisolated public static let offeredLanguages: [LanguageOption] = [
+        LanguageOption(code: "fr", endonym: "Français"),
+        LanguageOption(code: "en", endonym: "English"),
+        LanguageOption(code: "es", endonym: "Español"),
+        LanguageOption(code: "de", endonym: "Deutsch"),
+        LanguageOption(code: "it", endonym: "Italiano"),
+        LanguageOption(code: "pt", endonym: "Português"),
+        LanguageOption(code: "nl", endonym: "Nederlands"),
+        LanguageOption(code: "pl", endonym: "Polski"),
+        LanguageOption(code: "tr", endonym: "Türkçe"),
+        LanguageOption(code: "ru", endonym: "Русский"),
+        LanguageOption(code: "ar", endonym: "العربية"),
+        LanguageOption(code: "zh", endonym: "中文"),
+        LanguageOption(code: "ja", endonym: "日本語"),
+        LanguageOption(code: "ko", endonym: "한국어")
+    ]
+
+    /// #9944 — la langue présélectionnée : la première langue de l'appareil que
+    /// le sélecteur propose, normalisée comme partout (`normalizeLanguageCode`) ;
+    /// « fr » seulement quand aucune ne l'est.
+    nonisolated static func defaultLanguage(for deviceLanguages: [String]) -> String {
+        let offered = Set(offeredLanguages.map(\.code))
+        let deviceOffered = deviceLanguages
+            .compactMap { MeeshyUser.normalizeLanguageCode($0) }
+            .first(where: { offered.contains($0) })
+        return deviceOffered ?? "fr"
     }
 
     // MARK: - Load Link Info
