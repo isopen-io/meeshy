@@ -124,6 +124,7 @@ export function ProfilePostsPanel({
           <FeedPostCard
             key={model.id}
             model={model}
+            impressionSource="profile"
             onGesture={gestures.onGesture}
             onShare={gestures.onShare}
             onComment={gestures.onComment}
