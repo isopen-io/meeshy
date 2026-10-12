@@ -17,6 +17,7 @@ import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
+import { shellStartHref } from '@/lib/links/shell-start';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -132,6 +133,13 @@ function Skeleton() {
 function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
   const language = useSyncExternalStore(subscribeInterfaceLanguage, currentInterfaceLanguage, currentInterfaceLanguage);
   return <Fragment key={language}>{children}</Fragment>;
+}
+
+/* LA COQUE DÉMARRE SUR LA LISTE (#10353) — `navigate`, pas un `replaceState`
+   nu : le routeur a lu l'adresse à l'import et ne verrait pas la réécriture. */
+if (__SHELL__) {
+  const start = shellStartHref(window.location, href('list'));
+  if (start !== null) navigate(start, true);
 }
 
 const root = document.getElementById('root');
