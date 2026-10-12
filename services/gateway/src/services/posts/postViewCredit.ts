@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters } from './postCounters';
+import { NOT_DELETED } from './postIncludes';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+
+const log = enhancedLogger.child({ module: 'postViewCredit' });
 
 type PostViewCreditPrisma = Pick<PrismaClient, 'postView' | '$runCommandRaw'>;
 
@@ -44,4 +48,38 @@ export async function creditPostView(
   await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
 
   return true;
+}
+
+const isUniqueRace = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+
+/**
+ * #10404 — un lecteur qui RÉAGIT à un post ou le COMMENTE l'a vu : sa vue est
+ * créditée, avec la dédup de `creditPostView` (une vue par lecteur et par
+ * post). `viewCount` ne comptait que l'événement `view` explicite, que la carte
+ * du fil n'émet pas en likant ni en commentant : « N likes, 0 vue ». Posé côté
+ * passerelle, le crédit vaut pour tous les clients, anciens compris.
+ *
+ * L'auteur n'est jamais compté — la règle de `recordView`. `authorId` évite la
+ * relecture quand l'appelant l'a déjà. Un crédit qui échoue ne fait jamais
+ * échouer le geste qui l'a porté.
+ */
+export async function creditEngagedReaderView(
+  prisma: PostViewCreditPrisma & Pick<PrismaClient, 'post'>,
+  { postId, userId, authorId }: { readonly postId: string; readonly userId: string; readonly authorId?: string },
+): Promise<void> {
+  try {
+    const author = authorId ?? (await prisma.post.findFirst({
+      where: { id: postId, deletedAt: NOT_DELETED },
+      select: { authorId: true },
+    }))?.authorId;
+    if (!author || author === userId) return;
+    await creditPostView(prisma, { postId, userId });
+  } catch (error) {
+    if (isUniqueRace(error)) return;
+    log.warn('creditEngagedReaderView failed — gesture kept', {
+      postId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

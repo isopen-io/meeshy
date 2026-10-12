@@ -18,6 +18,7 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
 import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditEngagedReaderView } from './posts/postViewCredit';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -200,6 +201,8 @@ export class PostCommentService {
       where: { id: postId },
       data: { commentCount: { increment: 1 } },
     }));
+    // #10404 — commenter le post d'un autre, c'est l'avoir vu.
+    await creditEngagedReaderView(this.prisma, { postId, userId: authorId, authorId: post.authorId });
     if (parentId) {
       await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },

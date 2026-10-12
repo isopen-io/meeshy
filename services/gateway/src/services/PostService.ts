@@ -13,7 +13,7 @@ import { applyMediaOrder } from './posts/mediaOrder';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from './posts/mediaAltWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
-import { creditPostView } from './posts/postViewCredit';
+import { creditEngagedReaderView, creditPostView } from './posts/postViewCredit';
 import { incrementPostCounters } from './posts/postCounters';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -1443,6 +1443,7 @@ export class PostService {
   async likePost(postId: string, userId: string, emoji: string = '❤️', passage: { readonly through?: RepostPassage } = {}) {
     try {
       await this.postReactionService.addReaction({ postId, userId, emoji, ...passage });
+      await creditEngagedReaderView(this.prisma, { postId, userId });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('not found') || message.includes('deleted')) {
