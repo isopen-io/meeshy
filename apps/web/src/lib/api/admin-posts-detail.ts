@@ -100,6 +100,9 @@ export type AdminPostFiche = {
   readonly contentEditedAt: string | null;
   readonly expiresAt: string | null;
   readonly deletedAt: string | null;
+  /** Le retrait de modération (#10392) — posé, la fiche dit « hors ligne » et propose « Remettre en ligne ». */
+  readonly moderationHiddenAt: string | null;
+  readonly moderationPriorVisibility: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly author: AdminPersonRef | null;
@@ -274,6 +277,8 @@ export function decodeAdminPostFiche(raw: unknown): AdminPostFiche | null {
     contentEditedAt: textOrNull(post.contentEditedAt),
     expiresAt: textOrNull(post.expiresAt),
     deletedAt: textOrNull(post.deletedAt),
+    moderationHiddenAt: textOrNull(post.moderationHiddenAt),
+    moderationPriorVisibility: textOrNull(post.moderationPriorVisibility),
     createdAt: textOrNull(post.createdAt),
     updatedAt: textOrNull(post.updatedAt),
     author: decodeAdminPersonRef(post.author),

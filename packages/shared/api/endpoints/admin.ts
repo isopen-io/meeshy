@@ -255,6 +255,12 @@ export const posts = '/api/v1/admin/posts';
 /** GET · DELETE /api/v1/admin/posts/:postId */
 export const postsByPostId = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}`;
 
+/** POST /api/v1/admin/posts/:postId/gestures */
+export const postsByPostIdGestures = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}/gestures`;
+
+/** POST /api/v1/admin/posts/gestures */
+export const postsGestures = '/api/v1/admin/posts/gestures';
+
 /** GET /api/v1/admin/posts/stats */
 export const postsStats = '/api/v1/admin/posts/stats';
 

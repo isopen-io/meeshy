@@ -108,13 +108,17 @@ export function adminPostStateOf(facts: AdminPostStateFacts, now: Date): AdminPo
   return 'published';
 }
 
-/** Ce que chaque état laisse faire d'un geste — l'interface ne propose que ceux-là. */
+/**
+ * Ce que chaque état laisse faire d'un geste — l'interface ne propose que ceux-là.
+ * Une publication hors ligne se remet en ligne avec l'audience de son auteur
+ * (`restore`) ou avec celle que l'administration choisit (`set-visibility`).
+ */
 export function adminGesturesFor(state: AdminPostState): readonly AdminPostGestureName[] {
   switch (state) {
     case 'deleted':
       return [];
     case 'offline':
-      return ['restore'];
+      return ['restore', 'set-visibility'];
     case 'published':
     case 'private':
     case 'expired':

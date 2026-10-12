@@ -11,6 +11,7 @@ import auditReglagesPt from './admin/audit-reglages-pt';
 import personnesPt from './admin/personnes-pt';
 import conversationsAgentPt from './admin/conversations-agent-pt';
 import engagementScalePt from './admin/engagement-scale-pt';
+import gestesPt from './admin/gestes-pt';
 import gameSeasonsPt from './admin/game-seasons-pt';
 
 const pt = {
@@ -380,6 +381,7 @@ const pt = {
   ...personnesPt,
   ...conversationsAgentPt,
   ...engagementScalePt,
+  ...gestesPt,
   ...gameSeasonsPt,
 } satisfies AdminInterfaceCatalog;
 

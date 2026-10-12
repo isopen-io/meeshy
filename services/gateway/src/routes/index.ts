@@ -119,6 +119,7 @@ import { anonymousUsersAdminRoutes } from './admin/anonymous-users';
 import { systemRankingsRoutes } from './admin/system-rankings';
 import { broadcastRoutes } from './admin/broadcasts';
 import { adminPostRoutes } from './admin/posts';
+import { adminPostGestureRoutes } from './admin/post-gestures';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { gameSeasonsAdminRoutes } from './admin/game-seasons';
@@ -286,6 +287,8 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-broadcasts', prefix: `${API_PREFIX}/admin/broadcasts`, module: broadcastRoutes },
   { name: 'admin-ops', prefix: `${API_PREFIX}/admin/ops`, module: adminOpsRoutes },
   { name: 'admin-posts', prefix: `${API_PREFIX}/admin`, module: adminPostRoutes },
+  // Les gestes de publication depuis la liste (#10392) : hors ligne, remise en ligne, audience.
+  { name: 'admin-post-gestures', prefix: `${API_PREFIX}/admin`, module: adminPostGestureRoutes },
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-game-seasons', prefix: `${API_PREFIX}/admin/game`, module: gameSeasonsAdminRoutes },

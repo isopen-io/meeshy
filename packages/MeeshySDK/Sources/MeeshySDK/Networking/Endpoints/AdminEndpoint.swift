@@ -93,6 +93,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case opsStatus
     case posts
     case postsByPostId(postId: String)
+    case postsByPostIdGestures(postId: String)
+    case postsGestures
     case postsStats
     case ranking
     case reports
@@ -231,6 +233,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .opsStatus: return "/api/v1/admin/ops/status"
         case .posts: return "/api/v1/admin/posts"
         case .postsByPostId(let postId): return "/api/v1/admin/posts/\(postId)"
+        case .postsByPostIdGestures(let postId): return "/api/v1/admin/posts/\(postId)/gestures"
+        case .postsGestures: return "/api/v1/admin/posts/gestures"
         case .postsStats: return "/api/v1/admin/posts/stats"
         case .ranking: return "/api/v1/admin/ranking"
         case .reports: return "/api/v1/admin/reports"

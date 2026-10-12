@@ -201,6 +201,10 @@ const f = {
   'admin.enum.postVisibility.ONLY.explain': 'Visible solo para una lista elegida de amigos.',
 
   'admin.enum.postState.published': 'Publicada',
+  'admin.enum.postState.offline': 'Fuera de línea',
+  'admin.enum.postState.offline.explain': 'Retirada por la moderación: solo su autor la ve y no puede reabrirla.',
+  'admin.enum.postState.private': 'Privada',
+  'admin.enum.postState.private.explain': 'Solo su autor la ve.',
   'admin.enum.postState.deleted': 'Retirada',
   'admin.enum.postState.deleted.explain': 'Retirada por su autor o por la moderación.',
   'admin.enum.postState.expired': 'Caducada',

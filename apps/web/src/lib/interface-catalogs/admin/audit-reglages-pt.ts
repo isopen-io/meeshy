@@ -147,7 +147,7 @@ const f = {
   'admin.audit.action.DELETE_POST': 'Publicação removida',
   'admin.audit.action.DELETE_POST.explain': 'Um conteúdo foi removido por um terceiro autorizado, não pelo seu autor: é um gesto de moderação.',
   'admin.audit.action.MODERATE_POST': 'Visibilidade de uma publicação moderada',
-  'admin.audit.action.MODERATE_POST.explain': 'Uma publicação foi tornada privada, tirada do ar ou colocada de volta no ar a partir da ficha do autor; o detalhe guarda o público de antes e de depois.',
+  'admin.audit.action.MODERATE_POST.explain': 'Uma publicação foi tirada do ar, recolocada, tornada privada ou mostrada a outro público — pela lista, pela página do autor ou por uma denúncia; o detalhe guarda o estado antes e depois.',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'Ficha de um participante do World Wide lida',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Leitura soberana, para moderar, da configuração de uma pessoa que entrou no World Wide — convidados incluídos: idiomas, país, navegador e dispositivo, data de entrada, link usado. Nunca um endereço IP.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Lista de visualizações de um conteúdo lida',
