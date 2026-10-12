@@ -151,6 +151,8 @@ const f = {
   'admin.audit.action.DELETE_POST.explain': 'Un contenu a été retiré par un tiers habilité, non par son auteur : c’est un geste de modération.',
   'admin.audit.action.MODERATE_POST': 'Visibilité d’une publication modérée',
   'admin.audit.action.MODERATE_POST.explain': 'Une publication a été mise hors ligne, remise en ligne, mise en privé ou servie à une autre audience — depuis la liste, la fiche de son auteur ou un signalement ; le détail garde l’état d’avant et d’après.',
+  'admin.audit.action.REMOVE_CONTENT': 'Commentaire retiré',
+  'admin.audit.action.REMOVE_CONTENT.explain': 'Un commentaire (et ses réponses) a été retiré par la modération, depuis un signalement ou la fiche de sa publication.',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'Fiche d’un participant de World Wide lue',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Lecture souveraine, pour modérer, de la configuration d’une personne entrée dans World Wide — invité compris : langues, pays, navigateur et appareil, date d’entrée, lien utilisé. Jamais d’adresse IP.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Liste des vues d’un contenu lue',

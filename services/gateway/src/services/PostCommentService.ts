@@ -557,12 +557,18 @@ export class PostCommentService {
     // CHAQUE appel — le service n'est enregistré qu'au démarrage du socket,
     // après la construction des routes.
     announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+    // Le retrait PAR LA MODÉRATION (#10394, `routes/admin/moderation-acts.ts`) : la
+    // garde d'auteur cède à la décision d'un modérateur, déjà autorisée en amont
+    // (`canModerateContent`, hiérarchie), et la reprise des crédits suit la règle
+    // `removalReclaimsAuthorCredits` sous modération.
+    options: { readonly byModeration?: boolean } = {},
   ) {
+    const byModeration = options.byModeration === true;
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
-    if (comment.authorId !== userId) throw new Error('FORBIDDEN');
+    if (comment.authorId !== userId && !byModeration) throw new Error('FORBIDDEN');
 
     // Soft-delete the WHOLE reply subtree, not just the target comment.
     // `addComment` increments `post.commentCount` for EVERY comment — top-level
@@ -606,7 +612,7 @@ export class PostCommentService {
     // auteur, oui ; les réponses des AUTRES qu'elle emporte, non. Une
     // suppression rejouée ne reprend rien.
     [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
-      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration: false }))
+      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration }))
       .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement));
 
     await this.prisma.post.update({

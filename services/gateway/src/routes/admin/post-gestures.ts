@@ -101,6 +101,9 @@ function afterOf(gesture: AdminPostGesture, before: PostModerationState, context
   }
 }
 
+/** Une écriture attendue n'a pas eu lieu : la transaction s'annule, le geste se dit en conflit. */
+class GestureConflict extends Error {}
+
 const withdraws = (gesture: AdminPostGesture): boolean =>
   gesture.gesture === 'take-offline' || (gesture.gesture === 'set-visibility' && gesture.visibility === 'PRIVATE');
 
@@ -118,6 +121,8 @@ export async function applyPostGesture(
     readonly reason: string | null;
     readonly actor: ModerationActor;
     readonly extra?: (tx: Prisma.TransactionClient, applied: readonly ModerationPlan[]) => Promise<void>;
+    /** Ce que le journal de chaque publication porte en plus (le signalement d'origine). */
+    readonly metadata?: Readonly<Record<string, unknown>>;
   },
 ): Promise<readonly GestureOutcome[]> {
   const { gesture, actor } = input;
@@ -138,6 +143,19 @@ export async function applyPostGesture(
   const candidates = inReach.filter((plan) => plan.after !== null && !outranked.has(plan.row.id));
   const copies = gesture.gesture === 'set-visibility' ? { plans: [], outranked: 0 } : await copyPlans(fastify, gesture.gesture, candidates, { now, actor });
 
+  // Ce que le geste engage À CÔTÉ (le statut d'un signalement) ne s'écrit que si le geste
+  // s'applique à au moins une publication — jamais sur un refus — et s'annule avec lui :
+  // une écriture attendue qui n'a pas eu lieu (publication changée entre-temps) avorte la
+  // transaction entière, le signalement compris.
+  const acceptable = inReach.filter((plan) => !outranked.has(plan.row.id));
+  const extra = input.extra;
+  const guardedExtra =
+    extra === undefined || acceptable.length === 0
+      ? undefined
+      : async (tx: Prisma.TransactionClient, done: readonly ModerationPlan[]) => {
+          if (candidates.length > 0 && done.every((plan) => plan.copyOf !== undefined)) throw new GestureConflict();
+          await extra(tx, done);
+        };
   const applied = await writeModerationPlans(fastify, request, {
     writes: [...candidates, ...copies.plans],
     actorId: actor.id,
@@ -147,8 +165,12 @@ export async function applyPostGesture(
       to: stateFromModeration(plan.after as PostModerationState, expiresOf.get(plan.row.id), now),
       reason: input.reason,
       ...(gesture.gesture === 'set-visibility' ? { visibility: gesture.visibility } : {}),
+      ...(input.metadata ?? {}),
     }),
-    ...(input.extra === undefined ? {} : { extra: input.extra }),
+    ...(guardedExtra === undefined ? {} : { extra: guardedExtra }),
+  }).catch((error: unknown) => {
+    if (error instanceof GestureConflict) return [] as readonly ModerationPlan[];
+    throw error;
   });
   announceWithdrawals(fastify, withdraws(gesture), applied);
 
@@ -176,6 +198,9 @@ const nullableString = { type: ['string', 'null'] } as const;
 
 export const adminPostModerationViewJsonSchema = {
   type: 'object',
+  // `required` n'est pas décoratif : dans un `anyOf` (l'acte sur un signalement), il est ce qui
+  // empêche fast-json-stringify d'élire ce schéma pour un commentaire retiré et de le vider.
+  required: ['id', 'state', 'visibility', 'updatedAt'],
   properties: {
     id: { type: 'string' },
     state: { type: 'string', enum: [...ADMIN_POST_STATES] },

@@ -1,5 +1,5 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
-import { ADMIN_POST_STATES, type AdminPostState } from '@meeshy/shared/types/admin-publications';
+import { ADMIN_POST_STATES, type AdminPostState, type AdminReportAction } from '@meeshy/shared/types/admin-publications';
 
 import type { PostGestureIntent } from '@/lib/admin/post-gestures';
 
@@ -84,4 +84,25 @@ export async function sendAdminPostBatchGesture(
     return [{ postId: record.postId, outcome, code: textOrNull(record.code), view: decodeAdminPostView(record.view) }];
   });
   return { ok: true, data: verdicts };
+}
+
+/** Ce que l'acte sur un signalement a fait : le statut du dossier, et ce qu'il est advenu du contenu. */
+export type AdminReportActResult = { readonly reportId: string; readonly status: string; readonly post: AdminPostView | null };
+
+/**
+ * **TRAITER UN SIGNALEMENT EN UN GESTE** (#10394) — `POST admin.reportsByReportIdAct` : l'action
+ * sur le contenu et la clôture du dossier partent ensemble.
+ */
+export async function actOnAdminReport(
+  params: AdminDeps & { readonly reportId: string; readonly action: AdminReportAction; readonly reason?: string | null },
+): Promise<ApiResult<AdminReportActResult>> {
+  const result = await params.transport.request<unknown>({
+    method: 'POST',
+    path: adminEndpoints.reportsByReportIdAct(params.reportId),
+    body: { action: params.action, ...(params.reason === null || params.reason === undefined || params.reason === '' ? {} : { reason: params.reason }) },
+  });
+  if (!result.ok) return result;
+  const data = asRecord(result.data);
+  const report = asRecord(data?.report);
+  return { ok: true, data: { reportId: params.reportId, status: textOrNull(report?.status) ?? '', post: decodeAdminPostView(data?.target) } };
 }

@@ -148,6 +148,8 @@ const f = {
   'admin.audit.action.DELETE_POST.explain': 'Un tercero autorizado, y no su autor, retiró un contenido: es un gesto de moderación.',
   'admin.audit.action.MODERATE_POST': 'Visibilidad de una publicación moderada',
   'admin.audit.action.MODERATE_POST.explain': 'Una publicación fue retirada, vuelta a publicar, hecha privada o mostrada a otra audiencia — desde la lista, la ficha de su autor o una denuncia; el detalle guarda el estado de antes y de después.',
+  'admin.audit.action.REMOVE_CONTENT': 'Comentario retirado',
+  'admin.audit.action.REMOVE_CONTENT.explain': 'La moderación retiró un comentario (y sus respuestas), desde una denuncia o desde la ficha de su publicación.',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED': 'Ficha de un participante de World Wide leída',
   'admin.audit.action.WORLD_PARTICIPANT_CARD_VIEWED.explain': 'Lectura soberana, para moderar, de la configuración de una persona que entró en World Wide — invitados incluidos: idiomas, país, navegador y dispositivo, fecha de entrada, enlace usado. Nunca una dirección IP.',
   'admin.audit.action.ADMIN_POST_VIEWERS_VIEWED': 'Lista de vistas de un contenido leída',

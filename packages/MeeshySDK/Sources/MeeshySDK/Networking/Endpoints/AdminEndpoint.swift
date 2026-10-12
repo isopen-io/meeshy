@@ -55,6 +55,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case broadcastsByIdPreview(id: String)
     case broadcastsByIdSend(id: String)
     case broadcastsByIdSendInapp(id: String)
+    case commentsByCommentIdRemove(commentId: String)
     case communities
     case communitiesByCommunityId(communityId: String)
     case communitiesByCommunityIdMembers(communityId: String)
@@ -100,6 +101,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case reports
     case reportsById(id: String)
     case reportsByIdAssign(id: String)
+    case reportsByReportIdAct(reportId: String)
     case reportsEntityByTypeById(type: String, id: String)
     case reportsModeratorMine
     case reportsRecent
@@ -195,6 +197,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .broadcastsByIdPreview(let id): return "/api/v1/admin/broadcasts/\(id)/preview"
         case .broadcastsByIdSend(let id): return "/api/v1/admin/broadcasts/\(id)/send"
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
+        case .commentsByCommentIdRemove(let commentId): return "/api/v1/admin/comments/\(commentId)/remove"
         case .communities: return "/api/v1/admin/communities"
         case .communitiesByCommunityId(let communityId): return "/api/v1/admin/communities/\(communityId)"
         case .communitiesByCommunityIdMembers(let communityId): return "/api/v1/admin/communities/\(communityId)/members"
@@ -240,6 +243,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .reports: return "/api/v1/admin/reports"
         case .reportsById(let id): return "/api/v1/admin/reports/\(id)"
         case .reportsByIdAssign(let id): return "/api/v1/admin/reports/\(id)/assign"
+        case .reportsByReportIdAct(let reportId): return "/api/v1/admin/reports/\(reportId)/act"
         case .reportsEntityByTypeById(let type, let id): return "/api/v1/admin/reports/entity/\(type)/\(id)"
         case .reportsModeratorMine: return "/api/v1/admin/reports/moderator/mine"
         case .reportsRecent: return "/api/v1/admin/reports/recent"

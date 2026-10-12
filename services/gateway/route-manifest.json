@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 685,
+  "routeCount": 687,
   "routes": [
     {
       "method": "DELETE",
@@ -6385,6 +6385,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/comments/:commentId/remove",
+      "module": "adminModerationActRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/conversations/:conversationId/participants/:userId/remove",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -6514,6 +6528,20 @@
       "path": "/api/v1/admin/reports/:id/assign",
       "module": "reportRoutes",
       "mountPrefix": "/api/v1/admin/reports",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/reports/:reportId/act",
+      "module": "adminModerationActRoutes",
+      "mountPrefix": "/api/v1/admin",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S4",

@@ -141,6 +141,9 @@ export const broadcastsByIdSend = (id: string): string => `/api/v1/admin/broadca
 /** POST /api/v1/admin/broadcasts/:id/send-inapp */
 export const broadcastsByIdSendInapp = (id: string): string => `/api/v1/admin/broadcasts/${encodeURIComponent(id)}/send-inapp`;
 
+/** POST /api/v1/admin/comments/:commentId/remove */
+export const commentsByCommentIdRemove = (commentId: string): string => `/api/v1/admin/comments/${encodeURIComponent(commentId)}/remove`;
+
 /** GET /api/v1/admin/communities */
 export const communities = '/api/v1/admin/communities';
 
@@ -275,6 +278,9 @@ export const reportsById = (id: string): string => `/api/v1/admin/reports/${enco
 
 /** POST /api/v1/admin/reports/:id/assign */
 export const reportsByIdAssign = (id: string): string => `/api/v1/admin/reports/${encodeURIComponent(id)}/assign`;
+
+/** POST /api/v1/admin/reports/:reportId/act */
+export const reportsByReportIdAct = (reportId: string): string => `/api/v1/admin/reports/${encodeURIComponent(reportId)}/act`;
 
 /** GET /api/v1/admin/reports/entity/:type/:id */
 export const reportsEntityByTypeById = (type: string, id: string): string => `/api/v1/admin/reports/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
