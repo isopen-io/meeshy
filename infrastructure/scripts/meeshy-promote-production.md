@@ -47,10 +47,10 @@ celle de la production. Le plan refuse une image webapp antérieure (sans l'entr
 
 - Lire : `gh workflow run promote-production.yml --ref dev -f action=status`
 - Promouvoir :
-  `gh workflow run promote-production.yml --ref dev -f action=promote -f gateway=sha256:… -f recette=<URL>`.
+  `gh workflow run promote-production.yml --ref dev -f action=promote -f gateway=sha256:… -f agent=sha256:… -f recette=<URL>` — **passerelle et agent toujours ensemble** (#10290) : l'hôte refuse l'un sans l'autre ; un agent inchangé est sauté (« deja-en-production »).
   Prendre les digests dans la ligne `ETAT … staging=` du `status`.
-- **Retour arrière, une commande** : `gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback`.
-  Sans GitHub, en root sur l'hôte : `meeshy-promote-production.sh rollback gateway`.
+- **Retour arrière, une commande** : `gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback -f agent=rollback`.
+  Sans GitHub, en root sur l'hôte : `meeshy-promote-production.sh rollback gateway agent`.
 
 ## Avant la première promotion
 

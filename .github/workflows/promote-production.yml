@@ -24,7 +24,8 @@
 # antérieure, dont l'origine reste figée au build.
 #
 # Retour arrière en une commande :
-#   gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback
+#   gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback -f agent=rollback
+#   (passerelle et agent ensemble, toujours : l'hôte refuse l'un sans l'autre — #10290)
 # =============================================================================
 
 name: Promote to production
