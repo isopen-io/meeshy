@@ -193,7 +193,8 @@ struct StoryViewerView: View {
     /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
     /// termine son cycle avant l'avance.
     @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
-    @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
+    @State var hasFiredNextPrefetch = false // filet du premier tic d'horloge : les voisines N±1, N±2 se préparent au plus tard quand la slide commence à compter (#10348).
+    @State var neighborPrefetch = StoryNeighborPrefetchQueue()
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au
@@ -655,6 +656,7 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: isContentReady) { _, ready in
             guard ready, let id = currentStory?.id else { return }
             slideTimer.markContentReady(slideId: id)
+            prepareNeighborWindow()
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             // **La légende se replie à CHAQUE changement de story.** Laissée
@@ -1025,14 +1027,11 @@ struct StoryViewerView: View {
             // Le tick n'écrit AUCUN état du lecteur (#9859) : il publie dans
             // l'horloge de la barre, seule à se redessiner.
             progressClock.publish(p)
-            // Seuil d'amorçage du prefetch de la slide suivante : 5 s avant
-            // la fin, borné à 50 % minimum (cf. rationale historique dans
-            // l'ancien `startTimer()` — conservée à l'identique).
-            let duration = computedStoryDuration
-            let threshold = max(0.5, 1.0 - (5.0 / max(duration, 0.1)))
-            if p >= threshold && !hasFiredNextPrefetch {
+            // Le compte ne démarre qu'une fois le contenu à l'écran : son
+            // premier tic arme les voisines si `isContentReady` ne l'a pas fait.
+            if p > 0 && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
-                _ = prefetchStory(at: currentStoryIndex + 1)
+                prepareNeighborWindow()
             }
         }
         t.onCompletion = { [self] in
@@ -1087,27 +1086,9 @@ struct StoryViewerView: View {
         // skips every clip silently (logged via `Logger.storyAudio`).
         // Images bypass the resolver via `CachedAsyncImage`, but audio has no
         // equivalent prefetch path, so we MUST provide a resolver here.
-        // Prefetch inter-groupes (Lot 3) : garde chaud le slide d'ENTRÉE des
-        // groupes voisins pour que la première frame d'un swipe auteur→auteur
-        // soit instantanée (zéro rebuildLayers perceptible). Entrée = première
-        // non-vue non-expirée du groupe suivant (là où `startAtFirstUnviewed`
-        // atterrira), sinon la première ; pour le groupe précédent, la première
-        // (comportement back-swipe actuel).
-        let now = Date()
-        var extraWarmItems: [StoryItem] = []
-        if groups.indices.contains(currentGroupIndex + 1) {
-            let next = groups[currentGroupIndex + 1].stories
-            if let entry = next.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
-                ?? next.first(where: { !$0.isExpired(at: now) }) {
-                extraWarmItems.append(entry)
-            }
-        }
-        if currentGroupIndex > 0, groups.indices.contains(currentGroupIndex - 1) {
-            let previous = groups[currentGroupIndex - 1].stories
-            if let entry = previous.first(where: { !$0.isExpired(at: now) }) {
-                extraWarmItems.append(entry)
-            }
-        }
+        // Prefetch inter-groupes (Lot 3, #10348) : la slide où ATTERRIT un
+        // balayage d'auteur — l'entrée du suivant, la DERNIÈRE du précédent.
+        let extraWarmItems = authorSwipeWarmItems()
 
         let windowItems = stories
         let mediaIndex: [String: URL] = Dictionary(
