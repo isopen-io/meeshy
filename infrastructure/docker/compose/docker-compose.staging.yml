@@ -318,6 +318,11 @@ services:
       # unsetOrNull('liftedAt'), témoin sur documents Mongo vert). Production :
       # toujours désarmée, feu vert du porteur et sauvegarde vérifiée d'abord.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-true}
+      # #10175 (L19) — le push d'une étape du jeu franchie app fermée : détection, ligne de
+      # base et UNE notification groupée par jour au plus. ARMÉ par la seule valeur exacte on ;
+      # toute autre valeur, absence comprise, le laisse éteint (relu à chaque passage du job).
+      # Staging : allumé pour la recette.
+      - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-on}
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
