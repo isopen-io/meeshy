@@ -292,8 +292,13 @@ enum MediaGalleryStage {
         return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
     }
 
+    /// **Le viewport du solveur est celui que la galerie MESURE** (#10352).
+    ///
+    /// La fenêtre lue dans un `body` n'invalide rien quand elle change de taille
+    /// (Split View, Stage Manager, rotation) : les cotes restaient celles de
+    /// l'ouverture. Elle ne sert donc que de repli avant la première mesure.
     static func viewport(measured: CGSize, window: CGSize) -> CGSize {
-        window
+        measured.width > 0 && measured.height > 0 ? measured : window
     }
 
     private static func freeRegionRatio(viewport: CGSize,
@@ -357,6 +362,26 @@ struct MediaStageBackdrop: View {
     }
 }
 
+// MARK: - Le cadre plié à son conteneur
+
+/// **Le cadre d'une page tient dans la place qu'elle reçoit RÉELLEMENT** (#10352).
+///
+/// Le solveur calcule contre le viewport de la galerie ; une page peut recevoir
+/// moins — page protégée dans la couche sécurisée, fenêtre redimensionnée. Le
+/// conteneur se mesure ici et le cadre s'y plie (`MediaStageFraming.Result.fitted`),
+/// centré : un conteneur assez grand rend les cotes du solveur intactes.
+struct FittedMediaStage<Content: View>: View {
+    let stage: MediaStageFraming.Result
+    @ViewBuilder let content: (MediaStageFraming.Result) -> Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            content(stage.fitted(in: proxy.size))
+                .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+}
+
 // MARK: - Le plateau, côté vue
 
 extension ConversationMediaGalleryView {
@@ -370,6 +395,11 @@ extension ConversationMediaGalleryView {
             safeBottom: DeviceLayout.safeAreaBottom,
             attachments: allAttachments
         )
+    }
+
+    /// Le viewport que le solveur reçoit — mesuré par la racine (#10352).
+    var stageViewport: CGSize {
+        MediaGalleryStage.viewport(measured: measuredViewport, window: DeviceLayout.windowSize)
     }
 
     /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
@@ -411,7 +441,7 @@ extension ConversationMediaGalleryView {
     /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
-            viewport: DeviceLayout.windowSize,
+            viewport: stageViewport,
             mediaRatio: MediaGalleryStage.mediaRatio(of: attachment,
                                                      scenes: sceneContext?.scenes ?? [:],
                                                      presentation: stageGeometryPresentation),
@@ -447,7 +477,7 @@ extension ConversationMediaGalleryView {
     /// scènes ouvertes dans le même état reçoivent le même cadre.
     func sceneStage() -> GallerySceneStage.Frame {
         GallerySceneStage.frame(
-            viewport: DeviceLayout.windowSize,
+            viewport: stageViewport,
             presentation: stageGeometryPresentation,
             corridors: stageCorridors
         )
@@ -456,7 +486,7 @@ extension ConversationMediaGalleryView {
     /// Le cadre de la page OUVERTE — celui que l'overlay habille.
     var currentStage: MediaStageFraming.Result {
         guard currentIndex < allAttachments.count else {
-            return MediaGalleryStage.resolve(viewport: DeviceLayout.windowSize,
+            return MediaGalleryStage.resolve(viewport: stageViewport,
                                              mediaRatio: nil,
                                              presentation: stageGeometryPresentation.framing,
                                              corridors: stageCorridors)
@@ -591,7 +621,7 @@ extension ConversationMediaGalleryView {
     /// C'est la surface que le ThumbHash habille déjà (`MediaStageBackdrop`) —
     /// le chrome s'y aligne désormais aussi.
     var plateauSize: CGSize {
-        CGSize(width: max(0, DeviceLayout.windowSize.width - 2 * MediaGalleryStage.gutter),
+        CGSize(width: max(0, stageViewport.width - 2 * MediaGalleryStage.gutter),
                height: max(0, currentStage.frame.height))
     }
 
