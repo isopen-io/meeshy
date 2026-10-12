@@ -1,6 +1,6 @@
 import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { REEL_STUDIO } from '@/lib/api/fixtures-reels';
 import type { ReelPageMode } from '@/lib/reels/thread';
@@ -31,10 +31,22 @@ afterAll(async () => {
 
 const NOW = new Date('2026-09-14T09:00:00.000Z');
 
+/* Chaque racine est DÉMONTÉE après son témoin : un lecteur laissé monté garde
+   ses abonnements et se re-rend pendant les fichiers suivants de la suite. */
+const mounted: { readonly root: Root; readonly container: HTMLElement }[] = [];
+
+afterEach(() => {
+  mounted.splice(0).forEach(({ root, container }) => {
+    act(() => root.unmount());
+    container.remove();
+  });
+});
+
 async function mountPausedReel(mode: ReelPageMode): Promise<HTMLElement> {
   const container = window.document.createElement('div');
   window.document.body.appendChild(container);
   const root = createRoot(container);
+  mounted.push({ root, container });
   await act(async () => {
     root.render(
       <ReelPage
