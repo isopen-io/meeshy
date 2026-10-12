@@ -172,6 +172,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'A report was handed to a moderator.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Points scale changed',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'The engagement points scale — points per operation, multiplier and caps — was changed by an administrator.',
+  'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Server operation triggered',
+  'admin.audit.action.TRIGGER_SERVER_OPERATION.explain': 'A backup or a Docker image purge was requested from the Operations screen; the detail keeps the operation, environment and reason.',
   'admin.audit.action.GAME_SEASON_UPDATE': 'Game season changed',
   'admin.audit.action.GAME_SEASON_UPDATE.explain': 'An administrator scheduled, shifted, paused or adjusted an upcoming Game season.',
   'admin.audit.action.GAME_SEASON_PROPOSAL_REQUEST': 'Season proposal requested from the AI',

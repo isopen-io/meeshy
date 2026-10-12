@@ -177,6 +177,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Un signalement a été confié à un modérateur.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Barème de points modifié',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Le barème des points d’engagement — points par opération, multiplicateur et plafonds — a été réglé par un administrateur.',
+  'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Opération lancée sur le serveur',
+  'admin.audit.action.TRIGGER_SERVER_OPERATION.explain': 'Une sauvegarde ou une purge des images Docker a été demandée depuis l’écran Opérations ; le détail garde l’opération, l’environnement et le motif.',
   'admin.audit.action.GAME_SEASON_UPDATE': 'Saison du Jeu modifiée',
   'admin.audit.action.GAME_SEASON_UPDATE.explain': 'Une administratrice ou un administrateur a programmé, décalé, mis en pause ou réglé une saison à venir du Jeu.',
   'admin.audit.action.GAME_SEASON_PROPOSAL_REQUEST': 'Proposition de saison demandée à l’IA',
