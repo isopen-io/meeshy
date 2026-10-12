@@ -64,7 +64,7 @@ const BUTTON = { minHeight: 44 } as const;
 const HOLD_MS = 450;
 
 /** Une sortie vers la galerie a abouti : un fichier écrit, ou la feuille du système qui l'a pris. */
-const reachedGallery = (outcome: ShareOutcome): boolean => outcome === 'downloaded' || outcome === 'shared';
+const reachedGallery = (outcome: ShareOutcome): boolean => outcome === 'downloaded';
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([hidden]), [tabindex]:not([tabindex="-1"])';
 
@@ -432,7 +432,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
         return;
       }
       dispatch({ type: 'save-failed', frame });
-      setNotice(outcome === 'cancelled' ? null : { tone: 'error', text: gameText('game.photo.notice.save_failed') });
+      setNotice(outcome === 'cancelled' || outcome === 'shared' ? null : { tone: 'error', text: gameText('game.photo.notice.save_failed') });
     },
     [env, format, outgoingFiles],
   );

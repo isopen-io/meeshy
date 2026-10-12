@@ -419,6 +419,15 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(host.textContent).not.toContain('Image enregistrée');
   });
 
+  test('« Enregistrer » replié sur la feuille de partage ne se dit pas « enregistrée » et garde le bouton (#10284)', async () => {
+    const { host } = await toResult({ save: async () => 'shared' });
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(host.textContent).not.toContain('Image enregistrée');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
   test('« Garder au carnet » garde le 9:16, avec le mode, sans source pour une carte seule, et le dit', async () => {
     const { host, log } = await toResult();
     await click(by(host, 'data-photo-keep'));
