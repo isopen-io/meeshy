@@ -413,6 +413,163 @@ final class ComposerInlineEditTests: XCTestCase {
         XCTAssertNil(ComposerInlinePanelLayout.sceneFrame(of: .media(fond), card: carte402, container: libre402))
     }
 
+    // MARK: - Clavier levé et iPad (#9146)
+
+    /// **Clavier levé, la scène libre s'arrête au clavier** : le calque de
+    /// chrome est comprimé par sa zone sûre, la carte non (`ignoresSafeArea(
+    /// .keyboard)`). iPhone de 874 pt, clavier à 538 : 476 pt de scène libre.
+    private let libreClavier = CGRect(x: 0, y: 62, width: 402, height: 476)
+
+    /// **Un texte EN SAISIE ne se voit pas là où le modèle le pose** : le
+    /// canvas le recentre sur la carte, sans rotation, le temps de la frappe
+    /// (`StoryCanvasUIView.anchorInlineEditing`). C'est ce bloc que le panneau
+    /// laisse voir — pas la position que le texte retrouvera à la fermeture.
+    @MainActor
+    func test_sceneFrame_unTexteEnSaisie_seLitAuCentreDeLaCarte_sansRotation() throws {
+        let texte = MeeshySceneObject.text(StoryTextObject(text: "Bonjour", y: 0.85, rotation: 30))
+        let pose = try XCTUnwrap(ComposerInlinePanelLayout.sceneFrame(of: texte, card: carte402,
+                                                                     container: libre402))
+        let saisi = try XCTUnwrap(ComposerInlinePanelLayout.sceneFrame(of: texte, card: carte402,
+                                                                      container: libre402, typing: true))
+        XCTAssertEqual(saisi.midY, carte402.midY - libre402.minY, accuracy: 0.5)
+        XCTAssertEqual(saisi.midX, carte402.midX - libre402.minX, accuracy: 0.5)
+        XCTAssertEqual(saisi.width, carte402.width, accuracy: 0.5, "aucune rotation pendant la frappe")
+        XCTAssertGreaterThan(pose.midY, saisi.midY + 100, "hors saisie, le texte reste où le modèle le pose")
+        let sticker = MeeshySceneObject.sticker(StorySticker(emoji: "🔥", y: 0.2))
+        XCTAssertEqual(ComposerInlinePanelLayout.sceneFrame(of: sticker, card: carte402, container: libre402,
+                                                           typing: true),
+                       ComposerInlinePanelLayout.sceneFrame(of: sticker, card: carte402, container: libre402),
+                       "seul un texte se saisit")
+    }
+
+    /// **Le défaut du clavier levé** : un texte posé bas (sous le clavier) puis
+    /// rouvert en saisie. Lu à sa position du modèle, il est hors de la scène
+    /// libre, donc le panneau prend le haut sur toute la hauteur — et couvre
+    /// le bloc que l'auteur est en train de taper au centre.
+    @MainActor
+    func test_placement_clavierLeve_laPoliceNeCouvrePasLeTexteEnSaisie() throws {
+        let texte = MeeshySceneObject.text(StoryTextObject(text: "Bonjour", y: 0.85))
+        let libre = libreClavier.size
+        let saisi = try XCTUnwrap(ComposerInlinePanelLayout.sceneFrame(of: texte, card: carte402,
+                                                                      container: libreClavier, typing: true))
+        XCTAssertLessThan(saisi.maxY, libre.height, "le bloc en saisie se voit au-dessus du clavier")
+        let police: CGFloat = 686
+        let pose = ComposerInlinePanelLayout.sceneFrame(of: texte, card: carte402, container: libreClavier)
+        let aveugle = ComposerInlinePanelLayout.placement(object: pose, free: libre, panelHeight: police)
+        XCTAssertTrue(panneauPose(aveugle, contenu: police, libre: libre).intersects(saisi),
+                      "le témoin du défaut : lu à sa place du modèle, le texte saisi est couvert")
+
+        let place = ComposerInlinePanelLayout.placement(object: saisi, free: libre, panelHeight: police)
+        let panneau = panneauPose(place, contenu: police, libre: libre)
+        XCTAssertFalse(panneau.intersects(saisi), "le texte saisi reste visible pendant le réglage")
+        XCTAssertGreaterThanOrEqual(place.maxHeight, ComposerInlinePanelLayout.minimumReducedHeight)
+        XCTAssertLessThanOrEqual(panneau.maxY, libre.height, "le panneau ne passe jamais sous le clavier")
+    }
+
+    /// Clavier levé, le bas de la scène libre est le haut du clavier : un objet
+    /// en haut renvoie le panneau contre le clavier, jamais dessous.
+    func test_placement_clavierLeve_leBasEstLeHautDuClavier() {
+        let libre = libreClavier.size
+        let objet = CGRect(x: 60, y: 30, width: 280, height: 90)
+        let place = ComposerInlinePanelLayout.placement(object: objet, free: libre, panelHeight: 220)
+        XCTAssertEqual(place.edge, .bottom)
+        let panneau = panneauPose(place, contenu: 220, libre: libre)
+        XCTAssertEqual(panneau.maxY, libre.height - ComposerRailGeometry.gutter)
+        XCTAssertFalse(panneau.intersects(objet))
+    }
+
+    /// **Une scène qui disparaît sous le clavier ne fait plus bouger le
+    /// panneau** : un objet tout entier sous le clavier n'a rien à montrer.
+    func test_placement_clavierLeve_unObjetSousLeClavier_hautPleineHauteur() {
+        let libre = libreClavier.size
+        let sousLeClavier = CGRect(x: 40, y: 520, width: 300, height: 120)
+        XCTAssertEqual(ComposerInlinePanelLayout.placement(object: sousLeClavier, free: libre, panelHeight: 400),
+                       ComposerInlinePanelPlacement(edge: .top,
+                                                    maxHeight: ComposerInlinePanelLayout.maxHeight(freeHeight: 476)))
+    }
+
+    /// iPad 11 pouces en portrait : scène libre de 834 × 1100, carte 9:16
+    /// centrée, panneau en carte de 320 pt à côté du rail.
+    private let libreIPad = CGRect(x: 0, y: 40, width: 834, height: 1100)
+    private let carteIPad = CGRect(x: 108, y: 60, width: 618, height: 1099)
+
+    /// **Sur iPad, le panneau est une carte de 320 pt calée sur le rail**, et la
+    /// loi raisonne sur CETTE carte, pas sur la largeur d'un téléphone.
+    func test_panelFrame_iPad_carteDe320CaleeSurLeRail() {
+        let cadre = ComposerInlinePanelLayout.frame(edge: .top, free: libreIPad.size, panelHeight: 300, roomy: true)
+        XCTAssertEqual(cadre.width, ComposerRailGeometry.roomyPanelWidth)
+        XCTAssertEqual(cadre.maxX, 834 - ComposerRailGeometry.roomyMargin
+                       - ComposerRailGeometry.railWidth - ComposerRailGeometry.gutter)
+        XCTAssertEqual(cadre.minY, ComposerRailGeometry.gutter)
+    }
+
+    /// Un objet que la carte du panneau ne touche pas — à gauche d'une grande
+    /// scène — le laisse en haut sur toute sa hauteur : rien à éviter.
+    @MainActor
+    func test_placement_iPad_unObjetHorsDeLaCarte_hautPleineHauteur() throws {
+        let sticker = MeeshySceneObject.sticker(StorySticker(emoji: "🔥", x: 0.15, y: 0.3))
+        let objet = try XCTUnwrap(ComposerInlinePanelLayout.sceneFrame(of: sticker, card: carteIPad,
+                                                                      container: libreIPad))
+        let place = ComposerInlinePanelLayout.placement(object: objet, free: libreIPad.size,
+                                                        panelHeight: 686, roomy: true)
+        XCTAssertEqual(place, ComposerInlinePanelPlacement(edge: .top,
+                                                           maxHeight: ComposerInlinePanelLayout.maxHeight(freeHeight: 1100)))
+    }
+
+    /// Un texte qui traverse la carte, lui, la fait se réduire — la même loi
+    /// qu'au téléphone, sur la géométrie de l'iPad.
+    @MainActor
+    func test_placement_iPad_laPoliceDUnTexteAuCentre_seReduit_horsDuTexte() throws {
+        let texte = MeeshySceneObject.text(StoryTextObject(text: "Bonjour", y: 0.45))
+        let objet = try XCTUnwrap(ComposerInlinePanelLayout.sceneFrame(of: texte, card: carteIPad,
+                                                                      container: libreIPad))
+        let police: CGFloat = 1200
+        let place = ComposerInlinePanelLayout.placement(object: objet, free: libreIPad.size,
+                                                        panelHeight: police, roomy: true)
+        let panneau = ComposerInlinePanelLayout.frame(
+            edge: place.edge, free: libreIPad.size,
+            panelHeight: ComposerInlinePanelLayout.height(content: police, placement: place), roomy: true)
+        XCTAssertLessThan(place.maxHeight, police)
+        XCTAssertFalse(panneau.intersects(objet))
+    }
+
+    /// **iPad en multitâche** (Slide Over, Split View étroit) : la classe de
+    /// taille redevient compacte, la scène libre a la largeur d'un téléphone
+    /// étroit. Le panneau prend ce que le rail laisse, sans sortir à gauche, et
+    /// garde au moins trois vignettes de large.
+    func test_panelFrame_iPadMultitache_largeurCompacte_tientDansLaFenetre() {
+        let libre = CGSize(width: 320, height: 1000)
+        let cadre = ComposerInlinePanelLayout.frame(edge: .top, free: libre, panelHeight: 300, roomy: false)
+        XCTAssertGreaterThanOrEqual(cadre.minX, 0)
+        XCTAssertGreaterThanOrEqual(cadre.width, ComposerInlinePanelLayout.minimumWidth)
+        XCTAssertEqual(cadre.maxX, 320 - ComposerRailGeometry.outerMargin
+                       - ComposerRailGeometry.railWidth - ComposerRailGeometry.gutter)
+    }
+
+    /// **Un toucher dans le panneau ne termine pas la saisie en ligne.** Une
+    /// `ScrollView` renvoie le clavier dès qu'on la fait défiler (défaut
+    /// `.automatic`) : le canvas perd son premier répondant, annonce une fin de
+    /// saisie, et le modèle referme le texte — l'auteur qui parcourt les
+    /// polices perdait son clavier au premier glissé.
+    func test_plaque_neRenvoieJamaisLeClavier() throws {
+        let code = try source("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        let debut = try XCTUnwrap(code.range(of: "structComposerTrailingOptionsPlate<"))
+        let fin = try XCTUnwrap(code.range(of: "extensionComposerInlinePanelLayout{", range: debut.upperBound..<code.endIndex))
+        let plaque = String(code[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(plaque.contains(".scrollDismissesKeyboard(.never)"),
+                      "la plaque d'options ne doit pas renvoyer le clavier de la saisie en ligne")
+    }
+
+    /// Le cadre que la plaque évite est celui du texte EN SAISIE quand c'est lui
+    /// qu'on règle.
+    func test_panneau_lisLeCadreDuTexteEnSaisie() throws {
+        let code = try source("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(code.contains("typing:viewModel.textEditingMode.activeTextId==edit.objectId"),
+                      "le panneau doit lire le texte là où le canvas le montre pendant la frappe")
+    }
+
     // MARK: - La politique du chrome : l'édition en place met la scène en focus
 
     func test_toolFocus_editionEnPlace_masqueToutSaufLeRailDroitEtSesControles() {
