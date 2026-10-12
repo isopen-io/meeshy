@@ -1,4 +1,5 @@
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
+import { adminPostStateOf, type AdminPostState, type AdminPostStateFacts, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publications';
 
 /**
  * **LA LOI DES TROIS GESTES DE MODÉRATION D'UNE PUBLICATION** (#10315).
@@ -76,6 +77,25 @@ export function nextModerationState(
 }
 
 /**
+ * **CHANGER L'AUDIENCE D'UN GESTE** (#10392) — publier un brouillon (`PUBLIC`),
+ * resserrer une publication à ses amis, ou la remettre en ligne avec une autre
+ * audience que celle de l'auteur. Le geste vaut décision de l'administration :
+ * il lève un retrait en cours (la hiérarchie du signataire s'applique, comme à
+ * la remise en ligne). Vers `PRIVATE`, l'audience d'avant est retenue, comme
+ * « mettre en privé », pour que « remettre en ligne » la rende.
+ */
+export function nextVisibilityState(current: PostModerationState, visibility: AdminSettableVisibility): PostModerationState | null {
+  const toPrivate = visibility === PRIVATE;
+  const prior = toPrivate ? (current.visibility !== PRIVATE ? current.visibility : current.moderationPriorVisibility) : null;
+  const after: PostModerationState = { visibility, moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: prior };
+  const same =
+    after.visibility === current.visibility &&
+    current.moderationHiddenAt === null &&
+    after.moderationPriorVisibility === current.moderationPriorVisibility;
+  return same ? null : after;
+}
+
+/**
  * Le geste LÈVE-t-il un retrait posé par quelqu'un d'autre ? Alors il exige un
  * rang au moins égal à celui de qui l'a posé — sans quoi un modérateur défait,
  * d'un geste, le retrait qu'un administrateur vient de décider. Un signataire
@@ -88,6 +108,11 @@ export function liftsSomeoneElsesHold(before: PostModerationState, after: PostMo
 /** Le geste retire-t-il la publication à une audience qui la lisait ? Alors les clients doivent l'oublier. */
 export function withdrawsAudience(before: PostModerationState, after: PostModerationState): boolean {
   return before.visibility !== PRIVATE && after.visibility === PRIVATE;
+}
+
+/** L'état d'une publication pour la liste de la PLATEFORME (#10392) : le contrat partagé, une seule définition. */
+export function adminStateOf(row: AdminPostStateFacts, now: Date): AdminPostState {
+  return adminPostStateOf(row, now);
 }
 
 export type PublicationState = 'deleted' | 'offline' | 'expired' | 'private' | 'online';

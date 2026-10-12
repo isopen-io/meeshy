@@ -1,0 +1,10 @@
+[Unit]
+Description=Sauvegarde du staging Meeshy chaque jour a 2 h 30 (heure de Paris), hors de la fenetre de la production
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Europe/Paris
+Persistent=true
+Unit=meeshy-staging-backup.service
+
+[Install]
+WantedBy=timers.target

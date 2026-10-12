@@ -57,11 +57,11 @@ describe('Barème de points — /admin/engagement-scale et /adm/engagement-scale
       resetAdminRouter(mounter);
     });
 
-    test(`sous /${space}, l’en-tête de page du kit porte le fil « Plateforme › Barème de points »`, async () => {
+    test(`sous /${space}, l’en-tête de page du kit porte le fil « Barèmes › Barème de points »`, async () => {
       const host = await mountAdminAt(mounter, `/${space}/engagement-scale`, ADMIN, ECRAN);
 
       expect(host.querySelector('[data-admin-page-header] h1')?.textContent).toBe('Barème de points');
-      expect([...host.querySelectorAll('[data-admin-page-header] nav li')].map((item) => item.textContent)).toEqual(['Plateforme', 'Barème de points']);
+      expect([...host.querySelectorAll('[data-admin-page-header] nav li')].map((item) => item.textContent)).toEqual(['Barèmes', 'Barème de points']);
       expect(host.querySelectorAll('h1').length).toBe(1);
       resetAdminRouter(mounter);
     });
@@ -75,12 +75,12 @@ describe('Barème de points — /admin/engagement-scale et /adm/engagement-scale
     resetAdminRouter(mounter);
   });
 
-  test('…et la tuile est rangée sous « Plateforme »', async () => {
+  test('…et la tuile est rangée sous « Barèmes » (#10391)', async () => {
     const host = await mountAdminAt(mounter, '/admin', ADMIN, '[data-admin-section]');
     const tile = host.querySelector('[data-admin-section="engagementScale"]');
     const groupe = tile?.closest('[data-admin-group]');
 
-    expect(groupe?.getAttribute('data-admin-group')).toBe('platform');
+    expect(groupe?.getAttribute('data-admin-group')).toBe('scales');
     resetAdminRouter(mounter);
   });
 });

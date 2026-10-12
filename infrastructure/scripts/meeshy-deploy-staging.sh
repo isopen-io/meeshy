@@ -42,6 +42,9 @@
 # =============================================================================
 
 set -uo pipefail
+# Aucune expansion de chemin : la demande est une liste de NOMS, et un `*` ne
+# doit jamais devenir la liste des fichiers du dossier courant.
+set -f
 
 STAGING_DIR="${MEESHY_STAGING_DIR:-/opt/meeshy/staging}"
 
@@ -61,6 +64,17 @@ RETENTION_SOUS_PRESSION="${MEESHY_PRUNE_RETENTION_PRESSURE:-24h}"
 RC_REFUS=64
 
 journal() { echo "[$(date -u +%FT%TZ)] $*"; }
+
+# **CE FILTRE EST UNE MESURE DE CONFIDENTIALITÉ, pas du confort de lecture**
+# (porté depuis la version installée sur l'hôte, #10387).
+#
+# `.env` porte des hachages d'authentification (`TRAEFIK_USERS`, `API_USERS`,
+# `MONGO_USERS`, `REDIS_USERS`) dont la forme `$apr1$…` contient des `$`.
+# Compose les prend pour des références de variables et rend, sur stderr,
+# `The "…" variable is not set.` — c'est-à-dire un FRAGMENT DU HACHAGE, en
+# clair, dans le journal public du run GitHub Actions. Toute sortie de
+# `docker compose` passe donc par ce filtre.
+sans_fuite() { grep -avE 'variable is not set|Defaulting to a blank string' || true; }
 
 occupation_disque() {
   df --output=pcent /var/lib/docker 2>/dev/null | tail -1 | tr -dc '0-9' || echo 0
@@ -119,17 +133,17 @@ deployer() {
   purger_les_images
 
   journal "pull: $services"
-  docker compose pull $services || return 1
+  docker compose pull $services 2>&1 | sans_fuite || return 1
 
   journal "up: $services"
-  docker compose up -d --no-deps $services || return 1
+  docker compose up -d --no-deps $services 2>&1 | sans_fuite || return 1
 
   sleep 15
 
   # L'appelant juge sur ce que la machine MONTRE (il y cherche `restarting` /
   # `exited`), jamais sur le code de retour d'`up -d`, qui rend 0 dès que
   # Docker a accepté la commande.
-  docker compose ps $services
+  docker compose ps $services 2>&1 | sans_fuite
 }
 
 self_test() {
@@ -163,7 +177,13 @@ self_test() {
     echecs=$((echecs + 1))
   fi
 
-  [ "$echecs" -eq 0 ] && echo "self-test: 6/6 vérifications passées." && return 0
+  # Toute sortie de compose passe par le filtre de confidentialité.
+  if grep -nE '^[[:space:]]*docker compose (pull|up|ps)' "$0" | grep -vq 'sans_fuite'; then
+    echo "AVEUGLE: une sortie de docker compose part sans le filtre sans_fuite." >&2
+    echecs=$((echecs + 1))
+  fi
+
+  [ "$echecs" -eq 0 ] && echo "self-test: 8/8 vérifications passées." && return 0
   echo "self-test: $echecs échec(s)." >&2
   return 1
 }
