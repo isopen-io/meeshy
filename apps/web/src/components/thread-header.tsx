@@ -347,7 +347,7 @@ export function ThreadHeader({
                 aria-expanded={expanded}
                 aria-label={toggleLabel}
                 data-thread-band-toggle
-                className="flex-1 self-stretch"
+                className="min-w-11 flex-1 self-stretch"
               />
             ) : (
               <span className="flex-1" />

@@ -56,6 +56,11 @@ export function registerStudioBench(): void {
   });
 
   afterAll(async () => {
+    // Une tâche du planificateur de React encore en file (un rendu suspendu
+    // résolu après le dernier démontage) s'exécuterait APRÈS le retrait de la
+    // fenêtre : `window.event` lève entre deux fichiers. On la laisse passer
+    // tant que la fenêtre existe.
+    await flush();
     delete globals.IS_REACT_ACT_ENVIRONMENT;
     document.documentElement.lang = 'fr';
     await releaseHappyDomIfRegistered();

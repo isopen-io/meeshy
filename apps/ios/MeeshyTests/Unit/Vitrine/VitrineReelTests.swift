@@ -152,7 +152,12 @@ final class VitrineReelTests: XCTestCase {
         XCTAssertEqual(resultat.mimeType, "video/mp4")
         XCTAssertEqual(resultat.fileSize, 36)
         XCTAssertTrue(resultat.fileUrl.hasPrefix(VitrineTus.racine + "/"))
-        XCTAssertNotNil(CacheCoordinator.videoLocalFileURL(for: resultat.fileUrl), "le téléverseur range le fichier envoyé sous fileUrl")
+        // #9875 : le téléverseur ensemence sous la clé de RENDU (l'adresse résolue), celle que le lecteur interroge.
+        // Face à l'hôte mort de la vitrine, elle retombe sur fileUrl ; ici la configuration résout l'adresse relative.
+        XCTAssertNotNil(
+            CacheCoordinator.videoLocalFileURL(for: TusUploadManager.renderCacheKey(forFileUrl: resultat.fileUrl)),
+            "le téléverseur range le fichier envoyé sous la clé de rendu de fileUrl"
+        )
     }
 
     // MARK: - La création du post

@@ -44,7 +44,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         // `AnyView` (not `some View`) since 2026-08-17 — erasure at the
         // DECLARATION was required to stop a Swift metadata-decoder stack
         // overflow at first render (see ConversationFirstRenderWarmup.swift).
-        guard let range = code.range(of: "private var headerButtonsCluster: AnyView {") else {
+        guard let range = code.range(of: "var headerButtonsCluster: AnyView {") else {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
@@ -104,11 +104,13 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     /// grappe (ni mode, ni recherche, ni appel) — le second site historique
     /// est retiré, et aucun nouveau site inline ne doit apparaître.
     func test_headerButtonsClusterOccurrenceCount_remainsUnaffectedByTheNewCluster() throws {
-        let code = try conversationViewSource()
+        // Le site d'appel PLIÉ vit dans `ConversationView+Header.swift` depuis #10300.
+        let code = try conversationViewSource() + "\n"
+            + strippedSource("Meeshy/Features/Main/Views/ConversationView+Header.swift")
         let occurrences = code.components(separatedBy: "headerButtonsCluster").count - 1
         XCTAssertEqual(
             occurrences, 2,
-            "ConversationView.swift référence « headerButtonsCluster » \(occurrences) fois — 2 attendues (1 déclaration + 1 site d'appel, l'état PLIÉ ; la bande dépliée n'en porte plus, user 2026-08-18)."
+            "L'en-tête (ConversationView.swift + ConversationView+Header.swift) référence « headerButtonsCluster » \(occurrences) fois — 2 attendues (1 déclaration + 1 site d'appel, l'état PLIÉ ; la bande dépliée n'en porte plus, user 2026-08-18)."
         )
     }
 
