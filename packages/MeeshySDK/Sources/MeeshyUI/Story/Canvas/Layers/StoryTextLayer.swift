@@ -597,6 +597,17 @@ public final class StoryTextLayer: CATextLayer {
         glassBackdropLayer?.setBackdropTexture(texture)
     }
 
+    /// `true` pour un texte en verre : seul porteur d'une couche à nourrir.
+    var hasGlassBackdrop: Bool { glassBackdropLayer != nil }
+
+    /// Ce que la lecture a déjà donné au verre de ce texte (#9864).
+    var glassBackdropFeedStamp: StoryGlassFeedStamp? { glassBackdropLayer?.feedStamp }
+
+    @MainActor
+    func setBackdropTexture(_ texture: MTLTexture?, stamp: StoryGlassFeedStamp) {
+        glassBackdropLayer?.setBackdropTexture(texture, stamp: stamp)
+    }
+
     // MARK: - Helpers
 
     /// Corner radius of the framing box, derived from the text object's

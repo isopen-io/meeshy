@@ -301,9 +301,18 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // C'est ce qui permet à la carte de léguer sa position sans payer le
         // fil de chrome que son mode lui refuse (`config.showsChrome`).
         let memoire = positionKey
-        view.onPlaybackTime = { t in
-            if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
-            playback?(t)
+        // Personne n'écoute ⇒ aucun relais : le canvas lit `onPlaybackTime`
+        // pour savoir si une barre d'hôte suit son tick, et garde alors son
+        // lien à 60–120 Hz. Le lecteur de stories n'en pose pas — sa barre a
+        // sa propre horloge — et une slide immobile y descend au palier bas
+        // (#9864).
+        if memoire != nil || playback != nil {
+            view.onPlaybackTime = { t in
+                if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
+                playback?(t)
+            }
+        } else {
+            view.onPlaybackTime = nil
         }
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
