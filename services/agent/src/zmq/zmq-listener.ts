@@ -12,6 +12,7 @@ export class ZmqAgentListener {
   /** #10288 — signatures déjà acceptées, gardées le temps de la fenêtre : un rejeu est refusé. */
   private seenSignatures = new Map<string, number>();
   private rejected = 0;
+  private wakeUp: (() => void) | null = null;
 
   constructor(
     private host: string,
@@ -26,8 +27,11 @@ export class ZmqAgentListener {
     const verdict = verifyAgentZmqPayload(payload, authFrame, this.internalToken, now);
     if (!verdict.ok) {
       this.rejected++;
-      // Une ligne par refus, sans contenu : le message refusé n'est jamais journalisé.
-      console.warn(`[ZMQ-Agent] Unauthenticated message rejected (reason=${verdict.reason}, total=${this.rejected})`);
+      // Sans contenu (le message refusé n'est jamais journalisé), et échantillonné : un intrus
+      // qui inonde le canal n'inonde pas les journaux (les 10 premiers, puis 1 sur 100).
+      if (this.rejected <= 10 || this.rejected % 100 === 0) {
+        console.warn(`[ZMQ-Agent] Unauthenticated message rejected (reason=${verdict.reason}, total=${this.rejected})`);
+      }
       return false;
     }
     for (const [sig, expiry] of this.seenSignatures) {
@@ -35,7 +39,9 @@ export class ZmqAgentListener {
     }
     if (this.seenSignatures.has(verdict.signature)) {
       this.rejected++;
-      console.warn(`[ZMQ-Agent] Replayed message rejected (total=${this.rejected})`);
+      if (this.rejected <= 10 || this.rejected % 100 === 0) {
+        console.warn(`[ZMQ-Agent] Replayed message rejected (total=${this.rejected})`);
+      }
       return false;
     }
     this.seenSignatures.set(verdict.signature, now + 2 * AGENT_ZMQ_MAX_SKEW_MS);
@@ -47,7 +53,8 @@ export class ZmqAgentListener {
   }
 
   async initialize(): Promise<void> {
-    this.pullSocket = new zmq.Pull();
+    // Un événement légitime pèse quelques Ko : au-delà de 1 Mo, libzmq coupe le pair (#10288).
+    this.pullSocket = new zmq.Pull({ maxMessageSize: 1_048_576 });
     await this.pullSocket.bind(`tcp://${this.host}:${this.port}`);
     console.log(`[ZMQ-Agent] PULL socket bound on ${this.host}:${this.port}`);
   }
@@ -105,7 +112,11 @@ export class ZmqAgentListener {
           console.log('[ZMQ-Agent] Reconnecting in 5s...');
         }
 
-        await new Promise((r) => setTimeout(r, 5000));
+        await new Promise<void>((r) => {
+          const timer = setTimeout(r, 5000);
+          this.wakeUp = () => { clearTimeout(timer); r(); };
+        });
+        this.wakeUp = null;
       }
     } finally {
       clearInterval(heartbeat);
@@ -115,6 +126,7 @@ export class ZmqAgentListener {
 
   async close(): Promise<void> {
     this.running = false;
+    this.wakeUp?.();
     if (this.pullSocket) {
       await this.pullSocket.close();
       this.pullSocket = null;

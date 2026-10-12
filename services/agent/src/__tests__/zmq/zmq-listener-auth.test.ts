@@ -47,13 +47,19 @@ async function run(token: string | undefined, batch: Buffer[][]) {
   const loop = listener.startListening();
   await new Promise((r) => setImmediate(r));
   await listener.close();
-  await Promise.race([loop, new Promise((r) => setTimeout(r, 50))]);
+  await loop;
   return handler;
 }
 
 describe('ZmqAgentListener — authentification du canal (#10288)', () => {
   beforeEach(() => jest.spyOn(console, 'log').mockImplementation(() => {}));
   afterEach(() => jest.restoreAllMocks());
+
+  it('borne la taille des messages acceptés (1 Mo)', async () => {
+    const zmq = jest.requireMock('zeromq') as { Pull: jest.Mock };
+    await run(TOKEN, []);
+    expect(zmq.Pull).toHaveBeenLastCalledWith({ maxMessageSize: 1_048_576 });
+  });
 
   it('rejette un message ZMQ non authentifié (une seule trame, ancien format ou intrus)', async () => {
     const handler = await run(TOKEN, [[Buffer.from(event())]]);
