@@ -1,4 +1,4 @@
-import type { Prisma } from '@meeshy/shared/prisma/client';
+import type { PostCounter, PostCounterIncrements } from './postCounters';
 
 /** Une vidéo plus courte que ce seuil est jugée sur la POSITION atteinte
  *  (90 %), pas sur une durée absolue : sur un format de huit secondes,
@@ -25,8 +25,8 @@ export type EngagementSession = {
 
 /**
  * Calcule les incréments de compteurs dénormalisés pour une NOUVELLE session
- * (spec §19.3). Renvoie un objet `Prisma.PostUpdateInput` partiel — vide si
- * la session ne déclenche aucun compteur.
+ * (spec §19.3). Renvoie les incréments à confier à `incrementPostCounters`
+ * (`./postCounters`) — vide si la session ne déclenche aucun compteur.
  *
  * ## Pourquoi un MODULE et plus une méthode privée
  *
@@ -44,8 +44,8 @@ export type EngagementSession = {
  * chaque appel et invisibles depuis l'extérieur : ils remontent au module,
  * documentés, là où un témoin peut les nommer.
  */
-export function engagementAggregateIncrements(s: EngagementSession): Prisma.PostUpdateInput {
-  const increments: Record<string, { increment: number }> = {};
+export function engagementAggregateIncrements(s: EngagementSession): PostCounterIncrements {
+  const increments: Partial<Record<PostCounter, { increment: number }>> = {};
 
   // "Ouverture" d'un post = consommation plein-cadre. Sur le feed de reels,
   // l'ouverture (vue totale) est comptée par l'engagement (défilement plein
@@ -78,5 +78,5 @@ export function engagementAggregateIncrements(s: EngagementSession): Prisma.Post
     increments.qualifiedViewCount = { increment: 1 };
   }
 
-  return increments as Prisma.PostUpdateInput;
+  return increments;
 }

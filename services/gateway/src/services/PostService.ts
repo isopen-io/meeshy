@@ -13,6 +13,8 @@ import { applyMediaOrder } from './posts/mediaOrder';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from './posts/mediaAltWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
+import { creditPostView } from './posts/postViewCredit';
+import { incrementPostCounters } from './posts/postCounters';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { isEphemeralPostType, type RepostPassage } from './posts/postVisibility';
@@ -1727,51 +1729,6 @@ export class PostService {
   }
 
   /**
-   * Dédup + incrément d'UN post : singleton `PostView` (postId,userId) + `viewCount`
-   * au premier insert, `duration` promue au max sur ré-ouverture. Factorisé hors de
-   * `recordView` pour être appliqué IDENTIQUEMENT au post affiché ET, pour un
-   * repost, à la racine créditée ci-dessous — même mécanique de dédup, aucune
-   * règle nouvelle inventée pour la racine.
-   */
-  private async creditPostView(
-    postId: string,
-    userId: string,
-    safeDuration: number | undefined,
-  ): Promise<boolean> {
-    const existing = await this.prisma.postView.findUnique({
-      where: { postId_userId: { postId, userId } },
-    });
-
-    if (existing) {
-      if (safeDuration !== undefined) {
-        // Le PostView est un singleton (postId,userId) : `duration` est le
-        // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
-        // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
-        // rétrograder la plus longue durée déjà observée — on conserve le max.
-        const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
-        if (nextDuration !== existing.duration) {
-          await this.prisma.postView.update({
-            where: { id: existing.id },
-            data: { duration: nextDuration },
-          });
-        }
-      }
-      return false;
-    }
-
-    await this.prisma.postView.create({
-      data: { postId, userId, duration: safeDuration },
-    });
-
-    await this.prisma.post.update({
-      where: { id: postId },
-      data: { viewCount: { increment: 1 } },
-    });
-
-    return true;
-  }
-
-  /**
    * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
    * réelle du post AFFICHÉ (création du PostView) — permet à l'appelant de ne
    * déclencher les effets de bord coûteux « une fois » (ex : marquer les
@@ -1865,7 +1822,7 @@ export class PostService {
       // legitimate viewer of the ORIGINAL (see root credit below).
       const isNewView = target.authorId === userId
         ? false
-        : await this.creditPostView(postId, userId, safeDuration);
+        : await creditPostView(this.prisma, { postId, userId, durationMs: safeDuration });
       creditStoryViewed(this.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
 
       const rootId = target.originalRepostOfId ?? target.repostOfId;
@@ -1877,7 +1834,7 @@ export class PostService {
           select: { id: true, authorId: true },
         });
         if (root && root.authorId !== userId) {
-          await this.creditPostView(rootId, userId, safeDuration);
+          await creditPostView(this.prisma, { postId: rootId, userId, durationMs: safeDuration });
         }
       }
 
@@ -1925,10 +1882,7 @@ export class PostService {
         return false; // déjà compté pour cette session (ou insert en échec) → no-op
       }
 
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: { postOpenCount: { increment: 1 } },
-      });
+      await incrementPostCounters(this.prisma, [postId], { postOpenCount: { increment: 1 } });
       return true;
     } catch {
       return false; // fire-and-forget : un compteur ne doit jamais casser une requête
@@ -2006,10 +1960,9 @@ export class PostService {
           update: data,
           create: { sessionId: s.sessionId, ...data },
         });
-        recorded += 1;
 
         if (isInsert) {
-          const increments = engagementAggregateIncrements({
+          await incrementPostCounters(this.prisma, [s.postId], engagementAggregateIncrements({
             surface: s.surface,
             contentType: s.contentType,
             dwellMs,
@@ -2017,16 +1970,16 @@ export class PostService {
             mediaDurationMs,
             completed,
             watchSamples: s.watchSamples ?? [],
-          });
-          if (Object.keys(increments).length > 0) {
-            await this.prisma.post.update({
-              where: { id: s.postId },
-              data: increments,
-            });
-          }
+          }));
         }
-      } catch {
-        continue; // never fail the whole batch on one row
+        recorded += 1;
+      } catch (error) {
+        // Une session dont l'écriture ou l'incrément a échoué n'est PAS comptée
+        // dans `recorded` (#10402) ; le lot continue, et l'échec se dit.
+        log.warn('recordEngagementBatch: session not recorded', {
+          postId: s.postId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
     return recorded;

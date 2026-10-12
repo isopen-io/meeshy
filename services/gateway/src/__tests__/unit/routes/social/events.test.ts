@@ -106,6 +106,7 @@ function makePrisma() {
 
   const prisma = {
     ecritures,
+    $runCommandRaw: journalise('post', 'runCommandRaw', { ok: 1 }),
     post: {
       findMany: jest.fn<any>().mockImplementation(({ where, select }: any) => {
         // Passe de résolution des racines de repost : aucun repost ici.
