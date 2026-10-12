@@ -2,8 +2,11 @@ import CoreGraphics
 import Foundation
 
 /// Les deux familles du rail (#9351).
+/// L'ordre de déclaration EST l'ordre du rail : Filtres · Effets · Cadres
+/// (#10311, porteur 2026-10-12).
 nonisolated enum ComposerLookFamily: String, CaseIterable, Hashable, Sendable {
     case filters
+    case effects
     case frames
 }
 
@@ -11,6 +14,7 @@ nonisolated enum ComposerLookFamily: String, CaseIterable, Hashable, Sendable {
 /// MONTRE la paire qu'elle produirait avec l'autre moitié en cours.
 nonisolated enum ComposerLookStripItem: Hashable, Sendable {
     case filter(VideoFilterPreset)
+    case effect(CallFaceEffect)
     case frame(ComposerPhotoFrame)
 }
 
@@ -130,11 +134,15 @@ nonisolated enum ComposerLookStripRule {
     static func items(_ family: ComposerLookFamily) -> [ComposerLookStripItem] {
         switch family {
         case .filters: return filterItems
+        case .effects: return effectItems
         case .frames: return frameItems
         }
     }
 
     private static let filterItems = ComposerPhotoLookRule.filters.map { ComposerLookStripItem.filter($0) }
+
+    /// Les effets de l'appel, « Aucun » en tête (#10311).
+    private static let effectItems = CallFaceEffect.allCases.map { ComposerLookStripItem.effect($0) }
 
     private static let frameItems: [ComposerLookStripItem] = {
         let cadres = ComposerLiveLookRule.chips()
@@ -146,11 +154,12 @@ nonisolated enum ComposerLookStripRule {
         return [.frame(.none)] + uniques.map { ComposerLookStripItem.frame($0) }
     }()
 
-    /// **Filtre et cadre se COMBINENT** : choisir l'un garde l'autre.
+    /// **Filtre, effet et cadre se COMBINENT** : choisir l'un garde les autres.
     static func look(of item: ComposerLookStripItem, combinedWith current: ComposerPhotoLook) -> ComposerPhotoLook {
         switch item {
-        case .filter(let preset): return ComposerPhotoLook(filter: preset, frame: current.frame)
-        case .frame(let cadre): return ComposerPhotoLook(filter: current.filter, frame: cadre)
+        case .filter(let preset): return ComposerPhotoLook(filter: preset, frame: current.frame, effect: current.effect)
+        case .effect(let effet): return ComposerPhotoLook(filter: current.filter, frame: current.frame, effect: effet)
+        case .frame(let cadre): return ComposerPhotoLook(filter: current.filter, frame: cadre, effect: current.effect)
         }
     }
 
@@ -158,6 +167,7 @@ nonisolated enum ComposerLookStripRule {
     static func isChosen(_ item: ComposerLookStripItem, in look: ComposerPhotoLook) -> Bool {
         switch item {
         case .filter(let preset): return look.filter == preset
+        case .effect(let effet): return look.effect == effet
         case .frame(let cadre): return look.frame == cadre
         }
     }

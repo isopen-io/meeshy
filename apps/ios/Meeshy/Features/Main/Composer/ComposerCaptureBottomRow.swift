@@ -129,40 +129,60 @@ struct ComposerCaptureBottomRow: View {
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
     /// #9754) — un panneau par outil ACTIF, empilés : les proportions, le
     /// spectre du son, la piste de découpe, le bouton muet à DROITE d'une piste
-    /// du temps ; ou la bande ouverte, qui les replie. Puis « Filtres »,
-    /// « Cadres », « Recadrer », « Couper », « Son » : chaque outil se retire ou
-    /// revient d'un toucher, sans fermer les autres.
+    /// du temps. Puis « Filtres », « Effets », « Cadres », « Recadrer »,
+    /// « Couper », « Son » : chaque outil se retire ou revient d'un toucher,
+    /// sans fermer les autres. Une famille ouverte prend la place de tout cela,
+    /// sa bande au niveau de son rail (#10311).
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
-            ForEach(session.editPanels, id: \.self) { panneau in
-                switch panneau {
-                case .trim:
-                    if let trimClip {
-                        mediaTrack(.trim) {
-                            ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
-                        }
-                    }
-                case .sound:
-                    if let trimClip {
-                        mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
-                    }
-                case .band:
-                    ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
-                        .transition(.opacity)
-                case .presets:
-                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                        .transition(.opacity)
-                case .none:
-                    EmptyView()
-                }
+            if session.openFamily != nil {
+                familyRow
+            } else {
+                editPanelsAndTools
             }
-            ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                             shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
-                session.toggleFamily(famille)
-            }
-            .frame(height: ComposerEditScene.toolsRow)
         }
         .padding(.bottom, ComposerEditScene.gap)
+    }
+
+    @ViewBuilder
+    private var editPanelsAndTools: some View {
+        ForEach(session.editPanels, id: \.self) { panneau in
+            switch panneau {
+            case .trim:
+                if let trimClip {
+                    mediaTrack(.trim) {
+                        ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                    }
+                }
+            case .sound:
+                if let trimClip {
+                    mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
+                }
+            case .presets:
+                ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                    .transition(.opacity)
+            case .band, .none:
+                EmptyView()
+            }
+        }
+        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
+            session.toggleFamily(famille)
+        }
+        .frame(height: ComposerEditScene.toolsRow)
+    }
+
+    /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
+    /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
+    /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
+    private var familyRow: some View {
+        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
+            ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
+                .padding(.leading, MeeshySpacing.mdPlus)
+            ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+        }
+        .frame(height: ComposerEditScene.familyRow)
+        .transition(.opacity)
     }
 
     /// Une piste du temps, et le bouton muet à sa DROITE quand elle le porte ;

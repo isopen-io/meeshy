@@ -44,10 +44,12 @@ nonisolated enum ComposerLookVideoExporter {
             let toile = ComposerLookPainter.canvas(for: upright, aspect: aspect)
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != ComposerPhotoFrame.none, scene == nil { throw UnpaintedFrame() }
+            let visages = ComposerFaceEffects.export()
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
                 let declare = declaredSpaceName.flatMap { CGColorSpace(name: $0 as CFString) }
                 let image = ComposerLookPainter.paint(request.sourceImage, look: look, framing: framing,
-                                                      scene: scene, canvas: toile, declared: declare)
+                                                      scene: scene, canvas: toile, declared: declare,
+                                                      faces: visages)
                 request.finish(with: image.cropped(to: CGRect(origin: .zero, size: toile)), context: nil)
             }
             guard MeeshyVideoWatermarkBaker.sizesMatch(composition.renderSize, upright) else { return nil }

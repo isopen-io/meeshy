@@ -9,13 +9,20 @@ extension ComposerCaptureCopy {
         switch family {
         case .filters:
             return String(localized: "call.filters", defaultValue: "Filtres", bundle: .main)
+        case .effects:
+            return CallControlsCopy.effectsCaption
         case .frames:
             return String(localized: "composer.capture.rail.frames", defaultValue: "Cadres", bundle: .main)
         }
     }
 
+    /// « Effets » porte le pictogramme des effets de l'appel (#10311).
     static func familySymbol(_ family: ComposerLookFamily) -> String {
-        family == .filters ? "camera.filters" : "photo.artframe"
+        switch family {
+        case .filters: return "camera.filters"
+        case .effects: return "wand.and.stars"
+        case .frames: return "photo.artframe"
+        }
     }
 
     static func itemName(_ item: ComposerLookStripItem) -> String {
@@ -24,6 +31,8 @@ extension ComposerCaptureCopy {
             return String(localized: "composer.capture.band.noFilter", defaultValue: "Aucun filtre", bundle: .main)
         case .filter(let preset):
             return CallEffectsCopy.presetName(preset)
+        case .effect(let effet):
+            return CallEffectsCopy.name(effet)
         case .frame(.none):
             return CallLiveFrameCopy.none
         case .frame(.montage(let choice)):
@@ -34,14 +43,18 @@ extension ComposerCaptureCopy {
     static func itemSymbol(_ item: ComposerLookStripItem) -> String {
         switch item {
         case .filter(let preset): return CallEffectsCopy.presetSymbol(preset)
+        case .effect(.none): return "circle.slash"
+        case .effect: return "wand.and.stars"
         case .frame(.none): return "circle.slash"
         case .frame(.montage(let choice)): return CallFrameCopy.choiceSymbol(choice)
         }
     }
 
-    /// Ce que la miniature choisie montre : ses deux moitiés, filtre et cadre.
+    /// Ce que la miniature choisie montre : filtre et cadre, et l'effet s'il y en a un.
     static func chosenLookName(_ look: ComposerPhotoLook) -> String {
-        ListFormatter.localizedString(byJoining: [itemName(.filter(look.filter)), itemName(.frame(look.frame))])
+        let effet = look.effect == .none ? [] : [itemName(.effect(look.effect))]
+        return ListFormatter.localizedString(byJoining: [itemName(.filter(look.filter))] + effet
+                                                 + [itemName(.frame(look.frame))])
     }
 }
 
