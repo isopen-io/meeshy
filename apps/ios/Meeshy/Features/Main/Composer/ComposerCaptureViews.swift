@@ -44,7 +44,8 @@ struct ComposerCapturePreview: View {
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
                                            mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
-                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame))
+                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame),
+                                           connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre

@@ -16,7 +16,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
         // inscrit au centre de notifications (#9295).
         if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
+        sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
+    /// Le guet de la santé de la session (#10308) — `CameraModel+Recovery`.
+    nonisolated(unsafe) var sessionObservers: [NSObjectProtocol] = []
+    /// Le rang de la dernière entrée vidéo posée (#10308) : la couche d'aperçu
+    /// ne règle sa connexion qu'à ce changement, jamais à chaque passe.
+    @Published private(set) var inputEpoch = 0
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
@@ -184,6 +190,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La configuration se fait sur la file de la session ; l'objectif installé
     /// et le micro reviennent au fil principal, dans l'ordre de la file.
     private func setupSession() {
+        observeSessionHealth()
         let armeLeMicro = CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
                                                         otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
         sessionQueue.perform { [weak self] in
@@ -202,6 +209,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    self.inputEpoch += 1
                     if micro { self.hasAudioInput = true }
                 }
             }
@@ -434,6 +442,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
+                    self.inputEpoch += 1
                     func ms(_ a: CFTimeInterval, _ b: CFTimeInterval) -> Int {
                         ComposerCameraSwitchTiming.milliseconds(from: a, to: b)
                     }
