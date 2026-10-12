@@ -130,6 +130,7 @@ const ptStudioChrome = {
   'story.studio.audioTrim.title': 'Editar o áudio',
   'story.studio.audioEdit.tool.trim': 'Aparar',
   'story.studio.audioEdit.tool.fade': 'Fade',
+  'story.studio.audioEdit.tool.speed': 'Velocidade',
   'story.studio.audioEdit.tool.volume': 'Volume',
   'story.studio.audioEdit.volume.normal': 'Normal',
   'story.studio.audioEdit.fade.in': 'Fade in',

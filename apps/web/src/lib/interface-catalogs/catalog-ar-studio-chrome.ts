@@ -130,6 +130,7 @@ const arStudioChrome = {
   'story.studio.audioTrim.title': 'تحرير الصوت',
   'story.studio.audioEdit.tool.trim': 'اقتصاص',
   'story.studio.audioEdit.tool.fade': 'تلاشٍ',
+  'story.studio.audioEdit.tool.speed': 'السرعة',
   'story.studio.audioEdit.tool.volume': 'مستوى الصوت',
   'story.studio.audioEdit.volume.normal': 'عادي',
   'story.studio.audioEdit.fade.in': 'تلاشٍ عند البداية',

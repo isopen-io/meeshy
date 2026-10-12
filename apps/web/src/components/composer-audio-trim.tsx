@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { AUDIO_GAIN, audioEditUntouched, editedWav, untouchedAudioEdit, volumePercent, type AudioEdit } from '@/lib/media/audio-edit';
+import { AUDIO_SPEEDS, speedLabel } from '@/lib/media/audio-stretch';
 import { decodeAudioFile, MINIMUM_AUDIO_WINDOW, trimmedAudioFileName, type DecodedAudio } from '@/lib/media/audio-trim';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import type { PendingAttachment } from '@/lib/send/attachments';
@@ -11,19 +12,20 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 /**
  * **« ÉDITER » UN AUDIO EN ATTENTE** (#9136, miroir de
  * `MeeshyAudioEditorView` iOS) — un son n'a pas de scène ; il garde son
- * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Fondu — #9162, Volume —
- * #9164), un seul
+ * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Fondu — #9162, Vitesse —
+ * #9163, Volume — #9164), un seul
  * panneau ouvert à la fois ; chaque réglage reste posé d'un outil à l'autre,
  * et « Terminé » les cuit ENSEMBLE dans la pièce rendue à sa place. Rien de
  * réglé la laisse telle quelle. ✕ ou Échap referment sans rien changer.
  */
-type AudioTool = 'trim' | 'fade' | 'volume';
+type AudioTool = 'trim' | 'fade' | 'speed' | 'volume';
 
-const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'fade', 'volume'];
+const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'fade', 'speed', 'volume'];
 
 const TOOL_KEY = {
   trim: 'story.studio.audioEdit.tool.trim',
   fade: 'story.studio.audioEdit.tool.fade',
+  speed: 'story.studio.audioEdit.tool.speed',
   volume: 'story.studio.audioEdit.tool.volume',
 } as const satisfies Record<AudioTool, InterfaceCatalogKey>;
 
@@ -79,6 +81,34 @@ function FadePanel({ lang, edit, onEdit }: { readonly lang: InterfaceLanguage; r
     <div className="flex flex-col gap-2">
       <FadeSwitch edge="in" on={edit.fadeIn} label={translate(lang, 'story.studio.audioEdit.fade.in')} onPress={() => onEdit({ ...edit, fadeIn: !edit.fadeIn })} />
       <FadeSwitch edge="out" on={edit.fadeOut} label={translate(lang, 'story.studio.audioEdit.fade.out')} onPress={() => onEdit({ ...edit, fadeOut: !edit.fadeOut })} />
+    </div>
+  );
+}
+
+function SpeedPanel({ lang, speed, onSpeed }: { readonly lang: InterfaceLanguage; readonly speed: number; readonly onSpeed: (speed: number) => void }) {
+  return (
+    <div role="radiogroup" aria-label={translate(lang, 'story.studio.audioEdit.tool.speed')} className="flex gap-1.5">
+      {AUDIO_SPEEDS.map((value) => {
+        const on = Math.abs(speed - value) < 0.001;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            data-audio-speed={String(value)}
+            onClick={() => onSpeed(value)}
+            className="min-h-11 flex-1 rounded-xl text-caption font-semibold tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{
+              outlineColor: 'var(--color-ios-brand)',
+              color: on ? '#fff' : 'var(--color-ios-ink)',
+              backgroundColor: on ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)',
+            }}
+          >
+            {speedLabel(value, lang)}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -144,9 +174,13 @@ export default function ComposerAudioTrim({
   }, [attachment.file, decode]);
 
   const gain = edit?.gain ?? 1;
+  const speed = edit?.speed ?? 1;
   useEffect(() => {
-    if (player.current !== null) player.current.volume = Math.min(1, gain);
-  }, [gain]);
+    if (player.current === null) return;
+    player.current.volume = Math.min(1, gain);
+    player.current.preservesPitch = true;
+    player.current.playbackRate = speed;
+  }, [gain, speed]);
 
   const total = decoded === null ? 0 : decoded.length / decoded.sampleRate;
   const kept = edit?.window ?? null;
@@ -177,6 +211,7 @@ export default function ComposerAudioTrim({
           </div>
         ) : null}
         {edit !== null && tool === 'fade' ? <FadePanel lang={lang} edit={edit} onEdit={setEdit} /> : null}
+        {edit !== null && tool === 'speed' ? <SpeedPanel lang={lang} speed={edit.speed} onSpeed={(next) => setEdit({ ...edit, speed: next })} /> : null}
         {edit !== null && tool === 'volume' ? <VolumePanel lang={lang} gain={edit.gain} onGain={(next) => setEdit({ ...edit, gain: next })} /> : null}
         {edit !== null && kept !== null && tool === 'trim' && total > MINIMUM_AUDIO_WINDOW ? (
           <>

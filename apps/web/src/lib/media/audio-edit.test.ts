@@ -96,7 +96,27 @@ describe('fondus (#9162)', () => {
   });
 });
 
+describe('vitesse (#9163)', () => {
+  test('la vitesse s’applique à la fenêtre gardée : 4 s gardées à 2× durent 2 s', () => {
+    const audio = constant(10, 0.25);
+    const [samples] = renderedChannels(audio, edit(audio, { window: { start: 3, end: 7 }, speed: 2 }));
+    expect(samples!.length / 8000).toBeCloseTo(2, 2);
+  });
+
+  test('0,75× allonge le son, et le fondu de sortie se pose sur la durée RENDUE', () => {
+    const audio = constant(6, 0.5);
+    const [samples] = renderedChannels(audio, edit(audio, { speed: 0.75, fadeOut: true }));
+    expect(samples!.length / 8000).toBeCloseTo(8, 2);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0, 3);
+    expect(samples![Math.round(6.7 * 8000)]).toBeCloseTo(0.5, 2);
+  });
+});
+
 describe('audioEditUntouched', () => {
+  test('une vitesse changée est une édition', () => {
+    expect(audioEditUntouched({ ...untouchedAudioEdit(10), speed: 1.5 }, 10)).toBe(false);
+  });
+
   test('un fondu posé est une édition', () => {
     expect(audioEditUntouched({ ...untouchedAudioEdit(10), fadeIn: true }, 10)).toBe(false);
     expect(audioEditUntouched({ ...untouchedAudioEdit(10), fadeOut: true }, 10)).toBe(false);

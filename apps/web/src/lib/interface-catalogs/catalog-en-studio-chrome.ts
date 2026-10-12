@@ -130,6 +130,7 @@ const enStudioChrome = {
   'story.studio.audioTrim.title': 'Edit audio',
   'story.studio.audioEdit.tool.trim': 'Trim',
   'story.studio.audioEdit.tool.fade': 'Fade',
+  'story.studio.audioEdit.tool.speed': 'Speed',
   'story.studio.audioEdit.tool.volume': 'Volume',
   'story.studio.audioEdit.volume.normal': 'Normal',
   'story.studio.audioEdit.fade.in': 'Fade in',

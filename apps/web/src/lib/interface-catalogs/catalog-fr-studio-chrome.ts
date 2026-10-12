@@ -134,6 +134,7 @@ const frStudioChrome = {
   'story.studio.audioTrim.title': 'Éditer l’audio',
   'story.studio.audioEdit.tool.trim': 'Rogner',
   'story.studio.audioEdit.tool.fade': 'Fondu',
+  'story.studio.audioEdit.tool.speed': 'Vitesse',
   'story.studio.audioEdit.tool.volume': 'Volume',
   'story.studio.audioEdit.volume.normal': 'Normal',
   'story.studio.audioEdit.fade.in': 'Fondu d’entrée',

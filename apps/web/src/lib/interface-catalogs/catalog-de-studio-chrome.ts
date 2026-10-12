@@ -130,6 +130,7 @@ const deStudioChrome = {
   'story.studio.audioTrim.title': 'Audio bearbeiten',
   'story.studio.audioEdit.tool.trim': 'Zuschneiden',
   'story.studio.audioEdit.tool.fade': 'Blende',
+  'story.studio.audioEdit.tool.speed': 'Geschwindigkeit',
   'story.studio.audioEdit.tool.volume': 'Lautstärke',
   'story.studio.audioEdit.volume.normal': 'Normal',
   'story.studio.audioEdit.fade.in': 'Einblenden',

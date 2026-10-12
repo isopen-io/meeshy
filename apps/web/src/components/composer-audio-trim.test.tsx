@@ -75,7 +75,7 @@ const firstSample = async (file: File) => new DataView(await file.arrayBuffer())
 describe('les outils de l’éditeur audio (#9164, ordre d’iOS)', () => {
   test('les outils se suivent comme sur iOS, « Rogner » d’abord', async () => {
     const { host } = await mountTrim();
-    expect([...host.querySelectorAll('[data-audio-tool]')].map((node) => node.getAttribute('data-audio-tool'))).toEqual(['trim', 'fade', 'volume']);
+    expect([...host.querySelectorAll('[data-audio-tool]')].map((node) => node.getAttribute('data-audio-tool'))).toEqual(['trim', 'fade', 'speed', 'volume']);
     expect(tool(host, 'trim').getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -118,5 +118,25 @@ describe('les fondus (#9162)', () => {
     expect(view.getInt16(44, true)).toBe(0);
     expect(Math.abs(view.getInt16(44 + (frames - 1) * 2, true))).toBeLessThan(10);
     expect(view.getInt16(44 + 5 * 8000 * 2, true) / 0x7fff).toBeCloseTo(0.5, 3);
+  });
+});
+
+describe('la vitesse (#9163)', () => {
+  test('les paliers d’iOS, 1× choisi d’abord', async () => {
+    const { host } = await mountTrim();
+    act(() => tool(host, 'speed').click());
+    const speeds = [...host.querySelectorAll<HTMLButtonElement>('[data-audio-speed]')];
+    expect(speeds.map((node) => node.getAttribute('data-audio-speed'))).toEqual(['0.5', '0.75', '1', '1.25', '1.5', '2']);
+    expect(speeds.find((node) => node.getAttribute('aria-checked') === 'true')?.getAttribute('data-audio-speed')).toBe('1');
+  });
+
+  test('2× : la pièce rendue dure la moitié, et l’aperçu joue à 2×', async () => {
+    const { host, done } = await mountTrim(tenSeconds(0.2));
+    act(() => tool(host, 'speed').click());
+    act(() => host.querySelector<HTMLButtonElement>('[data-audio-speed="2"]')!.click());
+    expect(host.querySelector<HTMLAudioElement>('audio')!.playbackRate).toBe(2);
+    act(() => host.querySelector<HTMLButtonElement>('[data-audio-trim-done]')!.click());
+    const view = new DataView(await done[0]!.arrayBuffer());
+    expect(view.getUint32(40, true) / view.getUint32(28, true)).toBeCloseTo(5, 2);
   });
 });

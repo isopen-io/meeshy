@@ -130,6 +130,7 @@ const itStudioChrome = {
   'story.studio.audioTrim.title': 'Modifica l’audio',
   'story.studio.audioEdit.tool.trim': 'Ritaglia',
   'story.studio.audioEdit.tool.fade': 'Dissolvenza',
+  'story.studio.audioEdit.tool.speed': 'Velocità',
   'story.studio.audioEdit.tool.volume': 'Volume',
   'story.studio.audioEdit.volume.normal': 'Normale',
   'story.studio.audioEdit.fade.in': 'Dissolvenza in entrata',
