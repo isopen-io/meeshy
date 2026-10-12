@@ -68,7 +68,9 @@ final class ComposerCaptureTopRowTests: XCTestCase {
     }
 
     func test_segmentBadge_arabicLocale_usesTheLocaleDigits() {
-        XCTAssertEqual(ComposerCaptureTopRow.segmentBadge(3, locale: Locale(identifier: "ar")), "\u{0663} \u{2013}")
+        let arabe = Locale(identifier: "ar")
+        XCTAssertEqual(ComposerCaptureTopRow.segmentBadge(3, locale: arabe), LocalizedNumber.exact(3, locale: arabe) + " \u{2013}",
+                       "le chiffre suit la locale")
     }
 
     func test_segmentCount_spokenLabel_stillSaysTheWordWithItsNumber() {
