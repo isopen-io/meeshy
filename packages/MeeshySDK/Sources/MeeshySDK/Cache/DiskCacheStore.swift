@@ -392,11 +392,13 @@ public actor DiskCacheStore: ReadableCacheStore {
         for urlString: String,
         url: URL,
         transfer: NetworkTransfer? = nil,
-        progress: MediaFileDownloader.Progress? = nil,
+        progress: MediaFileDownloader.ProgressHandler? = nil,
         cancelsWithCaller: Bool = false
     ) async throws -> Data {
         let fileKey = Self.fileKey(for: urlString)
-        if let existing = inFlightTasks[fileKey] {
+        // Un transfert déjà annulé (l'utilisateur vient de l'arrêter) ne se
+        // rejoint pas : il ne rendrait qu'une `CancellationError`.
+        if let existing = inFlightTasks[fileKey], !existing.task.isCancelled {
             return try await existing.task.value
         }
         let transfer = transfer ?? networkTransfer

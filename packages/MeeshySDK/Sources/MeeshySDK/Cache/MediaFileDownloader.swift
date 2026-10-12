@@ -34,7 +34,7 @@ public struct TransferProgressCadence: Sendable, Equatable {
 ///
 /// Building block opaque : il ne connaît ni cache, ni directive, ni clé.
 public final class MediaFileDownloader: NSObject, @unchecked Sendable {
-    public typealias Progress = @Sendable (_ writtenBytes: Int64, _ expectedBytes: Int64) -> Void
+    public typealias ProgressHandler = @Sendable (_ writtenBytes: Int64, _ expectedBytes: Int64) -> Void
 
     public struct Download: Sendable {
         public let fileURL: URL
@@ -47,16 +47,16 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     private let cadenceInterval: TimeInterval
     private let lock = NSLock()
     private var session: URLSession?
-    private var transfers: [Int: Transfer] = [:]
+    private var transfers: [ObjectIdentifier: Transfer] = [:]
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "media-file-download")
 
     private final class Transfer {
         let continuation: CheckedContinuation<Download, Error>
-        let progress: Progress?
+        let progress: ProgressHandler?
         var cadence: TransferProgressCadence
         var staged: Result<Download, Error>?
 
-        init(continuation: CheckedContinuation<Download, Error>, progress: Progress?, cadence: TransferProgressCadence) {
+        init(continuation: CheckedContinuation<Download, Error>, progress: ProgressHandler?, cadence: TransferProgressCadence) {
             self.continuation = continuation
             self.progress = progress
             self.cadence = cadence
@@ -113,7 +113,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     /// l'appelant de lire le statut, puis de supprimer le fichier.
     /// L'annulation de la `Task` appelante annule le transfert et lève
     /// `CancellationError`.
-    public func download(_ request: URLRequest, progress: Progress? = nil) async throws -> Download {
+    public func download(_ request: URLRequest, progress: ProgressHandler? = nil) async throws -> Download {
         try Task.checkCancellation()
         let relay = CancellationRelay()
         return try await withTaskCancellationHandler {
@@ -125,7 +125,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
                     progress: progress,
                     cadence: TransferProgressCadence(minimumInterval: cadenceInterval)
                 )
-                lock.withLock { transfers[task.taskIdentifier] = transfer }
+                lock.withLock { transfers[ObjectIdentifier(task)] = transfer }
                 relay.attach(task)
                 task.resume()
             }
@@ -144,7 +144,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     }
 
     private func transfer(for task: URLSessionTask) -> Transfer? {
-        lock.withLock { transfers[task.taskIdentifier] }
+        lock.withLock { transfers[ObjectIdentifier(task)] }
     }
 
     private func stage(_ location: URL) throws -> URL {
@@ -169,8 +169,8 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         let now = ProcessInfo.processInfo.systemUptime
-        let handler = lock.withLock { () -> Progress? in
-            guard let transfer = transfers[downloadTask.taskIdentifier], transfer.progress != nil else { return nil }
+        let handler = lock.withLock { () -> ProgressHandler? in
+            guard let transfer = transfers[ObjectIdentifier(downloadTask)], transfer.progress != nil else { return nil }
             guard transfer.cadence.admits(
                 writtenBytes: totalBytesWritten,
                 expectedBytes: totalBytesExpectedToWrite,
@@ -206,7 +206,7 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let transfer = lock.withLock({ transfers.removeValue(forKey: task.taskIdentifier) }) else { return }
+        guard let transfer = lock.withLock({ transfers.removeValue(forKey: ObjectIdentifier(task)) }) else { return }
         let staged = lock.withLock { transfer.staged }
         if let error {
             if case .success(let download) = staged {

@@ -380,6 +380,26 @@ final class DiskCacheStoreStreamedTransferTests: XCTestCase {
         XCTAssertEqual(StreamedStubURLProtocol.stops(url), 1)
     }
 
+    /// Arrêter puis relancer aussitôt le même média : le second appel ne
+    /// rejoint pas le transfert condamné (il ne rendrait qu'une annulation),
+    /// il en ouvre un neuf.
+    func test_restartingRightAfterACancel_opensAFreshTransfer() async throws {
+        let url = base + "relance.mp4"
+        reply(url, .init(cacheControl: nil, body: body(256 * 1024), chunks: 16, hangs: true))
+        let store = makeStore()
+        let first = Task { try await store.data(for: url, progress: { _, _ in }) }
+        try await waitUntil { StreamedStubURLProtocol.hits(url) == 1 }
+
+        first.cancel()
+        let payload = body(2048)
+        reply(url, .init(cacheControl: nil, body: payload))
+        let served = try await store.data(for: url, progress: { _, _ in })
+
+        XCTAssertEqual(served, payload)
+        XCTAssertEqual(StreamedStubURLProtocol.hits(url), 2)
+        _ = await first.result
+    }
+
     /// Rejoindre un transfert n'en fait pas son propriétaire : l'appelant qui
     /// a seulement REJOINT et s'annule ne coupe pas le préchargement d'autrui.
     func test_cancellingAJoiningCaller_doesNotCancelTheTransferItJoined() async throws {
