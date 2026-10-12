@@ -193,6 +193,11 @@ describe('POST /posts/:postId/impression', () => {
     expect(passesRacines()).toHaveLength(3);
   });
 
+  it('#10403 — la route unitaire a son propre seau PAR COMPTE, plus le seau global par adresse', async () => {
+    const { createPostRouteRateLimitConfig } = await import('../middleware/rate-limiter');
+    expect(createPostRouteRateLimitConfig).toHaveBeenCalledWith('impressionUnit');
+  });
+
   it('rejects an unknown source with 400', async () => {
     const res = await unauthApp.inject({
       method: 'POST',

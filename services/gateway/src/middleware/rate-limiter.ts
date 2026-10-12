@@ -278,15 +278,24 @@ export function createDirectoryRouteRateLimitConfig(
   };
 }
 
+/**
+ * `view` et `impressionUnit` sont à la mesure d'un DÉFILEMENT de réels (#10403) :
+ * une vue et une impression par réel affiché, et la passerelle dédoublonne
+ * déjà la vue par (post, compte). Un plafond de 60 vues par compte, et
+ * l'impression unitaire laissée au seau global de 300/min par ADRESSE, jetaient
+ * en 429 les premières vues réelles des réels suivants — sans rejeu côté
+ * client (prod, 2026-10-12 : 1430 × 429 sur /view, 204 sur /impression).
+ */
 export function createPostRouteRateLimitConfig(
-  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
+  type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'impressionUnit' | 'engagement'
 ): object {
   const configs = {
     create: { max: 10, label: 'create' },
     like: { max: 30, label: 'like' },
-    view: { max: 60, label: 'view' },
+    view: { max: 240, label: 'view' },
     comment: { max: 20, label: 'comment' },
     impression: { max: 30, label: 'impression' },
+    impressionUnit: { max: 240, label: 'impression-unit' },
     engagement: { max: 20, label: 'engagement' },
   };
   const cfg = configs[type];
