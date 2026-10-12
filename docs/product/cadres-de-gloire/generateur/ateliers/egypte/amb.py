@@ -304,6 +304,7 @@ def amb1():
     c.add(lotus_frieze(c, "lfb", 20, 530, 936, 0.8))
     birds(c, [("mee-jackpot", 52, 476, 126, False, 14), ("meo-trophee", 488, 506, 126, True, -14)])
     inscription(c, KICK, "Ambassadeur I", "On l'a fait ensemble", y=774, style="cartouche", panel=("#0E1A4A", "#050A20"))
+    c.motif("afrique")
     save(c, "ambassadeur-1", RANK, 1, "I", "L'Or de Nubie",
          "Le cadre devient un pectoral royal : Khépri, le scarabée de lapis, pousse le soleil de cornaline où se lève le blason, entre deux ailes "
          "cloisonnées de turquoise et de cornaline, l'anneau shen d'éternité entre ses pattes ; la photo est sertie d'incrustations et suspendue "
