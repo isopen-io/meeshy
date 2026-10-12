@@ -201,7 +201,6 @@ async function exportFrame(handle, { collection, name, message }) {
   const has = (k) => order[k] !== undefined;
   const decorKinds = [...DECOR_KINDS, ...(MUTATE === 'text-in-decor' ? ['text'] : []), ...(MUTATE === 'birds-in-decor' ? ['birds'] : [])];
 
-  const full = await render(['photo', 'photo-bg', 'backdrop', ...DECOR_KINDS, 'front-under', 'front-over', 'crest', 'plate', 'birds', 'text']);
   const probeM = await render(DECOR_KINDS, { probe: '#FF00FF' });
   const probeG = await render(DECOR_KINDS, { probe: '#00FF00' });
   const t = transmission(probeM.raw, probeG.raw);
@@ -243,7 +242,7 @@ async function exportFrame(handle, { collection, name, message }) {
     },
     plate: plate ? { [message ? 'message' : 'plain']: await encode(dir, message ? 'plate-message' : 'plate-plain', plate.raw) } : null,
   };
-  const thumbBuf = await sharp(full.raw, { raw: { width: FW, height: FH, channels: 4 } }).resize(THUMB[0], THUMB[1], { kernel: 'lanczos3' }).webp({ quality: QUALITY.thumb, alphaQuality: 100, effort: 6 }).toBuffer();
+  const thumbBuf = await sharp(notext.raw, { raw: { width: FW, height: FH, channels: 4 } }).resize(THUMB[0], THUMB[1], { kernel: 'lanczos3' }).webp({ quality: QUALITY.thumb, alphaQuality: 100, effort: 6 }).toBuffer();
   fs.writeFileSync(path.join(dir, 'thumb.webp'), thumbBuf);
 
   const text = Object.fromEntries(slots.map((s, i) => {

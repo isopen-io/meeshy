@@ -85,7 +85,7 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 | `layers.grade` | ce que le décor peignait DANS la fenêtre, en PASSES ordonnées : le décor est découpé en suites consécutives de même mode de fusion (`normal`, `screen`, `multiply`…), chaque passe est une couche posée sur la photo dans l'ordre du SVG avec son `blend` (`null` quand la passe ne touche pas la fenêtre) |
 | `layers.front` | `under-birds` (décor dessiné après le blason ou la plaque, avant les oiseaux) et `over-birds` (après les oiseaux) |
 | `layers.plate` | le panneau de la plaque, en `plain` ou `message` selon le cadre (une seule variante par cadre : l'atelier ne dessine que la sienne) |
-| `thumb` | la vignette 270×480 du cadre complet |
+| `thumb` | la vignette 270×480 du cadre, photo factice, oiseaux, blason et plaque compris, SANS texte : le texte est vivant et localisé, une vignette ne le cuit pas en français (et le rendu Chromium d’un titre en dégradé sur chemin courbe n’est pas déterministe) |
 | `stack` | l'ordre des couches de CE cadre, lu dans le SVG — le peintre ne le devine jamais |
 | `text` | chaque emplacement (`kicker`, `title`, `message`, `date`, `plate.<n>`, `decor.<n>`) : texte, ligne de base, ancre, matrice, police (famille, graisse exacte, taille, interlettrage), remplissage résolu (dégradé et arrêts), contour, opacité, filtres, chemin courbe, boîte, effets (les copies décalées, floues ou dédoublées), et `contrast` : le contraste WCAG mesuré contre les pixels réellement dessous (5ᵉ centile, et `contrastMin`) |
 | `birds` | chaque oiseau posé (`bird()`) : pose, boîte carrée du sticker, rotation, miroir, opacité |

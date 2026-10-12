@@ -43,6 +43,7 @@ export async function showSvg(handle, svg, { fonts }) {
   fs.writeFileSync(handle.file, html);
   await handle.page.goto('file://' + handle.file);
   await handle.page.evaluate(async () => {
+    await Promise.all([...document.fonts].filter((face) => face.status === 'unloaded').map((face) => face.load().catch(() => null)));
     await document.fonts.ready;
     const hrefs = [...new Set([...document.querySelectorAll('image')].map((im) => im.getAttribute('href') ?? im.getAttribute('xlink:href')).filter(Boolean))];
     await Promise.all(hrefs.map((href) => {
