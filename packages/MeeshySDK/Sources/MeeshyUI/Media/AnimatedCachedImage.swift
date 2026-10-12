@@ -82,15 +82,51 @@ public struct AnimatedCachedImage<Fallback: View>: View {
     /// ait à quitter l'écran.
     private var taskKey: String { "\(urlString ?? "")|\(animates)|\(reduceMotion)|\(pixelBudget)" }
 
+    /// **Le décodage quitte le fil principal** (#9210) : la tâche d'une vue
+    /// est isolée au fil principal, et N images s'y décodaient pour chaque case
+    /// qui entre pendant un défilement — une grille de stickers animés y perdait
+    /// des images. Seule la pose de l'état revient au fil principal.
     private func resolve() async {
-        let loader = DiskCacheImageLoader()
-        let resolved = await AnimatedImageResolution.resolve(
+        let rendu = await AnimatedCachedImageDecoding.resolve(
             urlString: urlString,
             animates: animates,
             reduceMotion: reduceMotion,
             maxPixelSize: pixelBudget
-        ) { await loader.data(for: $0) }
+        )
         guard !Task.isCancelled else { return }
-        decoded = resolved
+        decoded = rendu?.decoded
+    }
+}
+
+/// Une animation décodée, traversant du décodage concurrent vers la vue —
+/// des `CGImage` immuables, lues et jamais mutées.
+nonisolated struct AnimatedDecodedFrames: @unchecked Sendable {
+    let decoded: AnimatedImageDecoder.Decoded
+}
+
+/// **Le décodage d'`AnimatedCachedImage`, HORS du fil principal** (#9210) —
+/// la règle d'`AnimatedImageResolution`, exécutée sur l'exécuteur concurrent.
+nonisolated enum AnimatedCachedImageDecoding {
+
+    /// Les octets par la pile de cache des images, puis le décodage.
+    @concurrent
+    static func resolve(urlString: String?, animates: Bool, reduceMotion: Bool,
+                        maxPixelSize: Int) async -> AnimatedDecodedFrames? {
+        let loader = DiskCacheImageLoader()
+        return await resolve(urlString: urlString, animates: animates, reduceMotion: reduceMotion,
+                             maxPixelSize: maxPixelSize) { await loader.data(for: $0) }
+    }
+
+    @concurrent
+    static func resolve(urlString: String?, animates: Bool, reduceMotion: Bool, maxPixelSize: Int,
+                        loader: @Sendable (String) async -> Data?) async -> AnimatedDecodedFrames? {
+        let decoded = await AnimatedImageResolution.resolve(
+            urlString: urlString,
+            animates: animates,
+            reduceMotion: reduceMotion,
+            maxPixelSize: maxPixelSize,
+            loader: loader
+        )
+        return decoded.map(AnimatedDecodedFrames.init(decoded:))
     }
 }
