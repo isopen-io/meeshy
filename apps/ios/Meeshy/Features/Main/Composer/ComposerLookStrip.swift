@@ -200,7 +200,9 @@ struct ComposerLookStrip: View {
                 }
             } else {
                 VStack(spacing: 0) {
-                    band.frame(height: ComposerLookStripRule.cellSize.height)
+                    // Le cadre de la choisie déborde de la case (#10309) : la
+                    // bande lui garde sa place, sans quoi le défilement le rognerait.
+                    band.frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset)
                     Text(chosenItemName)
                         .font(MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold))
                         .foregroundStyle(.white)
@@ -214,7 +216,7 @@ struct ComposerLookStrip: View {
                 }
             }
         }
-        .frame(height: ComposerLookStripRule.cellSize.height + Self.labelHeight)
+        .frame(height: ComposerLookStripRule.cellSize.height + 2 * ComposerTriggerOutline.outset + Self.labelHeight)
         .adaptiveOnChange(of: pressing) { _, tenu in
             guard !tenu else { return }
             session.releaseStaleHold()
@@ -261,8 +263,8 @@ struct ComposerLookStrip: View {
         }
         .frame(width: cellule.width, height: cellule.height)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-            .strokeBorder(Color.white, lineWidth: 3))
+        // Le cadre AUTOUR du flux (#10309) : rouge et battant pendant la prise.
+        .modifier(ComposerTriggerOutlineStyle(recording: recording))
         .contentShape(Rectangle())
         .gesture(chosenGestures)
         .accessibilityElement()
@@ -378,15 +380,18 @@ struct ComposerLookStrip: View {
             }
             .modifier(ComposerLookStripTargets())
         }
+        .padding(.vertical, ComposerTriggerOutline.outset)
     }
 
     /// Une case : son contour, rien d'écrit — seul le choix se nomme, sous la bande.
+    /// La choisie porte son cadre HORS du flux (#10309) ; les autres, un filet.
     @ViewBuilder
     private func cell(item: ComposerLookStripItem, chosen: Bool) -> some View {
         let cellule = ComposerLookStripRule.cellSize
         let corps = RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-            .strokeBorder(chosen ? Color.white : Color.white.opacity(0.25), lineWidth: chosen ? 3 : 1)
+            .strokeBorder(Color.white.opacity(chosen ? 0 : 0.25), lineWidth: 1)
             .frame(width: cellule.width, height: cellule.height)
+            .modifier(ComposerTriggerOutlineStyle(recording: recording, shown: chosen))
             .contentShape(Rectangle())
             .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
                 perform(.otherThumbnail, .tap, item: item)
