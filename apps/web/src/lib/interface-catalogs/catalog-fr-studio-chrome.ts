@@ -120,6 +120,7 @@ const frStudioChrome = {
   'story.studio.background.menu.edit': 'Modifier le fond',
   'story.studio.background.menu.retake': 'Reprendre une photo',
   'story.studio.background.menu.forward': 'Passer au premier plan',
+  'story.studio.background.menu.rotate': 'Pivoter',
   'story.studio.background.menu.remove': 'Retirer le fond',
   'story.studio.background.tools': 'Outils du fond',
   'story.studio.background.tools.describe': 'Décrire',

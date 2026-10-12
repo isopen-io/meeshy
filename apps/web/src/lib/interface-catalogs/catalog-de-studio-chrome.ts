@@ -116,6 +116,7 @@ const deStudioChrome = {
   'story.studio.background.menu.edit': 'Hintergrund bearbeiten',
   'story.studio.background.menu.retake': 'Neues Foto aufnehmen',
   'story.studio.background.menu.forward': 'In den Vordergrund',
+  'story.studio.background.menu.rotate': 'Drehen',
   'story.studio.background.menu.remove': 'Hintergrund entfernen',
   'story.studio.background.tools': 'Hintergrund-Werkzeuge',
   'story.studio.background.tools.describe': 'Beschreiben',

@@ -116,6 +116,7 @@ const esStudioChrome = {
   'story.studio.background.menu.edit': 'Editar el fondo',
   'story.studio.background.menu.retake': 'Volver a hacer una foto',
   'story.studio.background.menu.forward': 'Pasar a primer plano',
+  'story.studio.background.menu.rotate': 'Girar',
   'story.studio.background.menu.remove': 'Quitar el fondo',
   'story.studio.background.tools': 'Herramientas del fondo',
   'story.studio.background.tools.describe': 'Describir',

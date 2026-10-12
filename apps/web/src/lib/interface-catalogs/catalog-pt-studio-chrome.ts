@@ -116,6 +116,7 @@ const ptStudioChrome = {
   'story.studio.background.menu.edit': 'Editar o fundo',
   'story.studio.background.menu.retake': 'Tirar outra foto',
   'story.studio.background.menu.forward': 'Trazer para a frente',
+  'story.studio.background.menu.rotate': 'Girar',
   'story.studio.background.menu.remove': 'Remover o fundo',
   'story.studio.background.tools': 'Ferramentas do fundo',
   'story.studio.background.tools.describe': 'Descrever',

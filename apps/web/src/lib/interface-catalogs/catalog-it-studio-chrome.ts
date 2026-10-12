@@ -116,6 +116,7 @@ const itStudioChrome = {
   'story.studio.background.menu.edit': 'Modifica lo sfondo',
   'story.studio.background.menu.retake': 'Scatta di nuovo',
   'story.studio.background.menu.forward': 'Porta in primo piano',
+  'story.studio.background.menu.rotate': 'Ruota',
   'story.studio.background.menu.remove': 'Rimuovi lo sfondo',
   'story.studio.background.tools': 'Strumenti dello sfondo',
   'story.studio.background.tools.describe': 'Descrivi',
