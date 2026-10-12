@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   CAPTURE_ZONES,
+  applyFormatChange,
   applyFrameChange,
   applySaveFailed,
   applySaved,
@@ -10,6 +11,7 @@ import {
   captureDestination,
   saveButtonVisible,
   type CaptureDestination,
+  type CaptureFormat,
   type CaptureOrigin,
   type CaptureZone,
   type FrameChoice,
@@ -18,8 +20,9 @@ import {
 
 type Step =
   | { readonly op: 'save' }
-  | { readonly op: 'saveFailed'; readonly frameId: FrameChoice }
-  | { readonly op: 'frame'; readonly frameId: FrameChoice };
+  | { readonly op: 'saveFailed'; readonly frameId: FrameChoice; readonly format: CaptureFormat }
+  | { readonly op: 'frame'; readonly frameId: FrameChoice }
+  | { readonly op: 'format'; readonly format: CaptureFormat };
 
 type Vectors = {
   readonly destinations: readonly {
@@ -44,9 +47,11 @@ const apply = (state: TakeSaveState, step: Step): TakeSaveState => {
     case 'save':
       return applySaved(state);
     case 'saveFailed':
-      return applySaveFailed(state, step.frameId);
+      return applySaveFailed(state, { frameId: step.frameId, format: step.format });
     case 'frame':
       return applyFrameChange(state, step.frameId);
+    case 'format':
+      return applyFormatChange(state, step.format);
   }
 };
 
@@ -92,16 +97,36 @@ describe('la loi d’enregistrement d’une prise — directive porteur 2026-10-
   });
 
   it('les transitions ne mutent jamais l’état reçu', () => {
-    const start = beginTake({ zone: 'frame', frameId: 'or-royal' });
+    const start = beginTake({ zone: 'frame', frameId: 'or-royal', format: 'story' });
     const snapshot = JSON.stringify(start);
     applyFrameChange(start, 'argent');
+    applyFormatChange(start, 'square');
     applySaved(applyFrameChange(start, 'argent'));
-    applySaveFailed(start, 'or-royal');
+    applySaveFailed(start, { frameId: 'or-royal', format: 'story' });
     expect(JSON.stringify(start)).toBe(snapshot);
   });
 
-  it('réenregistrer avec le même cadre n’empile pas de doublon', () => {
-    const twice = applySaved(applySaved(beginTake({ zone: 'outside', frameId: null })));
-    expect(twice.savedWith).toEqual([null]);
+  it('réenregistrer avec le même cadre et le même format n’empile pas de doublon', () => {
+    const twice = applySaved(applySaved(beginTake({ zone: 'outside', frameId: null, format: 'story' })));
+    expect(twice.savedWith).toEqual([{ frameId: null, format: 'story' }]);
+  });
+
+  it('#10296 : une prise par le cadre marque la paire (cadre, format de la prise)', () => {
+    expect(beginTake({ zone: 'frame', frameId: 'or-royal', format: 'square' })).toEqual({
+      currentFrame: 'or-royal',
+      currentFormat: 'square',
+      savedWith: [{ frameId: 'or-royal', format: 'square' }],
+    });
+  });
+
+  it('#10296 : story enregistrée, carré enregistré, retour à la story — deux versions, aucun doublon', () => {
+    const story = beginTake({ zone: 'frame', frameId: 'or-royal', format: 'story' });
+    const both = applySaved(applyFormatChange(story, 'square'));
+    const back = applySaved(applyFormatChange(both, 'story'));
+    expect(back.savedWith).toEqual([
+      { frameId: 'or-royal', format: 'story' },
+      { frameId: 'or-royal', format: 'square' },
+    ]);
+    expect(saveButtonVisible(back)).toBe(false);
   });
 });

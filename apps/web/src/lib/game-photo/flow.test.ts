@@ -78,10 +78,10 @@ describe('la caméra', () => {
 
 describe('la frappe et le résultat', () => {
   const striking: FlowState = { step: 'striking', mode: 'selfie', zone: 'outside' };
-  const unsaved = { currentFrame: 'moment', savedWith: [] };
+  const unsaved = { currentFrame: 'moment', currentFormat: 'story', savedWith: [] };
 
   test('les deux images prêtes : le résultat, rien de gardé ni de partagé encore', () => {
-    expect(run([{ type: 'composed', frame: 'moment' }], striking)).toEqual({ step: 'result', mode: 'selfie', kept: null, shared: null, save: unsaved });
+    expect(run([{ type: 'composed', frame: 'moment', format: 'story' }], striking)).toEqual({ step: 'result', mode: 'selfie', kept: null, shared: null, save: unsaved });
   });
 
   test('une composition impossible est un état à part, avec une sortie', () => {
@@ -124,22 +124,22 @@ describe('la frappe et le résultat', () => {
  */
 describe('l’enregistrement d’une prise suit la zone qui l’a déclenchée (#10284)', () => {
   const live: FlowState = { step: 'camera', camera: 'live' };
-  const resultOf = (zone: 'frame' | 'outside') => run([{ type: 'shutter', zone }, { type: 'composed', frame: 'moment' }], live);
+  const resultOf = (zone: 'frame' | 'outside') => run([{ type: 'shutter', zone }, { type: 'composed', frame: 'moment', format: 'story' }], live);
   const visible = (state: FlowState): boolean | null => (state.step === 'result' ? saveButtonVisible(state.save) : null);
 
   test('prise par la case du cadre : déjà en galerie avec ce cadre, « Enregistrer » masqué', () => {
-    expect(resultOf('frame')).toMatchObject({ step: 'result', save: { currentFrame: 'moment', savedWith: ['moment'] } });
+    expect(resultOf('frame')).toMatchObject({ step: 'result', save: { currentFrame: 'moment', currentFormat: 'story', savedWith: [{ frameId: 'moment', format: 'story' }] } });
     expect(visible(resultOf('frame'))).toBe(false);
   });
 
   test('prise par la scène : jamais en galerie, « Enregistrer » visible', () => {
-    expect(resultOf('outside')).toMatchObject({ step: 'result', save: { currentFrame: 'moment', savedWith: [] } });
+    expect(resultOf('outside')).toMatchObject({ step: 'result', save: { currentFrame: 'moment', currentFormat: 'story', savedWith: [] } });
     expect(visible(resultOf('outside'))).toBe(true);
   });
 
   test('une photo importée et la carte seule sont des prises hors cadre', () => {
-    const card = run([{ type: 'card' }, { type: 'composed', frame: 'moment' }]);
-    const imported = run([{ type: 'gallery' }, { type: 'composed', frame: 'moment' }], live);
+    const card = run([{ type: 'card' }, { type: 'composed', frame: 'moment', format: 'story' }]);
+    const imported = run([{ type: 'gallery' }, { type: 'composed', frame: 'moment', format: 'story' }], live);
     expect(visible(card)).toBe(true);
     expect(visible(imported)).toBe(true);
   });
@@ -147,11 +147,11 @@ describe('l’enregistrement d’une prise suit la zone qui l’a déclenchée (
   test('« Enregistrer » touché le masque ; un échec le fait revenir', () => {
     const saved = run([{ type: 'saved' }], resultOf('outside'));
     expect(visible(saved)).toBe(false);
-    expect(visible(run([{ type: 'save-failed', frame: 'moment' }], saved))).toBe(true);
+    expect(visible(run([{ type: 'save-failed', frame: 'moment', format: 'story' }], saved))).toBe(true);
   });
 
   test('l’écriture automatique d’une prise par le cadre qui échoue rend « Enregistrer »', () => {
-    expect(visible(run([{ type: 'save-failed', frame: 'moment' }], resultOf('frame')))).toBe(true);
+    expect(visible(run([{ type: 'save-failed', frame: 'moment', format: 'story' }], resultOf('frame')))).toBe(true);
   });
 
   test('changer de cadre fait revenir « Enregistrer » ; revenir au cadre enregistré le masque', () => {
@@ -160,8 +160,26 @@ describe('l’enregistrement d’une prise suit la zone qui l’a déclenchée (
     expect(visible(run([{ type: 'frame', frame: 'moment' }], other))).toBe(false);
   });
 
+  test('#10296 : story enregistrée par le cadre, puis le carré, fait revenir « Enregistrer »', () => {
+    expect(visible(run([{ type: 'format', format: 'square' }], resultOf('frame')))).toBe(true);
+  });
+
+  test('#10296 : le carré enregistré puis le retour à la story déjà enregistrée le masque, sans doublon', () => {
+    const squareSaved = run([{ type: 'format', format: 'square' }, { type: 'saved' }], resultOf('frame'));
+    expect(visible(squareSaved)).toBe(false);
+    const back = run([{ type: 'format', format: 'story' }], squareSaved);
+    expect(visible(back)).toBe(false);
+    expect(back).toMatchObject({ save: { savedWith: [{ frameId: 'moment', format: 'story' }, { frameId: 'moment', format: 'square' }] } });
+  });
+
+  test('#10296 : l’échec de l’écriture du carré vise le carré, pas la story déjà en galerie', () => {
+    const failed = run([{ type: 'format', format: 'square' }, { type: 'saved' }, { type: 'save-failed', frame: 'moment', format: 'square' }], resultOf('frame'));
+    expect(visible(failed)).toBe(true);
+    expect(visible(run([{ type: 'format', format: 'story' }], failed))).toBe(false);
+  });
+
   test('avant la composition, rien ne s’enregistre', () => {
     const striking: FlowState = { step: 'striking', mode: 'selfie', zone: 'frame' };
-    expect(run([{ type: 'saved' }, { type: 'frame', frame: 'x' }], striking)).toEqual(striking);
+    expect(run([{ type: 'saved' }, { type: 'frame', frame: 'x' }, { type: 'format', format: 'square' }], striking)).toEqual(striking);
   });
 });

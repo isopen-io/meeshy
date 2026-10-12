@@ -645,6 +645,31 @@ describe('le cadre est le déclencheur (#10284)', () => {
     expect(host.querySelector('[role="status"]')?.textContent).toContain('Image enregistrée');
   });
 
+  test('#10296 : story enregistrée par la case du cadre, puis le carré : « Enregistrer » revient et écrit le carré', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    expect(by(host, 'data-photo-save')).toBeNull();
+    await click(by(host, 'data-photo-format="square"'));
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png', 'meeshy-profil.png']);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('#10296 : le carré enregistré puis le retour à la story déjà enregistrée : masqué, sans doublon', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-format="square"'));
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    await click(by(host, 'data-photo-format="story"'));
+    expect(by(host, 'data-photo-save')).toBeNull();
+    expect(log.saved).toHaveLength(2);
+  });
+
   test('toucher deux fois la scène : le résultat, RIEN dans la galerie, « Enregistrer » visible', async () => {
     const { host, log } = await live();
     await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
