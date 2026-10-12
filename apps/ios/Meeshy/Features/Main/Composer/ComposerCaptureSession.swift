@@ -237,10 +237,25 @@ final class ComposerCaptureSession: ObservableObject {
     func arm(mode: ComposerSceneCameraMode) {
         resetIntents()
         self.mode = mode
+        // **Les cadres d'emblée, « Aucun » choisi** (#10307, porteur 2026-10-12) :
+        // la bande s'ouvre sur la famille des cadres, sans en imposer un.
+        look = ComposerCaptureSession.openingLook
+        openFamily = ComposerCaptureSession.openingFamily
         stage = .armed
         armedAt = Date()
         watchThermalState()
         camera.configure()
+    }
+
+    /// La bande ouverte à l'armement, et le look qu'elle montre choisi (#10307).
+    static let openingFamily: ComposerLookFamily? = .frames
+    static let openingLook = ComposerPhotoLook()
+
+    /// **Préparer la session avant de la montrer** (#10307) : l'hôte qui peut
+    /// filmer l'appelle à son ouverture ; l'armement n'aura plus qu'à lancer.
+    func prewarm() {
+        guard stage == .off else { return }
+        camera.prewarm()
     }
 
     /// **Une entrée, pas un mode** : la prise rendue, le viseur se retire et la

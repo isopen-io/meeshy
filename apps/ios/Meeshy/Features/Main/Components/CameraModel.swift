@@ -78,6 +78,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     nonisolated let liveFeed = ComposerCameraFeed()
     /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction (#10308).
     nonisolated let previewMirroring = ComposerPreviewMirroring()
+    /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
+    /// refait pas (#10307).
+    private(set) var sessionIsPrepared = false
+    /// De l'armement à la première trame, relevé dans la console (#10307).
+    nonisolated let firstFrameClock = ComposerCameraFirstFrameClock()
     #if DEBUG
     /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
     let fixture: ComposerCaptureFixtureDriver?
@@ -189,16 +194,39 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    /// La configuration se fait sur la file de la session ; l'objectif installé
-    /// et le micro reviennent au fil principal, dans l'ordre de la file.
+    /// **La session se prépare AVANT d'être montrée** (#10307, porteur
+    /// 2026-10-12 : « armer la caméra vite »). Le composer qui s'ouvre sur un
+    /// format qui filme la configure déjà — sorties, objectif, connexions —
+    /// sans la lancer : aucun voyant caméra ne s'allume tant qu'on ne vise pas,
+    /// et l'armement n'a plus qu'à la démarrer. Seulement si l'accès est DÉJÀ
+    /// accordé : préparer ne demande jamais rien.
+    func prewarm() {
+        guard !runsFixture, AVCaptureDevice.authorizationStatus(for: .video) == .authorized else { return }
+        prepareSession()
+    }
+
+    /// Arme, puis lance : la configuration n'est faite qu'UNE fois par modèle —
+    /// un ré-armement ne retire ni ne repose rien (#10307), il garde l'objectif
+    /// choisi et démarre. Le micro déjà autorisé entre avant le lancement.
     private func setupSession() {
+        let prechauffee = sessionIsPrepared
+        prepareSession()
+        armMicrophoneAtSetup()
+        firstFrameClock.start(prewarmed: prechauffee)
+        sessionQueue.setRunning(true, session)
+    }
+
+    /// La configuration se fait sur la file de la session ; l'objectif installé
+    /// revient au fil principal, dans l'ordre de la file.
+    private func prepareSession() {
         observeSessionHealth()
-        let armeLeMicro = CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
-                                                        otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
+        guard !sessionIsPrepared else { return }
+        sessionIsPrepared = true
+        liveFeed.watchFirstFrame { [firstFrameClock] in _ = firstFrameClock.report() }
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            self.session.sessionPreset = .high
+            if self.session.sessionPreset != .high { self.session.sessionPreset = .high }
             if self.session.canAddOutput(self.photoOutput) { self.session.addOutput(self.photoOutput) }
             if self.session.canAddOutput(self.videoOutput) { self.session.addOutput(self.videoOutput) }
             self.frameOutput.alwaysDiscardsLateVideoFrames = true
@@ -207,19 +235,30 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             let installe = Self.installVideoInput(in: self.session, position: .back, outputs: self.orientedOutputs,
                                                   prepared: self.preparedInputs,
                                                   previewWanted: self.previewMirroring.isWanted)
-            let micro = armeLeMicro && Self.addAudioInput(to: self.session)
             self.session.commitConfiguration()
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     if let installe { self.adopt(installe) }
                     self.inputEpoch += 1
-                    if micro { self.hasAudioInput = true }
                 }
             }
+            self.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
         }
-        sessionQueue.setRunning(true, session)
+    }
+
+    /// Le micro déjà autorisé entre dans la session ARRÊTÉE (#9328), jamais
+    /// pendant qu'une musique joue ; décidé à l'armement, pas à la préparation.
+    private func armMicrophoneAtSetup() {
+        guard !hasAudioInput, CameraAudioArming.armsAtSetup(
+            microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) else { return }
         sessionQueue.perform { [weak self] in
-            self?.preparedInputs.prepare(.front) { Self.videoInput(position: .front) }
+            guard let self else { return }
+            self.session.beginConfiguration()
+            let micro = Self.addAudioInput(to: self.session)
+            self.session.commitConfiguration()
+            guard micro else { return }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self.hasAudioInput = true } }
         }
     }
 

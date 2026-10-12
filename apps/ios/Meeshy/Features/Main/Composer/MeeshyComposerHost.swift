@@ -967,6 +967,11 @@ struct MeeshyComposerHost: View {
         // donc il n'y a rien à observer. Le loquet tient la répétition.
         .onAppear { ingestSeedIntoDocumentIfNeeded() }
         .onAppear { ingestRetouchSeriesIfNeeded() }
+        // **La caméra se prépare à l'ouverture** (#10307) : un format qui filme
+        // configure sa session sans la lancer — l'armement n'a plus qu'à démarrer.
+        .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in
+            if filme { sceneCapture.prewarm() }
+        }
         // Une scène fondée en retouche prend son état de départ après ses
         // mesures vidéo (#9126, #9131).
         .adaptiveOnChange(of: slideIdByMediaURL.count) { _, _ in
