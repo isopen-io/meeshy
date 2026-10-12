@@ -38,7 +38,6 @@ import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
-import enContentRefused from './catalog-en-content-refused';
 import enPublicEntry from './catalog-en-public-entry';
 
 const en = {
@@ -1116,7 +1115,6 @@ const en = {
   ...enCommentRow,
   ...enContactDiscovery,
   ...enUserProfile,
-  ...enContentRefused,
   ...enPublicEntry,
 } satisfies InterfaceCatalog;
 

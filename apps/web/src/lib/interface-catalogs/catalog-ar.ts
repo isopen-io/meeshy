@@ -38,7 +38,6 @@ import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
-import arContentRefused from './catalog-ar-content-refused';
 import arPublicEntry from './catalog-ar-public-entry';
 
 const ar = {
@@ -1113,7 +1112,6 @@ const ar = {
   ...arCommentRow,
   ...arContactDiscovery,
   ...arUserProfile,
-  ...arContentRefused,
   ...arPublicEntry,
 } satisfies InterfaceCatalog;
 

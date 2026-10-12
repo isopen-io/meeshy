@@ -38,7 +38,6 @@ import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
-import itContentRefused from './catalog-it-content-refused';
 import itPublicEntry from './catalog-it-public-entry';
 
 const it = {
@@ -1116,7 +1115,6 @@ const it = {
   ...itCommentRow,
   ...itContactDiscovery,
   ...itUserProfile,
-  ...itContentRefused,
   ...itPublicEntry,
 } satisfies InterfaceCatalog;
 

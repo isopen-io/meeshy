@@ -38,7 +38,6 @@ import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
-import ptContentRefused from './catalog-pt-content-refused';
 import ptPublicEntry from './catalog-pt-public-entry';
 
 /**
@@ -1120,7 +1119,6 @@ const pt = {
   ...ptCommentRow,
   ...ptContactDiscovery,
   ...ptUserProfile,
-  ...ptContentRefused,
   ...ptPublicEntry,
 } satisfies InterfaceCatalog;
 
