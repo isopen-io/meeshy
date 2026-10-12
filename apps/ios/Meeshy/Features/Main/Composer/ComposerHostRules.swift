@@ -956,7 +956,8 @@ nonisolated enum ComposerSoundHandoff: Equatable {
 nonisolated enum ComposerFileImportIntent: Equatable {
 
     /// La rangée du document et la porte média — tout ce qui compose la
-    /// publication.
+    /// publication. Un fichier AUDIO choisi ici devient un son posé sur la
+    /// scène (#10363, `ComposerImportedFileRoute`).
     case media
 
     /// La porte SON : un fichier audio, posé sur la scène avec son rôle.
