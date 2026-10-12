@@ -156,4 +156,28 @@ final class AnonymousSenderLinksTests: XCTestCase {
         XCTAssertNotEqual(BubbleContent.Reply(reference: anonymous, isStory: false),
                           BubbleContent.Reply(reference: registered, isStory: false))
     }
+
+    // MARK: - Avis d'arrivée (#9717)
+
+    private func joinNotice(username: String, givenName: String?, anonymous: Bool) -> BubbleContent.JoinNotice {
+        BubbleContent.JoinNotice(participantId: "participant-1", displayName: username,
+                                 isAnonymous: anonymous, viaShareLink: anonymous, fallbackText: "repli",
+                                 username: username, givenName: givenName, linkRules: nil)
+    }
+
+    func test_joinNoticePresentation_anonymousGuestWithGivenName_showsNoTechnicalHandle() {
+        let presentation = JoinNoticePresentation(notice: joinNotice(username: "ano_Emma", givenName: "Emma", anonymous: true))
+
+        XCTAssertEqual(presentation.primaryName, "Emma")
+        XCTAssertNil(presentation.handle)
+        XCTAssertTrue(presentation.showsNoAccountBadge)
+    }
+
+    func test_joinNoticePresentation_registeredAccountNamedLikeAGuest_keepsItsHandle() {
+        let presentation = JoinNoticePresentation(notice: joinNotice(username: "ano_bob", givenName: "Bob", anonymous: false))
+
+        XCTAssertEqual(presentation.primaryName, "Bob")
+        XCTAssertEqual(presentation.handle, "@ano_bob")
+        XCTAssertFalse(presentation.showsNoAccountBadge)
+    }
 }
