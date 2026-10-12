@@ -327,7 +327,9 @@ public struct ImageFullscreen: View {
         } else {
             FullscreenChromeButton(
                 systemImage: saveGlyph,
-                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
                 exitGate.perform {
                     if let onSaveRequested {
@@ -343,10 +345,16 @@ public struct ImageFullscreen: View {
 
     private var saveGlyph: String {
         switch saveState {
-        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
         case .saved: return FullscreenChromeSymbol.saved
         case .failed: return FullscreenChromeSymbol.close
         }
+    }
+
+    /// Déjà dans l'album Meeshy (#10370) : lu au registre, dès le premier rendu.
+    private var isInAlbum: Bool {
+        PhotoAlbumSaveFeedback.isInAlbum(attachmentId: attachmentId)
     }
 
     private func reportImageViewed() {
@@ -365,8 +373,10 @@ public struct ImageFullscreen: View {
         saveState = .saving
         HapticFeedback.light()
         Task {
-            let saved = await saveAsReceived(url)
-            if saved, let attId = attachmentId {
+            let outcome = await saveAsReceived(url)
+            let saved = outcome.isInAlbum
+            if outcome == .alreadyPresent { PhotoAlbumSaveFeedback.announceAlreadyInAlbum() }
+            if outcome == .saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                 AttachmentStatusReporter.report(attachmentId: attId, body: body)
             }
@@ -404,14 +414,15 @@ public struct ImageFullscreen: View {
     /// cette vue ne décide rien, elle sert des octets déjà qualifiés par le seul
     /// chemin qui puisse l'atteindre.
     @MainActor
-    private func saveAsReceived(_ url: URL) async -> Bool {
+    private func saveAsReceived(_ url: URL) async -> PhotoLibrarySaveOutcome {
         // Le fichier du cache part PAR RÉFÉRENCE : rien n'est relu ni décodé (#9685).
+        // Dédoublonné par l'empreinte du contenu (#10370).
         if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
-            return await PhotoLibraryManager.shared.saveImageFile(at: onDisk)
+            return await PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)
         }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
-            return false
+            return .failed
         }
-        return await PhotoLibraryManager.shared.saveImage(data)
+        return await PhotoLibraryManager.shared.addImage(data, alias: attachmentId)
     }
 }

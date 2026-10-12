@@ -232,9 +232,9 @@ struct RootChromeLayer: ViewModifier {
                         onItemTap: onSyncPillTap,
                         activeConversationId: activeConversationId
                     )
-                    // Dans la bande de la barre d'état, sous l'îlot, hors du
-                    // contenu — sur tous les écrans, conversation comprise
-                    // (#9680). La position vit dans `SyncPillPlacement`, plus
+                    // Sous la zone sûre, décollée de l'îlot — sur tous les
+                    // écrans, conversation comprise (#10371, qui supplante
+                    // #9680). La position vit dans `SyncPillPlacement`, plus
                     // chez chaque hôte (#5941, #5944, #5835).
                     .inSyncPillBand()
                 }

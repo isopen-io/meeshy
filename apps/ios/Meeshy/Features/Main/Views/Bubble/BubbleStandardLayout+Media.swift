@@ -299,6 +299,10 @@ fileprivate struct BubbleGridCell: View {
     let onOpenProtected: (MessageAttachment) -> Void
 
     @State private var showReactionPicker = false
+    /// L'image affichée par la case est ARRIVÉE (`onFullImageLoaded`) : le
+    /// badge « télécharger » se tait, elle est sur l'appareil (#10370).
+    @State private var displayedImageLanded = false
+    @Environment(\.displayScale) private var displayScale: CGFloat
 
     private var attachmentIsProtected: Bool {
         attachment.isViewOnce || attachment.isBlurred
@@ -473,7 +477,8 @@ fileprivate struct BubbleGridCell: View {
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
+            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
+                                onFullImageLoaded: { displayedImageLanded = true })
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
@@ -537,7 +542,11 @@ fileprivate struct BubbleGridCell: View {
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
-                }
+                },
+                displayedURL: BubbleGridImageView.displayedURL(for: attachment,
+                                                               cellPointWidth: cellPointWidth,
+                                                               displayScale: displayScale),
+                displayedImageLanded: displayedImageLanded
             )
         }
     }
@@ -598,24 +607,31 @@ fileprivate struct BubbleGridImageView: View {
     /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
+    /// Le plein format affiché est résident — relayé au badge (#10370).
+    var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
     @Environment(\.displayScale) private var displayScale: CGFloat
+
+    /// 5.2 — l'URL que la case AFFICHE : la plus petite variante
+    /// `>= largeur d'affichage en px` (atome pur SDK), ou l'original sans
+    /// variante (image chiffrée). Site unique : le badge y lit la MÊME URL
+    /// que celle que la case télécharge (#10370).
+    static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
+                             displayScale: CGFloat) -> String? {
+        guard !attachment.fileUrl.isEmpty else { return nil }
+        return ImageVariantSelector.bestImageURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: attachment.fileUrl,
+            originalWidth: attachment.width,
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded())
+        )
+    }
 
     var body: some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-
-        // 5.2 — choisir la plus petite variante `>= largeur d'affichage en px`
-        // (atome pur SDK). Sans variante (image chiffrée) → `originalFull`.
-        let targetWidthPx = Int((cellPointWidth * displayScale).rounded())
-        let selectedFull: String? = originalFull.map { orig in
-            ImageVariantSelector.bestImageURL(
-                variants: attachment.imageVariants ?? [],
-                originalURL: orig,
-                originalWidth: attachment.width,
-                targetWidthPx: targetWidthPx
-            )
-        }
+        let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
+                                             displayScale: displayScale)
         // N6 — quand une variante allégée est choisie (≠ original), le thumbHash
         // couvre déjà le remplissage instantané : on saute le tier thumbnail pour
         // ne pas télécharger thumbnail + variante.
@@ -628,7 +644,8 @@ fileprivate struct BubbleGridImageView: View {
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
-                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
+                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
+                onFullImageLoaded: onFullImageLoaded
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
@@ -691,6 +708,9 @@ struct BubbleCarouselView: View {
     var containerWidth: CGFloat = 260
 
     @State private var currentPageID: String?
+    /// Les images du carrousel arrivées sur l'appareil : leur badge
+    /// « télécharger » se tait (#10370).
+    @State private var landedImageIds: Set<String> = []
 
     private func carouselHeight(width: CGFloat) -> CGFloat {
         // Pager height = max(width / ratio) — pure aspect ratio respect, no
@@ -861,7 +881,8 @@ struct BubbleCarouselView: View {
                 attachment: attachment,
                 accentColor: contactColor,
                 messageDeliveryStatus: messageDeliveryStatus,
-                onShareFile: { _ in }
+                onShareFile: { _ in },
+                displayedImageLanded: landedImageIds.contains(attachment.id)
             )
             .padding(.bottom, MeeshySpacing.sm)
         }
@@ -877,7 +898,8 @@ struct BubbleCarouselView: View {
             ProgressiveCachedImage(
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl
+                fullUrl: fullUrl ?? thumbUrl,
+                onFullImageLoaded: { _ = landedImageIds.insert(attachment.id) }
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
