@@ -21,7 +21,7 @@ import Foundation
 ///
 /// Rien de fonctionnel ne disparaît : lecture, boucle, son, PiP, statistiques
 /// et rapports sont DÉPLACÉS après le geste, jamais retirés.
-public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
+public nonisolated struct ReelSwitchWork: OptionSet, Sendable, Hashable {
     public let rawValue: Int
 
     public init(rawValue: Int) { self.rawValue = rawValue }
@@ -51,7 +51,7 @@ public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
     public static let mountActiveChrome = ReelSwitchWork(rawValue: 1 << 10)
 
     /// La phase du passage, vue depuis une page.
-    public enum Phase: Sendable, Equatable {
+    public nonisolated enum Phase: Sendable, Equatable {
         /// Le doigt ou l'inertie déplace encore le pager.
         case gesture
         /// Le défilement s'est arrêté sur la page.
@@ -59,7 +59,7 @@ public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
     }
 
     /// Ce que la page entrante porte.
-    public enum Kind: Sendable, Equatable {
+    public nonisolated enum Kind: Sendable, Equatable {
         /// Une vidéo ; `attachedPlayer` = sa surface tient déjà un lecteur prêt.
         case video(attachedPlayer: Bool)
         /// Une scène composée.
@@ -129,7 +129,7 @@ public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
 /// était avalé par la barre, et le pager ne défilait pas. Le glissement ne
 /// commence qu'après `minimumDistance`, et ne parcourt la vidéo que s'il est
 /// d'abord horizontal ; une fois parti, il garde la main jusqu'au relâcher.
-public enum ReelScrubAxis {
+public nonisolated enum ReelScrubAxis {
     public static let minimumDistance: CGFloat = 6
 
     public static func claims(translation: CGSize, alreadySeeking: Bool) -> Bool {

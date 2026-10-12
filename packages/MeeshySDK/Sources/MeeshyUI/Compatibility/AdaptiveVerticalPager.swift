@@ -117,10 +117,14 @@ private struct ScrollingReporter: ViewModifier {
     let onScrollingChange: ((Bool) -> Void)?
 
     func body(content: Content) -> some View {
-        if #available(iOS 18.0, *), let onScrollingChange {
-            content.onScrollPhaseChange { old, new in
-                guard old.isScrolling != new.isScrolling else { return }
-                onScrollingChange(new.isScrolling)
+        if #available(iOS 18.0, *) {
+            if let onScrollingChange {
+                content.onScrollPhaseChange { old, new in
+                    guard old.isScrolling != new.isScrolling else { return }
+                    onScrollingChange(new.isScrolling)
+                }
+            } else {
+                content
             }
         } else {
             content
