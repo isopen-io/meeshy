@@ -65,3 +65,18 @@ enum EditClockThrottle {
         return (now - lastInteractionAt) >= idleDelay ? .idle : .full
     }
 }
+
+/// **Un canvas préchargé n'arme aucun lien d'édition** (#9864).
+///
+/// `StoryReaderPrefetcher` monte ses canvas voisins en `.edit`, invisibles et
+/// non interactifs (`isUserInteractionEnabled = false`), dans une fenêtre :
+/// `didMoveToWindow` leur armait chacun un `editDisplayLink` à 120 Hz pendant
+/// la fenêtre de grâce d'`EditClockThrottle` — trois liens à 120 Hz après
+/// chaque balayage, pour des scènes que personne ne voit ni ne touche. Le lien
+/// d'édition sert les gestes, le verre d'une vidéo en édition et les
+/// décorations animées du composer : un canvas sans interaction n'en a aucun.
+enum EditClockArming {
+    nonisolated static func shouldArm(isEditing: Bool, isInteractive: Bool) -> Bool {
+        isEditing && isInteractive
+    }
+}
