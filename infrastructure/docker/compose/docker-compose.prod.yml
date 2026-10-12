@@ -68,6 +68,8 @@ services:
       - ./shared/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh mongodb://localhost:27017/${MONGODB_DATABASE:-meeshy} --quiet || exit 1"]
       interval: 30s
@@ -110,6 +112,8 @@ services:
       - redis_data:/data
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -365,6 +369,8 @@ services:
         condition: service_healthy
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -500,8 +506,11 @@ services:
     depends_on:
       - database
       - redis
+    # Réseau PRIVÉ seulement (#10289), comme agent-staging : la passerelle le joint
+    # par son nom de service (HTTP 3200, ZMQ 5560/5561). meeshy-network, partagé avec
+    # Traefik, la webapp, static-files et certs-dumper, ne lui servait à rien.
     networks:
-      - meeshy-network
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
       interval: 30s
@@ -678,4 +687,8 @@ volumes:
 
 networks:
   meeshy-network:
+    driver: bridge
+  # #10289 — agent + passerelle + base + Redis. Bridge (pas `internal`) : l'agent
+  # doit joindre son fournisseur LLM.
+  meeshy-agent-network:
     driver: bridge
