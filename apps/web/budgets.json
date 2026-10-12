@@ -1074,7 +1074,7 @@
   },
   "story_fonts": {
     "subject": "Les TREIZE polices d'un texte de story (#6951) — les familles de StoryTextStyle.swift qu'iOS sert par une police EMBARQUEE, et que le web sert par un substitut REDISTRIBUABLE. Mesurees en octets BRUTS : un WOFF2 porte deja sa compression (Brotli), et le regzipper l'ALOURDIT — mesure, gzip -9 rend PLUS d'octets que le fichier. Une somme en gzip dirait donc un poids que personne ne telecharge.",
-    "pattern": "^assets/[A-Za-z0-9_-]+\\.woff2$",
+    "pattern": "^assets/(?!glory-)[A-Za-z0-9_-]+\\.woff2$",
     "declared_by": "apps/web/src/styles/story-fonts.css (les @font-face) + src/lib/canvas/story-fonts.ts (la table, la provenance, le cliquet par fichier)",
     "cost_model": "CONDITIONNEL PAR NATURE, et c'est ce que le gate garde plutot qu'un plafond genereux. Une @font-face ne coute que ses lignes de CSS tant qu'aucun caractere de son unicode-range n'est peint : un lecteur qui n'ouvre aucune story ne telecharge RIEN, celui qui en ouvre une en `handwriting` paie 22 332 octets, une fois. Les TROIS facons de rendre ce cout inconditionnel sont gardees par measure-weight.mjs : (1) une @font-face dans un fichier CRITIQUE, (2) un precache par le service worker -- globPatterns nommait `woff2`, et Workbox inscrivait les treize fichiers au manifeste : 247 Ko a l'installation, pour chaque visiteur, soit plus de QUATRE fois la premiere peinture entiere ; l'exclusion vit dans vite.config.ts > globIgnores --, (3) un fichier qui disparait ou qui change sans que personne ne le dise.",
     "files": {
@@ -1091,6 +1091,22 @@
       "value": 51068,
       "status": "MESURE le 2026-09-21 (#6951) — informatif, non garde",
       "source": "`brush` / Caveat 700, le seul substitut au-dessus de 30 Ko : une ecriture cursive dessine beaucoup plus de points de contour qu'un sans-serif. Les alternatives MESUREES (Gochi Hand 19 648, Architects Daughter 13 140, Shadows Into Light 15 988, Rock Salt 52 040) sont plus legeres mais empietent sur le caractere de `cartoon`, `bubble` ou `note` -- trois familles voisines qui se confondraient. Le poids est paye par le seul lecteur qui ouvre une story en `brush`, avec le texte deja peint (font-display: swap). Meme arbitrage pour `retro` : Special Elite rendait 53 040 octets, Cutive en rend 15 332 ET ressemble davantage a American Typewriter, qui est un slab serif propre et non une machine usee."
+    }
+  },
+  "glory_fonts": {
+    "subject": "Les polices des CADRES DE GLOIRE (#10158, L6, § 5.6 du prompt des Cadres de gloire) — la liste FERMEE GLORY_FRAME_FONTS du contrat partage, servie par six sous-ensembles latins pris tels que Google Fonts les publie (Caveat 700 reprend le fichier de `brush`, compte par story_fonts). Mesurees en octets BRUTS, comme les polices de story.",
+    "pattern": "^assets/glory-[A-Za-z0-9_-]+\\.woff2$",
+    "declared_by": "apps/web/src/styles/glory-fonts.css (les @font-face) + src/lib/game-photo/glory-fonts.ts (la table, le cliquet par fichier, le choix d'ecriture)",
+    "cost_model": "CONDITIONNEL et HORS PREMIERE PEINTURE : la feuille n'est importee que par lib/game-photo/glory-fonts.ts, que seul le peintre des cadres (chunk paresseux de L7) importera ; un temoin de source (glory-fonts.test.ts) prouve qu'aucun module atteint statiquement depuis main.tsx ne l'importe. Jamais precachees (vite.config.ts > globIgnores couvre assets/*.woff2, et measure-weight.mjs refuse toute police dans sw.js). Un lecteur ne paie que les familles du cadre qu'il compose, une fois. Tant qu'aucun module ne les importe, Vite n'en emet aucune et ce bloc n'a rien a compter ; des la premiere emission, inventaire et octets sont EXACTS.",
+    "files": {
+      "value": 6,
+      "status": "MESURE le 2026-10-12 (#10158)",
+      "source": "Cinzel (variable 400-900), Cinzel Decorative 700 et 900, Cormorant Garamond (variable 300-700), Fraunces (variable wght 100-900, sans l axe opsz), Manrope (variable 200-800)."
+    },
+    "bytes": {
+      "value": 154768,
+      "status": "MESURE le 2026-10-12 (#10158) — cliquet EXACT, sans marge (un binaire ne derive pas)",
+      "source": "Octets bruts des sous-ensembles latins de Google Fonts : Cinzel 25 888 · Cinzel Decorative 700 15 428 · Cinzel Decorative 900 14 540 · Cormorant Garamond 37 776 · Fraunces 36 560 (67 388 avec l axe opsz, ecarte) · Manrope 24 576. Un cadre en peint deux ou trois (titre, sur-titre et date, message) : 50 a 115 Ko, une fois, au premier cadre compose. Aucun ne dessine l arabe, le cyrillique, le grec, l hebreu ni le CJK : ces textes prennent la pile systeme (D10), choisie par leurs plages Unicode, et leur unicode-range garantit qu ils ne telechargent aucun fichier."
     }
   }
 }
