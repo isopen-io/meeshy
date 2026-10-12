@@ -365,7 +365,7 @@ public class MainActivity extends BridgeActivity {
                     @Override
                     public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail detail) {
                         long now = SystemClock.elapsedRealtime();
-                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now)) {
+                        if (!RendererRecovery.shouldRecover(lastRendererRecovery, now, detail.didCrash())) {
                             return false;
                         }
                         lastRendererRecovery = now;
