@@ -265,7 +265,7 @@ public struct VideoTransportControls: View {
                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .contentShape(Circle())
         }
-        .accessibilityLabel(String(localized: "media.video.more_options", defaultValue: "Plus d'options", bundle: .module))
+        .accessibilityLabel(FullscreenMoreMenuLabel.text)
     }
 
     // MARK: - Rail : son · AirPlay · (...) en disques empilés (#9577)
