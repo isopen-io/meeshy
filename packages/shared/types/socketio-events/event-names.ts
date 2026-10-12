@@ -18,6 +18,7 @@
  * Un nom neuf de ces domaines s'ajoute à son module, jamais ici.
  */
 
+import { ADMIN_METRICS_CLIENT_EVENTS, ADMIN_METRICS_SERVER_EVENTS } from './admin-metrics-event-names.js';
 import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from './call-recording-event-names.js';
 import { SESSION_SERVER_EVENTS } from './session-event-names.js';
 import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from './viewing-event-names.js';
@@ -32,6 +33,7 @@ export const ROOMS = {
   call: (id: string) => `call:${id}`,
   post: (id: string) => `post:${id}`,
   adminAgent: () => 'admin:agent',
+  adminHostMetrics: () => 'admin:host-metrics',
 } as const;
 
 // ===== CONSTANTES D'ÉVÉNEMENTS =====
@@ -132,6 +134,7 @@ export const SERVER_EVENTS = {
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   ...VIEWING_SERVER_EVENTS,
+  ...ADMIN_METRICS_SERVER_EVENTS,
   /**
    * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
    * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
@@ -622,6 +625,7 @@ export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
+  SERVER_EVENTS.ADMIN_METRICS_SAMPLE,
 ]);
 
 // Événements du client vers le serveur
@@ -643,6 +647,7 @@ export const CLIENT_EVENTS = {
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   ...VIEWING_CLIENT_EVENTS,
+  ...ADMIN_METRICS_CLIENT_EVENTS,
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et
