@@ -104,8 +104,11 @@ extension MeeshyComposerHost {
     }
 
     /// Les options du sous-outil ouvert, remises à la surface : elle les pose à
-    /// droite de la scène, depuis le haut.
+    /// droite de la scène, depuis le haut. Le DESSIN y passe d'abord (#9145) :
+    /// il capture le doigt sur toute la scène, comme il l'emporte sur la
+    /// colonne de droite (`ComposerTrailingColumn.focus`).
     var sceneInlinePanel: AnyView? {
+        if viewModel.isDrawingActive { return sceneDrawingOptionsPanel }
         guard let edition = activeInlineEdit, let section = edition.openSection else { return nil }
         let porteUnMedia: Bool
         switch edition.family {
@@ -120,6 +123,19 @@ extension MeeshyComposerHost {
             altText: porteUnMedia ? mediaAltBinding(for: edition.objectId) : nil,
             onSelectText: { beginInlineEdit($0, section: .plan) },
             onCompareLook: { comparingLookObjectId = $0 ? edition.objectId : nil }))
+    }
+
+    /// **Les options du pinceau, à droite depuis le haut** (#9145) — la plaque
+    /// de l'édition en place, avec le panneau d'options du SDK : le contrôleur
+    /// touché dans la colonne de droite s'y déplie, la scène ne remonte plus.
+    var sceneDrawingOptionsPanel: AnyView? {
+        guard ComposerFirstView.trailingPanelShowsDrawingOptions(
+            drawing: viewModel.isDrawingActive,
+            expandedTool: viewModel.drawingEditingMode.expandedTool != nil,
+            strokeSelected: viewModel.drawingEditingMode.selectedStrokeId != nil) else { return nil }
+        return AnyView(ComposerTrailingOptionsPlate(plateauTint: tint.color) {
+            MeeshyToolOptionsPanel(viewModel: viewModel)
+        })
     }
 
     /// Le pied du rail droit suit-il ses sous-outils, sans ressort ?

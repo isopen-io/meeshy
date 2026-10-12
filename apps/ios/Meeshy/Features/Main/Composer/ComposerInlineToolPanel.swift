@@ -37,42 +37,15 @@ struct ComposerInlineToolPanel: View {
     /// montre l'original de l'image dans la scène tant qu'il dure.
     var onCompareLook: ((Bool) -> Void)?
 
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.composerSceneCardFrame) private var sceneCard
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var contentHeight: CGFloat = 0
     @State private var planHoldsGesture = false
 
-    private var roomy: Bool { horizontalSizeClass == .regular }
-
     var body: some View {
-        GeometryReader { geo in
-            let place = placement(container: geo.frame(in: .global))
-            let cote = place.edge
-            ScrollView(.vertical, showsIndicators: false) {
-                content
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(ComposerInlinePanelLayout.contentPadding)
-                    .background {
-                        GeometryReader { mesure in
-                            Color.clear.preference(key: ComposerInlinePanelHeightKey.self,
-                                                   value: mesure.size.height)
-                        }
-                    }
-            }
-            .scrollDisabled(planHoldsGesture)
-            .frame(width: ComposerInlinePanelLayout.width(freeWidth: geo.size.width, roomy: roomy),
-                   height: ComposerInlinePanelLayout.height(content: contentHeight, placement: place))
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
-                           tint: plateauTint.opacity(0.55))
-            .padding(cote == .top ? .top : .bottom, ComposerRailGeometry.gutter)
-            .padding(.trailing, ComposerRailGeometry.edgeMargin(roomy: roomy)
-                                + ComposerRailGeometry.railWidth + ComposerRailGeometry.gutter)
-            .frame(maxWidth: .infinity, maxHeight: .infinity,
-                   alignment: cote == .top ? .topTrailing : .bottomTrailing)
-            .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: place)
+        ComposerTrailingOptionsPlate(plateauTint: plateauTint,
+                                     holdsGesture: planHoldsGesture,
+                                     objectFrame: { objectFrame(container: $0) }) {
+            content
         }
-        .onPreferenceChange(ComposerInlinePanelHeightKey.self) { contentHeight = $0 }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerObjectEditorCopy.entry(section)))
     }
@@ -132,20 +105,69 @@ struct ComposerInlineToolPanel: View {
         viewModel.currentEffects.mediaObjects?.first { $0.id == edit.objectId }
     }
 
-    /// **Le côté et la hauteur qui laissent voir l'objet réglé** (#9495,
+    /// **Le cadre de l'objet réglé, que le panneau laisse voir** (#9495,
     /// #9143) — pour TOUT sous-outil de TOUT objet posé : la police d'un texte
-    /// se juge sur le texte comme un filtre sur l'image. Le cadre de l'objet
-    /// vient de la géométrie même du calque qui le peint, ramenée dans le
-    /// repère du panneau ; un fond couvre la carte entière, il n'a rien à
-    /// éviter.
-    private func placement(container: CGRect) -> ComposerInlinePanelPlacement {
-        let objet: CGRect? = edit.family.isBackground || sceneCard.isNull || sceneCard.width <= 0
-            ? nil
-            : viewModel.currentSlide.sceneObject(id: edit.objectId).flatMap {
-                ComposerInlinePanelLayout.sceneFrame(of: $0, card: sceneCard, container: container)
+    /// se juge sur le texte comme un filtre sur l'image. Il vient de la
+    /// géométrie même du calque qui le peint, ramenée dans le repère du
+    /// panneau ; un fond couvre la carte entière, il n'a rien à éviter.
+    private func objectFrame(container: CGRect) -> CGRect? {
+        guard !edit.family.isBackground, !sceneCard.isNull, sceneCard.width > 0,
+              let objet = viewModel.currentSlide.sceneObject(id: edit.objectId) else { return nil }
+        return ComposerInlinePanelLayout.sceneFrame(of: objet, card: sceneCard, container: container)
+    }
+}
+
+/// **La plaque d'options À DROITE, depuis le haut** (#9138) — celle de
+/// l'édition en place d'un objet ET celle du dessin (#9145 : « même
+/// grammaire »). Une plaque de verre teintée du plateau, posée à gauche de la
+/// colonne des sous-outils, qui épouse son contenu jusqu'à la hauteur libre et
+/// défile au-delà. Le côté et la hauteur viennent de
+/// `ComposerInlinePanelLayout.placement` : sans objet à laisser voir, le haut,
+/// toute la hauteur.
+struct ComposerTrailingOptionsPlate<Content: View>: View {
+    let plateauTint: Color
+    var holdsGesture: Bool = false
+    /// Le cadre, dans le repère de la plaque, de ce qu'elle ne doit pas couvrir.
+    var objectFrame: @MainActor (CGRect) -> CGRect? = { _ in nil }
+    @ViewBuilder let content: () -> Content
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var contentHeight: CGFloat = 0
+
+    private var roomy: Bool { horizontalSizeClass == .regular }
+
+    var body: some View {
+        GeometryReader { geo in
+            let place = ComposerInlinePanelLayout.placement(object: objectFrame(geo.frame(in: .global)),
+                                                            free: geo.size,
+                                                            panelHeight: contentHeight,
+                                                            roomy: roomy)
+            let cote = place.edge
+            ScrollView(.vertical, showsIndicators: false) {
+                content()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(ComposerInlinePanelLayout.contentPadding)
+                    .background {
+                        GeometryReader { mesure in
+                            Color.clear.preference(key: ComposerInlinePanelHeightKey.self,
+                                                   value: mesure.size.height)
+                        }
+                    }
             }
-        return ComposerInlinePanelLayout.placement(object: objet, free: container.size,
-                                                   panelHeight: contentHeight, roomy: roomy)
+            .scrollDisabled(holdsGesture)
+            .frame(width: ComposerInlinePanelLayout.width(freeWidth: geo.size.width, roomy: roomy),
+                   height: ComposerInlinePanelLayout.height(content: contentHeight, placement: place))
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
+                           tint: plateauTint.opacity(0.55))
+            .padding(cote == .top ? .top : .bottom, ComposerRailGeometry.gutter)
+            .padding(.trailing, ComposerRailGeometry.edgeMargin(roomy: roomy)
+                                + ComposerRailGeometry.railWidth + ComposerRailGeometry.gutter)
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: cote == .top ? .topTrailing : .bottomTrailing)
+            .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: place)
+        }
+        .onPreferenceChange(ComposerInlinePanelHeightKey.self) { contentHeight = $0 }
     }
 }
 
