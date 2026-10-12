@@ -240,6 +240,15 @@ export const messagesTrends = '/api/v1/admin/messages/trends';
 /** GET /api/v1/admin/monitoring */
 export const monitoring = '/api/v1/admin/monitoring';
 
+/** POST /api/v1/admin/ops/:operation */
+export const opsByOperation = (operation: string): string => `/api/v1/admin/ops/${encodeURIComponent(operation)}`;
+
+/** GET /api/v1/admin/ops/host-metrics */
+export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
+
+/** GET /api/v1/admin/ops/status */
+export const opsStatus = '/api/v1/admin/ops/status';
+
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';
 
