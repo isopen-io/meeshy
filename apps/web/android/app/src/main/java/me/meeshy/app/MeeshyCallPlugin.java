@@ -110,6 +110,7 @@ public class MeeshyCallPlugin extends Plugin {
         video = wantsVideo;
         CallForegroundService.start(getContext(), wantsVideo);
         keepScreenOn(true);
+        volumeKeys(true);
         if (starting && audio != null) {
             audio.setMode(AudioManager.MODE_IN_COMMUNICATION);
             applyRoute(audio, CallAudioRoutes.defaultRoute(wantsVideo, CallAudioRoutes.available(deviceTypes(audio))));
@@ -264,6 +265,7 @@ public class MeeshyCallPlugin extends Plugin {
         aspectHeight = 0;
         CallForegroundService.stop(getContext());
         keepScreenOn(false);
+        volumeKeys(false);
         showOverLockScreen(false);
         updateProximity();
         AudioManager audio = audio();
@@ -346,6 +348,12 @@ public class MeeshyCallPlugin extends Plugin {
             if (proximity.isHeld()) proximity.release(PowerManager.RELEASE_FLAG_WAIT_FOR_NO_PROXIMITY);
             proximity = null;
         }
+    }
+
+    /** #10375 — la voix pendant l'appel, les medias en dehors, comme dans Chrome. */
+    private void volumeKeys(boolean inCall) {
+        if (getActivity() == null) return;
+        getActivity().setVolumeControlStream(VolumeStreamRules.streamFor(inCall));
     }
 
     private void keepScreenOn(boolean on) {
