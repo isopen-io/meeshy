@@ -182,6 +182,32 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertEqual(celebration.celebratedUserIds, [])
     }
 
+    // MARK: - #8037 — l'échec d'un lien ouvert sans compte se voit
+
+    /// Sans compte, l'écran affiché est l'accueil (présenté en
+    /// `fullScreenCover` par la racine) ou une porte d'accès présentée par
+    /// l'écran de connexion — toutes recouvrent l'hôte des toasts de la racine.
+    /// Chacune monte donc le sien : sinon le refus d'un lien ne se voit pas.
+    func test_signedOutSurfaces_mountTheToastHost() throws {
+        let welcome = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/WelcomeView.swift"))
+        let login = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/LoginView.swift"))
+
+        XCTAssertGreaterThanOrEqual(welcome.components(separatedBy: ".feedbackToastOverlay()").count - 1, 2,
+                                    "l'accueil et son inscription montent l'hôte des toasts")
+        XCTAssertGreaterThanOrEqual(login.components(separatedBy: ".feedbackToastOverlay()").count - 1, 4,
+                                    "mot de passe oublié, code, lien de connexion et inscription montent l'hôte des toasts")
+    }
+
+    func test_aRefusedLink_raisesAnErrorToast() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.magicResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+
+        XCTAssertEqual(toasts.errorMessages.count, 1)
+        XCTAssertEqual(auth.openedSessions, [])
+    }
+
     // MARK: - SessionOpeningGate
 
     func test_gate_codeHandOff_waitsForTheSheetWithoutForcingItClosed() {
