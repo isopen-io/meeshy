@@ -28,11 +28,18 @@ jest.mock('../../../../services/messaging/reproduceEditedMessageNotifications', 
 }));
 
 import { applyMessageEditEffects } from '../../../../services/messaging/messageEditEffects';
+import {
+  ORIGINAL_SOURCE_VERSION,
+  sharedTranslationRow,
+  sharedTranslationTable,
+} from '../../../helpers/shared-translation-table';
 
 const MESSAGE_ID = '507f1f77bcf86cd799439011';
+const OTHER_MESSAGE_ID = '507f1f77bcf86cd799439055';
 const CONVERSATION_ID = '507f1f77bcf86cd799439022';
 const SENDER_PARTICIPANT_ID = '507f1f77bcf86cd799439033';
 const SENDER_USER_ID = '507f1f77bcf86cd799439044';
+const EDITED_AT = new Date('2026-10-10T12:00:00.000Z');
 
 const prisma = {} as any;
 
@@ -44,6 +51,7 @@ function editedMessage(overrides: Partial<Record<string, unknown>> = {}) {
     senderUserId: SENDER_USER_ID,
     previousContent: 'trois petits mots',
     content: 'deux mots',
+    editedAt: EDITED_AT,
     ...overrides,
   };
 }
@@ -152,5 +160,124 @@ describe('applyMessageEditEffects — reproduction des notifications', () => {
     await expect(
       applyMessageEditEffects(prisma, editedMessage({ content: 'nouveau texte' }) as any, undefined),
     ).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * Le TROISIÈME effet durable d'une édition : les traductions PARTAGÉES des
+ * versions qu'elle périme (#9899, audit C4).
+ *
+ * Une traduction partagée est la version scellée du texte tel qu'il était à un
+ * instant (`sourceVersion` = `editedAt`, ou `original`). L'édition périme toutes
+ * les versions d'avant — leur texte n'est plus celui que le message porte — et
+ * elles restaient pourtant en base : le texte que l'édition existait peut-être
+ * pour retirer demeurait lisible, pour qui détenait la clé.
+ *
+ * Le double de la table APPLIQUE le `where` : ces témoins lisent les lignes qui
+ * RESTENT. Épargner la version que l'édition vient d'écrire en est la moitié
+ * qu'une clause trop large casserait en silence.
+ */
+describe('applyMessageEditEffects — traductions partagées', () => {
+  const EARLIER_EDIT = '2026-10-09T08:30:00.000Z';
+  const NEW_VERSION = EDITED_AT.toISOString();
+  const prismaWith = (table: ReturnType<typeof sharedTranslationTable>) =>
+    ({ sharedTranslation: table.delegate }) as any;
+
+  beforeEach(() => {
+    mockReproduce.mockResolvedValue(1);
+  });
+
+  it("efface les versions PÉRIMÉES par l'édition — l'originale comme les éditions précédentes", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'originale', messageId: MESSAGE_ID, sourceVersion: ORIGINAL_SOURCE_VERSION }),
+      sharedTranslationRow({ id: 'édition-précédente', messageId: MESSAGE_ID, sourceVersion: EARLIER_EDIT }),
+    ]);
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage());
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("épargne la version que l'édition vient d'écrire — dans toutes ses langues", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'périmée', messageId: MESSAGE_ID, sourceVersion: ORIGINAL_SOURCE_VERSION }),
+      sharedTranslationRow({ id: 'courante-fr', messageId: MESSAGE_ID, targetLanguage: 'fr', sourceVersion: NEW_VERSION }),
+      sharedTranslationRow({ id: 'courante-en', messageId: MESSAGE_ID, targetLanguage: 'en', sourceVersion: NEW_VERSION }),
+    ]);
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage());
+
+    expect(table.remainingIds()).toEqual(['courante-fr', 'courante-en']);
+  });
+
+  it("ne touche à aucune traduction partagée d'un AUTRE message, quelle que soit sa version", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'voisine-originale', messageId: OTHER_MESSAGE_ID }),
+      sharedTranslationRow({ id: 'voisine-éditée', messageId: OTHER_MESSAGE_ID, sourceVersion: EARLIER_EDIT }),
+    ]);
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage());
+
+    expect(table.remainingIds()).toEqual(['voisine-originale', 'voisine-éditée']);
+  });
+
+  it("lit la version courante dans la date que l'écrivain vient de poser, à la milliseconde", async () => {
+    // `sourceVersion` est `editedAt.toISOString()` : une version écrite avec
+    // une milliseconde de différence n'est PAS la version courante.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'courante', messageId: MESSAGE_ID, sourceVersion: '2026-10-10T12:00:00.000Z' }),
+      sharedTranslationRow({ id: 'une-milliseconde-plus-tôt', messageId: MESSAGE_ID, sourceVersion: '2026-10-10T11:59:59.999Z' }),
+    ]);
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage({ editedAt: new Date('2026-10-10T12:00:00.000Z') }));
+
+    expect(table.remainingIds()).toEqual(['courante']);
+  });
+
+  it("efface TOUTES les versions quand la date d'édition ne se lit pas — jamais l'originale par défaut", async () => {
+    // Fail-closed. `sharedTranslationSourceVersion(undefined)` rend `original`,
+    // exactement la version que toute édition périme : passer la date telle
+    // quelle épargnerait les lignes du texte d'AVANT.
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'originale', messageId: MESSAGE_ID, sourceVersion: ORIGINAL_SOURCE_VERSION }),
+      sharedTranslationRow({ id: 'éditée', messageId: MESSAGE_ID, sourceVersion: EARLIER_EDIT }),
+    ]);
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage({ editedAt: undefined }));
+    expect(table.remainingIds()).toEqual([]);
+
+    const second = sharedTranslationTable([
+      sharedTranslationRow({ id: 'originale', messageId: MESSAGE_ID, sourceVersion: ORIGINAL_SOURCE_VERSION }),
+    ]);
+    await applyMessageEditEffects(prismaWith(second), editedMessage({ editedAt: new Date('pas une date') }));
+    expect(second.remainingIds()).toEqual([]);
+  });
+
+  it("ne fait jamais échouer l'édition, déjà committée, quand la table voisine ne répond pas", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ id: 'reste', messageId: MESSAGE_ID })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await expect(applyMessageEditEffects(prismaWith(table), editedMessage())).resolves.toBeUndefined();
+    expect(table.remainingIds()).toEqual(['reste']);
+  });
+
+  it("ajuste quand même les compteurs et reproduit les notifications quand l'effacement échoue", async () => {
+    const table = sharedTranslationTable();
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage());
+
+    expect(mockOnMessageEdited).toHaveBeenCalledTimes(1);
+    expect(mockReproduce).toHaveBeenCalledTimes(1);
+  });
+
+  it("efface quand même les versions périmées quand les compteurs et les notifications échouent", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: MESSAGE_ID })]);
+    mockOnMessageEdited.mockRejectedValue(new Error('counters down'));
+    mockReproduce.mockRejectedValue(new Error('mongo down'));
+
+    await applyMessageEditEffects(prismaWith(table), editedMessage());
+
+    expect(table.remainingIds()).toEqual([]);
   });
 });

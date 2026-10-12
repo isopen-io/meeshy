@@ -4,9 +4,11 @@ import {
   conversationMessageStatsService,
   statsAuthorKey,
 } from '../ConversationMessageStatsService';
+import { sharedTranslationSourceVersion } from '@meeshy/shared/utils/shared-translation-eligibility';
 import { reproduceEditedMessageNotifications } from './reproduceEditedMessageNotifications';
 import type { ReproducedNotificationAnnouncer } from '../notifications/reproducedNotifications';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
+import { eraseSharedTranslations } from './sharedTranslationErasure';
 
 const log = enhancedLogger.child({ module: 'messageEditEffects' });
 
@@ -25,7 +27,10 @@ const log = enhancedLogger.child({ module: 'messageEditEffects' });
  *
  * C'est le jumeau d'`messageEditAdmission` du côté des ÉCRITURES : celui-là dit
  * qui peut éditer et jusqu'à quand, `messageEditContent` dit ce qu'on a le droit
- * d'écrire, celui-ci dit ce que l'écriture entraîne.
+ * d'écrire, celui-ci dit ce que l'écriture entraîne. Dont l'effacement des
+ * traductions PARTAGÉES des versions que l'édition périme (#9899) : la table
+ * voisine de `Message.translations` gardait la version scellée du texte
+ * d'AVANT, que l'édition existait peut-être précisément pour retirer.
  *
  * BEST-EFFORT, délibérément : quand ceci s'exécute, le nouveau contenu est DÉJÀ
  * committé. Un compteur récalcitrant ne doit jamais transformer une édition
@@ -46,6 +51,30 @@ export interface EditedMessageRecord {
    * de la REQUÊTE ferait diverger l'ajustement de son propre recalcul.
    */
   readonly content: string | null;
+  /**
+   * L'instant d'édition TEL QU'IL VIENT D'ÊTRE ÉCRIT dans `Message.editedAt` —
+   * la même valeur, pas un `new Date()` relu plus loin : la version de source
+   * d'une traduction partagée en est l'ISO (`sharedTranslationSourceVersion`), et
+   * deux instants distincts de quelques millisecondes feraient effacer par
+   * erreur la version courante, ou épargner une version périmée. REQUIS, pour
+   * qu'un cinquième transport d'édition ne puisse pas l'oublier.
+   */
+  readonly editedAt: Date;
+}
+
+/**
+ * La version de source que cette édition vient d'écrire, ou `undefined` quand
+ * rien ne permet de la lire.
+ *
+ * `undefined` a ici un sens précis : TOUTES les versions du message partent.
+ * C'est le sens sûr, et ce n'est pas celui que la fonction partagée donnerait
+ * d'elle-même — `sharedTranslationSourceVersion(undefined)` rend `'original'`,
+ * soit exactement la version que toute édition PÉRIME. Une date absente ou
+ * illisible, passée telle quelle, épargnerait donc les lignes du texte d'avant.
+ */
+function writtenSourceVersion(editedAt: Date | null | undefined): string | undefined {
+  if (!editedAt) return undefined;
+  return sharedTranslationSourceVersion(editedAt) ?? undefined;
 }
 
 export async function applyMessageEditEffects(
@@ -57,6 +86,18 @@ export async function applyMessageEditEffects(
   // test) réécrit quand même les lignes, sans annonce.
   announcer: ReproducedNotificationAnnouncer | undefined = getSharedNotificationService()
 ): Promise<void> {
+  // Les traductions PARTAGÉES des versions que cette édition vient de périmer
+  // (#9899). Elles passent EN PREMIER pour la raison des notifications ci-dessous
+  // — leur retard se lit comme une fuite : le texte d'avant reste lisible, pour
+  // qui détient la clé. Ne lit que `id` et `editedAt`, que rien de ce qui suit
+  // ne peut invalider. La version qu'on vient d'écrire est ÉPARGNÉE : un appareil
+  // a pu la partager entre l'écriture de l'édition et cet appel, et c'est la
+  // seule que la passerelle sert encore. BEST-EFFORT dans l'unité même.
+  await eraseSharedTranslations(prisma, {
+    messageIds: [message.id],
+    keepSourceVersion: writtenSourceVersion(message.editedAt),
+  });
+
   try {
     await conversationMessageStatsService.onMessageEdited(
       prisma,

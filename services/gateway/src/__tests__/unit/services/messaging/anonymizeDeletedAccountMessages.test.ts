@@ -68,6 +68,7 @@ import {
   anonymizeMessagesOfDeletedAccount,
   DELETED_ACCOUNT_DISPLAY_NAME,
 } from '../../../../services/messaging/anonymizeDeletedAccountMessages';
+import { sharedTranslationRow, sharedTranslationTable } from '../../../helpers/shared-translation-table';
 
 const USER_ID = 'user-deleted-1';
 
@@ -300,5 +301,79 @@ describe('anonymizeMessagesOfDeletedAccount', () => {
 
     expect(result.anonymized).toBe(1);
     expect((prisma as any).message.update).toHaveBeenCalled();
+  });
+});
+
+/**
+ * La fin de grâce détruit le contenu du compte supprimé — `translations: null`
+ * sur chaque message — et laissait la version SCELLÉE que les appareils des
+ * autres membres s'étaient passée (#9899, audit C4) : le texte d'un message
+ * anonymisé restait lisible, pour qui détenait la clé, dans la table voisine.
+ *
+ * L'effacement vit dans `applyMessageRemovalEffects`, que cette unité appelle
+ * pour chaque message : ces témoins gardent que l'appel reste le SEUL chemin, et
+ * que la table se vide vraiment. Le double de la table APPLIQUE le `where`.
+ */
+describe('anonymizeMessagesOfDeletedAccount — traductions partagées', () => {
+  const prismaWith = (prisma: unknown, table: ReturnType<typeof sharedTranslationTable>) =>
+    ({ ...(prisma as object), sharedTranslation: table.delegate }) as unknown as import('@meeshy/shared/prisma/client').PrismaClient;
+
+  it('efface les traductions partagées de chaque message anonymisé — et celles-là seulement', async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'a-fr', messageId: 'msg-a', targetLanguage: 'fr' }),
+      sharedTranslationRow({ id: 'a-en', messageId: 'msg-a', targetLanguage: 'en' }),
+      sharedTranslationRow({ id: 'b-fr', messageId: 'msg-b', targetLanguage: 'fr' }),
+      sharedTranslationRow({ id: 'd-un-autre-compte', messageId: 'msg-autre-compte' }),
+    ]);
+    const prisma = buildPrisma({
+      messagePages: [[messageRow({ id: 'msg-a' }), messageRow({ id: 'msg-b' })], []],
+    });
+
+    await anonymizeMessagesOfDeletedAccount(prismaWith(prisma, table), USER_ID, { attachmentRemover: buildAttachments() });
+
+    expect(table.remainingIds()).toEqual(['d-un-autre-compte']);
+  });
+
+  it("efface aussi celles des messages d'une fournée suivante", async () => {
+    const table = sharedTranslationTable([
+      sharedTranslationRow({ id: 'première', messageId: 'msg-a' }),
+      sharedTranslationRow({ id: 'seconde', messageId: 'msg-b' }),
+    ]);
+    const prisma = buildPrisma({
+      messagePages: [[messageRow({ id: 'msg-a' })], [messageRow({ id: 'msg-b' })], []],
+    });
+
+    await anonymizeMessagesOfDeletedAccount(prismaWith(prisma, table), USER_ID, {
+      attachmentRemover: buildAttachments(),
+      batchSize: 1,
+    });
+
+    expect(table.remainingIds()).toEqual([]);
+  });
+
+  it("garde les traductions partagées d'une ligne dont l'écriture a échoué — reprise à la fournée suivante", async () => {
+    // Le message n'est PAS anonymisé : son clair est toujours là, et la passe
+    // suivante reprendra l'écriture ET l'effacement. Effacer ici ce qu'on n'a
+    // pas pu anonymiser dissocierait les deux, et le compteur mentirait.
+    const table = sharedTranslationTable([sharedTranslationRow({ id: 'reste', messageId: 'msg-fail' })]);
+    const prisma = buildPrisma({ messagePages: [[messageRow({ id: 'msg-fail' })], []] });
+    (prisma as any).message.update.mockRejectedValueOnce(new Error('Mongo indisponible'));
+
+    await anonymizeMessagesOfDeletedAccount(prismaWith(prisma, table), USER_ID, { attachmentRemover: buildAttachments() });
+
+    expect(table.remainingIds()).toEqual(['reste']);
+  });
+
+  it("une table voisine qui ne répond pas n'empêche ni l'anonymisation ni son décompte", async () => {
+    const table = sharedTranslationTable([sharedTranslationRow({ messageId: 'msg-a' })]);
+    table.deleteMany.mockRejectedValueOnce(new Error('mongo down'));
+    const prisma = buildPrisma({ messagePages: [[messageRow({ id: 'msg-a' })], []] });
+
+    const result = await anonymizeMessagesOfDeletedAccount(prismaWith(prisma, table), USER_ID, {
+      attachmentRemover: buildAttachments(),
+    });
+
+    expect(result.anonymized).toBe(1);
+    expect((prisma as any).participant.updateMany).toHaveBeenCalled();
   });
 });

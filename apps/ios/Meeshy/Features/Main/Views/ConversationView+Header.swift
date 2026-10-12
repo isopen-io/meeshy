@@ -27,6 +27,13 @@ extension ConversationView {
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
             admitPeerUpdate(event)
         }
+        // Traduction sur l'appareil (#9899) : le fond vit aussi longtemps que
+        // l'écran, et la couche n'y peint rien.
+        .deviceTranslationLayer(
+            viewModel: viewModel,
+            isEnabled: !previewMode && anonymousSession == nil,
+            encryptionMode: liveConversation?.encryptionMode
+        )
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
