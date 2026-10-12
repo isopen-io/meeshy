@@ -23618,6 +23618,3693 @@
         "dayKey": "2027-02-21",
         "minuteOfDay": 1200
       }
+    },
+    {
+      "_label": "calendrier vide : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier vide : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 4,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier illisible : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": "pas un calendrier",
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 0,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 4,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier seed : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [
+          1
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 4,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-03-01",
+          "endDay": "2027-04-25",
+          "weekKeys": [
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05",
+            "2027-04-12",
+            "2027-04-19"
+          ],
+          "themeKey": "language:ja"
+        },
+        "status": "scheduled",
+        "stepPoints": 150,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 150
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-26",
+          "endDay": "2027-06-20",
+          "weekKeys": [
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31",
+            "2027-06-07",
+            "2027-06-14"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-03-01",
+          "endDay": "2027-04-25",
+          "weekKeys": [
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05",
+            "2027-04-12",
+            "2027-04-19"
+          ],
+          "themeKey": "language:ja"
+        },
+        "status": "scheduled",
+        "stepPoints": 150,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 150
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 2
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-26",
+          "endDay": "2027-06-20",
+          "weekKeys": [
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31",
+            "2027-06-07",
+            "2027-06-14"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier décalé : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-03-01",
+              "status": "scheduled",
+              "themeKey": "language:ja",
+              "stepPoints": 150,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 2,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": null,
+        "status": "paused",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": null,
+        "status": "paused",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": null,
+        "status": "paused",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": null,
+        "status": "paused",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier en pause : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 2,
+        "kept": [
+          1,
+          2
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-05-03",
+          "endDay": "2027-06-27",
+          "weekKeys": [
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31",
+            "2027-06-07",
+            "2027-06-14",
+            "2027-06-21"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 120,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 120
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-05-03",
+          "endDay": "2027-06-27",
+          "weekKeys": [
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31",
+            "2027-06-07",
+            "2027-06-14",
+            "2027-06-21"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 120,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 120
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier chevauchant : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 3,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-01",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 3,
+              "startDay": "2027-05-03",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 120,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 3,
+        "kept": [
+          1,
+          3
+        ],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 1,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier mardi : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-22",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 4,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 1, le 2026-10-11 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": null,
+        "upcoming": 1
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 2, le 2026-12-20 à 1200 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2026-12-20",
+        "minuteOfDay": 1200
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": null,
+        "week": null,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 3, le 2027-01-05 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 3,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 1, le 2027-02-14 à 1199 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-02-14",
+        "minuteOfDay": 1199
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 1,
+        "week": 8,
+        "seasonOfMoment": 1,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 2, le 2027-02-20 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 2,
+        "dayKey": "2027-02-20",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 1,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 3, le 2027-03-01 à 0 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 3,
+        "dayKey": "2027-03-01",
+        "minuteOfDay": 0
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 3,
+          "startDay": "2027-04-12",
+          "endDay": "2027-06-06",
+          "weekKeys": [
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26",
+            "2027-05-03",
+            "2027-05-10",
+            "2027-05-17",
+            "2027-05-24",
+            "2027-05-31"
+          ],
+          "themeKey": "language:ar"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 2,
+        "week": 3,
+        "seasonOfMoment": 2,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "calendrier hors bornes : saison 1, le 2027-05-03 à 600 min",
+      "input": {
+        "law": "season-schedule",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 500,
+              "copy": null
+            }
+          ]
+        },
+        "season": 1,
+        "dayKey": "2027-05-03",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "revision": 1,
+        "kept": [],
+        "calendar": {
+          "number": 1,
+          "startDay": "2026-12-21",
+          "endDay": "2027-02-14",
+          "weekKeys": [
+            "2026-12-21",
+            "2026-12-28",
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled",
+        "stepPoints": 100,
+        "claim": {
+          "allowed": true,
+          "reward": {
+            "kind": "points",
+            "amount": 100
+          },
+          "seal": null
+        },
+        "season": 3,
+        "week": 4,
+        "seasonOfMoment": 3,
+        "upcoming": null
+      }
+    },
+    {
+      "_label": "programmation : décale la saison 2",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "startDay": "2027-03-01"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 2,
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-03-01",
+          "endDay": "2027-04-25",
+          "weekKeys": [
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05",
+            "2027-04-12",
+            "2027-04-19"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled"
+      }
+    },
+    {
+      "_label": "programmation : refuse un mardi",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "startDay": "2027-03-02"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "not-monday"
+      }
+    },
+    {
+      "_label": "programmation : refuse un jour illisible",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "startDay": "2027-02-30"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "invalid-day"
+      }
+    },
+    {
+      "_label": "programmation : refuse la saison en cours",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 1,
+          "startDay": "2027-01-11"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "season-not-future"
+      }
+    },
+    {
+      "_label": "programmation : refuse un chevauchement",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "startDay": "2027-02-08"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "overlaps-previous"
+      }
+    },
+    {
+      "_label": "programmation : refuse une date commencée",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 0,
+          "seasons": []
+        },
+        "edit": {
+          "number": 1,
+          "startDay": "2026-10-05"
+        },
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "start-not-future"
+      }
+    },
+    {
+      "_label": "programmation : met en pause la saison 2",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "status": "paused"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 2,
+        "calendar": null,
+        "status": "paused"
+      }
+    },
+    {
+      "_label": "programmation : programme derrière une pause, sans dates",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 3,
+          "startDay": "2027-06-07"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 3,
+        "calendar": null,
+        "status": "paused"
+      }
+    },
+    {
+      "_label": "programmation : reprend la saison 2",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 2,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            },
+            {
+              "number": 2,
+              "startDay": "2027-02-15",
+              "status": "paused",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "status": "scheduled",
+          "startDay": "2027-03-08"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 3,
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-03-08",
+          "endDay": "2027-05-02",
+          "weekKeys": [
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05",
+            "2027-04-12",
+            "2027-04-19",
+            "2027-04-26"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled"
+      }
+    },
+    {
+      "_label": "programmation : refuse des récompenses hors bornes",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "stepPoints": 250
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "rewards-out-of-bounds"
+      }
+    },
+    {
+      "_label": "programmation : accepte des récompenses bornées",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "stepPoints": 50
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 2,
+        "calendar": {
+          "number": 2,
+          "startDay": "2027-02-15",
+          "endDay": "2027-04-11",
+          "weekKeys": [
+            "2027-02-15",
+            "2027-02-22",
+            "2027-03-01",
+            "2027-03-08",
+            "2027-03-15",
+            "2027-03-22",
+            "2027-03-29",
+            "2027-04-05"
+          ],
+          "themeKey": "language:es"
+        },
+        "status": "scheduled"
+      }
+    },
+    {
+      "_label": "programmation : refuse un thème inconnu",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 2,
+          "themeKey": "language:xx"
+        },
+        "dayKey": "2027-01-05",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": false,
+        "reason": "invalid-theme"
+      }
+    },
+    {
+      "_label": "programmation : programme la saison 1 avant son ouverture",
+      "input": {
+        "law": "season-edit",
+        "schedule": {
+          "revision": 1,
+          "seasons": [
+            {
+              "number": 1,
+              "startDay": "2026-12-21",
+              "status": "scheduled",
+              "themeKey": "language:fr",
+              "stepPoints": 100,
+              "copy": null
+            }
+          ]
+        },
+        "edit": {
+          "number": 1,
+          "startDay": "2027-01-04"
+        },
+        "dayKey": "2026-10-11",
+        "minuteOfDay": 600
+      },
+      "expected": {
+        "ok": true,
+        "revision": 2,
+        "calendar": {
+          "number": 1,
+          "startDay": "2027-01-04",
+          "endDay": "2027-02-28",
+          "weekKeys": [
+            "2027-01-04",
+            "2027-01-11",
+            "2027-01-18",
+            "2027-01-25",
+            "2027-02-01",
+            "2027-02-08",
+            "2027-02-15",
+            "2027-02-22"
+          ],
+          "themeKey": "language:fr"
+        },
+        "status": "scheduled"
+      }
     }
   ]
 }
