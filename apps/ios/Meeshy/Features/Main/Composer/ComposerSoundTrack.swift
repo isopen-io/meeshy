@@ -79,6 +79,11 @@ struct ComposerTakeMuteButton: View {
 struct ComposerSoundTrack: View {
     @ObservedObject var session: ComposerCaptureSession
     let url: URL
+    /// **Posé PAR-DESSUS la bande vidéo** (porteur 2026-10-12, #10341) : pas de
+    /// fond, le spectre en transparence, la ligne de volume tirée par sa seule
+    /// prise — le reste de la bande garde ses gestes. Le bouton du son se pose
+    /// à côté, par l'hôte, au bord droit intérieur avant la poignée.
+    var overlaid = false
 
     private static let height: CGFloat = ComposerTrimTrack.height
     private static let samplesCount = 256
@@ -91,16 +96,20 @@ struct ComposerSoundTrack: View {
         GeometryReader { proxy in
             let largeur = proxy.size.width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(Color.white.opacity(0.1))
+                if !overlaid {
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                        .fill(Color.white.opacity(0.1))
+                }
                 spectrum(width: largeur)
+                    .opacity(overlaid ? 0.75 : 1)
+                    .allowsHitTesting(false)
                 volumeLine(width: largeur)
+                if overlaid { volumeGrip }
             }
             .frame(width: largeur, height: Self.height)
+            .coordinateSpace(name: Self.space)
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0).onChanged { valeur in
-                session.setTakeGain(ComposerTakeSound.gain(atY: valeur.location.y, height: Self.height))
-            })
+            .gesture(volumeDrag, including: overlaid ? .subviews : .all)
         }
         .frame(height: Self.height)
         .environment(\.layoutDirection, .leftToRight)
@@ -117,6 +126,24 @@ struct ComposerSoundTrack: View {
         .task(id: url) { @MainActor in
             samples = (try? await WaveformCache.shared.samples(from: url, count: Self.samplesCount)) ?? []
         }
+    }
+
+    private static let space = "composer.capture.sound"
+
+    private var volumeDrag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space)).onChanged { valeur in
+            session.setTakeGain(ComposerTakeSound.gain(atY: valeur.location.y, height: Self.height))
+        }
+    }
+
+    /// La prise de la ligne, seule à se tirer quand la piste est posée sur la vidéo.
+    private var volumeGrip: some View {
+        let y = ComposerTakeSound.lineY(gain: Double(sound.effectiveGain), height: Self.height)
+        return Color.clear
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Rectangle())
+            .offset(x: -MeeshyControlSize.tapTarget / 4, y: y - MeeshyControlSize.tapTarget / 2)
+            .gesture(volumeDrag)
     }
 
     /// Les barres du spectre, centrées, à la hauteur du gain servi.

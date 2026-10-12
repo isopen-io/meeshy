@@ -149,11 +149,13 @@ final class ComposerEditToolsTests: XCTestCase {
     }
 
     func test_takeSound_gainFollowsTheLine_andMuteRemembersTheGain() {
-        XCTAssertEqual(ComposerTakeSound.gain(atY: 0, height: 52), 1, "en haut le plein")
+        XCTAssertEqual(ComposerTakeSound.gain(atY: 0, height: 52), 2, "en haut 200 % (#10341)")
         XCTAssertEqual(ComposerTakeSound.gain(atY: 52, height: 52), 0, "en bas le silence")
-        XCTAssertEqual(ComposerTakeSound.gain(atY: 26, height: 52), 0.5, accuracy: 0.0001)
-        XCTAssertEqual(ComposerTakeSound.gain(atY: -40, height: 52), 1, "borné")
-        XCTAssertEqual(ComposerTakeSound.lineY(gain: 0.25, height: 52), 39, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeSound.gain(atY: 26, height: 52), 1, accuracy: 0.0001, "100 % au milieu")
+        XCTAssertEqual(ComposerTakeSound.gain(atY: -40, height: 52), 2, "borné")
+        XCTAssertEqual(ComposerTakeSound.lineY(gain: 1, height: 52), 26, accuracy: 0.0001, "le son intact au milieu")
+        XCTAssertEqual(ComposerTakeSound.lineY(gain: 0.5, height: 52), 39, accuracy: 0.0001)
+        XCTAssertEqual(ComposerTakeSound.percent(2), 200)
         var son = ComposerTakeSound(gain: 0.4)
         XCTAssertEqual(son.effectiveGain, 0.4, accuracy: 0.0001)
         son.muted = true
@@ -161,7 +163,7 @@ final class ComposerEditToolsTests: XCTestCase {
         son.muted = false
         XCTAssertEqual(son.effectiveGain, 0.4, accuracy: 0.0001, "réactiver rend le gain d'avant")
         XCTAssertTrue(ComposerTakeSound().isUntouched)
-        XCTAssertEqual(ComposerTakeSound.stepped(0.95, up: true), 1)
+        XCTAssertEqual(ComposerTakeSound.stepped(1.95, up: true), 2)
     }
 
     func test_session_appliesGainAndMuteToThePreview_andResetsWithTheEdit() async {

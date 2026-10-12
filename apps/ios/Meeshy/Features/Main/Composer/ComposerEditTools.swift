@@ -115,7 +115,8 @@ nonisolated enum ComposerEditTools {
 /// Le gain va de 0 à 100 % : `AVAudioMix` et `AVPlayer` ne savent pas amplifier
 /// au-delà du niveau enregistré.
 nonisolated struct ComposerTakeSound: Equatable, Sendable {
-    static let range: ClosedRange<Double> = 0...1
+    /// **100 % au MILIEU de la piste, de 0 à 200 %** (porteur 2026-10-12, #10341).
+    static let range: ClosedRange<Double> = 0...2
     /// Le pas d'un balayage VoiceOver.
     static let accessibilityStep: Double = 0.1
 
@@ -135,16 +136,16 @@ nonisolated struct ComposerTakeSound: Equatable, Sendable {
         return min(range.upperBound, max(range.lowerBound, gain))
     }
 
-    /// Le doigt posé à `y` sur une piste de `height` points : en haut le plein,
-    /// en bas le silence.
+    /// Le doigt posé à `y` sur une piste de `height` points : en haut 200 %, au
+    /// milieu le son tel quel, en bas le silence.
     static func gain(atY y: CGFloat, height: CGFloat) -> Double {
         guard height > 0 else { return 1 }
-        return clamped(1 - Double(min(max(y / height, 0), 1)))
+        return clamped(range.upperBound * (1 - Double(min(max(y / height, 0), 1))))
     }
 
     /// Où se trace la ligne de volume, depuis le haut de la piste.
     static func lineY(gain: Double, height: CGFloat) -> CGFloat {
-        CGFloat(1 - clamped(gain)) * max(0, height)
+        CGFloat(1 - clamped(gain) / range.upperBound) * max(0, height)
     }
 
     static func stepped(_ gain: Double, up: Bool) -> Double {

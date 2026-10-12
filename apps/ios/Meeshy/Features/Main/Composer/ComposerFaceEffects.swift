@@ -35,6 +35,7 @@ nonisolated final class ComposerFaceEffects: @unchecked Sendable {
     private let detector = VisionFaceLandmarkDetector()
     private let lock = NSLock()
     private var probeOf: ProbeKey?
+    private var stillFace: (key: ProbeKey, detection: CallFaceDetection?)?
     private var probe: CVPixelBuffer?
     private var pool: CVPixelBufferPool?
     private var poolSize: CGSize = .zero
@@ -55,17 +56,25 @@ nonisolated final class ComposerFaceEffects: @unchecked Sendable {
         let debout = image.transformed(by: CGAffineTransform(translationX: -origine.x, y: -origine.y))
         guard let sonde = probe(for: source) else { return image }
         let rendu = still
-            ? renderer.render(effect, upright: debout, face: face(in: sonde, canvas: debout.extent.size),
+            ? renderer.render(effect, upright: debout, face: face(of: source, in: sonde, canvas: debout.extent.size),
                               intensity: Self.intensity)
             : renderer.render(effect, on: debout, pixelBuffer: sonde, rotation: 0, intensity: Self.intensity,
                               isDegraded: false)
         return rendu.transformed(by: CGAffineTransform(translationX: origine.x, y: origine.y))
     }
 
-    /// Le visage de la photo, cherché sur sa sonde.
-    private func face(in sonde: CVPixelBuffer, canvas: CGSize) -> CallFaceLandmarks? {
+    /// Le visage de la photo, cherché sur sa sonde UNE fois par image : la
+    /// retouche la repeint, ses vignettes aussi, sans relancer Vision (#10340).
+    private func face(of source: CIImage, in sonde: CVPixelBuffer, canvas: CGSize) -> CallFaceLandmarks? {
+        let cle = ProbeKey(image: ObjectIdentifier(source), extent: source.extent)
         lock.lock()
-        let detection = detector.detect(in: sonde, orientation: .up)
+        let detection: CallFaceDetection?
+        if let connue = stillFace, connue.key == cle {
+            detection = connue.detection
+        } else {
+            detection = detector.detect(in: sonde, orientation: .up)
+            stillFace = (cle, detection)
+        }
         lock.unlock()
         return detection.map {
             CallFaceLandmarks.fromNormalized(boundingBox: $0.boundingBox, leftEye: $0.leftEye, rightEye: $0.rightEye,

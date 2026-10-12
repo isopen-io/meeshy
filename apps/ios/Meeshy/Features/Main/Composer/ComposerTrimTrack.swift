@@ -101,6 +101,9 @@ struct ComposerTrimTrack: View {
     static let height: CGFloat = 52
     private static let boundsHeight: CGFloat = 16
     private static let handleWidth: CGFloat = 18
+    /// Le retrait de la bande vidéo entre ses deux poignées : ce qui se pose
+    /// PAR-DESSUS elle (le son, #10341) s'y aligne.
+    static var trackInset: CGFloat { MeeshySpacing.mdPlus + handleWidth }
     private static let frameRadius: CGFloat = 10
     private static let thumbnailCount = 12
     private static let waveformSamples = 256

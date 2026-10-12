@@ -105,7 +105,9 @@ nonisolated enum ComposerCaptureTopRow {
 nonisolated enum ComposerCaptureDiscardRule {
     static func asksBeforeClosing(stage: ComposerSceneCameraStage, editing: Bool,
                                   segments: [ComposerCaptureSegment], takeSave: ComposerTakeSaveState) -> Bool {
-        guard !editing else { return takeSave != .saved }
+        // Photo comme vidéo, enregistrée ou non (porteur 2026-10-12, #10342) :
+        // la retouche en cours — effet, cadre, recadrage — se perdrait.
+        guard !editing else { return true }
         return stage == .recording || ComposerCaptureSegments.asksBeforeClosing(segments)
     }
 }

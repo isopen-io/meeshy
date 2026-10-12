@@ -126,6 +126,15 @@ nonisolated enum ComposerLookStripRule {
     /// bas des cases (porteur 2026-10-12).
     static var railBottomInset: CGFloat { chosenNameHeight + ComposerTriggerOutline.outset }
 
+    /// **La colonne Filtres · Effets · Cadres a la hauteur exacte d'une case**
+    /// (#10339, porteur 2026-10-12 : « les bordures ne sont pas alignées ») : son
+    /// haut sur le haut des cases, son bas sur leur bas, et l'espacement des
+    /// cases entre ses entrées.
+    static var railEntryHeight: CGFloat {
+        let familles = CGFloat(ComposerLookFamily.allCases.count)
+        return (cellSize.height - (familles - 1) * spacing) / familles
+    }
+
     /// La case sous le milieu de la bande, pour un défilement de `scrolled`
     /// points depuis la première ; les rebonds restent sur les bords.
     static func centeredIndex(scrolled: CGFloat, count: Int) -> Int? {

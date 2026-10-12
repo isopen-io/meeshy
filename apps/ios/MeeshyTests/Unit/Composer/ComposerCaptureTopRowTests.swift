@@ -138,10 +138,11 @@ final class ComposerCaptureTopRowTests: XCTestCase {
                       "un enregistrement en vol peut encore échouer")
     }
 
-    func test_closingTheRetouch_ofATakeAlreadyInPhotos_leavesAtOnce() {
-        XCTAssertFalse(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: [],
-                                                                   takeSave: .saved),
-                       "la prise est dans Photos : la croix ne perd rien")
+    /// Porteur 2026-10-12 (#10342) : la retouche PHOTO demande la même
+    /// confirmation que la vidéo — même déjà dans Photos, la retouche se perdrait.
+    func test_closingTheRetouch_ofATakeAlreadyInPhotos_stillAsks() {
+        XCTAssertTrue(ComposerCaptureDiscardRule.asksBeforeClosing(stage: .armed, editing: true, segments: [],
+                                                                  takeSave: .saved))
     }
 
     func test_theQuestion_namesWhatIsLost() {
