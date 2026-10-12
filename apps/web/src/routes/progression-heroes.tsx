@@ -11,6 +11,7 @@ import {
   levelTitle,
   scoreLabel,
 } from '@/lib/view/progression';
+import { formatCount, gameText } from '@/lib/view/game-copy';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { BRAND, CARD, INK, INK_2, MEESH_TINT, UNLOCKED_TINT } from '@/routes/progression-parts';
 
@@ -199,7 +200,9 @@ export function ElansHero({ progress }: { progress: EngagementProgress }) {
           <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={18} />
         </span>
         <h2 id="progression-elans" className="flex-1 text-body font-bold" style={{ color: INK }}>
-          {elan?.isAccelerated === true ? `Élan ×${elan.factor}` : 'Vos élans'}
+          {elan?.isAccelerated === true
+            ? gameText('game.concept.elans.factor', { factor: formatCount(elan.factor) })
+            : gameText('game.concept.elans.title')}
         </h2>
       </div>
 

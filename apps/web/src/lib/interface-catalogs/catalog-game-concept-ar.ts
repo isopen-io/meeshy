@@ -67,6 +67,8 @@ const ar = {
   'game.concept.elans.tip.2': 'عُد عدة أيام متتالية لتحافظ عليه.',
   'game.concept.elans.families.one': 'فئة نشطة واحدة',
   'game.concept.elans.families.other': '⁦{count}⁩ فئات نشطة',
+  'game.concept.elans.title': 'زخمك',
+  'game.concept.elans.factor': 'الزخم ⁦×{factor}⁩',
   'game.concept.badges.name': 'الأوسمة',
   'game.concept.badges.why': 'الوسام يُظهر أكثر ما تفعله على Meeshy.',
   'game.concept.badges.how': 'كرّر إجراءً: يتغيّر معدن وسامه، من النحاس إلى المنشور.',

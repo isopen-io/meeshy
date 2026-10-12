@@ -19916,6 +19916,53 @@
         }
       }
     },
+    "conversation.send.slow_mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة واحدة كل 30 ث للحسابات الجديدة — أعد المحاولة بعد %lld ث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Konten: eine Nachricht alle 30 s — versuch es in %lld s erneut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One message every 30 s for new accounts — try again in %lld s"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje cada 30 s para las cuentas nuevas — vuelve a intentarlo en %lld s"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message toutes les 30 s pour les nouveaux comptes — réessaie dans %lld s"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio ogni 30 s per i nuovi account — riprova tra %lld s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem a cada 30 s para contas novas — tente de novo em %lld s"
+          }
+        }
+      }
+    },
     "emailVerification.provenElsewhere.body": {
       "extractionState": "manual",
       "localizations": {
@@ -25441,6 +25488,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostre quem você é"
+          }
+        }
+      }
+    },
+    "progression.elan.factor": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزخم ×%lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwung ×%lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Momentum ×%lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élan ×%lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slancio ×%lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
           }
         }
       }
@@ -92528,43 +92622,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تام بين الطرفين (Signal)"
+            "value": "تام بين الطرفين (على أجهزتك)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende (Signal)"
+            "value": "Ende-zu-Ende (auf deinen Geräten)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (on your devices)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Extremo a extremo (Signal)"
+            "value": "Extremo a extremo (en tus dispositivos)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bout en bout (Signal)"
+            "value": "Bout en bout (sur vos appareils)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (sui tuoi dispositivi)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ponta a ponta (Signal)"
+            "value": "Ponta a ponta (nos seus dispositivos)"
           }
         }
       }

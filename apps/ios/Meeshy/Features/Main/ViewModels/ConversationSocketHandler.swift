@@ -674,7 +674,8 @@ final class ConversationSocketHandler {
                         Task {
                             do {
                                 try await persistence.markEdited(
-                                    localId: msgId, newContent: content, editedAt: editedAt, marksEdited: marksEdited)
+                                    localId: msgId, newContent: content, editedAt: editedAt, marksEdited: marksEdited,
+                                    arrivalsNotice: apiMsg.arrivalsNotice)
                             } catch {
                                 Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                             }

@@ -67,6 +67,8 @@ const pt = {
   'game.concept.elans.tip.2': 'Volte vários dias seguidos para mantê-lo.',
   'game.concept.elans.families.one': '{count} família ativa',
   'game.concept.elans.families.other': '{count} famílias ativas',
+  'game.concept.elans.title': 'Seus impulsos',
+  'game.concept.elans.factor': 'Impulso ×{factor}',
   'game.concept.badges.name': 'Selos',
   'game.concept.badges.why': 'Um selo mostra o que você mais faz no Meeshy.',
   'game.concept.badges.how': 'Repita um gesto: o selo dele muda de material, do cobre ao prisma.',

@@ -67,6 +67,8 @@ const en = {
   'game.concept.elans.tip.2': 'Come back several days in a row to keep it.',
   'game.concept.elans.families.one': '{count} active family',
   'game.concept.elans.families.other': '{count} active families',
+  'game.concept.elans.title': 'Your streaks in motion',
+  'game.concept.elans.factor': 'Momentum ×{factor}',
   'game.concept.badges.name': 'Badges',
   'game.concept.badges.why': 'A badge shows what you do most on Meeshy.',
   'game.concept.badges.how': 'Repeat an action: its badge changes material, from copper to prism.',

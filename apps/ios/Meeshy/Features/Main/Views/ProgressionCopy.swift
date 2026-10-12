@@ -177,6 +177,13 @@ enum ProgressionCopy {
         String(localized: "progression.points", defaultValue: "\(score) points", bundle: .main)
     }
 
+    /// « Élan ×3 » — le titre de la carte des élans quand le multiplicateur est actif (#7757), dans la langue du
+    /// lecteur comme la phrase juste dessous (« Momentum ×3 », « Schwung ×3 »). Le facteur est entier par construction.
+    nonisolated static func elanTitle(factor: Double) -> String {
+        let f = Int(factor.rounded())
+        return String(localized: "progression.elan.factor", defaultValue: "Élan ×\(f)", bundle: .main)
+    }
+
     /// L'élan courant, et CE QUI LE PORTE (#5749) — un multiplicateur dont on
     /// ignore la cause ne se pilote pas, il se subit.
     static func elan(factor: Double, families: Int, windowDays: Int, hasStanding: Bool) -> String {

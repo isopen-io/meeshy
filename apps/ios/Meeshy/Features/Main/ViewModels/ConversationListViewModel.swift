@@ -85,11 +85,6 @@ class ConversationListViewModel: ObservableObject {
     /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
     @Published var activeTagFilter: String? = nil
 
-    /// Icône de synchronisation de la carte de focus (2026-08-22) : l'appui
-    /// rejoue l'outbox des mutations de conversation tout de suite.
-    func forceSync() {
-        Task { await store.flushOutbox() }
-    }
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     /// Taille du corpus que `groupedConversations` a groupé en dernier — voir
