@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
+import { postCounterWritesOf } from '../../../helpers/posts-counter-writes';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -161,6 +162,7 @@ function makeAuth(authenticated: boolean) {
 async function buildApp(authenticated = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
+    $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1 }),
     postImpression: {
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
@@ -354,7 +356,7 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('increments impressionCount once per occurrence, not once per distinct post', async () => {
     const OTHER = '507f1f77bcf86cd799439033';
     const prisma = (app as any).prisma;
-    prisma.post.updateMany.mockClear();
+    prisma.$runCommandRaw.mockClear();
     prisma.postImpression.createMany.mockClear();
 
     const res = await app.inject({
@@ -370,13 +372,13 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     expect(created).toHaveLength(3);
 
     // Somme des incréments par post, quelle que soit la façon de grouper les
-    // updates. Le `in` est DÉDUPLIQUÉ avant de sommer : `updateMany` avec
-    // `id: { in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
+    // updates. Le `$in` est DÉDUPLIQUÉ avant de sommer : une mise à jour avec
+    // `_id: { $in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
     // doublon ici ferait passer le test sur le code bogué.
     const increments: Record<string, number> = {};
-    for (const [args] of prisma.post.updateMany.mock.calls as any[]) {
-      const step = args.data.impressionCount.increment as number;
-      for (const id of new Set(args.where.id.in as string[])) {
+    for (const write of postCounterWritesOf(prisma.$runCommandRaw)) {
+      const step = write.data.impressionCount.increment;
+      for (const id of new Set(write.ids)) {
         increments[id] = (increments[id] ?? 0) + step;
       }
     }

@@ -33,6 +33,10 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 import { ConflictError } from '../../../../errors/custom-errors';
 import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { counterWrite, postCounterWritesOf } from '../../../helpers/posts-counter-writes';
+
+const counterWritesIn = (prisma: object) =>
+  postCounterWritesOf((prisma as { $runCommandRaw: Parameters<typeof postCounterWritesOf>[0] }).$runCommandRaw);
 import {
   makePreValidationAuth,
   buildApp,
@@ -322,14 +326,8 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
     // UNE seule passe de résolution de racines pour tout le lot.
     expect(prisma.post.findMany.mock.calls.filter(([a]: any[]) => a?.where?.repostOfId !== undefined))
       .toHaveLength(1);
-    expect(prisma.post.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [POST_ID] } },
-      data: { impressionCount: { increment: 1 } },
-    });
-    expect(prisma.post.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [ROOT_ID] }, deletedAt: { isSet: false } },
-      data: { impressionCount: { increment: 1 } },
-    });
+    expect(counterWritesIn(prisma)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
+    expect(counterWritesIn(prisma)).toContainEqual(counterWrite([ROOT_ID], { impressionCount: { increment: 1 } }, true));
     await app.close();
   });
 
@@ -347,12 +345,9 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
     expect(res.statusCode).toBe(200);
     expect(prisma.post.findUnique).not.toHaveBeenCalled();
-    // Le seul `updateMany` est celui du post lui-même : aucun crédit de racine.
-    expect(prisma.post.updateMany).toHaveBeenCalledTimes(1);
-    expect(prisma.post.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [POST_ID] } },
-      data: { impressionCount: { increment: 1 } },
-    });
+    // La seule écriture de compteur est celle du post lui-même : aucun crédit de racine.
+    expect(counterWritesIn(prisma)).toHaveLength(1);
+    expect(counterWritesIn(prisma)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
     await app.close();
   });
 });
@@ -442,10 +437,7 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
 
     // Chaque repost distinct du batch crédite la MÊME racine → +2, jamais +1
     // (piège `in` dédupliqué, appliqué ici au crédit de racine).
-    expect(prisma.post.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [ROOT_ID] }, deletedAt: { isSet: false } },
-      data: { impressionCount: { increment: 2 } },
-    });
+    expect(counterWritesIn(prisma)).toContainEqual(counterWrite([ROOT_ID], { impressionCount: { increment: 2 } }, true));
     await app.close();
   });
 });
