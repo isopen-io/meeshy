@@ -6,6 +6,7 @@ import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
 import { describeLlmStartup } from './llm/llm-startup-log';
 import { LlmRouter } from './llm/llm-router';
+import { BudgetedLlmProvider, resolveDailyBudgetUsd, resolveMaxConcurrentCalls } from './llm/budgeted-llm';
 import type { LlmProvider } from './llm/types';
 import { buildAgentGraph, type TracerRef } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
@@ -116,7 +117,17 @@ async function start() {
   // restart. The router itself is registered as a listener on the config
   // cache global-invalidation hook below.
   const llmRouter = new LlmRouter(await buildLlmFromConfig());
-  const llm = llmRouter;
+  // #10287 — toute sortie LLM (graphe, réactif, lecture, saison) est bornée par le budget du
+  // jour en dollars et par maxConcurrentCalls, lus dans AgentGlobalConfig (cache Redis).
+  const persistence = new MongoPersistence(prisma);
+  const configCache = new ConfigCache(redis, persistence);
+  const budgetManager = new DailyBudgetManager(redis);
+  const globalConfigForBudget = () => configCache.getGlobalConfig();
+  const llm = new BudgetedLlmProvider(llmRouter, budgetManager, {
+    // Configuration illisible ⇒ l'erreur remonte et l'appel est refusé (fermé).
+    budgetUsd: async () => resolveDailyBudgetUsd(await globalConfigForBudget()),
+    maxConcurrentCalls: async () => resolveMaxConcurrentCalls(await globalConfigForBudget().catch(() => null)),
+  });
 
   // Topic catalog : seed initial (idempotent) + instanciation services partagés
   // AVANT le build du graph pour que createStrategistNode reçoive les deps.
@@ -132,8 +143,6 @@ async function start() {
     topicUsage: topicUsageService,
   });
   const stateManager = new RedisStateManager(redis);
-  const persistence = new MongoPersistence(prisma);
-
   // #10288 — le PULL n'accepte que les messages signés par la passerelle (même secret que le HTTP).
   const zmqListener = new ZmqAgentListener(env.ZMQ_HOST, env.ZMQ_PULL_PORT, env.AGENT_INTERNAL_TOKEN);
   const zmqPublisher = new ZmqAgentPublisher(env.ZMQ_HOST, env.ZMQ_PUB_PORT);
@@ -141,8 +150,6 @@ async function start() {
   await zmqListener.initialize();
   await zmqPublisher.initialize();
 
-  const configCache = new ConfigCache(redis, persistence);
-  const budgetManager = new DailyBudgetManager(redis);
   await configCache.startListening();
 
   // Rebuild the LLM provider in-place whenever the global config or the
@@ -293,10 +300,16 @@ async function start() {
     }
   });
 
-  server.get('/debug/scanner-status', async () => ({
-    pendingDeliveries: await deliveryQueue.pendingCount,
-    uptime: process.uptime(),
-  }));
+  server.get('/debug/scanner-status', async () => {
+    const budgetUsd = resolveDailyBudgetUsd(await globalConfigForBudget().catch(() => null));
+    return {
+      pendingDeliveries: await deliveryQueue.pendingCount,
+      uptime: process.uptime(),
+      // #10287 — la dépense LLM du jour (UTC) face au budget appliqué.
+      llmSpentTodayUsd: await budgetManager.getLlmSpendToday(),
+      llmDailyBudgetUsd: budgetUsd,
+    };
+  });
 
   zmqListener.startListening().catch((error) => {
     server.log.error('ZMQ listener error:', error);
