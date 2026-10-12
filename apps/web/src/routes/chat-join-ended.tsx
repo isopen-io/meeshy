@@ -5,6 +5,7 @@ import { translateInvite } from '@/lib/i18n-invite-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { conversationLinkOfPath } from '@/lib/links/conversation-link';
 import { internalPathOf } from '@/lib/links/internal-link';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { INK, INK_2, INVITE_ACTION_BACKGROUND, INVITE_ACTION_FLOOR, INVITE_CARD_STYLE } from '@/routes/chat-join-parts';
 import { Link } from '@/routes/route-table';
 
@@ -35,7 +36,7 @@ export function invitationPathOf(raw: string, origins: readonly string[]): strin
   return SHARE_LINK_KEY.test(value) ? `/chat/${value}` : null;
 }
 
-const pageOrigins = (): readonly string[] => (typeof window === 'undefined' ? [] : [window.location.origin]);
+const pageOrigins = (): readonly string[] => (typeof window === 'undefined' ? [] : [publicWebOrigin(window.location.origin), window.location.origin]);
 
 export function GuestAccessEndedNotice({
   language,
