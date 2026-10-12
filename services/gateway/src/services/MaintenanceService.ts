@@ -18,7 +18,7 @@ import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
-import { cleanupExpiredData as sweepExpiredData } from './cleanupExpiredData';
+import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -50,6 +50,11 @@ export class MaintenanceService {
    * injecté par le manager, résolu à l'appel, best-effort.
    */
   private sessionRevoker: SessionRevoker | null = null;
+  /**
+   * Le vivant qu'éteint la révocation des invités d'un lien expiré au
+   * balayage journalier (#10440). Injecté par le manager, résolu à l'appel.
+   */
+  private shareLinkRevocationLive: ShareLinkRevocationLive = {};
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
@@ -96,6 +101,16 @@ export class MaintenanceService {
    */
   setSessionRevoker(revoker: SessionRevoker): void {
     this.sessionRevoker = revoker;
+  }
+
+  /**
+   * Injecter le vivant (`io`, manager) dont `revokeShareLinkGuests` a besoin
+   * pour annoncer le départ des invités d'un lien expiré et couper leurs
+   * sockets (#10440) — même origine et même raison que les trois capacités
+   * ci-dessus.
+   */
+  setShareLinkRevocationLive(live: ShareLinkRevocationLive): void {
+    this.shareLinkRevocationLive = live;
   }
 
   /**
@@ -675,7 +690,7 @@ export class MaintenanceService {
    * Nettoyer les sessions expirées et les données temporaires
    */
   async cleanupExpiredData(): Promise<void> {
-    await sweepExpiredData(this.prisma);
+    await sweepExpiredData(this.prisma, this.shareLinkRevocationLive);
   }
 
   /**

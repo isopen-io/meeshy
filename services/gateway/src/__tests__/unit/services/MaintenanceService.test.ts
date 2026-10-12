@@ -482,7 +482,11 @@ describe('cleanupExpiredData', () => {
         where: expect.objectContaining({ expiresAt: expect.objectContaining({ lt: expect.any(Date) }) }),
       })
     );
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['link-expired'] } } });
+    // #10440 — la suppression relit l'échéance : un lien prolongé entre la
+    // lecture et la suppression reste.
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: ['link-expired'] }, expiresAt: { lt: expect.any(Date) } },
+    });
   });
 
   it('does not throw on DB error during cleanup', async () => {

@@ -5,10 +5,12 @@ import path from 'path';
 import {
   resolveAnonymousUploadIdentity,
   fetchShareLinkAnonymousFlags,
+  shareLinkExpiredTusRefusal,
   readFilePrefix,
   type AnonymousUploadIdentityPrisma,
 } from '../AnonymousUploadIdentity';
 import { hashSessionToken } from '../../../utils/session-token';
+import { ShareLinkExpiredError } from '../../shareLinkReadGate';
 
 function buildPrisma(overrides: Partial<AnonymousUploadIdentityPrisma> = {}): AnonymousUploadIdentityPrisma {
   return {
@@ -49,7 +51,7 @@ describe('resolveAnonymousUploadIdentity', () => {
         type: 'anonymous',
         isActive: true,
       },
-      select: { id: true, anonymousSession: true },
+      select: { id: true, shareLinkId: true, anonymousSession: true },
     });
   });
 
@@ -69,6 +71,65 @@ describe('resolveAnonymousUploadIdentity', () => {
   });
 });
 
+/**
+ * #10440 — le chemin resumable (`/api/v1/uploads`) ne passe pas par
+ * `middleware/auth.ts`, où #10437 a posé la garde du lien échu : un invité au
+ * lien expiré y téléversait encore. La résolution d'identité de ce chemin
+ * applique désormais la même garde, et lève la même cause typée.
+ */
+describe('resolveAnonymousUploadIdentity — un lien expiré ferme le chemin resumable (#10440)', () => {
+  const guest = (link: { shareLinkId?: string; session?: string }) =>
+    jest.fn<any>().mockResolvedValue({
+      id: 'p-guest',
+      shareLinkId: link.shareLinkId ?? null,
+      anonymousSession: link.session ? { shareLinkId: link.session } : null,
+    });
+
+  it('refuse un invité dont le lien (colonne) a expiré', async () => {
+    const findUnique = jest.fn<any>().mockResolvedValue({ expiresAt: new Date(Date.now() - 60_000) });
+    const prisma = buildPrisma({ participant: { findFirst: guest({ shareLinkId: 'link-col' }) } as any, conversationShareLink: { findUnique } as any });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).rejects.toBeInstanceOf(ShareLinkExpiredError);
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: 'link-col' }, select: expect.objectContaining({ expiresAt: true }) });
+  });
+
+  it('refuse un invité dont le lien (session embarquée) a expiré', async () => {
+    const findUnique = jest.fn<any>().mockResolvedValue({ expiresAt: new Date(Date.now() - 60_000) });
+    const prisma = buildPrisma({ participant: { findFirst: guest({ session: 'link-emb' }) } as any, conversationShareLink: { findUnique } as any });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).rejects.toBeInstanceOf(ShareLinkExpiredError);
+  });
+
+  it('admet un invité au lien vivant ou sans échéance', async () => {
+    const findUnique = jest.fn<any>()
+      .mockResolvedValueOnce({ expiresAt: new Date(Date.now() + 60_000) })
+      .mockResolvedValueOnce({ expiresAt: null });
+    const prisma = buildPrisma({ participant: { findFirst: guest({ shareLinkId: 'link-col' }) } as any, conversationShareLink: { findUnique } as any });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).resolves.toEqual({ participantId: 'p-guest', shareLinkId: 'link-col' });
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).resolves.toEqual({ participantId: 'p-guest', shareLinkId: 'link-col' });
+  });
+
+  it('propage une lecture du lien qui échoue — fail-closed, jamais une identité servie', async () => {
+    const findUnique = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+    const prisma = buildPrisma({ participant: { findFirst: guest({ shareLinkId: 'link-col' }) } as any, conversationShareLink: { findUnique } as any });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).rejects.toThrow('mongo down');
+  });
+
+  it('le refus rendu par @tus/server est le 403 SHARE_LINK_EXPIRED des autres portes', () => {
+    const refusal = shareLinkExpiredTusRefusal();
+
+    expect(refusal.status_code).toBe(403);
+    expect(JSON.parse(refusal.body)).toEqual({
+      success: false,
+      error: 'This share link has expired',
+      message: 'This share link has expired',
+      code: 'SHARE_LINK_EXPIRED',
+    });
+  });
+});
+
 describe('fetchShareLinkAnonymousFlags', () => {
   it('rend les drapeaux du lien quand il existe', async () => {
     const findUnique = jest.fn<any>().mockResolvedValue({ allowAnonymousFiles: false, allowAnonymousImages: true });
@@ -79,7 +140,7 @@ describe('fetchShareLinkAnonymousFlags', () => {
     expect(flags).toEqual({ allowAnonymousFiles: false, allowAnonymousImages: true });
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'sharelink-1' },
-      select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } } },
+      select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } }, expiresAt: true },
     });
   });
 

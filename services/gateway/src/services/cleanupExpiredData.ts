@@ -4,6 +4,8 @@ import { cleanupExpiredSessions } from './SessionService';
 import { AffiliateTrackingService } from './AffiliateTrackingService';
 import { EngagementQuotas } from './engagement/EngagementQuotas';
 import { repairOrphanedMessageSenders } from './messaging/repairOrphanedMessageSenders';
+import { revokeShareLinkGuests, type GuestSocketRegistry } from '../socketio/revokeShareLinkGuests';
+import type { DepartedMemberEphemeralState } from '../socketio/endConversationMembership';
 
 /** Une empreinte de visiteur ne survit pas à la période de rotation de sa clé. */
 const VISIT_BUCKET_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,7 +19,19 @@ const ANONYMOUS_PARTICIPANT_TTL_MS = 24 * 60 * 60 * 1000;
  * l'une ne doit pas empêcher les autres d'avoir lieu, ni faire échouer le
  * balayage journalier qui l'appelle.
  */
-export async function cleanupExpiredData(prisma: PrismaClient): Promise<void> {
+/**
+ * Le vivant qu'une révocation d'invités éteint (sockets, appel, position) —
+ * RÉSOLU à l'appel, jamais capturé : le manager Socket.IO naît après le
+ * service de maintenance (même contrat que `ExpiredShareLinksCleanupService`).
+ * Sans lui, la révocation reste entière en base et dans le cache ; seuls les
+ * effets vivants manquent, et la porte de la reconnexion les rattrape.
+ */
+export type ShareLinkRevocationLive = {
+  readonly resolveIO?: () => GuestSocketRegistry | null | undefined;
+  readonly resolveManager?: () => DepartedMemberEphemeralState | null | undefined;
+};
+
+export async function cleanupExpiredData(prisma: PrismaClient, live: ShareLinkRevocationLive = {}): Promise<void> {
   try {
     const expiredBefore = new Date(Date.now() - ANONYMOUS_PARTICIPANT_TTL_MS);
 
@@ -60,10 +74,17 @@ export async function cleanupExpiredData(prisma: PrismaClient): Promise<void> {
     // #10437 — un lien SUPPRIMÉ ne ferme plus rien : les portes du lien échu
     // (`middleware/auth.ts`, `AuthHandler`, les lectures par route) tiennent un
     // lien introuvable pour ouvert, parce qu'un lien retiré à la main révoque
-    // ses invités (`revokeShareLinkGuests`). Supprimer un lien expiré sans
-    // terminer ses invités leur RENDAIT l'accès au balayage suivant. Les
-    // invités sont donc terminés D'ABORD ; si cette écriture échoue, aucun lien
-    // n'est supprimé (le `catch` englobant), et le balayage suivant réessaie.
+    // ses invités. Supprimer un lien expiré sans terminer ses invités leur
+    // RENDAIT l'accès au balayage suivant : ils sont donc révoqués D'ABORD.
+    //
+    // #10440 — révoqués par `revokeShareLinkGuests`, l'unité du balayage
+    // horaire et des gestes de l'hôte, jamais par un `updateMany` appauvri qui
+    // n'annonçait aucun départ, ne coupait ni socket, ni appel, ni position
+    // vive, et laissait le cache d'appartenance autoriser l'écriture. LIEN PAR
+    // LIEN : un lien dont la révocation échoue n'est pas supprimé (il reste
+    // candidat au balayage suivant), sans retenir les autres. La suppression
+    // relit l'échéance dans son `where` : un lien PROLONGÉ entre la lecture et
+    // la suppression reste.
     const now = new Date();
     const expiredLinkIds = (
       await prisma.conversationShareLink.findMany({
@@ -72,24 +93,29 @@ export async function cleanupExpiredData(prisma: PrismaClient): Promise<void> {
       })
     ).map((link) => link.id);
 
-    if (expiredLinkIds.length > 0) {
-      const endedGuests = await prisma.participant.updateMany({
-        where: {
-          type: 'anonymous',
-          isActive: true,
-          OR: [
-            { shareLinkId: { in: expiredLinkIds } },
-            { anonymousSession: { is: { shareLinkId: { in: expiredLinkIds } } } },
-          ],
-        },
-        data: { isActive: false, isOnline: false, leftAt: now },
-      });
-      if (endedGuests.count > 0) {
-        logger.info(`🧹 ${endedGuests.count} invités de liens expirés terminés (#10437)`);
+    const io = live.resolveIO?.() ?? null;
+    const manager = live.resolveManager?.() ?? null;
+    const revokedLinkIds: string[] = [];
+    let revokedGuests = 0;
+    for (const shareLinkId of expiredLinkIds) {
+      try {
+        const revoked = await revokeShareLinkGuests({ prisma, io, manager, shareLinkId, revokedAt: now });
+        revokedGuests += revoked.length;
+        revokedLinkIds.push(shareLinkId);
+      } catch (error) {
+        logger.warn('🧹 révocation des invités d’un lien expiré échouée — lien conservé (#10440)', {
+          shareLinkId,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
+    }
+    if (revokedGuests > 0) {
+      logger.info(`🧹 ${revokedGuests} invités de liens expirés révoqués (#10437, #10440)`);
+    }
 
+    if (revokedLinkIds.length > 0) {
       const expiredShareLinks = await prisma.conversationShareLink.deleteMany({
-        where: { id: { in: expiredLinkIds } },
+        where: { id: { in: revokedLinkIds }, expiresAt: { lt: now } },
       });
 
       if (expiredShareLinks.count > 0) {

@@ -89,7 +89,11 @@ function guestSocket() {
     on: jest.fn((event: string, listener: () => void) => {
       if (event === 'disconnect') disconnectListeners.push(listener);
     }),
-    disconnect: jest.fn(() => disconnectListeners.forEach((listener) => listener())),
+    disconnected: false,
+    disconnect: jest.fn(() => {
+      socket.disconnected = true;
+      disconnectListeners.forEach((listener) => listener());
+    }),
   };
   return socket;
 }
@@ -165,13 +169,13 @@ describe('AuthHandler — un lien de partage expiré sort l’invité de sa room
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 
-  it('n’arme rien pour un lien sans échéance', async () => {
+  it('un lien sans échéance ne coupe jamais', async () => {
     const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
     await handler.handleTokenAuthentication(socket as never);
-    await jest.advanceTimersByTimeAsync(400 * 24 * HOUR);
+    await jest.advanceTimersByTimeAsync(2 * 24 * HOUR);
 
     expect(joinedConversationRoom(socket)).toBe(true);
     expect(socket.disconnect).not.toHaveBeenCalled();
@@ -189,5 +193,79 @@ describe('AuthHandler — un lien de partage expiré sort l’invité de sa room
     await jest.advanceTimersByTimeAsync(2 * HOUR);
     expect(expiredError(socket)).toHaveLength(0);
     expect(socket.disconnect).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #10440 — l'audit adversarial de #10437 : le minuteur ne relisait le lien
+ * qu'à l'échéance lue à la CONNEXION. Un lien écourté gardait l'invité dans la
+ * room jusqu'à l'ancienne date ; un lien sans échéance auquel l'hôte en posait
+ * une n'armait jamais rien. Le minuteur relit désormais le lien au plus tard
+ * toutes les 5 minutes, échéance ou non. Et il n'est plus armé sur un socket
+ * déjà parti (fuite : son `disconnect` ne sonnera plus), ni EMPILÉ par une
+ * ré-authentification du même socket.
+ */
+describe('AuthHandler — le minuteur du lien d’un invité relit le lien et ne fuit pas (#10440)', () => {
+  const MINUTE = 60 * 1000;
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('un lien ÉCOURTÉ après la connexion coupe l’invité à la nouvelle échéance, à 5 minutes près', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + 3 * HOUR) }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.links[0] = { id: LINK_ID, expiresAt: new Date(NOW.getTime() + 10 * MINUTE) };
+
+    await jest.advanceTimersByTimeAsync(9 * MINUTE);
+    expect(socket.disconnect).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(6 * MINUTE);
+    expect(expiredError(socket)).toHaveLength(1);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('un lien SANS échéance à la connexion, échu ensuite, coupe l’invité dans les 5 minutes', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.links[0] = { id: LINK_ID, expiresAt: new Date(NOW.getTime() - MINUTE) };
+
+    await jest.advanceTimersByTimeAsync(5 * MINUTE + 1000);
+    expect(expiredError(socket)).toHaveLength(1);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
+  it('une ré-authentification du MÊME socket remplace le minuteur au lieu d’en empiler un second', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    const armedOnce = jest.getTimerCount();
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(armedOnce).toBe(1);
+    expect(jest.getTimerCount()).toBe(armedOnce);
+  });
+
+  it('n’arme rien sur un socket parti pendant l’authentification', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+    socket.join.mockImplementation(async () => { socket.disconnected = true; });
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(jest.getTimerCount()).toBe(0);
   });
 });

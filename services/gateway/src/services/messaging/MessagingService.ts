@@ -44,6 +44,7 @@ import {
 } from './attachmentKindAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
@@ -143,16 +144,16 @@ export class MessagingService {
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
             select: {
-              id: true, conversationId: true, isActive: true,
+              id: true, conversationId: true, isActive: true, bannedAt: true,
               permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
             }
           });
           if (!p || p.conversationId !== conversationId) {
             logger.error('DEPRECATED: userId passed as participantId — caller must pass Participant.id', { participantId, conversationId });
             p = await this.prisma.participant.findFirst({
-              where: { userId: participantId, conversationId, isActive: true },
+              where: { userId: participantId, conversationId, ...PARTICIPATION_VIVANTE },
               select: {
-                id: true, conversationId: true, isActive: true,
+                id: true, conversationId: true, isActive: true, bannedAt: true,
                 permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
               }
             });
@@ -168,7 +169,11 @@ export class MessagingService {
         { ...corr, conversationId }
       );
 
-      if (!participant || !participant.isActive) {
+      // #10440 — la participation VIVANTE (`PARTICIPATION_VIVANTE`) : active
+      // ET non bannie. Une ligne active et bannie — la forme que
+      // `restore-for-me` produisait avant #10436 — n'écrit pas, même si une
+      // autre écriture la rallumait un jour sans lire `bannedAt`.
+      if (!participant || !participant.isActive || participant.bannedAt) {
         return this.createErrorResponse(
           'Permissions insuffisantes pour envoyer des messages'
         );
@@ -789,6 +794,7 @@ export class MessagingService {
     id: string;
     conversationId: string;
     isActive: boolean;
+    bannedAt: Date | null;
     permissions: ParticipantPermissions;
     anonymousSession: { rights: AnonymousRightsOverride | null; shareLinkId: string } | null;
   } | null> {
@@ -857,7 +863,7 @@ export class MessagingService {
           deletedForMe: null
         },
         select: {
-          id: true, conversationId: true, isActive: true,
+          id: true, conversationId: true, isActive: true, bannedAt: true,
           permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
         }
       });

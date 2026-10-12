@@ -96,6 +96,7 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 describe('MessagingService.handleMessage — droit d’écriture du PARTICIPANT — canSendMessages (#4855)', () => {
   let service: MessagingService;
@@ -272,5 +273,38 @@ describe('MessagingService.handleMessage — droit d’écriture du PARTICIPANT 
     const response = await service.handleMessage(validRequest, testParticipantId);
 
     expect(response.success).toBe(true);
+  });
+
+  // #10440 — défense en profondeur (audit de #10437, #10436) : une ligne
+  // active ET bannie — la forme que `restore-for-me` produisait avant #10436 —
+  // n'écrit pas. La vérification de l'expéditeur lisait `isActive` seul.
+  it('refuse une participation active mais BANNIE', async () => {
+    mockPrisma.participant.findUnique.mockResolvedValue({
+      ...participantWithRights({}),
+      bannedAt: new Date('2026-10-01T00:00:00Z'),
+    });
+
+    const response = await service.handleMessage(validRequest, testParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(response.error).toContain('Permissions insuffisantes');
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('lit bannedAt sur la ligne chargée, et le repli par userId exige une participation vivante', async () => {
+    mockPrisma.participant.findUnique.mockResolvedValue(null);
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    await service.handleMessage(validRequest, testParticipantId);
+
+    expect(mockPrisma.participant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ bannedAt: true }) })
+    );
+    expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining(PARTICIPATION_VIVANTE),
+      })
+    );
   });
 });

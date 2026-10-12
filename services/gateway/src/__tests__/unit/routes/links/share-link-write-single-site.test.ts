@@ -103,6 +103,26 @@ describe('#4351 — applyShareLinkUpdate est le site unique de l\'écriture', ()
     expect(mockRevoke).not.toHaveBeenCalled();
   });
 
+  // #10440 — une échéance posée dans le PASSÉ ferme le lien à l'instant de
+  // l'écriture, comme `isActive: false` : sans révocation, l'invité gardait sa
+  // room (réception ET envoi) jusqu'au balayage horaire.
+  it('une échéance posée dans le PASSÉ révoque les invités, avant l\'écriture', async () => {
+    const fastify = buildFastify();
+
+    await applyShareLinkUpdate(fastify, ROW_ID, { expiresAt: new Date(Date.now() - 60_000) });
+
+    expect(mockRevoke).toHaveBeenCalledWith(expect.objectContaining({ shareLinkId: ROW_ID }));
+    expect(journal).toEqual(['revoke', 'update']);
+  });
+
+  it('retirer l\'échéance (null) ne révoque rien', async () => {
+    const fastify = buildFastify();
+
+    await applyShareLinkUpdate(fastify, ROW_ID, { expiresAt: null });
+
+    expect(mockRevoke).not.toHaveBeenCalled();
+  });
+
   it('la révocation précède l\'écriture — l\'ordre inverse laisse l\'état interdit si elle lève', async () => {
     const fastify = buildFastify();
 
