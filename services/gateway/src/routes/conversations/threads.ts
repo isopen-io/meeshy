@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { servedLinkMetadata, type LinkSenderFacts } from '../../services/messaging/linkTrackingAuthor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import {
@@ -194,6 +195,8 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
       message.id as string,
       message.translations as Record<string, MessageTranslationJSON> | null
     ),
+    // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
+    metadata: servedLinkMetadata(message.metadata, message.sender as LinkSenderFacts | null | undefined),
   };
 }
 

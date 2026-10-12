@@ -6,6 +6,7 @@
  * plancher d'historique). Voir `messages.ts` pour le composeur
  * (`registerMessagesRoutes`), qui appelle `registerMessageSearchRoute`.
  */
+import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -310,6 +311,8 @@ export function registerMessageSearchRoute(
         // hoistStickerOnto (#4823) : même hoist pour `metadata.sticker`.
         return hoistStickerOnto(hoistLocationOnto({
           ...msg,
+          // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
+          metadata: servedLinkMetadata(msg.metadata, sender),
           // #4885 — les quatre drapeaux de protection, servis à l'identique
           // de `GET .../messages` (même source, `mapMessageProtectionFields`).
           ...withInheritedExpiry(

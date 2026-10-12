@@ -10,7 +10,7 @@ import MeeshyUI
 ///
 /// Deux formats : 9:16 pour la story, 1:1 pour le profil. Rien n'est écrit en
 /// dur par format hors de cette table : une troisième forme s'ajoute ici.
-nonisolated enum PhotoFormat: CaseIterable, Sendable {
+nonisolated enum PhotoFormat: String, CaseIterable, Sendable {
     case story
     case square
 

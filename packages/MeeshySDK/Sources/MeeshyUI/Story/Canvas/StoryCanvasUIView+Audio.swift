@@ -235,6 +235,9 @@ extension StoryCanvasUIView {
         // (entries=0 at that moment) — the in-Task call is what actually
         // schedules the buffers once the cache is warm.
         let slideId = slide.id
+        // L'aperçu d'édition n'a pas de durée de slide : chaque clip y boucle
+        // (`ReaderAudioLoopPolicy`, #10362). Lu ici, avant le Task.
+        let isEditPreview = mode == .edit
         Task { @MainActor [weak self] in
             guard let self else { return }
             var fgURLs: [String: URL] = [:]
@@ -273,7 +276,8 @@ extension StoryCanvasUIView {
             guard self.slide.id == slideId else { return }
 
             do {
-                try self.audioMixer.configure(audios: foreground, urls: fgURLs)
+                try self.audioMixer.configure(audios: foreground, urls: fgURLs,
+                                              loopsEveryClip: isEditPreview)
             } catch {
                 os.Logger.storyAudio.error(
                     "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
@@ -312,7 +316,9 @@ extension StoryCanvasUIView {
                         try self.audioMixer.configureBackground(
                             audio: background,
                             url: localURL,
-                            looping: background.loop ?? true
+                            looping: ReaderAudioLoopPolicy.loops(declared: background.loop,
+                                                                 isBackground: true,
+                                                                 isEditPreview: isEditPreview)
                         )
                     } catch {
                         os.Logger.storyAudio.error(
@@ -362,16 +368,22 @@ extension StoryCanvasUIView {
     /// gates content-ready ni de session refcomptée — la session `.playback`
     /// est déjà posée par `applyEditPlayback` (éditeur sonore). Respecte le mute
     /// composer et la preview timeline (qui possède alors l'audio via l'engine).
+    ///
+    /// Un seul canevas d'édition joue à la fois — le dernier monté — et une
+    /// passe planifiée à neuf entre à la phase partagée de la slide, jamais au
+    /// début (`StoryCanvasEditAudioOwnership.swift`, #10362).
     func startEditAudioPlayback() {
         guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive else { return }
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
         guard !isAudioMuted else { return }
+        guard mayPlayEditAudio else { return }
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
-        let anchor = captureSlideTimelineAnchor()
+        let anchor = editAudioAnchor()
         do {
             _ = try audioMixer.play(originHost: anchor.originHost,
                                     slideKey: currentSlideKey,
                                     slideElapsed: anchor.slideElapsed)
+            publishEditAudioPhase()
         } catch {
             os.Logger(subsystem: "me.meeshy.app", category: "media")
                 .error("edit ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
@@ -464,6 +476,10 @@ extension StoryCanvasUIView {
         forEachMediaLayer { $0.isMuted = false }
         backgroundLayer.isMuted = false
         guard !audioMixer.hasStartedPlayback(slideKey: currentSlideKey) else { return }
-        startAudioPlayback()
+        guard mode == .edit else {
+            startAudioPlayback()
+            return
+        }
+        startEditAudioPlayback()
     }
 }

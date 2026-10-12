@@ -184,6 +184,11 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// ce champ doit toujours se décoder.
     public var quotedPieceCount: Int?
 
+    /// L'auteur cité n'a pas de compte (#10286) : ses adresses se citent en
+    /// texte brut, jamais cliquables. Optionnel pour les blobs `replyToJson`
+    /// gravés avant ce champ.
+    public var authorIsAnonymous: Bool?
+
     /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
     public var quotedExtraPieceCount: Int? {
         guard let quotedPieceCount, quotedPieceCount > 1, !quotedMediaIsProtected else { return nil }

@@ -10,6 +10,7 @@
 const itIdentity = {
   'a11y.avatar.profile': 'Vedi il profilo di {name}',
   'a11y.avatar.story': 'Vedi la storia di {name}',
+  'a11y.avatar.conversation': 'Vedi la conversazione {name}',
   'avatar.menu.label': 'Azioni per {name}',
   'avatar.menu.view_profile': 'Vedi il profilo',
   'userProfile.peek.openPage': 'Apri il profilo completo',

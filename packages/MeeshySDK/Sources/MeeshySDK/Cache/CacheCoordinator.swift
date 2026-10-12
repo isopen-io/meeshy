@@ -373,9 +373,9 @@ public actor CacheCoordinator {
         // Audio/vidéo : la lecture passe par des file URLs (AVPlayer), pas par
         // des Data résidents — 8 MB suffisent aux petits payloads (vocaux)
         // rejoués, et les 2 × 80 MB de plafonds théoriques disparaissent du
-        // budget mémoire (cible app : < 150 MB).
-        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024)
-        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024)
+        // budget mémoire (cible app : < 150 MB). Funnel en flux vers un fichier (#9863).
+        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
+        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
     }
 

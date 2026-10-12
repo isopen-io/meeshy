@@ -54,6 +54,7 @@ import {
 import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
+import { AdminUserPublicationsSection } from './admin-user-publications';
 import { AdminUserPreferencesTab } from './admin-user-preferences';
 
 /**
@@ -108,7 +109,7 @@ export function AdminUserFiche({
   /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les seuls
      rangs d'administration : la même marque que la révocation des sessions (`admin-user-sessions.tsx`).
      Une section absente de la liste n'a ni carte, ni modale, et son adresse n'ouvre rien. */
-  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank });
+  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank, moderate: reach.can('canModerateContent') });
   const sections = useAdminOpen(offertes, { legacyTab: true });
   const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
@@ -186,6 +187,8 @@ export function AdminUserFiche({
         return <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} now={now} />;
       case 'media':
         return <AdminUserMediaSection userId={membre.id} language={language} deps={deps} />;
+      case 'publications':
+        return <AdminUserPublicationsSection userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} now={now} />;
       case 'contacts':
         return <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} fallback={membre.counts} />;
       case 'communities':

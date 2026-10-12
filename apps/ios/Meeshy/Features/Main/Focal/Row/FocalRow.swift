@@ -720,7 +720,7 @@ struct FocalRow: View {
                 hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
                 linkTint: Color(hex: input.accentHex),
                 isDark: input.isDark,
-                trackedLinks: content.text?.trackedLinks ?? [:],
+                trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true,
                 fontSize: textSize,
                 // Aucune entrée gouvernant la HAUTEUR ne dépend de
                 // `isFocused` (decisions.md 2026-08-22 bis) : seul le

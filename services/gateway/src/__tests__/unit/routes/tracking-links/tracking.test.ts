@@ -32,13 +32,20 @@ jest.mock('../../../../middleware/admin-permissions.middleware', () => ({
   requireAnalyticsPermission: jest.fn(),
 }));
 
-// createUnifiedAuthMiddleware returns a no-op that sets an anonymous authContext
+// createUnifiedAuthMiddleware sets an anonymous authContext, or a registered one
+// when the request carries `x-test-user`
 const mockAuthContext = { isAuthenticated: false, type: 'anonymous', anonymousUser: null, registeredUser: null };
+const mockRegisteredContext = (id: string) => ({
+  isAuthenticated: true, isAnonymous: false, type: 'user', userId: id, registeredUser: { id, role: 'USER' },
+});
 jest.mock('../../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn().mockReturnValue(
-    async (req: any) => { req.authContext = mockAuthContext; }
+    async (req: any) => {
+      const userId = req.headers['x-test-user'];
+      req.authContext = userId ? mockRegisteredContext(userId) : mockAuthContext;
+    }
   ),
-  isRegisteredUser: jest.fn().mockReturnValue(false),
+  isRegisteredUser: jest.fn().mockImplementation((ctx: any) => ctx?.type === 'user' && !ctx?.isAnonymous),
   UnifiedAuthRequest: {},
 }));
 
@@ -155,20 +162,20 @@ describe('POST /tracking-links — missing required field', () => {
   });
 });
 
-describe('POST /tracking-links — an anonymous caller reuses nobody\'s link (#9184)', () => {
-  it('creates a fresh link without looking up existing ones', async () => {
+describe('POST /tracking-links — a caller without an account reuses nobody\'s link (#9184, #10291)', () => {
+  it('is refused before any lookup or write', async () => {
     const existingLink = { id: 'link-1', token: 'abc123', originalUrl: 'https://example.com', isActive: true, createdBy: 'someone-else' };
     mockFindExisting.mockClear();
+    mockCreate.mockClear();
     mockFindExisting.mockResolvedValue(existingLink);
-    mockCreate.mockResolvedValue({ id: 'link-3', token: 'fresh1', originalUrl: 'https://example.com', isActive: true });
     const { app } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/tracking-links',
       payload: { originalUrl: 'https://example.com' },
     });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().data.trackingLink.token).toBe('fresh1');
+    expect(res.statusCode).toBe(401);
     expect(mockFindExisting).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -179,7 +186,7 @@ describe('POST /tracking-links — success creates new link', () => {
     mockCreate.mockResolvedValue({ id: 'link-2', token: 'xyz789', originalUrl: 'https://new.com', isActive: true });
     const { app } = await buildApp();
     const res = await app.inject({
-      method: 'POST', url: '/tracking-links',
+      method: 'POST', url: '/tracking-links', headers: { 'x-test-user': 'alice' },
       payload: { originalUrl: 'https://new.com' },
     });
     expect(res.statusCode).toBe(201);
@@ -193,7 +200,7 @@ describe('POST /tracking-links — DB error', () => {
     mockCreate.mockRejectedValue(new Error('db crash'));
     const { app } = await buildApp();
     const res = await app.inject({
-      method: 'POST', url: '/tracking-links',
+      method: 'POST', url: '/tracking-links', headers: { 'x-test-user': 'alice' },
       payload: { originalUrl: 'https://example.com' },
     });
     expect(res.statusCode).toBe(500);

@@ -48,6 +48,7 @@ import { ProtectionChrome } from './protection-chrome';
 import { LongMessageText } from './long-message-text';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
+import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
@@ -461,6 +462,8 @@ export const FocalRow = memo(function FocalRow({
    * badge textuel — l'écart avec le tracé exact d'iOS (Phosphor ne publie
    * pas `theatermasks`) est assumé, D-32. */
   const isAnonymousSender = message.sender?.type === 'anonymous';
+  /* Les adresses d'un anonyme restent du texte (#10286) — la décision de la bulle. */
+  const links = linkRenderingOf(message);
   const reactions = reactionEntries(message.reactionSummary);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
@@ -607,10 +610,11 @@ export const FocalRow = memo(function FocalRow({
           style={{ color: 'var(--color-ios-ink)' }}
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
+          links={links}
           plainTextHidden
         />
       ) : null}
-      <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />
+      {links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 

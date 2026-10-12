@@ -19,6 +19,8 @@ struct BubbleSecondaryContent: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite).
     var trackedLinks: [String: String] = [:]
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    var linksAreInert: Bool = false
 
     var body: some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: langCode))
@@ -51,7 +53,8 @@ struct BubbleSecondaryContent: View, Equatable {
                     hashtagColor: hashtagTint,
                     accentColor: linkTint,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                    trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks
+                    trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks,
+                    linksAreInert: linksAreInert
                 )
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -72,5 +75,6 @@ struct BubbleSecondaryContent: View, Equatable {
             && lhs.hashtagTint == rhs.hashtagTint
             && lhs.linkTint == rhs.linkTint
             && lhs.trackedLinks == rhs.trackedLinks
+            && lhs.linksAreInert == rhs.linksAreInert
     }
 }

@@ -10,6 +10,7 @@
 const arIdentity = {
   'a11y.avatar.profile': 'عرض الملف الشخصي لـ {name}',
   'a11y.avatar.story': 'عرض قصة {name}',
+  'a11y.avatar.conversation': 'عرض المحادثة {name}',
   'avatar.menu.label': 'إجراءات لـ {name}',
   'avatar.menu.view_profile': 'عرض الملف الشخصي',
   'userProfile.peek.openPage': 'فتح الملف الشخصي الكامل',

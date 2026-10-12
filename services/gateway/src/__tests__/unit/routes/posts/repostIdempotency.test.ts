@@ -34,6 +34,14 @@ const mockRepostPost = jest.fn<any>();
 const mockGetPostById = jest.fn<any>((id: string) => Promise.resolve({ id, repostOfId: POST_ID, type: 'POST', authorId: USER_ID }));
 const mockRepublishStory = jest.fn<any>();
 
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
+
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     repostPost: (...args: any[]) => mockRepostPost(...args),

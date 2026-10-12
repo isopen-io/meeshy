@@ -67,10 +67,9 @@ struct ComposerSceneDescriptionPanel: View {
     /// EST le site d'écriture.
     @Binding var text: String
 
-    /// L'invite du CHAMP — ce qu'on attend comme contenu. Distincte de l'amorce
-    /// du calque, qui décrit le GESTE (« Touchez pour écrire ») ; les confondre
-    /// donnerait soit une amorce muette sur ce qu'il faut faire, soit une invite
-    /// qui parle d'un tap qu'on ne peut plus faire, puisqu'on écrit déjà.
+    /// L'invite du CHAMP — ce qu'on attend comme contenu. C'est la MÊME phrase
+    /// que l'amorce du calque au repos (#10359, « Ajouter une légende ») : une
+    /// seule zone, un seul nom, avant comme pendant la saisie.
     let placeholder: String
 
     @Binding var isCollapsed: Bool

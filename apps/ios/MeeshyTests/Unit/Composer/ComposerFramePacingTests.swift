@@ -114,7 +114,9 @@ final class ComposerFramePacingTests: XCTestCase {
 
     func test_preview_neverStacksTheSystemLayerUnderMetal() throws {
         let apercu = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(apercu.contains("mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer("),
+        // La règle est lue par une propriété de la vue (#10307), que la couche système reçoit.
+        XCTAssertTrue(apercu.contains("ComposerCaptureSurfaceRule.mirrorsSystemLayer(")
+                      && apercu.contains("mirrorsFrames: mirrorsSystemLayer"),
                       "avec effet, la couche système est détachée : un passage par image, jamais deux")
         XCTAssertTrue(apercu.contains("onFirstFrame: { metalHasFrame = true }"),
                       "la couche système ne se détache qu'à la première image Metal")

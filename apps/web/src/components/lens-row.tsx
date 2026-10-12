@@ -12,6 +12,8 @@ import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { isRowCallAction, type RowActionId } from '@/lib/view/row-actions';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
+import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
@@ -99,6 +101,14 @@ export type LensRowProps = {
    */
   onRowAction: (conversationId: string, id: RowActionId) => void;
   /**
+   * OUVRE LA FICHE D'UNE CONVERSATION NON DIRECTE (#10300) — toucher l'avatar
+   * d'un groupe, d'une publique, de la globale ou d'une communauté ouvre ses
+   * détails, comme l'avatar d'un direct ouvre le profil du pair. Même
+   * discipline que `onRowAction` : une fonction STABLE qui reçoit l'id.
+   * Absente, l'avatar garde le chemin du fil.
+   */
+  onOpenDetails?: ((conversationId: string) => void) | undefined;
+  /**
    * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793, #7547) — les noms
    * des frappeurs vivants qui ne sont pas le lecteur, distribués par l'écran
    * (`useTypistNames`, `lib/api/use-typists.ts`) : une rangée est rendue dans un
@@ -139,12 +149,6 @@ export type LensRowProps = {
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
   now?: (() => number) | undefined;
-  /**
-   * LA RANGÉE ÉPINGLÉE EN TÊTE DE LISTE (#10004) — World Wide. Une rangée
-   * ORDINAIRE, sans cadre ni fond de carte (#10191) : seule l'épingle, qui se
-   * voit toujours, dit pourquoi elle est en tête.
-   */
-  pinnedAtHead?: boolean | undefined;
 };
 
 function LensRowImpl({
@@ -155,6 +159,7 @@ function LensRowImpl({
   flags,
   unreadCount,
   onRowAction,
+  onOpenDetails,
   typists,
   peerHere = false,
   peerActive = false,
@@ -163,7 +168,6 @@ function LensRowImpl({
   engagement,
   interfaceLanguage,
   now,
-  pinnedAtHead = false,
 }: LensRowProps) {
   const unread = unreadCount > 0;
   /* LA CONVERSATION OUVERTE À CÔTÉ (#10073) — sur grand écran, la liste reste
@@ -208,6 +212,13 @@ function LensRowImpl({
     return typeof handle === 'string' && handle !== '' ? handle : undefined;
   })();
   const accent = accentOf(conversation);
+  const guest = useSpeaksAsGuest();
+  const avatarDoor = conversationAvatarDoor({
+    group,
+    guest,
+    peerUsername: peerHandle,
+    detailsAvailable: onOpenDetails !== undefined,
+  });
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
   const liveCall = (conversation as ListConversation).activeCall ?? null;
   /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
@@ -333,7 +344,29 @@ function LensRowImpl({
             que sur un DIRECT, et un participant ANONYME n'a pas de compte —
             `identityTarget` range les deux cas sous la même absence de cible,
             et l'avatar ne paraît alors pas tapable (loi 4). */}
-        {peerHandle === undefined ? (
+        {avatarDoor.kind === 'details' && onOpenDetails !== undefined ? (
+          /* LA FICHE DE LA CONVERSATION (#10300) — l'avatar d'une conversation
+             non directe ouvre ses détails, comme celui d'un direct ouvre le
+             profil. Ce n'est plus un doublon du lien du texte : c'est une
+             autre porte, donc un bouton nommé, dans le parcours clavier. */
+          <button
+            type="button"
+            onClick={() => onOpenDetails(conversation.id)}
+            aria-haspopup="dialog"
+            aria-label={translate(currentInterfaceLanguage(), 'a11y.avatar.conversation', { name: title })}
+            data-lens-avatar-door
+            className="flex shrink-0 rounded-full"
+          >
+            <Avatar
+              initials={initialsOf(title)}
+              color={accent}
+              size={44}
+              opacity={chromeFade}
+              {...(photo === undefined ? {} : { src: photo })}
+              {...peerSignals}
+            />
+          </button>
+        ) : peerHandle === undefined ? (
           /* GROUPE (ou pair sans compte) : l'avatar garde EXACTEMENT le geste
              d'avant — il ouvre le fil. Le lien est un DOUBLON de celui du
              texte, donc il sort de l'ordre de lecture et du parcours clavier :
@@ -446,7 +479,7 @@ function LensRowImpl({
               (`ThemedConversationRow.swift:296-300`, qui annonce épinglage ET
               sourdine).
             */}
-            {flags.isPinned || pinnedAtHead ? (
+            {flags.isPinned ? (
               <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
             {/* La sourdine, elle, ne prend PAS de glyphe : la peau Lentille la
@@ -622,6 +655,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.viewerId !== next.viewerId) return false;
   if (prev.unreadCount !== next.unreadCount) return false;
   if (prev.onRowAction !== next.onRowAction) return false;
+  if (prev.onOpenDetails !== next.onOpenDetails) return false;
   /* `typists` (#5793, #7547) — comparés par VALEUR (les noms joints) : l'écran
      redistribue une carte d'identité neuve à chaque `typing:start`/`stop` de
      n'importe quelle conversation, et sans cette ligne la rangée concernée
@@ -637,7 +671,6 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
-  if ((prev.pinnedAtHead ?? false) !== (next.pinnedAtHead ?? false)) return false;
 
   const s1 = prev.status ?? AT_REST;
   const s2 = next.status ?? AT_REST;

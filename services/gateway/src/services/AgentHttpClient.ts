@@ -17,13 +17,13 @@ export const AGENT_INTERNAL_TOKEN_MIN_LENGTH = 32;
  * #10242 — le secret interne que l'agent exige sur toute route sauf /health
  * (`services/agent/src/routes/internal-guard.ts`). Lu à chaque appel : absent ou trop court, rien ne part.
  */
-function internalToken(): string | null {
+export function agentInternalToken(): string | null {
   const token = (process.env.AGENT_INTERNAL_TOKEN ?? '').trim();
   return token.length >= AGENT_INTERNAL_TOKEN_MIN_LENGTH ? token : null;
 }
 
 /** Le signal de démarrage : la passerelle peut-elle joindre l'agent ? (journalisé une fois par `server.ts`). */
-export const agentInternalTokenConfigured = (): boolean => internalToken() !== null;
+export const agentInternalTokenConfigured = (): boolean => agentInternalToken() !== null;
 
 export class AgentUnavailableError extends Error {
   constructor(message: string) {
@@ -37,7 +37,7 @@ export class AgentHttpClient {
 
   private async request<T>(path: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const { timeoutMs = 5000, ...fetchOptions } = options;
-    const token = internalToken();
+    const token = agentInternalToken();
     if (token === null) throw new AgentUnavailableError('AGENT_INTERNAL_TOKEN is not configured on the gateway');
     const controller = new AbortController();
     const timeout = guardedTimeout({ name: 'agent-http-timeout', afterMs: timeoutMs, logger: enhancedLogger, run: () => controller.abort() });

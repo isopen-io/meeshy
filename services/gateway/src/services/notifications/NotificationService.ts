@@ -826,6 +826,7 @@ export class NotificationService {
         // la phrase (« a commenté un réel de Windie Nh ») au lieu d'être posé
         // à côté en sous-titre. Même chemin que `parentCommentPreview`.
         authorName: (typeof meta.contentAuthorName === 'string' ? meta.contentAuthorName : null),
+        conversationTitle: params.context.conversationTitle ?? null,
       };
       // On ne touche la base pour la langue du destinataire QUE si un rendu
       // localisé en a réellement besoin (titre localisé du type, ou corps

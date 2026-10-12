@@ -81,6 +81,8 @@ struct BubbleExpandableText: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
     var trackedLinks: [String: String] = [:]
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    var linksAreInert: Bool = false
     /// Taille de rendu du texte. `15` = la cote de bulle historique ; la
     /// rangée plate passe la sienne (`FocalMetrics.Text.size`).
     /// `MessageTextRenderer.render` produit une `AttributedString` dont
@@ -106,6 +108,7 @@ struct BubbleExpandableText: View, Equatable {
         lhs.linkTint == rhs.linkTint &&
         lhs.isDark == rhs.isDark &&
         lhs.trackedLinks == rhs.trackedLinks &&
+        lhs.linksAreInert == rhs.linksAreInert &&
         lhs.fontSize == rhs.fontSize &&
         lhs.expansion == rhs.expansion
     }
@@ -121,7 +124,7 @@ struct BubbleExpandableText: View, Equatable {
         let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
 
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            MessageTextRenderer.render(state.displayedText, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+            MessageTextRenderer.render(state.displayedText, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
                 // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir

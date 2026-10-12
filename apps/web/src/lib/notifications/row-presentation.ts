@@ -67,15 +67,16 @@ const normalized = (text: string): string =>
 
 /**
  * Deux textes « se répètent » quand, dépouillés de leurs guillemets, de leur
- * casse, de leurs espaces et d'une troncature « … », l'un est l'autre ou son
- * début : la passerelle tronque ses citations, l'égalité stricte ne les
- * reconnaîtrait jamais.
+ * casse, de leurs espaces et d'une troncature « … », l'un est l'autre, son
+ * début ou sa FIN : la passerelle tronque ses citations, l'égalité stricte ne
+ * les reconnaîtrait jamais ; et un titre « acteur + action » (« Awa a rejoint
+ * Les Amis ») porte déjà l'action seule que le corps répète (#10299).
  */
 export function repeatsText(candidate: string, other: string): boolean {
   const a = normalized(candidate);
   const b = normalized(other);
   if (a === '' || b === '') return false;
-  return a === b || a.startsWith(b) || b.startsWith(a);
+  return a === b || a.startsWith(b) || b.startsWith(a) || a.endsWith(b) || b.endsWith(a);
 }
 
 /** Garde, dans l'ordre, chaque texte qui ne répète aucun des précédents — les autres deviennent `null`. */
@@ -217,8 +218,10 @@ const MILESTONE_GLYPHS: Readonly<Record<Exclude<Milestone['kind'], 'badge'>, Mil
 
 function milestonePresentation(notification: NotificationRecord, milestone: Milestone, language: InterfaceLanguage): NotificationRowPresentation {
   const glyph = milestone.kind === 'badge' ? AXIS_GLYPHS[milestone.axis] : MILESTONE_GLYPHS[milestone.kind];
-  const name = milestoneName(milestone, language) ?? notificationTitle(notification);
-  const reason = milestoneReason(notification, milestone, language) ?? firstFilled(notification.content);
+  // #10298 — un palier qui porte `tierRank` a son titre (le palier) et son corps (l'exploit) composés par le serveur.
+  const served = notification.metadata.tierRank !== undefined;
+  const name = (served ? firstFilled(notification.title ?? undefined) : null) ?? milestoneName(milestone, language) ?? notificationTitle(notification);
+  const reason = (served ? firstFilled(notification.content) : null) ?? milestoneReason(notification, milestone, language) ?? firstFilled(notification.content);
   const [, body] = distinctTexts([name, reason]);
   return { leading: { kind: 'milestone', glyph }, title: name, body: body ?? null, quote: null, footer: null };
 }

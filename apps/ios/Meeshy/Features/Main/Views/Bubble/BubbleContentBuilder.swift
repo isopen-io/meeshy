@@ -7,12 +7,30 @@ extension BubbleContent {
     /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
     /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
     /// par diverger au premier format de lien ajouté.
+    ///
+    /// `authorIsAnonymous` (#10286) — un invité sans compte n'émet AUCUN lien :
+    /// ni aperçu, ni carte de conversation, ni lecteur intégré, ni lien suivi ;
+    /// son adresse se lit telle qu'écrite.
     static func text(
         raw: String,
         trackedLinks: [String: String],
         isEmojiOnly: Bool = false,
-        emojiFontSize: CGFloat? = nil
+        emojiFontSize: CGFloat? = nil,
+        authorIsAnonymous: Bool = false
     ) -> Text {
+        if authorIsAnonymous {
+            return Text(
+                raw: raw,
+                isEmojiOnly: isEmojiOnly,
+                emojiFontSize: emojiFontSize,
+                firstLinkURL: nil,
+                embeddedVideo: nil,
+                trackedLinks: [:],
+                embedTrackedURL: nil,
+                conversationCardTarget: nil,
+                linksAreInert: true
+            )
+        }
         // Précalcul unique du lien (NSDataDetector) — réutilisé par
         // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
         let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
@@ -191,7 +209,8 @@ extension BubbleContent {
             raw: effective,
             trackedLinks: message.trackedLinkMap,
             isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize
+            emojiFontSize: emojiResult.fontSize,
+            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
 
         // --- Translation panel ---

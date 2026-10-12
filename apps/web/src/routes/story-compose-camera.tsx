@@ -9,7 +9,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
-import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
+import { createBrowserCameraEngine, type CameraEngine, type CameraOpenResult } from '@/lib/stories/studio-camera-engine';
 import { cameraFlashPlan, quickCaptureArmedHold, quickCaptureArmedTap, quickCaptureRelease, type CameraFacing } from '@/lib/stories/studio-quick-capture';
 import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -38,6 +38,35 @@ type ScreenFlash = 'off' | 'full' | 'ring';
 export type StudioHoldDrag = { current: ((dx: number, dy: number) => void) | null };
 
 const NO_ZOOM: CameraZoomRange = { mode: 'preview', min: 1, max: 1, step: 0 };
+
+/** La fenêtre du flux : en retrait du bord, aux coins arrondis — le liseré
+ * se pose dans ce retrait. Sol blanc en anneau : plus en retrait encore. */
+const WINDOW_INSET = 10;
+const WINDOW_RADIUS = 24;
+const RING_INSET = { y: 14, x: 10 } as const;
+const RING_RADIUS = 28;
+/** Le liseré : son épaisseur, et l'écart noir qui le sépare du flux. */
+const EDGE_WIDTH = 3;
+const EDGE_GAP = 3;
+const EDGE_OUT = EDGE_WIDTH + EDGE_GAP;
+
+type Box = { readonly top: string; readonly bottom: string; readonly left: string; readonly right: string; readonly borderRadius: number };
+
+function windowBox(floor: ScreenFlash): Box {
+  if (floor === 'ring') return { top: `${RING_INSET.y}%`, bottom: `${RING_INSET.y}%`, left: `${RING_INSET.x}%`, right: `${RING_INSET.x}%`, borderRadius: RING_RADIUS };
+  const inset = `${WINDOW_INSET}px`;
+  return { top: inset, bottom: inset, left: inset, right: inset, borderRadius: WINDOW_RADIUS };
+}
+
+function edgeBox(floor: ScreenFlash): Box {
+  if (floor === 'ring') {
+    const y = `calc(${RING_INSET.y}% - ${EDGE_OUT}px)`;
+    const x = `calc(${RING_INSET.x}% - ${EDGE_OUT}px)`;
+    return { top: y, bottom: y, left: x, right: x, borderRadius: RING_RADIUS + EDGE_OUT };
+  }
+  const inset = `${WINDOW_INSET - EDGE_OUT}px`;
+  return { top: inset, bottom: inset, left: inset, right: inset, borderRadius: WINDOW_RADIUS + EDGE_OUT };
+}
 
 function directionOf(element: Element | null): LayoutDirection {
   if (element === null || typeof getComputedStyle !== 'function') return 'ltr';
@@ -80,6 +109,7 @@ export function StudioCamera({
   onIntensity = () => undefined,
   holdDrag,
   engine: injected,
+  preopened,
   onTake,
   onClose,
 }: {
@@ -97,6 +127,11 @@ export function StudioCamera({
   readonly holdDrag?: StudioHoldDrag;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly engine?: CameraEngine;
+  /** LE FLUX DÉJÀ DEMANDÉ PAR L'HÔTE à l'ouverture (#10307) — pendant que
+   * l'écran de la caméra se charge, la caméra du téléphone s'allume déjà.
+   * Pris UNE fois (`null` ensuite) : la caméra le reprend au lieu d'en
+   * redemander un, et le possède dès lors. */
+  readonly preopened?: () => Promise<CameraOpenResult> | null;
   readonly onTake: (file: File) => void;
   readonly onClose: () => void;
 }) {
@@ -110,6 +145,14 @@ export function StudioCamera({
   const startedRef = useRef(false);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [facing, setFacing] = useState<CameraFacing>('environment');
+  const facingRef = useRef<CameraFacing>('environment');
+  /** Chaque ouverture a son numéro : un flux arrivé après une autre ouverture
+   * (ou après la sortie) est relâché, jamais attaché. */
+  const generationRef = useRef(0);
+  /** L'ancien flux pendant une bascule (#10308) : sa vidéo est arrêtée, son
+   * micro passe au nouveau — la sortie le relâche s'il n'a pas été repris. */
+  const handoffRef = useRef<MediaStream | null>(null);
+  const [switching, setSwitching] = useState(false);
   const [status, setStatus] = useState<'opening' | 'live' | 'unavailable'>('opening');
   const [attempt, setAttempt] = useState(0);
   const openAppSettings = appSettingsOpener();
@@ -139,43 +182,85 @@ export function StudioCamera({
 
   const releaseStream = () => {
     const stream = streamRef.current;
+    const handoff = handoffRef.current;
     streamRef.current = null;
+    handoffRef.current = null;
     if (stream !== null) engine.release(stream);
+    if (handoff !== null) engine.release(handoff);
     restoreRef.current?.();
     restoreRef.current = null;
   };
 
+  /** Attache le flux d'une ouverture à l'aperçu — à moins qu'une autre
+   * ouverture, ou la sortie, ne l'ait périmé entre-temps. */
+  const attach = async (result: CameraOpenResult, generation: number) => {
+    const current = generation === generationRef.current && !closedRef.current;
+    if (!current) {
+      if (result.ok) engine.release(result.stream);
+      return;
+    }
+    handoffRef.current = null;
+    setSwitching(false);
+    if (!result.ok) {
+      setStatus('unavailable');
+      return;
+    }
+    streamRef.current = result.stream;
+    setTorch(result.torch);
+    zoomRangeRef.current = result.zoom;
+    zoomRef.current = result.zoom.min;
+    setZoomState(result.zoom.min);
+    const video = videoRef.current;
+    if (video !== null) {
+      video.srcObject = result.stream;
+      void video.play?.()?.catch(() => undefined);
+      await engine.live(video);
+    }
+    if (generation === generationRef.current && !closedRef.current) setStatus('live');
+  };
+
   useEffect(() => {
-    let alive = true;
+    generationRef.current += 1;
+    const generation = generationRef.current;
     setStatus('opening');
-    void engine.open(facing).then(async (result) => {
-      if (!alive) {
-        if (result.ok) engine.release(result.stream);
-        return;
-      }
-      if (!result.ok) {
-        setStatus('unavailable');
-        return;
-      }
-      streamRef.current = result.stream;
-      setTorch(result.torch);
-      zoomRangeRef.current = result.zoom;
-      zoomRef.current = result.zoom.min;
-      setZoomState(result.zoom.min);
-      const video = videoRef.current;
-      if (video !== null) {
-        video.srcObject = result.stream;
-        void video.play?.()?.catch(() => undefined);
-        await engine.live(video);
-      }
-      if (alive) setStatus('live');
-    });
+    const pending = (attempt === 0 ? preopened?.() : null) ?? engine.open(facingRef.current);
+    void pending.then((result) => attach(result, generation));
     return () => {
-      alive = false;
+      generationRef.current += 1;
       releaseStream();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facing, engine, attempt]);
+  }, [engine, attempt]);
+
+  /* LA BASCULE AVANT ↔ ARRIÈRE (#10308) — l'image de l'ancienne optique ne
+     reste pas figée à l'écran : l'aperçu se vide le temps de la bascule.
+     L'ancien flux est REMIS au moteur, qui arrête sa vidéo avant de demander
+     l'autre optique et garde son micro (`acquireCamera`). Encore en train de
+     s'ouvrir, la caméra rouvre simplement de l'autre côté. */
+  const flip = () => {
+    if (recordingRef.current !== null || handoffRef.current !== null) return;
+    const next: CameraFacing = facingRef.current === 'user' ? 'environment' : 'user';
+    facingRef.current = next;
+    setFacing(next);
+    autoRef.current = true;
+    generationRef.current += 1;
+    const generation = generationRef.current;
+    const previous = streamRef.current;
+    streamRef.current = null;
+    handoffRef.current = previous;
+    const video = videoRef.current;
+    if (video !== null) video.srcObject = null;
+    setStatus('opening');
+    setSwitching(previous !== null);
+    const pending = previous === null ? engine.open(next) : engine.open(next, previous);
+    void pending.then((result) => {
+      if (!result.ok && previous !== null && handoffRef.current === previous) {
+        handoffRef.current = null;
+        engine.release(previous);
+      }
+      return attach(result, generation);
+    });
+  };
 
   /* AU RETOUR DES RÉGLAGES, LA CAMÉRA SE RALLUME (#9193) — « Réglages » sort
      de l'app (#9032) ; la permission accordée là-bas n'est relue qu'au
@@ -431,6 +516,7 @@ export function StudioCamera({
       ref={rootRef}
       data-story-camera={status}
       data-story-camera-facing={facing}
+      data-story-camera-switching={switching ? '' : undefined}
       data-story-camera-zoom-mode={zoomRangeRef.current.mode}
       role="dialog"
       aria-modal="true"
@@ -454,18 +540,25 @@ export function StudioCamera({
           style={{ backgroundColor: flashFloorColor(intensity) }}
         />
       ) : null}
+      {/* LE LISERÉ (#10309) — aux coins arrondis, À L'EXTÉRIEUR de la fenêtre
+          du flux, jamais dessus : un écart noir les sépare. Pendant la prise
+          il passe au rouge et pulse en fondu ; « réduire les animations »
+          le garde rouge, immobile. */}
+      {floor !== 'full' ? (
+        <span
+          aria-hidden="true"
+          data-story-camera-edge={recording !== null ? 'recording' : 'idle'}
+          className={`pointer-events-none absolute block${recording !== null ? ' motion-safe:animate-pulse' : ''}`}
+          style={{ ...edgeBox(floor), borderStyle: 'solid', borderWidth: EDGE_WIDTH, borderColor: recording !== null ? 'var(--color-error)' : 'rgba(255,255,255,0.35)' }}
+        />
+      ) : null}
       {/* La FENÊTRE du viseur borne l'image : un zoom numérique agrandit la
           vidéo DANS elle, jamais par-dessus l'anneau blanc du flash. */}
       <div
         aria-hidden="true"
+        data-story-camera-window
         className="absolute overflow-hidden"
-        style={{
-          inset: floor === 'ring' ? '14% 10%' : 0,
-          width: floor === 'ring' ? '80%' : '100%',
-          height: floor === 'ring' ? '72%' : '100%',
-          borderRadius: floor === 'ring' ? 28 : 0,
-          visibility: floor === 'full' ? 'hidden' : 'visible',
-        }}
+        style={{ ...windowBox(floor), visibility: floor === 'full' ? 'hidden' : 'visible' }}
       >
         <video
           ref={videoRef}
@@ -619,12 +712,8 @@ export function StudioCamera({
             type="button"
             data-story-camera-flip
             aria-label={translate(lang, 'story.studio.camera.flip')}
-            disabled={recording !== null}
-            onClick={() => {
-              autoRef.current = true;
-              setStatus('opening');
-              setFacing((current) => (current === 'user' ? 'environment' : 'user'));
-            }}
+            disabled={recording !== null || switching}
+            onClick={flip}
             className={ROUND_GLASS}
             style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
           >

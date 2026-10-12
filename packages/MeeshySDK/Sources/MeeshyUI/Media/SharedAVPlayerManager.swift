@@ -153,6 +153,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// `duration` publisher tick (AVFoundation reports it more than once as
     /// the item loads) — the resume seek must happen exactly once per `load()`.
     private var hasAppliedResumeThisLoad = false
+    /// `play()` demandé avant que la reprise soit posée (#10354) : la lecture
+    /// part une fois la tête au bon endroit, jamais depuis zéro avant de sauter.
+    private var playsWhenResumed = false
 
     /// Capture fidèle de l'interaction : une entrée par visionnage réellement
     /// continu, avec son motif de fin. Distinct des `WatchSample` d'engagement,
@@ -280,10 +283,14 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     /// Rend le lecteur que `load()` remplace au pool de `StoryMediaLoader`
-    /// (borné à trois, FIFO) au lieu de le détruire — le retour en arrière
-    /// d'un réel ne repart plus à froid. Tête ramenée au début : on revient à
-    /// un réel, on ne reprend pas au milieu d'une boucle (la reprise servie,
-    /// elle, est réappliquée à l'adoption par `applyResumePositionIfAvailable`).
+    /// (borné à trois) au lieu de le détruire — le retour en arrière d'un réel
+    /// ne repart plus à froid.
+    ///
+    /// La tête RESTE où l'utilisateur l'a laissée quand la position est
+    /// reprenable (#10354, `PlaybackResumeLaw.recycledHead`) : le retour
+    /// reprend là, à l'instant, par un simple `play()`. Ramenée à zéro, elle
+    /// jouait depuis le début pendant le geste, puis un `seek` précis la
+    /// replaçait une fois la page posée — plusieurs secondes sur l'appareil.
     private func recycle(_ outgoing: AVPlayer, for url: URL) {
         guard Self.mayRecycleOutgoingPlayer(
             isReadyToPlay: outgoing.currentItem?.status == .readyToPlay,
@@ -291,14 +298,22 @@ public final class SharedAVPlayerManager: ObservableObject {
         ) else { return }
         Self.dropLoopSuccessors(of: outgoing)
         outgoing.actionAtItemEnd = Self.actionAtItemEnd(looping: false)
-        // Ramené au début PUIS préroulé (#9702) : le lecteur préparé du réel
-        // suivant l'est, celui du réel précédent ne l'était pas — ses tampons
-        // se remplissaient au `play()` du retour en arrière, image figée.
-        outgoing.seek(to: .zero, toleranceBefore: .zero, toleranceAfter: .zero) { finished in
+        let rewind = PlaybackResumeLaw.recycledHead(
+            position: outgoing.currentTime().seconds,
+            duration: outgoing.currentItem?.duration.seconds ?? .nan,
+            isResumable: Self.isResumable)
+        StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
+        guard let rewind else {
+            // Préroulé là où il est (#9702) : ses tampons sont pleins au
+            // `play()` du retour en arrière, l'image ne fige pas.
+            Self.prerollIfIdle(outgoing)
+            return
+        }
+        outgoing.seek(to: CMTime(seconds: rewind, preferredTimescale: 600),
+                      toleranceBefore: .zero, toleranceAfter: .zero) { finished in
             guard finished else { return }
             Task { @MainActor in Self.prerollIfIdle(outgoing) }
         }
-        StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
     }
 
     /// `preroll` lève une exception sur un lecteur qui joue ou dont l'élément
@@ -329,6 +344,18 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     public func play() {
         guard let player else { return }
+        // La reprise se pose AVANT la lecture (#10354) — ici, pour un lecteur
+        // adopté déjà prêt, la consommation servie étant remise entre `load()`
+        // et `play()`. Élément pas encore prêt : la lecture attend que
+        // `applyResumePositionIfAvailable` l'ait posée.
+        if !hasAppliedResumeThisLoad {
+            playsWhenResumed = false
+            applyResumePositionIfAvailable()
+            guard hasAppliedResumeThisLoad else {
+                playsWhenResumed = true
+                return
+            }
+        }
         PlaybackCoordinator.shared.willStartPlaying(video: self)
         // Session de lecture via la source UNIQUE (call-aware) : ne reconfigure
         // pas la session pendant un appel VoIP — la vidéo joue alors sous la
@@ -349,7 +376,23 @@ public final class SharedAVPlayerManager: ObservableObject {
         emitWatchSample()
     }
 
+    /// **La pause du réel qu'on quitte, pendant le geste** (#10354).
+    ///
+    /// `pause()` envoie aussi le rapport de visionnage et écrit la position
+    /// de reprise — du travail qui figeait la page à mi-course. Ici, seul le
+    /// lecteur s'arrête et le passage en cours se clôt : le rapport part au
+    /// `cleanup()` du `load()` suivant, une fois la page posée, ou au prochain
+    /// `pause()`. `isPlaying` suit par l'observation du débit.
+    public func pauseForSwitch() {
+        playsWhenResumed = false
+        guard let player else { return }
+        emitWatchSample()
+        stretchTracker.pause(positionMs)
+        player.pause()
+    }
+
     public func pause() {
+        playsWhenResumed = false
         emitWatchSample()
         // Clôt AVANT le rapport, qui draine la trace : sinon le dernier passage
         // resterait ouvert et manquerait à l'envoi.
@@ -492,6 +535,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     private func tearDown() {
+        pipCreationTask?.cancel()
+        pipCreationTask = nil
+        pendingPipLayer = nil
         stopPip()
         cleanup()
         if !activeURL.isEmpty { activeURL = "" }
@@ -549,10 +595,55 @@ public final class SharedAVPlayerManager: ObservableObject {
         !teardownWasInternal
     }
 
+    /// La surface qui a demandé un PiP DIFFÉRÉ, et la création qui l'attend.
+    private weak var pendingPipLayer: AVPlayerLayer?
+    private var pipCreationTask: Task<Void, Never>?
+
+    /// Le délai d'un PiP différé : la page vient de se poser, la création du
+    /// contrôleur (≈ 3 % du fil principal mesurés au balayage, #10354) passe
+    /// après la dernière image du défilement.
+    nonisolated static let deferredPipDelay: Duration = .milliseconds(250)
+
+    /// Pure : la création différée a encore un sens — la couche montre
+    /// toujours le lecteur du moteur, et aucun contrôleur ne la sert déjà.
+    public nonisolated static func mayCreateDeferredPip(layerShowsEnginePlayer: Bool, alreadyServed: Bool) -> Bool {
+        layerShowsEnginePlayer && !alreadyServed
+    }
+
     /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
-    public func configurePip(playerLayer: AVPlayerLayer) {
+    ///
+    /// `deferred` (#10354) : le lecteur de réels demande son contrôleur pour
+    /// la page POSÉE ; la création attend `deferredPipDelay`, coalescée — une
+    /// rafale de demandes (montage, `load()`, mise à jour) n'en crée qu'un, et
+    /// une demande dont la couche ne montre plus le moteur ne crée rien. Le
+    /// passage automatique en arrière-plan
+    /// (`canStartPictureInPictureAutomaticallyFromInline`) reste posé.
+    public func configurePip(playerLayer: AVPlayerLayer, deferred: Bool = false) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
         guard pipController?.playerLayer !== playerLayer else { return }
+        guard deferred else {
+            createPipController(for: playerLayer)
+            return
+        }
+        pendingPipLayer = playerLayer
+        guard pipCreationTask == nil else { return }
+        pipCreationTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.deferredPipDelay)
+            // Annulée par `tearDown()`, la tâche ne touche plus à rien : une
+            // demande neuve a peut-être déjà pris sa place.
+            guard let self, !Task.isCancelled else { return }
+            self.pipCreationTask = nil
+            guard let layer = self.pendingPipLayer else { return }
+            self.pendingPipLayer = nil
+            guard Self.mayCreateDeferredPip(
+                layerShowsEnginePlayer: self.player != nil && layer.player === self.player,
+                alreadyServed: self.pipController?.playerLayer === layer
+            ) else { return }
+            self.createPipController(for: layer)
+        }
+    }
+
+    private func createPipController(for playerLayer: AVPlayerLayer) {
         // Une fenêtre PiP ouverte (ou en train de s'ouvrir) garde SON
         // contrôleur : une surface qui se monte pendant ce temps — la bulle
         // restée sous un plein écran qu'on ferme — le remplacerait et tuerait
@@ -707,25 +798,50 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     /// Seeks to the saved resume position (if any) BEFORE playback starts.
-    /// Called once per `load()` from the `duration` publisher sink, guarded by
-    /// `hasAppliedResumeThisLoad` — AVFoundation republishes `duration` more
-    /// than once while the item loads.
+    /// Called once per `load()` — from `play()` when the adopted item is
+    /// already ready, otherwise from the `status` / `duration` sinks — guarded
+    /// by `hasAppliedResumeThisLoad` (AVFoundation republishes `duration` more
+    /// than once while the item loads).
+    ///
+    /// #10354 — la tête d'un lecteur ADOPTÉ est souvent déjà sur la reprise
+    /// (rendu au pool à sa place, joué pendant le geste) : aucun `seek`,
+    /// seulement `play()`. Sinon UN `seek` tolérant (`PlaybackResumeLaw`), au
+    /// lieu du `seek` précis qui décodait depuis l'image-clé précédente sur un
+    /// lecteur qui jouait déjà. Un `play()` demandé entre-temps part ici.
     ///
     /// #7212 — la position servie par la passerelle comble l'ABSENCE locale, par
     /// la MÊME fonction que la vignette interroge pour teindre sa barre
     /// (`MediaResumeResolver`), et sur la paire de champs du médium VIDÉO
     /// (`lastWatchPositionMs` / `watchedComplete`).
     private func applyResumePositionIfAvailable() {
-        guard !hasAppliedResumeThisLoad, duration > 0, let attId = attachmentId else { return }
+        guard !hasAppliedResumeThisLoad, let player, let item = player.currentItem else { return }
+        let total = Self.finiteSeconds(item.duration)
+        guard total > 0 || item.status != .unknown else { return }
         hasAppliedResumeThisLoad = true
-        guard let saved = MediaResumeResolver.resumePosition(
-            localPositionSeconds: VideoPlaybackPositionStore.shared.position(for: attId),
-            servedConsumption: MediaResumeResolver.heldConsumption(servedConsumption, matching: attId),
-            medium: .video,
-            totalDuration: duration,
-            isEligible: Self.isResumable)
-        else { return }
-        seek(to: saved)
+        let saved = attachmentId.flatMap { attId in
+            MediaResumeResolver.resumePosition(
+                localPositionSeconds: VideoPlaybackPositionStore.shared.position(for: attId),
+                servedConsumption: MediaResumeResolver.heldConsumption(servedConsumption, matching: attId),
+                medium: .video,
+                totalDuration: total,
+                isEligible: Self.isResumable)
+        }
+        if case .seek(let target) = PlaybackResumeLaw.action(
+            saved: saved, current: Self.finiteSeconds(player.currentTime())
+        ) {
+            seek(to: target, precise: false)
+            // Le visionnage ouvert au `play()` qui suit part de la reprise, pas
+            // de zéro : l'observateur périodique ne l'a pas encore relevée.
+            if currentTime != target { currentTime = target }
+        }
+        guard playsWhenResumed else { return }
+        playsWhenResumed = false
+        play()
+    }
+
+    private nonisolated static func finiteSeconds(_ time: CMTime) -> Double {
+        let seconds = time.seconds
+        return seconds.isFinite ? max(0, seconds) : 0
     }
 
     /// Saves `elapsed` as the resume point for `id`, or clears any stored
@@ -749,6 +865,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.isMuted = effectiveMuted
         if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
         applyLoop(to: player)
+        // La tête d'un lecteur adopté n'est pas à zéro (#10354) : le visionnage
+        // qui commencera au `play()` part de là, pas de la valeur effacée par
+        // `cleanup()` — sinon la trace compterait de zéro à la reprise.
+        let head = Self.finiteSeconds(player.currentTime())
+        if currentTime != head { currentTime = head }
 
         // The active reel is on-screen: lift the offscreen preroll bitrate cap so
         // ABR can pick the best rendition (thermal-aware — stays capped when hot).
@@ -795,6 +916,16 @@ public final class SharedAVPlayerManager: ObservableObject {
                 guard let self else { return }
                 let seconds = cmDuration.seconds
                 self.duration = seconds.isNaN || seconds.isInfinite ? 0 : seconds
+                self.applyResumePositionIfAvailable()
+            }
+            .store(in: &cancellables)
+
+        // Un élément prêt sans durée finie, ou en échec, libère aussi la
+        // lecture retenue par la reprise (#10354).
+        player.currentItem?.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
                 self.applyResumePositionIfAvailable()
             }
             .store(in: &cancellables)
@@ -872,6 +1003,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         watchClockStart = nil
         lastHeartbeat = 0
         hasAppliedResumeThisLoad = false
+        playsWhenResumed = false
         attachmentId = nil
         pipController = nil
         pipDelegate = nil

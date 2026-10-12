@@ -53,6 +53,20 @@ final class GameSourceGuardTests: XCTestCase {
         XCTAssertTrue(view.contains("prepareShare()"), "« Partager » crée le jeton, puis ouvre la feuille")
     }
 
+    // MARK: - Le cadre est le déclencheur (#10284)
+
+    /// Directive porteur 2026-10-12 : « le cadre sont les bouton d'enregistrement ». Le déroulé du jeu ne
+    /// porte AUCUN cercle d'enregistrement à côté du cadre : la case du cadre déclenche, la scène prend hors cadre.
+    func test_thePhotoFlowHasNoRecordCircleBesideTheFrame() throws {
+        let photo = iosRoot.appendingPathComponent("Meeshy/Features/Main/Game/Photo")
+        let view = try String(contentsOf: photo.appendingPathComponent("GamePhotoFlowView.swift"), encoding: .utf8)
+        XCTAssertFalse(view.contains("game.photo.shutter"), "plus de déclencheur rond à côté du cadre")
+        XCTAssertFalse(view.contains("session.shutter("), "la prise passe par la table des gestes")
+        XCTAssertTrue(view.contains("game.photo.frame_trigger"), "la case du cadre est le déclencheur")
+        XCTAssertTrue(view.contains("on: .chosenThumbnail"), "la case du cadre lit la table des gestes du composer")
+        XCTAssertTrue(view.contains("on: .scene"), "la scène prend hors cadre")
+    }
+
     // MARK: - Les clés d'usage et la fréquence d'images
 
     private func infoPlist() throws -> [String: Any] {

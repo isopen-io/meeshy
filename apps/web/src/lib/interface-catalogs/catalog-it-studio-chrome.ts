@@ -77,6 +77,7 @@ const itStudioChrome = {
   'story.studio.camera.quick.photo': 'Scatta una foto',
   'story.studio.camera.quick.video': 'Filma',
   'story.studio.camera.title': 'Fotocamera',
+  'story.studio.background.cameraHold': 'Tieni premuto: apri la fotocamera',
   'story.studio.camera.close': 'Torna alla scena',
   'story.studio.camera.flip': 'Cambia fotocamera',
   'story.studio.camera.flash': 'Flash',

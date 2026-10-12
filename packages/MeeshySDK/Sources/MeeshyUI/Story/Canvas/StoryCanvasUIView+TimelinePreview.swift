@@ -99,9 +99,14 @@ extension StoryCanvasUIView {
     /// « ouvrir l'outil timeline » (directive user 2026-07-30) ; l'autre est le
     /// bouton lecture/pause de la timeline, porté par l'engine lui-même. Toute
     /// autre manipulation du canvas laisse la boucle intacte.
+    ///
+    /// La phase partagée des canevas d'édition (#10362) s'oublie avec : sans
+    /// cela, la sortie reprendrait la boucle où elle en était au lieu de la
+    /// relancer.
     private func enterTimelinePreview() {
         audioMixer.stop()
         lastAudioConfigRevision = nil
+        Self.editAudioPhase = nil
     }
 
     /// Sortie de preview : redonne le canvas au mode édition nominal — les

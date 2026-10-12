@@ -717,14 +717,16 @@ extension MeeshyComposerHost {
     /// rend `false` pour un fichier qui n'est pas *scoped* — ce n'est pas un
     /// échec, la copie est tentée quel que soit ce retour, et `stop…` n'est
     /// appelé que si `start` a rendu `true`.
-    func ingestSoundFiles(_ urls: [URL]) async {
+    /// `placement` impose le rôle (un fichier audio arrivé par la porte média
+    /// est un son POSÉ, #10363) ; absent, le choix de la feuille son décide.
+    func ingestSoundFiles(_ urls: [URL], placement: ComposerAudioRole? = nil) async {
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
             let destination = FileManager.default.temporaryDirectory
                 .appendingPathComponent("composer_sound_\(UUID().uuidString)_\(sourceURL.lastPathComponent)")
             guard (try? FileManager.default.copyItem(at: sourceURL, to: destination)) != nil else { continue }
-            switch chosenSoundPlacement {
+            switch placement ?? chosenSoundPlacement {
             case .background:
                 attachBackgroundSound(url: destination)
             case .foreground:

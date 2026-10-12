@@ -1714,6 +1714,7 @@ public actor MessagePersistenceActor {
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
+                    existing.senderIsAnonymous = api.sender.map(\.isAnonymous) ?? existing.senderIsAnonymous; existing.senderHasAccount = api.sender.map(\.hasAccount) ?? existing.senderHasAccount
                     existing.effectFlags = effectFlags
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
@@ -1828,7 +1829,8 @@ public actor MessagePersistenceActor {
                         stickerJson: stickerJson,
                         // #7508 — le seul porteur d'horloge du temps réel.
                         ephemeralDuration: api.ephemeralDuration,
-                        trackedLinksJson: trackedLinksJson
+                        trackedLinksJson: trackedLinksJson,
+                        senderIsAnonymous: api.sender.map(\.isAnonymous), senderHasAccount: api.sender.map(\.hasAccount)
                     )
                     if api.consumedByMe == true {
                         record.sealAsOpenedViewOnce(at: Date())

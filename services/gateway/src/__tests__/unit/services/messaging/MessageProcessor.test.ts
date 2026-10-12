@@ -338,17 +338,19 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
     );
   });
 
-  // Un participant anonyme n'a AUCUN `User.id` : le schéma prévoit `null`
-  // (« null si anonyme »). Y laisser le `Participant.id` attribuait le lien à
-  // un id qui ne désigne aucun utilisateur.
-  it('laisse le lien sans propriétaire pour un expéditeur anonyme', async () => {
-    partFindUnique.mockResolvedValue({ userId: null });
-
-    await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
-
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ createdBy: undefined })
-    );
+  // #10286 — un invité anonyme ne fait JAMAIS de ses adresses des liens suivis :
+  // ni `m+<token>`, ni carte `metadata.trackingLinks`, texte tel qu'écrit.
+  it.each([[{ type: 'anonymous', userId: null }], [{ type: 'user', userId: null }], [null]])(
+    'ne suit aucune adresse d’un expéditeur non inscrit (%j)', async (sender) => {
+    partFindUnique.mockResolvedValue(sender);
+    mockCollectContentTrackingLinks.mockResolvedValue([{ url: 'https://evil.example', token: 'tok-1' }]);
+    const content = 'regarde <https://evil.example>, https://evil.example et m+abc12 tel quel';
+    await processor.saveMessage({ ...baseData, content });
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(mockCollectContentTrackingLinks).not.toHaveBeenCalled();
+    const data = msgCreate.mock.calls[0][0].data;
+    expect(data.content).toBe(content);
+    expect(data.metadata?.trackingLinks).toBeUndefined();
   });
 
   it('ne résout rien quand le message ne porte aucune URL', async () => {
@@ -358,15 +360,13 @@ describe('MessageProcessor.saveMessage — le propriétaire du lien de suivi', (
   });
 
   // La résolution est best-effort : elle ne doit pas faire échouer l'envoi.
-  it('envoie quand même, sans propriétaire, si la résolution échoue', async () => {
+  // Fail-closed (#10286) : sans preuve d'un compte inscrit, rien n'est suivi.
+  it('envoie quand même, texte tel qu’écrit et sans lien suivi, si la résolution échoue', async () => {
     partFindUnique.mockRejectedValue(new Error('DB down'));
-
     const result = await processor.saveMessage({ ...baseData, content: 'regarde <https://example.com>' });
-
     expect(result).toBeDefined();
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ createdBy: undefined })
-    );
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(msgCreate.mock.calls[0][0].data.content).toBe('regarde <https://example.com>');
   });
 });
 
@@ -806,8 +806,8 @@ describe('MessageProcessor.saveMessage', () => {
   });
 
   it('updates tracking link messageIds when <url> was processed', async () => {
-    // La réécriture est le SIGNAL : `saveMessage` rattache les liens au message
-    // seulement quand le contenu traité diffère de celui qu'on lui a donné.
+    // La réécriture (d'un compte inscrit) est le SIGNAL du rattachement.
+    partFindUnique.mockResolvedValue({ type: 'user', userId: 'u-author' });
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
     await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
     expect(tlUpdateMany).toHaveBeenCalled();
@@ -823,9 +823,9 @@ describe('MessageProcessor.saveMessage', () => {
    * n'était jamais écrite. « `tlUpdateMany` a été appelé » ne peut pas voir ça.
    */
   it('rattache un lien dont la colonne messageId est ABSENTE, sans voler celui d\'un autre message', async () => {
+    partFindUnique.mockResolvedValue({ type: 'user', userId: 'u-author' });
     mockProcessExplicitLinksInContent.mockResolvedValue({ processedContent: 'm+tok-abc', trackingLinks: [] });
     await processor.saveMessage({ ...baseData, content: '<https://example.com>' });
-
     const { where } = tlUpdateMany.mock.calls[0][0] as any;
     const fresh = { token: 'tok-abc', conversationId: baseData.conversationId };
 

@@ -7,6 +7,12 @@ public protocol StoppablePlayer: AnyObject {
     func stop()
 }
 
+/// Un lecteur qui sait s'éteindre en fondu plutôt que se couper net (#9867).
+@MainActor
+public protocol FadingStoppablePlayer: StoppablePlayer, Sendable {
+    func fadeOutAndStop(duration: TimeInterval) async
+}
+
 // MARK: - Playback Coordinator
 
 @MainActor
@@ -136,6 +142,19 @@ public final class PlaybackCoordinator {
             weak.player?.stop()
         }
         stopAllExternal(except: nil)
+    }
+
+    /// Éteint en fondu chaque lecteur externe qui le sait, en parallèle, et
+    /// rend la main quand tous sont arrêtés. Appelé par le lecteur de stories
+    /// au début de sa fermeture : le son descend pendant le ressort au lieu de
+    /// se couper net quand la vue disparaît (#9867). Les lecteurs sans fondu
+    /// ne sont pas touchés — `stopAll()` les arrête à la disparition.
+    public func fadeOutAllExternal(duration: TimeInterval) async {
+        pruneDeadReferences()
+        let fades = externalPlayers.values
+            .compactMap { $0.player as? FadingStoppablePlayer }
+            .map { player in Task { await player.fadeOutAndStop(duration: duration) } }
+        for fade in fades { await fade.value }
     }
 
     // MARK: - Cleanup

@@ -421,6 +421,7 @@ extension MeeshyComposerHost {
             // La surface, elle, ne compte rien : elle relaie.
             railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
+            onRailDoorLongPress: railDoorLongPress,
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
@@ -682,9 +683,7 @@ extension MeeshyComposerHost {
         return AnyView(
             ComposerSceneDescriptionPanel(
                 text: sceneDescriptionBinding,
-                placeholder: String(localized: "composer.description.placeholder",
-                                    defaultValue: "Ajouter une description",
-                                    bundle: .main),
+                placeholder: ComposerDescriptionCopy.amorce,
                 isCollapsed: $sceneDescriptionCollapsed,
                 // **L'encre suit le FOND** (#6127). Même loi que le reste du
                 // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois

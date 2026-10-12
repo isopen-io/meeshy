@@ -19,6 +19,7 @@ import type { SyncIdentity } from './identity';
 import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
+import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
 import { selectForFields, restrictFields, isFieldServed, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { loadReaderReactionsByMessage } from '../conversations/messages-reader-reactions';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
@@ -211,6 +212,10 @@ export const syncMessagePlan: ColumnPlan<typeof syncMessageSelect> = {
     // ordinaire comprise (fail-closed), et ses caches clients changeraient
     // d'adresse à chaque pas.
     attachments: ['attachments', ...PROTECTION_KEYS],
+    // #10286 — la carte de liens suivis ne se sert que si l'expéditeur est un
+    // compte inscrit : sans lui chargé, `servedLinkMetadata` la retiendrait
+    // aussi aux messages des inscrits (fail-closed). Lu, pas servi.
+    metadata: ['metadata', 'sender'],
   },
 };
 
@@ -283,6 +288,7 @@ function serializeSyncMessage(
             brut.translations as unknown as Record<string, MessageTranslationJSON> | null,
           ),
         }),
+    ...(brut.metadata === undefined ? {} : { metadata: servedLinkMetadata(brut.metadata, brut.sender) }),
     ...(brut.attachments === undefined
       ? {}
       : {

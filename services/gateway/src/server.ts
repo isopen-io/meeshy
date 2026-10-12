@@ -869,9 +869,9 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     if (agentHost) {
       // #10242 — sans secret interne, aucun appel HTTP ne part vers l'agent (fermé) : on le dit UNE fois, fort.
       if (!agentInternalTokenConfigured()) {
-        logger.error('❌ AGENT_HOST is set but AGENT_INTERNAL_TOKEN is missing or shorter than 32 characters — every HTTP call to the agent is refused');
-      }
-      try {
+        // #10288 — le canal ZMQ est signé par ce même secret : sans lui, l'agent rejetterait tout.
+        logger.error('❌ AGENT_HOST is set but AGENT_INTERNAL_TOKEN is missing or shorter than 32 characters — every HTTP call and ZMQ event to the agent is refused');
+      } else try {
         this.agentClient = new ZmqAgentClient(agentHost, 5560, 5561);
         await this.agentClient.initialize();
         logger.info(`✓ Agent ZMQ client initialized (${agentHost}:5560/5561)`);

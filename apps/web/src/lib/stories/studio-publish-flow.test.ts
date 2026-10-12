@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ApiFailure, ApiResult } from '@/lib/api/http';
+import { createHttpTransport, type ApiFailure, type ApiResult } from '@/lib/api/http';
 
-import { runStudioPublish, studioPublicationContent, type StudioPublishedEvent } from './studio-publish-flow';
+import { createPublicationKeyring } from './publication-mutation-key';
+import { publishStudioPlan, runStudioPublish, studioPublicationContent, type StudioPublishedEvent } from './studio-publish-flow';
 import type { StudioPublication, StudioPublishPlan } from './studio-publish';
 
 /**
@@ -113,6 +114,59 @@ describe('runStudioPublish — séquentiel, dans l’ordre, arrêt à la premiè
 
     expect(calls).toEqual(['page-1']);
     expect(outcome).toEqual({ kind: 'aborted', published: 1, total: 3 });
+  });
+});
+
+/**
+ * L'ANNULATION PAR L'AUTEUR (#10316) — une publication en attente se retire
+ * de l'envoi, y compris quand la requête est DÉJÀ partie : la requête est
+ * coupée, et la clé d'idempotence fait qu'un rejeu du même contenu ne publie
+ * jamais deux fois ce que le serveur aurait reçu avant la coupure.
+ */
+describe('publishStudioPlan — annulable en vol, idempotent au rejeu (#10316)', () => {
+  function heldGateway() {
+    const calls: Array<{ readonly mutationId: string | null; readonly signal: AbortSignal | undefined }> = [];
+    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      calls.push({ mutationId: headers.get('X-Client-Mutation-Id'), signal: init?.signal ?? undefined });
+      return new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        setTimeout(() => resolve(new Response(JSON.stringify({ success: true, data: { id: `post-${calls.length}` } }), { status: 201 })), 5);
+      });
+    }) as typeof fetch;
+    return { calls, api: { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl }) } };
+  }
+
+  const plan = readyPlan(['page-1']);
+
+  test('l’annulation coupe la requête EN VOL et rend « aborted », jamais un échec', async () => {
+    const gateway = heldGateway();
+    const cancel = new AbortController();
+    const outcome = publishStudioPlan({ plan, api: gateway.api, kind: 'STORY', visibility: null, language: 'fr', signal: cancel.signal, requestSignal: cancel.signal });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(gateway.calls).toHaveLength(1);
+    cancel.abort();
+    expect(await outcome).toEqual({ kind: 'aborted', published: 0, total: 1 });
+    expect(gateway.calls[0]!.signal?.aborted).toBe(true);
+  });
+
+  test('le rejeu du MÊME contenu porte la MÊME clé X-Client-Mutation-Id', async () => {
+    const gateway = heldGateway();
+    const keyring = createPublicationKeyring();
+    await publishStudioPlan({ plan, api: gateway.api, kind: 'STORY', visibility: null, language: 'fr', keyring });
+    await publishStudioPlan({ plan, api: gateway.api, kind: 'STORY', visibility: null, language: 'fr', keyring });
+    expect(gateway.calls).toHaveLength(2);
+    expect(gateway.calls[0]!.mutationId).toMatch(/^cmid_/);
+    expect(gateway.calls[1]!.mutationId).toBe(gateway.calls[0]!.mutationId);
+  });
+
+  test('un contenu retouché part sous une clé neuve', async () => {
+    const gateway = heldGateway();
+    const keyring = createPublicationKeyring();
+    await publishStudioPlan({ plan, api: gateway.api, kind: 'POST', visibility: null, language: 'fr', postText: 'Bonjour', keyring });
+    await publishStudioPlan({ plan, api: gateway.api, kind: 'POST', visibility: null, language: 'fr', postText: 'Bonsoir', keyring });
+    expect(gateway.calls[1]!.mutationId).not.toBe(gateway.calls[0]!.mutationId);
   });
 });
 

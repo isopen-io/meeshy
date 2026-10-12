@@ -119,6 +119,7 @@ const mockPostMentionDeleteMany = jest.fn<any>().mockResolvedValue({ count: 0 })
 
 function makePrisma() {
   return {
+    post: { findFirst: async () => null },
     postMention: {
       findMany: (...args: any[]) => mockPostMentionFindMany(...args),
       deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),

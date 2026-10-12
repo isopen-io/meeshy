@@ -25,6 +25,13 @@ struct ComposerCapturePreview: View {
             && ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
     }
 
+    /// La couche système montre-t-elle l'objectif ? Le vœu suit aussi la bascule,
+    /// qui règle la connexion neuve dans sa transaction (#10308).
+    private var mirrorsSystemLayer: Bool {
+        ComposerCaptureSurfaceRule.mirrorsSystemLayer(paintsWithMetal: session.paintsWithMetal,
+                                                      metalHasFrame: metalHasFrame)
+    }
+
     /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
     private var editedSource: (any ComposerFrameSourcing)? {
         session.phase.isEditing ? session.editSource : nil
@@ -43,8 +50,8 @@ struct ComposerCapturePreview: View {
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
-                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame))
+                                           mirrorsFrames: mirrorsSystemLayer,
+                                           connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre
@@ -88,6 +95,8 @@ struct ComposerCapturePreview: View {
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
+                    .modifier(ComposerCameraSwitchVeilStyle(switching: editedSource == nil
+                                                            && session.camera.isSwitchingCamera))
                     .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
                     .adaptiveOnChange(of: proportions, initial: true) { _, vues in
@@ -97,6 +106,9 @@ struct ComposerCapturePreview: View {
             case .permissionRefused:
                 CameraPermissionPanel()
             }
+        }
+        .adaptiveOnChange(of: mirrorsSystemLayer, initial: true) { _, montre in
+            session.camera.previewMirroring.isWanted = montre
         }
         .adaptiveOnChange(of: session.paintsWithMetal) { _, peint in
             if !peint { metalHasFrame = false }
@@ -225,6 +237,26 @@ struct ComposerCaptureChrome: View {
                         guard cadre.height > 0 else { return }
                         session.setEditAspect(cadre.width / cadre.height)
                     }
+                }
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
+                .transition(.opacity)
+            }
+            // **Lecture et son, en bas à droite de la vidéo** (#10356) : posés
+            // sur la scène, ils quittent la bande et ne lui prennent rien.
+            if !finishing, session.offersEditPlayback, let aspect = session.editAspect {
+                GeometryReader { proxy in
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels)
+                    let rangee = ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone),
+                                                                   hasAudio: session.takeHasAudio,
+                                                                   clearsBrackets: session.showsCropBrackets)
+                    ComposerEditPlaybackControls(paused: session.editPaused,
+                                                 hasAudio: session.takeHasAudio,
+                                                 muted: session.takeSound.muted,
+                                                 onTogglePlayback: { session.toggleEditPlayback() },
+                                                 onToggleMute: { session.toggleTakeMute() })
+                        .frame(width: rangee.width, height: rangee.height)
+                        .position(x: rangee.midX, y: rangee.midY)
                 }
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)

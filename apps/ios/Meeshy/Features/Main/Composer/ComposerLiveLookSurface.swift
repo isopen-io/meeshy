@@ -134,9 +134,12 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
               let frame = source.latestImage(),
               let drawable = view.currentDrawable,
               let buffer = commandQueue.makeCommandBuffer() else { return }
-        let lookPeint = look.frame != ComposerPhotoFrame.none && scene == nil ? ComposerPhotoLook(filter: look.filter) : look
+        let lookPeint = look.frame != ComposerPhotoFrame.none && scene == nil ? look.withoutFrame : look
+        // Une photo figée (retouche) cherche son visage sur elle : elle ne se
+        // repeint qu'à un changement, le suivi n'aurait pas de trame suivante.
         let peinte = ComposerLookPainter.paint(frame, look: lookPeint, framing: framing, scene: scene,
-                                               canvas: canvas, declared: source.declaredSpace)
+                                               canvas: canvas, declared: source.declaredSpace,
+                                               still: source is ComposerStillSource)
         let bounds = CGRect(origin: .zero, size: view.drawableSize)
         let ecran = ComposerLookPainter.onScreen(peinte, canvas: canvas, drawable: view.drawableSize)
         let opaque = ecran.composited(over: CIImage(color: .black).cropped(to: bounds))

@@ -212,7 +212,7 @@ struct ComposerSeedTarget: Identifiable {
                                                      preferredLanguages: preferredLanguages)
         else { return nil }
         self.init(id: "story/\(story.id)",
-                  plan: ComposableAttachment.SeedPlan(media: nil, description: recomposition.description),
+                  plan: ComposableAttachment.seedPlan(recomposingStoryWith: recomposition.description),
                   origin: .socialMedia(postId: story.id, mediaId: nil),
                   recomposition: recomposition)
     }

@@ -256,7 +256,7 @@ export function registerEditMessagePutRoute(
       // soudées dans une unité que tous les écrivains appellent.
       const editedLinks = await reconcileEditedLinks({
         linkService: trackingLinkService,
-        message: { id: messageId, conversationId },
+        message: { id: messageId, conversationId, sender: existingMessage.sender },
         content: editedContent.content,
         editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in edit', err),
@@ -701,7 +701,7 @@ export function registerEditMessagePatchRoute(
       // produit un lien.
       const patchedLinks = await reconcileEditedLinks({
         linkService: trackingLinkService,
-        message: { id: messageId, conversationId: message.conversationId },
+        message: { id: messageId, conversationId: message.conversationId, sender: message.sender },
         content: editedContent.content,
         editorUserId: userId,
         onError: (err) => logger.error('Error processing tracking links in patch edit', err),

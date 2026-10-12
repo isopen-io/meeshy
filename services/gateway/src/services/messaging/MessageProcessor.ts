@@ -12,6 +12,7 @@ import { declaredReplyProtection } from './replyProtectionContagion';
 import { PrismaClient, Message, type Prisma } from '@meeshy/shared/prisma/client';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { processExplicitLinks } from './messageLinks';
+import { linkTrackingAuthorOf, UNTRACKED_LINK_AUTHOR, type LinkTrackingAuthor } from './linkTrackingAuthor';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
@@ -116,25 +117,23 @@ export class MessageProcessor {
   }
 
   /**
-   * L'identité UTILISATEUR derrière le participant expéditeur — la seule que
-   * `TrackingLink.createdBy` accepte de désigner (`/tracking-links` y compare
-   * un `User.id` pour lister « mes liens » ET pour autoriser l'accès).
+   * Qui, derrière le participant expéditeur, a le droit de voir ses adresses
+   * suivies — et au nom de quel `User.id` (`TrackingLink.createdBy`, contre
+   * lequel `/tracking-links` liste « mes liens » ET autorise l'accès).
    *
-   * `undefined` pour un expéditeur anonyme (aucun `User.id`) comme pour une
-   * lecture en échec : dans les deux cas, un lien sans propriétaire vaut mieux
-   * qu'un lien attribué à un id qui ne désigne aucun utilisateur. Même forme et
-   * même raison que `resolveSenderUserId` côté mentions (cf. messageMentions.ts).
+   * Un invité anonyme n'est jamais suivi (#10286), et une lecture en échec non
+   * plus : sans preuve d'un compte inscrit, le texte part tel qu'écrit.
    */
-  private async resolveLinkAuthorUserId(senderParticipantId: string): Promise<string | undefined> {
+  private async resolveLinkTrackingAuthor(senderParticipantId: string): Promise<LinkTrackingAuthor> {
     try {
       const participant = await this.prisma.participant.findUnique({
         where: { id: senderParticipantId },
-        select: { userId: true },
+        select: { userId: true, type: true },
       });
-      return participant?.userId ?? undefined;
+      return linkTrackingAuthorOf(participant);
     } catch (error) {
       logger.error('[MessageProcessor] Error resolving link author', error);
-      return undefined;
+      return UNTRACKED_LINK_AUTHOR;
     }
   }
 
@@ -336,21 +335,21 @@ export class MessageProcessor {
     // sans lien ne produit aucun `TrackingLink`, donc aucun propriétaire à
     // désigner. `containsLinks` couvre les deux syntaxes explicites autant que
     // les URLs brutes : `[[https://…]]` contient une URL.
-    const linkAuthorUserId = this.containsLinks(data.content)
-      ? await this.resolveLinkAuthorUserId(data.senderId)
-      : undefined;
+    //
+    // Un expéditeur non inscrit (invité anonyme, participant introuvable) ne
+    // voit aucune adresse suivie (#10286) : ni réécriture, ni carte.
+    const linkAuthor = this.containsLinks(data.content)
+      ? await this.resolveLinkTrackingAuthor(data.senderId)
+      : UNTRACKED_LINK_AUTHOR;
 
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
-    const processedContent = await performanceLogger.withTiming(
-      'messaging.processLinks',
-      () => this.processLinksInContent(
-        data.content,
-        data.conversationId,
-        linkAuthorUserId,
-        undefined
-      ),
-      corr
-    );
+    const processedContent = linkAuthor.tracked
+      ? await performanceLogger.withTiming(
+          'messaging.processLinks',
+          () => this.processLinksInContent(data.content, data.conversationId, linkAuthor.userId, undefined),
+          corr
+        )
+      : data.content;
 
     // ÉTAPE 2: Get encryption context for this message
     let encryptionContext: MessageEncryptionContext;
@@ -391,9 +390,9 @@ export class MessageProcessor {
     // `metadata.trackingLinks`. Le client rend le lien (texte + façade vidéo) vers
     // `/l/<token>` (capture du clic + redirection) tout en gardant l'URL/aperçu.
     // Ignoré pour les messages chiffrés (contenu vide côté serveur).
-    const trackingLinks = encryptionContext.isEncrypted
+    const trackingLinks = encryptionContext.isEncrypted || !linkAuthor.tracked
       ? []
-      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthorUserId);
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, linkAuthor.userId);
 
     // Les blocs que le CLIENT déclare (`location`, `sticker`) passent par leurs
     // parseurs dédiés — jamais un `metadata` brut, cf. `clientDeclaredMetadata.ts`.

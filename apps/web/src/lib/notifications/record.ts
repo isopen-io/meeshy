@@ -95,9 +95,10 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'gameSection',
 ];
 
-type MetadataNumberField = 'threshold' | 'level';
+/** `tierRank` (#10298) : présent ⇒ le palier est composé par le serveur, titre et corps compris. */
+type MetadataNumberField = 'threshold' | 'level' | 'tierRank';
 
-const METADATA_NUMBER_FIELDS: readonly MetadataNumberField[] = ['threshold', 'level'];
+const METADATA_NUMBER_FIELDS: readonly MetadataNumberField[] = ['threshold', 'level', 'tierRank'];
 
 /**
  * #8860 — le DÉTAIL du contenu (#8857) et le média inline du vocal, que la

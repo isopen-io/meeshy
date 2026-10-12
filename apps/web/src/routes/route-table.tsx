@@ -178,8 +178,11 @@ const chatJoinScreen = () =>
    porte et les refus. */
 const worldEntryScreen = () =>
   Promise.all([import('@/routes/world-entry'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* LA FICHE D'UN LIEN DE PARTAGE monte son formulaire d'édition, dont les
+   libellés `links.create.*` vivent dans le catalogue des familles de liens
+   (#10322). */
 const shareLinkScreen = () =>
-  Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  withLinkFamiliesCatalog(Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen));
 const shareLinkArrivalsScreen = () =>
   Promise.all([import('@/routes/share-link-arrivals'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -478,7 +481,7 @@ export const ROUTES = {
      seul tenant. L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
-  shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLinkNew: { pattern: '/links/share/new', screen: () => withLinkFamiliesCatalog(import('@/routes/share-link-new')) },
   shareLinkArrivals: { pattern: '/links/share/$link/arrivals', screen: shareLinkArrivalsScreen },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
   /* LES TROIS AUTRES FAMILLES (#6408, #6409, #6410) — miroir `Route.trackingLinks`,

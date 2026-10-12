@@ -751,7 +751,7 @@ export class PostService {
     // lecteur anonyme, qu'aucune référence ne peut désigner.
     const post = visible ?? (viewerUserId
       ? await this.prisma.post.findFirst({
-          where: { id: postId, deletedAt: NOT_DELETED },
+          where: { id: postId, deletedAt: NOT_DELETED, visibility: { not: PostVisibility.PRIVATE } },
           select: detailSelect,
         })
       : null);
@@ -1230,7 +1230,7 @@ export class PostService {
         await tx.postImpression.deleteMany({ where: { postId } });
       }
       return tx.post.update({
-        where: { id: postId },
+        where: { id: postId, ...(updateData.visibility && updateData.visibility !== PostVisibility.PRIVATE ? { OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] } : {}) },
         data: updateData,
         select: postInclude,
       });

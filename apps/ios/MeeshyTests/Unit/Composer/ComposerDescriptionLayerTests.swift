@@ -11,10 +11,8 @@ final class ComposerDescriptionLayerTests: XCTestCase {
 
     // MARK: - Les libellés
 
-    /// **Deux libellés, et ils ne disent pas la même chose.** L'amorce décrit le
-    /// GESTE et appartient au calque ; l'invite du champ décrit le CONTENU et
-    /// appartient à l'hôte. Les confondre donnerait soit une amorce muette sur
-    /// ce qu'il faut faire, soit une invite qui parle d'un tap déjà fait.
+    /// Trois rôles, trois phrases : l'invite de la zone, l'indice du geste et
+    /// la fermeture.
     func test_lesLibellesDuCalque_sontDistinctsEtNonVides() {
         let libelles = [ComposerDescriptionCopy.amorce,
                         ComposerDescriptionCopy.editHint,
@@ -29,6 +27,50 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     /// geste, la seconde le contenu attendu.
     func test_lAmorce_nEstPasLInviteDuChamp() {
         XCTAssertNotEqual(ComposerDescriptionCopy.amorce, ComposerDocumentCopy.placeholder)
+    }
+
+    /// **#10359 — un seul mot pour une seule zone.** Au repos, la légende vide
+    /// disait « Touchez pour écrire » (un geste) ; ouverte, le champ disait
+    /// « Ajouter une description » (un autre nom). Le porteur veut l'invite
+    /// « Ajouter une légende », la même avant et pendant la saisie : le volet
+    /// reçoit donc l'amorce elle-même, et l'ancienne clé quitte le catalogue.
+    func test_10359_leChampOuvert_porteLaMemeInviteQueLeRepos() throws {
+        let surfaces = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift"))
+        XCTAssertTrue(surfaces.contains("ComposerSceneDescriptionPanel("),
+                      "Le fusible : la garde doit lire le site qui monte le volet.")
+        XCTAssertTrue(surfaces.contains("placeholder:ComposerDescriptionCopy.amorce,"),
+                      "Le champ ouvert dit la même chose que la légende au repos.")
+        XCTAssertFalse(surfaces.contains("composer.description.placeholder"),
+                       "Une seconde clé pour la même zone ferait diverger les deux invites.")
+    }
+
+    /// **#10359 — l'invite se lit « Ajouter une légende »**, dans la langue
+    /// source comme en anglais. Lu au catalogue, pas à la résolution : la
+    /// langue du simulateur de test ne décide pas du verdict.
+    func test_10359_lAmorce_ditAjouterUneLegende() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any]
+        let locs = (strings?["composer.description.amorce"] as? [String: Any])?["localizations"] as? [String: Any]
+        func valeur(_ langue: String) -> String? {
+            ((locs?[langue] as? [String: Any])?["stringUnit"] as? [String: Any])?["value"] as? String
+        }
+        XCTAssertEqual(valeur("fr"), "Ajouter une légende")
+        XCTAssertEqual(valeur("en"), "Add a caption")
+        XCTAssertNil(strings?["composer.description.placeholder"],
+                     "La clé de l'ancienne invite n'a plus de lecteur.")
+    }
+
+    /// **#10359 — l'invite a la forme d'une invite, pas d'un indice.** Plus
+    /// d'italique, ni au repos ni dans le champ : les deux portent la même
+    /// opacité d'invite sur l'encre de scène.
+    func test_10359_lInvite_nEstPlusEnItalique() throws {
+        let calque = compact(try composer("ComposerDescriptionLayer.swift"))
+        XCTAssertFalse(calque.contains(".italic()"))
+        XCTAssertTrue(calque.contains("Text(ComposerDescriptionCopy.amorce).font(MeeshyFont.relative(MeeshyFont.bodySize)).foregroundColor(encre.opacity(ComposerDescriptionCopy.amorceOpacity))"),
+                      "Au repos : l'encre de scène, à l'opacité d'invite.")
+        XCTAssertTrue(calque.contains("prompt:Text(placeholder).foregroundColor(encre.opacity(ComposerDescriptionCopy.amorceOpacity))"),
+                      "En saisie : la même forme.")
     }
 
     // MARK: - Les sources

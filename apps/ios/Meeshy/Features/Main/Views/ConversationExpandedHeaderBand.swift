@@ -227,6 +227,9 @@ struct ConversationHeaderMidContent: View {
     let layout: ConversationHeaderLayout
     let titleAndTags: () -> AnyView
     let actionButtons: () -> AnyView
+    /// La bascule de l'en-tête quand l'avatar ouvre une fiche (#10300) : la zone
+    /// libre — l'espace avant les actions replié, la colonne du titre dépliée.
+    var onToggleBand: (() -> Void)? = nil
 
     var body: some View {
         if layout.showsTitle && layout.showsActions {
@@ -239,6 +242,7 @@ struct ConversationHeaderMidContent: View {
             }
         } else if layout.showsTitle {
             titleAndTags()
+                .modifier(HeaderBandToggleArea(onToggle: onToggleBand))
         } else {
             // Le bouton d'appel reste à côté de la recherche dans les DEUX
             // états : le repli ne bascule que la zone nom/tags.
@@ -246,6 +250,7 @@ struct ConversationHeaderMidContent: View {
                 Spacer()
                 actionButtons()
             }
+            .modifier(HeaderBandToggleArea(onToggle: onToggleBand))
         }
     }
 }

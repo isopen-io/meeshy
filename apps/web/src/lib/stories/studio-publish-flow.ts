@@ -3,6 +3,7 @@ import type { ApiResult } from '@/lib/api/http';
 import { publishStory, type PublishStoryResult } from '@/lib/api/stories-publish';
 
 import type { ChoosableAudience } from './publication-audience';
+import { publicationFingerprint, type PublicationKeyring } from './publication-mutation-key';
 import type { PublicationKind } from './publication-kind';
 import { studioFailureKey, type StudioFailureKey } from './studio-page';
 import type { StudioPublication, StudioPublishPlan } from './studio-publish';
@@ -38,7 +39,10 @@ export type StudioPublishOutcome =
  * jamais une requête en vol** — il n'est lu qu'ENTRE deux requêtes (miroir
  * `guard !Task.isCancelled`, `PublicationUpload.swift:120`) : une création
  * abandonnée en route peut avoir été commise côté serveur sans que l'écran le
- * sache, et un retry la publierait deux fois.
+ * sache. Seule l'ANNULATION de l'auteur (#10316) coupe la requête en vol —
+ * `publishStudioPlan` la transmet au transport, et la clé d'idempotence fait
+ * qu'un rejeu du même contenu ne publie jamais deux fois. Une requête coupée
+ * par CE signal rend `aborted`, jamais un échec.
  */
 export async function runStudioPublish(params: {
   readonly plan: Extract<StudioPublishPlan, { kind: 'ready' }>;
@@ -50,9 +54,11 @@ export async function runStudioPublish(params: {
 }): Promise<StudioPublishOutcome> {
   const total = params.plan.publications.length;
   const postIds: string[] = [];
+  const stopped = (): boolean => params.signal?.aborted === true;
   for (const publication of params.plan.publications) {
-    if (params.signal?.aborted === true) return { kind: 'aborted', published: postIds.length, total };
+    if (stopped()) return { kind: 'aborted', published: postIds.length, total };
     const result = await params.publish(publication);
+    if (!result.ok && result.code === 'ABORTED' && stopped()) return { kind: 'aborted', published: postIds.length, total };
     if (!result.ok) {
       return { kind: 'failed', failure: studioFailureKey(result, 'publish') ?? 'story.studio.failure.network', published: postIds.length, total };
     }
@@ -115,6 +121,12 @@ export function publishStudioPlan(params: {
   readonly alsoAsReel?: boolean;
   readonly onPublished?: (event: StudioPublishedEvent) => void;
   readonly signal?: AbortSignal;
+  /** L'ANNULATION de l'auteur (#10316) — la seule qui coupe une requête EN
+   * VOL ; `signal` doit être abandonné avec elle pour que la séquence rende
+   * `aborted`. */
+  readonly requestSignal?: AbortSignal;
+  /** Une clé par contenu, stable au rejeu (`X-Client-Mutation-Id`, #10316). */
+  readonly keyring?: PublicationKeyring;
 }): Promise<StudioPublishOutcome> {
   const content = studioPublicationContent({
     kind: params.kind,
@@ -126,9 +138,8 @@ export function publishStudioPlan(params: {
     plan: params.plan,
     ...(params.onPublished !== undefined ? { onPublished: params.onPublished } : {}),
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
-    publish: (publication): Promise<ApiResult<PublishStoryResult>> =>
-      publishStory({
-        ...params.api,
+    publish: (publication): Promise<ApiResult<PublishStoryResult>> => {
+      const body = {
         type: params.kind,
         // **RIEN CHOISI ⇒ LA CLÉ EST ABSENTE** (loi 1, D-111/D-115) : le
         // défaut reste une règle SERVEUR (`core.ts:421`) — jamais un défaut
@@ -143,6 +154,13 @@ export function publishStudioPlan(params: {
         ...(alsoAsReel ? { alsoAsReel: true } : {}),
         storyEffects: publication.storyEffects,
         mediaIds: publication.mediaIds,
-      }),
+      };
+      return publishStory({
+        ...params.api,
+        ...body,
+        ...(params.keyring !== undefined ? { clientMutationId: params.keyring.keyFor(publicationFingerprint(body)) } : {}),
+        ...(params.requestSignal !== undefined ? { signal: params.requestSignal } : {}),
+      });
+    },
   });
 }

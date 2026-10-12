@@ -6,6 +6,10 @@ import { ListHeader } from '@/components/list-header';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
+import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
+import { accentOf } from '@/lib/accent';
+import { titleOf } from '@/lib/view/conversation';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
@@ -354,6 +358,13 @@ export default function ConversationsScreen() {
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
   const conversations = list.data ?? EMPTY_CONVERSATIONS;
+  /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
+     (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
+     `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
+     visiteur sans compte n'ouvre aucune fiche (#10205). */
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
+  const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
   const overrides = useStore(conversationStore, (s) => s.overrides);
   /**
    * LES CATÉGORIES DU LECTEUR (#10103) — un COMPTE seulement : un invité ou un
@@ -484,17 +495,18 @@ export default function ConversationsScreen() {
   });
 
   /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
-     épinglée en tête (#10004) : mêmes signaux, même scène, même peau (#10191). */
-  const lensRowOf = (c: (typeof conversations)[number], pinnedAtHead = false) => (
+     en tête (#10004) : mêmes signaux, même scène, même peau (#10191), et
+     son épingle seulement si on l'a épinglée (#10347). */
+  const lensRowOf = (c: (typeof conversations)[number]) => (
     <LensRow
       key={c.id}
-      pinnedAtHead={pinnedAtHead}
       conversation={c}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
       flags={effectiveFlagsOf(c, overrides)}
       unreadCount={effectiveUnreadOf(c, overrides)}
       onRowAction={rowAction}
+      onOpenDetails={openDetails}
       typists={typists[c.id]}
       peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
       peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
@@ -663,7 +675,7 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
-        {world === undefined ? null : lensRowOf(world, true)}
+        {world === undefined ? null : lensRowOf(world)}
         {sections.map((section, i) => {
           const fold = folds[i];
           return (
@@ -863,6 +875,18 @@ export default function ConversationsScreen() {
           ) : null}
         </div>
       </div>
+      {detailsConversation === undefined ? null : (
+        <ConversationDetailsPortal
+          open
+          conversation={detailsConversation}
+          title={titleOf(detailsConversation, viewer.id ?? '')}
+          accent={accentOf(detailsConversation)}
+          viewerId={viewer.id ?? ''}
+          deps={apiDeps}
+          origin={publicWebOrigin(window.location.origin)}
+          onClose={() => setDetailsId(null)}
+        />
+      )}
     </div>
   );
 }

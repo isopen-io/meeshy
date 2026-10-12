@@ -31,6 +31,8 @@ afterEach(unmountAll);
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 15)));
 const choose = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-photo-choice="${id}"]`);
 const by = (host: ParentNode, attribute: string) => host.querySelector<HTMLElement>(`[${attribute}]`);
+const takeFrame = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="frame"]');
+const scene = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="scene"]');
 
 type Log = {
   stops: number;
@@ -149,13 +151,13 @@ describe('la proposition', () => {
 });
 
 describe('le selfie', () => {
-  test('la caméra s’ouvre, puis le déclencheur est là, nommé', async () => {
+  test('la caméra s’ouvre, puis la case du cadre est là, nommée : c’est elle qui déclenche', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
     expect(log.cameraOpened).toBe(1);
-    expect(by(host, 'data-photo-shutter')?.textContent).toBe('Prendre la photo');
+    expect(takeFrame(host)?.textContent).toContain('Voix II');
     expect(host.querySelector('video')).not.toBeNull();
   });
 
@@ -173,7 +175,7 @@ describe('le selfie', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    expect(by(host, 'data-photo-shutter')).toBeNull();
+    expect(takeFrame(host)).toBeNull();
     expect(host.textContent).toContain('Ouverture de la caméra');
   });
 
@@ -182,7 +184,7 @@ describe('le selfie', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     expect(log.rendered).toEqual([{ moment: rank, mirror: true }]);
     expect(by(host, 'data-photo-share')).not.toBeNull();
@@ -193,7 +195,7 @@ describe('le selfie', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     expect(log.stops).toBeGreaterThanOrEqual(1);
   });
@@ -225,7 +227,7 @@ describe('la photo se fige au déclenchement', () => {
     const host = await open(rank, frozen, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     const still = host.querySelector('[data-photo-still]');
     expect(still).not.toBeNull();
@@ -242,7 +244,7 @@ describe('une caméra refusée n’est pas une impasse', () => {
       const host = await open(rank, e, log);
       await click(choose(host, 'selfie'));
       await settle();
-      expect(by(host, 'data-photo-shutter')).toBeNull();
+      expect(takeFrame(host)).toBeNull();
       expect(host.querySelector('[role="alert"]')?.textContent?.length).toBeGreaterThan(20);
       expect(by(host, 'data-photo-gallery')).not.toBeNull();
       expect(choose(host, 'card')).not.toBeNull();
@@ -417,6 +419,15 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(host.textContent).not.toContain('Image enregistrée');
   });
 
+  test('« Enregistrer » replié sur la feuille de partage ne se dit pas « enregistrée » et garde le bouton (#10284)', async () => {
+    const { host } = await toResult({ save: async () => 'shared' });
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(host.textContent).not.toContain('Image enregistrée');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
   test('« Garder au carnet » garde le 9:16, avec le mode, sans source pour une carte seule, et le dit', async () => {
     const { host, log } = await toResult();
     await click(by(host, 'data-photo-keep'));
@@ -435,7 +446,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     await click(by(host, 'data-photo-keep'));
     await settle();
@@ -586,14 +597,163 @@ describe('une vraie couche modale', () => {
     expect(document.activeElement).toBe(buttons[0] ?? null);
   });
 
-  test('le déclencheur porte son texte visible dans son nom accessible', async () => {
+  test('la case du cadre porte son texte visible dans son nom accessible', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    const shutter = by(host, 'data-photo-shutter');
-    const name = shutter?.getAttribute('aria-label') ?? shutter?.textContent ?? '';
-    expect(name).toContain(shutter?.textContent ?? '∅');
+    const shutter = takeFrame(host);
+    const visible = shutter?.querySelector('[data-photo-take-label]')?.textContent ?? '∅';
+    expect(shutter?.getAttribute('aria-label') ?? '').toContain(visible);
+  });
+});
+
+/**
+ * LE CADRE EST LE DÉCLENCHEUR (#10284) — directive porteur 2026-10-12 : aucun
+ * cercle d'enregistrement en plus du cadre ; la case du cadre prend la photo,
+ * l'enregistre dans la galerie (la galerie de la coque Android, un fichier dans
+ * un navigateur) puis ouvre le résultat ; la scène (toucher deux fois, tenir,
+ * ou Entrée au clavier) prend la photo sans l'écrire nulle part hors de l'app.
+ * « Enregistrer » n'apparaît que si la prise n'est pas déjà enregistrée avec ce
+ * cadre (loi `@meeshy/shared/utils/capture/capture-save`).
+ */
+describe('le cadre est le déclencheur (#10284)', () => {
+  const live = async (overrides: Parameters<typeof env>[0] = {}) => {
+    const bench = env(overrides);
+    const host = await open(rank, bench.env, bench.log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    return { ...bench, host };
+  };
+  const fire = (target: HTMLElement | null, event: Event) => act(() => void target?.dispatchEvent(event));
+
+  test('aucun rond d’enregistrement à côté du cadre : la case du cadre est le seul déclencheur', async () => {
+    const { host } = await live();
+    expect(by(host, 'data-photo-shutter')).toBeNull();
+    expect(host.querySelectorAll('[data-photo-take="frame"]')).toHaveLength(1);
+    expect(takeFrame(host)?.tagName).toBe('BUTTON');
+  });
+
+  test('toucher la case du cadre : la photo part dans la galerie, PUIS le résultat, sans « Enregistrer »', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    expect(log.saved).toHaveLength(1);
+    expect(log.saved[0]).toBe(log.outputs.at(-1)?.story);
+    expect(by(host, 'data-photo-share')).not.toBeNull();
+    expect(by(host, 'data-photo-save')).toBeNull();
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('Image enregistrée');
+  });
+
+  test('#10296 : story enregistrée par la case du cadre, puis le carré : « Enregistrer » revient et écrit le carré', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    expect(by(host, 'data-photo-save')).toBeNull();
+    await click(by(host, 'data-photo-format="square"'));
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png', 'meeshy-profil.png']);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('#10296 : le carré enregistré puis le retour à la story déjà enregistrée : masqué, sans doublon', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-format="square"'));
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    await click(by(host, 'data-photo-format="story"'));
+    expect(by(host, 'data-photo-save')).toBeNull();
+    expect(log.saved).toHaveLength(2);
+  });
+
+  test('toucher deux fois la scène : le résultat, RIEN dans la galerie, « Enregistrer » visible', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    expect(by(host, 'data-photo-share')).not.toBeNull();
+    expect(log.saved).toEqual([]);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un seul toucher sur la scène ne prend rien', async () => {
+    const { host, log } = await live();
+    await click(scene(host));
+    await settle();
+    expect(log.rendered).toEqual([]);
+    expect(takeFrame(host)).not.toBeNull();
+  });
+
+  test('tenir la scène prend la photo hors cadre', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new PointerEvent('pointerdown', { bubbles: true }));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 600)));
+    await fire(scene(host), new PointerEvent('pointerup', { bubbles: true }));
+    await settle();
+    expect(log.rendered).toHaveLength(1);
+    expect(log.saved).toEqual([]);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un appui bref sur la scène ne déclenche pas', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new PointerEvent('pointerdown', { bubbles: true }));
+    await fire(scene(host), new PointerEvent('pointerup', { bubbles: true }));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 600)));
+    expect(log.rendered).toEqual([]);
+  });
+
+  test('au clavier, la scène est un contrôle nommé : Entrée prend la photo hors cadre', async () => {
+    const { host, log } = await live();
+    const target = scene(host);
+    expect(target?.getAttribute('role')).toBe('button');
+    expect(target?.getAttribute('tabindex')).toBe('0');
+    expect(target?.getAttribute('aria-label')?.length).toBeGreaterThan(10);
+    await fire(target, new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(log.rendered).toHaveLength(1);
+    expect(log.saved).toEqual([]);
+  });
+
+  test('« Enregistrer » après une prise hors cadre : enregistrée une fois, puis le bouton disparaît', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(log.saved).toHaveLength(1);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('une galerie qui refuse l’écriture automatique : on le dit, et « Enregistrer » revient', async () => {
+    const { host } = await live({ save: async () => 'failed' });
+    await click(takeFrame(host));
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('L’enregistrement n’a pas pu aboutir');
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un « Enregistrer » qui échoue revient', async () => {
+    const { host } = await live({ save: async () => 'failed' });
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('une prise par le cadre déjà enregistrée ne propose plus la galerie quand le carnet est plein', async () => {
+    const { host, log } = await live({ keepOutcome: 'no-space' });
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Plus de place');
+    expect(by(host, 'data-photo-no-space-save')).toBeNull();
+    expect(log.saved).toHaveLength(1);
   });
 });
 

@@ -190,7 +190,8 @@ const world = {
  * porteur du 2026-10-11 : sur /chats, World Wide (épinglée en tête, #10004)
  * et Meeshy Global (rangée ouverte à côté, #10073) se lisaient dans un cadre
  * arrondi, une carte, au lieu d'une rangée comme les autres. World Wide garde
- * sa place en tête et son épingle ; aucune rangée ne porte de cadre.
+ * sa place en tête — sans épingle depuis #10347 : la tête lui revient sans
+ * qu'on l'épingle ; aucune rangée ne porte de cadre.
  */
 describe('World Wide et Meeshy Global sont des rangées de liste ordinaires (#10191)', () => {
   const rowCss = (): readonly { readonly selector: string; readonly body: string }[] =>
@@ -198,11 +199,11 @@ describe('World Wide et Meeshy Global sont des rangées de liste ordinaires (#10
       .map((match) => ({ selector: (match[1] ?? '').replace(/\/\*[\s\S]*?\*\//g, '').trim(), body: match[2] ?? '' }))
       .filter((rule) => rule.selector.includes('.lens-row'));
 
-  test('World Wide en tête garde son épingle et ses non-lus, sans peau de carte', () => {
+  test('World Wide en tête n’est pas épinglée pour autant : ni glyphe ni annonce, ses non-lus restent (#10347)', () => {
     const html = renderToStaticMarkup(
-      <LensRow conversation={world} languages={LANGUAGES} viewerId="u-viewer" flags={FLAGS} unreadCount={12} onRowAction={() => {}} pinnedAtHead />,
+      <LensRow conversation={world} languages={LANGUAGES} viewerId="u-viewer" flags={FLAGS} unreadCount={12} onRowAction={() => {}} />,
     );
-    expect(html).toContain('Épinglée');
+    expect(html).not.toContain('Épinglée');
     expect(html).toContain('12');
     expect(html).not.toContain('lens-row--card');
     expect(html).not.toContain('data-world-card');
@@ -232,7 +233,7 @@ describe('World Wide et Meeshy Global sont des rangées de liste ordinaires (#10
   test('l’écran de liste pose World Wide en tête, comme une rangée des sections', () => {
     const source = readFileSync(new URL('../routes/conversations.tsx', import.meta.url).pathname, 'utf8');
     expect(source).toContain('pinWorldWide(');
-    expect(source).toMatch(/<LensRow[\s\S]{0,400}\bpinnedAtHead\b/);
+    expect(source).not.toContain('pinnedAtHead');
     expect(source).not.toMatch(/\bcard=\{|\bcard = false/);
   });
 });

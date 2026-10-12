@@ -77,6 +77,7 @@ const enStudioChrome = {
   'story.studio.camera.quick.photo': 'Take a photo',
   'story.studio.camera.quick.video': 'Film',
   'story.studio.camera.title': 'Camera',
+  'story.studio.background.cameraHold': 'Hold: open the camera',
   'story.studio.camera.close': 'Back to the scene',
   'story.studio.camera.flip': 'Switch camera',
   'story.studio.camera.flash': 'Flash',

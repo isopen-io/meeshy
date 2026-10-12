@@ -81,6 +81,7 @@ const frStudioChrome = {
   'story.studio.camera.quick.photo': 'Prendre une photo',
   'story.studio.camera.quick.video': 'Filmer',
   'story.studio.camera.title': 'Caméra',
+  'story.studio.background.cameraHold': 'Maintenir : ouvrir la caméra',
   'story.studio.camera.close': 'Revenir à la scène',
   'story.studio.camera.flip': 'Changer d’objectif',
   'story.studio.camera.flash': 'Flash',

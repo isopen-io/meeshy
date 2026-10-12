@@ -144,7 +144,8 @@ struct BubbleQuotedReply: View, Equatable {
             storyThumbnailUrl: reply.storyThumbnailUrl,
             moodEmoji: reply.moodEmoji,
             storyUnavailable: reply.storyUnavailable,
-            quotedPieceCount: reply.quotedPieceCount
+            quotedPieceCount: reply.quotedPieceCount,
+            authorIsAnonymous: reply.authorIsAnonymous
         )
     }
 
@@ -193,6 +194,8 @@ struct BubbleQuotedReply: View, Equatable {
         /// « +N » (#9911) — arrive avec l'écho serveur ; absent de la
         /// projection, le badge resterait figé sur la première résolution.
         let quotedPieceCount: Int?
+        /// #10286 — un auteur sans compte rend ses adresses inertes.
+        let authorIsAnonymous: Bool?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -522,7 +525,8 @@ struct BubbleQuotedReply: View, Equatable {
                 coupe,
                 fontSize: 12, color: previewColor,
                 mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: previewColor,
-                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                linksAreInert: reply.authorIsAnonymous == true
             )
     }
 

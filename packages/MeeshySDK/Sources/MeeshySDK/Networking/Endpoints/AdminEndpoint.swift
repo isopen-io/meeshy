@@ -123,6 +123,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdPreferencesByCategory(userId: String, category: String)
     case usersByUserIdProfileImageCandidates(userId: String)
     case usersByUserIdProfileImagesByKind(userId: String, kind: String)
+    case usersByUserIdPublications(userId: String)
+    case usersByUserIdPublicationsModeration(userId: String)
     case usersByUserIdReportedMessages(userId: String)
     case usersByUserIdReports(userId: String)
     case usersByUserIdResetPassword(userId: String)
@@ -256,6 +258,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdPreferencesByCategory(let userId, let category): return "/api/v1/admin/users/\(userId)/preferences/\(category)"
         case .usersByUserIdProfileImageCandidates(let userId): return "/api/v1/admin/users/\(userId)/profile-image-candidates"
         case .usersByUserIdProfileImagesByKind(let userId, let kind): return "/api/v1/admin/users/\(userId)/profile-images/\(kind)"
+        case .usersByUserIdPublications(let userId): return "/api/v1/admin/users/\(userId)/publications"
+        case .usersByUserIdPublicationsModeration(let userId): return "/api/v1/admin/users/\(userId)/publications/moderation"
         case .usersByUserIdReportedMessages(let userId): return "/api/v1/admin/users/\(userId)/reported-messages"
         case .usersByUserIdReports(let userId): return "/api/v1/admin/users/\(userId)/reports"
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"

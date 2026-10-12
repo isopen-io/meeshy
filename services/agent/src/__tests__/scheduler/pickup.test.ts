@@ -118,6 +118,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any
     );
 
@@ -152,6 +153,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -186,6 +188,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -224,6 +227,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -263,6 +267,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 
@@ -287,6 +292,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
       canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
       recordScannedConversation: jest.fn().mockResolvedValue(undefined),
       getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
     } as any);
 
     await scanner.scanConversation('conv-1');
@@ -317,6 +323,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
         canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
         recordScannedConversation: jest.fn().mockResolvedValue(undefined),
         getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+        canSpendLlm: jest.fn().mockResolvedValue({ allowed: true, spentUsd: 0, budgetUsd: 10 }),
       } as any,
     );
 

@@ -2087,24 +2087,6 @@ struct ConversationView: View {
         ))
     }
 
-    /// Middle slot of the header band (between back button and avatar).
-    /// Extracted as a separate `@ViewBuilder` property because inlining the
-    /// `if composerState.showOptions { … } else { Spacer() }` branches
-    /// alongside the rest of the band produced an opaque return type that
-    /// Swift's runtime metadata resolver couldn't materialize — `body` would
-    /// crash at first render with a deep `swift_getTypeByMangledName` stack.
-    // Frontière NOMINALE — `ConversationHeaderMidContent` (#6194). L'`AnyView`
-    // posé ici en 2026-08 ne suffisait pas : c'est le getter de CE maillon que
-    // la trace du crash désigne, sous
-    // `__swift_instantiateConcreteTypeFromMangledNameV2`.
-    private var expandedHeaderMidContent: AnyView {
-        AnyView(ConversationHeaderMidContent(
-            layout: headerLayout,
-            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
-            actionButtons: { headerButtonsCluster }
-        ))
-    }
-
     /// Call + search buttons, grouped with zero extra spacing between them
     /// (user-requested 2026-07-11: "les boutons n'ont pas besoin d'être si
     /// loin l'un de l'autre"). Each button already carries its own ~8pt of
@@ -2128,7 +2110,7 @@ struct ConversationView: View {
     // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
     // mangled name, donc le démangleur n'a plus à le parcourir.
     // L'aperçu (#9031) : « agrandir » prend la place de la loupe.
-    private var headerButtonsCluster: AnyView {
+    var headerButtonsCluster: AnyView {
         AnyView(ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
             searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
@@ -2205,7 +2187,7 @@ struct ConversationView: View {
     /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
     /// propose détails OU profil de l'utilisateur.
     @ViewBuilder
-    private var expandedHeaderTitleAndTags: some View {
+    var expandedHeaderTitleAndTags: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
             HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                 expandedHeaderTitleButton

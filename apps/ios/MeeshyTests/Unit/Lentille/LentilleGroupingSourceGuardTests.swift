@@ -9,13 +9,13 @@ import XCTest
 /// deux des régressions que ce test attrape.
 final class LentilleGroupingSourceGuardTests: XCTestCase {
 
-    private func viewModelSource() throws -> String {
+    private func viewModelSource(_ fileName: String = "ConversationListViewModel.swift") throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Unit/Lentille
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift")
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/\(fileName)")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -32,11 +32,16 @@ final class LentilleGroupingSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_conversationListViewModel_stillDeclaresGroupConversationsAsNonisolatedPrivateStatic() throws {
-        let stripped = AppSourceGuard.stripComments(try viewModelSource())
+    /// Le groupement a quitté l'hôte hors budget pour
+    /// `ConversationListViewModel+Ordering.swift` (#10347) : il y perd son
+    /// `private` (un `private` ne traverse pas les fichiers) et gagne le
+    /// drapeau en paramètre, lu par défaut. `nonisolated static` reste gelé :
+    /// le groupement tourne hors du thread principal.
+    func test_conversationListViewModel_stillDeclaresGroupConversationsAsNonisolatedStatic() throws {
+        let stripped = AppSourceGuard.stripComments(try viewModelSource("ConversationListViewModel+Ordering.swift"))
         XCTAssertTrue(
-            stripped.contains("nonisolated private static func groupConversations("),
-            "la signature de groupConversations (nonisolated private static) est gelée par le " +
+            stripped.contains("nonisolated static func groupConversations("),
+            "la signature de groupConversations (nonisolated static) est gelée par le " +
             "contrat LWS-5 — seul son corps est remplacé par un appel au miroir " +
             "LentilleSectionResolver."
         )

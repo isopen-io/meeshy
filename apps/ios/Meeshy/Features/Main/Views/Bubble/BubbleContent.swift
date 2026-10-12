@@ -109,6 +109,10 @@ nonisolated struct BubbleContent: Equatable {
         /// direct), précalculée une fois par le builder. Non-nil → la bulle
         /// rend la carte de conversation (#8099) au lieu de l'aperçu OpenGraph.
         var conversationCardTarget: ConversationCardTarget? = nil
+        /// L'auteur n'a pas de compte (#10286) : aucune adresse n'est un lien
+        /// — ni aperçu, ni carte, ni lecteur, ni lien suivi —, le texte se
+        /// rend tel qu'il a été écrit.
+        var linksAreInert: Bool = false
     }
 
     struct Translation: Equatable {
@@ -150,6 +154,7 @@ nonisolated struct BubbleContent: Equatable {
                 // ce comparateur figeait la citation en initiales pour toujours.
                 && lhs.reference.authorAvatarUrl == rhs.reference.authorAvatarUrl
                 && lhs.reference.moodEmoji == rhs.reference.moodEmoji
+                && lhs.reference.authorIsAnonymous == rhs.reference.authorIsAnonymous
         }
 
         private static func sameQuotedMedia(_ lhs: Reply, _ rhs: Reply) -> Bool {

@@ -345,6 +345,12 @@ export const usersByUserIdProfileImageCandidates = (userId: string): string => `
 /** PUT /api/v1/admin/users/:userId/profile-images/:kind */
 export const usersByUserIdProfileImagesByKind = (userId: string, kind: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/profile-images/${encodeURIComponent(kind)}`;
 
+/** GET /api/v1/admin/users/:userId/publications */
+export const usersByUserIdPublications = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/publications`;
+
+/** POST /api/v1/admin/users/:userId/publications/moderation */
+export const usersByUserIdPublicationsModeration = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/publications/moderation`;
+
 /** GET /api/v1/admin/users/:userId/reported-messages */
 export const usersByUserIdReportedMessages = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/reported-messages`;
 

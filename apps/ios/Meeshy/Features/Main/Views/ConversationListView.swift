@@ -449,8 +449,7 @@ struct ConversationListView: View {
     }
 
     private var isSingleUngroupedSection: Bool {
-        conversationViewModel.groupedConversations.count == 1
-        && conversationViewModel.groupedConversations[0].section.id == "other"
+        Self.isSingleUngroupedSection(sectionIds: conversationViewModel.groupedConversations.map(\.section.id))
     }
 
     // MARK: - Sections : pliage et cible de drop — règles PURES dans
@@ -530,7 +529,7 @@ struct ConversationListView: View {
         for group: (section: ConversationSection, conversations: [Conversation])
     ) -> some View {
         // Hide section header when there are no user categories (flat list)
-        if !isSingleUngroupedSection {
+        if Self.showsSectionHeader(sectionId: group.section.id, isSingleUngroupedSection: isSingleUngroupedSection) {
             sectionHeaderLabel(for: group)
                 // Frame globale du header → registre inerte : cible de drop de la
                 // chip du morph drag (l'overlay hit-teste le doigt au relâchement).

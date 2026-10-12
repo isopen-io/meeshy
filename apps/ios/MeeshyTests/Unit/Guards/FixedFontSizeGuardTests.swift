@@ -168,12 +168,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
-        // #9896 — le code pays de la puce de langue du composer (7 pt gras sous
-        // le drapeau) : CADRE FIXE, la puce garde la hauteur de la barre. La
-        // taille vient d'un `@ScaledMetric` plafonné à `.xLarge` ; `relative(7)`
-        // la porterait à 11 pt et ferait déborder la puce. Le drapeau, emoji
-        // seul, passe par `MeeshyFont.emoji`.
-        "Features/Main/Components/UniversalComposerBar+Toolbar.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -343,7 +337,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// (`Text(flags[i])`, 20 pt) — est parti avec le fichier. Un cliquet qui ne
     /// descend pas quand la population descend cesse d'être un cliquet.
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
-    private static let textCeiling = 34
+    // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
+    private static let textCeiling = 33
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -444,7 +439,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // `bearingFiles` (règle 4) ; `StoryViewerContainer.swift` garde son glyphe d'erreur.
     // 194 → 191 (#8878) : le rail des réels n'a plus que le contour de participation
     // (trois sites → un) et sa croix monte `FullscreenTopBar` (un glyphe).
-    private static let totalCeiling = 191
+    // 191 → 190 (#10366) : la puce de langue repasse sur une ligne en polices
+    // sémantiques, son code pays de 7 pt figé disparaît.
+    private static let totalCeiling = 190
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

@@ -18,6 +18,7 @@ import {
   hardenedRateLimitConfig,
 } from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
+import { mayRepostSource } from '../../services/posts/moderationHold';
 import { DailyGestureLimitReached } from '../../services/engagement/DailyGestureGate';
 import { refuseDailyGesture } from '../../utils/daily-gesture-refusal';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
@@ -854,6 +855,8 @@ export function registerInteractionRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
       const data = parsed.data;
+      // #10315 — on ne republie que ce qu'on peut lire, et jamais ce qui est hors ligne.
+      if (!(await mayRepostSource(prisma, postId, authContext.registeredUser.id))) return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
 
       // Idempotent via clientMutationId (lot 7, tâche 7.1) : `repostPost`
       // n'est PAS naturellement idempotent — chaque appel `prisma.post.create`

@@ -150,7 +150,7 @@ struct GameBannerBadgeView: View {
                     }
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
                 }
             }
         }

@@ -16955,6 +16955,100 @@
         }
       }
     },
+    "composer.rail.media.takePhoto": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط صورة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto aufnehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take a photo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer una foto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prendre une photo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scatta una foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tirar uma foto"
+          }
+        }
+      }
+    },
+    "composer.rail.media.fromFiles": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من الملفات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Dateien"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "From Files"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desde Archivos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Depuis les fichiers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da File"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos Arquivos"
+          }
+        }
+      }
+    },
     "composer.scene.empty.title": {
       "extractionState": "manual",
       "localizations": {
@@ -74056,43 +74150,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إنهاء الوصف"
+            "value": "إنهاء التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beschreibung abschließen"
+            "value": "Bildunterschrift abschließen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finish the description"
+            "value": "Finish the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terminar la descripción"
+            "value": "Terminar el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Terminer la description"
+            "value": "Terminer la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termina la descrizione"
+            "value": "Termina la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Concluir a descrição"
+            "value": "Concluir a legenda"
           }
         }
       }
@@ -74103,43 +74197,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر لتعديل الوصف"
+            "value": "انقر لتعديل التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Bearbeiten der Beschreibung tippen"
+            "value": "Zum Bearbeiten der Bildunterschrift tippen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to edit the description"
+            "value": "Tap to edit the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para editar la descripción"
+            "value": "Toca para editar el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour modifier la description"
+            "value": "Touchez pour modifier la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per modificare la descrizione"
+            "value": "Tocca per modificare la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para editar a descrição"
+            "value": "Toque para editar a legenda"
           }
         }
       }
@@ -74150,43 +74244,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كتابة الوصف"
+            "value": "كتابة التعليق التوضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Beschreibung schreiben"
+            "value": "Bildunterschrift schreiben"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Write the description"
+            "value": "Write the caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escribir la descripción"
+            "value": "Escribir el pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire la description"
+            "value": "Écrire la légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scrivi la descrizione"
+            "value": "Scrivi la didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Escrever a descrição"
+            "value": "Escrever a legenda"
           }
         }
       }
@@ -74197,43 +74291,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انقر للكتابة"
+            "value": "إضافة تعليق توضيحي"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zum Schreiben tippen"
+            "value": "Bildunterschrift hinzufügen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap to write"
+            "value": "Add a caption"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca para escribir"
+            "value": "Añadir un pie de foto"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour écrire"
+            "value": "Ajouter une légende"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca per scrivere"
+            "value": "Aggiungi una didascalia"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque para escrever"
+            "value": "Adicionar uma legenda"
           }
         }
       }
@@ -74328,53 +74422,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mostrar a descrição"
-          }
-        }
-      }
-    },
-    "composer.description.placeholder": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إضافة وصف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beschreibung hinzufügen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add a description"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir una descripción"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une description"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggiungi una descrizione"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adicionar uma descrição"
           }
         }
       }
@@ -90966,6 +91013,194 @@
           "stringUnit": {
             "state": "translated",
             "value": "Oculta a chama até o cabeçalho ser expandido novamente"
+          }
+        }
+      }
+    },
+    "conversation.header.avatar.viewProfile": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض الملف الشخصي لـ %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil von %@ ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View %@’s profile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver el perfil de %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir le profil de %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi il profilo di %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver o perfil de %@"
+          }
+        }
+      }
+    },
+    "conversation.header.avatar.viewConversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض المحادثة %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung %@ ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View the conversation %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver la conversación %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir la conversation %@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi la conversazione %@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver a conversa %@"
+          }
+        }
+      }
+    },
+    "conversation.header.expand": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "توسيع الترويسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopfzeile ausklappen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand the header"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplegar el encabezado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplier l’en-tête"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espandi l’intestazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expandir o cabeçalho"
+          }
+        }
+      }
+    },
+    "conversation.header.collapse": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طي الترويسة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopfzeile einklappen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse the header"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plegar el encabezado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replier l’en-tête"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprimi l’intestazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recolher o cabeçalho"
           }
         }
       }
@@ -114839,6 +115074,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Publicação original de %@"
+          }
+        }
+      }
+    },
+    "feed.post.pending.alreadySent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إرسال هذا المنشور للتو. احذفه بعد ظهوره على الإنترنت."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Beitrag wurde gerade gesendet. Lösche ihn, sobald er online ist."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This post was just sent. Delete it once it's online."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicación acaba de enviarse. Elimínala cuando esté en línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette publication vient de partir. Supprimez-la une fois en ligne."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo post è appena partito. Eliminalo quando sarà online."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta publicação acabou de ser enviada. Exclua-a quando estiver online."
+          }
+        }
+      }
+    },
+    "feed.post.pending.withdrawn": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم إلغاء الإرسال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senden abgebrochen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sending canceled"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envío cancelado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envoi annulé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invio annullato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envio cancelado"
           }
         }
       }
@@ -232010,6 +232339,53 @@
         }
       }
     },
+    "visitor.sharedBy.story": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شارك %@ معك هذه القصة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diese Story mit dir geteilt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ shared this story with you"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ te ha compartido esta historia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ vous a partagé cette story"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ha condiviso con te questa storia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ compartilhou este story com você"
+          }
+        }
+      }
+    },
     "visitor.signup": {
       "extractionState": "manual",
       "localizations": {
@@ -249208,53 +249584,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Escolher uma foto da galeria"
-          }
-        }
-      }
-    },
-    "game.photo.shutter": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "التقط الصورة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Foto aufnehmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Take the photo"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hacer la foto"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prendre la photo"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scatta la foto"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tirar a foto"
           }
         }
       }
@@ -287936,6 +288265,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "O caderno ocupa %@."
+          }
+        }
+      }
+    },
+    "game.photo.frame_trigger.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "التقاط الصورة في إطار %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foto im Rahmen „%@“ aufnehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take the photo in the “%@” frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer la foto en el marco «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prendre la photo dans le cadre « %@ »"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scatta la foto nella cornice «%@»"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tirar a foto na moldura “%@”"
+          }
+        }
+      }
+    },
+    "game.photo.frame_trigger.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تُحفظ في الصور، ثم تفتح النتيجة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird in Fotos gesichert, dann öffnet sich das Ergebnis."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved to Photos, then the result opens."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se guarda en Fotos y luego se abre el resultado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrée dans Photos, puis le résultat s’ouvre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salvata in Foto, poi si apre il risultato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salva em Fotos, depois o resultado se abre."
+          }
+        }
+      }
+    },
+    "game.photo.scene.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "معاينة الكاميرا، انقر مرتين للالتقاط دون حفظ في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kameravorschau – zweimal tippen nimmt auf, ohne in Fotos zu sichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera preview — double-tap to take without saving to Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vista de la cámara: toca dos veces para hacer la foto sin guardarla en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aperçu de la caméra : touche deux fois pour prendre sans enregistrer dans Photos"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anteprima della fotocamera: tocca due volte per scattare senza salvare in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévia da câmera: toque duas vezes para tirar sem salvar em Fotos"
           }
         }
       }

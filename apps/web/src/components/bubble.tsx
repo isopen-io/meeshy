@@ -26,6 +26,7 @@ import { ProtectionChrome } from './protection-chrome';
 import { LongMessageText } from './long-message-text';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
+import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
@@ -177,6 +178,8 @@ export function Bubble({
   onOpenDetail?: (messageId: string) => void;
 }) {
   const { message, tail } = place;
+  /* Les adresses d'un anonyme restent du texte (#10286) — UNE décision, lue aussi par la rangée plate. */
+  const links = linkRenderingOf(message);
   /* EN SÉLECTION, un tap sur la rangée BASCULE la coche de sélection
      (`thread-modes.tsx`, `onRowTap`) : l'accusé y redevient un glyphe NU,
      sinon un seul geste ouvrirait la fiche ET basculerait la sélection. */
@@ -408,6 +411,7 @@ export function Bubble({
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
+          links={links}
           linkColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)'}
           toggleColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)'}
           plainTextHidden
@@ -415,7 +419,7 @@ export function Bubble({
       ) : null}
       {/* La carte d'un lien de conversation (#8099), SOUS le texte comme iOS
           (`BubbleLinkEmbed.swift`). */}
-      {bareBody ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
+      {bareBody || links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 

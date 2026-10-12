@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { threadCallOffer, threadHeaderSubtitle } from './thread-header-offer';
+import { conversationAvatarDoor, threadCallOffer, threadHeaderSubtitle } from './thread-header-offer';
 
 /**
  * CE QUE L'EN-TÊTE DU FIL OFFRE À SON LECTEUR (#10205, #10207, #10114) — un
@@ -64,5 +64,28 @@ describe('threadCallOffer', () => {
 
   test('un type sans appel (diffusion, inconnu) n’en offre aucun', () => {
     expect(threadCallOffer({ ...member, conversation: { type: 'broadcast' } })).toBe('none');
+  });
+});
+
+describe('conversationAvatarDoor — ce qu’ouvre l’avatar d’une conversation (#10300)', () => {
+  test('un direct mène au profil de son pair', () => {
+    expect(conversationAvatarDoor({ group: false, guest: false, peerUsername: 'nour', detailsAvailable: true })).toEqual({ kind: 'profile', username: 'nour' });
+  });
+
+  test('toute autre conversation ouvre sa fiche', () => {
+    expect(conversationAvatarDoor({ group: true, guest: false, peerUsername: undefined, detailsAvailable: true })).toEqual({ kind: 'details' });
+  });
+
+  test('un pair sans compte n’a pas de profil : la fiche de la conversation', () => {
+    expect(conversationAvatarDoor({ group: false, guest: false, peerUsername: '', detailsAvailable: true })).toEqual({ kind: 'details' });
+  });
+
+  test('un visiteur sans compte n’ouvre ni profil ni fiche (#10205)', () => {
+    expect(conversationAvatarDoor({ group: false, guest: true, peerUsername: 'nour', detailsAvailable: true })).toEqual({ kind: 'toggle' });
+    expect(conversationAvatarDoor({ group: true, guest: true, peerUsername: undefined, detailsAvailable: true })).toEqual({ kind: 'toggle' });
+  });
+
+  test('sans porte vers les détails, l’avatar d’un groupe garde la bascule', () => {
+    expect(conversationAvatarDoor({ group: true, guest: false, peerUsername: undefined, detailsAvailable: false })).toEqual({ kind: 'toggle' });
   });
 });

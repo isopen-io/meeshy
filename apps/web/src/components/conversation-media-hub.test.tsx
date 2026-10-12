@@ -33,7 +33,7 @@ const wireMessage = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   conversationId: 'c1',
   senderId: 'u-nour',
-  sender: { id: 'p-nour', displayName: 'Nour Haddad' },
+  sender: { id: 'p-nour', type: 'user', displayName: 'Nour Haddad' },
   content: '',
   originalLanguage: 'fr',
   messageType: 'text',

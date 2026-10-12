@@ -180,8 +180,7 @@ struct ReelFeedCard: View, Equatable {
     /// le lecteur de réels — une seule règle, `ReelPublishedContent`.
     private var displayCaption: String {
         if post.content.isEmpty, let repostedReel { return repostedReel.content }
-        return ReelPublishedContent.content(type: .reel, text: post.displayContent,
-                                            captions: post.media.map(\.caption)) ?? ""
+        return ReelCaptionMemo.shared.caption(text: post.displayContent, captions: post.media.map(\.caption))
     }
 
     /// La couverture d'un réel dont le média joué est un son, s'il en porte une.

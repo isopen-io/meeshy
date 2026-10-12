@@ -41,7 +41,8 @@ import {
   type EngagementOperationKey,
 } from '@meeshy/shared/types/engagement-operations';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
-import { engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
+import { engagementAchievementTitle } from '@meeshy/shared/utils/engagement-labels';
+import { tierReachedNotification } from '@meeshy/shared/utils/tier-reached-notification';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -607,17 +608,21 @@ export class EngagementService {
       // LECTEUR (`engagementAxisLabel`, même catalogue que la v3.1 web et le
       // miroir iOS) ; `route` dit au client où le tap MÈNE — l'écran
       // « Progression » (#5547 web, #5698 iOS), jamais un autre.
+      // #10298 — le PALIER (rang dans l'échelle) en titre, l'EXPLOIT chiffré
+      // et le palier en corps : « Commentaires écrits : 1 000 — bravo, vous
+      // êtes au palier 6 ! ». Le seuil seul (« palier 1000 ») se lisait comme
+      // un millième palier.
+      const banner = tierReachedNotification(lang, { kind: 'badge', axisKey, threshold });
+      if (banner === null) return;
       await notificationService.createNotification({
         userId,
         type: 'badge_earned',
         priority: 'normal',
-        content: notificationString(lang, 'engagement.badgeEarned', {
-          title: engagementAxisLabel(lang, axisKey),
-          count: threshold,
-        }),
+        title: banner.title,
+        content: banner.body,
         context: {},
         ...(actor ? { actor } : {}),
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, axisKey, threshold, tierRank: banner.rank, value: banner.value },
       });
     } catch (err) {
       log.warn('badge_earned notification failed after milestone was recorded', {
@@ -938,17 +943,21 @@ export class EngagementService {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
       const lang = recipientLanguage(user, 'fr');
       const notificationService = getSharedNotificationService() ?? new NotificationService(this.prisma);
+      // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
+      // palier de points) se lisait comme un cent-cinquantième niveau. Le
+      // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
+      // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
+      // #10298 — et le corps dit ce qui l'a fait atteindre : les points.
+      const banner = tierReachedNotification(lang, { kind: 'level', threshold });
+      if (banner === null) return;
       await notificationService.createNotification({
         userId,
         type: 'level_up',
         priority: 'normal',
-        // Le NIVEAU, jamais le seuil de score : « Niveau 150 atteint » (le
-        // palier de points) se lisait comme un cent-cinquantième niveau. Le
-        // niveau est le RANG du palier dans l'échelle (§ 7) — le même que
-        // l'écran « Progression » affiche (`EngagementLevelProgress.level`).
-        content: notificationString(lang, 'engagement.levelUp', { count: levelIndexOf(threshold) }),
+        title: banner.title,
+        content: banner.body,
         context: {},
-        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold) },
+        metadata: { action: 'view_details', route: ENGAGEMENT_ROUTE, threshold, level: levelIndexOf(threshold), tierRank: banner.rank, value: banner.value },
       });
     } catch (err) {
       log.warn('level_up notification failed after milestone was recorded', {

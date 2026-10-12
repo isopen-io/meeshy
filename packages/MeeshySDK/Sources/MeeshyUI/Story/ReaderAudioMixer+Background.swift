@@ -66,7 +66,7 @@ extension ReaderAudioMixer {
         // SOURCE se lit sur le fichier, jamais sur `audio.duration` (qui, une
         // fois rogné, porte la durée occupée sur la timeline, pas celle du
         // fichier). Pas d'intention de rognage déclarée ⇒ `nil`, et
-        // `scheduleBackgroundFile` retombe sur `scheduleFile` sans surcoût.
+        // `scheduleAudio` retombe sur `scheduleFile` sans surcoût.
         let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
             ? nil
             : audio.trimBounds(sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1))
@@ -102,37 +102,18 @@ extension ReaderAudioMixer {
             hostTime: originHost
                 + ReaderAudioMixer.hostTime(forDelaySeconds: bg.startOffset)
         )
-        scheduleBackgroundFile(at: scheduleAt, elapsedInClip: elapsedInClip)
+        if bg.looping {
+            scheduleLoop(.background, elapsedInClip: elapsedInClip, at: scheduleAt)
+        } else {
+            scheduleAudio(node: bg.player, file: bg.file, trimBounds: bg.trimBounds,
+                          elapsedInClip: elapsedInClip,
+                          at: scheduleAt, completionHandler: nil)
+        }
         // Start silent when a fade-in (explicit or default) will ramp the
         // volume up; otherwise play straight at the target volume.
         bg.player.volume = isMuted ? 0 : (bg.fadeIn > 0 ? 0 : bg.targetVolume)
         bg.player.play()
         scheduleExplicitBackgroundFades(originHost: originHost, slideElapsed: slideElapsed)
-    }
-
-    /// Schedules the background file and, when `looping`, recursively re-arms
-    /// the buffer on completion so the loop has no audible gap.
-    private func scheduleBackgroundFile(at scheduleAt: AVAudioTime?, elapsedInClip: Double) {
-        guard let bg = backgroundEntry else { return }
-        let completion: (@Sendable () -> Void)? = bg.looping ? { @Sendable [weak self] in
-            // `_ =` : voir `scheduleFile(originHost:)` — discarde le handle du
-            // `Task` pour que la closure retourne `Void`.
-            _ = Task { @MainActor [weak self] in
-                guard let self,
-                      let live = self.backgroundEntry,
-                      live.player.isPlaying else { return }
-                // `elapsedInClip: 0` ÉCRIT, pas omis : le rebouclage du fond
-                // repart au DÉBUT de sa fenêtre — jumeau de la note de
-                // `rescheduleLoopedEntry`.
-                self.scheduleBackgroundFile(at: nil, elapsedInClip: 0)
-            }
-        } : nil
-        // Même site partagé que le foreground (`scheduleAudio`) : le rebouclage
-        // du fond respecte la même fenêtre — sinon la musique de fond rognée
-        // rejouerait le fichier ENTIER à partir de la deuxième itération.
-        scheduleAudio(node: bg.player, file: bg.file, trimBounds: bg.trimBounds,
-                      elapsedInClip: elapsedInClip,
-                      at: scheduleAt, completionHandler: completion)
     }
 
     /// Honours a composer-authored fade on the background entry. When an

@@ -151,11 +151,54 @@ figure { margin: 0; }
 .poses { display: flex; gap: 8px; overflow: hidden; }
 .poses span { flex: none; font: 600 13px var(--font-round); padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; }
 .poses span.on { background: #fff; color: #1e1b4b; }
-.shutter-row { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
-.shutter { width: 74px; height: 74px; border-radius: 50%; border: 5px solid #fff; display: grid; place-items: center; }
-.shutter::after { content: ""; width: 58px; height: 58px; border-radius: 50%; background: #fff; }
 .cam .circle { background: rgba(255,255,255,.14); color: #fff; border-color: rgba(255,255,255,.18); }
 .cam .link { color: rgba(255,255,255,.85); }
+
+/* La bande du composer iOS (ComposerLookStrip, ComposerCaptureBottomRow) : la case choisie EST le déclencheur.
+   Cases 56 × 100, pas de 8, rayon MeeshyRadius.sm ; la choisie au centre, contour blanc de 3 ; rien d'écrit dans les cases,
+   seul le nom du choix s'écrit sous la bande. Le rond n'existe que sans cadre (collapsedTrigger = .shutter). */
+.band-zone { display: flex; flex-direction: column; align-items: stretch; gap: 0; position: relative; }
+.band { display: flex; gap: 8px; justify-content: center; overflow: hidden; height: 100px; }
+.cell { flex: none; width: 56px; height: 100px; border-radius: 10px; overflow: hidden; position: relative; background: rgba(255,255,255,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+.cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cell.dim img { filter: saturate(.35) brightness(.7); }
+.cell.on { box-shadow: inset 0 0 0 3px #fff; }
+.cell.on img { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); border-radius: 7px; }
+.cell .glyph { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.7); }
+.cell .glyph svg { width: 20px; height: 20px; }
+.cell .ring { background: rgba(0,0,0,.35); }
+.cell .ring svg { width: 26px; height: 26px; }
+.cell .badge-c { inset: auto 3px 4px 3px; }
+.cell .badge-c .pill { font-size: 9.5px; padding: 1px 5px; }
+.cell .rec { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: 999px; background: rgba(0,0,0,.45); font: 700 11px var(--font-mono); color: #fff; white-space: nowrap; }
+.rec i, .chrono i { width: 7px; height: 7px; border-radius: 50%; background: #f87171; display: inline-block; }
+.band-name { height: 30px; display: flex; align-items: flex-end; justify-content: center; font: 700 20px var(--font-round); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); white-space: nowrap; overflow: hidden; }
+.band-name.quiet { visibility: hidden; }
+.lock-track { position: absolute; right: 14px; top: 34px; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.14); color: #fff; font-size: 12px; }
+.lock-track svg { width: 15px; height: 15px; }
+.chrono { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(0,0,0,.45); font: 700 13px var(--font-mono); color: #fff; }
+.rail { position: absolute; left: 8px; bottom: 10px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.rail.row { position: static; flex-direction: row; justify-content: center; gap: 28px; }
+.rail span { min-width: 44px; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: 600 11px var(--font-ui); color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.rail span svg { width: 19px; height: 19px; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.rail span.on { color: #ffcc00; }
+.trigger-ring { width: 72px; height: 72px; border-radius: 50%; box-shadow: inset 0 0 0 4px #fff; display: grid; place-items: center; margin: 14px auto; }
+.trigger-ring::after { content: ""; width: 58px; height: 58px; border-radius: 50%; background: #fff; }
+.hint { text-align: center; font: 12.5px var(--font-mono); color: rgba(255,255,255,.85); margin: 0; }
+.cam-top { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.cam-top .spacer { flex: 1; }
+.done { font: 600 15px var(--font-round); padding: 8px 16px; border-radius: 999px; background: #fff; color: #1e1b4b; }
+.toast { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--s-glass); backdrop-filter: blur(20px); border: 0.5px solid var(--s-edge); color: var(--s-ink); font: 600 13px var(--font-round); white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,.25); z-index: 2; }
+.toast svg { width: 15px; height: 15px; color: #34d399; }
+.saved-mark { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--s-ink3); justify-content: center; }
+.saved-mark svg { width: 13px; height: 13px; }
+.cam .saved-mark { color: rgba(255,255,255,.7); }
+.dev:not(.cam) .cell { box-shadow: inset 0 0 0 1px var(--s-edge); }
+.dev:not(.cam) .cell.on { box-shadow: inset 0 0 0 3px var(--s-ink); }
+.dev:not(.cam) .band-name { color: var(--s-ink); text-shadow: none; font-size: 17px; height: 26px; }
+.ann { font: 600 11px var(--font-mono); color: #fbbf24; text-align: center; margin: 0; }
+.t-light .ann { color: #b45309; }
+.cam .ann { color: #fbbf24; }
 
 /* Feuille modale / bannière */
 .dim-under { position: absolute; inset: 0; background: rgba(0,0,0,.42); }
@@ -235,6 +278,15 @@ figure { margin: 0; }
   <symbol id="i-up-app" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 16V8m0 0l-3.5 3.5M12 8l3.5 3.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2c1 4 5 5.5 5 11a5 5 0 01-10 0c0-2.4 1.2-3.7 2.2-4.8.2 1.6.9 2.6 1.8 3C11 8 11.2 4.6 12 2z"/></symbol>
+  <symbol id="i-frame" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7.5" y="7.5" width="9" height="9" rx="1" stroke="currentColor" stroke-width="1.6" fill="none"/></symbol>
+  <symbol id="i-filters" viewBox="0 0 24 24"><circle cx="9" cy="10" r="5.5" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="15" cy="10" r="5.5" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="15" r="5.5" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="i-crop" viewBox="0 0 24 24"><path d="M7 2.5V17h14.5M2.5 7H17v14.5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="currentColor"/><path d="M8 10.5V8a4 4 0 018 0v2.5" stroke="currentColor" stroke-width="2" fill="none"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M7.5 12.2l3 3 6-6.4" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-size" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path fill="currentColor" d="M13.5 2L5 13.5h6L10 22l9-12h-6z"/></symbol>
+  <symbol id="i-none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6 18L18 6" stroke="currentColor" stroke-width="2"/></symbol>
+  <symbol id="i-app" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8.5 9h7M8.5 13h4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
 </svg>
 
@@ -243,6 +295,7 @@ figure { margin: 0; }
     <h1>Cadres de gloire · les écrans neufs</h1>
     <p>Brouillon de design du lot L0b (<code>#10147</code>), daté du 12 octobre 2026. Chaque écran se valide séparément par son numéro (E1 à E17). Tous sont dérivés de l'interface iOS livrée : jetons <code>MeeshyColors</code>, boutons en verre, Boutique des packs (<code>PackShopView</code>, <code>FramePackShelfView</code>, <code>pack-shop.tsx</code> sur le web).</p>
     <p>Chaque vignette de cadre affiche son <b>libellé d'usage</b>, tiré de la loi <code>describeFrameUsage</code> et des textes déjà traduits (« Rang Ambassadeur I uniquement », « Capture photo et vidéo uniquement »…). Les poids des packs sont des estimations de la spec (§ 5.10.5), que le lot L3 mesurera. Les mots entre guillemets sont proposés et restent à valider ; les noms de cadres (« Baobab d'or », « Temple de l'Aube »…) sont provisoires, le lot L16 les fixera. Une étape sans cadre livré (les mythologies de Murmure à Polyglotte, lot L15) montre la carte actuelle.</p>
+    <p><b>Révisé le 12 octobre 2026 sur le retour du porteur (#10284)</b> : il n'y a plus de rond d'enregistrement à côté des cadres. Comme dans la caméra du composer iOS, la case du cadre choisi EST le déclencheur (E2, E3, E14, E16). Une prise par la case de cadre rejoint Photos puis la retouche (E18) ; une prise hors du cadre va en retouche et reste dans Meeshy (E19) ; « Enregistrer » est masqué tant que la prise est dans Photos avec le cadre affiché, et revient quand on en change (E20). Le rond ne subsiste que sans aucun cadre choisi (E14, variante 2).</p>
     <p>Chaque écran est montré en clair, en sombre et, quand la largeur change la disposition, à 320 px. L'iPad (E16) et le web de bureau (E17) ont leur propre composition.</p>
     <nav aria-label="Écrans"><ul class="toc" id="toc"></ul></nav>
   </header>
@@ -274,26 +327,45 @@ figure { margin: 0; }
   </section>
 
   <!-- E2 -->
-  <section class="screen-section" id="e2" data-name="Écran caméra et carrousel">
+  <section class="screen-section" id="e2" data-name="Caméra : la case de cadre déclenche">
     <div class="screen-head">
-      <div><h2><span class="id">E2</span> Déroulé photo : caméra, carrousel de décors et poses</h2>
-      <p class="lead">Chemin nominal en deux gestes : « Immortaliser » puis déclencher, cadre et pose déjà choisis. Sous l'aperçu, le carrousel des décors de l'atmosphère, puis les poses de Mee et Meo. L'aperçu à l'écran est l'image finale.</p></div>
-      <div class="note"><b>À valider : la présence de chaque tuile</b><span>Prête (vignette nette), à télécharger (pastille de poids), en cours (anneau), échec (« Réessayer »), plus de place (pastille rouge).</span><span>Toucher une tuile absente la met en tête de file ; l'aperçu bascule quand le cadre est prêt, sans spinner, avec la carte simple en attendant.</span><span>Le cadre choisi affiche son usage sur l'aperçu. « Autres atmosphères » ouvre la boutique en mode « choisir » (E12).</span></div>
+      <div><h2><span class="id">E2</span> Déroulé photo : la bande des cadres, dont la case choisie déclenche</h2>
+      <p class="lead">La caméra du composer iOS, reprise telle quelle (<code>ComposerLookStrip</code>, <code>ComposerCaptureBottomRow</code>) : la bande des décors de l'atmosphère, la case choisie au centre, encadrée de blanc, et son nom écrit seul sous la bande. <b>La case choisie EST le déclencheur</b> : la toucher prend la photo, la tenir filme. Il n'y a pas de rond en plus. Les poses de Mee et Meo restent au-dessus de la bande.</p></div>
+      <div class="note"><b>À valider</b><span>Une prise par la case de cadre rejoint Photos, puis la retouche (E18). Une prise par la scène (toucher deux fois l'aperçu, ou le tenir) va en retouche et reste dans Meeshy seulement (E19).</span><span>Les cases n'écrivent rien : la présence de chaque décor se lit sur sa case (prête, poids, anneau de téléchargement, « Réessayer », « Plein »). Glisser la bande choisit la case du centre ; une case absente passe en tête de file, la carte simple tient l'aperçu en attendant.</span><span>Le « + » en bout de bande ouvre « Autres atmosphères » (E12). Le rail « Filtres · Cadres » est celui du composer. L'import depuis la galerie prend la place du flash en haut ; « Carte seule » reste dans la feuille « On immortalise ? ».</span><span>Repliée (rail refermé), la miniature choisie reste seule et déclenche toujours. En enregistrement, seule elle reste, avec son point rouge et son chrono, et le cadenas à droite.</span><span>La caméra est noire dans les deux thèmes, comme celle du composer.</span></div>
     </div>
-    <div class="stage" data-variants="dark 320" data-force="cam"><template>
+    <div class="stage" data-variants="dark 320" data-force="cam"><template data-label="bande ouverte">
       <div class="content">
-        <div class="nav"><span class="circle"><svg><use href="#i-x"/></svg></span><h3>Ambassadeur I</h3><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
-        <div class="viewer"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Savane d'Ambassadeur I"><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div></div>
-        <div class="carousel">
-          <div class="ctile sel"><div class="thumb"><img src="vignettes/savane-ambassadeur-1.webp" alt=""></div><span class="lbl">Baobab d'or</span></div>
-          <div class="ctile"><div class="thumb"><img src="vignettes/royaumes-ambassadeur-1.webp" alt=""></div><span class="lbl">Cour du roi</span></div>
-          <div class="ctile"><div class="thumb dim"><img src="vignettes/egypte-ambassadeur-1.webp" alt=""><div class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" stroke="rgba(255,255,255,.35)" stroke-width="4" fill="none"/><circle cx="18" cy="18" r="14" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="88" stroke-dashoffset="50" transform="rotate(-90 18 18)" stroke-linecap="round"/></svg></div></div><span class="lbl">En cours</span></div>
-          <div class="ctile"><div class="thumb dim"><img src="vignettes/olympe-ambassadeur-1.webp" alt=""><div class="badge-c"><span class="pill">340 Ko</span></div></div><span class="lbl">Temple</span></div>
-          <div class="ctile"><div class="thumb dim"><img src="vignettes/nord-ambassadeur-1.webp" alt=""><div class="ring"><svg viewBox="0 0 24 24" style="width:22px;height:22px;color:#fff"><use href="#i-retry"/></svg></div></div><span class="lbl">Réessayer</span></div>
-          <div class="ctile"><div class="thumb dim"><img src="vignettes/abysses-ambassadeur-1.webp" alt=""><div class="badge-c"><span class="pill" style="background:#991b1b">Plein</span></div></div><span class="lbl">Plus de place</span></div>
-        </div>
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
+        <div class="viewer"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or, Ambassadeur I"><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div><div class="rail"><span><svg><use href="#i-filters"/></svg>Filtres</span><span class="on"><svg><use href="#i-frame"/></svg>Cadres</span></div></div>
         <div class="poses"><span class="on">Au pied</span><span>Perchés</span><span>Par les côtés</span><span>Le ruban</span><span>Selfie</span></div>
-        <div class="shutter-row"><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="shutter" aria-label="Prendre la photo"></span><span class="link">Autres<br>atmosphères</span></div>
+        <div class="band-zone">
+          <div class="band">
+            <span class="cell"><img src="vignettes/celeste-ambassadeur-1.webp" alt=""></span>
+            <span class="cell dim"><img src="vignettes/nord-ambassadeur-1.webp" alt=""><span class="ring glyph"><svg viewBox="0 0 24 24" style="color:#fff"><use href="#i-retry"/></svg></span></span>
+            <span class="cell"><img src="vignettes/neon-ambassadeur-1.webp" alt=""></span>
+            <span class="cell"><img src="vignettes/royaumes-ambassadeur-1.webp" alt=""></span>
+            <span class="cell on" role="button" aria-label="Baobab d'or : toucher pour une photo, maintenir pour filmer"><img src="vignettes/savane-ambassadeur-1.webp" alt=""></span>
+            <span class="cell dim"><img src="vignettes/egypte-ambassadeur-1.webp" alt=""><span class="ring"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" stroke="rgba(255,255,255,.35)" stroke-width="4" fill="none"/><circle cx="18" cy="18" r="14" stroke="#fff" stroke-width="4" fill="none" stroke-dasharray="88" stroke-dashoffset="50" transform="rotate(-90 18 18)" stroke-linecap="round"/></svg></span></span>
+            <span class="cell dim"><img src="vignettes/olympe-ambassadeur-1.webp" alt=""><span class="badge-c"><span class="pill">340 Ko</span></span></span>
+            <span class="cell dim"><img src="vignettes/abysses-ambassadeur-1.webp" alt=""><span class="badge-c"><span class="pill" style="background:#991b1b">Plein</span></span></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-plus"/></svg></span></span>
+          </div>
+          <div class="band-name">Baobab d'or</div>
+        </div>
+      </div>
+    </template><template data-label="repliée : la miniature choisie, seule" data-variants="dark">
+      <div class="content">
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
+        <div class="viewer"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or"><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div><div class="rail"><span><svg><use href="#i-filters"/></svg>Filtres</span><span><svg><use href="#i-frame"/></svg>Cadres</span></div></div>
+        <div class="poses"><span class="on">Au pied</span><span>Perchés</span><span>Par les côtés</span><span>Le ruban</span><span>Selfie</span></div>
+        <div class="band-zone"><div class="band"><span class="cell on" role="button" aria-label="Baobab d'or : toucher pour une photo, maintenir pour filmer"><img src="vignettes/savane-ambassadeur-1.webp" alt=""></span></div><div class="band-name quiet">Baobab d'or</div></div>
+      </div>
+    </template><template data-label="enregistrement en cours" data-variants="dark">
+      <div class="content">
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="chrono"><i></i>0:04</span><span class="spacer"></span></div>
+        <div class="viewer"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or, vidéo en cours"><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div></div>
+        <div class="poses" style="visibility:hidden"><span>Au pied</span></div>
+        <div class="band-zone"><div class="band"><span class="cell on"><img src="vignettes/savane-ambassadeur-1.webp" alt=""><span class="rec"><i></i>4″</span></span></div><span class="lock-track" aria-hidden="true">› › <svg><use href="#i-lock"/></svg></span><div class="band-name quiet">Baobab d'or</div></div>
       </div>
     </template></div>
   </section>
@@ -303,14 +375,14 @@ figure { margin: 0; }
     <div class="screen-head">
       <div><h2><span class="id">E3</span> Pose « Selfie » et guide de cadrage</h2>
       <p class="lead">Seule pose où Meo entre dans la photo, et seulement si on la choisit. Un guide place le visage hors de sa zone, sans aucune analyse de l'image. Les autres poses gardent Mee et Meo autour de la fenêtre, jamais dessus.</p></div>
-      <div class="note"><b>À valider</b><span>Ovale pointillé blanc pour le visage, zone hachurée ambre pour Meo, une phrase d'aide qui s'efface après trois secondes.</span><span>Carte seule et galerie restent dans la même rangée que le déclencheur.</span></div>
+      <div class="note"><b>À valider</b><span>Ovale pointillé blanc pour le visage, zone hachurée ambre pour Meo, une phrase d'aide qui s'efface après trois secondes.</span><span>Le bas est celui de E2, bande repliée : la miniature du cadre choisi déclenche, aucun rond à côté. « Carte seule » reste dans la feuille « On immortalise ? ».</span></div>
     </div>
-    <div class="stage" data-variants="dark light" data-force="cam"><template>
+    <div class="stage" data-variants="dark" data-force="cam"><template>
       <div class="content">
-        <div class="nav"><span class="circle"><svg><use href="#i-x"/></svg></span><h3>Ambassadeur I</h3><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
-        <div class="viewer"><img src="vignettes/royaumes-ambassadeur-1.webp" alt=""><span class="guide"></span><span class="meo-zone"></span><div class="over" style="justify-content:flex-end"><span class="usage on-media" style="align-self:center">Garde ton visage dans l'ovale, Meo se place à droite</span></div></div>
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
+        <div class="viewer"><img src="vignettes/royaumes-ambassadeur-1.webp" alt="Aperçu : cadre Cour du roi, pose Selfie"><span class="guide"></span><span class="meo-zone"></span><div class="over" style="justify-content:flex-end"><span class="usage on-media" style="align-self:center">Garde ton visage dans l'ovale, Meo se place à droite</span></div><div class="rail" style="bottom:52px"><span><svg><use href="#i-filters"/></svg>Filtres</span><span><svg><use href="#i-frame"/></svg>Cadres</span></div></div>
         <div class="poses"><span>Au pied</span><span>Perchés</span><span>Par les côtés</span><span>Le ruban</span><span class="on">Selfie</span></div>
-        <div class="shutter-row"><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="shutter"></span><span class="link">Carte<br>seule</span></div>
+        <div class="band-zone"><div class="band"><span class="cell on" role="button" aria-label="Cour du roi : toucher pour une photo, maintenir pour filmer"><img src="vignettes/royaumes-ambassadeur-1.webp" alt=""></span></div><div class="band-name quiet">Cour du roi</div></div>
       </div>
     </template></div>
   </section>
@@ -320,7 +392,7 @@ figure { margin: 0; }
     <div class="screen-head">
       <div><h2><span class="id">E4</span> Résultat : message, Flamme, lien, et cadre d'une autre atmosphère</h2>
       <p class="lead">L'image fixe, recomposée depuis la photo. On y change cadre, pose et message sans reprendre la photo. Ici le cadre vient d'Olympe, pris « pour cette photo seulement » : d'où « Faire d'Olympe mon atmosphère » et, plus discret, « Ajouter à mes cadres ».</p></div>
-      <div class="note"><b>À valider</b><span>Champ de message seulement sur un cadre qui a un support (ruban, cartouche, parchemin) : 60 caractères au plus, une ligne, police manuscrite, aucun texte par défaut.</span><span>« Afficher ma Flamme » et « Partager avec mon lien », sur le web comme sur iOS. Formats 9:16 et 1:1.</span><span>Ordre des gestes : Partager, Enregistrer, Garder.</span></div>
+      <div class="note"><b>À valider</b><span>Champ de message seulement sur un cadre qui a un support (ruban, cartouche, parchemin) : 60 caractères au plus, une ligne, police manuscrite, aucun texte par défaut.</span><span>« Afficher ma Flamme » et « Partager avec mon lien », sur le web comme sur iOS. Formats 9:16 et 1:1.</span><span>Ordre des gestes : Partager, Enregistrer, Garder. « Enregistrer » n'apparaît que si la prise n'est pas déjà dans Photos avec ce cadre (E18 à E20).</span></div>
     </div>
     <div class="stage" data-variants="light dark 320"><template>
       <div class="content">
@@ -343,6 +415,95 @@ figure { margin: 0; }
         <div class="card" style="padding:10px 12px"><div class="row"><span class="grow sub" style="flex:1">Ce cadre vient d'Olympe.</span><button class="btn sm">Faire d'Olympe mon atmosphère</button></div><span class="link" style="text-align:left">Ajouter à mes cadres</span></div>
         <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn sec" style="flex:1">Enregistrer</button><button class="btn" style="flex:1">Garder</button></div>
       </div>
+    </template></div>
+  </section>
+
+  <!-- E18 -->
+  <section class="screen-section" id="e18" data-name="Prise par le cadre">
+    <div class="screen-head">
+      <div><h2><span class="id">E18</span> Prise par la case de cadre : enregistrée dans Photos, puis la retouche</h2>
+      <p class="lead">Toucher ou tenir la case de cadre choisie (E2, E3, E14) prend la photo ou la vidéo AVEC son cadre, l'enregistre dans Photos, puis ouvre la retouche. Une pastille discrète le dit, « Enregistrée dans Photos », et s'efface seule ; « Enregistrer » est déjà fait, il n'apparaît pas.</p></div>
+      <div class="note"><b>À valider</b><span>Pastille non modale, annoncée poliment aux lecteurs d'écran, partie après deux secondes ; elle ne prend jamais le focus.</span><span>La directive du 12 octobre (#10284) supplante ici le réglage de Médias (#9684, « l'original jamais dans Photos par défaut ») : viser le cadre, c'est demander la photo.</span><span>Variante 2 : la même règle dans la retouche du composer : la flèche ⬇︎ de la rangée haute n'est pas là, « Terminé » seul à droite.</span><span>Un refus d'accès à Photos se dit comme aujourd'hui (le message de la caméra) ; la retouche s'ouvre quand même, « Enregistrer » visible.</span></div>
+    </div>
+    <div class="stage" data-variants="light dark 320"><template data-label="jeu">
+      <div class="content">
+        <div class="nav"><span class="circle"><svg><use href="#i-back"/></svg></span><h3>Ta photo</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
+        <div class="row" style="justify-content:center"><div class="thumb" style="width:60%"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or"></div></div>
+        <div class="stack" style="text-align:center;gap:2px;align-items:center"><span class="sub">Baobab d'or · Afrique éternelle</span><span class="usage"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div>
+        <div class="row wrap" style="justify-content:center"><span class="pill">Changer le cadre</span><span class="pill">Changer la pose</span></div>
+        <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn" style="flex:1">Garder</button></div>
+      </div>
+      <div class="toast" role="status"><svg><use href="#i-check"/></svg>Enregistrée dans Photos</div>
+    </template><template data-label="variante 2 · composer" data-variants="dark" data-force="cam">
+      <div class="content">
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-size"/></svg></span><span class="done">Terminé</span></div>
+        <div class="viewer" style="max-height:520px"><img src="vignettes/poses-ruban.webp" alt="Retouche : cadre Ruban"></div>
+        <div class="rail row" style="margin-top:auto"><span><svg><use href="#i-filters"/></svg>Filtres</span><span><svg><use href="#i-frame"/></svg>Cadres</span><span><svg><use href="#i-crop"/></svg>Recadrer</span></div>
+      </div>
+      <div class="toast" role="status"><svg><use href="#i-check"/></svg>Enregistrée dans Photos</div>
+    </template></div>
+  </section>
+
+  <!-- E19 -->
+  <section class="screen-section" id="e19" data-name="Prise hors cadre">
+    <div class="screen-head">
+      <div><h2><span class="id">E19</span> Prise hors de la case de cadre : la retouche, gardée dans Meeshy seulement</h2>
+      <p class="lead">Toucher deux fois l'aperçu, le tenir, ou le rond quand aucun cadre n'est choisi (E14, variante 2) : la prise s'ouvre en retouche, gardée dans l'application, jamais dans Photos. Aucune pastille de galerie ; « Enregistrer » reste visible pour qui la veut dans Photos.</p></div>
+      <div class="note"><b>À valider</b><span>Même retouche qu'en E18 : seule la présence d'« Enregistrer » change, et rien n'est écrit pour l'expliquer.</span><span>« Garder » range la photo dans le carnet du jeu ; dans le composer, « Terminé » la pose dans la publication : dans les deux cas elle vit dans Meeshy.</span><span>Variante 2 : la retouche du composer, flèche ⬇︎ visible entre la taille et « Terminé ».</span></div>
+    </div>
+    <div class="stage" data-variants="light dark 320"><template data-label="jeu">
+      <div class="content">
+        <div class="nav"><span class="circle"><svg><use href="#i-back"/></svg></span><h3>Ta photo</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
+        <div class="row" style="justify-content:center"><div class="thumb" style="width:60%"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or"></div></div>
+        <div class="stack" style="text-align:center;gap:2px;align-items:center"><span class="sub">Baobab d'or · Afrique éternelle</span><span class="usage"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div>
+        <div class="row wrap" style="justify-content:center"><span class="pill">Changer le cadre</span><span class="pill">Changer la pose</span></div>
+        <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn sec" style="flex:1">Enregistrer</button><button class="btn" style="flex:1">Garder</button></div>
+      </div>
+      
+    </template><template data-label="variante 2 · composer" data-variants="dark" data-force="cam">
+      <div class="content">
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-size"/></svg></span><span class="circle" aria-label="Enregistrer dans Photos"><svg><use href="#i-down"/></svg></span><span class="done">Terminé</span></div>
+        <div class="viewer" style="max-height:520px"><img src="vignettes/poses-ruban.webp" alt="Retouche : cadre Ruban"></div>
+        <div class="rail row" style="margin-top:auto"><span><svg><use href="#i-filters"/></svg>Filtres</span><span><svg><use href="#i-frame"/></svg>Cadres</span><span><svg><use href="#i-crop"/></svg>Recadrer</span></div>
+      </div>
+      
+    </template></div>
+  </section>
+
+  <!-- E20 -->
+  <section class="screen-section" id="e20" data-name="Enregistrer et changement de cadre">
+    <div class="screen-head">
+      <div><h2><span class="id">E20</span> « Enregistrer » : masqué avec le cadre déjà enregistré, de retour quand on change de cadre</h2>
+      <p class="lead">La retouche se souvient du cadre avec lequel la prise est dans Photos. Tant que c'est le cadre affiché, « Enregistrer » est masqué. Changer de cadre le fait revenir ; l'enregistrer de nouveau le masque, avec la même pastille.</p></div>
+      <div class="note"><b>À valider</b><span>Étape 1 : prise par la case « Baobab d'or », déjà dans Photos : Partager, Garder.</span><span>Étape 2 : « Changer le cadre » ouvre la bande sous l'image, comme la retouche du composer ; choisir « Cour du roi » ramène « Enregistrer ».</span><span>Étape 3 : « Enregistrer » touché : la pastille, puis le bouton s'efface.</span><span>Revenir à un cadre déjà enregistré le masque de nouveau : la retouche garde la liste des cadres déjà dans Photos pour cette prise, et rien d'autre.</span></div>
+    </div>
+    <div class="stage" data-variants="light dark 320"><template data-label="1 · enregistrée avec ce cadre">
+      <div class="content">
+        <div class="nav"><span class="circle"><svg><use href="#i-back"/></svg></span><h3>Ta photo</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
+        <div class="row" style="justify-content:center"><div class="thumb" style="width:60%"><img src="vignettes/savane-ambassadeur-1.webp" alt="Aperçu : cadre Baobab d'or"></div></div>
+        <div class="stack" style="text-align:center;gap:2px;align-items:center"><span class="sub">Baobab d'or · Afrique éternelle</span><span class="usage"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div>
+        <div class="row wrap" style="justify-content:center"><span class="pill">Changer le cadre</span><span class="pill">Changer la pose</span></div>
+        <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn" style="flex:1">Garder</button></div>
+      </div>
+      
+    </template><template data-label="2 · cadre changé">
+      <div class="content">
+        <div class="nav"><span class="circle"><svg><use href="#i-back"/></svg></span><h3>Ta photo</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
+        <div class="row" style="justify-content:center"><div class="thumb" style="width:44%"><img src="vignettes/royaumes-ambassadeur-1.webp" alt="Aperçu : cadre Cour du roi"></div></div>
+        <div class="stack" style="text-align:center;gap:2px;align-items:center"><span class="sub">Cour du roi · Afrique éternelle</span><span class="usage"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div>
+        <div class="band-zone"><div class="band"><span class="cell"><img src="vignettes/nord-ambassadeur-1.webp" alt=""></span><span class="cell"><img src="vignettes/savane-ambassadeur-1.webp" alt=""></span><span class="cell on"><img src="vignettes/royaumes-ambassadeur-1.webp" alt=""></span><span class="cell"><img src="vignettes/egypte-ambassadeur-1.webp" alt=""></span><span class="cell"><img src="vignettes/olympe-ambassadeur-1.webp" alt=""></span></div><div class="band-name">Cour du roi</div></div><p class="ann">Enregistrer revient : ce cadre n'est pas encore dans Photos</p>
+        <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn sec" style="flex:1">Enregistrer</button><button class="btn" style="flex:1">Garder</button></div>
+      </div>
+      
+    </template><template data-label="3 · réenregistrée" data-variants="light dark">
+      <div class="content">
+        <div class="nav"><span class="circle"><svg><use href="#i-back"/></svg></span><h3>Ta photo</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
+        <div class="row" style="justify-content:center"><div class="thumb" style="width:60%"><img src="vignettes/royaumes-ambassadeur-1.webp" alt="Aperçu : cadre Cour du roi"></div></div>
+        <div class="stack" style="text-align:center;gap:2px;align-items:center"><span class="sub">Cour du roi · Afrique éternelle</span><span class="usage"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div>
+        <div class="row wrap" style="justify-content:center"><span class="pill">Changer le cadre</span><span class="pill">Changer la pose</span></div>
+        <div class="row" style="margin-top:auto"><button class="btn sec" style="flex:1">Partager</button><button class="btn" style="flex:1">Garder</button></div>
+      </div>
+      <div class="toast" role="status"><svg><use href="#i-check"/></svg>Enregistrée dans Photos</div>
     </template></div>
   </section>
 
@@ -563,19 +724,36 @@ figure { margin: 0; }
   </section>
 
   <!-- E14 -->
-  <section class="screen-section" id="e14" data-name="Puces des cadres de capture">
+  <section class="screen-section" id="e14" data-name="Cadres de capture et leur usage">
     <div class="screen-head">
-      <div><h2><span class="id">E14</span> Puces d'ambiance des cadres de capture, avec leur usage</h2>
-      <p class="lead">Photo du composer iOS et montage de capture d'appel. La puce choisie dit où son cadre est utilisable. Le « + » ouvre la boutique filtrée sur ces cadres.</p></div>
-      <div class="note"><b>À valider : la loi d'usage</b><span>Un cadre de capture seule n'est JAMAIS proposé en appel : en appel, ses puces n'existent pas.</span><span>Un cadre d'appel sert aussi la capture : « Utilisable : appels vidéo et captures ».</span><span>Aucun de ces cadres n'est proposé pour un succès, un rang ou un Prestige.</span></div>
+      <div><h2><span class="id">E14</span> Caméra du composer : la bande des cadres de capture, avec leur usage</h2>
+      <p class="lead">La caméra du composer iOS telle qu'elle est livrée : rail « Filtres · Cadres » en bas à gauche, bande ouverte sur les cadres, « Aucun » en tête, la case choisie au centre, son nom écrit sous la bande. La case choisie déclenche. L'aperçu dit où son cadre est utilisable ; le « + » ouvre la boutique filtrée sur ces cadres.</p></div>
+      <div class="note"><b>À valider : la loi d'usage</b><span>Un cadre de capture seule n'est JAMAIS proposé en appel : en appel, ses cases n'existent pas.</span><span>Un cadre d'appel sert aussi la capture : « Utilisable : appels vidéo et captures ». Aucun de ces cadres n'est proposé pour un succès, un rang ou un Prestige.</span><span><b>Le rond n'existe que sans cadre</b> (variante 2, <code>collapsedTrigger = .shutter</code>) : c'est alors le seul déclencheur, et sa prise est hors cadre, donc gardée dans Meeshy (E19). Dès qu'un cadre est choisi, le rond s'efface au profit de sa miniature.</span><span>Les cases voisines peignent le direct à travers leur cadre ; la planche montre leurs pictogrammes de repli.</span></div>
     </div>
-    <div class="stage" data-variants="dark light" data-force="cam"><template>
+    <div class="stage" data-variants="dark 320" data-force="cam"><template data-label="cadre « Ruban » choisi">
       <div class="content">
-        <div class="nav"><span class="circle"><svg><use href="#i-x"/></svg></span><h3>Photo</h3><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
-        <div class="viewer" style="max-height:440px"><img src="vignettes/poses-ruban.webp" alt=""><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Capture photo et vidéo uniquement</span></div></div>
-        <div class="poses"><span class="circle" style="width:36px;height:36px;padding:0;display:grid;place-items:center"><svg style="width:16px;height:16px"><use href="#i-plus"/></svg></span><span>Aucun</span><span class="on">Ruban</span><span>Polaroïd</span><span>Néon</span><span>Fête</span></div>
-        <div class="card" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff"><div class="row"><span class="usage" style="color:#a5b4fc"><svg><use href="#i-seal"/></svg>Néon : Utilisable : appels vidéo et captures</span></div><div class="row"><span class="usage" style="color:#a5b4fc"><svg><use href="#i-seal"/></svg>Ruban, Polaroïd, Fête : Capture photo et vidéo uniquement</span></div></div>
-        <div class="shutter-row"><span class="circle"><svg><use href="#i-photo"/></svg></span><span class="shutter"></span><span style="width:36px"></span></div>
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-size"/></svg></span><span class="circle"><svg><use href="#i-bolt"/></svg></span><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
+        <div class="viewer" style="max-height:440px"><img src="vignettes/poses-ruban.webp" alt="Aperçu : cadre Ruban"><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Capture photo et vidéo uniquement</span></div><div class="rail"><span><svg><use href="#i-filters"/></svg>Filtres</span><span class="on"><svg><use href="#i-frame"/></svg>Cadres</span></div></div>
+        <div class="card" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.12);color:#fff;padding:8px 10px;gap:4px"><span class="usage" style="color:#a5b4fc"><svg><use href="#i-seal"/></svg>Néon : Utilisable : appels vidéo et captures</span><span class="usage" style="color:#a5b4fc"><svg><use href="#i-seal"/></svg>Ruban, Polaroïd, Fête : Capture photo et vidéo uniquement</span></div>
+        <div class="band-zone">
+          <div class="band">
+            <span class="cell" style="visibility:hidden"></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-none"/></svg></span></span>
+            <span class="cell on" role="button" aria-label="Ruban : toucher pour une photo, maintenir pour filmer"><img src="vignettes/poses-ruban.webp" alt=""></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-photo"/></svg></span></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-frame"/></svg></span></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-seal"/></svg></span></span>
+            <span class="cell"><span class="glyph"><svg><use href="#i-plus"/></svg></span></span>
+          </div>
+          <div class="band-name">Ruban</div>
+        </div>
+      </div>
+    </template><template data-label="variante 2 · aucun cadre : le rond, seul" data-variants="dark">
+      <div class="content">
+        <div class="cam-top"><span class="circle"><svg><use href="#i-x"/></svg></span><span class="spacer"></span><span class="circle"><svg><use href="#i-size"/></svg></span><span class="circle"><svg><use href="#i-bolt"/></svg></span><span class="circle"><svg><use href="#i-flip"/></svg></span></div>
+        <div class="viewer" style="max-height:440px"><div role="img" aria-label="Aperçu sans cadre" style="width:100%;height:100%;background:radial-gradient(60% 40% at 50% 38%,#6b5a4a 0%,#3a2f27 55%,#17120e 100%)"></div><div class="rail"><span><svg><use href="#i-filters"/></svg>Filtres</span><span><svg><use href="#i-frame"/></svg>Cadres</span></div></div>
+        <span class="trigger-ring" role="button" aria-label="Prendre une photo"></span>
+        <p class="hint">toucher deux fois pour une photo · maintenir pour filmer</p>
       </div>
     </template></div>
   </section>
@@ -601,7 +779,7 @@ figure { margin: 0; }
   <section class="screen-section" id="e16" data-name="iPad">
     <div class="screen-head">
       <div><h2><span class="id">E16</span> iPad : déroulé et boutique côte à côte</h2>
-      <p class="lead">Sur iPad, « Autres atmosphères » ouvre la boutique en mode « choisir » dans un panneau à droite de l'aperçu, qui reste visible. Sans le panneau, le carrousel de E2 occupe cette colonne. Les poses et le déclencheur passent sous l'aperçu, sur une ligne.</p></div>
+      <p class="lead">Sur iPad, « Autres atmosphères » ouvre la boutique en mode « choisir » dans un panneau à droite de l'aperçu, qui reste visible. Sans le panneau, le carrousel de E2 occupe cette colonne. Les poses et la miniature du cadre choisi, qui déclenche, passent sous l'aperçu, sur une ligne ; aucun rond.</p></div>
       <div class="note"><b>À valider</b><span>Même rangée, mêmes états, mêmes libellés qu'en E10 et E12.</span><span>Paysage, rendu à l'échelle de 1024 px de large.</span></div>
     </div>
     <div class="stage" data-variants="ipad-dark ipad-light"><template>
@@ -609,7 +787,7 @@ figure { margin: 0; }
         <div class="stack" style="gap:14px;background:#000;border-radius:22px;padding:16px;color:#fff">
           <div class="nav"><span class="circle" style="background:rgba(255,255,255,.14);color:#fff"><svg><use href="#i-x"/></svg></span><h3>Ambassadeur I</h3><span class="circle" style="background:rgba(255,255,255,.14);color:#fff"><svg><use href="#i-flip"/></svg></span></div>
           <div class="viewer" style="max-height:420px;width:auto;height:420px"><img src="vignettes/olympe-ambassadeur-1.webp" alt=""><div class="over"><span class="usage on-media" style="align-self:flex-start"><svg><use href="#i-seal"/></svg>Rang Ambassadeur I uniquement</span></div></div>
-          <div class="row" style="justify-content:center;gap:12px"><div class="poses"><span class="on">Au pied</span><span>Perchés</span><span>Par les côtés</span><span>Le ruban</span><span>Selfie</span></div><span class="shutter" style="width:62px;height:62px"></span></div>
+          <div class="row" style="justify-content:center;gap:16px;align-items:flex-end"><div class="poses"><span class="on">Au pied</span><span>Perchés</span><span>Par les côtés</span><span>Le ruban</span><span>Selfie</span></div><span class="cell on" role="button" aria-label="Temple de l'Aube : toucher pour une photo, maintenir pour filmer"><img src="vignettes/olympe-ambassadeur-1.webp" alt=""></span></div>
         </div>
         <div class="stack" style="gap:12px">
           <div class="nav"><h3 style="text-align:left">Autres atmosphères</h3><span class="circle"><svg><use href="#i-x"/></svg></span></div>
@@ -670,9 +848,9 @@ figure { margin: 0; }
     return fig;
   };
   document.querySelectorAll('.stage').forEach((stage) => {
-    const variants = stage.dataset.variants.split(' ');
-    const force = stage.dataset.force;
     stage.querySelectorAll('template').forEach((tpl) => {
+      const variants = (tpl.dataset.variants ?? stage.dataset.variants).split(' ');
+      const force = tpl.dataset.force ?? stage.dataset.force;
       variants.forEach((variant) => stage.append(device(variant, tpl.innerHTML, force, tpl.dataset.label)));
     });
   });
