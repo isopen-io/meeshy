@@ -122,7 +122,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 
     /// L'auteur a prouvé un compte (`sender.type` user ou bot, #10286) — ne
     /// gouverne que les liens. `nil` (lignes antérieures, écho sans sender
-    /// jamais complété) ⇒ déduit de `senderIsAnonymous`.
+    /// jamais complété) ⇒ inconnu : liens inertes, sauf message propre ou
+    /// système (fail-closed).
     public var senderHasAccount: Bool?
 
     /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`

@@ -298,9 +298,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
         senderIsAnonymous = try c.decodeIfPresent(Bool.self, forKey: .senderIsAnonymous) ?? false
-        senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount) ?? true
         deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
+        // #10286 — blob antérieur : compte inconnu ⇒ liens inertes chez autrui.
+        senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount)
+            ?? (isMe || messageSource != .user)
         deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
@@ -372,7 +374,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
         try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
         if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
-        if !senderHasAccount { try c.encode(false, forKey: .senderHasAccount) }
+        try c.encode(senderHasAccount, forKey: .senderHasAccount)
         try c.encode(deliveryStatus, forKey: .deliveryStatus)
         try c.encode(isMe, forKey: .isMe)
         try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)

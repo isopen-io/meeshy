@@ -155,7 +155,9 @@ extension MessageRecord {
             senderAvatarURL: senderAvatarURL,
             senderUserId: senderId == currentUserId ? currentUserId : nil,
             senderIsAnonymous: senderIsAnonymous ?? false,
-            senderHasAccount: senderHasAccount ?? !(senderIsAnonymous ?? false),
+            // #10286 — inconnu (ligne antérieure, écho sans sender) ⇒ liens
+            // INERTES chez autrui ; la revalidation REST remplit la colonne.
+            senderHasAccount: senderHasAccount ?? (senderId == currentUserId || msgSource != .user),
             deliveryStatus: deliveryStatus,
             isMe: senderId == currentUserId,
             deliveredToAllAt: deliveredToAllAt,

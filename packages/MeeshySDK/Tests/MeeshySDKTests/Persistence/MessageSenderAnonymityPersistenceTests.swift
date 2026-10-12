@@ -90,6 +90,37 @@ final class MessageSenderAnonymityPersistenceTests: XCTestCase {
         XCTAssertTrue(message.senderHasAccount)
     }
 
+    func test_toMessage_unknownAccountRowFromSomeoneElse_hasNoProvenAccount() async throws {
+        try await actor.upsertFromAPIMessages([
+            try makeAPIMessage(id: "srv_unknown", conversationId: "conv_unknown", senderType: nil)
+        ])
+        let record = try row("srv_unknown", in: "conv_unknown")
+
+        XCTAssertNil(record.senderHasAccount)
+        XCTAssertFalse(record.toMessage(currentUserId: "user_me").senderHasAccount)
+    }
+
+    func test_toMessage_unknownAccountRowOfMine_keepsLinks() async throws {
+        try await actor.upsertFromAPIMessages([
+            try makeAPIMessage(id: "srv_mine", conversationId: "conv_mine", senderType: nil)
+        ])
+
+        let message = try row("srv_mine", in: "conv_mine").toMessage(currentUserId: "participant_1")
+        XCTAssertTrue(message.senderHasAccount)
+    }
+
+    func test_upsertFromAPIMessages_partialEchoWithoutSender_keepsProvenAccount() async throws {
+        try await actor.upsertFromAPIMessages([
+            try makeAPIMessage(id: "srv_known", conversationId: "conv_known", senderType: "user")
+        ])
+        try await actor.upsertFromAPIMessages([
+            try makeAPIMessage(id: "srv_known", conversationId: "conv_known", senderType: nil)
+        ])
+
+        let message = try row("srv_known", in: "conv_known").toMessage(currentUserId: "user_me")
+        XCTAssertTrue(message.senderHasAccount)
+    }
+
     func test_upsertFromAPIMessages_partialEchoWithoutSender_keepsAnonymity() async throws {
         try await actor.upsertFromAPIMessages([
             try makeAPIMessage(id: "srv_keep", conversationId: "conv_keep", senderType: "anonymous")
@@ -109,6 +140,14 @@ final class MessageSenderAnonymityPersistenceTests: XCTestCase {
         let reference = try XCTUnwrap(api.replyTo).toReplyReference(currentUserId: "user_me", preferredLanguages: [])
 
         XCTAssertEqual(reference.authorIsAnonymous, true)
+    }
+
+    func test_decode_legacyBlobFromSomeoneElse_hasNoProvenAccount() throws {
+        let legacy = #"{"id":"m1","conversationId":"c1","senderId":"p1","content":"https://exemple.com","createdAt":0,"updatedAt":0,"isMe":false}"#
+
+        let decoded = try JSONDecoder().decode(MeeshyMessage.self, from: Data(legacy.utf8))
+
+        XCTAssertFalse(decoded.senderHasAccount)
     }
 
     func test_codableRoundTrip_anonymousSender_staysAnonymous() throws {
