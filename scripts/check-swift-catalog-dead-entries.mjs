@@ -482,7 +482,11 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // manifeste — l'administration du calendrier des saisons n'a pas d'écran iOS (web seulement), même raison que les
 // dizaines d'autres `AdminEndpoint.*` ci-dessus. `MeEndpoint.gameSeasonsCalendar` a, lui, son appelant
 // (`GameEndpointPolicy.gameSeasonCalendar`). Valeur MESURÉE le 2026-10-12 en CI (run 38190033361 rouge sur 301).
-const BASELINE_DEAD_ENTRIES = 301;
+// 301 -> 303 (#10315, 2026-10-12) : `AdminEndpoint.usersByUserIdPublications` et `…PublicationsModeration`
+// (`/api/v1/admin/users/:userId/publications[/moderation]`) — la modération des publications d'un membre est un
+// écran d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
+// 2026-10-12 en CI (run 38270055989 rouge sur 303) et en local.
+const BASELINE_DEAD_ENTRIES = 303;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
