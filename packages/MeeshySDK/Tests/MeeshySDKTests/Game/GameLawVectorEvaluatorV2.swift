@@ -23,8 +23,7 @@ extension GameLawVectorEvaluator {
         "showcase-view", "showcase-cap", "trophy-month", "atlas", "atlas-language", "prestige", "rarity",
         "rarity-display", "mythic-seats", "mythic-crossing", "mythic-signature", "badge-tier", "badge-served", "guide-v2", "guide-choose", "photo-moment",
         "trophy-visitor-key", "showcase-visitor", "season-tense",
-    ] + photoLaws + constellationLaws
-    ] + photoLaws + scheduleLaws
+    ] + photoLaws + constellationLaws + scheduleLaws
 
     static func evaluateWave2(law: String, input: GameJSON) throws -> GameJSON {
         switch law {
