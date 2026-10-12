@@ -3,6 +3,7 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 import type { Transport } from '../net/transport';
 
 import { anySignal, timeoutSignal } from './abort';
+import { guestAccessEndOf, type GuestAccessEnd } from './guest-access-end';
 
 /**
  * LE CLIENT HTTP RÉEL (#5605, T2) — le transport que `apiConfig`/`session.ts`
@@ -193,6 +194,10 @@ export type HttpTransportOptions = {
    * refusé (`login.ts:133`, `security: []`) déconnecterait sinon la session
    * en cours pour un mot de passe mal tapé dans un ré-authentifiant. */
   readonly onUnauthorized?: () => void;
+  /** Notifié quand la passerelle dit à une session d'INVITÉ que son accès est
+   * fini (#10442, `guest-access-end.ts`) : lien expiré ou invité retiré. Ni un
+   * compte ni un appel au crédential forcé ne le déclenchent. */
+  readonly onGuestAccessEnded?: (reason: GuestAccessEnd) => void;
   readonly fetchImpl?: typeof fetch;
   /** Délai de garde en ms, `DEFAULT_TIMEOUT_MS` par défaut. `0` ou négatif
    * DÉSACTIVE le délai (utile à un témoin qui veut isoler un autre
@@ -422,12 +427,17 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       };
     }
 
+    const error = typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status);
+    const code = typeof envelope.code === 'string' ? envelope.code : undefined;
+    const guestEnd = !forced && credential?.kind === 'anonymous' && !identityChanged() ? guestAccessEndOf({ status: response.status, error, ...(code !== undefined ? { code } : {}) }) : null;
+    if (guestEnd !== null) options.onGuestAccessEnded?.(guestEnd);
+
     const field = fieldOf(envelope);
     return {
       ok: false,
       status: response.status,
-      error: typeof envelope.error === 'string' ? envelope.error : GENERIC_ERROR(response.status),
-      ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
+      error,
+      ...(code !== undefined ? { code } : {}),
       ...(field !== undefined ? { field } : {}),
       ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
       ...(suggestionsOf(envelope).length > 0 ? { suggestions: suggestionsOf(envelope) } : {}),

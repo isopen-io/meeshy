@@ -826,10 +826,10 @@ export function createUnifiedAuthMiddleware(
         });
       }
 
-      // Même code que les portes de lecture par route (#7388) — les clients
-      // qui branchent déjà `SHARE_LINK_EXPIRED` n'ont rien à apprendre. Sur
-      // une route à authentification facultative aussi : retomber en visiteur
-      // tairait la cause, comme pour la révocation ci-dessus.
+      // Même code que les portes de lecture par route (#7388). Le client y
+      // oublie la session d'invité et cesse de se reconnecter, comme pour la
+      // révocation ci-dessus (#10442). Sur une route à authentification
+      // facultative aussi : retomber en visiteur tairait la cause.
       if (error instanceof ShareLinkExpiredError) {
         return refuseExpiredShareLink(reply);
       }
