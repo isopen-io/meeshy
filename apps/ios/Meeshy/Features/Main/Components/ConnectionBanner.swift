@@ -4,8 +4,8 @@ import MeeshySDK
 import MeeshyUI
 
 /// Single inline pill at the top of every NavigationStack content view
-/// (mounted in the status-bar band by `.inSyncPillBand()` on `RootView` /
-/// `iPadRootView`, see `SyncPillPlacement`, #9680). Acts as the **orchestrator** for the unified
+/// (mounted below the safe area by `.inSyncPillBand()` on `RootView` /
+/// `iPadRootView`, see `SyncPillPlacement`, #10371). Acts as the **orchestrator** for the unified
 /// `SyncPill` chip: it collects every signal worth surfacing
 /// (`ConnectionStatus`, offline outbox items, transient online return)
 /// and emits a single list of `SyncPillEntry` to rotate through.
