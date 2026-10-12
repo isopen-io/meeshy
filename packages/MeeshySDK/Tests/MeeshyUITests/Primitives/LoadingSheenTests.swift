@@ -58,7 +58,6 @@ final class LoadingSheenLawTests: XCTestCase {
 /// placeholder d'image déclarent leur état au reflet.
 final class LoadingSheenSourceGuardTests: XCTestCase {
 
-    private static let sheenToken = try! NSRegularExpression(pattern: "(?i)(shimmer|sheen)")
     private static let animationPrimitives = ["repeatForever(", "CABasicAnimation(", "TimelineView("]
 
     /// Toute déclaration de premier niveau de MeeshyUI qui nomme un reflet ET
@@ -142,8 +141,9 @@ final class LoadingSheenSourceGuardTests: XCTestCase {
 
     private static func isAnimatedSheen(_ code: String) -> Bool {
         code.components(separatedBy: "\n}\n").contains { declaration in
-            let range = NSRange(declaration.startIndex..., in: declaration)
-            guard sheenToken.firstMatch(in: declaration, range: range) != nil else { return false }
+            guard declaration.range(of: "shimmer|sheen", options: [.regularExpression, .caseInsensitive]) != nil else {
+                return false
+            }
             return animationPrimitives.contains { declaration.contains($0) }
         }
     }
