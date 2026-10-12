@@ -143,6 +143,7 @@ const f = {
   'admin.people.pref.notification.friendContentEnabled': 'Publicaciones de mis amigos',
   'admin.people.pref.notification.contactActivityEnabled': 'Un contacto que vuelve a Meeshy',
   'admin.people.pref.notification.gameEnabled': 'Notificación del juego Meeshy',
+  'admin.people.pref.notification.gamePhotoEnabled': 'Momentos para inmortalizar (push del juego)',
   'admin.people.pref.notification.dndEnabled': 'No molestar',
   'admin.people.pref.notification.dndStartTime': 'No molestar: inicio',
   'admin.people.pref.notification.dndEndTime': 'No molestar: fin',
