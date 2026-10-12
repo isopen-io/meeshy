@@ -3,61 +3,15 @@ import Combine
 
 // MARK: - Shimmer Modifier
 
+/// Tenue « squelette » du reflet de chargement. Délègue à `LoadingSheen`,
+/// l'unique reflet animé du SDK (#9869).
 public struct ShimmerModifier: ViewModifier {
-    @State private var offset: CGFloat = -200
-    @Environment(\.accessibilityReduceMotion) private var systemReduce
-    @Environment(\.meeshyForceReduceMotion) private var userForced
     private let theme = ThemeManager.shared
 
     public init() {}
 
-    private var reduceMotion: Bool {
-        MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
-    }
-
     public func body(content: Content) -> some View {
-        content
-            .overlay(
-                LinearGradient(
-                    colors: [
-                        Color.clear,
-                        theme.textMuted.opacity(MeeshyOpacity.medium),
-                        Color.clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: 120)
-                .offset(x: offset)
-                .animation(ShimmerCycle.sweep(duration: 1.5, running: offset == 400), value: offset)
-                // **L'animation est PORTÉE par le reflet, jamais par une transaction**
-                // (#7625). Un `withAnimation` à courbe infinie posé dans `onAppear` anime
-                // TOUTE la transaction en cours — dans un fil paresseux, celle qui fait
-                // aussi naître les rangées voisines, qui hériteraient d'une animation sans
-                // fin. `.animation(_:value:)` borne la courbe au seul reflet ; l'état se
-                // pose sans animation.
-                .onAppear {
-                    // Reduce Motion (system or in-app): keep a static placeholder
-                    // instead of a perpetual sweeping highlight.
-                    guard !reduceMotion else { return }
-                    offset = 400
-                }
-                .onDisappear {
-                    withTransaction(Transaction(animation: nil)) {
-                        offset = -200
-                    }
-                }
-            )
-            .clipped()
-    }
-}
-
-/// La courbe d'un reflet de chargement : un balayage sans fin quand il court,
-/// AUCUNE animation quand il revient au repos (`onDisappear`) — sinon le retour
-/// à la position de départ rejouerait la courbe infinie.
-nonisolated public enum ShimmerCycle {
-    public static func sweep(duration: Double, running: Bool) -> Animation? {
-        running ? .linear(duration: duration).repeatForever(autoreverses: false) : nil
+        content.modifier(LoadingSheen(style: .skeleton(tint: theme.textMuted.opacity(MeeshyOpacity.medium))))
     }
 }
 

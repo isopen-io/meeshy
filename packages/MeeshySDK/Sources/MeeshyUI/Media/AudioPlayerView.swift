@@ -170,10 +170,6 @@ public struct AudioPlayerView: View {
     // simple dark/light read; ThemeManager.mode itself is kept in sync with
     // it (see `ThemeManager.syncWithSystem`).
     @Environment(\.colorScheme) private var colorScheme
-    // Internal (not `private`) — `transcriptionShimmer` (moved to
-    // AudioPlayerView+Transcription.swift) reads both for Reduce Motion.
-    @Environment(\.accessibilityReduceMotion) internal var systemReduce
-    @Environment(\.meeshyForceReduceMotion) internal var userForced
     /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
     /// then owned by user interaction (language pill taps, `externalLanguage`)
     /// exactly like before. Internal (not `private`) so `@testable import`
@@ -215,9 +211,6 @@ public struct AudioPlayerView: View {
     /// reste de la vie de cette vue. Internal — lu et posé par
     /// `transcriptionBlock` (AudioPlayerView+Transcription.swift).
     @State internal var hasManuallyRevealedTranscription = false
-    /// Toggled in `onAppear` of the skeleton view to drive the pulse.
-    /// Internal — `transcriptionShimmer` (extension file) owns it.
-    @State internal var transcriptionPulsePhase = false
     /// `true` pendant le drag de scrub sur la waveform. Publié via
     /// `MediaScrubbingPreferenceKey` pour que l'hôte (conteneur de swipe de
     /// bulle côté app) désengage ses gestes horizontaux le temps du scrub.
