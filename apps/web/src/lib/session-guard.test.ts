@@ -409,9 +409,9 @@ describe("toute route d'administration déclarée dans ROUTES est PRIVÉE (#8876
     expect(publiques).toEqual([]);
   });
 
-  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906)', () => {
+  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906) + les deux des opérations (#10391)', () => {
     const adresses = Object.values(ROUTES).filter((route) => route.pattern.startsWith('/adm')).length;
-    expect(adresses).toBe(58);
+    expect(adresses).toBe(60);
   });
 });
 

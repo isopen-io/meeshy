@@ -295,7 +295,9 @@ describe('À traiter — la file de modération et les diffusions en cours', () 
   test('les signalements récents sont NOMMÉS — l’entité, le motif, le moment, le statut — jamais leur contenu', async () => {
     const { host } = await dashboard({ open: 'todo' });
     const rows = [...host.querySelectorAll('[data-admin-block="moderation"] li[data-admin-row]')].map((row) => flat(row.textContent));
-    expect(rows).toEqual(['Message de Awa DiopHarcèlement · il y a 3 minutesEn attente', 'Jean DupontMembre · Indésirable · il y a 3 heuresEn cours d’examen']);
+    expect(rows).toEqual(['Message de Awa DiopHarcèlement · il y a 3 minutesEn attenteClasser', 'Jean DupontMembre · Indésirable · il y a 3 heuresEn cours d’examenClasser']);
+    // #10394 — chaque signalement ouvert se traite depuis la ligne : « Classer » pour un message ou un membre.
+    expect(host.querySelectorAll('[data-admin-block="moderation"] [data-admin-report-act="dismiss"]').length).toBe(2);
 
     expect(host.textContent).not.toContain('EXTRAIT-SECRET');
     expect(host.textContent).not.toContain('note interne');
