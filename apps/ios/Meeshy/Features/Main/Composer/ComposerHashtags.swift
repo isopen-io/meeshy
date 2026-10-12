@@ -150,6 +150,51 @@ nonisolated enum ReelPublishedContent {
     }
 }
 
+/// **La légende servie d'un réel, calculée une fois** (#10354).
+///
+/// `ReelPublishedContent.content` reparse les balises (expressions régulières
+/// ICU) : appelé par le corps de chaque page de réel, il pesait 4,9 % du fil
+/// principal pendant les balayages (iPhone 16 Pro Max, Release). Le résultat
+/// ne dépend QUE de ses entrées — le texte servi (déjà résolu par le Prisme :
+/// traduction, original ou langue choisie) et les légendes des médias — donc
+/// la mémoire se clé sur elles : une traduction qui arrive, une langue
+/// choisie ou une édition changent la clé, jamais le résultat d'une autre.
+///
+/// Bornée : au-delà de `capacity` entrées, la mémoire repart vide.
+@MainActor
+final class ReelCaptionMemo {
+    nonisolated deinit {}
+
+    static let shared = ReelCaptionMemo()
+
+    private struct Key: Hashable {
+        let text: String?
+        let captions: [String?]
+    }
+
+    private let capacity: Int
+    private let compute: (String?, [String?]) -> String?
+    private var served: [Key: String] = [:]
+
+    init(capacity: Int = 64,
+         compute: @escaping (String?, [String?]) -> String? = { text, captions in
+             ReelPublishedContent.content(type: .reel, text: text, captions: captions)
+         }) {
+        self.capacity = capacity
+        self.compute = compute
+    }
+
+    /// Ce que `ReelPublishedContent.content(type: .reel, …)` rend, `""` pour rien.
+    func caption(text: String?, captions: [String?]) -> String {
+        let key = Key(text: text, captions: captions)
+        if let known = served[key] { return known }
+        let value = compute(text, captions) ?? ""
+        if served.count >= capacity { served.removeAll(keepingCapacity: true) }
+        served[key] = value
+        return value
+    }
+}
+
 /// Les mots de la feuille d'audience et de sa section hashtag (#4636).
 ///
 /// Ils vivent ICI et non dans le corps des vues : une chaîne composée dans un

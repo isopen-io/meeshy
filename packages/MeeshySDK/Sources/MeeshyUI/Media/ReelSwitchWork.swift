@@ -95,6 +95,15 @@ public struct ReelSwitchWork: OptionSet, Sendable, Hashable {
         }
     }
 
+    /// Pendant le geste, le lecteur attaché à la surface entrante joue s'il
+    /// existe, si le fichier est prêt, si la révélation d'ouverture est finie
+    /// et si aucun appel ne tient la session. Sinon le poster reste.
+    public static func mayPlayAttachedPlayer(
+        ready: Bool, revealCompleted: Bool, isCallActive: Bool, hasAttachedPlayer: Bool
+    ) -> Bool {
+        ready && revealCompleted && !isCallActive && hasAttachedPlayer
+    }
+
     /// La phase d'une page, depuis les deux signaux du lecteur : élue (elle
     /// passe la moitié de l'écran, pendant le geste) et posée (le paging s'est
     /// arrêté sur elle). `nil` : la page ne joue pas.

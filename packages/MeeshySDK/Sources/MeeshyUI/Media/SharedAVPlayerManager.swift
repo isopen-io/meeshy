@@ -349,6 +349,20 @@ public final class SharedAVPlayerManager: ObservableObject {
         emitWatchSample()
     }
 
+    /// **La pause du réel qu'on quitte, pendant le geste** (#10354).
+    ///
+    /// `pause()` envoie aussi le rapport de visionnage et écrit la position
+    /// de reprise — du travail qui figeait la page à mi-course. Ici, seul le
+    /// lecteur s'arrête et le passage en cours se clôt : le rapport part au
+    /// `cleanup()` du `load()` suivant, une fois la page posée, ou au prochain
+    /// `pause()`. `isPlaying` suit par l'observation du débit.
+    public func pauseForSwitch() {
+        guard let player else { return }
+        emitWatchSample()
+        stretchTracker.pause(positionMs)
+        player.pause()
+    }
+
     public func pause() {
         emitWatchSample()
         // Clôt AVANT le rapport, qui draine la trace : sinon le dernier passage
@@ -492,6 +506,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     private func tearDown() {
+        pipCreationTask?.cancel()
+        pipCreationTask = nil
+        pendingPipLayer = nil
         stopPip()
         cleanup()
         if !activeURL.isEmpty { activeURL = "" }
@@ -549,10 +566,53 @@ public final class SharedAVPlayerManager: ObservableObject {
         !teardownWasInternal
     }
 
+    /// La surface qui a demandé un PiP DIFFÉRÉ, et la création qui l'attend.
+    private weak var pendingPipLayer: AVPlayerLayer?
+    private var pipCreationTask: Task<Void, Never>?
+
+    /// Le délai d'un PiP différé : la page vient de se poser, la création du
+    /// contrôleur (≈ 3 % du fil principal mesurés au balayage, #10354) passe
+    /// après la dernière image du défilement.
+    nonisolated static let deferredPipDelay: Duration = .milliseconds(250)
+
+    /// Pure : la création différée a encore un sens — la couche montre
+    /// toujours le lecteur du moteur, et aucun contrôleur ne la sert déjà.
+    public nonisolated static func mayCreateDeferredPip(layerShowsEnginePlayer: Bool, alreadyServed: Bool) -> Bool {
+        layerShowsEnginePlayer && !alreadyServed
+    }
+
     /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
-    public func configurePip(playerLayer: AVPlayerLayer) {
+    ///
+    /// `deferred` (#10354) : le lecteur de réels demande son contrôleur pour
+    /// la page POSÉE ; la création attend `deferredPipDelay`, coalescée — une
+    /// rafale de demandes (montage, `load()`, mise à jour) n'en crée qu'un, et
+    /// une demande dont la couche ne montre plus le moteur ne crée rien. Le
+    /// passage automatique en arrière-plan
+    /// (`canStartPictureInPictureAutomaticallyFromInline`) reste posé.
+    public func configurePip(playerLayer: AVPlayerLayer, deferred: Bool = false) {
         guard AVPictureInPictureController.isPictureInPictureSupported() else { return }
         guard pipController?.playerLayer !== playerLayer else { return }
+        guard deferred else {
+            createPipController(for: playerLayer)
+            return
+        }
+        pendingPipLayer = playerLayer
+        guard pipCreationTask == nil else { return }
+        pipCreationTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.deferredPipDelay)
+            guard let self else { return }
+            self.pipCreationTask = nil
+            guard !Task.isCancelled, let layer = self.pendingPipLayer else { return }
+            self.pendingPipLayer = nil
+            guard Self.mayCreateDeferredPip(
+                layerShowsEnginePlayer: self.player != nil && layer.player === self.player,
+                alreadyServed: self.pipController?.playerLayer === layer
+            ) else { return }
+            self.createPipController(for: layer)
+        }
+    }
+
+    private func createPipController(for playerLayer: AVPlayerLayer) {
         // Une fenêtre PiP ouverte (ou en train de s'ouvrir) garde SON
         // contrôleur : une surface qui se monte pendant ce temps — la bulle
         // restée sous un plein écran qu'on ferme — le remplacerait et tuerait
