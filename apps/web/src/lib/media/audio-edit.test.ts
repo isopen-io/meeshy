@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AUDIO_GAIN, audioEditUntouched, editedWav, renderedChannels, untouchedAudioEdit, volumePercent, type AudioEdit } from './audio-edit';
+import { AUDIO_GAIN, audioEditUntouched, editedWav, fadeSeconds, renderedChannels, untouchedAudioEdit, volumePercent, type AudioEdit } from './audio-edit';
 import type { DecodedAudio } from './audio-trim';
 
 /**
@@ -55,7 +55,53 @@ describe('volume', () => {
   });
 });
 
+describe('fondus (#9162)', () => {
+  test('même durée qu’iOS : le tiers du son rendu, entre 0,2 et 1,2 s', () => {
+    expect(fadeSeconds(9)).toBeCloseTo(1.2, 5);
+    expect(fadeSeconds(1.5)).toBeCloseTo(0.5, 5);
+    expect(fadeSeconds(0.3)).toBeCloseTo(0.2, 5);
+  });
+
+  test('fondu d’entrée : le son part du silence et rejoint son niveau à la fin du fondu', () => {
+    const audio = constant(6, 0.5);
+    const [samples] = renderedChannels(audio, edit(audio, { fadeIn: true }));
+    expect(samples![0]).toBe(0);
+    expect(samples![Math.round(0.6 * 8000)]).toBeCloseTo(0.25, 2);
+    expect(samples![Math.round(1.2 * 8000)]).toBeCloseTo(0.5, 3);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0.5, 5);
+  });
+
+  test('fondu de sortie : le son finit au silence, le début reste intact', () => {
+    const audio = constant(6, 0.5);
+    const [samples] = renderedChannels(audio, edit(audio, { fadeOut: true }));
+    expect(samples![0]).toBeCloseTo(0.5, 5);
+    expect(samples![Math.round(4.8 * 8000) - 1]).toBeCloseTo(0.5, 3);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0, 3);
+  });
+
+  test('le fondu rejoint le volume réglé, pas le niveau d’origine', () => {
+    const audio = constant(6, 0.25);
+    const [samples] = renderedChannels(audio, edit(audio, { fadeIn: true, fadeOut: true, gain: 2 }));
+    expect(samples![0]).toBe(0);
+    expect(samples![3 * 8000]).toBeCloseTo(0.5, 5);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0, 3);
+  });
+
+  test('le fondu se mesure sur la fenêtre gardée', () => {
+    const audio = constant(10, 0.5);
+    const [samples] = renderedChannels(audio, edit(audio, { window: { start: 4, end: 7 }, fadeOut: true }));
+    expect(samples!.length).toBe(3 * 8000);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0, 3);
+    expect(samples![Math.round(1.9 * 8000)]).toBeCloseTo(0.5, 3);
+  });
+});
+
 describe('audioEditUntouched', () => {
+  test('un fondu posé est une édition', () => {
+    expect(audioEditUntouched({ ...untouchedAudioEdit(10), fadeIn: true }, 10)).toBe(false);
+    expect(audioEditUntouched({ ...untouchedAudioEdit(10), fadeOut: true }, 10)).toBe(false);
+  });
+
   test('rien de réglé : la pièce reste telle quelle', () => {
     expect(audioEditUntouched(untouchedAudioEdit(10), 10)).toBe(true);
   });

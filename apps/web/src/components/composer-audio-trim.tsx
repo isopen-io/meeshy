@@ -11,17 +11,19 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 /**
  * **« ÉDITER » UN AUDIO EN ATTENTE** (#9136, miroir de
  * `MeeshyAudioEditorView` iOS) — un son n'a pas de scène ; il garde son
- * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Volume — #9164), un seul
+ * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Fondu — #9162, Volume —
+ * #9164), un seul
  * panneau ouvert à la fois ; chaque réglage reste posé d'un outil à l'autre,
  * et « Terminé » les cuit ENSEMBLE dans la pièce rendue à sa place. Rien de
  * réglé la laisse telle quelle. ✕ ou Échap referment sans rien changer.
  */
-type AudioTool = 'trim' | 'volume';
+type AudioTool = 'trim' | 'fade' | 'volume';
 
-const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'volume'];
+const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'fade', 'volume'];
 
 const TOOL_KEY = {
   trim: 'story.studio.audioEdit.tool.trim',
+  fade: 'story.studio.audioEdit.tool.fade',
   volume: 'story.studio.audioEdit.tool.volume',
 } as const satisfies Record<AudioTool, InterfaceCatalogKey>;
 
@@ -48,6 +50,36 @@ function ToolButton({ on, tool, onPress, children }: { readonly on: boolean; rea
     >
       {children}
     </button>
+  );
+}
+
+function FadeSwitch({ edge, on, label, onPress }: { readonly edge: 'in' | 'out'; readonly on: boolean; readonly label: string; readonly onPress: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      data-audio-fade={edge}
+      onClick={onPress}
+      className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        outlineColor: 'var(--color-ios-brand)',
+        color: on ? '#fff' : 'var(--color-ios-ink)',
+        backgroundColor: on ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)',
+      }}
+    >
+      {label}
+      <span aria-hidden="true">{on ? '●' : '○'}</span>
+    </button>
+  );
+}
+
+function FadePanel({ lang, edit, onEdit }: { readonly lang: InterfaceLanguage; readonly edit: AudioEdit; readonly onEdit: (edit: AudioEdit) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <FadeSwitch edge="in" on={edit.fadeIn} label={translate(lang, 'story.studio.audioEdit.fade.in')} onPress={() => onEdit({ ...edit, fadeIn: !edit.fadeIn })} />
+      <FadeSwitch edge="out" on={edit.fadeOut} label={translate(lang, 'story.studio.audioEdit.fade.out')} onPress={() => onEdit({ ...edit, fadeOut: !edit.fadeOut })} />
+    </div>
   );
 }
 
@@ -144,6 +176,7 @@ export default function ComposerAudioTrim({
             ))}
           </div>
         ) : null}
+        {edit !== null && tool === 'fade' ? <FadePanel lang={lang} edit={edit} onEdit={setEdit} /> : null}
         {edit !== null && tool === 'volume' ? <VolumePanel lang={lang} gain={edit.gain} onGain={(next) => setEdit({ ...edit, gain: next })} /> : null}
         {edit !== null && kept !== null && tool === 'trim' && total > MINIMUM_AUDIO_WINDOW ? (
           <>
