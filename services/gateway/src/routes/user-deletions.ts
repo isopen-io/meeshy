@@ -23,6 +23,7 @@ import {
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
+import { unsetOrNull } from '../utils/prisma-unset';
 import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
@@ -152,6 +153,10 @@ const ALIAS_SUPPRESSION_DELETED_CONVERSATIONS = {
 export type UserDeletionsRoutesOptions = {
   readonly basePath?: string;
 };
+
+function refuseBannedRestore(reply: FastifyReply): void {
+  return sendForbidden(reply, 'You are banned from this conversation', { code: 'BANNED' });
+}
 
 /**
  * Base absolue des sept routes ci-dessous (#4277, critère 3). AVANT ce lot,
@@ -371,6 +376,7 @@ export default async function userDeletionsRoutes(
         }
       },
       400: errorResponseSchema,
+      403: errorResponseSchema,
       500: errorResponseSchema
     }
   } as const;
@@ -386,6 +392,7 @@ export default async function userDeletionsRoutes(
           select: {
             id: true,
             deletedForMe: true,
+            bannedAt: true,
             language: true,
             conversation: { select: { isActive: true } },
           },
@@ -393,6 +400,16 @@ export default async function userDeletionsRoutes(
 
         if (!participant || !participant.deletedForMe) {
           return sendBadRequest(reply, 'Conversation is not deleted');
+        }
+
+        // #10436 — un banni ne se restaure pas. Supprimer pour soi désactive la
+        // ligne ; un bannissement posé ENSUITE n'écrit que `bannedAt`
+        // (`resolveBanWrite`, la ligne étant déjà inactive). Rallumer
+        // `isActive` ici rendait la ligne active ET bannie, lue comme vivante
+        // par toute lecture `userId + isActive: true` (liste, envoi, push).
+        // Même refus que l'entrée par lien (`linkAdmission.ts`, code BANNED).
+        if (participant.bannedAt) {
+          return refuseBannedRestore(reply);
         }
 
         // Restaurer un participant dont la conversation a été CLOSE (dernier
@@ -406,10 +423,20 @@ export default async function userDeletionsRoutes(
           return sendBadRequest(reply, 'Conversation is closed and cannot be restored');
         }
 
-        await prisma.participant.update({
-          where: { id: participant.id },
-          data: { deletedForMe: null, isActive: true },
-        });
+        // La garde est AUSSI dans le `where` : un bannissement tombé entre la
+        // lecture ci-dessus et cette écriture ne doit pas être rallumé. La
+        // ligne ne s'apparie plus, Prisma lève P2025, et la route refuse.
+        try {
+          await prisma.participant.update({
+            where: { id: participant.id, ...unsetOrNull('bannedAt') },
+            data: { deletedForMe: null, isActive: true },
+          });
+        } catch (error) {
+          if ((error as { code?: unknown } | null)?.code === 'P2025') {
+            return refuseBannedRestore(reply);
+          }
+          throw error;
+        }
         // Miroir exact du DELETE ci-dessus : sans cette invalidation, le
         // cache de lookup continuerait de répondre "inactif" pour CE
         // participant jusqu'à l'expiration de son TTL, alors que la ligne
