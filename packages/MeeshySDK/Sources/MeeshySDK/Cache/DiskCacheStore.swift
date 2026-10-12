@@ -9,18 +9,20 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public let policy: CachePolicy
 
-    nonisolated(unsafe) private let memoryCache: NSCache<NSString, CacheBox>
+    nonisolated(unsafe) let memoryCache: NSCache<NSString, CacheBox>
     private let baseDirectory: URL
-    private let fileManager = FileManager.default
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
-    private var inFlightTasks: [String: InFlightDownload] = [:]
-    private var fileTimestamps: [String: Date] = [:]
+    let fileManager = FileManager.default
+    let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
+    var inFlightTasks: [String: InFlightDownload] = [:]
+    var fileTimestamps: [String: Date] = [:]
     private let urlSession: URLSession
+    let networkTransfer: NetworkTransfer
+    let fileDownloader: MediaFileDownloader
 
     /// Clés dont la dernière réponse interdisait le stockage (`no-store` /
     /// `no-cache`, #9478) : leurs octets ne vont ni sur le disque, ni dans le
     /// L1, ni dans le cache d'images décodées.
-    private var transientKeys: Set<String> = []
+    var transientKeys: Set<String> = []
 
     /// Pin registry (R5 offline replay) : fileKey → pin expiry. A file whose
     /// pin is still active is exempt from BOTH `evictOverBudget()` (LRU) and
@@ -33,7 +35,7 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     /// Wraps an in-flight network task with an identity token so a stale
     /// completion never clears a NEWER entry registered under the same key.
-    private struct InFlightDownload {
+    struct InFlightDownload {
         let id = UUID()
         let task: Task<Data, Error>
     }
@@ -58,11 +60,15 @@ public actor DiskCacheStore: ReadableCacheStore {
         policy: CachePolicy,
         baseDirectory: URL? = nil,
         memoryBudgetBytes: Int = 80 * 1024 * 1024,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        networkTransfer: NetworkTransfer = .inMemory,
+        fileDownloader: MediaFileDownloader? = nil
     ) {
         self.policy = policy
         self.memoryBudgetBytes = memoryBudgetBytes
         self.urlSession = urlSession
+        self.networkTransfer = networkTransfer
+        self.fileDownloader = fileDownloader ?? MediaFileDownloader(configuration: urlSession.configuration)
         let subdir: String
         if case .disk(let sub, _) = policy.storageLocation {
             subdir = sub
@@ -95,6 +101,10 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
     }
 
+    deinit {
+        fileDownloader.invalidate()
+    }
+
     // MARK: - ReadableCacheStore
 
     public func load(for key: String) async -> CacheResult<[Data]> {
@@ -114,7 +124,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         guard fileManager.fileExists(atPath: filePath.path) else { return .empty }
         let data: Data
         do {
-            data = try Data(contentsOf: filePath)
+            data = try Data(contentsOf: filePath, options: .mappedIfSafe)
         } catch {
             // Le fichier EXISTE mais est illisible : corruption ou I/O — c'est
             // un vrai incident, pas un cache miss.
@@ -211,7 +221,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     private var autoEvictionWriteCounter: Int = 0
     private static let autoEvictionEveryNWrites: Int = 32
 
-    private func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
+    func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
         guard case .disk(_, let maxBytes) = policy.storageLocation else { return }
         autoEvictionWriteCounter &+= 1
         let bigWrite = latestWriteSize > maxBytes / 10
@@ -369,12 +379,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         if let data = result.snapshot()?.first { return data }
 
         // 2. Download from network (coalesced with any in-flight fetch) and cache
-        guard let url = URL(string: urlString),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "https" || scheme == "http" else {
-            throw DiskCacheError.notCached(urlString)
-        }
-        return try await networkData(for: urlString, url: url)
+        return try await networkData(for: urlString, url: Self.remoteURL(urlString))
     }
 
     /// Single network funnel: every remote fetch for this store goes through
@@ -383,11 +388,18 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// connections. Observed on device: the same voice note fetched 2-3×
     /// concurrently by independent paths saturated a slow cellular link
     /// (NSURLError -1001 ×50 → HTTP/2 connection torn down).
-    private func networkData(for urlString: String, url: URL) async throws -> Data {
+    func networkData(
+        for urlString: String,
+        url: URL,
+        transfer: NetworkTransfer? = nil,
+        progress: MediaFileDownloader.Progress? = nil,
+        cancelsWithCaller: Bool = false
+    ) async throws -> Data {
         let fileKey = Self.fileKey(for: urlString)
         if let existing = inFlightTasks[fileKey] {
             return try await existing.task.value
         }
+        let transfer = transfer ?? networkTransfer
 
         let task = Task<Data, Error> {
             // Média protégé même-origine (ex. audio de la bibliothèque de sons
@@ -400,6 +412,9 @@ public actor DiskCacheStore: ReadableCacheStore {
                 authToken: APIClient.shared.authToken,
                 sessionToken: APIClient.shared.anonymousSessionToken
             )
+            if transfer == .streamedToFile {
+                return try await streamedNetworkData(for: urlString, request: request, progress: progress)
+            }
             let (data, response) = try await urlSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw DiskCacheError.notCached(urlString)
@@ -423,7 +438,12 @@ public actor DiskCacheStore: ReadableCacheStore {
         defer {
             if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
         }
-        return try await task.value
+        guard cancelsWithCaller else { return try await task.value }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
     }
 
     /// In-flight network download for `key`, if any. Lets an external
@@ -476,8 +496,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     @discardableResult
     public func store(_ data: Data, for key: String, honoring response: URLResponse?) async -> Bool {
         guard MediaCacheDirective(response: response).mayPersist else {
-            await evict(key)
-            transientKeys.insert(Self.fileKey(for: key))
+            await refuseStorage(for: key)
             return false
         }
         await save(data, for: key)
@@ -485,7 +504,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     /// Retire une clé de TOUS les niveaux : disque, L1, et variantes décodées.
-    private func evict(_ key: String) async {
+    func evict(_ key: String) async {
         await invalidate(for: key)
         let fileKey = Self.fileKey(for: key)
         Self._imageCache.removeObject(forKey: fileKey as NSString)
@@ -937,7 +956,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// Refreshes the mtime used as the LRU key. A failure does not lose data
     /// but skews eviction order — the entry looks older than it is and gets
     /// evicted early, so it is worth a trace.
-    private func touchModificationDate(atPath path: String) {
+    func touchModificationDate(atPath path: String) {
         do {
             try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
         } catch {
@@ -945,7 +964,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
     }
 
-    private func diskFilePath(for fileKey: String) -> URL {
+    func diskFilePath(for fileKey: String) -> URL {
         baseDirectory.appendingPathComponent(fileKey)
     }
 

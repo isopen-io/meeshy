@@ -777,16 +777,17 @@ struct AudioPostComposerView: View {
         }
         acquisition = .loading
         Task {
-            guard let (donnees, _) = try? await URLSession.shared.data(from: distante),
-                  !donnees.isEmpty else {
+            guard let (transit, _) = try? await URLSession.shared.download(from: distante) else {
                 acquisition = .failed
                 return
             }
             let extension_ = distante.pathExtension.isEmpty ? "m4a" : distante.pathExtension
             let locale = FileManager.default.temporaryDirectory
                 .appendingPathComponent("meeshy-borrowed-\(sound.id).\(extension_)")
-            try? donnees.write(to: locale, options: .atomic)
-            guard FileManager.default.fileExists(atPath: locale.path) else {
+            try? FileManager.default.removeItem(at: locale)
+            try? FileManager.default.moveItem(at: transit, to: locale)
+            guard let taille = (try? FileManager.default.attributesOfItem(atPath: locale.path))?[.size] as? Int,
+                  taille > 0 else {
                 acquisition = .failed
                 return
             }
