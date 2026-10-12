@@ -64,6 +64,8 @@ final class GamePhotoSession: ObservableObject {
     /// Le lien d'invitation se montre sur la carte — et part en texte — tant que l'utilisateur ne l'a pas retiré
     /// (conformité H-2 : le lien est retirable, comme la Flamme).
     @Published private(set) var linkOnCard = true
+    /// L'enregistrement de la prise dans Photos, loi partagée (#10284) : `nil` tant qu'aucune prise n'est composée.
+    @Published private(set) var takeSave: TakeSaveState?
 
     let moment: PhotoMoment
     let camera: GamePhotoCameraProviding
@@ -86,6 +88,8 @@ final class GamePhotoSession: ObservableObject {
     private var shareInFlight: Task<Void, Never>?
     private var composedSource: UIImage?
     private var composedMode: PhotoMode?
+    /// Une prise est en cours : le second toucher d'un double sur la case ne déclenche pas une seconde prise.
+    private var taking = false
 
     /// La Flamme de l'utilisateur, quand elle brûle : c'est ce que le bandeau peut montrer.
     var hasFlame: Bool { flame != nil }
@@ -264,20 +268,54 @@ final class GamePhotoSession: ObservableObject {
 
     // MARK: - Étape 2 et 3 : la prise et la frappe en place
 
-    var momentFrameId: String { moment.id }
-    var showsSave: Bool { true }
-    func chooseFrame(_ frameId: String?) {}
-    func gesture(_ kind: ComposerCaptureGestureKind, on zone: ComposerCaptureZone) async {}
+    // MARK: - Le cadre est le déclencheur (#10284)
 
+    /// Le cadre posé sur la prise : celui du moment, seul que le déroulé sait peindre tant que le peintre
+    /// des cadres décorés (#10160) n'existe pas — même identité que le web (`moment.id`).
+    var momentFrameId: String { moment.id }
+
+    /// « Enregistrer » ne se montre que si la prise n'est pas déjà dans Photos AVEC le cadre courant.
+    var showsSave: Bool { takeSave.map(CaptureSaveLaw.saveButtonVisible) ?? false }
+
+    /// Le contexte que lit la table des gestes du composer : un viseur armé seulement quand la caméra vit,
+    /// et jamais de vidéo — le déroulé du jeu ne filme pas.
+    var captureContext: ComposerCaptureGestureContext {
+        ComposerCaptureGestureContext(stage: state == .camera(.live) ? .armed : .off, allowsVideo: false)
+    }
+
+    /// Un geste sur une zone de la caméra : la table du composer décide (`ComposerCaptureGesture`), la session exécute.
+    func gesture(_ kind: ComposerCaptureGestureKind, on zone: ComposerCaptureZone) async {
+        await perform(ComposerCaptureGesture.action(zone: zone, gesture: kind, context: captureContext))
+    }
+
+    /// Une action de la table — par un geste, ou nommée par VoiceOver.
+    func perform(_ action: ComposerCaptureAction) async {
+        switch action {
+        case .photoToGallery: await take(from: .frame)
+        case .photoToEdit: await take(from: .outside)
+        default: return
+        }
+    }
+
+    /// Changer de cadre après la prise : « Enregistrer » revient si la prise n'est pas en galerie avec lui.
+    func chooseFrame(_ frameId: String?) {
+        guard let takeSave else { return }
+        self.takeSave = CaptureSaveLaw.applyFrameChange(takeSave, frameId: frameId)
+    }
+
+    /// La prise : par la case du cadre, elle part dans Photos puis le résultat s'ouvre ; hors cadre (la scène),
+    /// le résultat s'ouvre et la prise reste dans l'app (`CaptureSaveLaw.destination(for:)`).
     func take(from zone: CaptureZone) async {
-        guard case .camera(.live) = state else { return }
+        guard case .camera(.live) = state, !taking else { return }
+        taking = true
+        defer { taking = false }
         guard let shot = await camera.capture() else {
             send(.cameraFailed(.unavailable))
             return
         }
         camera.stop()
         send(.shutter)
-        await strikeInPlace(source: shot, mode: .selfie)
+        await strikeInPlace(source: shot, mode: .selfie, zone: zone)
     }
 
     func useGalleryPhoto(_ data: Data) async {
@@ -287,7 +325,7 @@ final class GamePhotoSession: ObservableObject {
         await strikeInPlace(source: image, mode: .gallery)
     }
 
-    private func strikeInPlace(source: UIImage?, mode: PhotoMode) async {
+    private func strikeInPlace(source: UIImage?, mode: PhotoMode, zone: CaptureZone = .outside) async {
         guard case .striking = state else { return }
         frozen = source
         strike = 0
@@ -308,6 +346,10 @@ final class GamePhotoSession: ObservableObject {
         }
         composed = result
         send(.composed)
+        let frame = momentFrameId
+        takeSave = CaptureSaveLaw.beginTake(zone == .frame ? .frame(frameId: frame) : .outside(frameId: frame))
+        guard CaptureSaveLaw.destination(for: zone).gallery else { return }
+        await writeToLibrary(square: false, frameId: frame)
     }
 
     // MARK: - Étape 4 : le résultat
@@ -324,7 +366,7 @@ final class GamePhotoSession: ObservableObject {
                 let box = SendableSourceImage(image: taken)
                 source = await Task.detached(priority: .userInitiated) { GamePhotoNotebook.sourceData(from: box.image) }.value
             }
-            let recipe = NotebookRecipe(mirror: taken == nil ? nil : composedMode == .selfie, showLink: referral != nil && linkOnCard)
+            let recipe = NotebookRecipe(frameId: takeSave?.currentFrame, mirror: taken == nil ? nil : composedMode == .selfie, showLink: referral != nil && linkOnCard)
             outcome = await notebook.keep(moment, photo: KeptPhoto(story: composed.storyData, mode: composed.mode, source: source, recipe: recipe))
         }
         send(.kept(outcome == .kept))
@@ -342,13 +384,23 @@ final class GamePhotoSession: ObservableObject {
         }
     }
 
-    /// Enregistre dans Photos (autorisation en ajout seul) l'image du format choisi.
+    /// « Enregistrer » : la prise part dans Photos (autorisation en ajout seul) avec le cadre courant, dans le
+    /// format choisi. Déjà enregistrée avec ce cadre, rien ne part — le bouton est d'ailleurs masqué.
     func save(square: Bool) async {
-        guard case .result = state, let outgoing = exportable() else { return }
+        guard case .result = state, showsSave, let takeSave else { return }
+        let frame = takeSave.currentFrame
+        self.takeSave = CaptureSaveLaw.applySaved(takeSave)
+        await writeToLibrary(square: square, frameId: frame)
+    }
+
+    /// L'écriture dans Photos, déjà comptée par l'état (optimiste) : un échec rend le cadre à enregistrer.
+    private func writeToLibrary(square: Bool, frameId: String?) async {
         do {
+            guard let outgoing = exportable() else { throw MediaSaveError.sourceUnavailable }
             try await library.saveImage(square ? outgoing.squareData : outgoing.storyData)
             notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.saved", defaultValue: "Image enregistrée dans Photos.", bundle: .main))
         } catch {
+            if let takeSave { self.takeSave = CaptureSaveLaw.applySaveFailed(takeSave, frameId: frameId) }
             notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.save_failed", defaultValue: "L’enregistrement n’a pas pu aboutir.", bundle: .main))
         }
     }
