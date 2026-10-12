@@ -14,9 +14,9 @@
  *  - **l'envoi** (`deliver`) regroupe, par compte, les étapes détectées depuis au moins le délai de la politique
  *    et ni présentées ni notifiées (`photoAlertDigest`), et pousse UNE notification par `GameNotifier` (plafond
  *    d'une notification de jeu par jour, « Jeu masqué », langue de cadrage). Il DIFFÈRE — sans rien écrire — pour un
- *    compte en ligne (l'hôte de l'app est la surface), pendant son « Ne pas déranger » (`isWithinDnd`, la règle
- *    même de `NotificationService`, testée AVANT `GameNotifier` pour qu'une suppression ne consomme pas sa clé),
- *    la nuit dans SON fuseau (`effectiveZone`), ou quand le créneau du jour est pris. Il n'envoie rien à un compte
+ *    compte en ligne (l'hôte de l'app est la surface), pendant son « Ne pas déranger » quand il l'a posé
+ *    (`isWithinDnd`, la règle même de `NotificationService`, testée AVANT `GameNotifier` pour qu'une suppression ne
+ *    consomme pas sa clé), sinon la nuit dans SON fuseau (`effectiveZone`), ou quand le créneau du jour est pris. Il n'envoie rien à un compte
  *    qui a coupé le push photo ou le jeu. Une étape notifiée ne repart jamais (`notifiedAt` fait foi) ; une Flamme
  *    déjà annoncée par `streak_milestone` ne part pas en push photo (l'invitation dans l'app reste).
  *
@@ -198,7 +198,8 @@ export class GamePhotoMomentService {
     const prefs = await this.preferencesOf(userId);
     if (prefs === null || !isNotificationTypeEnabled(prefs as unknown as NotificationPreference, 'game_photo_moment')) return 'skipped';
     if (user.isOnline === true) return 'deferred';
-    if (isWithinDnd(prefs, now) || this.isNight(now, user.timezone)) return 'deferred';
+    // UNE règle d'heures calmes : le « Ne pas déranger » de l'utilisateur quand il l'a posé, sinon la nuit de la politique.
+    if (prefs.dndEnabled ? isWithinDnd(prefs, now) : this.isNight(now, user.timezone)) return 'deferred';
 
     const announced = await this.flamesAnnounced(userId, pending);
     const records: PhotoMomentRecord[] = pending.filter((row) => !announced.has(row.stepId)).map((row) => ({ stepId: row.stepId, presentedAt: null, notifiedAt: null }));
