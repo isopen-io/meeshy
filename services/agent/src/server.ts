@@ -23,6 +23,7 @@ import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
 import { deliveryRoutes } from './routes/delivery';
 import { readingRoutes } from './routes/reading';
+import { installInternalGuard } from './routes/internal-guard';
 import { createBridgeReadingOutlet, messageReaderFromStore } from './reading/bridge-reading-outlet';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
@@ -33,6 +34,8 @@ import { TopicSeedService } from './topics/TopicSeedService';
 import { TopicUsageService } from './topics/TopicUsageService';
 
 const server = Fastify({ logger: true });
+// #10242 — toute route sauf /health exige le secret interne de la passerelle (fermée sans lui).
+installInternalGuard(server, { internalToken: env.AGENT_INTERNAL_TOKEN });
 const prisma = new PrismaClient();
 const redis = new Redis(env.REDIS_URL);
 

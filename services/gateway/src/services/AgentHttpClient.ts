@@ -7,6 +7,18 @@ type AgentApiResponse<T> = {
   message?: string;
 };
 
+/** L'en-tête du secret interne passerelle → agent (`services/agent/src/routes/internal-auth.ts`). */
+export const AGENT_INTERNAL_TOKEN_HEADER = 'x-meeshy-internal-token';
+
+/**
+ * #10242 — le secret interne que l'agent exige sur toute route sauf /health
+ * (`services/agent/src/routes/internal-guard.ts`). Lu à chaque appel : absent, rien ne part.
+ */
+function internalToken(): string | null {
+  const token = (process.env.AGENT_INTERNAL_TOKEN ?? '').trim();
+  return token.length > 0 ? token : null;
+}
+
 export class AgentUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -19,6 +31,8 @@ export class AgentHttpClient {
 
   private async request<T>(path: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const { timeoutMs = 5000, ...fetchOptions } = options;
+    const token = internalToken();
+    if (token === null) throw new AgentUnavailableError('AGENT_INTERNAL_TOKEN is not configured on the gateway');
     const controller = new AbortController();
     const timeout = guardedTimeout({ name: 'agent-http-timeout', afterMs: timeoutMs, logger: enhancedLogger, run: () => controller.abort() });
 
@@ -29,10 +43,17 @@ export class AgentHttpClient {
         headers: {
           'Content-Type': 'application/json',
           ...fetchOptions.headers,
+          [AGENT_INTERNAL_TOKEN_HEADER]: token,
         },
       });
 
       const body = await response.json() as AgentApiResponse<T>;
+
+      // Un refus du secret interne est une panne de CONFIGURATION entre services, pas un refus de
+      // l'utilisateur : relayé en 401, il déconnecterait l'administrateur.
+      if (response.status === 401 || (response.status === 503 && body?.message === 'internal-auth-not-configured')) {
+        throw new AgentUnavailableError(`Agent refused the internal token (${response.status})`);
+      }
 
       if (!response.ok) {
         const err = new Error(body.message ?? `Agent responded with ${response.status}`);
