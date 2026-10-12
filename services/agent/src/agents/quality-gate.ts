@@ -1,4 +1,5 @@
 import type { ConversationState, PendingAction, PendingMessage, PendingReaction, AgentHistoryEntry } from '../graph/state';
+import { LlmBudgetExceededError } from '../llm/budgeted-llm';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
@@ -290,6 +291,12 @@ Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolea
               continue;
             }
           } catch (error) {
+            // #10287 — budget du jour atteint : le message ne part pas sans contrôle.
+            if (error instanceof LlmBudgetExceededError) {
+              console.warn(`[QualityGate] Daily LLM budget reached, message for ${userId} rejected`);
+              rejectionReasons.push({ asUserId: userId, reason: 'llm_budget_exceeded' });
+              continue;
+            }
             console.warn(`[QualityGate] LLM error for ${userId}, allowing message through:`, error instanceof Error ? error.message : 'unknown');
             seenContents.add(contentKey);
             validatedMessages.push(msg);

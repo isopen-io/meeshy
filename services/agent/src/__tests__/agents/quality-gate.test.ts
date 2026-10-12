@@ -202,6 +202,19 @@ describe('Quality Gate', () => {
     consoleSpy.mockRestore();
   });
 
+  it('rejette le message quand le budget LLM du jour est atteint pendant le contrôle (#10287)', async () => {
+    const { LlmBudgetExceededError } = await import('../../llm/budgeted-llm');
+    const budgetLlm: LlmProvider = {
+      name: 'budget-mock',
+      async chat() { throw new LlmBudgetExceededError(2.01, 2); },
+    };
+    const gate = createQualityGateNode(budgetLlm);
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await gate(makeState({ pendingActions: [goodMessage], controlledUsers: [controlledUser] }));
+    expect(result.pendingActions.filter((a) => a.type === 'message')).toHaveLength(0);
+    warn.mockRestore();
+  });
+
   describe('deterministic checks', () => {
     it('rejects message with @@username (double arobase)', async () => {
       const gate = createQualityGateNode(mockLlm);
