@@ -306,6 +306,8 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      - AGENT_HOST=agent-staging
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       # E-mails de staging (#8036) — de VRAIS envois, marqués « [STAGING] » au
       # sujet et d'un bandeau dans le corps (`services/email/staging-marker.ts`).
       # Sans BREVO_API_KEY sur l'hôte, rien ne part (la passerelle le journalise).
@@ -503,6 +505,7 @@ services:
       - ZMQ_PUB_PORT=5561
       - NODE_ENV=production
       - PORT=3200
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
     depends_on:
       mongo-init-staging:
         condition: service_completed_successfully
