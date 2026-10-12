@@ -641,8 +641,8 @@ extension StoryViewerView {
         guard !isDismissing else { return }
         isTransitioning = true
         slideTimer.setPaused(true)
-        // Déclencher le fade-out audio immédiat lors du dismiss
-        NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
+        // Le son s'éteint en fondu pendant le ressort, avant la coupure de `stopAll()` (#9867).
+        Task { await PlaybackCoordinator.shared.fadeOutAllExternal(duration: 0.4) }
 
         // isDismissing MUST be inside withAnimation so computed transforms animate
         withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
@@ -664,7 +664,6 @@ extension StoryViewerView {
     func startTimer() {
         progressClock.reset()
         isContentReady = false
-        hasFiredFadeOut = false
         hasFiredNextPrefetch = false
         // Toutes les surfaces du reader tombent au changement de slide, pas
         // seulement les commentaires : un strip de langues ou une barre d'emojis
