@@ -80,6 +80,11 @@ public struct APIMessageSender: Decodable, Sendable {
     /// type tranche.
     public var isAnonymous: Bool { type == "anonymous" }
 
+    /// L'auteur a-t-il un COMPTE qui l'engage (#10286) ? Fail-closed : seuls
+    /// `user` et `bot` le prouvent ; un type absent ou inconnu vaut invité,
+    /// et ses adresses restent du texte brut.
+    public var hasAccount: Bool { type == "user" || type == "bot" }
+
     public var resolvedUserId: String? {
         userId ?? user?.id
     }
@@ -1028,7 +1033,7 @@ extension APIMessage {
             forwardedFrom: uiForwardRef,
             senderName: effectiveSenderName, senderUsername: effectiveSenderUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
-            senderIsAnonymous: sender?.isAnonymous ?? false,
+            senderIsAnonymous: sender.map { !$0.hasAccount } ?? (!isMe && msgSource == .user),
             deliveryStatus: computedDeliveryStatus,
             isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,

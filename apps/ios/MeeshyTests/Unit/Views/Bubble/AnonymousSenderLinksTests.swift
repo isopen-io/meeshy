@@ -80,6 +80,16 @@ final class AnonymousSenderLinksTests: XCTestCase {
 
     // MARK: - Lien suivi
 
+    func test_init_anonymousSenderWithLegacyShortLinks_hasNoLinkNorCard() throws {
+        let written = "Vu m+abc123 et https://meeshy.me/l/abc"
+        let resolved = try XCTUnwrap(text(message(written, anonymous: true)))
+
+        XCTAssertNil(resolved.firstLinkURL)
+        XCTAssertNil(resolved.conversationCardTarget)
+        XCTAssertTrue(resolved.linksAreInert)
+        XCTAssertEqual(resolved.raw, written)
+    }
+
     func test_init_anonymousSenderWithTrackedLink_dropsTheTrackedMap() throws {
         let resolved = try XCTUnwrap(text(message("Va sur https://exemple.com", anonymous: true,
                                                   trackedLinks: ["https://exemple.com": "tok123"])))
@@ -91,7 +101,7 @@ final class AnonymousSenderLinksTests: XCTestCase {
     // MARK: - Texte rendu
 
     func test_attributed_linksAreInert_rendersEveryAddressAsWrittenWithoutLink() {
-        let written = "Va sur https://exemple.com, [doc](https://doc.example.org) et m+abc123"
+        let written = "Va sur https://exemple.com, [doc](https://doc.example.org), https://meeshy.me/l/abc et m+abc123"
 
         let attributed = MessageTextRenderer.attributed(
             written, color: .primary,
