@@ -63,6 +63,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPersonalHistoryHiding, type PersonalHistoryHiding } from '../../services/personalHistoryFilter';
 import { GENRES_DE_MEDIA, lireGenres, predicatDeMedia } from './messages-media-kinds';
+import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../../services/messaging/searchExitLaw';
+import type { ContentExitProjection } from '@meeshy/shared/utils/content-exit-law';
 
 /** Les cinq sous-collections que `?view=` sait désigner. */
 export type CollectionView = 'timeline' | 'thread' | 'pinned' | 'search' | 'media';
@@ -311,8 +313,11 @@ const CANDIDATS_TRADUITS = 200;
  * final. Une recherche est la surface la plus révélatrice d'un historique
  * effacé — elle rend un message par son CONTENU, donc en connaître un mot
  * suffit.
+ *
+ * #10429 — un message qui disparaît (vue unique, flamme, sur lui ou une pièce)
+ * n'entre pas dans l'ensemble : même loi que la route dédiée.
  */
-type LigneTrouvee = { readonly id: string; readonly createdAt: Date; readonly translations?: unknown };
+type LigneTrouvee = ContentExitProjection & { readonly id: string; readonly createdAt: Date; readonly translations?: unknown };
 
 export async function resolveSearchMessageIds(
   prisma: Pick<PrismaClient, 'message'>,
@@ -323,7 +328,7 @@ export async function resolveSearchMessageIds(
       where: applyPersonalHistoryHiding({ ...base, content: { contains: term, mode: 'insensitive' } }, hiding),
       orderBy: { createdAt: 'desc' },
       take: wanted,
-      select: { id: true, createdAt: true },
+      select: { id: true, createdAt: true, ...SEARCH_EXIT_LAW_SELECT },
     }),
     prisma.message.findMany({
       where: applyPersonalHistoryHiding(
@@ -336,13 +341,14 @@ export async function resolveSearchMessageIds(
       ),
       orderBy: { createdAt: 'desc' },
       take: CANDIDATS_TRADUITS,
-      select: { id: true, createdAt: true, translations: true },
+      select: { id: true, createdAt: true, translations: true, ...SEARCH_EXIT_LAW_SELECT },
     }),
   ])) as unknown as [ReadonlyArray<LigneTrouvee>, ReadonlyArray<LigneTrouvee>];
 
-  const vus = new Set<string>(parContenu.map((m) => m.id));
-  const fusion: LigneTrouvee[] = [...parContenu];
-  for (const candidat of candidatsTraduits) {
+  const ordinaires = parContenu.filter(appearsInSearch);
+  const vus = new Set<string>(ordinaires.map((m) => m.id));
+  const fusion: LigneTrouvee[] = [...ordinaires];
+  for (const candidat of candidatsTraduits.filter(appearsInSearch)) {
     if (vus.has(candidat.id)) continue;
     if (!traductionContient(candidat.translations, term)) continue;
     vus.add(candidat.id);

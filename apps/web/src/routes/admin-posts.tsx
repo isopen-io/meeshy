@@ -1,9 +1,13 @@
+import { useState } from 'react';
+
 import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge } from '@/components/admin/badges';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminFilterChips, AdminListToolbar } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
+import { AdminAnnouncement } from '@/components/admin/announcement';
+import { AdminButton } from '@/components/admin/button';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK2, SURFACE } from '@/components/admin/tone';
@@ -15,7 +19,9 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { personRef } from '@/lib/admin/post-entities';
 import { periodOf, POST_LIST_SPEC, POST_PERIODS, POST_TABS, POST_VISIBILITIES, postTabOf, postTypeOfTab } from '@/lib/admin/post-list';
 import { postExcerptOf } from '@/lib/admin/post-phrases';
+import { applyGestureToRows } from '@/lib/admin/post-gestures';
 import { postStateOf } from '@/lib/admin/post-state';
+import { ADMIN_POST_STATES } from '@meeshy/shared/types/admin-publications';
 import { useAdminList } from '@/lib/admin/use-admin-list';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -24,7 +30,11 @@ import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
+import type { AdminPage } from '@/lib/api/admin-page';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
+import { AdminPostGestureBar } from './admin-post-gestures';
+import { AdminPostPreview } from './admin-post-preview';
 import { AdminPostsStatsBand } from './admin-posts-stats';
 
 /**
@@ -92,6 +102,8 @@ export function AdminPostsPanel({
   readonly now?: Date;
 }) {
   const reach = useAdminReach();
+  const announcer = useLiveAnnouncer();
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [search, setSearch] = useSearch();
   const list = useAdminList<AdminPostRow, SortKey, FilterKey, 'authorId'>({
     spec: POST_LIST_SPEC,
@@ -101,6 +113,7 @@ export function AdminPostsPanel({
   });
 
   const all = { value: '', label: translateAdmin(language, 'admin.list.all') };
+  const listKey = adminPostsQueryKey(list.address);
   const total = list.query.data?.total;
   const periodFilter = periodOf(list.state.filters.period);
   const authorId = list.state.ids.authorId;
@@ -137,6 +150,27 @@ export function AdminPostsPanel({
       id: 'state',
       header: translateAdmin(language, 'admin.posts.col.state'),
       cell: (row) => <AdminInterpretedBadge value={interpretPostState(postStateOf(row, now), language)} />,
+    },
+    {
+      /* LES GESTES DE LA LIGNE (#10392) : hors ligne, remise en ligne, audience — en un appui et
+         une confirmation, sans ouvrir la fiche. L'effet est immédiat sur cette page de liste. */
+      id: 'gestures',
+      header: translateAdmin(language, 'admin.gesture.col'),
+      cell: (row) => (
+        <span className="flex flex-wrap items-center gap-1.5">
+          <AdminButton tone="secondary" onClick={() => setPreviewId(row.id)} data={{ 'data-admin-post-preview-open': row.id }}>
+            {translateAdmin(language, 'admin.gesture.preview.open')}
+          </AdminButton>
+          <AdminPostGestureBar
+            language={language}
+            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility }}
+            onAnnounce={announcer.announce}
+            deps={deps}
+            compact
+            optimistic={{ key: listKey, apply: (before, intent, at) => applyGestureToRows(before as AdminPage<AdminPostRow>, row.id, intent, at) }}
+          />
+        </span>
+      ),
     },
     {
       id: 'published',
@@ -206,6 +240,13 @@ export function AdminPostsPanel({
                   onChange: (value) => list.filter('visibility', value),
                 },
                 {
+                  id: 'state',
+                  label: translateAdmin(language, 'admin.gesture.filter.state'),
+                  value: list.state.filters.state ?? '',
+                  options: [all, ...ADMIN_POST_STATES.map((state) => ({ value: state, label: interpretPostState(state, language).label }))],
+                  onChange: (value) => list.filter('state', value),
+                },
+                {
                   id: 'isDeleted',
                   label: translateAdmin(language, 'admin.posts.filter.deleted'),
                   value: list.state.filters.isDeleted === 'true' ? 'true' : '',
@@ -243,6 +284,20 @@ export function AdminPostsPanel({
           }
         />
       </div>
+      {previewId === null ? null : (
+        <AdminPostPreview
+          language={language}
+          postId={previewId}
+          rows={list.query.data?.rows ?? []}
+          onNavigate={setPreviewId}
+          onClose={() => setPreviewId(null)}
+          onAnnounce={announcer.announce}
+          deps={deps}
+          now={now}
+          listOptimistic={{ key: listKey, apply: (before, postId, intent, at) => applyGestureToRows(before as AdminPage<AdminPostRow>, postId, intent, at) }}
+        />
+      )}
+      <AdminAnnouncement text={announcer.text} />
     </div>
   );
 }

@@ -387,6 +387,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted).shieldsCapture())"),
         ("Views/MediaReplyComposerBar.swift", "citationBanner.captureShield(citation.quotedCapture(quotedMessage:nil).shieldsCapture())"),
         ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
+        ("Views/ConversationView+ViewOnceExit.swift", ".captureShield(item.isCaptureShielded)"),
     ]
 
     func test_everyMessageContentSurface_isShielded() throws {
@@ -394,6 +395,19 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
             XCTAssertTrue(try code(surface.file).contains(surface.shield),
                           "\(surface.file) : le contenu protégé doit passer par `\(surface.shield)`")
         }
+    }
+
+    /// #9621 — le plein écran d'un lieu ouvert depuis la rangée Focal est
+    /// présenté par la conversation : il porte le verdict de SON message, lu une
+    /// fois, et la conversation le relaie depuis la rangée avec l'identifiant.
+    func test_focalPlaceFullscreen_readsItsMessageVerdict() throws {
+        XCTAssertTrue(try code("Views/ConversationView+ViewOnceExit.swift")
+            .contains("isCaptureShielded=message?.exitOffer.capture.shieldsCapture()??true"))
+        XCTAssertTrue(try code("Views/MessageListViewController.swift")
+            .contains("focalActions.onTapLocation={placeintapLocationHandler?(place,messageId)}"),
+                      "la rangée Focal relaie le message du lieu touché")
+        XCTAssertTrue(try code("Views/ConversationView.swift")
+            .contains("focalFullscreenPlace=makeFocalFullscreenPlace(place,messageId:messageId)"))
     }
 
     func test_theProjections_readTheExitOfferOnce() throws {
@@ -499,5 +513,42 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
             offenders.append(relative)
         }
         XCTAssertEqual(offenders, [], "ces surfaces rendent le texte d'un message hors de la couche sécurisée")
+    }
+}
+
+// MARK: - #9621 — le plein écran d'un lieu garde la loi de sortie de son message
+
+@MainActor
+final class FocalFullscreenPlaceTests: XCTestCase {
+
+    private let place = SharedPlace(latitude: 48.8566, longitude: 2.3522)
+
+    private func message(viewOnce: Bool = false, flags: MessageEffectFlags = [], duration: Int? = nil) -> Message {
+        var message = Message(id: "m1", conversationId: "c1", senderId: "u2",
+                              content: "", attachments: [], senderName: "Demo", isMe: false)
+        message.effects.flags = flags
+        message.effects.ephemeralDuration = duration
+        message.isViewOnce = viewOnce
+        return message
+    }
+
+    func test_ordinaryMessage_placeIsNotShielded() {
+        XCTAssertFalse(FocalFullscreenPlace(place: place, message: message()).isCaptureShielded)
+    }
+
+    func test_viewOncePlace_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(viewOnce: true)).isCaptureShielded)
+    }
+
+    /// Le plein écran n'est pas enregistré auprès du détecteur de capture : une
+    /// flamme y reste NOIRE plutôt que capturée en silence (#9617, #9632).
+    func test_flamePlace_onANonAnnouncingSurface_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(flags: .ephemeral, duration: 30)).isCaptureShielded)
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: message(flags: [.ephemeral, .ephemeralAfterRead])).isCaptureShielded)
+    }
+
+    /// Fermé par défaut : un lieu dont le message est introuvable reste noir.
+    func test_unknownMessage_isShielded() {
+        XCTAssertTrue(FocalFullscreenPlace(place: place, message: nil).isCaptureShielded)
     }
 }

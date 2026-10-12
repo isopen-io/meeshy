@@ -8,6 +8,7 @@ import { MediaService } from '../../services/MediaService';
 import { filterConsumablePostIds } from '../posts/postConsumptionGate';
 import { buildViewerVisibilityFilter } from '../../services/posts/viewerAudience';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
+import { incrementPostCounters } from '../../services/posts/postCounters';
 import { EngagementSessionSchema, DOWNLOAD_SURFACES } from '../posts/types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
@@ -406,14 +407,11 @@ async function applyImpressions(
 
   await Promise.all([
     ...groupesParIncrement(impressions).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({ where: { id: { in: ids } }, data: { impressionCount: { increment } } })),
+      incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } })),
     ...groupesParIncrement(ouvertures).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({ where: { id: { in: ids } }, data: { postOpenCount: { increment } } })),
+      incrementPostCounters(deps.prisma, ids, { postOpenCount: { increment } })),
     ...groupesParIncrement(creditsRacine).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({
-        where: { id: { in: ids }, deletedAt: NOT_DELETED },
-        data: { impressionCount: { increment } },
-      })),
+      incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } }, { liveOnly: true })),
   ]);
 
   return events.length;

@@ -84,6 +84,7 @@ function makePrisma() {
     });
   return {
     ecritures,
+    $runCommandRaw: journalise('post.runCommandRaw', { ok: 1 }),
     post: {
       // Le double HONORE la clause `visibility` du `where` — il ne se contente
       // pas de filtrer par id. Sans cela il ACCEPTERAIT ce que Mongo refuse : la

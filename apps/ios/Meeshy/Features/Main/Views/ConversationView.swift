@@ -186,7 +186,7 @@ struct ConversationView: View {
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (même patron
     /// que `BubbleFullscreenPlace` côté bulle).
-    @State private var focalFullscreenPlace: BubbleFullscreenPlace?
+    @State private var focalFullscreenPlace: FocalFullscreenPlace?
     /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
     @State private var focalShareFileItem: FocalShareFileItem?
     // `typingObserver` a été RETIRÉ (#5961). Il était capturé à l'`init` depuis
@@ -718,16 +718,7 @@ struct ConversationView: View {
             // primitives que la bulle (`BubbleStandardLayout`,
             // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
             // parce que la rangée vit dans une cellule de collection.
-            .conversationCover(item: $focalFullscreenPlace) { item in
-                LocationFullscreenView(
-                    latitude: item.place.latitude,
-                    longitude: item.place.longitude,
-                    placeName: item.place.name,
-                    address: item.place.address,
-                    accentColor: accentColor,
-                    senderName: nil
-                )
-            }
+            .conversationCover(item: $focalFullscreenPlace) { focalPlaceFullscreen($0) }
             .sheet(item: $focalShareFileItem) { item in
                 ShareSheet(activityItems: [item.url])
             }
@@ -1474,8 +1465,8 @@ struct ConversationView: View {
                     overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
                 },
-                onFocalTapLocation: { place in
-                    focalFullscreenPlace = BubbleFullscreenPlace(place: place)
+                onFocalTapLocation: { place, messageId in
+                    focalFullscreenPlace = makeFocalFullscreenPlace(place, messageId: messageId)
                 },
                 onFocalShareFile: { url in
                     focalShareFileItem = FocalShareFileItem(url: url)

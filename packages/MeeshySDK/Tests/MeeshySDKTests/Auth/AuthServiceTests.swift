@@ -671,6 +671,44 @@ final class AuthServiceTests: XCTestCase {
         }
     }
 
+    // MARK: - Premier mot de passe (#9186)
+
+    func test_changePassword_withoutCurrentPassword_omitsTheKey() async throws {
+        mock.stub("/users/me/password", result: SimpleAPIResponse(success: true, message: nil, error: nil))
+
+        try await service.changePassword(currentPassword: nil, newPassword: "Meeshy-2026!")
+
+        let body = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertNil(body["currentPassword"])
+        XCTAssertEqual(body["newPassword"] as? String, "Meeshy-2026!")
+    }
+
+    func test_hasPassword_readsTheSecuritySummaryOfMe() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: .init(hasPassword: false))),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertEqual(hasPassword, false)
+        let query = mock.lastRequest?.queryItems ?? []
+        XCTAssertTrue(query.contains(URLQueryItem(name: "expand", value: "security")))
+    }
+
+    func test_hasPassword_gatewayWithoutSecuritySummary_isUnknown() async throws {
+        mock.stub("/auth/me", result: APIResponse(
+            success: true,
+            data: MeSecurityResponseData(user: .init(security: nil)),
+            error: nil
+        ))
+
+        let hasPassword = try await service.hasPassword()
+
+        XCTAssertNil(hasPassword)
+    }
+
     // MARK: - logout
 
     func testLogoutCallsCorrectEndpoint() async {

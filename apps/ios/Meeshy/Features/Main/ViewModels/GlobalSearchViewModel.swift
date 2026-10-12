@@ -412,8 +412,10 @@ final class GlobalSearchViewModel: ObservableObject {
                 // Même résolution que `ThemedConversationRow` — la ligne de
                 // résultat de recherche est une ligne de conversation, elle doit
                 // rendre le MÊME texte que la liste. Rend l'aperçu original
-                // quand aucune langue du prisme n'est servie (règle #1).
-                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                // quand aucune langue du prisme n'est servie (règle #1). Un
+                // message qui disparaît n'y laisse que son libellé : hors du
+                // fil, aucune couche sécurisée ne le garde (#9622).
+                lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                 lastMessageAt: conv.lastMessageAt,
                 unreadCount: conv.userState.unreadCount,
                 conversation: conv
@@ -442,7 +444,7 @@ final class GlobalSearchViewModel: ObservableObject {
                     // (jumeau de `GET /conversations`) : les rendre bruts ici
                     // laisserait la recherche dans la langue de l'expéditeur
                     // alors que la liste, elle, traduit.
-                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                    lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                     lastMessageAt: conv.lastMessageAt,
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv
@@ -549,6 +551,17 @@ final class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Messages (FTS5-first, network fallback)
 
+    /// **Un message qui disparaît ne sort pas de sa conversation par la
+    /// recherche** (#9619, loi de sortie #9572). Une vue unique, une flamme à
+    /// durée ou après lecture — sur le message OU sur l'une de ses pièces —
+    /// n'apparaît dans aucun résultat : la rangée le montrerait en clair, hors
+    /// de toute couche sécurisée, et le seul fait qu'il RÉPONDE à la requête
+    /// dirait déjà un mot de son texte. Les deux volets (index local, réseau)
+    /// passent par ici, avant toute mise en cache.
+    nonisolated static func appearsInSearch(_ message: MeeshyMessage) -> Bool {
+        message.contentExitLaw.nature == .ordinary
+    }
+
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
     private func searchMessages(query: String) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
@@ -617,7 +630,9 @@ final class GlobalSearchViewModel: ObservableObject {
         case .expired, .empty:
             conversationsById = [:]
         }
-        return records.map { record in
+        let readerId = authManager.currentUser?.id ?? ""
+        return records.compactMap { record -> GlobalSearchMessageResult? in
+            guard Self.appearsInSearch(record.toMessage(currentUserId: readerId)) else { return nil }
             let conv = conversationsById[record.conversationId]
             return GlobalSearchMessageResult(
                 id: record.localId,
@@ -707,7 +722,9 @@ final class GlobalSearchViewModel: ObservableObject {
                     URLQueryItem(name: "limit", value: "5"),
                 ]
             )
-            return .served(response.data.map { apiMsg in
+            let readerId = authManager.currentUser?.id ?? ""
+            return .served(response.data.compactMap { apiMsg -> GlobalSearchMessageResult? in
+                guard Self.appearsInSearch(apiMsg.toMessage(currentUserId: readerId)) else { return nil }
                 let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
                 return GlobalSearchMessageResult(
                     id: apiMsg.id,

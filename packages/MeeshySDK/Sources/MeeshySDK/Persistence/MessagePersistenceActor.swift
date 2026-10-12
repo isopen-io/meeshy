@@ -1715,7 +1715,7 @@ public actor MessagePersistenceActor {
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
                     existing.senderIsAnonymous = api.sender.map(\.isAnonymous) ?? existing.senderIsAnonymous; existing.senderHasAccount = api.sender.map(\.hasAccount) ?? existing.senderHasAccount
-                    existing.effectFlags = effectFlags
+                    existing.effectFlags = effectFlags; existing.adoptServedOriginalLanguage(api.originalLanguage)
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
                     // ensemble : la DURÉE par `message:new` (sans échéance,

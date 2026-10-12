@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 
@@ -10,6 +10,7 @@ import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
 import { AdminErrorState, AdminSkeleton } from '@/components/admin/states';
+import { AdminTabs, adminTabId, adminTabPanelId } from '@/components/admin/tabs';
 import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
 import { personLabel } from '@/lib/admin/interpret/labels';
@@ -34,7 +35,8 @@ import {
 import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
 import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
 import { OperationsSections } from '@/routes/admin-engagement-scale-operations';
-import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/admin-engagement-scale-rules';
+import { AbuseSection, LinkVisitSection } from '@/routes/admin-engagement-scale-rules';
+import { BigPointsNotice, LoyaltyTab, StreaksTab } from '@/routes/admin-engagement-scale-tiers';
 import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
@@ -58,6 +60,22 @@ const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>>
   highBadgesForStanding: 'admin.scale.field.highBadgesForStanding',
   maxFactor: 'admin.scale.field.maxFactor',
 };
+
+/**
+ * LES ONGLETS DU BARÈME (#10395) — Opérations (points par geste, visites de lien), Séries
+ * (globale et par acte), Fidélité, Élan (multiplicateur, plafonds par niveau), Garde-fous.
+ * TOUS les panneaux restent montés (les inactifs cachés) : un seul brouillon, un seul enregistrement, rien de perdu en changeant d'onglet.
+ */
+const SCALE_TABS = ['operations', 'streaks', 'loyalty', 'momentum', 'guards'] as const;
+type ScaleTab = (typeof SCALE_TABS)[number];
+
+function ScaleTabPanel({ base, tab, active, children }: { readonly base: string; readonly tab: ScaleTab; readonly active: ScaleTab; readonly children: ReactNode }) {
+  return (
+    <div role="tabpanel" id={adminTabPanelId(base, tab)} aria-labelledby={adminTabId(base, tab)} hidden={tab !== active} data-scale-tab-panel={tab} className="grid gap-4">
+      {children}
+    </div>
+  );
+}
 
 type LevelRow = { readonly cap: ScaleDraft['levelCaps'][number]; readonly index: number };
 
@@ -142,6 +160,8 @@ function ScaleEditor({
   readonly document: AdminEngagementScaleDocument;
 }) {
   const queryClient = useQueryClient();
+  const tabsBase = useId();
+  const [tab, setTab] = useState<ScaleTab>('operations');
   const [draft, setDraft] = useState<ScaleDraft>(() => draftOf(document.scale));
   const [saving, setSaving] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -194,34 +214,54 @@ function ScaleEditor({
           {document.updatedAt === null ? translateAdmin(language, 'admin.scale.defaults') : <UpdatedBy language={language} document={document} updatedAt={document.updatedAt} />}
         </p>
 
-        <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
-          <OperationsSections language={language} draft={draft} onDraft={setDraft} />
-        </AdminFicheSection>
+        <AdminTabs
+          idBase={tabsBase}
+          label={translateAdmin(language, 'admin.scale.tab.label')}
+          tabs={SCALE_TABS.map((id) => ({ id, label: translateAdmin(language, `admin.scale.tab.${id}`) }))}
+          active={tab}
+          onChange={setTab}
+        />
 
-        <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
+        <BigPointsNotice language={language} draft={draft} />
 
-        <StreakBonusSection language={language} draft={draft} onDraft={setDraft} />
+        <ScaleTabPanel base={tabsBase} tab="operations" active={tab}>
+          <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
+            <OperationsSections language={language} draft={draft} onDraft={setDraft} />
+          </AdminFicheSection>
+          <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
+        </ScaleTabPanel>
 
-        <AbuseSection language={language} draft={draft} onDraft={setDraft} />
+        <ScaleTabPanel base={tabsBase} tab="streaks" active={tab}>
+          <StreaksTab language={language} draft={draft} onDraft={setDraft} />
+        </ScaleTabPanel>
 
-        <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
-          <div className="grid gap-3 @2xl:grid-cols-2">
-            {MULTIPLIER_FIELDS.map((field) => (
-              <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
-                <NumberField
-                  value={draft.multiplier[field]}
-                  label={translateAdmin(language, MULTIPLIER_LABELS[field])}
-                  onChange={(value) => setDraft(withMultiplier(draft, field, value))}
-                  data={{ 'data-scale-multiplier': field }}
-                />
-              </LabeledNumber>
-            ))}
-          </div>
-        </AdminFicheSection>
+        <ScaleTabPanel base={tabsBase} tab="loyalty" active={tab}>
+          <LoyaltyTab language={language} draft={draft} onDraft={setDraft} />
+        </ScaleTabPanel>
 
-        <AdminFicheSection id="scale-levels" title={translateAdmin(language, 'admin.scale.levels.title')}>
-          <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
-        </AdminFicheSection>
+        <ScaleTabPanel base={tabsBase} tab="momentum" active={tab}>
+          <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
+            <div className="grid gap-3 @2xl:grid-cols-2">
+              {MULTIPLIER_FIELDS.map((field) => (
+                <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
+                  <NumberField
+                    value={draft.multiplier[field]}
+                    label={translateAdmin(language, MULTIPLIER_LABELS[field])}
+                    onChange={(value) => setDraft(withMultiplier(draft, field, value))}
+                    data={{ 'data-scale-multiplier': field }}
+                  />
+                </LabeledNumber>
+              ))}
+            </div>
+          </AdminFicheSection>
+          <AdminFicheSection id="scale-levels" title={translateAdmin(language, 'admin.scale.levels.title')}>
+            <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
+          </AdminFicheSection>
+        </ScaleTabPanel>
+
+        <ScaleTabPanel base={tabsBase} tab="guards" active={tab}>
+          <AbuseSection language={language} draft={draft} onDraft={setDraft} />
+        </ScaleTabPanel>
 
         <AdminFormError text={error} data={{ 'data-scale-error': '' }} />
 

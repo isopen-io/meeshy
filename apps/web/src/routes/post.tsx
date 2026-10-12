@@ -19,6 +19,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { dwellContentTypeOf, useReadingSession } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -174,6 +175,17 @@ export default function PostDetailScreen() {
   });
   const { visitor, ask } = invitation;
   const body = postDetailBodyOf({ served: model !== undefined, visitor, refused: isRefusal(post.error), failed: post.isError });
+  /* LA LECTURE DU DÉTAIL (#10401) — ouvrir une publication est une
+     impression `detail` ET une vue, comptées tout de suite ; la durée et la
+     séance partent à la sortie. Miroir `PostDetailViewModel` (iOS). */
+  useReadingSession({
+    postId: model?.id,
+    active: model !== undefined,
+    contentType: dwellContentTypeOf(post.data?.type),
+    surface: 'detail',
+    impressionSource: 'detail',
+    openView: true,
+  });
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
   // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu

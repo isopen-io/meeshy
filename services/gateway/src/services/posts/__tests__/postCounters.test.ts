@@ -1,0 +1,183 @@
+/**
+ * @jest-environment node
+ *
+ * #10402 — un compteur de lecture resté `null` reprend son compte.
+ *
+ * Le faux (`mongo-post-counter-store`) reproduit la loi que Prisma impose sur
+ * MongoDB : `{ increment }` devient `$add`, et `null + n = null`. Les témoins
+ * de bout en bout passent par les VRAIS sites d'appel (impressions, sessions
+ * d'engagement, vues, ouvertures anonymes) : chacun rougit tant qu'un site
+ * écrit encore par `{ increment }`.
+ */
+
+import { describe, it, expect, jest } from '@jest/globals';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { incrementPostCounters, postCounterIncrementCommand } from '../postCounters';
+import { creditPostView } from '../postViewCredit';
+import { makeMongoPostCounterStore, type StoredPost } from '../../../__tests__/helpers/mongo-post-counter-store';
+import { PostService } from '../../PostService';
+import { ingestSocialEvents, type SocialEventsDeps } from '../../../routes/social/events';
+
+const POST_A = '507f1f77bcf86cd799439011';
+const POST_B = '507f1f77bcf86cd799439012';
+
+const NULL_COUNTERS = {
+  impressionCount: null,
+  postOpenCount: null,
+  qualifiedViewCount: null,
+  playCount: null,
+  viewCount: null,
+};
+
+const legacyPost = (id: string, extra: Record<string, unknown> = {}): StoredPost =>
+  ({ id, authorId: 'author', visibility: 'PUBLIC', visibilityUserIds: [], ...NULL_COUNTERS, ...extra });
+
+const absentCountersPost = (id: string): StoredPost => ({ id, authorId: 'author', visibility: 'PUBLIC' });
+
+describe('le faux reproduit la loi de Prisma sur MongoDB', () => {
+  it('un `{ increment }` sur un compteur null le laisse null — la panne que ce lot ferme', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
+
+    await store.updateMany({ where: { id: { in: [POST_A] } }, data: { impressionCount: { increment: 1 } } });
+
+    expect(store.read(POST_A)?.impressionCount).toBeNull();
+  });
+});
+
+describe('incrementPostCounters — un compteur null ou absent repart de zéro', () => {
+  it('un compteur NULL passe à n', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
+
+    await incrementPostCounters({ $runCommandRaw: store.runCommandRaw }, [POST_A], { impressionCount: { increment: 3 } });
+
+    expect(store.read(POST_A)?.impressionCount).toBe(3);
+  });
+
+  it('un compteur ABSENT passe à n', async () => {
+    const store = makeMongoPostCounterStore([absentCountersPost(POST_A)]);
+
+    await incrementPostCounters({ $runCommandRaw: store.runCommandRaw }, [POST_A], { playCount: { increment: 1 } });
+
+    expect(store.read(POST_A)?.playCount).toBe(1);
+  });
+
+  it('un compteur déjà compté s\'additionne, sur chaque post et chaque champ nommé', async () => {
+    const store = makeMongoPostCounterStore([
+      legacyPost(POST_A, { impressionCount: 4, postOpenCount: 2 }),
+      legacyPost(POST_B),
+    ]);
+
+    await incrementPostCounters(
+      { $runCommandRaw: store.runCommandRaw },
+      [POST_A, POST_B],
+      { impressionCount: { increment: 2 }, postOpenCount: { increment: 1 } },
+    );
+
+    expect(store.read(POST_A)).toMatchObject({ impressionCount: 6, postOpenCount: 3 });
+    expect(store.read(POST_B)).toMatchObject({ impressionCount: 2, postOpenCount: 1 });
+  });
+
+  it('`liveOnly` ne crédite pas un post supprimé', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A, { deletedAt: new Date() }), legacyPost(POST_B)]);
+
+    await incrementPostCounters(
+      { $runCommandRaw: store.runCommandRaw },
+      [POST_A, POST_B],
+      { impressionCount: { increment: 1 } },
+      { liveOnly: true },
+    );
+
+    expect(store.read(POST_A)?.impressionCount).toBeNull();
+    expect(store.read(POST_B)?.impressionCount).toBe(1);
+  });
+
+  it('n\'envoie rien sans id, sans incrément non nul, ni pour un champ qui n\'est pas un compteur de lecture', async () => {
+    const runCommandRaw = jest.fn(async () => ({ ok: 1 }));
+
+    await incrementPostCounters({ $runCommandRaw: runCommandRaw }, [], { viewCount: { increment: 1 } });
+    await incrementPostCounters({ $runCommandRaw: runCommandRaw }, [POST_A], { viewCount: { increment: 0 } });
+    await incrementPostCounters(
+      { $runCommandRaw: runCommandRaw },
+      [POST_A],
+      { likeCount: { increment: 1 } } as never,
+    );
+
+    expect(runCommandRaw).not.toHaveBeenCalled();
+    expect(postCounterIncrementCommand([POST_A], {})).toBeNull();
+  });
+});
+
+describe('les sites d\'appel réels comptent un post antérieur aux colonnes', () => {
+  it('une impression de DÉTAIL compte l\'impression ET l\'ouverture d\'un post aux compteurs null', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
+    const prisma = {
+      post: {
+        findMany: async ({ where }: { where: { id: { in: string[] }; repostOfId?: unknown } }) =>
+          where.repostOfId !== undefined ? [] : where.id.in.map((id) => ({ ...store.read(id), expiresAt: null })),
+        updateMany: store.updateMany,
+      },
+      postImpression: { createMany: async () => ({ count: 1 }) },
+      $runCommandRaw: store.runCommandRaw,
+    } as unknown as PrismaClient;
+    const deps = { fastify: {}, prisma, postService: {} } as unknown as SocialEventsDeps;
+
+    await ingestSocialEvents(
+      deps,
+      [{ type: 'impression', postId: POST_A, source: 'detail' }],
+      { kind: 'user', userId: 'reader', username: 'reader' },
+    );
+
+    expect(store.read(POST_A)).toMatchObject({ impressionCount: 1, postOpenCount: 1 });
+  });
+
+  it('une session d\'engagement de réel complète et qualifiée compte ouverture, lecture et vue qualifiée', async () => {
+    const store = makeMongoPostCounterStore([absentCountersPost(POST_A)]);
+    const prisma = {
+      post: {
+        findFirst: async () => ({ id: POST_A, authorId: 'author' }),
+        update: store.update,
+      },
+      postEngagement: {
+        findUnique: async () => null,
+        upsert: async () => ({}),
+      },
+      $runCommandRaw: store.runCommandRaw,
+    } as unknown as PrismaClient;
+
+    const recorded = await new PostService(prisma).recordEngagementBatch([{
+      sessionId: 's-1', postId: POST_A, contentType: 'REEL', surface: 'reels',
+      startedAt: '2026-10-12T00:00:00.000Z', dwellMs: 9000, watchMs: 9000, completed: true,
+    }], 'reader');
+
+    expect(recorded).toBe(1);
+    expect(store.read(POST_A)).toMatchObject({ postOpenCount: 1, playCount: 1, qualifiedViewCount: 1 });
+  });
+
+  it('la première vue d\'un lecteur compte sur un viewCount null', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
+    const prisma = {
+      post: { update: store.update },
+      postView: { findUnique: async () => null, create: async () => ({}) },
+      $runCommandRaw: store.runCommandRaw,
+    } as unknown as PrismaClient;
+
+    const isNew = await creditPostView(prisma, { postId: POST_A, userId: 'reader' });
+
+    expect(isNew).toBe(true);
+    expect(store.read(POST_A)?.viewCount).toBe(1);
+  });
+
+  it('une ouverture anonyme compte sur un postOpenCount null', async () => {
+    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
+    const prisma = {
+      post: { findFirst: async () => ({ id: POST_A }), update: store.update },
+      anonymousPostOpen: { create: async () => ({}) },
+      $runCommandRaw: store.runCommandRaw,
+    } as unknown as PrismaClient;
+
+    const counted = await new PostService(prisma).recordAnonymousOpen(POST_A, 'session-key');
+
+    expect(counted).toBe(true);
+    expect(store.read(POST_A)?.postOpenCount).toBe(1);
+  });
+});

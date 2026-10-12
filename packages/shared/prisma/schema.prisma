@@ -494,6 +494,9 @@ model User {
   addressBookEntries UserContact[] @relation("AddressBookOwner")
   addressBookMatches UserContact[] @relation("AddressBookMatchedUser")
 
+  // Séries d'engagement par acte (#10389)
+  engagementActStreaks EngagementActStreak[]
+
   @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
   @@index([blockedUserIds]) // Multikey: "qui m'a bloqué ?" (getBlockRelatedUserIds) — sinon COLLSCAN à chaque transition de présence
   @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
@@ -5173,6 +5176,27 @@ model EngagementQuota {
 
   @@unique([userId, operationKey, bucket])
   @@index([userId, createdAt])
+}
+
+/// LA SÉRIE D'UN ACTE (#10389) — les jours civils consécutifs où CE geste a été
+/// crédité au compte : écrire dans une conversation, publier un post, un réel,
+/// une story, une humeur, commenter, réagir à un post, à un réel, à une story
+/// (`ENGAGEMENT_STREAK_ACTS`, `@meeshy/shared/types/engagement-act-streaks`).
+/// Une ligne par compte et par acte, avancée par `ActStreakRecorder` au jour
+/// civil du compte (`lastDay`, `YYYY-MM-DD`, son fuseau) ; ses paliers se payent
+/// une fois chacun, par le seau `streak:<acte>:<jours>` d'`EngagementQuota`.
+model EngagementActStreak {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  act         String
+  currentDays Int      @default(0)
+  longestDays Int      @default(0)
+  lastDay     String
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, act])
+  @@index([userId])
 }
 
 /// LE BARÈME d'engagement réglé par l'administration (#8906) — une ligne

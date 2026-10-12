@@ -28,6 +28,7 @@ jest.mock('../utils/logger-enhanced', () => ({
 }));
 
 import { PostService } from '../services/PostService';
+import { counterWrite, postCounterWritesOf } from './helpers/posts-counter-writes';
 
 const POST_A = '507f1f77bcf86cd799439011';
 
@@ -56,9 +57,13 @@ const buildPrisma = (overrides: Partial<Record<string, unknown>> = {}) => {
     create: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ id: 'v1' }),
     update: jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({}),
   };
-  const prisma = { post, postView, ...overrides };
+  const $runCommandRaw = jest.fn<(arg?: unknown) => Promise<unknown>>().mockResolvedValue({ ok: 1 });
+  const prisma = { post, postView, $runCommandRaw, ...overrides };
   return { prisma, post, postView };
 };
+
+const viewCredits = (prisma: { $runCommandRaw: unknown }) =>
+  postCounterWritesOf(prisma.$runCommandRaw as Parameters<typeof postCounterWritesOf>[0]);
 
 const makeService = (prisma: unknown) => {
   const svc = new PostService(prisma as never);
@@ -82,7 +87,7 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(false);
-    expect(post.update).not.toHaveBeenCalled();
+    expect(viewCredits(prisma)).toHaveLength(0);
     // Dédup ATTENDUE sous course — ne doit pas polluer les logs d'erreur.
     expect(mockLog.warn).not.toHaveBeenCalled();
     expect(mockLog.error).not.toHaveBeenCalled();
@@ -106,9 +111,7 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(true);
-    expect(post.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: { viewCount: { increment: 1 } },
-    }));
+    expect(viewCredits(prisma)).toEqual([counterWrite([POST_A], { viewCount: { increment: 1 } })]);
   });
 });
 
@@ -180,8 +183,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     expect(counted).toBe(true);
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: POST_A, userId: 'viewer-1', duration: undefined } });
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
-    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
-    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
   });
 
   it("chaîne repost-de-repost : la RACINE (originalRepostOfId) est créditée, jamais le parent intermédiaire", async () => {
@@ -193,8 +196,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     await svc.recordView(POST_A, 'viewer-1');
 
-    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
-    expect(post.update).not.toHaveBeenCalledWith({ where: { id: INTERMEDIATE_ID }, data: { viewCount: { increment: 1 } } });
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([INTERMEDIATE_ID], { viewCount: { increment: 1 } }));
   });
 
   it("l'auteur de la racine visionnant un repost de son propre contenu ne gonfle pas son propre compteur (même garde que la ré-ouverture directe)", async () => {
@@ -207,8 +210,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(true);
-    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
-    expect(post.update).not.toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
     expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: ROOT_ID }) }));
   });
 
@@ -222,8 +225,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(true);
-    expect(post.update).toHaveBeenCalledTimes(1);
-    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(viewCredits(prisma)).toHaveLength(1);
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
   });
 
   it('vue sur un post non-repost : comportement inchangé — une seule résolution, aucun crédit de racine', async () => {
@@ -234,7 +237,7 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     expect(counted).toBe(true);
     expect(post.findFirst).toHaveBeenCalledTimes(1);
-    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(viewCredits(prisma)).toHaveLength(1);
     expect(postView.create).toHaveBeenCalledTimes(1);
   });
 
@@ -263,8 +266,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
       select: { id: true, authorId: true },
     });
     expect(counted).toBe(true);
-    expect(post.update).toHaveBeenCalledTimes(1);
-    expect(post.update).toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
+    expect(viewCredits(prisma)).toHaveLength(1);
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
   });
 
   it("le reposteur qui revisionne SON PROPRE repost ne le gonfle pas, mais crédite bien la racine (garde évaluée PAR POST, pas un court-circuit global)", async () => {
@@ -278,9 +281,9 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     // Le retour reste celui du post AFFICHÉ (pas crédité ici).
     expect(counted).toBe(false);
-    expect(post.update).not.toHaveBeenCalledWith({ where: { id: POST_A }, data: { viewCount: { increment: 1 } } });
-    expect(post.update).toHaveBeenCalledWith({ where: { id: ROOT_ID }, data: { viewCount: { increment: 1 } } });
-    expect(post.update).toHaveBeenCalledTimes(1);
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toHaveLength(1);
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
     expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: POST_A }) }));
   });

@@ -634,7 +634,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
     /// Lot 3.2 — carte lieu / partage fichier de la rangée plate.
-    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    var onFocalTapLocation: ((SharedPlace, String) -> Void)?
     var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically pushes a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
