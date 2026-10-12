@@ -238,17 +238,52 @@ extension ComposerCaptureSession {
         activeEditTools = []
         takeSound = ComposerTakeSound()
         trimScrubbing = false
-        takeSaveState = .idle
+        takeSave = Self.noTakeSave
     }
 
-    // MARK: - ⬇︎ Enregistrer dans Photos (#9684)
+    // MARK: - ⬇︎ Enregistrer dans Photos (#9684, #10284)
+
+    /// Aucune prise en retouche : rien n'est dans Photos.
+    static let noTakeSave = CaptureSaveLaw.beginTake(.outside(frameId: nil))
+
+    /// L'état d'enregistrement vu du cadre COURANT — la loi partagée décide.
+    var currentTakeSave: TakeSaveState {
+        CaptureSaveLaw.applyFrameChange(takeSave, frameId: look.captureFrameId)
+    }
+
+    /// **Le bouton suit la loi** (#10284) : visible tant que la prise n'est pas
+    /// dans Photos avec ce cadre ; une roue pendant l'écriture ; sinon il s'en va.
+    var takeSaveState: ComposerTakeSaveState {
+        guard !CaptureSaveLaw.saveButtonVisible(currentTakeSave) else { return .idle }
+        return takeWrite == nil ? .saved : .saving
+    }
 
     /// **La flèche ⬇︎** : la prise retouchée rejoint Photos telle qu'on la voit —
     /// effet, cadre, cadrage et découpe ; l'original s'il n'y a rien de tout
-    /// cela. UNE fois par prise : ensuite la flèche devient ✓. On reste en
-    /// retouche ; un refus de Photos se dit et laisse la flèche disponible.
+    /// cela. Une fois par cadre : la flèche s'en va, et revient si le cadre
+    /// change (#10284). On reste en retouche ; un refus de Photos se dit et
+    /// rend la flèche.
     func saveTakeToPhotos() {
-        guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, let source = editSource else { return }
+        guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, editSource != nil else { return }
+        takeSave = CaptureSaveLaw.applySaved(currentTakeSave)
+        writeTake(frameId: look.captureFrameId, awaitingRaw: nil, toast: false)
+    }
+
+    /// **La prise par le cadre** (#10284) : la retouche vient de s'ouvrir, et la
+    /// prise part déjà vers Photos avec son cadre (`CaptureSaveLaw.beginTake`).
+    /// Le brut refusé (le refus s'est dit une fois) ne fait rien tenter d'autre.
+    func saveFrameTake(awaitingRaw brut: Task<Bool, Never>?) {
+        guard phase.isEditing, editSource != nil else { return }
+        let cadre = look.captureFrameId
+        takeSave = CaptureSaveLaw.beginTake(.frame(frameId: cadre))
+        writeTake(frameId: cadre, awaitingRaw: brut, toast: true)
+    }
+
+    /// L'écriture vers Photos de ce qu'on voit. Les écritures s'ENCHAÎNENT :
+    /// jamais deux rendus pleine définition à la fois, et la retouche abandonnée
+    /// attend la dernière avant de jeter son fichier.
+    private func writeTake(frameId: String, awaitingRaw brut: Task<Bool, Never>?, toast: Bool) {
+        guard let source = editSource else { return }
         let galerie = gallery
         let politique = savePolicy()
         let ecriture: @MainActor () async -> Bool?
@@ -273,29 +308,36 @@ extension ComposerCaptureSession {
                 return enregistree
             }
         }
-        takeSaveState = .saving
-        let tache = Task { @MainActor in await ecriture() }
+        let precedente = takeWrite
+        let tache = Task { @MainActor () -> Bool? in
+            _ = await precedente?.value
+            guard await brut?.value ?? true else { return false }
+            return await ecriture()
+        }
         takeWrite = tache
         Task { @MainActor [weak self] in
             let verdict = await tache.value
-            self?.takeWriteEnded(tache, verdict: verdict, source: source)
+            self?.takeWriteEnded(tache, verdict: verdict, source: source, frameId: frameId, toast: toast)
         }
     }
 
     /// **Le verdict se dit toujours** : sur la flèche si la retouche est encore là,
     /// par un bandeau sinon — jamais un échec silencieux. Un refus de Photos s'est
     /// déjà dit (`reportPhotoLibraryRefusal`) ; un rendu impossible se dit ici.
-    private func takeWriteEnded(_ tache: Task<Bool?, Never>, verdict: Bool?, source: any ComposerFrameSourcing) {
+    /// Un échec rend le cadre DE CETTE ÉCRITURE à enregistrer (`applySaveFailed`) ;
+    /// la prise par le cadre, qu'aucun bouton n'a demandée, se dit par un bandeau.
+    private func takeWriteEnded(_ tache: Task<Bool?, Never>, verdict: Bool?, source: any ComposerFrameSourcing,
+                                frameId: String, toast: Bool) {
         if takeWrite == tache { takeWrite = nil }
         let enregistree = verdict == true
-        if isStillEditing(source) { takeSaveState = enregistree ? .saved : .idle }
+        if !enregistree, isStillEditing(source) { takeSave = CaptureSaveLaw.applySaveFailed(takeSave, frameId: frameId) }
         guard enregistree else {
             HapticFeedback.error()
             if verdict == nil { FeedbackToastManager.shared.showError(ComposerCaptureCopy.saveToPhotosFailed) }
             return
         }
         HapticFeedback.success()
-        guard isStillEditing(source) else {
+        guard isStillEditing(source), !toast else {
             return FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
         UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)

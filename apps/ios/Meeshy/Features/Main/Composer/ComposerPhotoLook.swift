@@ -29,6 +29,10 @@ nonisolated struct ComposerPhotoLook: Hashable, Sendable {
 
     /// Rien n'a été choisi : la prise part telle quelle, octets d'origine compris.
     var isUntouched: Bool { filter == .natural && frame == .none }
+
+    /// L'identité du cadre pour la loi d'enregistrement (#10284) : deux looks
+    /// différents rendent deux versions différentes dans Photos.
+    var captureFrameId: String { String(describing: self) }
 }
 
 nonisolated enum ComposerPhotoLookRule {

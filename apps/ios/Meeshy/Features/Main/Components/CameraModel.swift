@@ -26,6 +26,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351) —
     /// `nil` quand `CaptureSavePolicy` ne l'enregistre pas (défaut, #9684).
     var librarySave: Task<Bool, Never>?
+    /// L'hôte garde-t-il cette prise dans l'app (#10284) ? Le jeton est celui de
+    /// l'enregistrement, `nil` pour une photo ; sans hôte, le réglage décide seul.
+    var keepsOriginalInApp: (@MainActor (_ recordingToken: String?) -> Bool)?
+
+    /// Le brut rejoint Photos si Réglages › Médias le demande ET que l'hôte ne
+    /// garde pas la prise dans l'app : une prise hors cadre n'y va jamais (#10284).
+    func savesOriginal(for token: String?) -> Bool {
+        CaptureSavePolicy.stored().savesOriginal && keepsOriginalInApp?(token) != true
+    }
     /// Le jeton de la prise, de son départ à sa LIVRAISON — chaque fichier porte
     /// le sien (`segmentTokens`) : `capturedVideoId` à l'arrivée, `abandonedRecordingId` sans fichier.
     private(set) var recordingId: String?
@@ -897,7 +906,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             // last recorded segment rather than losing the whole capture.
             if let lastSegment = segments.last {
                 capturedVideoURL = lastSegment
-                librarySave = CaptureSavePolicy.stored().savesOriginal
+                librarySave = savesOriginal(for: token)
                     ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) } }
                     : nil
                 capturedVideoId = token ?? UUID().uuidString
@@ -906,7 +915,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             return abandonRecording(token: token)
         }
         capturedVideoURL = finalURL
-        librarySave = CaptureSavePolicy.stored().savesOriginal
+        librarySave = savesOriginal(for: token)
             ? Task { await Self.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveVideo(at: finalURL) } }
             : nil
         capturedVideoId = token ?? UUID().uuidString
@@ -1038,19 +1047,19 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         // `PhotoLibraryManager` is deliberately non-@MainActor so its
         // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
-        // L'original ne rejoint Photos que si le réglage le demande (#9684) :
-        // la prise reste dans la session de toute façon.
+        // L'original ne rejoint Photos que si le réglage le demande (#9684) et
+        // que l'hôte ne garde pas la prise dans l'app (#10284) : la prise reste
+        // dans la session de toute façon.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
-        let enregistrement: Task<Bool, Never>? = CaptureSavePolicy.stored().savesOriginal
-            ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
-            : nil
         Task { @MainActor in
             self.isTakingPhoto = false
             self.capturedPhoto = image
             // Les octets TRAITÉS, publiés à côté de l'image : ils portent
             // l'EXIF de la prise, qu'une `UIImage` ne rend pas.
             self.capturedPhotoData = data
-            self.librarySave = enregistrement
+            self.librarySave = self.savesOriginal(for: nil)
+                ? Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+                : nil
             self.capturedPhotoId = UUID().uuidString
         }
     }

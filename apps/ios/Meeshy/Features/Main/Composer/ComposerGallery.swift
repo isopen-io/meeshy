@@ -72,11 +72,15 @@ nonisolated struct CaptureSavePolicy: Equatable, Sendable {
     var writesUntouchedTake: Bool { !savesOriginal }
 }
 
-/// Où en est l'enregistrement de la prise retouchée : une fois par prise.
+/// Où en est l'enregistrement de la prise retouchée, PROJETÉ de la loi partagée
+/// (`CaptureSaveLaw`, #10284) pour le cadre courant : `saved` = déjà dans Photos
+/// avec ce cadre — le bouton disparaît ; un autre cadre le fait revenir.
 nonisolated enum ComposerTakeSaveState: Equatable, Sendable {
     case idle
     case saving
     case saved
 
     var offersSave: Bool { self == .idle }
+
+    var showsSave: Bool { self != .saved }
 }

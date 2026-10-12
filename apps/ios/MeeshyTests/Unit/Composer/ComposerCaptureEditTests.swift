@@ -535,6 +535,40 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(session.takeSaveState, .idle, "la prise suivante repart avec sa flèche")
     }
 
+    /// **#10284 — « Enregistrer » suit le cadre** : masqué une fois la prise en
+    /// galerie AVEC ce cadre, il revient quand le cadre change, se masque de
+    /// nouveau après l'enregistrement, et revenir à un cadre déjà écrit le masque
+    /// sans écrire de doublon.
+    func test_saveTakeToPhotos_followsTheFrame_changingItOffersTheSaveAgain() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40)))
+        session.look = ComposerPhotoLook(filter: .warm)
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        session.look = ComposerPhotoLook(filter: .cool)
+        XCTAssertEqual(session.takeSaveState, .idle, "un autre cadre : « Enregistrer » réapparaît")
+        session.saveTakeToPhotos()
+        await ComposerCaptureTakesTests.waitUntil { session.takeSaveState == .saved }
+        XCTAssertEqual(galerie.saveImageCount, 2, "réenregistrer avec le nouveau cadre écrit la nouvelle version")
+        session.look = ComposerPhotoLook(filter: .warm)
+        XCTAssertEqual(session.takeSaveState, .saved, "ce cadre-là est déjà dans Photos")
+        session.saveTakeToPhotos()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(galerie.saveImageCount, 2, "aucun doublon")
+    }
+
+    func test_takeSaveState_savedHidesTheButton_savingStillShowsItsWheel() {
+        XCTAssertTrue(ComposerTakeSaveState.idle.showsSave)
+        XCTAssertTrue(ComposerTakeSaveState.saving.showsSave)
+        XCTAssertFalse(ComposerTakeSaveState.saved.showsSave, "déjà enregistrée : le bouton disparaît")
+    }
+
+    func test_cameraBar_hidesTheSaveOnceTheTakeIsSaved() throws {
+        let barre = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("offersSave: onSave != nil && saveState.showsSave"))
+    }
+
     func test_saveTakeToPhotos_refused_offersTheArrowAgain() async {
         let galerie = MockComposerGallery(imageResult: false)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie, savePolicy: { .standard })
@@ -627,14 +661,16 @@ final class ComposerCaptureEditTests: XCTestCase {
                        "jamais un échec silencieux")
     }
 
-    /// La caméra n'écrit plus le brut sans que le réglage le demande : chacune de
-    /// ses trois écritures (photo, vidéo, repli du dernier segment) le consulte.
-    func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo() throws {
+    /// La caméra n'écrit plus le brut sans que le réglage le demande, ni pour une
+    /// prise que l'hôte garde dans l'app (#10284) : chacune de ses trois écritures
+    /// (photo, vidéo, repli du dernier segment) passe par la même garde.
+    func test_cameraModel_writesTheOriginalOnlyWhenThePolicySaysSo_andTheHostLetsItGo() throws {
         let camera = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Components/CameraModel.swift")
         let ecritures = camera.components(separatedBy: "PhotoLibraryManager.shared.save").count - 1
-        let gardes = camera.components(separatedBy: "CaptureSavePolicy.stored().savesOriginal").count - 1
+        let gardes = camera.components(separatedBy: "savesOriginal(for:").count - 1
         XCTAssertEqual(ecritures, 3)
-        XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la politique")
+        XCTAssertEqual(gardes, ecritures, "chaque écriture du brut passe par la garde")
+        XCTAssertTrue(camera.contains("CaptureSavePolicy.stored().savesOriginal && keepsOriginalInApp?(token) != true"))
     }
 
     func test_cameraBar_offersTheSaveArrow_wiredToTheSession() throws {

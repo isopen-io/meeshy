@@ -454,9 +454,10 @@ struct ComposerLookStrip: View {
         return ComposerCaptureGesture.action(zone: zone, gesture: .drag, context: tenue) == .steerTake
     }
 
-    /// **Le toucher de la miniature, lu par le seul décideur** (#9464) : le second
-    /// d'un double dans la même zone prend la photo vers la galerie ; seul, il
-    /// arrête une prise verrouillée.
+    /// **Le toucher de la miniature, lu par le seul décideur** (#9464, #10284) :
+    /// la case choisie EST le déclencheur — un toucher photographie (galerie puis
+    /// retouche), le second d'un double est absorbé ; pendant une prise
+    /// verrouillée, il l'arrête.
     private func tapTrigger(_ zone: ComposerCaptureZone) {
         let issue = ComposerCaptureGesture.tap(zone: zone, context: context, now: Date(),
                                                lastTap: session.lastViewfinderTap, armedAt: session.armedAt)

@@ -58,7 +58,8 @@ struct ComposerSceneCameraBar: View {
     var rendering = false
     var onDone: () -> Void = {}
     /// **La flèche ⬇︎ de la retouche** (#9684) : la prise, avec ses effets et
-    /// son cadre, rejoint Photos — une fois, puis ✓.
+    /// son cadre, rejoint Photos ; déjà enregistrée avec ce cadre, la flèche
+    /// disparaît, et revient quand le cadre change (#10284).
     var saveState = ComposerTakeSaveState.idle
     var onSave: (() -> Void)?
 
@@ -88,7 +89,7 @@ struct ComposerSceneCameraBar: View {
 
     private var row: ComposerCaptureTopRow.Input {
         ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
-                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil)
+                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil && saveState.showsSave)
     }
 
     private var trailingItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.trailing(row) }
@@ -206,8 +207,9 @@ struct ComposerSceneCameraBar: View {
     }
 
     /// **⬇︎ Enregistrer dans Photos**, à gauche de « Terminé » : la flèche, puis
-    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps), puis ✓.
-    /// Une prise ne s'enregistre qu'une fois ; pendant « Terminé », elle attend.
+    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps) ; une
+    /// fois la prise dans Photos avec ce cadre, le bouton s'en va (#10284).
+    /// Pendant « Terminé », elle attend.
     private func saveButton(_ action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
