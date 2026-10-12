@@ -19,6 +19,17 @@ const f = {
   'admin.gesture.done.restore': 'Publicação de volta ao ar.',
   'admin.gesture.done.audience': 'Público da publicação alterado.',
   'admin.gesture.filter.state': 'Estado',
+  'admin.gesture.preview.open': 'Pré-visualizar',
+  'admin.gesture.preview.title': 'Pré-visualização da publicação',
+  'admin.gesture.preview.previous': 'Publicação anterior',
+  'admin.gesture.preview.next': 'Próxima publicação',
+  'admin.gesture.preview.fiche': 'Abrir a ficha',
+  'admin.gesture.preview.keys': 'j e k, ou as setas, passam de uma publicação à outra.',
+  'admin.gesture.preview.scene': 'Cena {index} de {count}',
+  'admin.gesture.preview.scenePrevious': 'Cena anterior',
+  'admin.gesture.preview.sceneNext': 'Próxima cena',
+  'admin.gesture.preview.file': 'Abrir o arquivo',
+  'admin.gesture.preview.empty': 'Esta publicação não tem texto nem mídia.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

@@ -103,6 +103,8 @@ export type AdminPostFiche = {
   /** Le retrait de modération (#10392) — posé, la fiche dit « hors ligne » et propose « Remettre en ligne ». */
   readonly moderationHiddenAt: string | null;
   readonly moderationPriorVisibility: string | null;
+  /** La scène BRUTE (`storyEffects`) : l'aperçu la remet au lecteur de scène de l'application (#10393). */
+  readonly storyEffects: unknown;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly author: AdminPersonRef | null;
@@ -279,6 +281,7 @@ export function decodeAdminPostFiche(raw: unknown): AdminPostFiche | null {
     deletedAt: textOrNull(post.deletedAt),
     moderationHiddenAt: textOrNull(post.moderationHiddenAt),
     moderationPriorVisibility: textOrNull(post.moderationPriorVisibility),
+    storyEffects: post.storyEffects ?? null,
     createdAt: textOrNull(post.createdAt),
     updatedAt: textOrNull(post.updatedAt),
     author: decodeAdminPersonRef(post.author),

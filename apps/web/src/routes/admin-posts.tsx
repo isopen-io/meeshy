@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge } from '@/components/admin/badges';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
@@ -5,6 +7,7 @@ import { AdminFilterChips, AdminListToolbar } from '@/components/admin/list-tool
 import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminAnnouncement } from '@/components/admin/announcement';
+import { AdminButton } from '@/components/admin/button';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK2, SURFACE } from '@/components/admin/tone';
@@ -31,6 +34,7 @@ import type { AdminPage } from '@/lib/api/admin-page';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminPostGestureBar } from './admin-post-gestures';
+import { AdminPostPreview } from './admin-post-preview';
 import { AdminPostsStatsBand } from './admin-posts-stats';
 
 /**
@@ -99,6 +103,7 @@ export function AdminPostsPanel({
 }) {
   const reach = useAdminReach();
   const announcer = useLiveAnnouncer();
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [search, setSearch] = useSearch();
   const list = useAdminList<AdminPostRow, SortKey, FilterKey, 'authorId'>({
     spec: POST_LIST_SPEC,
@@ -108,6 +113,7 @@ export function AdminPostsPanel({
   });
 
   const all = { value: '', label: translateAdmin(language, 'admin.list.all') };
+  const listKey = adminPostsQueryKey(list.address);
   const total = list.query.data?.total;
   const periodFilter = periodOf(list.state.filters.period);
   const authorId = list.state.ids.authorId;
@@ -151,17 +157,19 @@ export function AdminPostsPanel({
       id: 'gestures',
       header: translateAdmin(language, 'admin.gesture.col'),
       cell: (row) => (
-        <AdminPostGestureBar
-          language={language}
-          post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility }}
-          onAnnounce={announcer.announce}
-          deps={deps}
-          compact
-          optimistic={{
-            key: adminPostsQueryKey(list.address),
-            apply: (before, intent, at) => applyGestureToRows(before as AdminPage<AdminPostRow>, row.id, intent, at),
-          }}
-        />
+        <span className="flex flex-wrap items-center gap-1.5">
+          <AdminButton tone="secondary" onClick={() => setPreviewId(row.id)} data={{ 'data-admin-post-preview-open': row.id }}>
+            {translateAdmin(language, 'admin.gesture.preview.open')}
+          </AdminButton>
+          <AdminPostGestureBar
+            language={language}
+            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility }}
+            onAnnounce={announcer.announce}
+            deps={deps}
+            compact
+            optimistic={{ key: listKey, apply: (before, intent, at) => applyGestureToRows(before as AdminPage<AdminPostRow>, row.id, intent, at) }}
+          />
+        </span>
       ),
     },
     {
@@ -276,6 +284,19 @@ export function AdminPostsPanel({
           }
         />
       </div>
+      {previewId === null ? null : (
+        <AdminPostPreview
+          language={language}
+          postId={previewId}
+          rows={list.query.data?.rows ?? []}
+          onNavigate={setPreviewId}
+          onClose={() => setPreviewId(null)}
+          onAnnounce={announcer.announce}
+          deps={deps}
+          now={now}
+          listOptimistic={{ key: listKey, apply: (before, postId, intent, at) => applyGestureToRows(before as AdminPage<AdminPostRow>, postId, intent, at) }}
+        />
+      )}
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

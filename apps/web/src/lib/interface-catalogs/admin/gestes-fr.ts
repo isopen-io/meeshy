@@ -21,6 +21,17 @@ const f = {
   'admin.gesture.done.restore': 'Publication remise en ligne.',
   'admin.gesture.done.audience': 'Audience de la publication changée.',
   'admin.gesture.filter.state': 'État',
+  'admin.gesture.preview.open': 'Aperçu',
+  'admin.gesture.preview.title': 'Aperçu de la publication',
+  'admin.gesture.preview.previous': 'Publication précédente',
+  'admin.gesture.preview.next': 'Publication suivante',
+  'admin.gesture.preview.fiche': 'Ouvrir la fiche',
+  'admin.gesture.preview.keys': 'j et k, ou les flèches, passent d’une publication à l’autre.',
+  'admin.gesture.preview.scene': 'Scène {index} sur {count}',
+  'admin.gesture.preview.scenePrevious': 'Scène précédente',
+  'admin.gesture.preview.sceneNext': 'Scène suivante',
+  'admin.gesture.preview.file': 'Ouvrir le fichier',
+  'admin.gesture.preview.empty': 'Cette publication n’a ni texte ni média.',
 } as const;
 
 export default f;

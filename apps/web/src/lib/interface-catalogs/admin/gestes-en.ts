@@ -19,6 +19,17 @@ const f = {
   'admin.gesture.done.restore': 'Post back online.',
   'admin.gesture.done.audience': 'Post audience changed.',
   'admin.gesture.filter.state': 'State',
+  'admin.gesture.preview.open': 'Preview',
+  'admin.gesture.preview.title': 'Post preview',
+  'admin.gesture.preview.previous': 'Previous post',
+  'admin.gesture.preview.next': 'Next post',
+  'admin.gesture.preview.fiche': 'Open the record',
+  'admin.gesture.preview.keys': 'j and k, or the arrow keys, move between posts.',
+  'admin.gesture.preview.scene': 'Scene {index} of {count}',
+  'admin.gesture.preview.scenePrevious': 'Previous scene',
+  'admin.gesture.preview.sceneNext': 'Next scene',
+  'admin.gesture.preview.file': 'Open the file',
+  'admin.gesture.preview.empty': 'This post has neither text nor media.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
