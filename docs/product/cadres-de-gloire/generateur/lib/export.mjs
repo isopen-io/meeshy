@@ -1,8 +1,10 @@
 // L'exportateur unique (lot L1, § 5.1 et § 5.3 du prompt) : chaque cadre généré devient un jeu de couches raster
 // WebP rognées à leur boîte, et un export.json BRUT qui décrit ce que l'app peindra elle-même (texte, oiseaux, blason).
-// Usage : node lib/export.mjs [--generate] [--out out] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
-//   --generate régénère d'abord les SVG de chaque atelier (python3, ou $PYTHON ; poses demande numpy et Pillow)
-//   --mutate rejoue un défaut connu pour montrer export-check.mjs ROUGE : text-in-decor | birds-in-decor | veil | no-contrast
+// Usage : node lib/export.mjs [--generate] [--out out] [--plates out-plate] [--export export] [--only savane,neon] [--jobs 3] [--mutate <défaut>]
+//   --generate régénère d'abord les SVG de chaque atelier (python3, ou $PYTHON ; poses demande numpy et Pillow), et
+//              les rejoue dans les deux variantes de plaque (CADRES_PLATE=plain|message) sous out-plate/<variante>/
+//   --mutate rejoue un défaut connu pour montrer export-check.mjs ROUGE :
+//            text-in-decor | birds-in-decor | veil | no-contrast | one-plate
 //
 // Méthode, par cadre (Chromium, 1080×1920, polices aux graisses exactes) :
 //   - la photo factice est remplacée par du magenta puis du vert (sondes) : là où les deux rendus diffèrent, la photo
@@ -15,7 +17,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch } from './launch.mjs';
-import { classify, read, show } from './layers.mjs';
+import { classify, isFront, read, show } from './layers.mjs';
 import { H, openPage, pool, SCALE, shoot, showSvg, W } from './page.mjs';
 import sharp, { sharpVersion } from './sharp.mjs';
 
@@ -25,6 +27,8 @@ const arg = (name, fallback) => {
   return i > 0 ? process.argv[i + 1] : fallback;
 };
 const OUT = path.resolve(arg('--out', path.join(HERE, '../out')));
+const PLATES = path.resolve(arg('--plates', path.join(HERE, '../out-plate')));
+const VARIANTS = ['plain', 'message'];
 const EXPORT = path.resolve(arg('--export', path.join(HERE, '../export')));
 const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
 const JOBS = Number(arg('--jobs', '3'));
@@ -125,6 +129,24 @@ function contrastOf(mask, color, bg, main) {
   return { contrast: Math.round(ratios[Math.floor(ratios.length * 0.05)] * 100) / 100, contrastMin: Math.round(ratios[0] * 100) / 100, glyphPixels: ratios.length };
 }
 
+// Une couche posée sur le décor se lit DANS la scène où Chromium la peint, pas seule : un filtre en linearRGB
+// (l'ombre portée d'une plaque) quantifie les sombres sur 8 bits, et la trame de ce tramage dépend de ce qui est peint
+// autour (texte compris) — rendue seule, une plaque presque noire diffère de 13 niveaux de la référence sur des bandes
+// entières. Sa couleur se résout donc depuis la scène complète `full` et la même scène sans elle `without`, son alpha
+// restant celui du rendu seul : c = (full − (1 − a)·without) / a. Là où une couche peinte AU-DESSUS (texte, oiseaux,
+// avant-plan) couvre le pixel, ou là où le fond n'est pas plein, la scène ne dit rien de la couche : le rendu seul reste.
+function inScene(alone, full, without, above) {
+  const out = Buffer.from(alone);
+  for (let i = 0; i < FW * FH; i++) {
+    const p = i * 4;
+    const a = alone[p + 3];
+    if (a === 0 || above[p + 3] !== 0 || without[p + 3] !== 255 || full[p + 3] !== 255) continue;
+    const k = a / 255;
+    for (let c = 0; c < 3; c++) out[p + c] = Math.max(0, Math.min(255, Math.round((full[p + c] - (1 - k) * without[p + c]) / k)));
+  }
+  return out;
+}
+
 function slotsOf(texts) {
   const groups = new Map();
   texts.forEach((t) => groups.set(t.slot, [...(groups.get(t.slot) ?? []), t]));
@@ -141,10 +163,9 @@ function slotsOf(texts) {
 }
 
 function stackOf(order, runs) {
-  const anchored = [['crest', 'crest'], ['plate', 'plate'], ['front-under', 'front:under-birds'], ['birds', 'birds'], ['front-over', 'front:over-birds']]
-    .filter(([k]) => order[k] !== undefined)
-    .sort(([a], [b]) => order[a] - order[b])
-    .map(([, name]) => name);
+  const anchored = Object.keys(order)
+    .filter((k) => k === 'crest' || k === 'plate' || k === 'birds' || isFront(k))
+    .sort((a, b) => order[a] - order[b]);
   const grades = runs.map((_, n) => `grade:${n}`);
   return ['photo', ...grades, 'decor', ...anchored, 'text'];
 }
@@ -185,6 +206,40 @@ function bandOf(decor, front) {
   return { box: BANNER, opaque: Math.round((opaque / total) * 10000) / 10000 };
 }
 
+const frontKinds = (order) => Object.keys(order).filter(isFront).sort((a, b) => order[a] - order[b]);
+const sceneOf = (order, runs) => ['photo', 'photo-bg', 'backdrop', ...runs.map((r) => r.kind), ...frontKinds(order), 'crest', 'plate', 'birds', 'text'];
+
+async function plateInScene(render, order, scene) {
+  const full = await render(scene);
+  const alone = await render(['plate']);
+  const without = await render(scene.filter((k) => k !== 'plate'));
+  const above = await render(['text', ...scene.filter((k) => k !== 'text' && order[k] > order.plate)]);
+  return { inventory: alone.inventory, raw: inScene(alone.raw, full.raw, without.raw, above.raw) };
+}
+
+const PLATE_SLOTS = (slot) => ['kicker', 'title', 'message', 'date'].includes(slot) || slot.startsWith('plate.');
+
+// L'AUTRE variante de la plaque (§ 5.1, #10252) : l'atelier rejoué avec CADRES_PLATE (lib/base.py) l'a dessinée
+// dans out-plate/<variante>/ ; on la lit dans SA scène, on vérifie que son décor est celui du cadre au pixel près
+// (`decorDelta`), et on garde la géométrie de ses emplacements (le message déplace la date).
+async function otherPlate(handle, render, { collection, name, variant, decor }) {
+  const file = path.join(PLATES, variant, collection, name + '.svg');
+  if (!fs.existsSync(file)) return { variant, missing: true };
+  await showSvg(handle, fs.readFileSync(file, 'utf8'), { fonts: 'exact' });
+  const { order, runs } = await handle.page.evaluate(classify);
+  if (order.plate === undefined) return { variant, missing: true };
+  const own = await render(['backdrop', ...runs.map((r) => r.kind)]);
+  let decorDelta = 0;
+  for (let i = 0; i < own.raw.length; i += 4) if (own.raw.readUInt32LE(i) !== decor.readUInt32LE(i)) decorDelta++;
+  const plate = await plateInScene(render, order, sceneOf(order, runs));
+  const dom = await handle.page.evaluate(read);
+  const text = Object.fromEntries(slotsOf(dom.texts).filter((s) => PLATE_SLOTS(s.slot)).map((s) => {
+    const { index, slot, ...main } = s.main;
+    return [slot, { ...main, effects: s.effects }];
+  }));
+  return { variant, plate, decorDelta, text };
+}
+
 async function exportFrame(handle, { collection, name, message }) {
   const dir = path.join(EXPORT, collection, name);
   fs.mkdirSync(dir, { recursive: true });
@@ -211,10 +266,12 @@ async function exportFrame(handle, { collection, name, message }) {
   const grades = [];
   for (const run of runs) grades.push({ ...run, shot: await render([run.kind]) });
   const fill = await render(['photo-bg', 'backdrop']);
-  const frontU = has('front-under') ? await render(['front-under']) : null;
-  const frontO = has('front-over') ? await render(['front-over']) : null;
-  const plate = has('plate') ? await render(['plate']) : null;
-  const notext = await render(['photo', 'photo-bg', 'backdrop', ...DECOR_KINDS, 'front-under', 'front-over', 'crest', 'plate', 'birds']);
+  const FRONT_KINDS = frontKinds(order);
+  const fronts = [];
+  for (const kind of FRONT_KINDS) fronts.push({ rank: kind.slice('front:'.length), shot: await render([kind]) });
+  const notext = await render(['photo', 'photo-bg', 'backdrop', ...DECOR_KINDS, ...FRONT_KINDS, 'crest', 'plate', 'birds']);
+  const plate = has('plate') ? await plateInScene(render, order, sceneOf(order, runs)) : null;
+  const decorClean = decorKinds.length === DECOR_KINDS.length ? decorRaw.raw : (await render(['backdrop', ...DECOR_KINDS])).raw;
 
   const slots = slotsOf(dom.texts);
   const flat = slots.map((s, i) => ({ index: s.main.index, color: `rgb(${flatColor(i).join(',')})` }));
@@ -230,17 +287,27 @@ async function exportFrame(handle, { collection, name, message }) {
     const file = await encode(dir, `grade-${n}`, g.buf);
     gradeLayers.push(file ? { ...file, blend: g.blend } : null);
   }
-  const empty = Buffer.alloc(FW * FH * 4);
+  const front = {};
+  for (const f of fronts) front[f.rank] = await encode(dir, `front-${f.rank}`, f.shot.raw);
+  const frontRaw = fronts.reduce((acc, f) => {
+    for (let i = 3; i < acc.length; i += 4) acc[i] = Math.max(acc[i], f.shot.raw[i]);
+    return acc;
+  }, Buffer.alloc(FW * FH * 4));
+
+  const native = message ? 'message' : 'plain';
+  const nativeFile = plate ? await encode(dir, `plate-${native}`, plate.raw) : null;
+  const other = nativeFile && MUTATE !== 'one-plate'
+    ? await otherPlate(handle, render, { collection, name, variant: VARIANTS.find((v) => v !== native), decor: decorClean })
+    : null;
+  const plates = nativeFile ? { [native]: nativeFile } : null;
+  if (other?.plate) plates[other.variant] = await encode(dir, `plate-${other.variant}`, other.plate.raw);
 
   const layers = {
     decor: await encode(dir, 'decor', decorBuf, { quality: QUALITY.decor }),
     windowFill: await encode(dir, 'window-fill', cut(fill.raw, winMask, true)),
     grade: gradeLayers,
-    front: {
-      'under-birds': frontU ? await encode(dir, 'front-under-birds', frontU.raw) : null,
-      'over-birds': frontO ? await encode(dir, 'front-over-birds', frontO.raw) : null,
-    },
-    plate: plate ? { [message ? 'message' : 'plain']: await encode(dir, message ? 'plate-message' : 'plate-plain', plate.raw) } : null,
+    front,
+    plate: plates,
   };
   const thumbBuf = await sharp(notext.raw, { raw: { width: FW, height: FH, channels: 4 } }).resize(THUMB[0], THUMB[1], { kernel: 'lanczos3' }).webp({ quality: QUALITY.thumb, alphaQuality: 100, effort: 6 }).toBuffer();
   fs.writeFileSync(path.join(dir, 'thumb.webp'), thumbBuf);
@@ -250,7 +317,7 @@ async function exportFrame(handle, { collection, name, message }) {
     const { index, slot, ...main } = s.main;
     return [s.slot, { ...main, effects: s.effects, contrast: measured?.contrast ?? null, contrastMin: measured?.contrastMin ?? null, glyphPixels: measured?.glyphPixels ?? 0 }];
   }));
-  const veilLayers = [...gradeBufs.filter((g) => g.blend === 'normal').map((g) => g.buf), frontU?.raw ?? empty, frontO?.raw ?? empty];
+  const veilLayers = [...gradeBufs.filter((g) => g.blend === 'normal').map((g) => g.buf), ...fronts.map((f) => f.shot.raw)];
   const window = { box: windowFile?.box ?? [0, 0, 0, 0], area: winMask.reduce((a, v) => a + v, 0), mask: windowFile, veilMaxAlpha: 0 };
   const birds = dom.birds.map(({ href, ...b }) => b);
   return {
@@ -261,19 +328,20 @@ async function exportFrame(handle, { collection, name, message }) {
     stack: stackOf(order, runs).filter((step) => !step.startsWith('grade:') || gradeLayers[Number(step.slice(6))]),
     window,
     veil: veilOf({ box: window.box, mask: winMask }, veilLayers),
-    banner: bandOf(decorBuf, frontU?.raw ?? empty),
+    banner: bandOf(decorBuf, frontRaw),
     layers,
     thumb: { src: name + '/thumb.webp', size: THUMB, bytes: thumbBuf.length, sha256: sha256(thumbBuf) },
     crest: dom.crest,
     birds,
     art: dom.art,
     text,
+    plateVariant: other ? { variant: other.variant, missing: Boolean(other.missing), decorDelta: other.decorDelta ?? null, text: other.text ?? null } : null,
     inventory: {
       decor: decorRaw.inventory,
       windowFill: fill.inventory,
       grade: { text: grades.reduce((a, g) => a + g.shot.inventory.text, 0), birds: grades.reduce((a, g) => a + g.shot.inventory.birds, 0) },
-      front: { text: (frontU?.inventory.text ?? 0) + (frontO?.inventory.text ?? 0), birds: (frontU?.inventory.birds ?? 0) + (frontO?.inventory.birds ?? 0) },
-      plate: plate?.inventory ?? { text: 0, birds: 0 },
+      front: { text: fronts.reduce((a, f) => a + f.shot.inventory.text, 0), birds: fronts.reduce((a, f) => a + f.shot.inventory.birds, 0) },
+      plate: { text: (plate?.inventory.text ?? 0) + (other?.plate?.inventory.text ?? 0), birds: (plate?.inventory.birds ?? 0) + (other?.plate?.inventory.birds ?? 0) },
     },
   };
 }
@@ -285,9 +353,22 @@ const bytesOf = (frame) => {
 
 if (process.argv.includes('--generate')) {
   const ateliers = path.join(HERE, '../ateliers');
-  for (const atelier of fs.readdirSync(ateliers).filter((d) => fs.existsSync(path.join(ateliers, d, 'gen.py'))).sort()) {
+  const run = (atelier, variant) => {
     fs.rmSync(path.join(OUT, atelier), { recursive: true, force: true });
-    execFileSync(process.env.PYTHON ?? 'python3', ['-B', 'gen.py'], { cwd: path.join(ateliers, atelier), stdio: ['ignore', 'ignore', 'inherit'] });
+    const env = { ...process.env };
+    if (variant) env.CADRES_PLATE = variant;
+    else delete env.CADRES_PLATE;
+    execFileSync(process.env.PYTHON ?? 'python3', ['-B', 'gen.py'], { cwd: path.join(ateliers, atelier), env, stdio: ['ignore', 'ignore', 'inherit'] });
+  };
+  for (const atelier of fs.readdirSync(ateliers).filter((d) => fs.existsSync(path.join(ateliers, d, 'gen.py'))).sort()) {
+    for (const variant of VARIANTS) {
+      run(atelier, variant);
+      const target = path.join(PLATES, variant, atelier);
+      fs.rmSync(target, { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.renameSync(path.join(OUT, atelier), target);
+    }
+    run(atelier, null);
   }
 }
 const collections = fs.readdirSync(OUT).filter((d) => fs.statSync(path.join(OUT, d)).isDirectory() && (!ONLY || ONLY.has(d) || [...ONLY].some((o) => o.startsWith(d + '-')))).sort();

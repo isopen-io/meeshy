@@ -1,6 +1,7 @@
 // Juge un export (lot L1) : rouge tant qu'une couche peinte par le générateur porte du texte ou un oiseau, qu'une
 // fenêtre photo est voilée par le décor ou trop voilée par le grade, que la bande du bandeau n'est pas pleine, qu'un
-// emplacement de texte n'a pas de contraste mesuré, ou qu'un fichier déclaré ne correspond pas à ses octets.
+// emplacement de texte n'a pas de contraste mesuré, qu'une plaque dessinée n'a pas ses deux variantes (plain et message,
+// la seconde sans changer le décor), ou qu'un fichier déclaré ne correspond pas à ses octets.
 // Usage : node lib/export-check.mjs [export] [--reference ../reference/sha256.json] [--partial : n'exige pas les 191 cadres]
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -53,6 +54,11 @@ async function checkFrame(dir, frame) {
     if (!fs.existsSync(file)) { fail(id, `${name} : fichier ${layer.src} absent`); continue; }
     const buf = fs.readFileSync(file);
     if (buf.length !== layer.bytes || sha256(buf) !== layer.sha256) fail(id, `${name} : octets ≠ déclaration`);
+  }
+  if (frame.layers?.plate) {
+    for (const variant of ['plain', 'message']) if (!frame.layers.plate[variant]?.src) fail(id, `plaque sans sa variante ${variant}`);
+    const other = frame.plateVariant;
+    if (other && other.decorDelta !== 0 && other.decorDelta !== null) fail(id, `la variante ${other.variant} de la plaque change le décor : ${other.decorDelta} px`);
   }
   if (!frame.layers?.decor?.src || !frame.window?.mask?.src) return;
   const [decor, win] = await Promise.all([alphaPlane(dir, frame.layers.decor), alphaPlane(dir, frame.window.mask)]);
@@ -109,4 +115,4 @@ if (failures.length) {
   if (failures.length > 60) console.error(`  … et ${failures.length - 60} autres`);
   process.exit(1);
 }
-console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, octets conformes.`);
+console.log(`VERT — ${seen.size}/${expected.length} cadres : décor sans texte ni oiseau, fenêtres nettes, bande pleine, contrastes mesurés, plaques en deux variantes, octets conformes.`);
