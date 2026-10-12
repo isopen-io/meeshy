@@ -136,7 +136,24 @@ enum ReelPrewarm {
     static func prerollFromDisk(_ post: FeedPost) async {
         guard !Task.isCancelled, let url = videoURL(for: post),
               CacheCoordinator.videoLocalFileURL(for: url.absoluteString) != nil else { return }
-        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url, resume: resumePosition(of: post))
+    }
+
+    /// La reprise du réel `post`, résolue comme le moteur la résoudra à
+    /// l'adoption (#10354) : position locale, sinon servie, sous la règle des
+    /// bords — le lecteur préparé arrive à sa place, `play()` suffit.
+    static func resumePosition(of post: FeedPost) -> ((TimeInterval) -> TimeInterval?)? {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video else { return nil }
+        let local = VideoPlaybackPositionStore.shared.position(for: media.id)
+        let served = media.toMessageAttachment().currentUserConsumption
+        return { total in
+            MediaResumeResolver.resumePosition(
+                localPositionSeconds: local,
+                servedConsumption: served,
+                medium: .video,
+                totalDuration: total,
+                isEligible: SharedAVPlayerManager.isResumable)
+        }
     }
 
     /// Rend ce que `post` tenait : son téléchargement automatique en cours

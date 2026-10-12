@@ -52,6 +52,17 @@ final class ReelResumeWiringGuardTests: XCTestCase {
         XCTAssertTrue(play.contains("playsWhenResumed = true"))
     }
 
+    /// Le voisin préparé arrive à sa reprise : la tête se pose AVANT le
+    /// préroulage, par une tolérance de la loi, jamais par un seek précis.
+    func test_preroll_placesTheHeadOnTheResumeBeforePrerolling() throws {
+        let text = try source("Sources/MeeshyUI/Story/StoryMediaLoader.swift")
+        let resume = try XCTUnwrap(text.range(of: "resume?(")?.lowerBound)
+        let preroll = try XCTUnwrap(text.range(of: "player.preroll(atRate: 1.0)", range: resume..<text.endIndex)?.lowerBound,
+                                    "le préroulage suit la pose de la tête")
+        XCTAssertLessThan(resume, preroll)
+        XCTAssertTrue(text.contains("PlaybackResumeLaw.tolerance"))
+    }
+
     func test_pool_overflowsByTheFarthest() throws {
         let insert = try body(of: "private func insert(",
                               in: source("Sources/MeeshyUI/Story/StoryMediaLoader.swift"))
