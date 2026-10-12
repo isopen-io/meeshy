@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { AUDIO_GAIN, audioEditUntouched, editedWav, fadeSeconds, renderedChannels, untouchedAudioEdit, volumePercent, type AudioEdit } from './audio-edit';
+import { AUDIO_GAIN, audioEditUntouched, defaultAudioCut, editedWav, fadeSeconds, renderedChannels, untouchedAudioEdit, volumePercent, type AudioEdit } from './audio-edit';
 import type { DecodedAudio } from './audio-trim';
 
 /**
@@ -128,5 +128,59 @@ describe('audioEditUntouched', () => {
 
   test('un volume changé est une édition', () => {
     expect(audioEditUntouched({ ...untouchedAudioEdit(10), gain: 0.5 }, 10)).toBe(false);
+  });
+});
+
+describe('scission (#9161, miroir de AudioEditorTool.split)', () => {
+  const ramp = (seconds: number, sampleRate = 8000): DecodedAudio => ({
+    sampleRate,
+    numberOfChannels: 1,
+    length: seconds * sampleRate,
+    getChannelData: () => Float32Array.from({ length: seconds * sampleRate }, (_, frame) => frame / (seconds * sampleRate)),
+  });
+
+  test('la plage d’iOS se pose de 40 à 60 % du son', () => {
+    expect(defaultAudioCut(10)).toEqual({ start: 4, end: 6 });
+  });
+
+  test('retirer 4 → 6 s d’un son de 10 s : il en reste 8, et le son reprend après la plage', () => {
+    const audio = ramp(10);
+    const [samples] = renderedChannels(audio, edit(audio, { cut: { start: 4, end: 6 } }));
+    expect(samples!.length / 8000).toBeCloseTo(8, 3);
+    expect(samples![4 * 8000 - 1]).toBeCloseTo(0.4, 3);
+    expect(samples![4 * 8000]).toBeCloseTo(0.6, 3);
+  });
+
+  test('la plage se lit dans la fenêtre gardée : 2 → 8 s gardées, 4 → 6 s retirées, il reste 4 s', () => {
+    const audio = ramp(10);
+    const [samples] = renderedChannels(audio, edit(audio, { window: { start: 2, end: 8 }, cut: { start: 4, end: 6 } }));
+    expect(samples!.length / 8000).toBeCloseTo(4, 3);
+    expect(samples![0]).toBeCloseTo(0.2, 3);
+    expect(samples![2 * 8000]).toBeCloseTo(0.6, 3);
+  });
+
+  test('une plage plus courte que 0,2 s ne retire rien (isSplitMeaningful)', () => {
+    const audio = ramp(10);
+    const [samples] = renderedChannels(audio, edit(audio, { cut: { start: 5, end: 5.1 } }));
+    expect(samples!.length).toBe(10 * 8000);
+    expect(audioEditUntouched({ ...untouchedAudioEdit(10), cut: { start: 5, end: 5.1 } }, 10)).toBe(true);
+  });
+
+  test('une plage qui laisserait moins de 0,4 s ne retire rien', () => {
+    const audio = ramp(10);
+    const [samples] = renderedChannels(audio, edit(audio, { cut: { start: 0, end: 9.8 } }));
+    expect(samples!.length).toBe(10 * 8000);
+  });
+
+  test('une plage posée est une édition ; la vitesse et le fondu se mesurent sur le son SCINDÉ', () => {
+    expect(audioEditUntouched({ ...untouchedAudioEdit(10), cut: { start: 4, end: 6 } }, 10)).toBe(false);
+    const audio = constant(10, 0.5);
+    const [samples] = renderedChannels(audio, edit(audio, { cut: { start: 4, end: 6 }, speed: 2, fadeOut: true }));
+    expect(samples!.length / 8000).toBeCloseTo(4, 2);
+    expect(samples![samples!.length - 1]).toBeCloseTo(0, 3);
+  });
+
+  test('aucune plage par défaut', () => {
+    expect(untouchedAudioEdit(10).cut).toBeNull();
   });
 });

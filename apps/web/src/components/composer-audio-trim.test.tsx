@@ -75,7 +75,7 @@ const firstSample = async (file: File) => new DataView(await file.arrayBuffer())
 describe('les outils de l’éditeur audio (#9164, ordre d’iOS)', () => {
   test('les outils se suivent comme sur iOS, « Rogner » d’abord', async () => {
     const { host } = await mountTrim();
-    expect([...host.querySelectorAll('[data-audio-tool]')].map((node) => node.getAttribute('data-audio-tool'))).toEqual(['trim', 'fade', 'speed', 'volume']);
+    expect([...host.querySelectorAll('[data-audio-tool]')].map((node) => node.getAttribute('data-audio-tool'))).toEqual(['trim', 'split', 'fade', 'speed', 'volume']);
     expect(tool(host, 'trim').getAttribute('aria-pressed')).toBe('true');
   });
 
@@ -138,5 +138,40 @@ describe('la vitesse (#9163)', () => {
     act(() => host.querySelector<HTMLButtonElement>('[data-audio-trim-done]')!.click());
     const view = new DataView(await done[0]!.arrayBuffer());
     expect(view.getUint32(40, true) / view.getUint32(28, true)).toBeCloseTo(5, 2);
+  });
+});
+
+describe('la scission (#9161)', () => {
+  test('« Couper » pose la plage d’iOS, de 40 à 60 % : la pièce rendue perd 2 s sur 10', async () => {
+    const { host, done } = await mountTrim(tenSeconds(0.2));
+    act(() => tool(host, 'split').click());
+    expect(host.textContent).toContain('Sélectionnez la section à supprimer.');
+    expect(host.querySelector<HTMLInputElement>('[data-audio-cut-start]')!.value).toBe('4');
+    expect(host.querySelector<HTMLInputElement>('[data-audio-cut-end]')!.value).toBe('6');
+    act(() => host.querySelector<HTMLButtonElement>('[data-audio-trim-done]')!.click());
+    const view = new DataView(await done[0]!.arrayBuffer());
+    expect(view.getUint32(40, true) / view.getUint32(28, true)).toBeCloseTo(8, 2);
+  });
+
+  test('la plage se règle : retirer 1 → 7 s laisse 4 s, et la plage reste posée d’un outil à l’autre', async () => {
+    const { host, done } = await mountTrim(tenSeconds(0.2));
+    act(() => tool(host, 'split').click());
+    slide(host.querySelector<HTMLInputElement>('[data-audio-cut-start]'), 1);
+    slide(host.querySelector<HTMLInputElement>('[data-audio-cut-end]'), 7);
+    expect(host.textContent).toContain('0:04.0');
+    act(() => tool(host, 'volume').click());
+    act(() => tool(host, 'split').click());
+    expect(host.querySelector<HTMLInputElement>('[data-audio-cut-start]')!.value).toBe('1');
+    act(() => host.querySelector<HTMLButtonElement>('[data-audio-trim-done]')!.click());
+    const view = new DataView(await done[0]!.arrayBuffer());
+    expect(view.getUint32(40, true) / view.getUint32(28, true)).toBeCloseTo(4, 2);
+  });
+
+  test('« Réinitialiser » remet la plage de 40 à 60 %', async () => {
+    const { host } = await mountTrim();
+    act(() => tool(host, 'split').click());
+    slide(host.querySelector<HTMLInputElement>('[data-audio-cut-start]'), 1);
+    act(() => host.querySelector<HTMLButtonElement>('[data-audio-cut-reset]')!.click());
+    expect(host.querySelector<HTMLInputElement>('[data-audio-cut-start]')!.value).toBe('4');
   });
 });

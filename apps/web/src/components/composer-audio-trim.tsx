@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { AUDIO_GAIN, audioEditUntouched, editedWav, untouchedAudioEdit, volumePercent, type AudioEdit } from '@/lib/media/audio-edit';
+import { AUDIO_GAIN, audioEditUntouched, defaultAudioCut, editedWav, keptAudioSeconds, MINIMUM_AUDIO_CUT, untouchedAudioEdit, volumePercent, type AudioEdit } from '@/lib/media/audio-edit';
 import { AUDIO_SPEEDS, speedLabel } from '@/lib/media/audio-stretch';
 import { decodeAudioFile, MINIMUM_AUDIO_WINDOW, trimmedAudioFileName, type DecodedAudio } from '@/lib/media/audio-trim';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
@@ -12,18 +12,19 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 /**
  * **« ÉDITER » UN AUDIO EN ATTENTE** (#9136, miroir de
  * `MeeshyAudioEditorView` iOS) — un son n'a pas de scène ; il garde son
- * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Fondu — #9162, Vitesse —
- * #9163, Volume — #9164), un seul
+ * éditeur. Ses outils suivent l'ordre d'iOS (Rogner, Couper — #9161, Fondu —
+ * #9162, Vitesse — #9163, Volume — #9164), un seul
  * panneau ouvert à la fois ; chaque réglage reste posé d'un outil à l'autre,
  * et « Terminé » les cuit ENSEMBLE dans la pièce rendue à sa place. Rien de
  * réglé la laisse telle quelle. ✕ ou Échap referment sans rien changer.
  */
-type AudioTool = 'trim' | 'fade' | 'speed' | 'volume';
+type AudioTool = 'trim' | 'split' | 'fade' | 'speed' | 'volume';
 
-const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'fade', 'speed', 'volume'];
+const AUDIO_TOOLS: readonly AudioTool[] = ['trim', 'split', 'fade', 'speed', 'volume'];
 
 const TOOL_KEY = {
   trim: 'story.studio.audioEdit.tool.trim',
+  split: 'story.studio.audioEdit.tool.split',
   fade: 'story.studio.audioEdit.tool.fade',
   speed: 'story.studio.audioEdit.tool.speed',
   volume: 'story.studio.audioEdit.tool.volume',
@@ -113,6 +114,59 @@ function SpeedPanel({ lang, speed, onSpeed }: { readonly lang: InterfaceLanguage
   );
 }
 
+function CutPanel({ lang, edit, total, onEdit }: { readonly lang: InterfaceLanguage; readonly edit: AudioEdit; readonly total: number; readonly onEdit: (edit: AudioEdit) => void }) {
+  const cut = edit.cut ?? defaultAudioCut(total);
+  return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-caption">{translate(lang, 'story.studio.audioEdit.split.hint')}</p>
+        <button
+          type="button"
+          data-audio-cut-reset
+          onClick={() => onEdit({ ...edit, cut: defaultAudioCut(total) })}
+          className="min-h-11 shrink-0 rounded-full px-3 text-caption font-semibold"
+          style={{ color: 'var(--color-ios-brand)' }}
+        >
+          {translate(lang, 'story.studio.audioEdit.reset')}
+        </button>
+      </div>
+      <p className="text-caption" aria-live="polite">
+        {translate(lang, 'story.studio.trim.kept', { kept: clock(keptAudioSeconds(edit)), total: clock(total) })}
+      </p>
+      <label className="flex items-center gap-3">
+        <span className="w-14 text-caption font-bold uppercase">{translate(lang, 'story.studio.trim.start')}</span>
+        <input
+          type="range"
+          data-audio-cut-start
+          min={0}
+          max={total}
+          step={0.1}
+          value={cut.start}
+          aria-valuetext={clock(cut.start)}
+          onInput={(event) => onEdit({ ...edit, cut: { ...cut, start: Math.min(Number(event.currentTarget.value), cut.end - MINIMUM_AUDIO_CUT) } })}
+          className="h-11 flex-1"
+          style={RANGE_STYLE}
+        />
+      </label>
+      <label className="flex items-center gap-3">
+        <span className="w-14 text-caption font-bold uppercase">{translate(lang, 'story.studio.trim.end')}</span>
+        <input
+          type="range"
+          data-audio-cut-end
+          min={0}
+          max={total}
+          step={0.1}
+          value={cut.end}
+          aria-valuetext={clock(cut.end)}
+          onInput={(event) => onEdit({ ...edit, cut: { ...cut, end: Math.max(Number(event.currentTarget.value), cut.start + MINIMUM_AUDIO_CUT) } })}
+          className="h-11 flex-1"
+          style={RANGE_STYLE}
+        />
+      </label>
+    </>
+  );
+}
+
 function VolumePanel({ lang, gain, onGain }: { readonly lang: InterfaceLanguage; readonly gain: number; readonly onGain: (gain: number) => void }) {
   const percent = volumePercent(gain);
   const label = percent === null ? translate(lang, 'story.studio.audioEdit.volume.normal') : translate(lang, 'story.studio.camera.flash.intensityValue', { percent: String(percent) });
@@ -184,6 +238,10 @@ export default function ComposerAudioTrim({
 
   const total = decoded === null ? 0 : decoded.length / decoded.sampleRate;
   const kept = edit?.window ?? null;
+  const selectTool = (name: AudioTool) => {
+    setTool(name);
+    if (name === 'split' && edit !== null && edit.cut === null) setEdit({ ...edit, cut: defaultAudioCut(total) });
+  };
   const finish = () => {
     if (decoded === null || edit === null || audioEditUntouched(edit, total)) return onCancel();
     onDone(new File([editedWav(decoded, edit)], trimmedAudioFileName(attachment.name), { type: 'audio/wav' }));
@@ -204,12 +262,13 @@ export default function ComposerAudioTrim({
         {edit !== null ? (
           <div className="flex gap-2" role="group" aria-label={translate(lang, 'story.studio.audioTrim.title')}>
             {AUDIO_TOOLS.map((name) => (
-              <ToolButton key={name} tool={name} on={tool === name} onPress={() => setTool(name)}>
+              <ToolButton key={name} tool={name} on={tool === name} onPress={() => selectTool(name)}>
                 {translate(lang, TOOL_KEY[name])}
               </ToolButton>
             ))}
           </div>
         ) : null}
+        {edit !== null && tool === 'split' && total > MINIMUM_AUDIO_WINDOW ? <CutPanel lang={lang} edit={edit} total={total} onEdit={setEdit} /> : null}
         {edit !== null && tool === 'fade' ? <FadePanel lang={lang} edit={edit} onEdit={setEdit} /> : null}
         {edit !== null && tool === 'speed' ? <SpeedPanel lang={lang} speed={edit.speed} onSpeed={(next) => setEdit({ ...edit, speed: next })} /> : null}
         {edit !== null && tool === 'volume' ? <VolumePanel lang={lang} gain={edit.gain} onGain={(next) => setEdit({ ...edit, gain: next })} /> : null}
