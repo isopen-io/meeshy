@@ -92528,43 +92528,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تام بين الطرفين (Signal)"
+            "value": "تام بين الطرفين (على أجهزتك)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende (Signal)"
+            "value": "Ende-zu-Ende (auf deinen Geräten)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (on your devices)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Extremo a extremo (Signal)"
+            "value": "Extremo a extremo (en tus dispositivos)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bout en bout (Signal)"
+            "value": "Bout en bout (sur vos appareils)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (sui tuoi dispositivi)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ponta a ponta (Signal)"
+            "value": "Ponta a ponta (nos seus dispositivos)"
           }
         }
       }
