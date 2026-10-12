@@ -260,13 +260,18 @@ public struct GloryFramePackFrame: Hashable, Sendable, Identifiable {
     public let thumb: PackAssetRef
     public let nameKey: String
     public let storyKey: String?
+    /// Où le cadre se range dans la loi (L3, #10154) ; `nil` pour un cadre de boutique sans placement (le pack
+    /// d'exemple) ou dont le placement contredit l'usage — il ne se propose alors à aucune étape.
+    public let placement: GloryFramePlacement?
 
-    public init(id: String, usage: FrameUsage, thumb: PackAssetRef, nameKey: String, storyKey: String? = nil) {
+    public init(id: String, usage: FrameUsage, thumb: PackAssetRef, nameKey: String, storyKey: String? = nil,
+                placement: GloryFramePlacement? = nil) {
         self.id = id
         self.usage = usage
         self.thumb = thumb
         self.nameKey = nameKey
         self.storyKey = storyKey
+        self.placement = placement
     }
 }
 
@@ -328,8 +333,10 @@ public struct GloryFramePackContract: Hashable, Sendable {
                 frame = nil
                 return
             }
+            let placement = GloryFramePlacement.read(id: raw.id, usage: raw.usage,
+                                                     raw: try? GloryFramePlacement.Raw(from: decoder))
             frame = GloryFramePackFrame(id: raw.id, usage: raw.usage, thumb: raw.thumb,
-                                        nameKey: raw.i18n.name, storyKey: raw.i18n.story)
+                                        nameKey: raw.i18n.name, storyKey: raw.i18n.story, placement: placement)
         }
     }
 

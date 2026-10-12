@@ -47,6 +47,19 @@ const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }
   entry.domain === 'sticker' || declaredUsages(entry).every((usage) => (usage.kind === 'free') === (entry.domain === 'capture-frame'));
 
 /**
+ * Un pack de stickers n'a pas d'usage ; un pack de CAPTURE porte le sien ; un
+ * pack de GLOIRE peut le laisser à ses cadres quand ils ne partagent pas le
+ * même (l'Afrique éternelle sert cinq rangs, les moments quatre familles) :
+ * chaque cadre de son contrat porte alors son usage, obligatoire et lu
+ * fail-closed (`glory-frame-pack.ts`), et la boutique l'affiche cadre par
+ * cadre (#10154). Jamais un usage de pack qui mentirait sur ses cadres.
+ */
+const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage }): boolean => {
+  if (entry.domain === 'sticker') return entry.usage === undefined;
+  return entry.domain === 'glory-frame' || entry.usage !== undefined;
+};
+
+/**
  * L'entrée de registre d'un pack officiel ou intégré. Un pack de CADRES porte
  * l'usage de ses cadres (`usage`, et par collection), que la loi d'usage lit :
  * un cadre sans usage lisible ne se propose nulle part.
@@ -74,7 +87,7 @@ export const PackIndexEntrySchema = z
     atmosphere: z.optional(z.enum(GLORY_ATMOSPHERES)),
   })
   .check(
-    z.refine((entry) => (entry.domain === 'sticker' ? entry.usage === undefined : entry.usage !== undefined)),
+    z.refine(packUsageDeclared),
     z.refine(usageFitsDomain),
     z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
     z.refine((entry) => entry.removable || entry.installedByDefault),
