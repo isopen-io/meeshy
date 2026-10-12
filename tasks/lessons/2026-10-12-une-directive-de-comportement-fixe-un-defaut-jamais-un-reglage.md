@@ -1,4 +1,4 @@
-# Une directive de comportement fixe un DÉFAUT, jamais l'écrasement d'un réglage
+## Une directive de comportement fixe un DÉFAUT, jamais l'écrasement d'un réglage
 
 **Correction porteur, 2026-10-12 (#10284).** La directive « en filmant sans passer par la zone cadre, on passe à l'édition mais on préserve juste l'image dans l'application uniquement » a été appliquée comme une CONTRAINTE : l'original d'une prise hors cadre ne partait plus dans Photos, même quand Réglages › Médias demandait « enregistrer l'original ». Le porteur : « Non il faut respecter la consigne et réglage utilisateur. Je n'exprimais que le comportement par défaut. »
 
