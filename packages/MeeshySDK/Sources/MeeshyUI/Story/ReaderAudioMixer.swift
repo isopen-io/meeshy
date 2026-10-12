@@ -132,7 +132,13 @@ public final class ReaderAudioMixer {
 
     /// Configure the mixer for a slide. Call before `play()`. Replaces any
     /// previous configuration and tears down dangling nodes.
-    public func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws {
+    ///
+    /// `loopsEveryClip` : l'aperçu d'édition du composer, qui n'a pas de durée
+    /// de slide, fait boucler chaque clip quoi que dise `loop`
+    /// (`ReaderAudioLoopPolicy`, #10362). Le lecteur garde la déclaration.
+    public func configure(audios: [StoryAudioPlayerObject],
+                          urls: [String: URL],
+                          loopsEveryClip: Bool = false) throws {
         teardown()
         logger.info("ReaderAudioMixer.configure audios=\(audios.count) urls=\(urls.count)")
         for audio in audios {
@@ -167,7 +173,9 @@ public final class ReaderAudioMixer {
                     fadeIn: audio.fadeIn ?? 0,
                     fadeOut: audio.fadeOut ?? 0,
                     duration: audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate),
-                    loop: audio.loop ?? false,
+                    loop: ReaderAudioLoopPolicy.loops(declared: audio.loop,
+                                                      isBackground: false,
+                                                      isEditPreview: loopsEveryClip),
                     // Fenêtre de rognage NON destructive (bornes seules, aucun
                     // ré-encodage). Résolue une fois ici — jamais recalculée à
                     // chaque schedule — via `StoryAudioPlayerObject.trimBounds`,
@@ -277,6 +285,11 @@ public final class ReaderAudioMixer {
         }
         isPlaying = true
     }
+
+    /// Origine `t = 0` de la passe en cours (après glissement des pauses
+    /// soldées), `nil` hors lecture planifiée. Les canevas d'édition s'y
+    /// recalent pour se passer le son sans le faire repartir (#10362).
+    var currentPassOriginHost: UInt64? { playbackStartHostTime }
 
     /// Décale `playbackStartHostTime` de la durée de la pause en cours, et
     /// solde le jalon. Sans effet si aucune pause n'est en attente.

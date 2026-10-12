@@ -24,6 +24,36 @@ nonisolated enum ReaderLoopLaw {
                             capturedNode: ObjectIdentifier, liveNode: ObjectIdentifier?) -> Bool {
         capturedEpoch == liveEpoch && capturedNode == liveNode
     }
+
+    /// **L'écoulé d'une entrée en boucle se replie sur UNE passe (#10362).**
+    ///
+    /// Entrer dans une boucle à `t` au-delà de sa longueur — la scène du
+    /// composer joue sans fin, le lecteur s'ouvre parfois loin dans la slide —
+    /// demandait à la fenêtre une position hors du fichier : `scheduleAudio`
+    /// ne planifiait rien, et la boucle ne démarrait jamais. Une boucle n'a
+    /// pas de fin ; sa position est l'écoulé modulo la passe.
+    ///
+    /// Une longueur de passe nulle ou non finie rend l'écoulé tel quel (la
+    /// règle d'avant), un écoulé non fini ou négatif rend zéro.
+    static func elapsedInPass(_ elapsedInClip: Double, passLength: Double) -> Double {
+        guard elapsedInClip.isFinite, elapsedInClip > 0 else { return 0 }
+        guard passLength.isFinite, passLength > 0 else { return elapsedInClip }
+        return elapsedInClip.truncatingRemainder(dividingBy: passLength)
+    }
+}
+
+/// **Qui boucle : la déclaration de l'auteur, sauf dans l'aperçu du composer (#10362).**
+///
+/// Le lecteur suit le modèle : un fond boucle sauf refus déclaré, un clip de
+/// premier plan joue une fois sauf boucle déclarée — la slide a une durée, et
+/// le clip s'y tait à sa place. L'aperçu d'ÉDITION n'a pas de durée : la scène
+/// joue tant qu'on compose, et un clip joué une fois s'y taisait pour de bon
+/// au bout de quelques secondes. Les vidéos de la scène bouclent déjà en
+/// édition (`attachPlayer(loop: mode != .play)`) ; le son suit la même loi.
+nonisolated enum ReaderAudioLoopPolicy {
+    static func loops(declared: Bool?, isBackground: Bool, isEditPreview: Bool) -> Bool {
+        isEditPreview || (declared ?? isBackground)
+    }
 }
 
 /// Le slot d'une boucle — `Sendable`, donc transportable par le handler de fin
@@ -38,6 +68,14 @@ struct ReaderLoopSource {
     let node: AVAudioPlayerNode
     let file: AVAudioFile
     let trimBounds: MediaTrimBounds?
+
+    /// Durée d'UNE passe : la fenêtre de rognage bornée au fichier, ou le
+    /// fichier entier — ce que `TimelineAudioWindow.segment` rend réellement.
+    var passLength: Double {
+        let fileDuration = Double(file.length) / max(file.processingFormat.sampleRate, 1)
+        guard let trimBounds else { return fileDuration }
+        return max(0, min(trimBounds.end, fileDuration) - trimBounds.start)
+    }
 }
 
 extension ReaderAudioMixer {
@@ -49,8 +87,9 @@ extension ReaderAudioMixer {
     func scheduleLoop(_ slot: ReaderLoopSlot, elapsedInClip: Double, at scheduleAt: AVAudioTime?) {
         guard let source = loopSource(for: slot) else { return }
         let rearm = loopRearmHandler(slot, node: source.node)
+        let entry = ReaderLoopLaw.elapsedInPass(elapsedInClip, passLength: source.passLength)
         guard scheduleAudio(node: source.node, file: source.file, trimBounds: source.trimBounds,
-                            elapsedInClip: elapsedInClip,
+                            elapsedInClip: entry,
                             at: scheduleAt, completionHandler: rearm) else { return }
         scheduleAudio(node: source.node, file: source.file, trimBounds: source.trimBounds,
                       elapsedInClip: 0,

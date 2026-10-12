@@ -760,6 +760,10 @@ extension StoryCanvasUIView {
     /// never wait out any part of the idle delay to feel responsive again.
     func noteEditInteraction() {
         lastEditInteractionAt = CACurrentMediaTime()
+        // Un son que quelqu'un d'autre a coupé (une écoute dans une feuille,
+        // un lecteur voisin) reprend à la phase de la scène dès qu'on y
+        // revient — seul le propriétaire du son le peut (#10362).
+        resumeEditAudioIfSilenced()
         guard isEditClockThrottled else { return }
         resumeEditClockFromIdle()
     }
@@ -785,13 +789,18 @@ extension StoryCanvasUIView {
     /// pause — players stay attached, the mixer's schedule stays intact — so
     /// `resumeEditModeMediaFromIdle()` can restart in place with no reload
     /// and no audible restart-from-zero.
+    ///
+    /// Le son n'est PAS suspendu (`EditIdleSuspension`, #10362) : la boucle
+    /// audio de la scène joue tant qu'on compose, touche ou pas.
     func suspendEditModeMediaForIdle() {
         guard mode == .edit else { return }
-        if playsVideoInEditMode {
+        let suspended = EditIdleSuspension.suspended(playsVideo: playsVideoInEditMode,
+                                                     playsAudio: playsAudioInEditMode)
+        if suspended.contains(.video) {
             backgroundLayer.isPlaybackActive = false
             forEachAVPlayer { $0.pause() }
         }
-        if playsAudioInEditMode {
+        if suspended.contains(.audio) {
             audioMixer.pause()
         }
     }

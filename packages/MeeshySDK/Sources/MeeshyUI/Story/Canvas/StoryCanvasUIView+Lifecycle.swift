@@ -17,6 +17,12 @@ extension StoryCanvasUIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Le canevas sonore d'édition qui arrive à l'écran prend la main
+            // sur le son de la scène, à la phase où elle en était (#10362).
+            if mode == .edit, playsAudioInEditMode {
+                claimEditAudio()
+                resumeEditAudioIfSilenced()
+            }
             // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
@@ -194,5 +200,8 @@ extension StoryCanvasUIView {
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
+        // Rend la main APRÈS s'être tu : le canevas d'en dessous reprend le
+        // son à la phase partagée (#10362).
+        releaseEditAudio()
     }
 }
