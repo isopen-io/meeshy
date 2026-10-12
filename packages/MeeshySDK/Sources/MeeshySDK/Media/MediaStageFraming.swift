@@ -157,6 +157,10 @@ public nonisolated enum MediaStageFraming {
         }
 
         static let zero = Result(frame: .zero, media: .zero, cornerRadius: 0)
+
+        public func fitted(in container: CGSize) -> Result {
+            self
+        }
     }
 
     public static func resolve(_ input: Input) -> Result {
