@@ -11,7 +11,7 @@ import { CommentsSheetPortal } from '@/components/publication-comments-sheet-laz
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { StoryActionRail } from '@/components/story-action-rail';
 import { ViewerExitButton, type ViewerIdentityModel } from '@/components/viewer-chrome';
-import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
+import { isContentRefusal, RefusedContentBackdrop, useVisitorInvitation } from '@/components/visitor-invitation';
 import { useViewerSwipe } from '@/components/viewer-chrome-gestures';
 import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
@@ -705,7 +705,9 @@ export default function StoryScreen() {
             <p className="text-body">Chargement…</p>
           </div>
         </div>
-      ) : visitorRefused ? null : notFound ? (
+      ) : visitorRefused ? (
+        <RefusedContentBackdrop />
+      ) : notFound ? (
         <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={38} style={{ color: 'var(--color-on-media-3)' }} />
           <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>

@@ -5,7 +5,7 @@ import { loadVisitorCatalog } from '@/lib/i18n-visitor-catalog';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { invitationOpen, VisitorInvitationDialog, visitorReturnPath, viaTokenOf } from './visitor-invitation';
+import { invitationOpen, RefusedContentBackdrop, VisitorInvitationDialog, visitorReturnPath, viaTokenOf } from './visitor-invitation';
 
 /**
  * **UN VISITEUR SANS COMPTE VOIT LE CONTENU PARTAGÉ** (#9149) — et, par-dessus,
@@ -93,6 +93,31 @@ describe('l’invitation sur un contenu refusé', () => {
     expect(host.textContent).not.toContain('Continuer à regarder');
     expect(host.textContent).not.toContain('could not load');
     expect(hrefOf(host, 'Se connecter')).toBe(`/login?next=${encodeURIComponent(RETURN)}`);
+  });
+});
+
+/* #10314 — un lien REFUSÉ (privé, amis seulement, compte requis) se présente
+   comme un réel refusé : un fond sombre NEUTRE, la modale par-dessus. Le fond
+   est neutre PAR CONSTRUCTION : il ne prend aucune propriété, il ne peut donc
+   porter ni texte, ni média, ni auteur — rien de ce que la passerelle a refusé
+   (elle ne sert d'ailleurs rien : le même 404 qu'un contenu inexistant). */
+describe('le fond d’un contenu refusé', () => {
+  test('sombre, plein écran, muet pour le lecteur d’écran', async () => {
+    const host = await mounter.mount(<RefusedContentBackdrop />);
+    const backdrop = host.querySelector('[data-refused-backdrop]');
+    expect(backdrop).not.toBeNull();
+    expect(backdrop?.getAttribute('aria-hidden')).toBe('true');
+    expect(backdrop?.className).toContain('bg-media-backdrop');
+    expect(backdrop?.className).toContain('fixed inset-0');
+  });
+
+  test('ne porte rien du contenu : aucune propriété, aucun texte, aucun média, aucun lien', async () => {
+    expect(RefusedContentBackdrop.length).toBe(0);
+    const host = await mounter.mount(<RefusedContentBackdrop />);
+    const backdrop = host.querySelector('[data-refused-backdrop]');
+    expect(backdrop?.textContent).toBe('');
+    expect(backdrop?.children.length).toBe(0);
+    expect(host.querySelectorAll('img, video, audio, a, [style*="url("]').length).toBe(0);
   });
 });
 

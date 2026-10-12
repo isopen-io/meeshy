@@ -4,7 +4,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
-import { isContentRefusal as isRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
+import { isContentRefusal as isRefusal, RefusedContentBackdrop, useVisitorInvitation } from '@/components/visitor-invitation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { usePost } from '@/lib/api/query';
@@ -128,6 +128,24 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
   );
 }
 
+export type PostDetailBody = 'card' | 'visitor-refused' | 'refused' | 'error' | 'loading';
+
+/**
+ * CE QUE LE DÉTAIL MONTRE, selon le verdict de la passerelle (#10314). Un
+ * visiteur refusé voit le fond sombre neutre des réels sous l'invitation ; un
+ * membre refusé, le refus dessiné (D-6) ; une panne, « Réessayer » — jamais
+ * confondue avec un refus.
+ */
+export function postDetailBodyOf(input: {
+  readonly served: boolean;
+  readonly visitor: boolean;
+  readonly refused: boolean;
+  readonly failed: boolean;
+}): PostDetailBody {
+  if (input.served) return 'card';
+  if (input.refused) return input.visitor ? 'visitor-refused' : 'refused';
+  return input.failed ? 'error' : 'loading';
+}
 
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
@@ -177,6 +195,7 @@ export default function PostDetailScreen() {
     state: model !== undefined ? 'served' : isRefusal(post.error) ? 'refused' : 'pending',
   });
   const { visitor, ask } = invitation;
+  const body = postDetailBodyOf({ served: model !== undefined, visitor, refused: isRefusal(post.error), failed: post.isError });
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
   // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu
@@ -226,9 +245,11 @@ export default function PostDetailScreen() {
             onOpenScene={sceneGallery.onOpenScene}
             registerScene={registerScene}
           />
-        ) : visitor && isRefusal(post.error) ? null : isRefusal(post.error) ? (
+        ) : body === 'visitor-refused' ? (
+          <RefusedContentBackdrop />
+        ) : body === 'refused' ? (
           <PostDetailRefused />
-        ) : post.isError ? (
+        ) : body === 'error' ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
         ) : (
           <div aria-busy="true" aria-label="Chargement de la publication">
