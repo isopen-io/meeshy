@@ -125,6 +125,26 @@ final class ComposerCameraSwitchFreezeTests: XCTestCase {
         XCTAssertTrue(modele.contains("sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }"))
     }
 
+    // MARK: - 3. La prise basculée attend sa nouvelle connexion
+
+    func test_segmentResumeWait_isBrief_butLongerThanAFrame() {
+        XCTAssertGreaterThan(ComposerCameraSwitchRule.segmentResumeWait, ComposerCameraSwitchRule.frameWait)
+        XCTAssertLessThanOrEqual(ComposerCameraSwitchRule.segmentResumeWait, 1, "la prise ne reste pas suspendue")
+    }
+
+    func test_resumeAfterSwitch_waitsForTheConnection_beforeReopeningTheSegment() throws {
+        let modele = AppSourceGuard.stripComments(try Self.code("Meeshy/Features/Main/Components/CameraModel.swift"))
+        let debut = try XCTUnwrap(modele.range(of: "private func resumeRecordingAfterSwitch()"))
+        let fin = try XCTUnwrap(modele.range(of: "private func reopenSegmentAfterSwitch()",
+                                             range: debut.upperBound..<modele.endIndex))
+        let reprise = String(modele[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(reprise.contains("ComposerCameraSwitchRule.segmentResumeWait"))
+        XCTAssertTrue(reprise.contains("!self.videoRecordingIsPossible"), "elle attend que la connexion puisse écrire")
+        XCTAssertTrue(reprise.contains("!self.pendingStopRequested"), "un arrêt demandé n'attend pas")
+        XCTAssertFalse(reprise.contains("isSwitchingCameraDuringRecording = false"),
+                       "l'arrêt demandé pendant l'attente reste en file")
+    }
+
     private static func code(_ relative: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()

@@ -17,6 +17,10 @@ nonisolated enum ComposerCameraSwitchRule {
     /// L'attente au plus d'une trame de l'objectif encore en place.
     static let frameWait: TimeInterval = 0.12
 
+    /// **Une prise basculée attend que la nouvelle connexion puisse écrire**
+    /// (#10308) — au plus ce temps, avant de conclure qu'elle ne le peut pas.
+    static let segmentResumeWait: TimeInterval = 0.6
+
     /// Une couverture floutée n'a pas besoin de détail : une petite image suffit.
     static let coverWidth = 270
 

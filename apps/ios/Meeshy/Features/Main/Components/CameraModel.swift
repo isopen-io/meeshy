@@ -883,12 +883,24 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     /// Le nouvel objectif est en place : la prise reprend — ou se clôt, si
-    /// l'auteur a demandé l'arrêt pendant la bascule.
+    /// l'auteur a demandé l'arrêt pendant la bascule. Sa connexion peut naître
+    /// inactive : la reprise l'attend un instant (#10308) plutôt que de clore la
+    /// prise sur un refus d'une image ; un arrêt demandé entre-temps reste en file.
     private func resumeRecordingAfterSwitch() {
-        isSwitchingCameraDuringRecording = false
         let suite = switchFollower
         switchFollower = nil
         suite?(currentPosition)
+        Task { @MainActor [weak self] in
+            let limite = Date().addingTimeInterval(ComposerCameraSwitchRule.segmentResumeWait)
+            while let self, !self.videoRecordingIsPossible, !self.pendingStopRequested, Date() < limite {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
+            self?.reopenSegmentAfterSwitch()
+        }
+    }
+
+    private func reopenSegmentAfterSwitch() {
+        isSwitchingCameraDuringRecording = false
         if pendingStopRequested {
             pendingStopRequested = false
             let jeton = recordingId
