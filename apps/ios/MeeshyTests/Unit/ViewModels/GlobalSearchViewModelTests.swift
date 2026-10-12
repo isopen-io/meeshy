@@ -659,6 +659,32 @@ final class GlobalSearchViewModelTests: XCTestCase {
         )
     }
 
+    /// #9622 — la ligne de résultat de conversation est un aperçu publié HORS
+    /// du fil : le texte d'une flamme à durée, que le serveur sert, n'y paraît
+    /// pas ; seul son libellé de protection.
+    func test_searchConversations_timedFlameLastMessage_showsItsProtectionLabel_neverItsText() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(
+            user: MeeshyUser(id: "user-001", username: "testuser", systemLanguage: "fr")
+        )
+        mockUserService.searchUsersResult = .success([])
+        let response: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{
+          "id":"conv-flame-1","type":"group","title":"Flamme","createdAt":"2026-01-01T00:00:00Z",
+          "lastMessage":{"id":"msg-1","content":"Rendez-vous secret","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:00:00Z"}
+        }]}
+        """)
+        mockAPI.stub("/conversations/search", result: response)
+
+        await sut.performSearch(query: "flamme")
+
+        XCTAssertEqual(
+            sut.conversationResults.first?.lastMessagePreview,
+            OutsidePreview.protectionLabel(for: .timedFlame),
+            "le texte d'une flamme à durée ne sort pas par un résultat de recherche"
+        )
+    }
+
     private func stubEmptyConversationSearch(on mockAPI: MockAPIClientForApp) {
         let emptyResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}

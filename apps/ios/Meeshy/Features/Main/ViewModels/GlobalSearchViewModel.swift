@@ -412,8 +412,10 @@ final class GlobalSearchViewModel: ObservableObject {
                 // Même résolution que `ThemedConversationRow` — la ligne de
                 // résultat de recherche est une ligne de conversation, elle doit
                 // rendre le MÊME texte que la liste. Rend l'aperçu original
-                // quand aucune langue du prisme n'est servie (règle #1).
-                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                // quand aucune langue du prisme n'est servie (règle #1). Un
+                // message qui disparaît n'y laisse que son libellé : hors du
+                // fil, aucune couche sécurisée ne le garde (#9622).
+                lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                 lastMessageAt: conv.lastMessageAt,
                 unreadCount: conv.userState.unreadCount,
                 conversation: conv
@@ -442,7 +444,7 @@ final class GlobalSearchViewModel: ObservableObject {
                     // (jumeau de `GET /conversations`) : les rendre bruts ici
                     // laisserait la recherche dans la langue de l'expéditeur
                     // alors que la liste, elle, traduit.
-                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                    lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                     lastMessageAt: conv.lastMessageAt,
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv

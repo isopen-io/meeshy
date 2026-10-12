@@ -20010,6 +20010,54 @@
         }
       }
     },
+    "exit.preview.ephemeral": {
+      "comment": "Aperçu d'une flamme à durée publié HORS de sa conversation (widget, résultat de recherche) : son texte n'en sort pas (#9622).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مؤقتة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flüchtige Nachricht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemeral message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje efímero"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message éphémère"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio effimero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem efêmera"
+          }
+        }
+      }
+    },
     "game.constellation.cosmetic": {
       "extractionState": "manual",
       "localizations": {
