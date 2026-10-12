@@ -319,17 +319,23 @@ lire_cibles() {
 lire_services() {
   local svc
   [ "$#" -gt 0 ] || refus "aucun service demandé"
+  local vus=" "
   for svc in "$@"; do
     est_promouvable "$svc" || refuser_service "$svc"
+    case "$vus" in *" $svc "*) refus "« $svc » demandé deux fois" ;; esac
+    vus="$vus$svc "
   done
   verifier_couple " $* "
 }
 
 # #10290 — la passerelle et l'agent partagent un protocole qui évolue ensemble
 # (secret interne #10242, canal ZMQ signé #10288, routes de saison #10246) :
-# l'un ne bascule JAMAIS sans l'autre, ni en promotion ni en retour arrière.
+# l'un n'est jamais DEMANDÉ sans l'autre, ni en promotion ni en retour arrière.
 # Un agent inchangé se demande quand même : le plan le marque
-# « deja-en-production » et la bascule le saute.
+# « deja-en-production », la bascule le saute, et son retour arrière ne fait rien.
+# Le couple bascule dans UNE commande, un service après l'autre : pendant la
+# fenêtre (santé de l'agent, puis recréation de la passerelle), un agent récent
+# côtoie l'ancienne passerelle — ses événements ZMQ non signés sont refusés.
 verifier_couple() {
   local demandes="$1" g=0 a=0
   case "$demandes" in *" gateway "*) g=1 ;; esac
@@ -391,8 +397,38 @@ planifier() {
 # précédent (deux retours successifs se rejouent l'un l'autre, comme attendu).
 # mode `auto` : retour après une bascule ratée — le digest raté n'est PAS noté
 # comme précédent, pour qu'un `rollback` manuel ultérieur n'y retourne jamais.
+# #10290 — ce que la DERNIÈRE promotion a fait de ce service : « promu » (il a
+# basculé), « inchange » (déjà en production, sauté). Absent (état antérieur à
+# #10290) : traité comme « promu », le comportement d'avant.
+derniere_action() { cat "$STATE_DIR/tx.$1" 2>/dev/null || echo promu; }
+
+# Plan d'un retour arrière manuel, SANS rien muter : une ligne par service, ou refus
+# de toute la demande si un service à revenir n'a pas de précédent noté.
+planifier_retour() {
+  local svc precedent
+  # D'abord TOUT vérifier : un refus ne laisse aucune ligne de plan derrière lui.
+  for svc in "$@"; do
+    [ "$(derniere_action "$svc")" = "inchange" ] && continue
+    [ -n "$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)" ] \
+      || refus "$svc : aucun digest précédent noté — retour arrière refusé en entier, rien n'a bougé"
+  done
+  for svc in "$@"; do
+    if [ "$(derniere_action "$svc")" = "inchange" ]; then
+      dire "RETOUR_PLAN service=$svc action=rien raison=inchange-a-la-derniere-promotion"
+      continue
+    fi
+    precedent="$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)"
+    [ -n "$precedent" ] || refus "$svc : aucun digest précédent noté — retour arrière refusé en entier, rien n'a bougé"
+    dire "RETOUR_PLAN service=$svc action=revenir vers=$precedent"
+  done
+}
+
 revenir() {
   local svc="$1" mode="${2:-manuel}" precedent courant
+  if [ "$mode" = "manuel" ] && [ "$(derniere_action "$svc")" = "inchange" ]; then
+    dire "RIEN service=$svc (inchangé à la dernière promotion)"
+    return 0
+  fi
   precedent="$(cat "$STATE_DIR/previous.$svc" 2>/dev/null || true)"
   [ -n "$precedent" ] || { journal "$svc : aucun digest précédent noté"; return "$RC_REFUS"; }
   courant="$(cat "$STATE_DIR/current.$svc" 2>/dev/null || true)"
@@ -420,12 +456,14 @@ promouvoir() {
     [ -n "$digest" ] || continue
     ref="$(depot "$svc")@$digest"
     if [ "${PROD_REF[$svc]}" = "$ref" ]; then
+      echo inchange > "$STATE_DIR/tx.$svc"
       dire "DEJA service=$svc digest=$digest"
       continue
     fi
     epingler "$svc" "${PROD_REF[$svc]}" \
       || { journal "$svc : impossible d'épingler ${PROD_REF[$svc]} — pas de bascule sans retour arrière"; echec=1; break; }
     echo "${PROD_REF[$svc]}" > "$STATE_DIR/previous.$svc"
+    echo promu > "$STATE_DIR/tx.$svc"
     historique "promote service=$svc vers=$ref depuis=${PROD_REF[$svc]} run=${run:-manuel}"
     if basculer "$svc" "$ref"; then
       dire "PROMU service=$svc digest=$digest precedent=${PROD_REF[$svc]#*@}"
@@ -486,6 +524,7 @@ self_test() {
     "promote database=sha256:$(printf 'a%.0s' $(seq 64))" \
     "promote gateway=sha256:$(printf 'a%.0s' $(seq 64))" \
     "rollback agent" \
+    "rollback gateway agent gateway" \
     "promote gateway=sha256:abc" \
     "promote gateway=sha256:$(printf 'A%.0s' $(seq 64))" \
     "promote gateway=latest" \
@@ -531,6 +570,8 @@ valider() {
 main() {
   [ "${1:-}" = "--self-test" ] && { self_test; return $?; }
   [ "${1:-}" = "__valider" ] && { shift; valider "$@"; return $?; }
+  # Témoin sans Docker : plan d'un retour arrière, lu dans STATE_DIR, sans mutation.
+  [ "${1:-}" = "__plan_retour" ] && { shift; lire_services "$@"; planifier_retour "$@"; return $?; }
 
   local -a mots
   local demande="${SSH_ORIGINAL_COMMAND-$*}"
@@ -565,6 +606,7 @@ main() {
     rollback)
       surcharge_lue || refus "la surcharge n'est pas lue par compose — lancer init (voir note)"
       local svc rc_total=0
+      planifier_retour "${mots[@]:1}"
       for svc in "${mots[@]:1}"; do revenir "$svc" || rc_total=$?; done
       return "$rc_total" ;;
   esac

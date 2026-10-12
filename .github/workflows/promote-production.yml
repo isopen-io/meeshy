@@ -263,6 +263,11 @@ jobs:
             exit "$RC"
           fi
           grep -o 'service=[a-z]*' <(grep '^PROMU ' bascule.txt) | cut -d= -f2 | xargs > promus.txt || true
+          # #10290 — le retour arrière porte toujours le COUPLE passerelle + agent : l'hôte refuse
+          # l'un sans l'autre, et ne fait rien pour celui que la promotion n'a pas basculé.
+          if grep -qwE 'gateway|agent' promus.txt; then
+            { tr ' ' '\n' < promus.txt; echo gateway; echo agent; } | sed '/^$/d' | sort -u | xargs > promus.couple && mv promus.couple promus.txt
+          fi
 
       - name: Test de fumée de la production
         id: fumee
@@ -298,6 +303,11 @@ jobs:
                 --base-url "$GATE_URL" --manifest manifest-get.json --concurrency 4 \
                 || ECHEC="$ECHEC routes"
             fi
+          fi
+          # L'agent n'est pas joignable d'Internet (#10242, #10289) : sa santé se lit sur l'hôte.
+          if grep -q '^PROMU service=agent' bascule.txt; then
+            ~/.ssh/hote-prod status > etat-apres.txt 2>/dev/null || true
+            grep '^ETAT service=agent ' etat-apres.txt | grep -q 'prod_sante=healthy' || ECHEC="$ECHEC agent-pas-healthy"
           fi
           curl -fsS --max-time 10 -o /dev/null "$WEB_URL/" || ECHEC="$ECHEC frontend"
           # La webapp SERVIE est-elle la révision promue, et sert-elle sa
@@ -350,5 +360,5 @@ jobs:
               echo ""; echo "### ${F%.txt}"; echo '```'; cat "$F"; echo '```'
             done
             echo ""
-            echo "Retour arrière : \`gh workflow run promote-production.yml --ref dev -f action=rollback -f <service>=rollback\`"
+            echo "Retour arrière : \`gh workflow run promote-production.yml --ref dev -f action=rollback -f <service>=rollback\` — passerelle et agent toujours ensemble (\`-f gateway=rollback -f agent=rollback\`, #10290)"
           } >> "$GITHUB_STEP_SUMMARY"

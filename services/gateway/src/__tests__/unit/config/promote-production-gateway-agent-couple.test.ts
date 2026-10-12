@@ -13,6 +13,8 @@
  */
 
 import { spawnSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 const SCRIPT = path.resolve(__dirname, '..', '..', '..', '..', '..', '..', 'infrastructure', 'scripts', 'meeshy-promote-production.sh');
@@ -32,11 +34,12 @@ describe('promotion en production : passerelle et agent ensemble (#10290)', () =
     ['promote', [`gateway=${D1}`, `webapp=${D2}`]],
     ['rollback', ['gateway']],
     ['rollback', ['agent']],
+    ['rollback', ['gateway', 'agent', 'gateway']],
     ['plan', [`gateway=${D1}`]],
   ])('refuse « %s %s » : l’un sans l’autre', (action, mots) => {
     const r = valider(action, ...mots);
     expect(r.status).toBe(RC_REFUS);
-    expect(r.stderr).toMatch(/passerelle et (l’|l')agent/);
+    expect(r.stderr).toMatch(/passerelle et (l’|l')agent|demandé deux fois/);
   });
 
   it.each([
@@ -54,5 +57,44 @@ describe('promotion en production : passerelle et agent ensemble (#10290)', () =
     const r = spawnSync(BASH, [SCRIPT, '--self-test'], { encoding: 'utf8', env: { ...process.env, PATH: `${path.dirname(BASH)}:${process.env.PATH}` } });
     expect(r.stdout + r.stderr).toMatch(/toutes les vérifications passées/);
     expect(r.status).toBe(0);
+  });
+});
+
+describe('retour arrière du couple : il suit la dernière promotion, et ne mute rien s’il est incomplet (#10290, audit)', () => {
+  const G_PREV = `isopen/meeshy-gateway@sha256:${'1'.repeat(64)}`;
+  const A_PREV = `isopen/meeshy-agent@sha256:${'2'.repeat(64)}`;
+
+  function planRetour(state: Record<string, string>, ...services: string[]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'promotion-state-'));
+    for (const [file, content] of Object.entries(state)) fs.writeFileSync(path.join(dir, file), `${content}\n`);
+    const r = spawnSync(BASH, [SCRIPT, '__plan_retour', ...services], { encoding: 'utf8', env: { ...process.env, MEESHY_PROMOTION_STATE: dir } });
+    fs.rmSync(dir, { recursive: true, force: true });
+    return r;
+  }
+
+  it("ne fait RIEN pour l'agent resté inchangé à la dernière promotion, et ramène la passerelle", () => {
+    const r = planRetour({ 'previous.gateway': G_PREV, 'tx.gateway': 'promu', 'previous.agent': A_PREV, 'tx.agent': 'inchange' }, 'gateway', 'agent');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain(`RETOUR_PLAN service=gateway action=revenir vers=${G_PREV}`);
+    expect(r.stdout).toContain('RETOUR_PLAN service=agent action=rien');
+    expect(r.stdout).not.toContain(A_PREV);
+  });
+
+  it('refuse TOUT le retour (aucune mutation) si un service à revenir n’a pas de précédent noté', () => {
+    const r = planRetour({ 'previous.gateway': G_PREV }, 'gateway', 'agent');
+    expect(r.status).toBe(RC_REFUS);
+    expect(r.stdout).not.toContain('RETOUR_PLAN service=gateway');
+  });
+
+  it('ramène les deux quand les deux ont basculé (ou état antérieur à #10290, sans marque)', () => {
+    for (const state of [
+      { 'previous.gateway': G_PREV, 'previous.agent': A_PREV, 'tx.gateway': 'promu', 'tx.agent': 'promu' },
+      { 'previous.gateway': G_PREV, 'previous.agent': A_PREV },
+    ]) {
+      const r = planRetour(state, 'gateway', 'agent');
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain(`vers=${G_PREV}`);
+      expect(r.stdout).toContain(`vers=${A_PREV}`);
+    }
   });
 });
