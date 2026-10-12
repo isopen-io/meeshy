@@ -292,6 +292,10 @@ enum MediaGalleryStage {
         return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
     }
 
+    static func viewport(measured: CGSize, window: CGSize) -> CGSize {
+        window
+    }
+
     private static func freeRegionRatio(viewport: CGSize,
                                         presentation: MediaStageFraming.Presentation,
                                         corridors: MediaStageFraming.Corridors) -> CGFloat {
