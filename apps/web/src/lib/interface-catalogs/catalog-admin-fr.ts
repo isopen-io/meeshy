@@ -10,6 +10,7 @@ import auditReglagesFr from './admin/audit-reglages-fr';
 import personnesFr from './admin/personnes-fr';
 import conversationsAgentFr from './admin/conversations-agent-fr';
 import engagementScaleFr from './admin/engagement-scale-fr';
+import gestesFr from './admin/gestes-fr';
 import gameSeasonsFr from './admin/game-seasons-fr';
 
 /**
@@ -65,7 +66,9 @@ const fr = {
   'admin.nav.agent.hint': 'Piloter l’agent de conversation',
   'admin.nav.settings.hint': 'Votre accès et les préférences de l’espace',
   'admin.nav.engagementScale': 'Barème de points',
-  'admin.nav.engagementScale.hint': 'Ce que chaque geste rapporte en points',
+  'admin.nav.engagementScale.hint': 'Ce que chaque geste rapporte, les séries, la fidélité et les saisons du Jeu',
+  'admin.nav.operations': 'Opérations',
+  'admin.nav.operations.hint': 'L’hôte en direct, la sauvegarde et la purge des images',
   'admin.users.search': 'Rechercher un compte',
   'admin.users.count': '{count} compte(s)',
   'admin.users.unavailable': 'Liste indisponible pour le moment.',
@@ -406,6 +409,7 @@ const fr = {
   ...personnesFr,
   ...conversationsAgentFr,
   ...engagementScaleFr,
+  ...gestesFr,
   ...gameSeasonsFr,
 } as const;
 

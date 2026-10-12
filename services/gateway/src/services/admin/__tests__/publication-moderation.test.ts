@@ -10,6 +10,8 @@ import {
   withdrawsAudience,
   publicationStateOf,
   liftsSomeoneElsesHold,
+  nextVisibilityState,
+  adminStateOf,
   type PostModerationState,
 } from '../publication-moderation';
 
@@ -151,5 +153,43 @@ describe('liftsSomeoneElsesHold — lever le retrait d’un autre exige son rang
 
   it('vaut faux quand rien n’est levé', () => {
     expect(liftsSomeoneElsesHold(state({ visibility: 'FRIENDS' }), state({ visibility: 'PRIVATE', moderationPriorVisibility: 'FRIENDS' }), ACTOR)).toBe(false);
+  });
+});
+
+describe('nextVisibilityState — changer l’audience d’un geste (#10392)', () => {
+  it("met en ligne un brouillon privé en PUBLIC et oublie l'audience retenue", () => {
+    expect(nextVisibilityState(state({ visibility: 'PRIVATE', moderationPriorVisibility: 'FRIENDS' }), 'PUBLIC')).toEqual({
+      visibility: 'PUBLIC',
+      moderationHiddenAt: null,
+      moderationHiddenById: null,
+      moderationPriorVisibility: null,
+    });
+  });
+
+  it('lève le retrait quand on remet en ligne une publication hors ligne avec une audience choisie', () => {
+    expect(
+      nextVisibilityState(state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER, moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' }), 'FRIENDS'),
+    ).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
+  });
+
+  it("passer en PRIVATE retient l'audience d'avant, comme « mettre en privé »", () => {
+    expect(nextVisibilityState(state({ visibility: 'COMMUNITY' }), 'PRIVATE')).toEqual({
+      visibility: 'PRIVATE',
+      moderationHiddenAt: null,
+      moderationHiddenById: null,
+      moderationPriorVisibility: 'COMMUNITY',
+    });
+  });
+
+  it('ne change rien quand l’audience est déjà celle demandée, sans retrait', () => {
+    expect(nextVisibilityState(state({ visibility: 'PUBLIC' }), 'PUBLIC')).toBeNull();
+    expect(nextVisibilityState(state({ visibility: 'PRIVATE', moderationPriorVisibility: 'FRIENDS' }), 'PRIVATE')).toBeNull();
+  });
+});
+
+describe('publicationStateOf / adminPostStateOf — une seule définition', () => {
+  it('publié se dit « published » pour la liste de la plateforme', () => {
+    expect(adminStateOf({ visibility: 'PUBLIC', deletedAt: null, expiresAt: null, moderationHiddenAt: null }, NOW)).toBe('published');
+    expect(adminStateOf({ visibility: 'PRIVATE', deletedAt: null, expiresAt: null, moderationHiddenAt: EARLIER }, NOW)).toBe('offline');
   });
 });

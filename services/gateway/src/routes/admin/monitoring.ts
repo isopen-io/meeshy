@@ -177,7 +177,7 @@ const dependencySchema = {
   properties: { status: chaine, latencyMs: nombreNul },
 } as const;
 
-const backupsSchema = {
+export const backupsSchema = {
   type: 'object',
   nullable: true,
   description: 'Le verdict de la sauvegarde nocturne (etat.json, #9668) — null quand il est absent ou illisible',

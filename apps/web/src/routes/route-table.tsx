@@ -118,6 +118,8 @@ const adminLanguagesScreen = () =>
   Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminSettingsScreen = () =>
   Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminOperationsScreen = () =>
+  Promise.all([import('@/routes/admin-operations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminEngagementScaleScreen = () =>
   Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
@@ -636,6 +638,10 @@ export const ROUTES = {
      Déclaré AUSSI dans `session-guard.ts`. */
   adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
   admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
+  /* LES OPÉRATIONS DU SERVEUR (#10391, #10396) — littéral à deux segments, comme
+     l'agent et le barème : l'hôte en direct, la sauvegarde, la purge. */
+  adminOperations: { pattern: '/admin/operations', screen: adminOperationsScreen },
+  admOperations: { pattern: '/adm/operations', screen: adminOperationsScreen },
   /* LE PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) — l'adresse du
      `share_target` de la PWA (`lib/share-incoming/share-target.ts`) : le worker
      y redirige après avoir rangé le `POST` du système, la page ouvre la feuille
