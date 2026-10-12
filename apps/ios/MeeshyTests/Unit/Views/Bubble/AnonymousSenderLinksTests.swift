@@ -48,6 +48,17 @@ final class AnonymousSenderLinksTests: XCTestCase {
         XCTAssertFalse(resolved.linksAreInert)
     }
 
+    func test_init_senderWithoutProvenAccount_hasNoLinkPreview() throws {
+        let unproven = Message(id: "m1", conversationId: "c1", senderId: "p2",
+                               content: "Va sur https://exemple.com", senderName: "?",
+                               senderHasAccount: false, isMe: false)
+
+        let resolved = try XCTUnwrap(text(unproven))
+
+        XCTAssertNil(resolved.firstLinkURL)
+        XCTAssertTrue(resolved.linksAreInert)
+    }
+
     // MARK: - Carte de conversation
 
     func test_init_anonymousSenderWithShareLink_hasNoConversationCard() throws {

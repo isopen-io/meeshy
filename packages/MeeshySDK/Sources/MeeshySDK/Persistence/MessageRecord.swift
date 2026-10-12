@@ -120,6 +120,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// cliquables au premier rechargement. `nil` (lignes antérieures) ⇒ inconnu.
     public var senderIsAnonymous: Bool?
 
+    /// L'auteur a prouvé un compte (`sender.type` user ou bot, #10286) — ne
+    /// gouverne que les liens. `nil` (lignes antérieures, écho sans sender
+    /// jamais complété) ⇒ déduit de `senderIsAnonymous`.
+    public var senderHasAccount: Bool?
+
     /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
     /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
     /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
@@ -181,7 +186,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         ephemeralDuration: Int? = nil,
         viewOnceOpenedAt: Date? = nil,
         trackedLinksJson: String? = nil,
-        senderIsAnonymous: Bool? = nil
+        senderIsAnonymous: Bool? = nil,
+        senderHasAccount: Bool? = nil
     ) {
         self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
@@ -249,6 +255,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.stickerJson = stickerJson
         self.trackedLinksJson = trackedLinksJson
         self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
     }
 
     // MARK: - Timestamp pre-compute helper

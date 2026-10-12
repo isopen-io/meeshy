@@ -292,7 +292,7 @@ nonisolated enum RiverConversationMapping {
                 protectedTap: protectedTap(of: message),
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
-                linksAreInert: message.senderIsAnonymous,
+                linksAreInert: message.senderIsAnonymous || !message.senderHasAccount,
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 capturesBlocked: message.exitOffer.capture.shieldsCapture(),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
@@ -466,7 +466,7 @@ nonisolated enum RiverConversationMapping {
         let displayed = displayedText(of: message, text: text)
         guard !displayed.isEmpty else { return nil }
         let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap,
-                                           authorIsAnonymous: message.senderIsAnonymous)
+                                           authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount)
         return resolved.firstLinkURL == nil ? nil : resolved
     }
 

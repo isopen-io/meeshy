@@ -63,6 +63,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// C'est LUI qui décide du glyphe fantôme, jamais le pseudo : le préfixe
     /// `ano_` est lisible mais pas réservé, et un compte peut le porter.
     public var senderIsAnonymous: Bool = false
+    /// L'auteur a PROUVÉ un compte (`sender.type` user ou bot, #10286). Ce
+    /// n'est pas l'inverse de `senderIsAnonymous`, qui n'affirme rien sur un
+    /// type absent : ici l'absence ne prouve rien, donc ses liens restent
+    /// inertes (fail-closed). Ne gouverne QUE les liens.
+    public var senderHasAccount: Bool = true
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -194,6 +199,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 senderIsAnonymous: Bool = false,
+                senderHasAccount: Bool = true,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
@@ -219,6 +225,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
         self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
         self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
@@ -240,7 +247,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
         case createdAt, updatedAt, attachments, reactions
         case replyTo, forwardedFrom
-        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous, senderHasAccount
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
@@ -291,6 +298,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
         senderIsAnonymous = try c.decodeIfPresent(Bool.self, forKey: .senderIsAnonymous) ?? false
+        senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount) ?? true
         deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
         deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
@@ -364,6 +372,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
         try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
         if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
+        if !senderHasAccount { try c.encode(false, forKey: .senderHasAccount) }
         try c.encode(deliveryStatus, forKey: .deliveryStatus)
         try c.encode(isMe, forKey: .isMe)
         try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)

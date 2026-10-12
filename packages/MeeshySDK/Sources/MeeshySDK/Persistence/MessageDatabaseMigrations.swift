@@ -385,5 +385,14 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "senderIsAnonymous", .boolean)
             }
         }
+
+        // **Le compte PROUVÉ de l'auteur** (#10286) — distinct de la colonne
+        // ci-dessus : un `type` absent n'affirme pas l'anonymat, mais ne prouve
+        // pas non plus un compte, et seuls les liens d'un compte prouvé vivent.
+        migrator.registerMigration("messages_sender_has_account") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "senderHasAccount", .boolean)
+            }
+        }
     }
 }

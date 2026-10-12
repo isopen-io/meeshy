@@ -210,7 +210,7 @@ extension BubbleContent {
             trackedLinks: message.trackedLinkMap,
             isEmojiOnly: isEmojiOnly,
             emojiFontSize: emojiResult.fontSize,
-            authorIsAnonymous: message.senderIsAnonymous
+            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
 
         // --- Translation panel ---

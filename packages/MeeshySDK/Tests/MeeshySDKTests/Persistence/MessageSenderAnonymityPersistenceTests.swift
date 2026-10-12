@@ -65,11 +65,21 @@ final class MessageSenderAnonymityPersistenceTests: XCTestCase {
         XCTAssertFalse(message.senderIsAnonymous)
     }
 
-    func test_toMessage_senderAbsent_isTreatedAsAnonymous() throws {
+    func test_toMessage_senderAbsent_provesNoAccountButClaimsNoAnonymity() throws {
         let message = try makeAPIMessage(id: "srv_untyped", conversationId: "conv_untyped", senderType: nil)
             .toMessage(currentUserId: "user_me")
 
-        XCTAssertTrue(message.senderIsAnonymous)
+        XCTAssertFalse(message.senderHasAccount)
+        XCTAssertFalse(message.senderIsAnonymous)
+    }
+
+    func test_upsertFromAPIMessages_registeredSender_readsBackWithProvenAccount() async throws {
+        try await actor.upsertFromAPIMessages([
+            try makeAPIMessage(id: "srv_proven", conversationId: "conv_proven", senderType: "user")
+        ])
+
+        let message = try row("srv_proven", in: "conv_proven").toMessage(currentUserId: "user_me")
+        XCTAssertTrue(message.senderHasAccount)
     }
 
     func test_toMessage_botSender_isNotAnonymous() throws {
@@ -77,6 +87,7 @@ final class MessageSenderAnonymityPersistenceTests: XCTestCase {
             .toMessage(currentUserId: "user_me")
 
         XCTAssertFalse(message.senderIsAnonymous)
+        XCTAssertTrue(message.senderHasAccount)
     }
 
     func test_upsertFromAPIMessages_partialEchoWithoutSender_keepsAnonymity() async throws {
