@@ -472,7 +472,9 @@ struct GalleryVideoPage: View, Equatable {
     @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var videoManagerPlayer: AVPlayer?
     @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
-    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit le disque
+    /// en synchrone, une vidéo déjà téléchargée ne montre jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: VideoAvailability?
     @StateObject private var downloader = AttachmentDownloader()
     /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
     @State private var offset: CGSize = .zero
@@ -497,7 +499,7 @@ struct GalleryVideoPage: View, Equatable {
         if downloader.isCached {
             return .ready
         }
-        return resolvedAvailability
+        return resolvedAvailability ?? VideoAvailability.atFirstRender(for: attachment)
     }
 
     private var isPlayerActive: Bool {
@@ -624,7 +626,7 @@ struct GalleryVideoPage: View, Equatable {
             // « prête » à la fermeture de la galerie.
             downloader.observe(attachment)
             await resolveAvailability()
-            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
+            if case .needsDownload? = resolvedAvailability, !downloader.isDownloading {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
                 if MediaDownloadPolicyEngine.shouldAutoDownload(

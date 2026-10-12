@@ -18,9 +18,12 @@
  * `maxUses` n'y entre pas (#4827) : il compte des ADMISSIONS, pas un droit de
  * lire.
  */
+import type { FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { logger } from '../utils/logger';
+import { sendForbidden } from '../utils/response';
+import type { HistoryReader } from './historyFloor';
 
 /** Ce qu'il faut d'une ligne `ConversationShareLink` pour trancher. `null` = introuvable. */
 export type ShareLinkExpiry = { readonly expiresAt?: Date | string | null } | null | undefined;
@@ -28,6 +31,53 @@ export type ShareLinkExpiry = { readonly expiresAt?: Date | string | null } | nu
 export function shareLinkHasExpired(link: ShareLinkExpiry, now: Date = new Date()): boolean {
   if (!link?.expiresAt) return false;
   return new Date(link.expiresAt).getTime() < now.getTime();
+}
+
+/**
+ * La RÉPONSE d'une porte fermée — site unique, pour que le fil, la recherche,
+ * les épinglés et le fil de réponses refusent avec les mêmes mots et le même
+ * code machine (`SHARE_LINK_EXPIRED`), que les clients branchent.
+ */
+export const SHARE_LINK_EXPIRED_CODE = 'SHARE_LINK_EXPIRED';
+
+export function refuseExpiredShareLink(reply: FastifyReply): void {
+  return sendForbidden(reply, 'This share link has expired', { code: SHARE_LINK_EXPIRED_CODE });
+}
+
+/**
+ * Forme PAR LECTEUR, pour les routes qui lisent UNE conversation sans avoir
+ * d'autre raison de charger la ligne du lecteur (#7388) : la recherche, les
+ * épinglés, le fil de réponses. Le fil (`messages-list.ts`) tient déjà la ligne
+ * et le lien ; il n'appelle que `shareLinkHasExpired`.
+ *
+ * Le lecteur se lit par la même règle que le plancher
+ * (`historyReaderFromAuthContext` : `participantId` d'abord), pour que les deux
+ * réponses ne divergent pas sur qui est l'appelant.
+ *
+ * Propage ses erreurs — fail-CLOSED : le `try/catch` de la route en fait un 500,
+ * jamais une lecture servie sur la foi d'une porte illisible.
+ */
+export async function readerShareLinkHasExpired(
+  prisma: Pick<PrismaClient, 'participant' | 'conversationShareLink'>,
+  params: { readonly conversationId: string; readonly reader: HistoryReader | null },
+  now: Date = new Date(),
+): Promise<boolean> {
+  const { conversationId, reader } = params;
+  if (!reader) return false;
+
+  const row = await prisma.participant.findFirst({
+    where: reader.kind === 'anonymous'
+      ? { id: reader.participantId, conversationId, isActive: true }
+      : { userId: reader.userId, conversationId, isActive: true },
+    select: { shareLinkId: true },
+  });
+  if (!row?.shareLinkId) return false;
+
+  const link = await prisma.conversationShareLink.findUnique({
+    where: { id: row.shareLinkId },
+    select: { expiresAt: true },
+  });
+  return shareLinkHasExpired(link, now);
 }
 
 /** Une participation telle que les lecteurs multi-conversations la chargent. */

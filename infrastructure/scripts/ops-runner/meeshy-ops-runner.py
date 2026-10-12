@@ -184,7 +184,7 @@ def parse_size(text):
     match = SIZE_RE.match(text or "")
     if not match:
         return 0
-    return int(float(match.group(1)) * UNITS.get(match.group(2), 1))
+    return int(round(float(match.group(1)) * UNITS.get(match.group(2), 1)))
 
 
 def reclaimed_bytes(output):

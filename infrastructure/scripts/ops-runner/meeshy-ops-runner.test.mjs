@@ -37,7 +37,7 @@ const FAKES = {
   docker: `#!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
 if [[ "$1 $2" == "system df" ]]; then
-  echo '{"Active":"20","Reclaimable":"18.1GB (28%)","Size":"63.17GB","TotalCount":"64","Type":"Images"}'
+  echo '{"Active":"20","Reclaimable":"18.1GB (28%)","Size":"64.63GB","TotalCount":"64","Type":"Images"}'
   echo '{"Active":"20","Reclaimable":"0B (0%)","Size":"388.3MB","TotalCount":"25","Type":"Containers"}'
   echo '{"Active":"20","Reclaimable":"10.51GB (6%)","Size":"160.4GB","TotalCount":"87","Type":"Local Volumes"}'
   echo '{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Build Cache"}'
@@ -254,7 +254,7 @@ describe('docker-df et init', () => {
     const usage = JSON.parse(readFileSync(path.join(base, 'state', 'docker.json'), 'utf8'));
     assert.deepEqual(usage, {
       measuredAt: NOW,
-      images: { count: 64, activeCount: 20, totalBytes: 63_170_000_000, reclaimableBytes: 18_100_000_000 },
+      images: { count: 64, activeCount: 20, totalBytes: 64_630_000_000, reclaimableBytes: 18_100_000_000 },
       buildCache: { totalBytes: 0, reclaimableBytes: 0 },
       volumes: { count: 87, totalBytes: 160_400_000_000, reclaimableBytes: 10_510_000_000 },
     });

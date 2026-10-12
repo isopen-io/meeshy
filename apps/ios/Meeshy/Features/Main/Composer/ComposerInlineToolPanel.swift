@@ -113,7 +113,8 @@ struct ComposerInlineToolPanel: View {
     private func objectFrame(container: CGRect) -> CGRect? {
         guard !edit.family.isBackground, !sceneCard.isNull, sceneCard.width > 0,
               let objet = viewModel.currentSlide.sceneObject(id: edit.objectId) else { return nil }
-        return ComposerInlinePanelLayout.sceneFrame(of: objet, card: sceneCard, container: container)
+        return ComposerInlinePanelLayout.sceneFrame(of: objet, card: sceneCard, container: container,
+                                                    typing: viewModel.textEditingMode.activeTextId == edit.objectId)
     }
 }
 
@@ -156,6 +157,10 @@ struct ComposerTrailingOptionsPlate<Content: View>: View {
                     }
             }
             .scrollDisabled(holdsGesture)
+            // **Un toucher dans le panneau ne termine pas la saisie en ligne**
+            // (#9146) : une `ScrollView` renvoie le clavier au premier glissé,
+            // et le canvas, privé de son répondant, refermerait le texte.
+            .scrollDismissesKeyboard(.never)
             .frame(width: ComposerInlinePanelLayout.width(freeWidth: geo.size.width, roomy: roomy),
                    height: ComposerInlinePanelLayout.height(content: contentHeight, placement: place))
             .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
@@ -185,8 +190,15 @@ extension ComposerInlinePanelLayout {
     /// `badgeFrame`) ; le sticker son côté rendu ; le texte la hauteur de ses
     /// lignes sur la largeur de la carte ; la puce de son un carré nominal.
     /// `nil` pour un fond : il occupe toute la carte.
+    ///
+    /// **Un texte EN SAISIE se lit là où le canvas le montre** (#9146) : le
+    /// temps de la frappe, `StoryCanvasUIView.anchorInlineEditing` le recentre
+    /// sur la carte, sans rotation, sans toucher au modèle. Clavier levé, un
+    /// texte posé bas serait lu sous le clavier, et le panneau couvrirait le
+    /// bloc que l'auteur tape.
     @MainActor
-    static func sceneFrame(of objet: MeeshySceneObject, card: CGRect, container: CGRect) -> CGRect? {
+    static func sceneFrame(of objet: MeeshySceneObject, card: CGRect, container: CGRect,
+                           typing: Bool = false) -> CGRect? {
         guard !objet.isBackground, card.width > 0, card.height > 0 else { return nil }
         let geometrie = CanvasGeometry(renderSize: card.size)
         let centre = geometrie.render(geometrie.designPoint(forNormalized: CGPoint(x: objet.x, y: objet.y)))
@@ -211,6 +223,12 @@ extension ComposerInlinePanelLayout {
             let lignes = CGFloat(max(1, texte.text.components(separatedBy: .newlines).count))
             let hauteur = StoryTextLayer.renderedFontSize(of: texte, in: geometrie)
                 * textLineHeightFactor * lignes * CGFloat(max(0.1, texte.scale))
+            if typing {
+                return objectFrame(center: CGPoint(x: card.width / 2, y: card.height / 2),
+                                   size: CGSize(width: card.width, height: hauteur),
+                                   anchor: CGPoint(x: 0.5, y: 0.5), rotationDegrees: 0,
+                                   card: card, container: container)
+            }
             return objectFrame(center: centre, size: CGSize(width: card.width, height: hauteur),
                                anchor: CGPoint(x: 0.5, y: texte.anchor.y),
                                rotationDegrees: texte.rotation, card: card, container: container)

@@ -43,6 +43,7 @@ import { servePostReplyCitations } from '../../services/messaging/servedPostRepl
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
 import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../../services/messaging/searchExitLaw';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -142,6 +143,10 @@ export function registerMessageSearchRoute(
       });
       if (!conversationId) {
         return;
+      }
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return refuseExpiredShareLink(reply);
       }
 
       const queryLower = q.toLowerCase().trim();

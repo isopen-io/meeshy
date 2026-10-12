@@ -23,6 +23,7 @@ import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifi
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -918,12 +919,15 @@ export class AuthHandler {
 
       if (isAnonymous) {
         conversations = await this.prisma.participant.findMany({
-          where: { id: userId, isActive: true },
+          where: { id: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }
         });
       } else {
+        // #7389 — un inscrit banni dont la ligne a été rallumée (restauration
+        // de compte) ne rejoint pas la room : il y recevrait chaque
+        // `message:new` que les portes REST lui refusent.
         conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, isActive: true },
+          where: { userId: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }
         });
       }
