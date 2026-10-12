@@ -5,6 +5,28 @@ import { sendNotFound, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
 
 /**
+ * Une participation VIVANTE : active ET non bannie — UNE définition pour
+ * l'invité et pour l'inscrit, sur toutes les portes de lecture (REST et
+ * socket) (#7389).
+ *
+ * `isActive: true` seul ne suffit pas : un bannissement écrit bien
+ * `isActive: false`, mais une restauration de compte rallume `isActive` sans
+ * regarder `bannedAt` (`routes/me/delete-account.ts`). La garde de
+ * bannissement ne vivait que sur la branche INVITÉ ; l'inscrit restauré
+ * relisait le fil, la recherche et les épinglés, et rejoignait la room à la
+ * connexion socket.
+ *
+ * `unsetOrNull` et non `bannedAt: null` : la colonne est ABSENTE du document de
+ * tout participant jamais banni, et l'égalité à `null` fermerait la
+ * conversation à toute la population (`utils/prisma-unset.ts`). Elle porte une
+ * clé `OR` : un `where` qui a déjà le sien passe par `AND`.
+ */
+export const PARTICIPATION_VIVANTE = {
+  isActive: true,
+  ...unsetOrNull('bannedAt')
+} as const;
+
+/**
  * The two identities an auth context can name a `Participant` row with.
  *
  * `userId` is NOT a `User.id` for everyone: the anonymous branch of
@@ -52,12 +74,7 @@ export async function resolveCallerParticipant(
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
-      where: {
-        id: participantId,
-        conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
-      },
+      where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, role: true, joinedAt: true }
     });
   }
@@ -66,7 +83,7 @@ export async function resolveCallerParticipant(
   if (!userId) return null;
 
   return prisma.participant.findFirst({
-    where: { conversationId, userId, isActive: true },
+    where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
     select: { id: true, role: true, joinedAt: true }
   });
 }
@@ -85,11 +102,11 @@ export function callerParticipantWhere(
 ): Prisma.ParticipantWhereInput {
   const participantId = authContext?.participantId;
   if (participantId) {
-    return { id: participantId, isActive: true, ...unsetOrNull('bannedAt') };
+    return { id: participantId, ...PARTICIPATION_VIVANTE };
   }
   const userId = authContext?.userId;
   if (!userId) return { id: { in: [] } };
-  return { userId, isActive: true };
+  return { userId, ...PARTICIPATION_VIVANTE };
 }
 
 /**
@@ -183,7 +200,7 @@ export async function verdictAccesConversation(
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
 
@@ -202,14 +219,14 @@ export async function verdictAccesConversation(
   //
   // La garde reste porteuse malgré `isActive: true` : un bannissement écrit bien
   // `isActive: false`, mais une restauration de compte rallume `isActive` sans
-  // regarder `bannedAt` (`routes/me/delete-account.ts`).
+  // regarder `bannedAt` (`routes/me/delete-account.ts`). Elle vaut pour les
+  // branches INSCRITES ci-dessous aussi (`PARTICIPATION_VIVANTE`, #7389).
   if (authContext.participantId) {
     const participant = await prisma.participant.findFirst({
       where: {
         id: authContext.participantId,
         conversationId: conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
+        ...PARTICIPATION_VIVANTE
       }
     });
     return participant ? ACCES_ACCORDE : NON_MEMBRE;
@@ -235,7 +252,7 @@ export async function verdictAccesConversation(
         where: {
           conversationId: conversation.id,
           userId: authContext.userId,
-          isActive: true
+          ...PARTICIPATION_VIVANTE
         }
       });
       return participant ? ACCES_ACCORDE : NON_MEMBRE;
@@ -245,7 +262,7 @@ export async function verdictAccesConversation(
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
     return participant ? ACCES_ACCORDE : NON_MEMBRE;
