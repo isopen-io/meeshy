@@ -44,6 +44,11 @@ struct ComposerLeadingRail: View {
 
     var onDoor: ((ComposerRailDoor) -> Void)?
 
+    /// **L'appui long d'une porte** (#10306) — servi aux seules portes qui en
+    /// ont un (`ComposerMediaSourcePolicy.longPressIntake`) : la photothèque
+    /// ouvre alors la caméra. `nil` ⇒ aucune porte n'a d'appui long.
+    var onDoorLongPress: ((ComposerRailDoor) -> Void)?
+
     /// Un contrôleur d'outil a été tapé — l'hôte déplie ou replie son panneau.
     var onToolControl: ((ComposerToolControl) -> Void)?
 
@@ -122,6 +127,8 @@ struct ComposerLeadingRail: View {
     var sceneTogglesAfter: ComposerRailDoor?
 
     @State private var lastTapped: String?
+    /// L'appui long dont la levée ne doit pas rappeler le toucher (#10306).
+    @State private var press = ComposerRailDoorPress()
 
     /// L'écart entre deux cadres : resserré quand chaque bouton ne dessine
     /// qu'un disque plus petit que sa cible.
@@ -330,9 +337,16 @@ struct ComposerLeadingRail: View {
               symbolName: door.symbolName,
               label: ComposerRailCopy.label(door),
               tint: MeeshyColors.textSecondary(isDark: true),
-              badge: badges[door]) {
+              badge: badges[door],
+              longPress: longPress(of: door)) {
             onDoor?(door)
         }
+    }
+
+    /// L'appui long de la porte, s'il en a un et que l'hôte l'écoute.
+    private func longPress(of door: ComposerRailDoor) -> (() -> Void)? {
+        guard let onDoorLongPress, ComposerMediaSourcePolicy.longPressIntake(for: door) != nil else { return nil }
+        return { onDoorLongPress(door) }
     }
 
     /// Un contrôleur d'outil. **Teinté quand son panneau est déplié** — le même
@@ -372,8 +386,11 @@ struct ComposerLeadingRail: View {
                        badge: Int? = nil,
                        glassTint: Color? = nil,
                        isOn: Bool = false,
+                       longPress: (() -> Void)? = nil,
                        action: @escaping () -> Void) -> some View {
         Button {
+            // Sans appui long en mémoire, l'état n'est pas touché : aucun rendu de plus.
+            guard press.longPressedId == nil || press.admitsTap(id: id, at: Date()) else { return }
             lastTapped = id
             action()
             HapticFeedback.light()
@@ -393,8 +410,23 @@ struct ComposerLeadingRail: View {
                 .overlay(alignment: .topTrailing) { badgeBubble(badge) }
                 .contentShape(Rectangle())
         }
+        // Le bouton rappelle aussi la levée d'un appui long : elle est avalée.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: ComposerRailDoorPress.minimumDuration).onEnded { _ in
+                guard let longPress else { return }
+                press.noteLongPress(id: id, at: Date())
+                lastTapped = id
+                HapticFeedback.medium()
+                longPress()
+            },
+            including: longPress == nil ? .subviews : .all)
         .accessibilityLabel(Text(label))
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityActions {
+            if let longPress {
+                Button(ComposerMediaSourcePolicy.openCameraAction) { longPress() }
+            }
+        }
         // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
         // fondre dans le libellé remplacerait le VERBE que VoiceOver annonce
         // (« Ajouter du texte ») par une phrase composée — et un contrôle qui

@@ -67,6 +67,22 @@ extension MeeshyComposerHost {
         return true
     }
 
+    /// **L'appui long sur la photothèque ARME le viseur** (#10306, porteur
+    /// 2026-10-12) — la seconde entrée de la caméra, quand la scène porte déjà
+    /// quelque chose et que le toucher sur elle sélectionne au lieu d'armer.
+    /// Offert seulement si le format sert la caméra : sinon la porte n'a pas
+    /// d'appui long, et son toucher reste celui de la photothèque.
+    var railDoorLongPress: ((ComposerRailDoor) -> Void)? {
+        guard ComposerSceneCamera.initialMode(for: selectedFormat) != nil else { return nil }
+        return { door in handleRailDoorLongPress(door) }
+    }
+
+    func handleRailDoorLongPress(_ door: ComposerRailDoor) {
+        guard ComposerMediaSourcePolicy.longPressIntake(for: door) == .camera, sceneCameraStage == .off else { return }
+        dismissTextEditing()
+        armSceneCamera()
+    }
+
     /// **Le doigt glisse pendant la prise** : à droite le cadenas, à la
     /// verticale le zoom — la loi est celle de la machine.
     func handleSceneCaptureLongPressChanged(_ translation: CGPoint) {

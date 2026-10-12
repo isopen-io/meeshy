@@ -154,6 +154,8 @@ struct ComposerSceneSurface: View {
     /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
     var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
+    /// L'appui long d'une porte (#10306) : la photothèque ouvre la caméra.
+    var onRailDoorLongPress: ((ComposerRailDoor) -> Void)?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
 
@@ -498,6 +500,7 @@ struct ComposerSceneSurface: View {
             ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
+                                onDoorLongPress: onRailDoorLongPress,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
@@ -534,6 +537,7 @@ struct ComposerSceneSurface: View {
             ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
+                                onDoorLongPress: onRailDoorLongPress,
                                 axis: .horizontal,
                                 systemEntry: railSystemEntry,
                                 systemEntryAfter: railSystemEntryAfter,

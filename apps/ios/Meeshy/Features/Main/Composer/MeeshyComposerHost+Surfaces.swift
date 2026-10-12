@@ -421,6 +421,7 @@ extension MeeshyComposerHost {
             // La surface, elle, ne compte rien : elle relaie.
             railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
+            onRailDoorLongPress: railDoorLongPress,
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
