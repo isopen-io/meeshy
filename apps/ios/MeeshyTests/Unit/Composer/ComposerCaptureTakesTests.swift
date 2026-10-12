@@ -59,7 +59,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
     func test_perform_photoToGallery_withALook_isATakeFromTheFrame() async {
         let objectif = MockComposerCaptureCamera()
         let session = ComposerCaptureSession(stage: .armed, controls: objectif, gallery: MockComposerGallery())
-        session.look = ComposerPhotoLook(filter: .warm)
+        session.look = Self.framedLook  // un VRAI cadre : « Aucun » prend hors cadre (porteur 2026-10-12)
         session.perform(.photoToGallery, item: nil)
         await Self.waitUntil(timeout: 2) { !objectif.photoFlashes.isEmpty }
         XCTAssertEqual(session.photoInFlightIntent, .gallery)
@@ -213,7 +213,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
 
     func test_perform_filmToGallery_cancelledBeforeFilming_leavesNoGalleryIntent() {
         let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
-        session.look = ComposerPhotoLook(filter: .warm)
+        session.look = Self.framedLook  // un VRAI cadre : « Aucun » prend hors cadre (porteur 2026-10-12)
         session.perform(.filmToGallery, item: nil)
         XCTAssertEqual(session.filmIntent, .gallery)
         session.endHold()
@@ -743,6 +743,15 @@ final class ComposerCaptureTakesTests: XCTestCase {
     static func publishPhoto(on session: ComposerCaptureSession) {
         session.camera.capturedPhoto = photo()
         session.camera.capturedPhotoId = UUID().uuidString
+    }
+
+    /// Un look qui porte un VRAI cadre — la zone cadre (#10284).
+    static var framedLook: ComposerPhotoLook {
+        let cadre = ComposerLookStripRule.items(.frames).lazy.compactMap { item -> ComposerPhotoFrame? in
+            guard case .frame(let cadre) = item, cadre != ComposerPhotoFrame.none else { return nil }
+            return cadre
+        }.first ?? ComposerPhotoFrame.none
+        return ComposerPhotoLook(filter: .warm, frame: cadre)
     }
 
     static func photo() -> UIImage {

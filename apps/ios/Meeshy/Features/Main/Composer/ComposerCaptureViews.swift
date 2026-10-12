@@ -95,6 +95,8 @@ struct ComposerCapturePreview: View {
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
+                    .modifier(ComposerCameraSwitchVeilStyle(switching: editedSource == nil
+                                                            && session.camera.isSwitchingCamera))
                     .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
                     .adaptiveOnChange(of: proportions, initial: true) { _, vues in
@@ -235,6 +237,26 @@ struct ComposerCaptureChrome: View {
                         guard cadre.height > 0 else { return }
                         session.setEditAspect(cadre.width / cadre.height)
                     }
+                }
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
+                .transition(.opacity)
+            }
+            // **Lecture et son, en bas à droite de la vidéo** (#10356) : posés
+            // sur la scène, ils quittent la bande et ne lui prennent rien.
+            if !finishing, session.offersEditPlayback, let aspect = session.editAspect {
+                GeometryReader { proxy in
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels)
+                    let rangee = ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone),
+                                                                   hasAudio: session.takeHasAudio,
+                                                                   clearsBrackets: session.showsCropBrackets)
+                    ComposerEditPlaybackControls(paused: session.editPaused,
+                                                 hasAudio: session.takeHasAudio,
+                                                 muted: session.takeSound.muted,
+                                                 onTogglePlayback: { session.toggleEditPlayback() },
+                                                 onToggleMute: { session.toggleTakeMute() })
+                        .frame(width: rangee.width, height: rangee.height)
+                        .position(x: rangee.midX, y: rangee.midY)
                 }
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)

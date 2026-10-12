@@ -683,9 +683,7 @@ extension MeeshyComposerHost {
         return AnyView(
             ComposerSceneDescriptionPanel(
                 text: sceneDescriptionBinding,
-                placeholder: String(localized: "composer.description.placeholder",
-                                    defaultValue: "Ajouter une description",
-                                    bundle: .main),
+                placeholder: ComposerDescriptionCopy.amorce,
                 isCollapsed: $sceneDescriptionCollapsed,
                 // **L'encre suit le FOND** (#6127). Même loi que le reste du
                 // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois

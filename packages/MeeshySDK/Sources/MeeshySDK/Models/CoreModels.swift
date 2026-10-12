@@ -383,6 +383,12 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
 
+    /// L'identifiant de World Wide, la conversation globale ouverte au monde
+    /// (miroir de `WORLD_IDENTIFIER`, `apps/web/src/lib/lens/world-pin.ts`).
+    /// Meeshy Global (`meeshy`) est une AUTRE conversation globale.
+    public static let worldWideIdentifier = "world"
+    public var isWorldWide: Bool { identifier == Self.worldWideIdentifier }
+
     /// Présence du pair d'une conversation directe, dérivée du SEUL signal que
     /// le modèle porte (`lastSeenAt`) via la règle produit 1/3/5.
     ///

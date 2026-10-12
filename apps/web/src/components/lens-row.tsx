@@ -149,12 +149,6 @@ export type LensRowProps = {
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
   now?: (() => number) | undefined;
-  /**
-   * LA RANGÉE ÉPINGLÉE EN TÊTE DE LISTE (#10004) — World Wide. Une rangée
-   * ORDINAIRE, sans cadre ni fond de carte (#10191) : seule l'épingle, qui se
-   * voit toujours, dit pourquoi elle est en tête.
-   */
-  pinnedAtHead?: boolean | undefined;
 };
 
 function LensRowImpl({
@@ -174,7 +168,6 @@ function LensRowImpl({
   engagement,
   interfaceLanguage,
   now,
-  pinnedAtHead = false,
 }: LensRowProps) {
   const unread = unreadCount > 0;
   /* LA CONVERSATION OUVERTE À CÔTÉ (#10073) — sur grand écran, la liste reste
@@ -486,7 +479,7 @@ function LensRowImpl({
               (`ThemedConversationRow.swift:296-300`, qui annonce épinglage ET
               sourdine).
             */}
-            {flags.isPinned || pinnedAtHead ? (
+            {flags.isPinned ? (
               <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
             {/* La sourdine, elle, ne prend PAS de glyphe : la peau Lentille la
@@ -678,7 +671,6 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
-  if ((prev.pinnedAtHead ?? false) !== (next.pinnedAtHead ?? false)) return false;
 
   const s1 = prev.status ?? AT_REST;
   const s2 = next.status ?? AT_REST;

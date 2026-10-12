@@ -154,8 +154,8 @@ struct ComposerSceneSurface: View {
     /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
     var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
-    /// L'appui long d'une porte (#10306) : la photothèque ouvre la caméra.
-    var onRailDoorLongPress: ((ComposerRailDoor) -> Void)?
+    /// L'appui long d'une porte (#10357) : la photothèque propose ses sources.
+    var onRailDoorLongPress: ComposerRailDoorLongPressHandler?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
 

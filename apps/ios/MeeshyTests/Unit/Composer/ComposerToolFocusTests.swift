@@ -123,6 +123,36 @@ final class ComposerToolFocusTests: XCTestCase {
                                     ComposerRailGeometry.gutter + ComposerRailGeometry.railWidth)
     }
 
+    // MARK: - #10358 · Le rail gauche de la scène : glyphes blancs en relief
+
+    /// **Sans disque de verre, l'encre fait tout** (retour porteur 2026-10-12).
+    /// Sur la scène : blanc au repos, jaune quand l'entrée est active. En
+    /// colonne (rangée basse, éditeur), la teinte de l'appelant ne change pas.
+    func test_10358_encreDuRailSurLaScene_blancAuRepos_jauneActif() {
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: false, columnTint: .gray), .white)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: true, active: true, columnTint: .gray), .yellow)
+        XCTAssertEqual(ComposerFloatingRailInk.glyph(separate: false, active: true, columnTint: .gray), .gray,
+                       "la rangée du bas n'est pas concernée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowOpacity, 0, "le relief vient d'une ombre portée")
+        XCTAssertGreaterThan(ComposerFloatingRailInk.shadowRadius, 0)
+    }
+
+    /// Le gabarit commun peint l'encre de la loi et son relief, sans plus
+    /// aucun disque de verre ; la pastille de compte porte le même relief.
+    func test_10358_leGabaritDuRail_neMontePlusDeVerreParBouton() throws {
+        let rail = try source("Meeshy/Features/Main/Composer/ComposerLeadingRail.swift")
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(rail.contains("structComposerLeadingRail"), "le fichier lu n'est pas le rail")
+        XCTAssertFalse(rail.contains("ComposerRailButtonGlass("), "plus de bulle de verre autour des outils")
+        XCTAssertTrue(rail.contains(".foregroundColor(ComposerFloatingRailInk.glyph(separate:separateButtons,active:isOn,columnTint:tint))"))
+        XCTAssertEqual(rail.components(separatedBy: ".modifier(ComposerRailGlyphRelief(active:separateButtons))").count - 1, 2,
+                       "le glyphe ET la pastille de compte portent l'ombre")
+        XCTAssertTrue(rail.contains(".frame(width:ComposerRailGeometry.railWidth,height:ComposerRailGeometry.railWidth)"),
+                      "la cible reste de 44 pt")
+        XCTAssertTrue(rail.contains("isOn:control.isExpanded"),
+                      "un outil ouvert est une entrée active : jaune, et annoncée sélectionnée")
+    }
+
     private func source(_ chemin: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()

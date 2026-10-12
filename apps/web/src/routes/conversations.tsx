@@ -495,11 +495,11 @@ export default function ConversationsScreen() {
   });
 
   /* UNE RANGÉE DE LA LENTILLE — partagée par les sections et par World Wide
-     épinglée en tête (#10004) : mêmes signaux, même scène, même peau (#10191). */
-  const lensRowOf = (c: (typeof conversations)[number], pinnedAtHead = false) => (
+     en tête (#10004) : mêmes signaux, même scène, même peau (#10191), et
+     son épingle seulement si on l'a épinglée (#10347). */
+  const lensRowOf = (c: (typeof conversations)[number]) => (
     <LensRow
       key={c.id}
-      pinnedAtHead={pinnedAtHead}
       conversation={c}
       languages={readerLanguages}
       viewerId={viewer.id ?? ''}
@@ -675,7 +675,7 @@ export default function ConversationsScreen() {
           en-tête par le suivant au lieu de les empiler tous en haut (revue
           #5694 ; voir le doc-comment de `LensSticker`).
         */}
-        {world === undefined ? null : lensRowOf(world, true)}
+        {world === undefined ? null : lensRowOf(world)}
         {sections.map((section, i) => {
           const fold = folds[i];
           return (

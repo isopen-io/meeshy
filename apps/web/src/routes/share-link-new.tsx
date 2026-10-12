@@ -11,6 +11,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
+import { translateLinkFamilies } from '@/lib/i18n-link-families-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { avatarOf, titleOf } from '@/lib/view/conversation';
@@ -111,25 +112,25 @@ export default function ShareLinkNewScreen() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <LinksHeader language={language} back="shareLinks" backLabel={translate(language, 'links.detail.back')} title={translate(language, 'links.create.title')} />
+      <LinksHeader language={language} back="shareLinks" backLabel={translate(language, 'links.detail.back')} title={translateLinkFamilies(language, 'links.create.title')} />
       <main id="contenu" className="flex-1 overflow-y-auto px-4 pb-safe">
         <form noValidate onSubmit={(event) => void submit(event)} className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
           {online ? null : <LinksOfflineNotice language={language} />}
-          <FormSection id="link-section-conversation" title={translate(language, 'links.create.section.conversation')} subtitle={null} icon={<LinksGlyph name="chatsCircle" size={12} />}>
+          <FormSection id="link-section-conversation" title={translateLinkFamilies(language, 'links.create.section.conversation')} subtitle={null} icon={<LinksGlyph name="chatsCircle" size={12} />}>
             <ConversationChoice language={language} conversation={chosen} invalid={feedback === 'links.create.error.conversation'} onOpen={() => setPicking(true)} />
           </FormSection>
-          <FormSection id="link-section-identity" title={translate(language, 'links.create.section.identity')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
+          <FormSection id="link-section-identity" title={translateLinkFamilies(language, 'links.create.section.identity')} subtitle={null} icon={<LinksGlyph name="tag" size={12} />}>
             <TextRow
               id="link-name"
-              label={translate(language, 'links.create.name')}
-              placeholder={translate(language, 'links.create.name.placeholder')}
+              label={translateLinkFamilies(language, 'links.create.name')}
+              placeholder={translateLinkFamilies(language, 'links.create.name.placeholder')}
               value={draft.name}
               onChange={(value) => edit('name', value)}
             />
             <TextRow
               id="link-description"
-              label={translate(language, 'links.create.description')}
-              placeholder={translate(language, 'links.create.description.placeholder')}
+              label={translateLinkFamilies(language, 'links.create.description')}
+              placeholder={translateLinkFamilies(language, 'links.create.description.placeholder')}
               value={draft.description}
               onChange={(value) => edit('description', value)}
             />
@@ -137,8 +138,8 @@ export default function ShareLinkNewScreen() {
           <RulesSection
             language={language}
             id="link-section-access"
-            title={translate(language, 'links.create.section.access')}
-            subtitle={translate(language, 'links.create.section.access.subtitle')}
+            title={translateLinkFamilies(language, 'links.create.section.access')}
+            subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
             icon={<Glyph name="key" size={12} />}
             rules={ACCESS_RULES}
             draft={draft}
@@ -147,8 +148,8 @@ export default function ShareLinkNewScreen() {
           <RulesSection
             language={language}
             id="link-section-permissions"
-            title={translate(language, 'links.create.section.permissions')}
-            subtitle={translate(language, 'links.create.section.permissions.subtitle')}
+            title={translateLinkFamilies(language, 'links.create.section.permissions')}
+            subtitle={translateLinkFamilies(language, 'links.create.section.permissions.subtitle')}
             icon={<LinksGlyph name="slidersHorizontal" size={12} />}
             rules={PERMISSION_RULES}
             draft={draft}
@@ -156,8 +157,8 @@ export default function ShareLinkNewScreen() {
           />
           <FormSection
             id="link-section-limits"
-            title={translate(language, 'links.create.section.limits')}
-            subtitle={translate(language, 'links.create.section.limits.subtitle')}
+            title={translateLinkFamilies(language, 'links.create.section.limits')}
+            subtitle={translateLinkFamilies(language, 'links.create.section.limits.subtitle')}
             icon={<LinksGlyph name="gauge" size={12} />}
           >
             <LimitsFields
@@ -171,7 +172,7 @@ export default function ShareLinkNewScreen() {
           </FormSection>
           {feedback === null ? null : (
             <p role="alert" data-link-create-error className="text-center text-caption font-medium" style={{ color: 'var(--color-error)' }}>
-              {translate(language, feedback)}
+              {translateLinkFamilies(language, feedback)}
             </p>
           )}
           <CreateLinkButton language={language} submitting={submitting} disabled={submitting || !online || chosen === null} />
