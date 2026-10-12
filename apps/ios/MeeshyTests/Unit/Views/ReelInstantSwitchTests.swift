@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Meeshy
 import MeeshySDK
 import MeeshyUI
@@ -192,5 +193,154 @@ final class ReelPlaybackRestingTests: XCTestCase {
         var election = ReelPlaybackElection()
         election.settled("r7")
         XCTAssertEqual(election.restingId, "r7")
+    }
+}
+
+// MARK: - Garde de source : le chemin d'élection reste léger (#10354)
+
+/// Le chemin qui s'exécute À MI-COURSE — l'élection (`elect`, la loi
+/// `ReelPlaybackElection`) et l'entrée / la sortie de la page vidéo
+/// (`switchIn`, `switchOut`) — ne crée aucun lecteur, ne touche pas la
+/// session audio et ne construit aucun contrôleur PiP.
+final class ReelElectionPathSourceGuardTests: XCTestCase {
+
+    private static let forbidden = ["load(", "setCategory(", "setActive(", "AVPictureInPictureController(",
+                                    "AVPlayer(", "AVQueuePlayer(", "AVPlayerItem(", "activatePlaybackSync(",
+                                    "willStartPlaying(", "configurePip("]
+
+    private var views: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+    }
+
+    private func source(_ file: String) throws -> String {
+        try String(contentsOf: views.appendingPathComponent(file), encoding: .utf8)
+    }
+
+    /// Le corps d'une déclaration, de son en-tête à l'accolade qui la ferme.
+    static func body(of header: String, in source: String) -> String? {
+        guard let start = source.range(of: header),
+              let open = source.range(of: "{", range: start.upperBound..<source.endIndex) else { return nil }
+        var depth = 0
+        var index = open.lowerBound
+        while index < source.endIndex {
+            switch source[index] {
+            case "{": depth += 1
+            case "}":
+                depth -= 1
+                if depth == 0 { return String(source[open.lowerBound...index]) }
+            default: break
+            }
+            index = source.index(after: index)
+        }
+        return nil
+    }
+
+    static func offenders(in body: String) -> [String] {
+        body.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.hasPrefix("//") && !$0.hasPrefix("///") }
+            .filter { line in forbidden.contains { line.contains($0) } }
+    }
+
+    func test_videoSwitchInAndOut_doNoHeavyWork() throws {
+        let video = try source("ReelsPlayerView+Video.swift")
+        for header in ["private func switchIn(ready: Bool)", "private func switchOut()"] {
+            let body = try XCTUnwrap(Self.body(of: header, in: video), "\(header) introuvable")
+            XCTAssertEqual(Self.offenders(in: body), [], "\(header) fait du travail lourd à mi-course")
+        }
+    }
+
+    func test_videoIsActiveChange_goesThroughTheSwitchOnly() throws {
+        let video = try source("ReelsPlayerView+Video.swift")
+        let body = try XCTUnwrap(Self.body(of: ".adaptiveOnChange(of: isActive)", in: video))
+        XCTAssertTrue(body.contains("switchIn(ready: ready)") && body.contains("switchOut()"))
+        XCTAssertFalse(body.contains("drive("), "le moteur complet attend la page posée")
+    }
+
+    func test_electionAndItsLaw_doNoHeavyWork() throws {
+        let player = try source("ReelsPlayerView.swift")
+        let elect = try XCTUnwrap(Self.body(of: "private func elect(trigger: String", in: player))
+        XCTAssertEqual(Self.offenders(in: elect), [])
+        let law = try XCTUnwrap(Self.body(of: "nonisolated struct ReelPlaybackElection", in: try source("ReelInstantSwitch.swift")))
+        XCTAssertEqual(Self.offenders(in: law), [])
+    }
+
+    func test_sceneAndAudio_engageOnlyOnceSettled() throws {
+        let player = try source("ReelsPlayerView.swift")
+        XCTAssertTrue(player.contains("ReelSceneView(reel: reel, document: document, isActive: isEngaged,"),
+                      "la scène (canvas, calques, mixer) ne démarre qu'une fois posée")
+        XCTAssertTrue(player.contains(".adaptiveOnChange(of: isEngaged)"),
+                      "le son d'un réel audio ne démarre qu'une fois posé")
+        XCTAssertTrue(player.contains("isActive: isEngaged,"), "la porte d'autostart audio lit l'engagement")
+    }
+
+    func test_guardCatchesAHeavyCall() {
+        let sample = """
+        private func switchIn(ready: Bool) {
+            manager.load(urlString: url)
+        }
+        """
+        let body = Self.body(of: "private func switchIn(ready: Bool)", in: sample) ?? ""
+        XCTAssertEqual(Self.offenders(in: body).count, 1)
+    }
+}
+
+// MARK: - Le poster arrive net (#10354)
+
+@MainActor
+final class ReelPosterPrefetchTests: XCTestCase {
+
+    private func reel(_ media: FeedMedia) -> FeedPost {
+        FeedPost(id: "r1", author: "Awa", authorId: "u1", type: "REEL", content: "", media: [media])
+    }
+
+    private func resolved(_ raw: String) -> String {
+        MeeshyConfig.resolveMediaURL(raw)?.absoluteString ?? raw
+    }
+
+    func test_videoReel_prefetchesTheThumbnailThePosterReads() {
+        let media = FeedMedia(id: "m1", type: .video, url: "/u/v.mp4", thumbnailUrl: "/u/v-thumb.jpg")
+        XCTAssertEqual(ReelPosterPrefetch.posterURL(for: reel(media)), resolved("/u/v-thumb.jpg"),
+                       "même clé que ReelPoster(url: media.thumbnailUrl ?? media.url)")
+    }
+
+    func test_videoReelWithoutThumbnail_prefetchesNothing() {
+        let media = FeedMedia(id: "m1", type: .video, url: "/u/v.mp4")
+        XCTAssertNil(ReelPosterPrefetch.posterURL(for: reel(media)), "une adresse vidéo n'est pas une image")
+    }
+
+    func test_imageReel_prefetchesTheFullImageTheCellReads() {
+        let media = FeedMedia(id: "m1", type: .image, url: "/u/p.jpg", thumbnailUrl: "/u/p-thumb.jpg")
+        XCTAssertEqual(ReelPosterPrefetch.posterURL(for: reel(media)), resolved("/u/p.jpg"),
+                       "même clé que ReelImageCell(fullUrl: media.url ?? media.thumbnailUrl)")
+    }
+
+    func test_audioReel_hasNoPoster() {
+        let media = FeedMedia(id: "m1", type: .audio, url: "/u/a.m4a")
+        XCTAssertNil(ReelPosterPrefetch.posterURL(for: reel(media)))
+    }
+
+    func test_decodeSize_isTheScreen_boundedByTheSyncCap() {
+        XCTAssertEqual(ReelPosterPrefetch.pixelSize(screenPoints: CGSize(width: 440, height: 956), scale: 3),
+                       DiskCacheStore.warmedPixelCap)
+        XCTAssertEqual(ReelPosterPrefetch.pixelSize(screenPoints: CGSize(width: 320, height: 568), scale: 2), 1136)
+    }
+
+    func test_decodeSize_sharesTheSlotThePageReadsAtInit() {
+        XCTAssertGreaterThan(ReelPosterPrefetch.pixelSize(screenPoints: CGSize(width: 390, height: 844), scale: 3),
+                             DiskCacheStore.fullFormatPixelCap,
+                             "au-dessus de 1 200 px, la variante occupe le slot plein format lu par residentImage")
+    }
+
+    func test_prefetchedPoster_isServedFromMemory() {
+        let url = resolved("/u/poster-\(UUID().uuidString).jpg")
+        XCTAssertNil(WarmImageProbe.residentImage(for: url))
+        let poster = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }
+        DiskCacheStore.cacheImageForPreview(poster, key: url)
+        XCTAssertNotNil(WarmImageProbe.residentImage(for: url),
+                        "le poster préchargé est servi par le cache mémoire, à l'init de la page, sans disque")
     }
 }

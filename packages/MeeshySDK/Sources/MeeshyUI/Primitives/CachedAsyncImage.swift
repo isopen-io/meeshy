@@ -58,16 +58,14 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             // Variante dimensionnée d'abord : le slot rempli par un chargement
-            // `targetSize` précédent (clé par bucket de pixels), sinon
-            // `warmedImage` — NSCache hit plein format s'il existe, sinon
-            // decode synchrone depuis le disque (zero IO reseau). C'est la cle
-            // pour que le cold start d'une conversation affiche les images
-            // directement, sans transitionner via le thumbHash.
+            // `targetSize` précédent (clé par bucket de pixels), sinon le slot
+            // plein format. MÉMOIRE seule (#10354) : l'init n'est pas le lieu
+            // d'un décodage disque — le `.task` le fait hors du fil principal.
             if let targetSize,
                let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: targetSize)) {
                 cachedFull = sized
             } else {
-                cachedFull = WarmImageProbe.warmedImage(for: resolved)
+                cachedFull = WarmImageProbe.residentImage(for: resolved)
             }
         } else {
             cachedFull = nil
@@ -489,16 +487,19 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         self.onFullImageFailure = onFullImageFailure
         self.placeholder = placeholder
 
-        // Tier 2: warm le full image depuis le disque vers la NSCache puis
-        // peuple l'etat sync — pas de transition thumbnail→full visible.
-        // Variante dimensionnée (slot par bucket de pixels) d'abord quand un
-        // `targetSize` est fourni, sinon le slot plein format.
+        // Tier 2: le full image déjà en MÉMOIRE peuple l'état sync — pas de
+        // transition thumbnail→full visible. Variante dimensionnée (slot par
+        // bucket de pixels) d'abord quand un `targetSize` est fourni, sinon le
+        // slot plein format. Jamais le disque (#10354) : le décodage d'un
+        // fichier dans l'init figeait le geste des réels ; le `.task` le lit
+        // hors du fil principal, et le préchargement des posters le met en
+        // mémoire avant que la page ne monte.
         let cachedFull: UIImage?
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
             cachedFull = targetSize.flatMap {
                 DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
-            } ?? WarmImageProbe.warmedImage(for: resolved)
+            } ?? WarmImageProbe.residentImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -507,7 +508,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // Tier 1: idem pour le thumbnail si le full n'est pas encore disponible.
         if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
-            _thumbnailImage = State(initialValue: WarmImageProbe.warmedImage(for: resolved))
+            _thumbnailImage = State(initialValue: WarmImageProbe.residentImage(for: resolved))
         }
 
         // Tier 0: decode ThumbHash instantly (< 0.1ms, always available if provided)
