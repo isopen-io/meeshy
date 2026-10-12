@@ -235,7 +235,8 @@ function scene(l: Layout): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${l.w}" height="${l.h}" viewBox="0 0 ${l.w} ${l.h}">
 <defs>${DEFS}${sky(l.w, l.h, l.cx, l.cy)}
   ${starfield(l.w, l.h, l.stars, 20261221, { cx: l.cx, cy: l.cy, r: l.ring * 1.1 })}
-  ${constellation(l.constellation.x, l.constellation.y, l.constellation.width, l.constellation.opacity)}
+  <mask id="clear"><rect width="${l.w}" height="${l.h}" fill="#fff"/><circle cx="${f(l.cx)}" cy="${f(l.cy)}" r="${f(l.ring * 1.12)}" fill="#000"/></mask>
+  <g mask="url(#clear)">${constellation(l.constellation.x, l.constellation.y, l.constellation.width, l.constellation.opacity)}</g>
   ${l.drift.map(([x, y, size, rot]) => fragment(x, y, size, rot, 0.85)).join('')}
   <circle cx="${f(l.cx)}" cy="${f(l.cy)}" r="${f(l.ring * 0.95)}" fill="url(#cupHalo)"/>
   ${stepsRing(l.cx, l.cy, l.ring, dot, frag)}
@@ -253,12 +254,18 @@ function scene(l: Layout): string {
 
 const BIRD = GAME_BIRD_BOX;
 
+/** Mee et Meo de part et d'autre du pied de la coupe, comme sur la coupe de Prestige (`Trophy`). */
+const flanking = (cx: number, cy: number, cupScale: number, birdScale: number) => {
+  const foot = 30 * cupScale + 12;
+  const top = cy + 5 * cupScale;
+  return { left: [cx - foot - BIRD * birdScale, top] as const, right: [cx + foot + BIRD * birdScale, top] as const };
+};
+
 const CARD: Layout = (() => {
-  const w = 1920, h = 1080, cx = 960, cy = 505, ring = 330, birdScale = 1.25;
-  const side = ring + 40;
+  const w = 1920, h = 1080, cx = 960, cy = 500, ring = 345, cupScale = 3.5, birdScale = 1.3;
   return {
-    w, h, cx, cy, ring, cupScale: 3.3, birdScale,
-    birds: { left: [cx - side - BIRD * birdScale, cy + 10], right: [cx + side + BIRD * birdScale, cy + 10] },
+    w, h, cx, cy, ring, cupScale, birdScale,
+    birds: flanking(cx, cy, cupScale, birdScale),
     constellation: { x: 150, y: 70, width: 1620, opacity: 0.55 },
     drift: [[300, 300, 22, 18], [1640, 360, 26, -14], [420, 800, 18, -24], [1530, 820, 20, 30], [180, 560, 14, 8], [1760, 600, 15, -6]],
     stars: 260,
@@ -266,10 +273,10 @@ const CARD: Layout = (() => {
 })();
 
 const DETAILS: Layout = (() => {
-  const w = 1080, h = 1920, cx = 540, cy = 820, ring = 360, birdScale = 1.15;
+  const w = 1080, h = 1920, cx = 540, cy = 800, ring = 370, cupScale = 3.6, birdScale = 1.3;
   return {
-    w, h, cx, cy, ring, cupScale: 3.5, birdScale,
-    birds: { left: [cx - 330, cy + ring - 10], right: [cx + 330, cy + ring - 10] },
+    w, h, cx, cy, ring, cupScale, birdScale,
+    birds: flanking(cx, cy, cupScale, birdScale),
     constellation: { x: 110, y: 170, width: 860, opacity: 0.7 },
     drift: [[170, 470, 18, 20], [920, 520, 22, -16], [200, 1420, 16, -28], [880, 1460, 18, 24], [540, 1620, 14, 6]],
     stars: 300,
