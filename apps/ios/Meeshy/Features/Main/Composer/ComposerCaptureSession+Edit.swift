@@ -127,7 +127,7 @@ extension ComposerCaptureSession {
     /// La vidéo part avec le look, le cadrage et la découpe qu'on voyait en la
     /// retouchant, lue dans l'espace où la boucle la lisait. Sans effet, sans
     /// cadrage ni découpe, le rendu EST le brut : il ne part en galerie que s'il
-    /// n'y est pas déjà (`CaptureSavePolicy.writesUntouchedTake`). **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
+    /// n'y est pas déjà — seul le brut d'une prise par le cadre y va (#10284). **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
     /// découpe et le cadrage ont retiré, et le remettre à sa place enverrait à
     /// l'hôte un passage que l'auteur a coupé. La retouche reste ouverte, comme
     /// pour une photo dont le cadre ne se peint pas — la prise n'est pas perdue.
@@ -139,6 +139,7 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let politique = savePolicy()
         let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
+        let brutEnGalerie = editRawSave
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
@@ -151,7 +152,8 @@ extension ComposerCaptureSession {
             }
             let neuve = rendue == url ? nil : rendue
             if enregistre, isStillEditing(source) {
-                _ = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+                _ = await Self.writeVideo(rendue, original: url, originalInLibrary: await brutEnGalerie?.value ?? false,
+                                          gallery: galerie)
             }
             guard isStillEditing(source) else {
                 if let neuve {
@@ -239,6 +241,7 @@ extension ComposerCaptureSession {
         takeSound = ComposerTakeSound()
         trimScrubbing = false
         takeSave = Self.noTakeSave
+        editRawSave = nil
     }
 
     // MARK: - ⬇︎ Enregistrer dans Photos (#9684, #10284)
@@ -276,6 +279,7 @@ extension ComposerCaptureSession {
         guard phase.isEditing, editSource != nil else { return }
         let cadre = look.captureFrameId
         takeSave = CaptureSaveLaw.beginTake(.frame(frameId: cadre))
+        editRawSave = brut
         writeTake(frameId: cadre, awaitingRaw: brut, toast: true)
     }
 
@@ -285,7 +289,7 @@ extension ComposerCaptureSession {
     private func writeTake(frameId: String, awaitingRaw brut: Task<Bool, Never>?, toast: Bool) {
         guard let source = editSource else { return }
         let galerie = gallery
-        let politique = savePolicy()
+        let brutEnGalerie = editRawSave
         let ecriture: @MainActor () async -> Bool?
         switch phase {
         case .capturing:
@@ -300,7 +304,9 @@ extension ComposerCaptureSession {
             let exporter = videoRender(url)
             ecriture = {
                 guard let rendue = await exporter() else { return nil }
-                let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+                let enregistree = await Self.writeVideo(rendue, original: url,
+                                                        originalInLibrary: await brutEnGalerie?.value ?? false,
+                                                        gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
                                                           logger: .media)

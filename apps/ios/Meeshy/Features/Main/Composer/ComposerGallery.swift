@@ -66,10 +66,6 @@ nonisolated struct CaptureSavePolicy: Equatable, Sendable {
     func savesRenderOnFinish(alreadySaved: Bool) -> Bool {
         renderedMode == .automatic && !alreadySaved
     }
-
-    /// Un rendu identique à l'original (une vidéo sans effet, ni cadrage, ni
-    /// découpe) ne s'écrit que si l'original n'est pas déjà dans Photos.
-    var writesUntouchedTake: Bool { !savesOriginal }
 }
 
 /// Où en est l'enregistrement de la prise retouchée, PROJETÉ de la loi partagée

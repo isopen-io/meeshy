@@ -105,6 +105,10 @@ final class ComposerCaptureSession: ObservableObject {
     /// (#9684). `nil` : rendu impossible, `false` : Photos a refusé (et l'a dit),
     /// `true` : enregistrée.
     @Published var takeWrite: Task<Bool?, Never>?
+    /// L'écriture du BRUT de la prise en retouche vers Photos (#10284) : posée
+    /// par la seule prise par le cadre, `nil` pour une prise hors cadre, dont
+    /// l'original reste dans l'app quel que soit le réglage.
+    var editRawSave: Task<Bool, Never>?
     /// Ce que la capture écrit dans Photos — lu à chaque décision, jamais figé.
     let savePolicy: @MainActor () -> CaptureSavePolicy
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent

@@ -292,7 +292,6 @@ extension ComposerCaptureSession {
     /// lui serait identique au pixel près — l'export rend alors le brut lui-même,
     /// qui s'écrit s'il n'est pas déjà en galerie (#9684).
     func saveRenderedVideo(_ url: URL) {
-        let politique = savePolicy()
         let regard = look
         let auteur = lookPerson
         let date = lookDate
@@ -313,7 +312,8 @@ extension ComposerCaptureSession {
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue else { return }
-            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, originalInLibrary: brut != nil,
+                                                                      gallery: galerie)
             if rendue != url {
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
@@ -325,11 +325,13 @@ extension ComposerCaptureSession {
 
     /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
     /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
-    /// l'original ne s'écrit que si l'original n'y est pas déjà. `true` : la
-    /// prise est dans Photos.
-    static func writeVideo(_ rendue: URL, original: URL, policy: CaptureSavePolicy,
+    /// l'original ne s'écrit que si l'original n'y est pas déjà — un FAIT de la
+    /// prise (son brut écrit), jamais une lecture du réglage : depuis #10284, le
+    /// brut d'une prise hors cadre reste dans l'app même quand Réglages › Médias
+    /// demande l'original. `true` : la prise est dans Photos.
+    static func writeVideo(_ rendue: URL, original: URL, originalInLibrary: Bool,
                            gallery: any ComposerGalleryProviding) async -> Bool {
-        guard rendue != original || policy.writesUntouchedTake else { return true }
+        guard rendue != original || !originalInLibrary else { return true }
         return await gallery.saveVideo(at: rendue)
     }
 
