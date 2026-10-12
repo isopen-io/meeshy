@@ -263,6 +263,77 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(ids.count, Set(ids).count, "mergeUnique must deduplicate by message id")
     }
 
+    // MARK: - #9619 — un message qui disparaît ne sort pas par la recherche
+
+    /// La loi de sortie (#9572) : un contenu qui disparaît ne quitte pas sa
+    /// conversation. Un résultat de recherche le montrait en clair, hors de
+    /// toute couche sécurisée, et le laissait capturer — et le seul fait qu'il
+    /// RÉPONDE à la requête dit déjà un mot de son texte. Il n'y paraît donc
+    /// pas, ni par l'index local (FTS5), ni par le volet réseau.
+    func test_searchMessages_localResults_leaveOutMessagesThatDisappear() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        var viewOnce = SearchTestMessageRecordFactory.make(
+            localId: "local-view-once", conversationId: "conv-exit", content: "rendezvous secret unique"
+        )
+        viewOnce.effectFlags = MessageEffectFlags.viewOnce.rawValue
+        var timedFlame = SearchTestMessageRecordFactory.make(
+            localId: "local-timed-flame", conversationId: "conv-exit", content: "rendezvous secret flamme"
+        )
+        timedFlame.effectFlags = MessageEffectFlags.ephemeral.rawValue
+        timedFlame.ephemeralDuration = 30
+        var afterRead = SearchTestMessageRecordFactory.make(
+            localId: "local-after-read", conversationId: "conv-exit", content: "rendezvous secret lecture"
+        )
+        afterRead.effectFlags = MessageEffectFlags.ephemeral.rawValue | MessageEffectFlags.ephemeralAfterRead.rawValue
+        let ordinary = SearchTestMessageRecordFactory.make(
+            localId: "local-ordinary", conversationId: "conv-exit", content: "rendezvous public"
+        )
+        try await pool.write { db in
+            for record in [viewOnce, timedFlame, afterRead, ordinary] { try record.insert(db) }
+        }
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(
+            searchService: MessageSearchService(reader: pool)
+        )
+        mockAPI.errorToThrow = URLError(.notConnectedToInternet)
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["local-ordinary"],
+            "une vue unique, une flamme à durée et une flamme après lecture ne sortent pas par la recherche locale"
+        )
+    }
+
+    func test_searchMessages_remoteResults_leaveOutMessagesThatDisappear() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        mockUserService.searchUsersResult = .success([])
+        let conversations: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[{"id":"conv-exit","type":"group","title":"Exit","createdAt":"2026-01-01T00:00:00Z"}]}
+        """)
+        mockAPI.stub("/conversations/search", result: conversations)
+        let messages: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-ordinary","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous public","createdAt":"2026-01-01T00:04:00.000Z"},
+            {"id":"msg-view-once","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret unique","isViewOnce":true,"createdAt":"2026-01-01T00:03:00.000Z"},
+            {"id":"msg-timed-flame","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret flamme","effectFlags":1,"ephemeralDuration":30,"createdAt":"2026-01-01T00:02:00.000Z"},
+            {"id":"msg-after-read","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret lecture","effectFlags":9,"createdAt":"2026-01-01T00:01:00.000Z"},
+            {"id":"msg-view-once-piece","conversationId":"conv-exit","senderId":"user-002","content":"rendezvous secret piece","attachments":[{"id":"att-1","fileName":"a.jpg","originalName":"a.jpg","mimeType":"image/jpeg","fileSize":1,"fileUrl":"https://x/a.jpg","isViewOnce":true,"createdAt":"2026-01-01T00:00:00.000Z"}],"createdAt":"2026-01-01T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockAPI.stub("/conversations/conv-exit/messages/search", result: messages)
+
+        await sut.performSearch(query: "rendezvous")
+
+        XCTAssertEqual(
+            sut.messageResults.map(\.id), ["msg-ordinary"],
+            "le volet réseau applique la même loi : rien de ce qui disparaît, pièce jointe protégée comprise"
+        )
+    }
+
     // MARK: - Tab Counts Tests
 
     func test_tabCounts_reflectResultArraySizes() async throws {
