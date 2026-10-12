@@ -335,8 +335,8 @@ extension ConversationViewModel {
             let localId = payload.tempId
             let canonicalId = serverId(for: localId)
             if let original = EditHistoryStore.shared.revisions(for: canonicalId).last?.content {
-                try? await messagePersistence.markEdited(
-                    localId: localId, newContent: original, editedAt: Date()
+                _ = try? await messagePersistence.markEditedLocally(
+                    localId: localId, newContent: original
                 )
                 EditHistoryStore.shared.removeHistory(for: canonicalId)
             }
