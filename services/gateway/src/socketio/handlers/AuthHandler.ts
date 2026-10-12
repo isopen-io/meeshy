@@ -24,6 +24,7 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { loadGuestShareLinkExpiry, shareLinkHasExpired, SHARE_LINK_EXPIRED_CODE, type GuestShareLinkRow } from '../../services/shareLinkReadGate';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -488,13 +489,25 @@ export class AuthHandler {
         id: true,
         displayName: true,
         language: true,
-        conversationId: true
+        conversationId: true,
+        shareLinkId: true,
+        anonymousSession: true
       }
     });
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
+      return;
+    }
+
+    // #10437 — la garde commune du lien échu, AVANT toute room : c'est cette
+    // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
+    // la connexion comme à chaque reconnexion. Un lien illisible lève, et
+    // `handleTokenAuthentication` coupe le socket (fail-closed).
+    const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
+    if (shareLinkHasExpired({ expiresAt: linkExpiresAt }, new Date())) {
+      this._refuseExpiredGuestLink(socket);
       return;
     }
 
@@ -551,6 +564,7 @@ export class AuthHandler {
     }
 
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
+    if (linkExpiresAt) this._scheduleGuestLinkExpiry(socket, participant, linkExpiresAt);
 
     // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
     if (isFirstSocket) {
@@ -617,6 +631,63 @@ export class AuthHandler {
     };
 
     arm();
+  }
+
+  private _refuseExpiredGuestLink(socket: Socket): void {
+    socket.emit(SERVER_EVENTS.ERROR, { message: 'This share link has expired', code: SHARE_LINK_EXPIRED_CODE });
+    socket.disconnect(true);
+  }
+
+  /**
+   * #10437 — une session invitée DÉJÀ connectée sort à l'échéance de son lien.
+   * Même patron que `_scheduleTokenExpiry` (plafond du minuteur, désarmement
+   * au `disconnect`), à une différence près : l'échéance d'un lien se MODIFIE
+   * (l'hôte peut le prolonger ou l'écourter). Le minuteur ne coupe donc pas
+   * sur la date lue à la connexion : il RELIT le lien quand il sonne, coupe
+   * s'il est échu (ou illisible — fail-closed), réarme s'il a été prolongé, et
+   * s'arrête s'il n'a plus d'échéance. Couper suffit : la reconnexion repasse
+   * par la garde ci-dessus, et le REST par `middleware/auth.ts`. La ligne
+   * n'est PAS désactivée — un lien prolongé rend l'accès, comme aux portes de
+   * lecture. Un lien écourté est vu à l'ancienne échéance au plus tard, et dès
+   * la requête REST suivante.
+   */
+  private _scheduleGuestLinkExpiry(socket: Socket, guest: GuestShareLinkRow, initialExpiresAt: Date): void {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    socket.on('disconnect', () => {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+    });
+
+    const arm = (expiresAt: Date) => {
+      if (disposed) return;
+      const msRemaining = expiresAt.getTime() - Date.now();
+      timer = guardedTimeout({
+        name: 'socket-guest-link-expiry',
+        // +1 ms : `shareLinkHasExpired` est strict (`expiresAt < now`) — sonner
+        // pile à l'échéance rendrait « pas encore », et réarmerait à 0 ms.
+        afterMs: Math.min(Math.max(msRemaining + 1, 1), AuthHandler.MAX_EXPIRY_TIMER_MS),
+        logger,
+        run: () => recheck(),
+      });
+    };
+
+    const recheck = async () => {
+      if (disposed) return;
+      const current = await loadGuestShareLinkExpiry(this.prisma, guest).catch((error: unknown) => {
+        logger.warn('guest share link unreadable at expiry — disconnecting (fail-closed)', { socketId: socket.id, error });
+        return 'unreadable' as const;
+      });
+      if (disposed) return;
+      if (current === 'unreadable' || shareLinkHasExpired({ expiresAt: current }, new Date())) {
+        logger.info('guest share link expired while connected — disconnecting', { socketId: socket.id });
+        this._refuseExpiredGuestLink(socket);
+        return;
+      }
+      if (current) arm(current);
+    };
+
+    arm(initialExpiresAt);
   }
 
   /**
@@ -923,9 +994,10 @@ export class AuthHandler {
           select: { conversationId: true }
         });
       } else {
-        // #7389 — un inscrit banni dont la ligne a été rallumée (restauration
-        // de compte) ne rejoint pas la room : il y recevrait chaque
-        // `message:new` que les portes REST lui refusent.
+        // #7389 — un inscrit banni dont la ligne a été rallumée (bannie
+        // pendant une suppression pour soi, puis restaurée par
+        // `restore-for-me` avant #10436) ne rejoint pas la room : il y
+        // recevrait chaque `message:new` que les portes REST lui refusent.
         conversations = await this.prisma.participant.findMany({
           where: { userId: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }

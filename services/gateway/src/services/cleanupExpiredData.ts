@@ -57,12 +57,44 @@ export async function cleanupExpiredData(prisma: PrismaClient): Promise<void> {
       logger.info(`🧹 ${endedWriterSessions.count} sessions anonymes expirées terminées (auteurs conservés, #6501)`);
     }
 
-    const expiredShareLinks = await prisma.conversationShareLink.deleteMany({
-      where: { expiresAt: { lt: new Date() } },
-    });
+    // #10437 — un lien SUPPRIMÉ ne ferme plus rien : les portes du lien échu
+    // (`middleware/auth.ts`, `AuthHandler`, les lectures par route) tiennent un
+    // lien introuvable pour ouvert, parce qu'un lien retiré à la main révoque
+    // ses invités (`revokeShareLinkGuests`). Supprimer un lien expiré sans
+    // terminer ses invités leur RENDAIT l'accès au balayage suivant. Les
+    // invités sont donc terminés D'ABORD ; si cette écriture échoue, aucun lien
+    // n'est supprimé (le `catch` englobant), et le balayage suivant réessaie.
+    const now = new Date();
+    const expiredLinkIds = (
+      await prisma.conversationShareLink.findMany({
+        where: { expiresAt: { lt: now } },
+        select: { id: true },
+      })
+    ).map((link) => link.id);
 
-    if (expiredShareLinks.count > 0) {
-      logger.info(`🧹 ${expiredShareLinks.count} liens de partage expirés supprimés`);
+    if (expiredLinkIds.length > 0) {
+      const endedGuests = await prisma.participant.updateMany({
+        where: {
+          type: 'anonymous',
+          isActive: true,
+          OR: [
+            { shareLinkId: { in: expiredLinkIds } },
+            { anonymousSession: { is: { shareLinkId: { in: expiredLinkIds } } } },
+          ],
+        },
+        data: { isActive: false, isOnline: false, leftAt: now },
+      });
+      if (endedGuests.count > 0) {
+        logger.info(`🧹 ${endedGuests.count} invités de liens expirés terminés (#10437)`);
+      }
+
+      const expiredShareLinks = await prisma.conversationShareLink.deleteMany({
+        where: { id: { in: expiredLinkIds } },
+      });
+
+      if (expiredShareLinks.count > 0) {
+        logger.info(`🧹 ${expiredShareLinks.count} liens de partage expirés supprimés`);
+      }
     }
   } catch (error) {
     logger.error('❌ Erreur lors du nettoyage des données expirées:', error);

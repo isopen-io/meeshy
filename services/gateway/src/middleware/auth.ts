@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
+import { guestShareLinkHasExpired, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -585,6 +586,7 @@ export class AuthMiddleware {
           isOnline: true,
           lastActiveAt: true,
           nickname: true,
+          shareLinkId: true,
           anonymousSession: true,
         }
       });
@@ -600,6 +602,15 @@ export class AuthMiddleware {
       // seul fait qui explique la panne.
       if (participant.isActive === false) {
         throw new GuestAccessRevokedError();
+      }
+
+      // #10437 — la garde COMMUNE du lien échu : toute requête d'un invité
+      // traverse cette résolution, lecture comme écriture. La porte vivait
+      // route par route (fil, recherche, épinglés, fil de réponses) ; les
+      // réactions, le détail et l'envoi restaient ouverts. Lien illisible ⇒
+      // l'erreur propage, le `catch` ci-dessous refuse la session.
+      if (await guestShareLinkHasExpired(this.prisma, participant)) {
+        throw new ShareLinkExpiredError();
       }
 
       if (this.statusService) {
@@ -651,6 +662,7 @@ export class AuthMiddleware {
       // pas seulement le `catch` extérieur : une erreur qu'on vient de
       // qualifier ne survit pas à un gestionnaire qui réécrit sans regarder.
       if (error instanceof GuestAccessRevokedError) throw error;
+      if (error instanceof ShareLinkExpiredError) throw error;
       authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
@@ -812,6 +824,14 @@ export function createUnifiedAuthMiddleware(
           error: 'GUEST_ACCESS_REVOKED',
           message: "L'acces de cet invite a ete retire"
         });
+      }
+
+      // Même code que les portes de lecture par route (#7388) — les clients
+      // qui branchent déjà `SHARE_LINK_EXPIRED` n'ont rien à apprendre. Sur
+      // une route à authentification facultative aussi : retomber en visiteur
+      // tairait la cause, comme pour la révocation ci-dessus.
+      if (error instanceof ShareLinkExpiredError) {
+        return refuseExpiredShareLink(reply);
       }
 
       if (options.requireAuth && error instanceof ActivationBlockedError) {

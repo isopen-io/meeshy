@@ -153,6 +153,8 @@ function buildPrisma() {
   return {
     user: { findUnique: jest.fn<any>().mockResolvedValue(registeredUserRow()) },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(anonymousParticipantRow()) },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null }) },
     userSession: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),

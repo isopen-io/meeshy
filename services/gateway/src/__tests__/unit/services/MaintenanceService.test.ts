@@ -99,6 +99,7 @@ function makePrisma(overrides: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
     conversationShareLink: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     userSession: {
@@ -469,17 +470,19 @@ describe('cleanupExpiredData', () => {
     );
   });
 
-  it('deletes expired conversation share links', async () => {
+  it('deletes expired conversation share links — only those it found expired, after ending their guests (#10437)', async () => {
     const prisma = makePrisma();
+    (prisma.conversationShareLink.findMany as jest.Mock<any>).mockResolvedValue([{ id: 'link-expired' }]);
     const sut = new MaintenanceService(prisma as any, attachmentService as any);
 
     await sut.cleanupExpiredData();
 
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith(
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ expiresAt: expect.objectContaining({ lt: expect.any(Date) }) }),
       })
     );
+    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['link-expired'] } } });
   });
 
   it('does not throw on DB error during cleanup', async () => {

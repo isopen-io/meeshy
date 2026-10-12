@@ -104,6 +104,10 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
     participant: {
       findFirst: overrides.participantFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
     },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: {
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ expiresAt: null }),
+    },
   } as unknown as ConstructorParameters<typeof AuthMiddleware>[0];
 }
 
