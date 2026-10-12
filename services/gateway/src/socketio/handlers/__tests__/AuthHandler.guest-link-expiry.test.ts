@@ -258,6 +258,19 @@ describe('AuthHandler — le minuteur du lien d’un invité relit le lien et ne
     expect(jest.getTimerCount()).toBe(armedOnce);
   });
 
+  it('un lien ILLISIBLE à la relecture coupe le socket SANS dire « lien expiré » : un accroc de la base ne coûte pas sa session à l’invité', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+    world.linkReadFails = true;
+
+    await jest.advanceTimersByTimeAsync(5 * MINUTE + 1000);
+    expect(expiredError(socket)).toHaveLength(0);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+
   it('n’arme rien sur un socket parti pendant l’authentification', async () => {
     const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
     const { handler } = buildHandler(world);

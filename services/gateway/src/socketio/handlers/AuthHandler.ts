@@ -669,8 +669,12 @@ export class AuthHandler {
    * (l'hôte peut le prolonger ou l'écourter). Le minuteur ne coupe donc pas
    * sur la date lue à la connexion : il RELIT le lien quand il sonne — à
    * l'échéance connue, et au plus tard toutes les `GUEST_LINK_RECHECK_MS`
-   * (#10440) —, coupe s'il est échu (ou illisible — fail-closed), et réarme
-   * sinon. Couper suffit : la reconnexion repasse par la garde ci-dessus, et
+   * (#10440) —, coupe s'il est échu, et réarme sinon. Un lien ILLISIBLE
+   * (base indisponible) coupe aussi, mais SANS le code `SHARE_LINK_EXPIRED` :
+   * le web et iOS lisent ce code comme la fin définitive de la session
+   * d'invité (#10442) — un accroc de la base ne doit pas la leur coûter, et la
+   * reconnexion repasse par la garde de connexion, fermée tant que le lien
+   * reste illisible (audit adversarial de #10440). Couper suffit : la reconnexion repasse par la garde ci-dessus, et
    * le REST par `middleware/auth.ts`. La ligne n'est PAS désactivée — un lien
    * prolongé rend l'accès, comme aux portes de lecture.
    *
@@ -714,7 +718,11 @@ export class AuthHandler {
         return 'unreadable' as const;
       });
       if (disposed) return;
-      if (current === 'unreadable' || shareLinkHasExpired({ expiresAt: current }, new Date())) {
+      if (current === 'unreadable') {
+        socket.disconnect(true);
+        return;
+      }
+      if (shareLinkHasExpired({ expiresAt: current }, new Date())) {
         logger.info('guest share link expired while connected — disconnecting', { socketId: socket.id });
         this._refuseExpiredGuestLink(socket);
         return;
