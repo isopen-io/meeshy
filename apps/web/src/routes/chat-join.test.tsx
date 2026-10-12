@@ -156,6 +156,11 @@ function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJ
     origin: () => ORIGIN,
     now: () => NOW,
     handoff: () => tabHolding(null).storage,
+    /* Un compte NON membre (#10282) — l'adhésion a ses témoins dans `chat-join-member.test.tsx`. */
+    cachedCard: () => undefined,
+    loadCard: async () => ({ ok: true, data: null }),
+    leave: async () => ({ ok: true, data: null }),
+    left: () => undefined,
     ...overrides,
   };
   return { deps, recorded };

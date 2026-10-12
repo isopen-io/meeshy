@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
+import type { ConversationCard } from '@meeshy/shared/types/conversation-card';
+
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { endRevokedSession } from '@/lib/api/account-caches';
 import { publicWebOrigin } from '@/lib/links/public-origin';
+import { cardWithMembership, conversationCardQueryKey, conversationCardsFilter, leaveConversation, loadConversationCard } from '@/lib/api/conversation-card';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
@@ -36,6 +39,7 @@ import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
 import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
 import { focusGuestOf } from '@/lib/view/guest-focus';
+import { MemberActions, MembershipPending, useLinkMembership, type MembershipDeps } from '@/routes/chat-join-member';
 import {
   GroupCard,
   INK,
@@ -132,7 +136,9 @@ export type ChatJoinDeps = {
   /** L'onglet où la landing pose son jeton de passage (#10094) — `sessionStorage`,
    * dont l'accès peut LEVER (navigation privée) : la jonction le lit sous garde. */
   readonly handoff: () => HandoffStorage;
-};
+} & MembershipDeps;
+
+const shareCardKey = (link: string) => conversationCardQueryKey({ kind: 'share-link', identifier: link });
 
 const DEFAULT_DEPS: ChatJoinDeps = {
   load: (link, signal) => loadLinkInvitation({ ...apiDeps, link, signal }),
@@ -161,6 +167,22 @@ const DEFAULT_DEPS: ChatJoinDeps = {
   origin: () => publicWebOrigin(window.location.origin),
   now: () => new Date(),
   handoff: () => window.sessionStorage,
+  /* La carte du lien, celle des bulles (#10282) : même clé de cache, donc une
+     carte déjà vue dans un fil peint les gestes d'un membre sans attendre. */
+  cachedCard: (link) => appQueryClient.getQueryData<ConversationCard | null>(shareCardKey(link)),
+  loadCard: async (link, signal) => {
+    const result = await loadConversationCard({ ...apiDeps, target: { kind: 'share-link', identifier: link }, signal });
+    if (result.ok) appQueryClient.setQueryData(shareCardKey(link), result.data);
+    return result;
+  },
+  leave: (conversationId) => leaveConversation(apiDeps, conversationId),
+  left: (link, conversationId) => {
+    appQueryClient.setQueryData<ConversationCard | null>(shareCardKey(link), (card) =>
+      card === undefined || card === null ? card : cardWithMembership(card, { isMember: false, conversationId: null }),
+    );
+    void appQueryClient.invalidateQueries(conversationCardsFilter(conversationId));
+    void appQueryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+  },
 };
 
 type LoadState =
@@ -301,6 +323,9 @@ export function ChatJoin({
   }, [load, language]);
 
   const isAccount = session.status === 'authenticated';
+  /* L'ADHÉSION (#10282) — un membre ouvre ou quitte, il ne rejoint pas. */
+  const member = useLinkMembership({ link, deps, active: isAccount && !anonymousRequested, online });
+  const { membership } = member;
 
   /**
    * L'ENTRÉE DEPUIS LA LANDING (#10003, D-186) — le nom et la langue y sont
@@ -466,8 +491,12 @@ export function ChatJoin({
   const open = join.kind !== 'joined' && !joinRefusedForGood;
   const next = href('chatJoin', { link });
   const primary: ReactNode =
-    choices.account && open ? (
-      <JoinAction language={language} joining={join.kind === 'joining'} online={online} onJoin={() => void handleJoin()} />
+    membership.kind === 'member' ? (
+      <MemberActions language={language} title={title} conversationId={membership.conversationId} failed={member.leaveFailed} onLeave={() => void member.leave()} />
+    ) : membership.kind === 'checking' ? (
+      <MembershipPending />
+    ) : choices.account && open ? (
+      <JoinAction language={language} joining={join.kind === 'joining'} held={member.leaving} online={online} onJoin={() => void handleJoin()} />
     ) : choices.guest && open ? (
       <GuestSubmit language={language} busy={join.kind === 'joining'} online={online} />
     ) : choices.accountRequired ? (
@@ -501,33 +530,35 @@ export function ChatJoin({
               <InvitationFigures language={language} invitation={invitation} />
               <RightsCard language={language} invitation={invitation} now={deps.now()} />
             </div>
-            <JoinPanel language={language} title={title}>
-              {join.kind === 'refused' ? <RefusalBanner language={language} refusal={join.refusal} /> : null}
+            {membership.kind === 'guest' ? (
+              <JoinPanel language={language} title={title}>
+                {join.kind === 'refused' ? <RefusalBanner language={language} refusal={join.refusal} /> : null}
 
-              {join.kind === 'joined' ? (
-                <p role="status" className="text-center text-body font-semibold" style={{ color: INK }}>
-                  {translateInvite(language, 'invite.join.joined')}
-                </p>
-              ) : null}
+                {join.kind === 'joined' ? (
+                  <p role="status" className="text-center text-body font-semibold" style={{ color: INK }}>
+                    {translateInvite(language, 'invite.join.joined')}
+                  </p>
+                ) : null}
 
-              {choices.guest && open ? (
-                <GuestForm
-                  language={language}
-                  terms={invitation.guest}
-                  draft={draft}
-                  busy={join.kind === 'joining'}
-                  online={online}
-                  refusedField={input?.field ?? null}
-                  refusalMessage={input?.message ?? null}
-                  focused={focused}
-                  onEdit={editDraft}
-                  onFocus={setFocused}
-                  onSubmit={() => void handleGuestJoin()}
-                />
-              ) : null}
-            </JoinPanel>
+                {choices.guest && open ? (
+                  <GuestForm
+                    language={language}
+                    terms={invitation.guest}
+                    draft={draft}
+                    busy={join.kind === 'joining'}
+                    online={online}
+                    refusedField={input?.field ?? null}
+                    refusalMessage={input?.message ?? null}
+                    focused={focused}
+                    onEdit={editDraft}
+                    onFocus={setFocused}
+                    onSubmit={() => void handleGuestJoin()}
+                  />
+                ) : null}
+              </JoinPanel>
+            ) : null}
 
-            {(choices.anonymousOffer || choices.accountOffer) && open ? (
+            {(choices.anonymousOffer || choices.accountOffer) && open && membership.kind === 'guest' ? (
               <div data-invite-identity-switch className="md:order-2 md:col-start-2">
                 <IdentitySwitch language={language} link={link} toAnonymous={choices.anonymousOffer} />
               </div>
@@ -595,15 +626,18 @@ function PrimaryBar({ children }: { readonly children: ReactNode }) {
 function JoinAction({
   language,
   joining,
+  held,
   online,
   onJoin,
 }: {
   readonly language: InterfaceLanguage;
   readonly joining: boolean;
+  /** Un départ en cours (#10282) : Rejoindre est revenu, inerte jusqu'à la réponse. */
+  readonly held: boolean;
   readonly online: boolean;
   readonly onJoin: () => void;
 }) {
-  const disabled = joining || !online;
+  const disabled = joining || held || !online;
   return (
     <div className="grid w-full gap-2">
       <button
