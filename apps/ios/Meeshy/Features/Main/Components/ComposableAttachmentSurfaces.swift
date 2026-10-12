@@ -109,6 +109,15 @@ nonisolated extension ComposableAttachment {
         guard let source = SeedSource.post(post, mediaId: mediaId) else { return nil }
         return seedPlan(for: source)
     }
+
+    /// **Ce qu'une story RECOMPOSÉE sème.** La scène entière part par la
+    /// recomposition : le plan ne porte aucun média, seulement la description,
+    /// normalisée comme ailleurs. Une story n'a aucune colonne de protection,
+    /// et le plan existe même sans texte — c'est la scène qui fait la graine.
+    static func seedPlan(recomposingStoryWith description: String?) -> SeedPlan {
+        let texte = (description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return SeedPlan(media: nil, description: texte.isEmpty ? nil : texte)
+    }
 }
 
 nonisolated extension ComposableAttachment.SeedSource {
