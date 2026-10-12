@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
 import MeeshyUI
@@ -418,5 +419,41 @@ final class ReelResumeTests: XCTestCase {
             distances: distances)
 
         XCTAssertEqual(victim, key(reels[5]))
+    }
+}
+
+/// **Sous les réels, rien ne travaille (#10354).** La liste des conversations,
+/// montée sous la couche des réels, se réévaluait à chaque rendu de la racine
+/// (`MeeshyAvatar.body`, `StoryCoverURLMemo.coverURL` au profil Release).
+@MainActor
+final class ReelsCoverTests: XCTestCase {
+
+    func test_cover_onlyOnceTheRevealHasCompleted() {
+        XCTAssertTrue(ReelsCover.isCovered(hasLaunch: true, revealCompleted: true))
+        XCTAssertFalse(ReelsCover.isCovered(hasLaunch: true, revealCompleted: false),
+                       "pendant le disque d'ouverture et dès la fermeture, la liste se voit")
+        XCTAssertFalse(ReelsCover.isCovered(hasLaunch: false, revealCompleted: true))
+    }
+
+    func test_freeze_twoCoveredValuesAreEqual_soTheBodyIsNotReevaluated() {
+        XCTAssertEqual(CoveredFreeze(isCovered: true) { Text("a") },
+                       CoveredFreeze(isCovered: true) { Text("b") })
+    }
+
+    func test_freeze_anyUncoveredValue_reevaluates() {
+        XCTAssertNotEqual(CoveredFreeze(isCovered: false) { Text("a") },
+                          CoveredFreeze(isCovered: false) { Text("a") },
+                          "découverte, la liste suit chaque rendu de la racine, comme avant")
+        XCTAssertNotEqual(CoveredFreeze(isCovered: true) { Text("a") },
+                          CoveredFreeze(isCovered: false) { Text("a") },
+                          "au découvrement, la liste se remet à jour")
+    }
+
+    func test_root_freezesTheListAndHidesWhatTheReelsCover() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+        XCTAssertTrue(source.contains("CoveredFreeze(isCovered: reelsCoverScreen) { ConversationListView("))
+        XCTAssertTrue(source.contains(".equatable()"))
+        XCTAssertEqual(source.components(separatedBy: ".opacity(reelsCoverScreen ? 0 : 1)").count - 1, 2,
+                       "la pile de navigation et le fil ne se composent plus sous les réels")
     }
 }

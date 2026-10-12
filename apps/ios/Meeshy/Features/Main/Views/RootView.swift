@@ -166,7 +166,7 @@ struct RootView: View {
 
             // 2. Main content -- NavigationStack
             NavigationStack(path: $router.path) {
-                ConversationListView(
+                CoveredFreeze(isCovered: reelsCoverScreen) { ConversationListView(
                     isScrollingDown: $isScrollingDown,
                     feedIsVisible: $showFeed,
                     onSelect: { conversation in
@@ -179,7 +179,8 @@ struct RootView: View {
                         storyViewerCoordinator.present(StoryViewerRequest(id: userId, startAtFirstUnviewed: true))
                     },
                     onNewConversation: { showNewConversation = true }
-                )
+                ) }
+                .equatable()
                 .navigationBarHidden(true)
                 // Les 27 écrans vivent dans `RootRouteDestination` (#5837) : le
                 // `switch` entrait sinon, avec la chaîne de chaque cas, dans le
@@ -195,10 +196,12 @@ struct RootView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.clear)
+            .opacity(reelsCoverScreen ? 0 : 1)
 
             // 3. Feed overlay
             if showFeed {
                 ThemedFeedOverlay()
+                    .opacity(reelsCoverScreen ? 0 : 1)
                     .transition(
                         .asymmetric(
                             insertion: .move(edge: .bottom)
@@ -1331,6 +1334,10 @@ struct RootView: View {
         }
     }
 
+    private var reelsCoverScreen: Bool {
+        ReelsCover.isCovered(hasLaunch: reelsPresenter.launch != nil, revealCompleted: reelsRevealCompleted)
+    }
+
     /// Closes the reels overlay with the reverse wave: pause the reel, re-apply
     /// the mask, shrink the disc back toward the feed button (1→0), THEN dismiss.
     /// Reduce Motion cross-fades.
@@ -1586,26 +1593,6 @@ extension View {
                     .delay(showMenu ? delay : 0),
                 value: showMenu
             )
-    }
-}
-
-// MARK: - Feed Button Anchor (pure mapping)
-
-/// Le centre du bouton Flux, d'où naît le disque des réels : lu dans
-/// `FloatingButtonGeometry.layout`, la source que le conteneur des boutons
-/// emploie pour le poser (#9679) — le disque naît au centre EXACT du bouton.
-enum FeedButtonAnchor {
-    static func screenPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> CGPoint {
-        geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
-    }
-
-    /// Le centre du bouton (global) en fraction du cadre GLOBAL `frame` de la
-    /// vue qui révèle les réels — qui peut, comme le conteneur des boutons, ne
-    /// pas commencer en haut de l'écran (bannière du joueur).
-    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry, in frame: CGRect) -> UnitPoint {
-        guard frame.width > 0, frame.height > 0 else { return .topLeading }
-        let p = screenPoint(fromRaw: raw, geometry: geometry)
-        return UnitPoint(x: (p.x - frame.minX) / frame.width, y: (p.y - frame.minY) / frame.height)
     }
 }
 
