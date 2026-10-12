@@ -38,6 +38,7 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
+import { heldAgainstAuthor } from '../../services/admin/publication-moderation';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -632,6 +633,12 @@ export function registerCoreRoutes(
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
         return;
+      }
+
+      // #10315 — une publication mise hors ligne par la modération ne se
+      // rouvre pas par une édition de son auteur.
+      if (await heldAgainstAuthor(prisma, { postId, userId: authContext.registeredUser.id, requestedVisibility: parsed.data.visibility })) {
+        return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       }
 
       // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,

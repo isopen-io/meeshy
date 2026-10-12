@@ -4,11 +4,12 @@
  *
  * @jest-environment node
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import {
   nextModerationState,
   withdrawsAudience,
   publicationStateOf,
+  heldAgainstAuthor,
   type PostModerationState,
 } from '../publication-moderation';
 
@@ -123,5 +124,37 @@ describe('publicationStateOf', () => {
 
   it('dit « en ligne » sinon', () => {
     expect(publicationStateOf(row({ visibility: 'FRIENDS', expiresAt: new Date('2026-10-13T00:00:00Z') }), NOW)).toBe('online');
+  });
+});
+
+describe("heldAgainstAuthor — l'auteur ne rouvre pas l'audience d'une publication mise hors ligne", () => {
+  const POST = '507f1f77bcf86cd799439022';
+  const AUTHOR = '507f1f77bcf86cd799439011';
+  const OTHER = '507f1f77bcf86cd799439099';
+  const prismaWith = (row: { authorId: string; moderationHiddenAt: Date | null } | null) => {
+    const findFirst = jest.fn<any>().mockResolvedValue(row);
+    return { prisma: { post: { findFirst } }, findFirst };
+  };
+
+  it("retient l'auteur qui rouvre une publication hors ligne", async () => {
+    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
+    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PUBLIC' })).toBe(true);
+  });
+
+  it("laisse passer une publication en ligne", async () => {
+    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: null });
+    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PUBLIC' })).toBe(false);
+  });
+
+  it("ne dit rien à un autre que l'auteur — aucun oracle sur l'état de modération", async () => {
+    const { prisma } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
+    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: OTHER, requestedVisibility: 'PUBLIC' })).toBe(false);
+  });
+
+  it("ne lit rien quand l'audience ne change pas, ou reste privée", async () => {
+    const { prisma, findFirst } = prismaWith({ authorId: AUTHOR, moderationHiddenAt: EARLIER });
+    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: undefined })).toBe(false);
+    expect(await heldAgainstAuthor(prisma, { postId: POST, userId: AUTHOR, requestedVisibility: 'PRIVATE' })).toBe(false);
+    expect(findFirst).not.toHaveBeenCalled();
   });
 });

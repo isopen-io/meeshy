@@ -1,4 +1,6 @@
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { NOT_DELETED } from '../posts/softDelete';
 
 /**
  * **LA LOI DES TROIS GESTES DE MODÉRATION D'UNE PUBLICATION** (#10315).
@@ -88,4 +90,35 @@ export function publicationStateOf(
   if (row.expiresAt !== null && row.expiresAt.getTime() <= now.getTime()) return 'expired';
   if (row.visibility === PRIVATE) return 'private';
   return 'online';
+}
+
+export type ModerationHoldPrisma = {
+  readonly post: {
+    readonly findFirst: (args: {
+      where: { id: string; deletedAt: typeof NOT_DELETED };
+      select: { authorId: true; moderationHiddenAt: true };
+    }) => Promise<{ authorId: string; moderationHiddenAt: Date | null } | null>;
+  };
+};
+
+/**
+ * L'AUTEUR demande-t-il de rouvrir l'audience d'une publication que la
+ * modération a mise hors ligne ? Alors `PUT /posts/:postId` refuse : sans cette
+ * garde, « Mettre hors ligne » ne tiendrait que jusqu'à la prochaine édition.
+ *
+ * Elle ne répond OUI qu'à l'auteur : à tout autre, le refus ordinaire (« pas
+ * l'auteur ») tombe plus loin, et l'état de modération ne fuit pas par la
+ * différence entre deux 403. Rester ou passer en PRIVATE n'est jamais retenu.
+ */
+export async function heldAgainstAuthor(
+  prisma: ModerationHoldPrisma,
+  params: { readonly postId: string; readonly userId: string; readonly requestedVisibility: PostVisibility | undefined },
+): Promise<boolean> {
+  if (params.requestedVisibility === undefined || params.requestedVisibility === PRIVATE) return false;
+  if (!isValidObjectId(params.postId)) return false;
+  const row = await prisma.post.findFirst({
+    where: { id: params.postId, deletedAt: NOT_DELETED },
+    select: { authorId: true, moderationHiddenAt: true },
+  });
+  return row !== null && row.authorId === params.userId && row.moderationHiddenAt !== null;
 }
