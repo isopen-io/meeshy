@@ -1,0 +1,278 @@
+{
+  "$comment": "La loi d'enregistrement d'une prise (#10284), rejouée par vitest (packages/shared/utils/capture/capture-save.test.ts) et par Swift (CaptureSaveLawVectorTests). Sur divergence, le TypeScript a raison : le miroir bouge, jamais le vecteur. `visible` donne l'état du bouton Enregistrer de la retouche juste après la prise, puis après chaque étape.",
+  "destinations": [
+    {
+      "zone": "frame",
+      "expected": {
+        "gallery": true,
+        "then": "edit",
+        "keptInApp": false
+      }
+    },
+    {
+      "zone": "outside",
+      "expected": {
+        "gallery": false,
+        "then": "edit",
+        "keptInApp": true
+      }
+    }
+  ],
+  "sequences": [
+    {
+      "name": "une prise par la case de cadre part en galerie : Enregistrer est masqué en retouche",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [],
+      "visible": [
+        false
+      ]
+    },
+    {
+      "name": "une prise par la scène reste dans l'app : Enregistrer est visible en retouche",
+      "origin": {
+        "zone": "outside",
+        "frameId": "or-royal"
+      },
+      "steps": [],
+      "visible": [
+        true
+      ]
+    },
+    {
+      "name": "le déclencheur rond, sans aucun cadre choisi, est hors zone cadre : Enregistrer visible",
+      "origin": {
+        "zone": "outside",
+        "frameId": null
+      },
+      "steps": [],
+      "visible": [
+        true
+      ]
+    },
+    {
+      "name": "changer de cadre fait réapparaître Enregistrer, réenregistrer le masque",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "save"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "revenir au cadre déjà enregistré masque de nouveau Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "retirer le cadre rend Enregistrer ; revenir à un cadre déjà enregistré le masque",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": null
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "name": "une prise hors cadre enregistrée sans cadre : poser un cadre rend Enregistrer",
+      "origin": {
+        "zone": "outside",
+        "frameId": null
+      },
+      "steps": [
+        {
+          "op": "save"
+        },
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": null
+        }
+      ],
+      "visible": [
+        true,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "une écriture en galerie refusée (permission, disque) rend Enregistrer",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal"
+        },
+        {
+          "op": "save"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "un échec d'écriture garde la trace d'aucun enregistrement : changer puis revenir laisse Enregistrer visible",
+      "origin": {
+        "zone": "outside",
+        "frameId": "argent"
+      },
+      "steps": [
+        {
+          "op": "save"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        },
+        {
+          "op": "frame",
+          "frameId": "argent"
+        }
+      ],
+      "visible": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "name": "re-choisir le cadre courant ne change rien",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        false
+      ]
+    },
+    {
+      "name": "un échec sur un second cadre n'efface pas l'enregistrement du premier",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "save"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "argent"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        false,
+        true,
+        false
+      ]
+    },
+    {
+      "name": "l'échec d'une écriture lancée avant un changement de cadre vise le cadre de l'écriture, pas le cadre courant",
+      "origin": {
+        "zone": "frame",
+        "frameId": "or-royal"
+      },
+      "steps": [
+        {
+          "op": "frame",
+          "frameId": "argent"
+        },
+        {
+          "op": "saveFailed",
+          "frameId": "or-royal"
+        },
+        {
+          "op": "frame",
+          "frameId": "or-royal"
+        }
+      ],
+      "visible": [
+        false,
+        true,
+        true,
+        true
+      ]
+    }
+  ]
+}
