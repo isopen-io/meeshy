@@ -101,3 +101,53 @@ final class ReelSwitchWorkTests: XCTestCase {
                        "perdre l'élection désengage tout de suite, même sur la page encore posée")
     }
 }
+
+/// Le `play()` du geste ne part que sur un lecteur attaché et prêt (#10354).
+final class ReelSwitchWorkAttachedPlayerTests: XCTestCase {
+
+    func test_playsAttached_whenEverythingIsReady() {
+        XCTAssertTrue(ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: true, revealCompleted: true, isCallActive: false, hasAttachedPlayer: true))
+    }
+
+    func test_keepsThePoster_withoutAttachedPlayer() {
+        XCTAssertFalse(ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: true, revealCompleted: true, isCallActive: false, hasAttachedPlayer: false))
+    }
+
+    func test_neverPlays_duringACall() {
+        XCTAssertFalse(ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: true, revealCompleted: true, isCallActive: true, hasAttachedPlayer: true))
+    }
+
+    func test_waitsForTheReveal() {
+        XCTAssertFalse(ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: true, revealCompleted: false, isCallActive: false, hasAttachedPlayer: true))
+    }
+
+    func test_waitsForTheFile() {
+        XCTAssertFalse(ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: false, revealCompleted: true, isCallActive: false, hasAttachedPlayer: true))
+    }
+}
+
+/// Le contrôleur PiP n'est créé qu'après la pose, et seulement s'il sert encore.
+final class SharedAVPlayerManagerDeferredPipTests: XCTestCase {
+
+    func test_createsTheDeferredController_whenTheLayerStillShowsTheEngine() {
+        XCTAssertTrue(SharedAVPlayerManager.mayCreateDeferredPip(layerShowsEnginePlayer: true, alreadyServed: false))
+    }
+
+    func test_dropsTheRequest_whenTheLayerNoLongerShowsTheEngine() {
+        XCTAssertFalse(SharedAVPlayerManager.mayCreateDeferredPip(layerShowsEnginePlayer: false, alreadyServed: false),
+                       "la page a été quittée avant l'échéance : aucun contrôleur pour elle")
+    }
+
+    func test_createsNoSecondController_forTheSameLayer() {
+        XCTAssertFalse(SharedAVPlayerManager.mayCreateDeferredPip(layerShowsEnginePlayer: true, alreadyServed: true))
+    }
+
+    func test_deferralLeavesTheScrollFrames() {
+        XCTAssertGreaterThanOrEqual(SharedAVPlayerManager.deferredPipDelay, .milliseconds(100))
+    }
+}
