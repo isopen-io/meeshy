@@ -72,6 +72,7 @@ export function registerImpressionRoutes(
     },
     onRequest: depreciee(socialEventsDeprecation()),
     preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('impressionUnit') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
