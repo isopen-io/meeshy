@@ -313,6 +313,7 @@ lire_cibles() {
     CIBLE[$svc]="$digest"
     ORDRE_DEMANDE="$ORDRE_DEMANDE $svc"
   done
+  verifier_couple "$ORDRE_DEMANDE "
 }
 
 lire_services() {
@@ -321,6 +322,19 @@ lire_services() {
   for svc in "$@"; do
     est_promouvable "$svc" || refuser_service "$svc"
   done
+  verifier_couple " $* "
+}
+
+# #10290 — la passerelle et l'agent partagent un protocole qui évolue ensemble
+# (secret interne #10242, canal ZMQ signé #10288, routes de saison #10246) :
+# l'un ne bascule JAMAIS sans l'autre, ni en promotion ni en retour arrière.
+# Un agent inchangé se demande quand même : le plan le marque
+# « deja-en-production » et la bascule le saute.
+verifier_couple() {
+  local demandes="$1" g=0 a=0
+  case "$demandes" in *" gateway "*) g=1 ;; esac
+  case "$demandes" in *" agent "*) a=1 ;; esac
+  [ "$g" -eq "$a" ] || refus "passerelle et l'agent se promeuvent ensemble (#10290) : demander gateway ET agent dans la même commande"
 }
 
 # Imprime une ligne PLAN par service, ou refuse. Ne modifie rien.
@@ -454,11 +468,13 @@ init() {
 # ---------------------------------------------------------------------------
 self_test() {
   local echecs=0 rc interdit
-  essai() { ( "$0" __valider "$@" ) >/dev/null 2>&1; }
+  # Même interpréteur que l'appelant (bash ≥ 4 : tableaux associatifs), pas celui du shebang.
+  essai() { ( "${BASH:-bash}" "$0" __valider "$@" ) >/dev/null 2>&1; }
 
   for valide in \
-    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64)) agent=sha256:$(printf 'c%.0s' $(seq 64))" \
     "promote webapp=sha256:$(printf 'b%.0s' $(seq 64))" \
+    "rollback gateway agent" \
     "rollback webapp"; do
     # shellcheck disable=SC2086
     essai $valide; rc=$?
@@ -468,6 +484,8 @@ self_test() {
   for interdit in \
     "promote frontend=sha256:$(printf 'a%.0s' $(seq 64))" \
     "promote database=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "promote gateway=sha256:$(printf 'a%.0s' $(seq 64))" \
+    "rollback agent" \
     "promote gateway=sha256:abc" \
     "promote gateway=sha256:$(printf 'A%.0s' $(seq 64))" \
     "promote gateway=latest" \
