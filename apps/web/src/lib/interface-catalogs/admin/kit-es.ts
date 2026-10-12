@@ -8,7 +8,8 @@ const f = {
   'admin.group.content': 'Contenidos',
   'admin.group.moderation': 'Moderación',
   'admin.group.growth': 'Crecimiento',
-  'admin.group.platform': 'Plataforma',
+  'admin.group.scales': 'Baremos',
+  'admin.group.operations': 'Operaciones',
 
   'admin.kit.breadcrumb': 'Ruta de navegación',
   'admin.kit.retry': 'Reintentar',
