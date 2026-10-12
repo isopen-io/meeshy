@@ -7,7 +7,8 @@ const MODEL_RATES: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-20250514': { input: 0.80, output: 4.00 },
 };
 
-const FALLBACK_RATE = { input: 3.00, output: 15.00 };
+// Modèle inconnu : tarif du plus cher des modèles courants (Claude Opus), jamais sous-estimé (#10287).
+const FALLBACK_RATE = { input: 15.00, output: 75.00 };
 
 function findRate(model: string): { input: number; output: number } {
   const exact = MODEL_RATES[model];

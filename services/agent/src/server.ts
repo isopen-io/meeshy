@@ -6,7 +6,7 @@ import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
 import { describeLlmStartup } from './llm/llm-startup-log';
 import { LlmRouter } from './llm/llm-router';
-import { BudgetedLlmProvider, resolveDailyBudgetUsd, resolveMaxConcurrentCalls } from './llm/budgeted-llm';
+import { LlmBudgetGate, resolveDailyBudgetUsd, resolveMaxConcurrentCalls } from './llm/budgeted-llm';
 import type { LlmProvider } from './llm/types';
 import { buildAgentGraph, type TracerRef } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
@@ -40,6 +40,19 @@ const server = Fastify({ logger: true });
 installInternalGuard(server, { internalToken: env.AGENT_INTERNAL_TOKEN });
 const prisma = new PrismaClient();
 const redis = new Redis(env.REDIS_URL);
+
+// #10287 — la porte du budget : posée sous la relance de CHAQUE fournisseur de base
+// (`createLlmProvider(…, budgetGate.wrap)`), elle borne toute sortie LLM de l'agent —
+// graphe, réactif, lecture, saison — au budget du jour en dollars et à maxConcurrentCalls,
+// lus dans AgentGlobalConfig (cache Redis). Configuration illisible ⇒ refus (fermé).
+const persistence = new MongoPersistence(prisma);
+const configCache = new ConfigCache(redis, persistence);
+const budgetManager = new DailyBudgetManager(redis);
+const globalConfigForBudget = () => configCache.getGlobalConfig();
+const budgetGate = new LlmBudgetGate(budgetManager, {
+  budgetUsd: async () => resolveDailyBudgetUsd(await globalConfigForBudget()),
+  maxConcurrentCalls: async () => resolveMaxConcurrentCalls(await globalConfigForBudget().catch(() => null)),
+});
 
 server.get('/health', { logLevel: 'warn' }, async () => ({
   status: 'ok',
@@ -83,7 +96,7 @@ async function buildLlmFromConfig(): Promise<LlmProvider> {
     baseUrl: llmConfig?.baseUrl ?? undefined,
     temperature: llmConfig?.temperature ?? undefined,
     maxTokens: llmConfig?.maxTokens ?? undefined,
-  });
+  }, budgetGate.wrap);
 
   const fallbackProviderName = (llmConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
     ?? (globalConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
@@ -105,7 +118,7 @@ async function buildLlmFromConfig(): Promise<LlmProvider> {
 
   if (fallbackKey && fallbackArmed) {
     const { withFallback } = await import('./llm/llm-fallback');
-    const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel });
+    const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel }, budgetGate.wrap);
     return withFallback(primary, fallback);
   }
   return primary;
@@ -117,17 +130,7 @@ async function start() {
   // restart. The router itself is registered as a listener on the config
   // cache global-invalidation hook below.
   const llmRouter = new LlmRouter(await buildLlmFromConfig());
-  // #10287 — toute sortie LLM (graphe, réactif, lecture, saison) est bornée par le budget du
-  // jour en dollars et par maxConcurrentCalls, lus dans AgentGlobalConfig (cache Redis).
-  const persistence = new MongoPersistence(prisma);
-  const configCache = new ConfigCache(redis, persistence);
-  const budgetManager = new DailyBudgetManager(redis);
-  const globalConfigForBudget = () => configCache.getGlobalConfig();
-  const llm = new BudgetedLlmProvider(llmRouter, budgetManager, {
-    // Configuration illisible ⇒ l'erreur remonte et l'appel est refusé (fermé).
-    budgetUsd: async () => resolveDailyBudgetUsd(await globalConfigForBudget()),
-    maxConcurrentCalls: async () => resolveMaxConcurrentCalls(await globalConfigForBudget().catch(() => null)),
-  });
+  const llm = llmRouter;
 
   // Topic catalog : seed initial (idempotent) + instanciation services partagés
   // AVANT le build du graph pour que createStrategistNode reçoive les deps.
