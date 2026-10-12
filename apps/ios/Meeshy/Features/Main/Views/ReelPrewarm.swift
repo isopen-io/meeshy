@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -148,6 +149,49 @@ enum ReelPrewarm {
     }
 }
 
+// MARK: - Le poster arrive net (#10354)
+
+/// **L'image que la page d'un réel montre avant sa première image vidéo** —
+/// préchargée, décodée et réduite à la taille de l'écran HORS du fil
+/// principal, puis posée dans le cache mémoire que la page lit en synchrone.
+///
+/// Constat filmé sur l'iPhone 16 Pro Max : le réel entrant n'était qu'un fond
+/// sombre avec une petite vignette. Aucun poster n'était préchargé, et l'init
+/// du poster lisait et réduisait le fichier SUR le fil principal.
+///
+/// La clé est celle que la page lit, et nulle autre :
+/// - réel vidéo : `ReelPoster(url: media.thumbnailUrl ?? media.url)` — seule la
+///   vignette se précharge (l'adresse vidéo n'est pas une image) ;
+/// - réel image : `ReelImageCell` (`fullUrl: media.url ?? media.thumbnailUrl`).
+///
+/// Le décodage passe par `DiskCacheStore.image(for:maxPixelSize:)` — le même
+/// décodeur que tout le dépôt (`CGImageSourceCreateThumbnailAtIndex`, décodage
+/// immédiat sur l'acteur du cache), sans jumeau. Au-dessus de 1 200 px, la
+/// variante occupe le slot plein format, celui que `WarmImageProbe.residentImage`
+/// lit à l'init de la page.
+nonisolated enum ReelPosterPrefetch {
+
+    /// L'adresse RÉSOLUE de l'image que la page de `reel` affiche d'abord,
+    /// `nil` quand il n'y en a pas (scène, son, vidéo sans vignette).
+    static func posterURL(for reel: FeedPost) -> String? {
+        guard let media = reel.primaryReelDisplayMedia else { return nil }
+        let raw: String?
+        switch media.type {
+        case .video: raw = media.thumbnailUrl
+        case .image: raw = media.url ?? media.thumbnailUrl
+        default: raw = nil
+        }
+        guard let raw, !raw.isEmpty else { return nil }
+        return MeeshyConfig.resolveMediaURL(raw)?.absoluteString ?? raw
+    }
+
+    /// La taille de décodage : le plus grand côté de l'écran en pixels, borné
+    /// par le plafond de la lecture synchrone du cache.
+    static func pixelSize(screenPoints: CGSize, scale: CGFloat) -> CGFloat {
+        min(max(screenPoints.width, screenPoints.height) * scale, DiskCacheStore.warmedPixelCap)
+    }
+}
+
 // MARK: - Le lecteur plein écran : la fenêtre de préchargement (#9702)
 
 /// **Prépare, autour du réel affiché, la fenêtre que l'USAGE réclame** —
@@ -230,6 +274,15 @@ final class ReelPagerPreloader {
             thermalState: ProcessInfo.processInfo.thermalState
         ) else { return }
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
+        // Les posters partent EN MÊME TEMPS que les fichiers : quelques
+        // centaines de Ko, et c'est ce que la page montre la première.
+        async let posters: Void = prefetchPosters(reels: reels, indices: [activeIndex] + plan.map(\.index))
+        await prepareFiles(reels: reels, plan: plan)
+        await posters
+    }
+
+    /// Fichiers, lecteurs préparés et sons de la fenêtre, palier par palier.
+    private func prepareFiles(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
         let near = plan.filter { $0.tier == .decode || $0.tier == .mount }
         let nearKeys: [(step: ReelPreloadWindow.Step, key: String)] = near.compactMap { step in
             ReelPrewarm.prefetchFile(of: reels[step.index], center: center).map { (step: step, key: $0) }
@@ -248,6 +301,21 @@ final class ReelPagerPreloader {
             guard !Task.isCancelled else { return }
             guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], center: center) else { continue }
             await ReelPrewarm.awaitFile(key: key, center: center)
+        }
+    }
+
+    /// **Les posters de la fenêtre, le plus proche d'abord** (#10354) : décodés
+    /// à la taille de l'écran sur l'acteur du cache, puis résidents en mémoire
+    /// sous la clé que la page lit à son init. Un poster déjà en mémoire ne
+    /// repart pas.
+    private func prefetchPosters(reels: [FeedPost], indices: [Int]) async {
+        let screen = UIScreen.main
+        let pixels = ReelPosterPrefetch.pixelSize(screenPoints: screen.bounds.size, scale: screen.scale)
+        for index in indices where reels.indices.contains(index) {
+            guard !Task.isCancelled else { return }
+            guard let url = ReelPosterPrefetch.posterURL(for: reels[index]),
+                  WarmImageProbe.residentImage(for: url) == nil else { continue }
+            _ = await CacheCoordinator.shared.images.image(for: url, maxPixelSize: pixels)
         }
     }
 

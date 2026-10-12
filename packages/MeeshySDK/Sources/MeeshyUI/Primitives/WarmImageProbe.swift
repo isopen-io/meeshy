@@ -79,6 +79,23 @@ public enum WarmImageProbe {
         )
     }
 
+    /// **L'image déjà en MÉMOIRE, sans jamais toucher le disque** (#10354).
+    ///
+    /// L'`init` d'une image ne lit plus le disque : `warmedImage` y décodait le
+    /// fichier sur le fil principal, à chaque page de réel que le pager
+    /// montait pendant le geste. L'init sert la mémoire seule ; le disque est
+    /// lu par le chargeur asynchrone (`.task`) déjà branché, hors du fil
+    /// principal — et un poster préchargé (`ReelPosterPrefetch`) est en mémoire
+    /// avant que sa page ne monte.
+    public static func residentImage(for resolved: String) -> UIImage? {
+        residentImage(for: resolved, resident: { DiskCacheStore.cachedImage(for: $0) })
+    }
+
+    /// La forme testable de `residentImage(for:)`.
+    static func residentImage(for resolved: String, resident: (String) -> UIImage?) -> UIImage? {
+        resident(resolved)
+    }
+
     /// La forme TESTABLE : la mémoire résidente et la sonde DISQUE sont
     /// injectées. Sans elle, un témoin ne pourrait affirmer que « le disque
     /// n'est sondé qu'une fois » — il ne verrait que la valeur rendue, qui est
