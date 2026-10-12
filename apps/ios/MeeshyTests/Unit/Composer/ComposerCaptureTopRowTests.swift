@@ -59,6 +59,37 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertEqual(ComposerCaptureTopRow.segmentCount(pending: 2, recording: false), 2)
     }
 
+    // MARK: - (#10310) « 3 – » à l'écran, « 3 segments » à la voix
+
+    func test_segmentBadge_threeSegments_showsTheNumberAndADash() {
+        let badge = ComposerCaptureTopRow.segmentBadge(3, locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(badge, "3 \u{2013}")
+        XCTAssertFalse(badge.localizedCaseInsensitiveContains("segment"), "le mot ne s'affiche plus")
+    }
+
+    func test_segmentBadge_arabicLocale_usesTheLocaleDigits() {
+        XCTAssertEqual(ComposerCaptureTopRow.segmentBadge(3, locale: Locale(identifier: "ar")), "\u{0663} \u{2013}")
+    }
+
+    func test_segmentCount_spokenLabel_stillSaysTheWordWithItsNumber() {
+        let dit = ComposerSceneCameraCopy.segmentCount(3)
+        XCTAssertTrue(dit.contains("3"))
+        XCTAssertTrue(dit.localizedCaseInsensitiveContains("segment"), "VoiceOver dit « 3 segments »")
+    }
+
+    func test_chronoChip_showsTheBadge_andSpeaksTheSegmentsAsItsLabel() throws {
+        let source = try String(contentsOfFile: Self.barPath, encoding: .utf8)
+        XCTAssertTrue(source.contains("Text(ComposerCaptureTopRow.segmentBadge(compte))"))
+        XCTAssertTrue(source.contains(".accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))"))
+        XCTAssertFalse(source.contains("Text(ComposerSceneCameraCopy.segmentCount("), "le mot ne s'affiche plus")
+    }
+
+    private static var barPath: String {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift").path
+    }
+
     func test_whileEditing_theRowIsCrossThenSaveAndDone_withoutChronoFlashOrFlip() {
         let retouche = Self.input(editing: true, segments: 0, size: false, save: true)
         XCTAssertEqual(ComposerCaptureTopRow.leading(retouche), [.close])

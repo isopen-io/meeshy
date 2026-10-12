@@ -78,6 +78,14 @@ nonisolated enum ComposerCaptureTopRow {
         max(0, pending) + (recording ? 1 : 0)
     }
 
+    /// **L'indicateur se LIT d'un coup d'œil : « 3 – »** (#10310, porteur
+    /// 2026-10-12). Le chiffre et un trait, sans le mot : la puce tient à côté
+    /// du chrono sur un iPhone étroit. Le mot reste à VoiceOver, au pluriel de
+    /// la langue (`ComposerSceneCameraCopy.segmentCount`).
+    static func segmentBadge(_ count: Int, locale: Locale = .current) -> String {
+        "\(LocalizedNumber.exact(max(0, count), locale: locale)) \u{2013}"
+    }
+
     /// **Le curseur d'intensité se pose SOUS le flash** : son retrait depuis le
     /// bord droit compte les contrôles posés à droite du flash.
     static func flashSliderTrailingInset(_ trailing: [ComposerCaptureTopItem], tapTarget: CGFloat) -> CGFloat {

@@ -317,7 +317,7 @@ struct ComposerSceneCameraBar: View {
             Text(LocalizedNumber.duration(seconds: elapsed))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
-            Text(ComposerSceneCameraCopy.segmentCount(compte))
+            Text(ComposerCaptureTopRow.segmentBadge(compte))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                 .foregroundStyle(.white.opacity(0.85))
         }
@@ -327,10 +327,11 @@ struct ComposerSceneCameraBar: View {
         .frame(height: 32)
         .adaptiveLiquidGlass(in: Capsule())
         .frame(minHeight: MeeshyControlSize.tapTarget)
-        // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT en mots.
+        // L'écran montre « 3 – » ; VoiceOver dit « 3 segments » (#10310), puis
+        // la minuterie EN MOTS — il lirait « 0:12 » comme une heure.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(LocalizedNumber.spokenDuration(seconds: elapsed))
-        .accessibilityValue(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityValue(LocalizedNumber.spokenDuration(seconds: elapsed))
         .accessibilityAddTraits(.updatesFrequently)
     }
 }
