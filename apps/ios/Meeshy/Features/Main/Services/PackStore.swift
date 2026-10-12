@@ -109,6 +109,13 @@ final class PackDiskCache<Pack: InstallablePack>: PackCaching {
         self.domain = domain
         self.root = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         self.now = now
+        if domain == .sticker { Self.removeLegacyStickerCache(in: root) }
+    }
+
+    /// L'ancien `sticker-packs.json`, non cloisonné, montrait au compte B les
+    /// packs du compte A : supprimé, jamais migré (§ 5.10.6).
+    private static func removeLegacyStickerCache(in root: URL) {
+        try? FileManager.default.removeItem(at: root.appendingPathComponent("sticker-packs.json"))
     }
 
     func load(account: String) async -> CacheResult<PackSnapshot<Pack>> {
@@ -121,6 +128,21 @@ final class PackDiskCache<Pack: InstallablePack>: PackCaching {
 
     func save(_ snapshot: PackSnapshot<Pack>, account: String) async {
         await file(account).write(PackCacheFile<Pack>.Stored(savedAt: now(), snapshot: snapshot))
+    }
+
+    /// **L'union des étagères des comptes connus sur l'appareil** (D-P4) : les
+    /// packs installés que retient chaque fichier de cache du domaine. `nil` si
+    /// l'un d'eux ne se relit pas — l'élagage, dans le doute, n'efface rien.
+    nonisolated static func installedSlugsOfEveryAccount(domain: PackDomain, directory: URL? = nil) async -> Set<String>? {
+        let root = directory ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        let prefix = "packs-\(domain.rawValue)-"
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        var slugs: Set<String> = []
+        for name in names where name.hasPrefix(prefix) && name.hasSuffix(".json") {
+            guard let stored = await PackCacheFile<Pack>(url: root.appendingPathComponent(name)).read() else { return nil }
+            slugs.formUnion(stored.snapshot.installed.map(\.slug))
+        }
+        return slugs
     }
 
     private func file(_ account: String) -> PackCacheFile<Pack> {
@@ -178,6 +200,9 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
     private let service: any PackServiceProviding<Pack>
     private let cache: any PackCaching<Pack>
     private let account: @MainActor () -> String?
+    /// Un pack a quitté l'étagère (retiré ici, ou ailleurs et vu à la
+    /// revalidation) : ses fichiers peuvent être élagués (§ 5.10.6).
+    private let onShelfShrank: (@MainActor () async -> Void)?
     private var shelfAccount: String?
     private var syncedAccount = false
     private var readCache = false
@@ -186,10 +211,12 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
 
     init(service: any PackServiceProviding<Pack>,
          cache: (any PackCaching<Pack>)? = nil,
-         account: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }) {
+         account: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+         onShelfShrank: (@MainActor () async -> Void)? = nil) {
         self.service = service
         self.cache = cache ?? PackDiskCache<Pack>(domain: service.domain)
         self.account = account
+        self.onShelfShrank = onShelfShrank
     }
 
     func loadInstalled() async {
@@ -234,6 +261,7 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
             } else {
                 await remember()
             }
+            if !wantsInstalled { await onShelfShrank?() }
         } catch {
             logger.error("Pack toggle refused: \(error.localizedDescription, privacy: .public)")
             guard owner == shelfAccount else { return }
@@ -277,8 +305,10 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
         do {
             let installed = try await service.installed()
             guard owner == shelfAccount else { return }
+            let before = Set(state.installed?.map(\.slug) ?? [])
             state.installed = installed
             await remember()
+            if !before.isSubset(of: Set(installed.map(\.slug))) { await onShelfShrank?() }
         } catch {
             logger.error("Installed packs failed: \(error.localizedDescription, privacy: .public)")
         }
@@ -295,5 +325,6 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
 @MainActor
 enum PackStores {
     static let stickers = PackStore<StickerPack>(service: StickerPackService.shared)
-    static let frames = PackStore<FramePack>(service: FramePackService.shared)
+    static let frames = PackStore<FramePack>(service: FramePackService.shared,
+                                             onShelfShrank: { await PackFilePruner.frames.requestPrune() })
 }

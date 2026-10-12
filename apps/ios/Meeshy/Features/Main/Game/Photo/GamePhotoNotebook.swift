@@ -211,6 +211,23 @@ final class GamePhotoNotebook: GamePhotoNotebooking {
         )
     }
 
+    /// **Les cadres que les carnets de TOUS les comptes de l'appareil gardent dans
+    /// une recette** — l'élagage des packs ne touche pas à leurs fichiers
+    /// (§ 5.10.6). `nil` si un index ne se relit pas : dans le doute, on garde.
+    nonisolated static func referencedFrameIdsOfEveryAccount(base: URL? = nil) async -> Set<String>? {
+        let root = (base ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory).appendingPathComponent("MeeshyGame", isDirectory: true)
+        let accounts = (try? FileManager.default.contentsOfDirectory(atPath: root.path)) ?? []
+        var frames: Set<String> = []
+        for account in accounts {
+            let directory = root.appendingPathComponent(account, isDirectory: true)
+                .appendingPathComponent("Notebook", isDirectory: true)
+            guard let entries = try? readIndex(in: directory) else { return nil }
+            frames.formUnion(entries.compactMap(\.recipe.frameId))
+        }
+        return frames
+    }
+
     // MARK: - API
 
     /// Toute lecture et toute écriture de l'index passent par UN acteur par dossier : deux
