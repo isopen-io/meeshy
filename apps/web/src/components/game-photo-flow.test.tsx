@@ -170,6 +170,20 @@ describe('le selfie', () => {
     expect(host.querySelector('[data-photo-art="emblem"]')).not.toBeNull();
   });
 
+  test('la scène garde son 9:16 quand le panneau déborde : elle ne se tasse pas, sa largeur suit sa hauteur bornée (#10293)', async () => {
+    const { env: e, log } = env();
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const stage = host.querySelector<HTMLElement>('[data-photo-stage]');
+    expect(stage?.classList.contains('shrink-0')).toBe(true);
+    expect(stage?.classList.contains('w-full')).toBe(false);
+    expect(stage?.classList.contains('w-[min(100%,calc(62dvh*9/16))]')).toBe(true);
+    const style = (stage?.getAttribute('style') ?? '').replace(/\s+/g, '');
+    expect(style).toContain('aspect-ratio:9/16');
+    expect(style).not.toContain('max-height');
+  });
+
   test('pendant l’ouverture : le déclencheur n’existe pas encore, l’état se dit', async () => {
     const { env: e, log } = env({ camera: 'pending' });
     const host = await open(rank, e, log);
