@@ -3,10 +3,10 @@ import type { QueryClient } from '@tanstack/react-query';
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 
-import { describeFrameUsage, type FrameUsage } from '@meeshy/shared/types/frame-usage';
+import { describeFrameUsage, type FrameMomentFamily, type FrameUsage } from '@meeshy/shared/types/frame-usage';
 import { parseGloryFramePackContract, parsePackStrings, type GloryFramePackFrame, type PackStrings } from '@meeshy/shared/types/glory-frame-pack';
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
-import type { GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
+import type { AchievementRarity, GloryRankOrMythic } from '@meeshy/shared/utils/game/glory';
 
 import type { PackShopAdapter } from './pack-shop';
 import { apiConfig } from '@/lib/api/config';
@@ -49,9 +49,9 @@ const FRAME_KEYS = packQueryKeys('glory-frame');
 const STALE_TIME = 5 * 60 * 1000;
 const SHOP_TAB = 'shop';
 
-/** Les libellés que ce module lit : usage des cadres, noms des rangs, boutique. À attendre avant le premier rendu. */
+/** Les libellés que ce module lit : usage des cadres, noms des rangs, des raretés et des familles de moments, boutique. À attendre avant le premier rendu. */
 export const prepareFramePackShop = (language: InterfaceLanguage): Promise<unknown> =>
-  Promise.all([loadFrameUsageCatalog(language), loadGameCatalogParts(language, ['banner'])]);
+  Promise.all([loadFrameUsageCatalog(language), loadGameCatalogParts(language, ['banner', 'core'])]);
 
 const RANK_KEYS = {
   murmure: 'game.rank.murmure',
@@ -67,9 +67,32 @@ const RANK_KEYS = {
   mythe: 'game.rank.mythe',
 } as const satisfies Readonly<Record<GloryRankOrMythic, GameCatalogKey>>;
 
-/** « Rang Ambassadeur IV uniquement » — la loi choisit la clé, le rang reçoit son nom traduit. */
-export const usageText = (language: InterfaceLanguage, usage: FrameUsage): string =>
-  frameUsageText(language, describeFrameUsage(usage), usage.kind === 'rank' ? { rank: translateGame(language, RANK_KEYS[usage.rank]) } : {});
+const RARITY_KEYS = {
+  common: 'game.rarity.common',
+  rare: 'game.rarity.rare',
+  epic: 'game.rarity.epic',
+  legendary: 'game.rarity.legendary',
+  mythic: 'game.rarity.mythic',
+} as const satisfies Readonly<Record<AchievementRarity, GameCatalogKey>>;
+
+const FAMILY_KEYS = {
+  tier: 'game.frame.family.tier',
+  meesh: 'game.frame.family.meesh',
+  treasury: 'game.frame.family.treasury',
+  flame: 'game.frame.family.flame',
+  day: 'game.frame.family.day',
+  'level-100': 'game.frame.family.level-100',
+} as const satisfies Readonly<Record<FrameMomentFamily, GameCatalogKey>>;
+
+const usageNames = (language: InterfaceLanguage, usage: FrameUsage): Readonly<Record<string, string>> => {
+  if (usage.kind === 'rank') return { rank: translateGame(language, RANK_KEYS[usage.rank]) };
+  if (usage.kind === 'achievement' && usage.rarity !== undefined) return { rarity: translateGame(language, RARITY_KEYS[usage.rarity]) };
+  if (usage.kind === 'moment') return { family: translateGame(language, FAMILY_KEYS[usage.family]) };
+  return {};
+};
+
+/** « Rang Ambassadeur IV uniquement », « Succès Légendaire uniquement », « Moment « Niveau 100 » uniquement » — la loi choisit la clé, le rang, la rareté et la famille reçoivent leur nom traduit (les mots d'iOS, #10273). */
+export const usageText = (language: InterfaceLanguage, usage: FrameUsage): string => frameUsageText(language, describeFrameUsage(usage), usageNames(language, usage));
 
 /**
  * L'origine de la passerelle : celle de la base d'API résolue. Une base

@@ -3,16 +3,20 @@ import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
+import { FRAME_MOMENT_FAMILIES, describeFrameUsage, type FrameUsage } from '@meeshy/shared/types/frame-usage';
+import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
+import { frameUsageText } from '@/lib/i18n-frame-usage-catalog';
 import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { packAssetUrl, sha256Hex } from '@/lib/packs/pack-asset-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { FramePackShop, prepareFramePackShop } from './frame-pack-shop';
+import { FramePackShop, prepareFramePackShop, usageText } from './frame-pack-shop';
 
 /**
  * **LA BOUTIQUE DES CADRES** (#10149, demande porteur 2026-10-11) — installer
@@ -202,5 +206,28 @@ describe('FramePackShop', () => {
     await until(() => host.querySelector('[data-pack-shop-empty]') !== null);
     expect(host.querySelector('[data-pack-shop] [role="status"]')?.textContent).toBe('');
     expect(host.querySelectorAll('[data-frame-pack-tab]').length).toBe(0);
+  });
+});
+
+describe('le libellé d’usage nomme la rareté et la famille de moment dans la langue de l’interface (#10273)', () => {
+  test('en français : les mots d’iOS, jamais la valeur brute de la loi', () => {
+    expect(usageText('fr', { kind: 'achievement', rarity: 'legendary' })).toBe('Succès Légendaire uniquement');
+    expect(usageText('fr', { kind: 'moment', family: 'level-100' })).toBe('Moment « Niveau 100 » uniquement');
+    expect(usageText('fr', { kind: 'moment', family: 'meesh' })).toBe('Moment « Meesh frappée » uniquement');
+  });
+
+  test('dans les sept langues, chaque rareté et chaque famille reçoit son nom traduit', async () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      await prepareFramePackShop(language);
+      const usages: readonly FrameUsage[] = [
+        ...ACHIEVEMENT_RARITIES.map((rarity) => ({ kind: 'achievement', rarity }) as const),
+        ...FRAME_MOMENT_FAMILIES.map((family) => ({ kind: 'moment', family }) as const),
+      ];
+      for (const usage of usages) {
+        const text = usageText(language, usage);
+        expect(text).not.toContain('{');
+        expect(text).not.toBe(frameUsageText(language, describeFrameUsage(usage)));
+      }
+    }
   });
 });
