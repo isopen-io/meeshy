@@ -50,6 +50,9 @@ struct GamePhotoFlowView: View {
             bundle: .main
         ))
         .accessibilityAddTraits(.isModal)
+        // Plein écran noir : les contrôles système (sélecteur de format, interrupteurs, feuilles) suivent le
+        // schéma SOMBRE quelle que soit l'apparence de l'appareil, sinon leur texte se perd sur le noir (#10294).
+        .environment(\.colorScheme, .dark)
     }
 
     private var closeButton: some View {
