@@ -32,7 +32,13 @@ import MeeshyUI
 /// depuis `ReelsPlayerView.swift`, et `private` porte sur le FICHIER.
 struct ReelVideoView: View {
     let media: FeedMedia
+    /// Le réel est ÉLU (#9837) : il passe la moitié de l'écran, peut-être
+    /// encore sous le doigt.
     let isActive: Bool
+    /// Le défilement s'est posé sur ce réel (#10354). Élu sans être posé, la
+    /// page ne fait que `play()` le lecteur déjà attaché à sa surface
+    /// (`ReelSwitchWork`) ; le moteur complet attend la pose.
+    var isSettled: Bool = true
     /// Gate: the first reel's playback starts only once the liquid reveal disc
     /// has reached full screen. Until then the poster (first frame) stays
     /// visible PAUSED. Subsequent reels (paged to after the reveal) see this as
@@ -60,6 +66,8 @@ struct ReelVideoView: View {
     @State private var pooledPlayer: AVPlayer?
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
+    /// Élu ET posé : le moteur partagé, la session, le PiP et les rapports.
+    private var isEngaged: Bool { ReelSwitchWork.engages(isElected: isActive, isSettled: isSettled) }
     /// Le verdict de montage du MOTEUR (#9575), au rôle plein écran.
     private var isShowingThis: Bool {
         player != nil && SharedAVPlayerManager.mayMountFullscreenPlayer(
@@ -77,13 +85,13 @@ struct ReelVideoView: View {
         }
         .onAppear { refreshPooledPlayer() }
         .adaptiveOnChange(of: mayDownload) { _, _ in refreshPooledPlayer() }
-        .task(id: PlaybackProbe(active: isActive, player: player.map(ObjectIdentifier.init))) {
+        .task(id: PlaybackProbe(active: isActive, player: displayedPlayer.map(ObjectIdentifier.init))) {
             await reportFirstPlayback()
         }
         // Le réel plein écran REPREND sa vidéo au retour au premier plan : la
         // fenêtre PiP se referme, la lecture continue ici (#9575).
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            guard isActive else { return }
+            guard isEngaged else { return }
             manager.reclaimFromPip(urlString: attachment.fileUrl)
         }
     }
@@ -154,10 +162,10 @@ struct ReelVideoView: View {
                 // l'image du moteur au lieu de retomber sur le poster.
                 if ready, let shown = displayedPlayer {
                     ReelVideoSurface(player: shown, videoGravity: .resizeAspect,
-                                     enablesPip: isActive && isShowingThis)
+                                     enablesPip: isEngaged && isShowingThis)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
-                } else if isActive, !ready {
+                } else if isEngaged, !ready {
                     ProgressView()
                         .tint(.white)
                 }
@@ -165,12 +173,14 @@ struct ReelVideoView: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
             .onAppear { drive(ready: ready) }
+            // Le passage suit `ReelSwitchWork` (#10354). Élu pendant le geste :
+            // le lecteur déjà attaché joue, rien d'autre. Quitté : une pause
+            // BRUTE, sans rapport ni écriture — ils partent une fois posé.
+            // Posé : le moteur complet (`drive`).
             .adaptiveOnChange(of: isActive) { _, active in
-                // Page away → pause this reel's video at once (don't wait for the
-                // delayed onDisappear during paging) so its sound doesn't bleed.
-                if active { drive(ready: ready) }
-                else if isShowingThis { manager.pause() }
+                if active { switchIn(ready: ready) } else { switchOut() }
             }
+            .adaptiveOnChange(of: isSettled) { _, _ in drive(ready: ready) }
             .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
             .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
             // F3 — re-drive the video when a call ENDS. The call-start (true) edge
@@ -260,12 +270,39 @@ struct ReelVideoView: View {
     }
 
     /// Ferme la mesure du passage (#9837) quand le lecteur de ce réel, actif,
-    /// avance vraiment — pas quand `play()` est demandé.
+    /// avance vraiment — pas quand `play()` est demandé. Le lecteur AFFICHÉ :
+    /// pendant le geste, c'est celui du pool qui joue (#10354).
     private func reportFirstPlayback() async {
-        guard isActive, let player, isShowingThis else { return }
-        for await status in player.publisher(for: \.timeControlStatus).values where status == .playing {
+        guard isActive, let shown = displayedPlayer else { return }
+        for await status in shown.publisher(for: \.timeControlStatus).values where status == .playing {
             ReelSwitchSignpost.mediaStarted(reelId, kind: "video")
             return
+        }
+    }
+
+    /// Le réel devient élu. Déjà posé (retour sur la page quittée sans
+    /// relâcher) : le moteur reprend. Sinon, pendant le geste : `play()` du
+    /// lecteur attaché à la surface, s'il y en a un — sinon le poster reste,
+    /// et le lecteur se crée une fois la page posée.
+    private func switchIn(ready: Bool) {
+        if isEngaged {
+            drive(ready: ready)
+            return
+        }
+        guard ReelSwitchWork.mayPlayAttachedPlayer(
+            ready: ready, revealCompleted: revealCompleted,
+            isCallActive: MediaSessionCoordinator.shared.isCallActive,
+            hasAttachedPlayer: displayedPlayer != nil
+        ), let shown = displayedPlayer else { return }
+        shown.play()
+    }
+
+    /// Le réel n'est plus élu : son lecteur s'arrête, sans rien d'autre.
+    private func switchOut() {
+        if isShowingThis {
+            manager.pauseForSwitch()
+        } else {
+            displayedPlayer?.pause()
         }
     }
 
@@ -274,7 +311,7 @@ struct ReelVideoView: View {
         // ne jamais (re)lancer un réel pendant un appel — la session audio appartient
         // à l'appel. La mise en pause immédiate au démarrage d'un appel est gérée par
         // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
-        guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
+        guard isEngaged, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
             // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
@@ -341,7 +378,7 @@ struct ReelVideoSurface: UIViewRepresentable {
         view.playerLayer.player = player
         view.playerLayer.videoGravity = videoGravity
         if enablesPip {
-            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer, deferred: true)
         }
         return view
     }
@@ -357,7 +394,7 @@ struct ReelVideoSurface: UIViewRepresentable {
             // Idempotent (garde d'identité de layer dans `configurePip`) —
             // ré-attache après le remount que provoque la chute du masque de
             // reveal (`ReelsRevealMaskModifier` change de branche d'identité).
-            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
+            SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer, deferred: true)
         }
     }
 
