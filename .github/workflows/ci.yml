@@ -128,6 +128,7 @@ jobs:
     outputs:
       translator: ${{ steps.affected.outputs.translator }}
       shell_android: ${{ steps.affected.outputs.shell_android }}
+      glory_frames: ${{ steps.affected.outputs.glory_frames }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -1363,6 +1364,61 @@ jobs:
           if-no-files-found: error
 
   # ===========================================================================
+  # CADRES DE GLOIRE : Mee et Meo ne recouvrent jamais la photo (lot L2, #10153)
+  # ===========================================================================
+  # La garde d'empiètement du prompt § 5.7 : les SVG des onze ateliers sont
+  # régénérés, puis `lib/overlap.mjs --check` mesure chaque cadre dans Chromium
+  # (fenêtre par différence magenta/vert, oiseaux par `data-layer`) et rougit
+  # dès qu'un cadre dépasse overlap 250 px, depth 6 px ou touche un visage.
+  # Le témoin qui précède prouve qu'elle rougit : un oiseau posé au centre de
+  # la fenêtre (`--mutate bird-in-window`). Playwright est ÉPINGLÉ, donc
+  # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
+  # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
+  glory-frames:
+    name: Cadres de gloire (empiètement)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.glory_frames == 'true'
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: docs/product/cadres-de-gloire/generateur
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Ateliers (numpy et Pillow, l'atelier poses)
+        run: python -m pip install --disable-pip-version-check numpy==2.5.4 Pillow==12.3.0
+
+      - name: Playwright épinglé (Chromium)
+        run: |
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Générer les SVG des ateliers
+        run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done
+
+      - name: Témoin — la garde rougit sur un empiètement injecté
+        run: |
+          if node lib/overlap.mjs --check --only neon-ambassadeur-1 --mutate bird-in-window; then
+            echo "::error::la garde d'empiètement n'a pas rougi sur un oiseau posé dans la fenêtre"
+            exit 1
+          fi
+
+      - name: Garde d'empiètement (191 cadres)
+        run: node lib/overlap.mjs --check --jobs 2
+
+  # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
@@ -2442,7 +2498,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [changes, quality, institutionnel-v3, shell-android, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, institutionnel-v3, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -2457,6 +2513,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Coque Android (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY

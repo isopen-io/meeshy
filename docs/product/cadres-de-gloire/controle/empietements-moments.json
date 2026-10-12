@@ -1,16 +1,18 @@
 [
  {
   "file": "moments-flamme-100",
-  "overlap": 1730,
+  "overlap": 79,
   "face": 0,
-  "depth": 38,
+  "depth": 4,
   "bbox": [
-   97,
-   408,
-   442,
-   513
+   95,
+   421,
+   445,
+   492
   ],
-  "windowPx": 139442
+  "windowPx": 142261,
+  "layout": "côtés",
+  "verdict": "ok"
  },
  {
   "file": "moments-flamme-30",
@@ -18,7 +20,9 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 126968
+  "windowPx": 130400,
+  "layout": "perchés",
+  "verdict": "ok"
  },
  {
   "file": "moments-flamme-365",
@@ -26,33 +30,39 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 129896
+  "windowPx": 134892,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "moments-flamme-7",
-  "overlap": 6877,
+  "overlap": 44,
   "face": 0,
-  "depth": 58,
+  "depth": 4,
   "bbox": [
-   93,
-   631,
-   446,
-   716
+   102,
+   714,
+   401,
+   719
   ],
-  "windowPx": 148737
+  "windowPx": 154205,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "moments-jour-a",
-  "overlap": 5163,
+  "overlap": 79,
   "face": 0,
-  "depth": 61,
+  "depth": 5,
   "bbox": [
-   97,
-   628,
-   453,
+   119,
+   708,
+   428,
    720
   ],
-  "windowPx": 147337
+  "windowPx": 147341,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "moments-jour-b",
@@ -60,33 +70,39 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 139141
+  "windowPx": 144727,
+  "layout": "perchés",
+  "verdict": "ok"
  },
  {
   "file": "moments-meesh-1",
-  "overlap": 5899,
+  "overlap": 49,
   "face": 0,
-  "depth": 59,
+  "depth": 4,
   "bbox": [
-   93,
-   623,
-   446,
-   717
+   107,
+   720,
+   126,
+   723
   ],
-  "windowPx": 132508
+  "windowPx": 137049,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "moments-meesh-10",
-  "overlap": 1752,
+  "overlap": 73,
   "face": 0,
-  "depth": 34,
+  "depth": 4,
   "bbox": [
-   90,
-   407,
-   449,
-   522
+   91,
+   418,
+   450,
+   500
   ],
-  "windowPx": 147883
+  "windowPx": 151271,
+  "layout": "côtés",
+  "verdict": "ok"
  },
  {
   "file": "moments-meesh-100",
@@ -94,59 +110,64 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 145671
+  "windowPx": 148392,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "moments-meesh-1000",
-  "overlap": 10290,
+  "overlap": 10571,
   "face": 0,
   "depth": 118,
   "bbox": [
-   331,
+   332,
    556,
-   455,
-   713
+   449,
+   712
   ],
-  "windowPx": 144213
+  "windowPx": 142560,
+  "layout": "selfie",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-aurore",
-  "overlap": 287,
+  "overlap": 0,
   "face": 0,
-  "depth": 6,
-  "bbox": [
-   119,
-   115,
-   438,
-   146
-  ],
-  "windowPx": 157995
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 162736,
+  "layout": "perchés",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-galaxie",
-  "overlap": 26,
+  "overlap": 33,
   "face": 0,
-  "depth": 3,
+  "depth": 5,
   "bbox": [
-   402,
-   633,
-   409,
-   643
+   406,
+   637,
+   414,
+   648
   ],
-  "windowPx": 125381
+  "windowPx": 130017,
+  "layout": "coins",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-lueur",
-  "overlap": 7367,
+  "overlap": 20,
   "face": 0,
-  "depth": 61,
+  "depth": 3,
   "bbox": [
-   92,
-   622,
+   439,
+   703,
    447,
-   719
+   713
   ],
-  "windowPx": 144854
+  "windowPx": 148797,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-nebuleuse",
@@ -154,32 +175,38 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 140776
+  "windowPx": 143787,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-singularite",
-  "overlap": 5636,
+  "overlap": 67,
   "face": 0,
-  "depth": 59,
+  "depth": 4,
   "bbox": [
-   97,
-   655,
-   232,
-   714
+   141,
+   714,
+   189,
+   717
   ],
-  "windowPx": 133393
+  "windowPx": 135984,
+  "layout": "duo",
+  "verdict": "ok"
  },
  {
   "file": "moments-palier-supernova",
-  "overlap": 6134,
+  "overlap": 6759,
   "face": 0,
-  "depth": 81,
+  "depth": 85,
   "bbox": [
-   369,
+   370,
    568,
-   450,
-   714
+   454,
+   719
   ],
-  "windowPx": 158109
+  "windowPx": 160347,
+  "layout": "selfie",
+  "verdict": "ok"
  }
 ]

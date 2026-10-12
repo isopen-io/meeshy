@@ -18,19 +18,19 @@ Le développement dans l'app se fait avec le prompt [`PROMPT-developpement.md`](
 
 ## Le catalogue
 
-| Collection | Nom | Cadres | Avec message | Hors règle d'empiètement |
+| Collection | Nom | Cadres | Avec message | Hors règle d'empiètement (2026-10-10 → 2026-10-12) |
 |---|---|---|---|---|
-| `savane` | Afrique éternelle · Savane | 19 | 11 | 10 |
-| `royaumes` | Afrique éternelle · Royaumes | 19 | 12 | 12 |
-| `egypte` | Égypte solaire | 19 | 14 | 16 |
-| `olympe` | Olympe | 19 | 11 | 10 |
-| `celeste` | Empire céleste | 19 | 11 | 0 |
-| `nord` | Aurores du Nord | 19 | 12 | 12 |
-| `abysses` | Abysses | 19 | 13 | 12 |
-| `neon` | Néon | 19 | 13 | 18 |
-| `moments` | Autres moments | 16 | 10 | 10 |
-| `tresor` | Trésor | 14 | 6 | 7 |
-| `poses` | Poses et messages | 9 | 5 | 6 |
+| `savane` | Afrique éternelle · Savane | 19 | 11 | 10 → 0 |
+| `royaumes` | Afrique éternelle · Royaumes | 19 | 12 | 12 → 0 |
+| `egypte` | Égypte solaire | 19 | 14 | 16 → 0 |
+| `olympe` | Olympe | 19 | 11 | 10 → 0 |
+| `celeste` | Empire céleste | 19 | 11 | 0 → 0 |
+| `nord` | Aurores du Nord | 19 | 12 | 12 → 0 |
+| `abysses` | Abysses | 19 | 13 | 12 → 0 |
+| `neon` | Néon | 19 | 13 | 18 → 0 |
+| `moments` | Autres moments | 16 | 10 | 10 → 0 |
+| `tresor` | Trésor | 14 | 6 | 7 → 0 |
+| `poses` | Poses et messages | 9 | 5 | 6 → 0 |
 
 Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `rank`, `division` (5→1, ou null), `option` (V…I, A/B/C, ou le palier), `name` et `story` (le nom et la courte histoire du cadre, en français), `layout` (la pose de Mee et Meo), `message` (exemple de message de l'auteur, ou null). Les planches-contacts sont dans `planches/`.
 
@@ -57,7 +57,7 @@ Depuis `generateur/` (Python 3 + Pillow, Node avec Playwright installé par `bun
 ```bash
 cd ateliers/<collection> && python3 gen.py        # → generateur/out/<collection>/*.svg + manifest.json (ignorés par git)
 cd ../.. && node lib/render.mjs out/<collection>  # → .jpg 540×960 + sheet.png
-node lib/overlap.mjs out/<collection> --png       # → overlap.json + .overlap/*.png (empiètement en rouge)
+node lib/overlap.mjs [--only <collection>] [--png <dossier>]   # → ../controle/empietements-<collection>.json (empiètement en rouge)
 ```
 
 `lib/launch.mjs` trouve Chromium : `$PW_CHROMIUM` (ou `$CHROMIUM`), sinon celui que Playwright attend, sinon le plus récent `chromium_headless_shell-*` du cache de Playwright (macOS, Linux), sinon `/opt/pw-browsers/chromium-*/chrome-linux/chrome`. L'atelier `poses` demande `numpy` et `Pillow`. `v1/frames.py <dossier>` génère la première proposition (Murmure → Polyglotte).
@@ -101,9 +101,13 @@ Options : `--only savane,neon-oracle-a` (collections ou cadres), `--jobs 3`, `--
 
 ## La règle d'empiètement
 
-Mee et Meo ne recouvrent **jamais** la photo : sur chaque cadre, `lib/overlap.mjs` doit donner **overlap ≤ 250 px, depth ≤ 6 px, face = 0**. Seule exception, la pose « selfie » choisie exprès par l'utilisateur (`poses-selfie`) : Meo dans la photo, sans toucher un visage.
+Mee et Meo ne recouvrent **jamais** la photo : sur chaque cadre, **overlap ≤ 250 px, depth ≤ 6 px, face = 0** (repère de design, `lib/overlap-rule.mjs`). Une mise en page `selfie` (déclarée par le manifeste : Meo dans la photo) est exemptée de l'overlap et de la profondeur, jamais du visage.
 
-État au 2026-10-10 (`controle/empietements-<collection>.json`) : aucun visage touché nulle part ; l'Empire céleste est conforme ; dans les autres collections, la pose « au pied du cadre » assied encore Mee et Meo sur les coins bas de la photo (colonne « Hors règle » ci-dessus). Dans l'app, les oiseaux deviennent une couche posée à des ancres validées par le détecteur : la règle y est une garde de CI, et ces empiètements s'y corrigent.
+**Le détecteur v2** (`lib/overlap.mjs`, lot L2) : la fenêtre est trouvée par DIFFÉRENCE (photo factice magenta puis verte sous tout ce que le cadre peint par-dessus, oiseaux exceptés : plus aucun faux positif sur un décor magenta) ; les oiseaux se lisent par `data-layer="birds"` (leur corps, pas leur ombre) ; les visages sont les cercles du placeholder, à leur position rendue. Sans option, il réécrit `controle/` ; avec `--check`, c'est la **garde de CI** (job « Cadres de gloire (empiètement) » de `ci.yml`, domaine `glory_frames` de `scripts/ci-affected.mjs`) : elle sort en 1 dès qu'un cadre est hors règle, et son témoin (`--mutate bird-in-window`, un oiseau posé au centre de la fenêtre) prouve qu'elle rougit.
+
+**Les ancres** (`lib/anchors.json`, calculées par `node lib/anchors.mjs`) : pour chaque cadre hors règle, chaque oiseau qui recouvre la photo est déplacé du MOINS possible, vers l'extérieur de la fenêtre, un peu réduit au besoin, sans sortir de la carte ni couvrir le texte de la plaque ou le blason. `lib/base.py` les applique à l'enregistrement du SVG ; ce qui suit un oiseau (`data-follows-bird` : la lueur du Néon, les queues du ruban tenues au bec) bouge avec lui ; le décor ne bouge pas. Relancer l'outil AFFINE (une correction se compose avec la précédente) ; `CADRES_ANCHORS=off` rend le dessin validé du 2026-10-10. La référence L0 n'est pas réécrite : `node lib/reference.mjs out ../reference --amend l2 --design <out CADRES_ANCHORS=off>` ajoute sous `amendments.l2` le rendu des seuls cadres corrigés, avec la preuve que le dessin validé se retrouve à l'octet et que le décor (oiseaux, suiveurs et texte vivant masqués) est identique au pixel ; `recompose.mjs` juge ces cadres contre l'amendement.
+
+État au 2026-10-12 (`controle/`) : **191/191 cadres dans la règle, aucun visage touché** ; 107 cadres ont des ancres corrigées (199 oiseaux : déplacement médian 54 px de design, 66 légèrement réduits), relevé d'avant : 106 hors règle au détecteur v2 (113 au v1), un 107e rapproché de la limite par marge. La planche avant/après de chaque collection est sous `planches/l2-avant-apres/` ; **le porteur revalide** (#9963) — vider `lib/anchors.json` rend le dessin d'avant.
 
 ## Polices
 

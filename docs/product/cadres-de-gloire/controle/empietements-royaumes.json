@@ -1,120 +1,138 @@
 [
  {
   "file": "royaumes-ambassadeur-1",
-  "overlap": 10718,
+  "overlap": 103,
   "face": 0,
-  "depth": 56,
+  "depth": 4,
   "bbox": [
-   71,
-   627,
-   468,
-   712
+   88,
+   712,
+   460,
+   716
   ],
-  "windowPx": 155766
+  "windowPx": 160216,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-ambassadeur-2",
-  "overlap": 125,
+  "overlap": 39,
   "face": 0,
-  "depth": 10,
+  "depth": 4,
   "bbox": [
-   88,
-   703,
-   455,
-   716
+   89,
+   712,
+   456,
+   719
   ],
-  "windowPx": 162414
+  "windowPx": 165387,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-ambassadeur-3",
-  "overlap": 40,
+  "overlap": 39,
   "face": 0,
-  "depth": 2,
+  "depth": 4,
   "bbox": [
-   98,
-   690,
+   96,
+   701,
    101,
-   705
+   713
   ],
-  "windowPx": 154416
+  "windowPx": 157641,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-ambassadeur-4",
-  "overlap": 10138,
+  "overlap": 138,
   "face": 0,
-  "depth": 60,
+  "depth": 4,
   "bbox": [
-   78,
-   631,
-   461,
-   715
+   92,
+   713,
+   456,
+   719
   ],
-  "windowPx": 172044
+  "windowPx": 177223,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-ambassadeur-5",
-  "overlap": 11442,
+  "overlap": 73,
   "face": 0,
-  "depth": 63,
+  "depth": 4,
   "bbox": [
-   76,
-   631,
-   463,
-   719
+   92,
+   716,
+   458,
+   722
   ],
-  "windowPx": 176710
+  "windowPx": 180978,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-legende-1",
-  "overlap": 8548,
+  "overlap": 18,
   "face": 0,
-  "depth": 75,
+  "depth": 3,
   "bbox": [
-   78,
-   622,
-   461,
-   715
+   140,
+   717,
+   150,
+   719
   ],
-  "windowPx": 157700
+  "windowPx": 162443,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-legende-2",
-  "overlap": 2376,
+  "overlap": 47,
   "face": 0,
-  "depth": 31,
+  "depth": 5,
   "bbox": [
-   103,
-   631,
-   431,
-   692
+   134,
+   678,
+   404,
+   686
   ],
-  "windowPx": 138629
+  "windowPx": 142865,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-legende-3",
-  "overlap": 178,
+  "overlap": 58,
   "face": 0,
-  "depth": 6,
+  "depth": 4,
   "bbox": [
-   84,
-   689,
-   445,
-   715
+   87,
+   705,
+   446,
+   719
   ],
-  "windowPx": 160627
+  "windowPx": 165037,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-legende-4",
-  "overlap": 3948,
+  "overlap": 65,
   "face": 0,
-  "depth": 55,
+  "depth": 4,
   "bbox": [
-   103,
-   638,
-   436,
-   714
+   136,
+   714,
+   398,
+   717
   ],
-  "windowPx": 150576
+  "windowPx": 154531,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-legende-5",
@@ -122,33 +140,39 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 166619
+  "windowPx": 171216,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-mythe-a",
-  "overlap": 7331,
+  "overlap": 52,
   "face": 0,
-  "depth": 75,
+  "depth": 4,
   "bbox": [
-   87,
-   627,
-   453,
-   711
+   150,
+   710,
+   405,
+   713
   ],
-  "windowPx": 154625
+  "windowPx": 157591,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-mythe-b",
-  "overlap": 1102,
+  "overlap": 45,
   "face": 0,
-  "depth": 28,
+  "depth": 4,
   "bbox": [
-   92,
-   391,
-   447,
-   489
+   89,
+   404,
+   451,
+   449
   ],
-  "windowPx": 142976
+  "windowPx": 147080,
+  "layout": "cotes",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-mythe-c",
@@ -156,41 +180,54 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 155398
+  "windowPx": 158250,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-oracle-a",
-  "overlap": 6133,
+  "overlap": 44,
   "face": 0,
-  "depth": 74,
+  "depth": 4,
   "bbox": [
-   88,
-   628,
+   150,
+   706,
    451,
-   715
+   718
   ],
-  "windowPx": 161096
+  "windowPx": 165189,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-oracle-b",
-  "overlap": 0,
+  "overlap": 7,
   "face": 0,
-  "depth": 0,
-  "bbox": null,
-  "windowPx": 152908
+  "depth": 2,
+  "bbox": [
+   440,
+   713,
+   445,
+   716
+  ],
+  "windowPx": 156895,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-oracle-c",
-  "overlap": 977,
+  "overlap": 56,
   "face": 0,
-  "depth": 26,
+  "depth": 4,
   "bbox": [
-   94,
-   395,
-   445,
-   486
+   92,
+   421,
+   448,
+   448
   ],
-  "windowPx": 150045
+  "windowPx": 153984,
+  "layout": "cotes",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-orateur-a",
@@ -198,32 +235,38 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 156047
+  "windowPx": 160046,
+  "layout": "libre",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-orateur-b",
-  "overlap": 2707,
+  "overlap": 61,
   "face": 0,
-  "depth": 47,
+  "depth": 4,
   "bbox": [
-   117,
-   629,
-   422,
-   714
+   144,
+   716,
+   401,
+   720
   ],
-  "windowPx": 134750
+  "windowPx": 137663,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "royaumes-orateur-c",
-  "overlap": 1,
+  "overlap": 15,
   "face": 0,
-  "depth": 0,
+  "depth": 2,
   "bbox": [
+   99,
+   694,
    101,
-   697,
-   101,
-   697
+   704
   ],
-  "windowPx": 141950
+  "windowPx": 145359,
+  "layout": "ruban",
+  "verdict": "ok"
  }
 ]

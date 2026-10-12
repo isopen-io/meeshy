@@ -3,3 +3,4 @@ export/
 __pycache__/
 *.pyc
 out-plate/
+node_modules/

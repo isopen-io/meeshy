@@ -1,7 +1,8 @@
 // Juge un export contre la référence de fidélité du L0 (§ 8.3) : chaque cadre est RECOMPOSÉ depuis ses couches
 // exportées, plus ce que l'app peindra (photo factice dans la fenêtre, blason, oiseaux et texte rendus à leurs
 // positions cuites), puis comparé au rendu de référence — dont le sha256 est d'abord vérifié contre
-// reference/sha256.json : la référence ne se recalcule pas, elle se retrouve.
+// reference/sha256.json : la référence ne se recalcule pas, elle se retrouve. Un cadre dont Mee et Meo ont bougé (L2)
+// se retrouve dans `amendments` (lib/reference.mjs --amend), décor prouvé identique.
 // Hors boîtes de texte et de blason : ≥ 99,5 % des pixels à |Δ| ≤ 6 par canal, aucun bloc 16×16 à Δ moyen > 12.
 // Usage : node lib/recompose.mjs [export] [--only a,b] [--jobs 3] [--sheet cadre1,cadre2,cadre3 --sheet-dir dossier]
 import crypto from 'node:crypto';
@@ -88,7 +89,8 @@ async function judge(handle, { collection, frame }) {
   const svg = fs.readFileSync(path.join(OUT, collection, frame.frame + '.svg'), 'utf8');
   await showSvg(handle, svg, { fonts: 'design' });
   const refPng = await shoot(handle);
-  const expected = reference.frames[frame.frame]?.png;
+  const amended = Object.values(reference.amendments ?? {}).map((a) => a.frames?.[frame.frame]).filter(Boolean).at(-1);
+  const expected = amended?.png ?? reference.frames[frame.frame]?.png;
   const { page } = handle;
   await page.evaluate(classify);
   const render = async (kinds) => {

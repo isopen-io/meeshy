@@ -17,6 +17,7 @@ Polices disponibles (chargées par render.mjs) : 'Cinzel', 'Cinzel Decorative', 
 import base64
 import functools
 import inspect
+import json
 import math
 import os
 import random
@@ -82,6 +83,7 @@ class Card:
         self._decor_texts = 0
         self._decor_keys = {}
         self.motifs = set()
+        self.birds = 0
         Card.current = self
 
     def nid(self, prefix="k"):
@@ -191,7 +193,45 @@ class Card:
 
     def save(self, path):
         Path(path).parent.mkdir(parents=True, exist_ok=True)
-        Path(path).write_text(self.svg())
+        Path(path).write_text(anchored(self.svg(), ANCHORS.get(Path(path).stem, [])))
+
+
+# Les ancres corrigées de Mee et Meo (lot L2, règle d'empiètement) : `lib/anchors.json` donne, par cadre, un
+# déplacement `dx`, `dy` (repère de design) et une échelle `scale` par oiseau, repéré par l'ordre de ses appels à
+# bird() (`data-bird`). Ce qui suit un oiseau (`data-follows-bird`, la lueur posée sous lui) bouge avec lui. Le décor
+# ne bouge pas. `lib/anchors.mjs` les calcule ; CADRES_ANCHORS=off rend le dessin validé du 2026-10-10 (référence L0).
+ANCHORS = {} if os.environ.get("CADRES_ANCHORS") == "off" else json.loads((HERE / "anchors.json").read_text())
+BIRD_TR = re.compile(r'(<g data-layer="birds" data-bird="(\d+)"[^>]*? transform=")translate\(([-\d.]+) ([-\d.]+)\)([^"]*)"')
+FOLLOW_TR = re.compile(r'<g data-follows-bird="(\d+)">')
+
+
+def anchored_spot(stem, index, x, y, size):
+    """La place corrigée d'un oiseau, pour un atelier qui accroche quelque chose à lui (les queues du ruban tenues au
+    bec) : ce qui s'accroche suit l'oiseau."""
+    fix = next((f for f in ANCHORS.get(stem, []) if f["bird"] == index), {})
+    return x + fix.get("dx", 0), y + fix.get("dy", 0), size * fix.get("scale", 1)
+
+
+def anchored(svg, fixes):
+    by_bird = {fix["bird"]: fix for fix in fixes}
+    if not by_bird:
+        return svg
+
+    def bird_tr(m):
+        fix = by_bird.get(int(m.group(2)))
+        if not fix:
+            return m.group(0)
+        x, y = float(m.group(3)) + fix.get("dx", 0), float(m.group(4)) + fix.get("dy", 0)
+        scale = fix.get("scale", 1)
+        return f'{m.group(1)}translate({f(x)} {f(y)}){m.group(5)}{f" scale({scale})" if scale != 1 else ""}"'
+
+    def follow_tr(m):
+        fix = by_bird.get(int(m.group(1)))
+        if not fix:
+            return m.group(0)
+        return f'<g data-follows-bird="{m.group(1)}" transform="translate({f(fix.get("dx", 0))} {f(fix.get("dy", 0))})">'
+
+    return FOLLOW_TR.sub(follow_tr, BIRD_TR.sub(bird_tr, svg))
 
 
 def nid(prefix="k"):
@@ -309,8 +349,10 @@ def bird(card, pose, x, y, size, flip=False, rotate=0, shadow=True):
     """Pose une image de Mee ou Meo, centrée en (x, y), largeur `size`."""
     tr = f"translate({f(x)} {f(y)}) rotate({rotate})" + (" scale(-1 1)" if flip else "")
     filt = f' filter="{card.shadow("bird", 0, 6, 6, "#000000", 0.45)}"' if shadow else ""
+    index = card.birds
+    card.birds += 1
     card.add(
-        f'<g data-layer="birds" data-pose="{pose}" transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
+        f'<g data-layer="birds" data-bird="{index}" data-pose="{pose}" transform="{tr}"{filt}><image href="{_data_uri(pose)}" x="{f(-size / 2)}" y="{f(-size / 2)}" '
         f'width="{f(size)}" height="{f(size)}" preserveAspectRatio="xMidYMid meet"/></g>'
     )
 

@@ -1,55 +1,63 @@
 [
  {
   "file": "poses-cotes",
-  "overlap": 1989,
+  "overlap": 179,
   "face": 0,
-  "depth": 49,
+  "depth": 4,
   "bbox": [
-   80,
-   414,
-   459,
-   577
+   84,
+   431,
+   460,
+   535
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "cotes",
+  "verdict": "ok"
  },
  {
   "file": "poses-groupe",
-  "overlap": 7211,
+  "overlap": 171,
   "face": 0,
-  "depth": 73,
+  "depth": 3,
   "bbox": [
-   80,
-   614,
-   459,
-   720
+   139,
+   709,
+   458,
+   721
   ],
-  "windowPx": 158360
+  "windowPx": 160394,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "poses-message-cartouche",
-  "overlap": 8878,
+  "overlap": 158,
   "face": 0,
-  "depth": 72,
+  "depth": 2,
   "bbox": [
-   80,
-   615,
-   459,
+   102,
+   713,
+   406,
    720
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "poses-message-parchemin",
-  "overlap": 1947,
+  "overlap": 169,
   "face": 0,
-  "depth": 42,
+  "depth": 4,
   "bbox": [
    80,
-   407,
-   459,
-   576
+   424,
+   460,
+   532
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "cotes",
+  "verdict": "ok"
  },
  {
   "file": "poses-message-ruban",
@@ -57,7 +65,9 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "poses-perches",
@@ -65,45 +75,53 @@
   "face": 0,
   "depth": 0,
   "bbox": null,
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "perches",
+  "verdict": "ok"
  },
  {
   "file": "poses-pied",
-  "overlap": 9268,
+  "overlap": 140,
   "face": 0,
-  "depth": 72,
+  "depth": 2,
   "bbox": [
    80,
-   616,
-   459,
-   720
+   699,
+   418,
+   721
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "pied",
+  "verdict": "ok"
  },
  {
   "file": "poses-ruban",
-  "overlap": 232,
+  "overlap": 176,
   "face": 0,
-  "depth": 6,
+  "depth": 3,
   "bbox": [
    80,
-   697,
-   459,
-   720
+   706,
+   460,
+   721
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "ruban",
+  "verdict": "ok"
  },
  {
   "file": "poses-selfie",
-  "overlap": 12933,
+  "overlap": 13560,
   "face": 0,
-  "depth": 120,
+  "depth": 125,
   "bbox": [
-   324,
-   549,
-   459,
-   719
+   325,
+   550,
+   460,
+   720
   ],
-  "windowPx": 158358
+  "windowPx": 160395,
+  "layout": "selfie",
+  "verdict": "ok"
  }
 ]
