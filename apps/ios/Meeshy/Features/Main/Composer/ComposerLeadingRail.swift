@@ -114,7 +114,8 @@ struct ComposerLeadingRail: View {
     var badges: [ComposerRailDoor: Int] = [:]
 
     /// **Des boutons séparés, sans colonne** (directive porteur 2026-09-27) —
-    /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
+    /// chaque entrée est un glyphe blanc en relief, sans disque de verre
+    /// (`ComposerFloatingRailInk`, #10358).
     var separateButtons: Bool = false
 
     /// **Les boutons de SCÈNE, après le lieu** (#8713, directive porteur
@@ -299,7 +300,6 @@ struct ComposerLeadingRail: View {
               symbolName: bouton.toggle.symbol,
               label: bouton.label,
               tint: MeeshyColors.textPrimary(isDark: true),
-              glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
               isOn: bouton.isOn,
               action: bouton.action)
     }
@@ -358,7 +358,8 @@ struct ComposerLeadingRail: View {
               label: control.label,
               tint: control.isExpanded
                   ? MeeshyColors.brandPrimary
-                  : MeeshyColors.textSecondary(isDark: true)) {
+                  : MeeshyColors.textSecondary(isDark: true),
+              isOn: control.isExpanded) {
             onToolControl?(control)
         }
     }
@@ -384,7 +385,6 @@ struct ComposerLeadingRail: View {
                        label: String,
                        tint: Color,
                        badge: Int? = nil,
-                       glassTint: Color? = nil,
                        isOn: Bool = false,
                        longPress: (() -> Void)? = nil,
                        action: @escaping () -> Void) -> some View {
@@ -395,13 +395,17 @@ struct ComposerLeadingRail: View {
             action()
             HapticFeedback.light()
         } label: {
+            // **Sur la scène, plus de disque de verre** (#10358) : le glyphe
+            // est BLANC, en relief par son ombre, et passe au jaune quand il
+            // est actif. La cible reste le cadre de `railWidth`, 44 pt.
             Image(systemName: symbolName)
-                .font(separateButtons ? .body.weight(.semibold) : .title3)
+                .font(separateButtons ? .title3.weight(.semibold) : .title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(tint)
+                .foregroundColor(ComposerFloatingRailInk.glyph(separate: separateButtons,
+                                                               active: isOn,
+                                                               columnTint: tint))
+                .modifier(ComposerRailGlyphRelief(active: separateButtons))
                 .composerToolBounce(active: lastTapped == id)
-                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint,
-                                                  tint: glassTint))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
@@ -451,6 +455,7 @@ struct ComposerLeadingRail: View {
                 // glyphe qu'elle chevauche — sans lui, un « 8 » posé sur une
                 // icône claire se lit comme un morceau de l'icône.
                 .overlay(Capsule().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .modifier(ComposerRailGlyphRelief(active: separateButtons))
                 .offset(x: 4, y: -2)
                 // Le glyphe reste la cible : la pastille n'est qu'un témoin, et
                 // un témoin qui capture le doigt vole le tap de sa porte.
