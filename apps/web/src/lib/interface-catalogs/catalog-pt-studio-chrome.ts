@@ -77,6 +77,7 @@ const ptStudioChrome = {
   'story.studio.camera.quick.photo': 'Tirar uma foto',
   'story.studio.camera.quick.video': 'Filmar',
   'story.studio.camera.title': 'Câmera',
+  'story.studio.background.cameraHold': 'Manter pressionado: abrir a câmera',
   'story.studio.camera.close': 'Voltar à cena',
   'story.studio.camera.flip': 'Trocar de câmera',
   'story.studio.camera.flash': 'Flash',

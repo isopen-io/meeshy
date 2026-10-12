@@ -77,6 +77,7 @@ const arStudioChrome = {
   'story.studio.camera.quick.photo': 'التقاط صورة',
   'story.studio.camera.quick.video': 'تصوير',
   'story.studio.camera.title': 'الكاميرا',
+  'story.studio.background.cameraHold': 'اضغط مطولًا: افتح الكاميرا',
   'story.studio.camera.close': 'العودة إلى المشهد',
   'story.studio.camera.flip': 'تبديل الكاميرا',
   'story.studio.camera.flash': 'الفلاش',

@@ -77,6 +77,7 @@ const esStudioChrome = {
   'story.studio.camera.quick.photo': 'Hacer una foto',
   'story.studio.camera.quick.video': 'Grabar',
   'story.studio.camera.title': 'Cámara',
+  'story.studio.background.cameraHold': 'Mantener: abrir la cámara',
   'story.studio.camera.close': 'Volver a la escena',
   'story.studio.camera.flip': 'Cambiar de cámara',
   'story.studio.camera.flash': 'Flash',

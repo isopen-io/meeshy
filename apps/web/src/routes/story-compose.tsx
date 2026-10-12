@@ -869,7 +869,7 @@ function StoryStudio({
             {animatedToggle}
           </div>
         ) : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia })}>
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia, onCamera: quick.retake })}>
             {/* L'ÉCLAIR puis le CADRE, après les portes (#8713). */}
             {retouching ? null : animatedToggle}
             {page.background !== null ? (
