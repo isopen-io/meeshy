@@ -2,13 +2,12 @@ import type { UserGameProfileResponse } from '@meeshy/shared/types/game';
 
 import { shownStanding } from '@/lib/game/ladder';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { formatCount, gameText, levelTierName, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
+import { gameText, rankName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 
 import { LevelRing } from './game/level-ring';
 import { MeeshCoin } from './game/meesh-coin';
 import { RankBlason } from './game/rank-blason';
-import { GAME_INK, GAME_INK_2 } from './game-surface';
 
 /**
  * LE JEU D'UN AUTRE, EN UN COUP D'ŒIL (#9481) — l'anneau de niveau à emblème, le blason du rang et sa
@@ -32,48 +31,8 @@ export function visibleStanding(game: UserGameProfileResponse | undefined): Visi
   return game.standing === null && game.treasury?.tier == null ? null : { standing: game.standing, treasury: game.treasury };
 }
 
-export function GameStanding({ game }: { readonly game: VisibleStanding }) {
-  const language = currentInterfaceLanguage();
-  const { treasury } = game;
-  const standing = shownStanding(game.standing);
-  const treasuryTier = treasury?.tier ?? null;
-  return (
-    <div className="flex flex-col gap-2" data-game-standing="">
-      {standing === null ? null : (
-        <div className="flex items-center gap-4">
-          <LevelRing
-            level={standing.level}
-            tier={standing.tier}
-            progress={null}
-            size={72}
-            prestige={standing.prestige}
-            label={levelRingLabelWithPrestige(standing.level, standing.tier, standing.prestige, language)}
-          />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <p className="text-body font-bold" style={{ color: GAME_INK }}>
-              {gameText('game.profile.level', { level: formatCount(standing.level), tier: levelTierName(standing.tier) })}
-            </p>
-            <p className="text-caption font-semibold" style={{ color: GAME_INK }}>
-              {standingLabel(shownRank(standing))}
-            </p>
-          </div>
-          <RankBlason {...shownRank(standing)} level={standing.level} size={56} label={rankName(standing.rank)} />
-        </div>
-      )}
-      {treasuryTier === null ? null : (
-        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption" style={{ color: GAME_INK_2 }}>
-          <li className="flex items-center gap-1.5" data-game-standing-treasury={treasuryTier}>
-            <MeeshCoin side="obverse" size={20} edition="silver" />
-            {gameText('game.standing.treasury', { tier: treasuryName(treasuryTier) })}
-          </li>
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /**
- * LA BANDE DE LA CARTE DE CONTACT — les mêmes pièces, en pictogrammes : chacune est nommée au lecteur
+ * LA BANDE DE LA CARTE DE CONTACT — le niveau, le rang et le trésor, en pictogrammes : chacune est nommée au lecteur
  * d'écran, aucune ne porte de bouton. Posée AVANT les coupes de la vitrine.
  */
 export function GameStandingMini({ game }: { readonly game: VisibleStanding }) {

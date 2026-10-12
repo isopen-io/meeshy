@@ -9,7 +9,7 @@ import { lazy, Suspense } from 'react';
  * plus pour une carte qui n'existe pas toujours).
  *
  * Le contenu est dans `game-profile-connected.tsx` ; les témoins rendent ses
- * pièces PURES (`game-profile-banner`, `game-profile-visitor`).
+ * pièces PURES (`game-profile-banner`, `game-contact-strip`).
  */
 const BannerOwn = lazy(() => import('./game-profile-connected').then((m) => ({ default: m.GameBannerOwnConnected })));
 const BannerVisitor = lazy(() => import('./game-profile-connected').then((m) => ({ default: m.GameBannerVisitorConnected })));
