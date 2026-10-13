@@ -1026,7 +1026,7 @@ struct PostDetailView: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: displayPost?.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
         // raccordé le 2026-09-06).

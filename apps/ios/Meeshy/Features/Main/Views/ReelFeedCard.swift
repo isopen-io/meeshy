@@ -252,7 +252,7 @@ struct ReelFeedCard: View, Equatable {
                 address: item.place.address,
                 accentColor: accentHex,
                 senderName: displayAuthor
-            )
+            ).closesForConversationOpening(.place)
         }
         .mediaSaveFlow(mediaSaveCoordinator)
     }

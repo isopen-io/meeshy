@@ -103,7 +103,7 @@ struct ProfileView: View {
                 imageURL: image.value,
                 fallbackText: user?.displayName ?? user?.username ?? "",
                 accentColor: accentColor
-            )
+            ).closesForConversationOpening(.profilePhoto)
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
