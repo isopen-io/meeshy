@@ -63,6 +63,23 @@ final class PinnedLogoutHTTPTests: XCTestCase {
         )
     }
 
+    /// A ouvert, SANS `applySession` : celui-ci lance le préchauffage des caches
+    /// de session (`warmSessionScopedCaches`, la liste de blocage), une requête
+    /// d'arrière-plan AU NOM DE A qui, sous un jeton non JWT, rafraîchit A —
+    /// légitimement, c'est sa propre requête. Ce rafraîchissement-là n'a rien à
+    /// voir avec la déconnexion épinglée de B et faisait rougir ces témoins
+    /// (CI #10463, run 38335841062). L'état posé est celui que lisent les
+    /// assertions : compte actif, trousseau, jeton du transport.
+    private func openAccount(token: String, sessionToken: String, user: MeeshyUser) throws {
+        let auth = AuthManager.shared
+        try auth.keychain.save(token, forKey: auth.tokenKey(for: user.id), account: nil)
+        try auth.keychain.save(sessionToken, forKey: auth.sessionTokenKey(for: user.id), account: nil)
+        auth.activeUserId = user.id
+        APIClient.shared.authToken = token
+        auth.currentUser = user
+        auth.isAuthenticated = true
+    }
+
     private func makeStubbedClient() -> APIClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [PinnedLogoutStubProtocol.self]
@@ -72,7 +89,7 @@ final class PinnedLogoutHTTPTests: XCTestCase {
     /// Le témoin au niveau du client : B reçoit 401, rien ne part sous A.
     func test_logoutThrowingWithToken_on401_sendsNothingButThePinnedToken() async throws {
         let auth = AuthManager.shared
-        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try openAccount(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
         refreshDouble.refreshedUser = makeUser("user-a")
         let client = makeStubbedClient()
         let service = AuthService(api: client, pinned: client)
@@ -98,7 +115,7 @@ final class PinnedLogoutHTTPTests: XCTestCase {
     /// reste ouvert.
     func test_discardProvenSession_on401_neverSpeaksForTheActiveAccount() async throws {
         let auth = AuthManager.shared
-        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try openAccount(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
         let client = makeStubbedClient()
         auth.authService = AuthService(api: client, pinned: client)
 
