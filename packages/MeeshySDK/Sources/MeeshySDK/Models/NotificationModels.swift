@@ -808,7 +808,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .friendNewMood:
             return "\(actorName) a partage une humeur"
         case .postRepost:
-            return "\(actorName) a repartage votre publication"
+            return String(format: repostFallbackTitleFormat, actorName)
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:
             return "Traduction disponible"
         case .voiceCloneReady:
@@ -980,8 +980,28 @@ extension APINotification {
     /// Libellé typé du contenu social : distingue story / réel / mood / statut /
     /// publication. Lit `metadata.postType` (réactions, commentaires) ou
     /// `metadata.contentType` (friend_new_*), avec repli sur le type de notif.
+    /// #10525 — la phrase d'une republication sans titre servi (ligne d'avant
+    /// le titre persisté) nomme le contenu republié, comme la passerelle : un
+    /// STATUS est « votre humeur ».
+    private var repostFallbackTitleFormat: String {
+        switch repostedKind {
+        case "REEL": return String(localized: "notification.repost.fallbackTitle.reel", defaultValue: "%@ a republié votre réel", bundle: .main)
+        case "STORY": return String(localized: "notification.repost.fallbackTitle.story", defaultValue: "%@ a republié votre story", bundle: .main)
+        case "MOOD": return String(localized: "notification.repost.fallbackTitle.mood", defaultValue: "%@ a republié votre humeur", bundle: .main)
+        default: return String(localized: "notification.repost.fallbackTitle.post", defaultValue: "%@ a republié votre publication", bundle: .main)
+        }
+    }
+
+    /// Le type d'un contenu republié, dans le mot que l'auteur lit : un STATUS
+    /// est son « humeur » (§ 7) — le fil, lui, garde STATUS.
+    private var repostedKind: String? {
+        let declared = (metadata?.postType ?? metadata?.contentType)?.uppercased()
+        return declared == "STATUS" ? "MOOD" : declared
+    }
+
     var socialKindLabel: String {
-        switch (metadata?.postType ?? metadata?.contentType)?.uppercased() {
+        let declared = notificationType == .postRepost ? repostedKind : (metadata?.postType ?? metadata?.contentType)?.uppercased()
+        switch declared {
         case "STORY": return String(localized: "content.kind.story", defaultValue: "Story", bundle: .main)
         case "REEL": return String(localized: "content.kind.reel", defaultValue: "Réel", bundle: .main)
         case "MOOD": return String(localized: "content.kind.mood", defaultValue: "Humeur", bundle: .main)
