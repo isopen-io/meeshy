@@ -7,6 +7,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { makeReachPrisma, type ReachGuest, type ReachPost } from './reach-prisma';
 import { registerSocialEventRoutes, type SocialEventsDeps } from '../../routes/social/events';
 import { creditPostView } from '../../services/posts/postViewCredit';
+import { resetCacheStore } from '../../services/CacheStore';
 
 export const REACH_GUEST: ReachGuest = {
   id: '507f1f77bcf86cd7994390ee',
@@ -19,6 +20,9 @@ export async function reachHarness(
   posts: readonly ReachPost[],
   guests: readonly ReachGuest[] = [REACH_GUEST],
 ): Promise<ReachHarness> {
+  // Le registre des ouvertures (`viewOpenLedger`) vit dans le CacheStore : un
+  // banc neuf repart d'un registre vide.
+  resetCacheStore();
   const fake = makeReachPrisma(posts, guests);
   const app = Fastify({ logger: false });
   app.decorate('prisma', fake.prisma as never);

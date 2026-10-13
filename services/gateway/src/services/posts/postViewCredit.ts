@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters } from './postCounters';
 import { NOT_DELETED } from './postIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
 
 const log = enhancedLogger.child({ module: 'postViewCredit' });
 
@@ -14,7 +15,10 @@ type PostViewCreditPrisma = Pick<PrismaClient, 'postView' | '$runCommandRaw'>;
  *    le veut, chaque fois compte (`repeat`, vrai par défaut) ;
  *  - la PREMIÈRE vue crée le singleton `PostView` (postId,userId) — la liste
  *    « vu par » — et monte `uniqueViewCount` ;
- *  - une ré-ouverture promeut `duration` au maximum, jamais en dessous.
+ *  - une ré-ouverture promeut `duration` au maximum, jamais en dessous ;
+ *  - la SORTIE d'une ouverture déjà comptée (vue avec durée qui suit une vue
+ *    sans durée du même lecteur, `viewOpenLedger.ts`) ne porte que la durée :
+ *    une ouverture est UNE vue, même quand le client en envoie deux.
  *
  * Appliquée IDENTIQUEMENT au post affiché et à la racine d'un repost.
  * `repeat: false` (l'engagement d'un lecteur, #10404) ne crédite que la
@@ -24,21 +28,23 @@ type PostViewCreditPrisma = Pick<PrismaClient, 'postView' | '$runCommandRaw'>;
  */
 export async function creditPostView(
   prisma: PostViewCreditPrisma,
-  { postId, userId, durationMs, surface, repeat = true }: {
+  { postId, userId, durationMs, surface, repeat = true, ledger = sharedViewOpenLedger }: {
     readonly postId: string;
     readonly userId: string;
     readonly durationMs?: number;
     readonly surface?: string;
     readonly repeat?: boolean;
+    readonly ledger?: ViewOpenLedger;
   },
 ): Promise<boolean> {
+  const view = { postId, readerId: userId, durationMs };
   const existing = await prisma.postView.findUnique({
     where: { postId_userId: { postId, userId } },
   });
 
   if (existing) {
     await promoteDuration(prisma, existing, durationMs);
-    if (repeat) await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
+    if (repeat) await creditRepeatView(prisma, ledger, view);
     return false;
   }
 
@@ -48,13 +54,25 @@ export async function creditPostView(
     });
   } catch (error) {
     if (!isUniqueRace(error)) throw error;
-    if (repeat) await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 } });
+    if (repeat) await creditRepeatView(prisma, ledger, view);
     return false;
   }
 
   await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } });
+  if (repeat) await noteCountedOpen(ledger, view);
 
   return true;
+}
+
+/** Une vue d'un lecteur déjà venu : comptée, sauf la sortie d'une ouverture déjà comptée. */
+async function creditRepeatView(
+  prisma: PostViewCreditPrisma,
+  ledger: ViewOpenLedger,
+  view: { readonly postId: string; readonly readerId: string; readonly durationMs?: number },
+): Promise<void> {
+  if (await isExitOfCountedOpen(ledger, view)) return;
+  await incrementPostCounters(prisma, [view.postId], { viewCount: { increment: 1 } });
+  await noteCountedOpen(ledger, view);
 }
 
 /**

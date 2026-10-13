@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters } from './postCounters';
 import { readServableToAnonymous, type AnonymousPostBatchPrisma } from '../../routes/posts/anonymousPostGate';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
 
 /**
  * La PORTÉE ANONYME d'un post (#10483) — ce qu'un lecteur sans compte (invité
@@ -17,6 +18,8 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
  *   lecteur crée sa ligne `AnonymousPostOpen(postId, readerKey)` (unique,
  *   90 jours, index TTL) et monte en plus `uniqueViewCount` et
  *   `anonymousUniqueViewCount`. Une vue répétée monte la durée la plus longue.
+ *   La SORTIE d'une ouverture déjà comptée (vue avec durée qui suit une vue
+ *   sans durée de la même clé, `viewOpenLedger.ts`) ne porte que la durée.
  *   Aucune ligne `PostView`, aucun « vu par ».
  * - **Impression** : des compteurs seulement (`impressionCount +1`,
  *   `anonymousImpressionCount +1`) à CHAQUE listage — aucun dédoublonnage
@@ -51,15 +54,21 @@ const boundedDuration = (durationMs: number | undefined): number | undefined =>
  */
 async function creditView(
   prisma: ReachPrisma,
-  params: { readonly postId: string; readonly readerKey: string; readonly durationMs?: number; readonly now: Date },
+  params: {
+    readonly postId: string; readonly readerKey: string; readonly durationMs?: number; readonly now: Date;
+    readonly ledger: ViewOpenLedger;
+  },
 ): Promise<boolean> {
+  const view = { postId: params.postId, readerId: params.readerKey, durationMs: params.durationMs };
   const first = await openOnce(prisma, params);
+  if (!first && (await isExitOfCountedOpen(params.ledger, view))) return false;
   await incrementPostCounters(prisma, [params.postId], {
     viewCount: { increment: 1 },
     anonymousViewCount: { increment: 1 },
     postOpenCount: { increment: 1 },
     ...(first ? { uniqueViewCount: { increment: 1 }, anonymousUniqueViewCount: { increment: 1 } } : {}),
   });
+  await noteCountedOpen(params.ledger, view);
   return first;
 }
 
@@ -116,9 +125,11 @@ export async function creditAnonymousViews(
     readonly views: readonly AnonymousViewInput[];
     readonly servable: ServableMap;
     readonly now?: Date;
+    readonly ledger?: ViewOpenLedger;
   },
 ): Promise<number> {
   const now = params.now ?? new Date();
+  const ledger = params.ledger ?? sharedViewOpenLedger;
   const views = params.views.filter((view) => params.servable.has(view.postId));
   if (views.length === 0) return 0;
 
@@ -128,11 +139,11 @@ export async function creditAnonymousViews(
   for (const view of views) {
     const durationMs = boundedDuration(view.durationMs);
     try {
-      await creditView(prisma, { postId: view.postId, readerKey: params.readerKey, durationMs, now });
+      await creditView(prisma, { postId: view.postId, readerKey: params.readerKey, durationMs, now, ledger });
       counted += 1;
       const root = params.servable.get(view.postId) ?? null;
       if (root !== null && roots.has(root)) {
-        await creditView(prisma, { postId: root, readerKey: params.readerKey, durationMs, now });
+        await creditView(prisma, { postId: root, readerKey: params.readerKey, durationMs, now, ledger });
       }
     } catch (error) {
       log.warn('anonymous view not recorded', {

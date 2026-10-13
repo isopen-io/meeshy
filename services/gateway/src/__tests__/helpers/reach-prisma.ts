@@ -81,7 +81,7 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
   }) as StoredPost));
   const writes: unknown[] = [];
   const opens: Open[] = [];
-  const postViews: { postId: string; userId: string; duration?: number; surface?: string }[] = [];
+  const postViews: { id: string; postId: string; userId: string; duration?: number; surface?: string }[] = [];
   const ids = () => posts.map((post) => post.id);
   const impressions: Record<string, unknown>[] = [];
 
@@ -141,10 +141,17 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
         if (postViews.some((v) => v.postId === data.postId && v.userId === data.userId)) {
           throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
         }
-        postViews.push({ ...data });
-        return data;
+        const created = { id: `postview-${postViews.length + 1}`, ...data };
+        postViews.push(created);
+        return created;
       }),
-      update: jest.fn(async (args: unknown) => { record('postView', 'update', args); return {}; }),
+      update: jest.fn(async (args: { where: { id: string }; data: { duration?: number } }) => {
+        record('postView', 'update', args);
+        const index = postViews.findIndex((v) => v.id === args.where.id);
+        if (index < 0) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
+        postViews[index] = { ...postViews[index], ...args.data };
+        return postViews[index];
+      }),
     },
     postImpression: {
       createMany: jest.fn(async (args: { data: Record<string, unknown>[] }) => {
