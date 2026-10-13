@@ -2,6 +2,7 @@ import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
 
 import { httpTransport } from './client';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
+import { accountReplacementOf, admitProvenSession, provenSessionOf } from './proven-session';
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
 import {
@@ -82,10 +83,6 @@ export function isVerificationRequired(
 ): data is VerificationRequiredData {
   return (data as VerificationRequiredData).status === 'verification-required';
 }
-
-/** L'horizon d'une session dont la passerelle ne sert pas `expiresIn` — le
- * défaut de `login.ts` sans « se souvenir de cet appareil ». */
-const DEFAULT_SESSION_SECONDS = 24 * 60 * 60;
 
 /**
  * LA CHARGE EXACTE de `POST /auth/register` (`register.ts:133`,
@@ -230,11 +227,10 @@ export function publishedClientDeclaration(host: object = globalThis): Readonly<
 }
 
 /**
- * LA BRANCHE PARTAGÉE d'une réponse « connexion réussie » (`LoginResponseData`)
- * — extraite (#5816, E5) pour que `login()` ET `validateMagicLink()` la
- * suivent SANS la recopier : les deux routes rendent la MÊME union
- * (`routes/magic-link.ts:166-206` a exactement la forme de `login.ts:145-158,
- * 206-212`).
+ * LA BRANCHE « connexion réussie » (`LoginResponseData`) de `login()`. Le lien
+ * magique rend la MÊME union (`routes/magic-link.ts:166-206`), mais la pose
+ * par `admitProvenSession` (`proven-session.ts`), après la question qu'un lien
+ * pour un AUTRE compte exige (#10451).
  */
 function applyLoginResponse(store: SessionStoreApi, data: LoginResponseData): void {
   if (isVerificationRequired(data)) return;
@@ -327,24 +323,30 @@ export function createAuthClient({ transport, store }: AuthDeps) {
   }
 
   /**
-   * `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`
-   * (`applyLoginResponse`, partagée) sur un succès. Un lien ouvert alors que
-   * le magasin est DÉJÀ `authenticated` (un autre compte, ou une session
-   * restaurée) purge D'ABORD (`clearSession()`) — le P0
-   * `MeeshyApp.swift:1019-1034` : jamais `establish(B)` par-dessus une
-   * session `A` encore vivante.
+   * UN LIEN SE PROUVE AVANT DE DÉCIDER (#10451) — rien n'est purgé avant la
+   * preuve : un lien bidon laisse la session ouverte intacte, et la requête
+   * ne présente aucun jeton (`credential: null`), si bien que son refus ne
+   * ferme rien. Une session prouvée pour le compte ouvert le fait tourner ;
+   * pour un AUTRE compte, elle n'est PAS posée — l'écran pose la question
+   * (`accountReplacementOf`, `proven-session.ts`).
    */
-  async function validateMagicLink(token: string): Promise<ApiResult<LoginResponseData>> {
-    if (store.getState().session.status === 'authenticated') store.getState().clearSession();
+  function admitUnlessReplacing(data: object): void {
+    const proven = provenSessionOf(data);
+    if (proven === null || accountReplacementOf(store.getState().session, proven) !== null) return;
+    admitProvenSession(store, proven);
+  }
 
+  /** `POST /auth/magic-link/validate` (T3b) — la MÊME union que `login()`. */
+  async function validateMagicLink(token: string): Promise<ApiResult<LoginResponseData>> {
     const result = await transport.request<LoginResponseData>({
       method: 'POST',
       path: authEndpoints.magicLinkValidate,
       body: { token },
+      credential: null,
     });
     if (!result.ok) return result;
 
-    applyLoginResponse(store, result.data);
+    admitUnlessReplacing(result.data);
     return result;
   }
 
@@ -406,21 +408,19 @@ export function createAuthClient({ transport, store }: AuthDeps) {
 
   /** `POST /auth/verify-email` — une réponse qui porte une session l'ÉTABLIT
    * (#8034), par le même `establish` que la connexion ; sans session (ancienne
-   * passerelle), le magasin reste tel quel. */
+   * passerelle), le magasin reste tel quel. Le lien comme le code suivent la
+   * règle du lien magique (#10451) : la session d'un AUTRE compte que le
+   * compte ouvert n'est pas posée sans la question. */
   async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
     const result = await transport.request<VerifyEmailData>({
       method: 'POST',
       path: authEndpoints.verifyEmail,
       body: verifyEmailBody(request),
+      credential: null,
     });
     if (!result.ok || !verificationOpensSession(result.data)) return result;
 
-    store.getState().establish({
-      user: result.data.user,
-      token: result.data.token,
-      sessionToken: result.data.sessionToken,
-      expiresIn: result.data.expiresIn ?? DEFAULT_SESSION_SECONDS,
-    });
+    admitUnlessReplacing(result.data);
     return result;
   }
 

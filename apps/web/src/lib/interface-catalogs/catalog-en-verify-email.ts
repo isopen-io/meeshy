@@ -36,6 +36,13 @@ const enVerifyEmail = {
   'verifyEmail.arrival.lead': 'Getting your conversations ready…',
   'verifyEmail.arrival.status': 'Address confirmed — signing in…',
   'emailSent.codeOrLink': 'Enter the 6-digit code sent to {email}, or open the link in the same email.',
+  'signInLink.switchAccount.title': 'Open a DIFFERENT account?',
+  'signInLink.switchAccount.lead': 'You’re signed in as @{current}, but what you just opened leads to a different account:',
+  'signInLink.switchAccount.warning': 'If you didn’t request this link or code yourself, cancel: you stay signed in and nothing changes.',
+  'signInLink.switchAccount.cancel': 'Cancel and stay on @{current}',
+  'signInLink.switchAccount.confirm': 'Open this other account',
+  'signInLink.switchAccount.kept': '@{current} will stay in your accounts on this device.',
+  'signInLink.switchAccount.busy': 'One moment…',
 };
 
 export default enVerifyEmail;

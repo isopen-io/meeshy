@@ -1,0 +1,145 @@
+import { useEffect, useRef, useState } from 'react';
+
+import { maskEmail } from '@/lib/api/email-mask';
+import { provenEmailOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+import { initialsOf } from '@/lib/view/conversation';
+
+import { Avatar } from './avatar';
+import { Glyph } from './glyph';
+
+/**
+ * LA QUESTION AVANT QU'UN LIEN N'OUVRE UN AUTRE COMPTE (#10451, jumelle web de
+ * #10445) — posée seulement APRÈS la preuve, quand l'id rendu n'est pas celui
+ * du compte ouvert. Elle dit « un AUTRE compte », montre ce compte (avatar,
+ * nom, @pseudo, adresse masquée) et le compte qu'on quitterait. « Annuler »
+ * est le geste mis en avant, et le focus initial : un lien qu'on n'a pas
+ * demandé se refuse d'une touche.
+ */
+
+/** Les gestes de l'appareil, chargés au geste : l'écran du lien n'embarque
+ * pas le coffre des comptes tant que personne ne répond. */
+export const deviceProvenSessions: ProvenSessionGestures = {
+  adopt: (replacement) => import('@/lib/api/device-accounts').then(({ provenSessions }) => provenSessions.adopt(replacement)),
+  discard: (replacement) => import('@/lib/api/device-accounts').then(({ provenSessions }) => provenSessions.discard(replacement)),
+};
+
+export function AccountReplacementPrompt({
+  language,
+  replacement,
+  gestures = deviceProvenSessions,
+  onAdopted,
+  onDiscarded,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly replacement: AccountReplacement;
+  readonly gestures?: ProvenSessionGestures;
+  readonly onAdopted: () => void;
+  readonly onDiscarded: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const answered = useRef(false);
+  const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const current = replacement.current.username;
+
+  /* Quitter l'écran sans répondre vaut « non » : la session prouvée ne reste
+     jamais ouverte côté passerelle. Le refus attend un tour, pour qu'un
+     démontage suivi d'un remontage immédiat (StrictMode) ne le déclenche pas. */
+  useEffect(() => {
+    if (leaving.current !== null) clearTimeout(leaving.current);
+    leaving.current = null;
+    return () => {
+      leaving.current = setTimeout(() => {
+        if (answered.current) return;
+        answered.current = true;
+        void gestures.discard(replacement);
+      }, 0);
+    };
+  }, [gestures, replacement]);
+  const proven = replacement.proven.user;
+  const name = proven.displayName?.trim() || proven.username;
+  const email = provenEmailOf(replacement.proven);
+
+  async function answer(adopt: boolean) {
+    if (answered.current) return;
+    answered.current = true;
+    setBusy(true);
+    if (adopt && (await gestures.adopt(replacement))) {
+      onAdopted();
+      return;
+    }
+    if (!adopt) await gestures.discard(replacement);
+    onDiscarded();
+  }
+
+  return (
+    <section role="alertdialog" aria-modal="false" aria-labelledby="account-replacement-title" aria-describedby="account-replacement-lead" className="grid gap-5 text-center">
+      <Glyph name="warningCircle" size={44} className="mx-auto" style={{ color: 'var(--ios-warning)' }} />
+      <h1 id="account-replacement-title" className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+        {translate(language, 'signInLink.switchAccount.title')}
+      </h1>
+      <p id="account-replacement-lead" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, 'signInLink.switchAccount.lead', { current })}
+      </p>
+
+      <div
+        data-proven-account={proven.username}
+        className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-start"
+        style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)' }}
+      >
+        <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={52} {...(proven.avatar ? { src: proven.avatar } : {})} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {name}
+          </span>
+          <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {`@${proven.username}`}
+          </span>
+          {email === null ? null : (
+            <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {maskEmail(email)}
+            </span>
+          )}
+        </span>
+      </div>
+
+      <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, 'signInLink.switchAccount.warning')}
+      </p>
+
+      <div className="grid gap-3">
+        <button
+          type="button"
+          data-answer="cancel"
+          autoFocus
+          disabled={busy}
+          onClick={() => void answer(false)}
+          className="grid place-items-center rounded-field px-6 font-bold text-ios-on-brand focus-visible:outline-2"
+          style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'signInLink.switchAccount.cancel', { current })}
+        </button>
+        <button
+          type="button"
+          data-answer="confirm"
+          disabled={busy}
+          aria-describedby="account-replacement-kept"
+          onClick={() => void answer(true)}
+          className="grid place-items-center rounded-field px-6 font-semibold focus-visible:outline-2"
+          style={{
+            minHeight: 44,
+            border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
+            color: 'var(--color-ios-ink)',
+            outlineColor: 'var(--color-ios-brand)',
+          }}
+        >
+          {busy ? translate(language, 'signInLink.switchAccount.busy') : translate(language, 'signInLink.switchAccount.confirm')}
+        </button>
+        <p id="account-replacement-kept" className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {translate(language, 'signInLink.switchAccount.kept', { current })}
+        </p>
+      </div>
+    </section>
+  );
+}
