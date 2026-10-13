@@ -146,12 +146,13 @@ final class ListedCellProbe {
     var fraction: Double?
 }
 
-/// La fenêtre dans laquelle une carte se mesure : l'écran. Le cadre de la
-/// carte est lu dans l'espace global ; aucune marge de la fenêtre n'est lue.
+/// La fenêtre dans laquelle une carte se mesure : celle de l'app, pas l'écran
+/// (en Split View l'app n'en tient qu'une part). Le cadre de la carte est lu
+/// dans l'espace global ; aucune marge de la fenêtre n'est lue.
 enum ListingViewport {
     @MainActor static var screen: CGRect {
         #if canImport(UIKit)
-        UIScreen.main.bounds
+        CGRect(origin: .zero, size: DeviceLayout.windowSize)
         #else
         .zero
         #endif

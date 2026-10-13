@@ -8,7 +8,8 @@ import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -256,6 +257,8 @@ export const FocalRow = memo(function FocalRow({
 }) {
   const { message, head, tail } = place;
   const nowMs = now();
+  /* LA PRÉSENCE VIVANTE DE L'EXPÉDITEUR (#10571) — avant tout retour anticipé. */
+  const senderPresence = usePresence(message.sender, { now });
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
 
@@ -416,7 +419,7 @@ export const FocalRow = memo(function FocalRow({
    * comble l'identité, jamais un nom vide en tête de groupe. */
   const senderAvatarName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
   /* LA PHOTO DE L'EXPÉDITEUR (#6975) — `message.sender` est un `Participant`
-     complet (c'est déjà lui que `presenceOf` reçoit deux lignes plus bas),
+     complet (c'est déjà lui que `usePresence` reçoit plus haut),
      donc les DEUX rangs de la loi partagée sont là : avatar local, puis
      avatar du compte. La rangée de message est le mode de lecture PAR DÉFAUT
      (D-7) : elle est vue à chaque message de chaque conversation. */
@@ -727,7 +730,7 @@ export const FocalRow = memo(function FocalRow({
                   ...(senderRing === undefined ? {} : { storyRing: senderRing }),
                 }
               : {})}
-            presence={presenceOf(message.sender, nowMs)}
+            presence={senderPresence}
           />
           {languageChip === null ? null : (
             <span aria-hidden data-author-language={languageChip} className={`author-language-chip${tintsName ? ' author-ink' : ''}`} style={tintsName ? senderNameStyle : { color: 'var(--color-ios-ink-2)' }}>

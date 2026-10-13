@@ -140,7 +140,8 @@ describe('les gestes d’une publication, depuis la liste', () => {
   test('hors du rang souverain, le motif est demandé et part avec le geste', async () => {
     const { host, calls } = await ouvrir(() => ({ ok: true, data: view(2, { state: 'published', visibility: 'FRIENDS', moderationHiddenAt: null, moderationPriorVisibility: null }) }), ADMIN);
     await click(gestures(host, 2)?.querySelector('[data-admin-post-gesture="restore"]') ?? null);
-    expect(confirmer()?.disabled).toBe(true);
+    /* L’ADMIN trouve le motif proposé déjà écrit (#10562) : la confirmation est offerte d’emblée. */
+    expect(confirmer()?.disabled).toBe(false);
     mounter.type(document, '[data-admin-motive]', 'Erreur de modération');
     await click(confirmer());
     expect(posts(calls)[0]?.body).toEqual({ gesture: 'restore', reason: 'Erreur de modération' });

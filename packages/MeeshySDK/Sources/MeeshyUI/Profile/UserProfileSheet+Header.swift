@@ -181,11 +181,23 @@ extension UserProfileSheet {
             accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
-            moodEmoji: isBlockedByTarget ? nil : moodEmoji,
+            moodEmoji: shownMoodEmoji,
             presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
-            onMoodTap: isBlockedByTarget ? nil : onMoodTap
+            onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
         )
+    }
+
+    /// L'humeur peinte sur l'avatar — le grand en-tête ET la barre compacte
+    /// (#10529) : celle que l'app remet, sauf si la cible m'a bloqué. Une
+    /// chaîne vide n'est pas une humeur.
+    public nonisolated static func shownMood(_ emoji: String?, isBlockedByTarget: Bool) -> String? {
+        guard !isBlockedByTarget, let emoji, !emoji.isEmpty else { return nil }
+        return emoji
+    }
+
+    var shownMoodEmoji: String? {
+        Self.shownMood(moodEmoji, isBlockedByTarget: isBlockedByTarget)
     }
 
     /// Présence affichée sur l'avatar (grand header + barre compacte).
@@ -311,7 +323,9 @@ extension UserProfileSheet {
                 accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
-                presenceState: isBlockedByTarget ? nil : resolvedPresence
+                moodEmoji: shownMoodEmoji,
+                presenceState: isBlockedByTarget ? nil : resolvedPresence,
+                onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
             )
 
             VStack(alignment: .leading, spacing: 0) {

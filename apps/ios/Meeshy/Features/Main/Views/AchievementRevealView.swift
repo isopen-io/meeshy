@@ -226,6 +226,8 @@ struct AchievementRevealView: View {
         // balayer trois fois ce qui est une seule nouvelle.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(phraseAccessible)
+        // La célébration RETIENT : la conversation s'ouvre quand on la quitte (#10543).
+        .retainsAgainstConversationOpening(.game)
     }
 
     /// « Succès débloqué. <titre>. <explication> », puis la rareté en toutes lettres : la couleur du liseré n'est

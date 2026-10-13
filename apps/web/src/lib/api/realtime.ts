@@ -13,6 +13,8 @@ import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
+import { bindPresenceLive } from './presence-live';
+import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
 import { endGuestAccess } from './guest-access-end';
 import { appQueryClient } from './query-client';
@@ -22,6 +24,7 @@ import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
+import { relaunchConversationList } from './realtime-thread-catch-up';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -100,14 +103,20 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     return;
   }
   const unbridge = bridgeCallEvents(next.socket);
-  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
-  const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
+     Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
+  const unwatch =
+    typeof document === 'undefined'
+      ? () => undefined
+      : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document), onWake: () => relaunchConversationList(appQueryClient) });
   /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
   const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
   /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
   const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
   /* « · +99 » (#9570) : ce qu'un post a rapporté au lecteur crédité, posé sur chaque caisse qui montre sa carte. */
   const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
+  /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
+  const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
@@ -116,6 +125,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unview();
     unengage();
     unengagePosts();
+    unpresence();
     unrevoke();
   };
 }

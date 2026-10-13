@@ -154,3 +154,34 @@ enum DeviceLayout {
         bubbleMaxWidth(containerWidth: windowSize.width, sizeClass: sizeClass)
     }
 }
+
+/// The bottom safe-area inset as the LAYOUT measures it, for views rendered
+/// inside `.ignoresSafeArea()`.
+///
+/// Reading `DeviceLayout.safeAreaBottom` during a `body` pass asks UIKit for the
+/// window's `safeAreaInsets`, which resolves the status bar through SwiftUI's
+/// preferences and re-enters the graph update in progress: the story viewer
+/// crashed there on 2026-10-10 (« Thread stack size exceeded », #10566), the
+/// call screen and the mini-player froze there before it (#8772, #9048).
+struct BottomSafeAreaInsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+extension View {
+    /// Writes the container's bottom inset — keyboard excluded — into `inset`.
+    /// Apply it OUTSIDE the `.ignoresSafeArea()` that flattens the inner readers.
+    func measuringBottomSafeArea(into inset: Binding<CGFloat>) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: BottomSafeAreaInsetKey.self, value: proxy.safeAreaInsets.bottom)
+            }
+            .ignoresSafeArea(.keyboard)
+        )
+        .onPreferenceChange(BottomSafeAreaInsetKey.self) { measured in
+            if inset.wrappedValue != measured { inset.wrappedValue = measured }
+        }
+    }
+}

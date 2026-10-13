@@ -56,6 +56,7 @@ struct RootEnvironmentLayer: ViewModifier {
                     .environmentObject(storyViewerCoordinator)
                     .presentationDetents([.large, .medium])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             // Propagate story viewer presentation state down to chrome (sync
             // pill, etc.) so they can skip rendering while a `fullScreenCover`
@@ -351,6 +352,10 @@ struct RootSheetsLayer: ViewModifier {
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
                 }
             }
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
@@ -363,6 +368,7 @@ struct RootSheetsLayer: ViewModifier {
                     .environmentObject(statusViewModel)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             .adaptiveOnChange(of: router.path) { _, newPath in
                 if !newPath.isEmpty && showFeed {
@@ -410,5 +416,9 @@ struct RootSheetsLayer: ViewModifier {
                     UpgradeGateView(requirement: requirement)
                 }
             }
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }

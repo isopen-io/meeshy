@@ -681,7 +681,22 @@ extension iPadRootView {
             notificationType: type,
             storyLifecycleHint: StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
         )
+        // Story, réel ou feuille en cours : le routeur les referme d'abord, par
+        // le site des conversations (#10543) — la cible ne s'ouvre plus dessous.
+        router.clearPresentedSurfaces { _ in
+            showSocialSurface(surface, postId: postId, type: type, commentId: commentId,
+                              parentCommentId: parentCommentId, storyContext: storyContext)
+        }
+    }
 
+    private func showSocialSurface(
+        _ surface: NotificationContentSurface,
+        postId: String,
+        type: MeeshyNotificationType,
+        commentId: String?,
+        parentCommentId: String?,
+        storyContext: StoryNotificationContext
+    ) {
         switch surface {
         case .story:
             router.push(.storyNotificationTarget(

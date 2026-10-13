@@ -1546,8 +1546,8 @@ final class MessageListViewController: UIViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
-                        senderIsHere: senderIsHere,
-                        senderStoryRingState: senderRingState,
+                        senderIsHere: senderIsHere, senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
+                        senderStoryRingState: senderRingState, onSenderMoodTap: statuses.moodTapHandler(for: senderId),
                         onViewStory: (senderRingState != .none)
                             ? { viewSenderStoryHandler?(senderId) }
                             : nil,

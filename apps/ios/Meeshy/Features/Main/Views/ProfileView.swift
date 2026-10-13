@@ -103,7 +103,7 @@ struct ProfileView: View {
                 imageURL: image.value,
                 fallbackText: user?.displayName ?? user?.username ?? "",
                 accentColor: accentColor
-            )
+            ).closesForConversationOpening(.profilePhoto)
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -282,13 +282,7 @@ struct ProfileView: View {
 
             // Avatar overlapping banner
             ZStack(alignment: .bottomTrailing) {
-                MeeshyAvatar(
-                    name: user?.displayName ?? user?.username ?? "?",
-                    context: .profileBanner,
-                    accentColor: accentColor,
-                    secondaryColor: MeeshyColors.indigo300Hex,
-                    avatarURL: user?.avatar
-                )
+                ProfileOwnAvatar(user: user, accentColor: accentColor, isEditing: isEditing)
                 .overlay(
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)

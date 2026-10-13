@@ -57,6 +57,7 @@ struct GlobalSearchView: View {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
+        .closesForConversationOpening(.search)
     }
 
     // MARK: - Header Bar

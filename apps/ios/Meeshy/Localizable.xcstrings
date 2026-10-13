@@ -44871,6 +44871,53 @@
         }
       }
     },
+    "audio.fullscreen.dial": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموضع في الرسالة الصوتية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position in der Sprachnachricht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position in the voice message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición en el mensaje de voz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position dans le vocal"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posizione nel messaggio vocale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posição na mensagem de voz"
+          }
+        }
+      }
+    },
     "audio.fullscreen.language.choose": {
       "extractionState": "manual",
       "localizations": {
@@ -234710,53 +234757,6 @@
         }
       }
     },
-    "game.chest.bonusOdds": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "مكافأة: %1$@ لـ %2$@، وإلا %3$@ لـ %4$@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bonus: %1$@ auf %2$@, sonst %3$@ auf %4$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bonus: %1$@ of %2$@, otherwise %3$@ of %4$@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prima: %1$@ de %2$@; si no, %3$@ de %4$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prime : %1$@ de %2$@, sinon %3$@ de %4$@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Premio: %1$@ per %2$@, altrimenti %3$@ per %4$@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bônus: %1$@ de %2$@; senão, %3$@ de %4$@"
-          }
-        }
-      }
-    },
     "game.badge.guide_link": {
       "extractionState": "manual",
       "localizations": {
@@ -240440,53 +240440,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Não deu certo — verifique sua conexão e tente de novo."
-          }
-        }
-      }
-    },
-    "game.chest.chance": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "فرصة واحدة من %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 Chance auf %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 chance in %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 posibilidad entre %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 chance sur %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 possibilità su %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 chance em %@"
           }
         }
       }
@@ -249182,53 +249135,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volte amanhã para o próximo."
-          }
-        }
-      }
-    },
-    "game.chest.odds": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ إلى %2$@ حسب مهامك · %3$@ لشظية نجم · %4$@ لتجميد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ bis %2$@ je nach Missionen · %3$@ auf ein Sternfragment · %4$@ auf ein Eis"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ to %2$@ depending on your missions · %3$@ for a star fragment · %4$@ for a freeze"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ a %2$@ según tus misiones · %3$@ de un fragmento de estrella · %4$@ de un congelador"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ à %2$@ selon tes missions · %3$@ d’un fragment d’étoile · %4$@ d’un gel"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Da %1$@ a %2$@ secondo le tue missioni · %3$@ per un frammento di stella · %4$@ per un gelo"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ a %2$@ conforme tuas missões · %3$@ de um fragmento de estrela · %4$@ de um congelamento"
           }
         }
       }
@@ -278040,53 +277946,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "O Atlas guarda um carimbo para cada idioma em que você conversou."
-          }
-        }
-      }
-    },
-    "game.chest.today": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هذا الصندوق: %1$@ · %2$@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Truhe: %1$@ · %2$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This chest: %1$@ · %2$@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este cofre: %1$@ · %2$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce coffre : %1$@ · %2$@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Questo forziere: %1$@ · %2$@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este baú: %1$@ · %2$@"
           }
         }
       }

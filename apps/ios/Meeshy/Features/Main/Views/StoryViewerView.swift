@@ -419,15 +419,10 @@ struct StoryViewerView: View {
     // swipe-to-dismiss thresholds and horizontal-slide normalization.
     private var windowSize: CGSize { DeviceLayout.windowSize }
 
-    /// Bas du safe area lu directement sur la keyWindow. Necessaire parce que
-    /// le `GeometryReader` interne au viewer est rendu dans un contexte
-    /// `.ignoresSafeArea()` (cf. `viewerContent`), ce qui aplatit
-    /// `geometry.safeAreaInsets.bottom` a 0 — le composer et la liste de
-    /// commentaires se retrouvaient alors plaques sur le bord physique et
-    /// chevauchaient le home indicator + les coins arrondis (bug 2026-05-28).
-    var windowBottomInset: CGFloat { // internal for cross-file extension access
-        DeviceLayout.safeAreaBottom
-    }
+    /// Encart bas MESURÉ par la mise en page (`measuringBottomSafeArea`), jamais
+    /// lu sur la fenêtre pendant `body` (#10566) : le `GeometryReader` interne,
+    /// sous `.ignoresSafeArea()`, rend 0.
+    @State var windowBottomInset: CGFloat = 0 // internal for cross-file extension access
 
     private var screenH: CGFloat { windowSize.height }
 
@@ -529,6 +524,7 @@ struct StoryViewerView: View {
         .background(Color.black)
         .preferredColorScheme(.dark)
         .ignoresSafeArea()
+        .measuringBottomSafeArea(into: $windowBottomInset)
         .statusBarHidden()
         .onAppear {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
@@ -1702,10 +1698,8 @@ struct StoryViewerView: View {
     // MARK: - Computed Bottom Padding
 
     private func composerBottomPadding(geometry: GeometryProxy) -> CGFloat {
-        // `.ignoresSafeArea()` au root du viewer aplatit `geometry.safeAreaInsets.bottom`
-        // a 0 dans le `GeometryReader` interne. On retombe sur le vrai inset de la
-        // keyWindow (`windowBottomInset`) pour ne pas plaquer le composer sur le
-        // home indicator et les coins arrondis iPhone Pro (bug 2026-05-28).
+        // `geometry.safeAreaInsets.bottom` vaut 0 sous `.ignoresSafeArea()` : l'encart mesuré tient le
+        // composer au-dessus du home indicator (bug 2026-05-28).
         let safeBottom = max(geometry.safeAreaInsets.bottom, windowBottomInset)
         if showTextEmojiPicker {
             // Emoji panel is showing — just need safe area below it

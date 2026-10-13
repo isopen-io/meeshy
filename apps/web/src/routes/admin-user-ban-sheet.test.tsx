@@ -267,8 +267,17 @@ describe('le motif du bannissement, selon le rang (spec 2026-10-04 § 4)', () =>
     expect(post?.body).toEqual({});
   });
 
-  test('ADMIN : le motif reste obligatoire', async () => {
-    const { apply } = await openAs('ADMIN');
+  test('ADMIN : le motif est proposé — facultatif, et un champ vide envoie le motif proposé (#10562)', async () => {
+    const { apply, calls } = await openAs('ADMIN');
+    expect(textOf(document.body)).toContain('Motif (facultatif)');
+    expect(document.querySelector('[data-admin-ban-reason]')?.getAttribute('placeholder')).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(apply?.disabled).toBe(false);
+    await mounter.click(apply ?? null);
+    expect(calls().find((call) => call.method === 'POST')?.body).toEqual({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' });
+  });
+
+  test('MODERATOR : rien n’est proposé, le motif reste obligatoire', async () => {
+    const { apply } = await openAs('MODERATOR');
     expect(textOf(document.body)).toContain('Motif (obligatoire)');
     expect(apply?.disabled).toBe(true);
   });
