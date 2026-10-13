@@ -120,6 +120,16 @@ enum EmailProofErrorText {
                defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: bundle)
     }
 
+    /// Le lien d'un AUTRE compte, accepté, n'a pas ouvert ce compte (#10518) :
+    /// l'écran dit POURQUOI — un lien trop vieux se redemande, une session que
+    /// l'appareil n'a pas pu poser ne se redemande pas.
+    static func accountSwitchMessage(for refusal: ProvenAccountSwitchRefusal, bundle: Bundle = .main) -> String {
+        switch refusal {
+        case .expired: return linkExpired(bundle: bundle)
+        case .failed: return sessionNotOpened(bundle: bundle)
+        }
+    }
+
     /// L'adresse est prouvée mais le compte attend son second facteur
     /// (#10445) : ce n'est ni un refus ni un « Email vérifié ! ».
     private static func secondFactorRequired(_ bundle: Bundle) -> String {

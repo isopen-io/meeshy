@@ -65,7 +65,7 @@ final class EmailProvenAccountSwitchTests: XCTestCase {
     /// indisponible dans le binaire de test SPM — la moitié comportementale se
     /// vérifie au simulateur et dans `SignInLinkDuringPresentationTests`.
     func test_switchToProvenAccount_suspendsTheCurrentAccount_neverLogsOut() throws {
-        let corps = try body(of: "public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {", in: try source())
+        let corps = try body(of: "public func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome {", in: try source())
 
         XCTAssertTrue(corps.contains("await suspendActiveSession()"),
                       "le compte quitté reste au sélecteur, repris sans mot de passe")
@@ -74,6 +74,9 @@ final class EmailProvenAccountSwitchTests: XCTestCase {
         let suspend = try XCTUnwrap(corps.range(of: "await suspendActiveSession()"))
         let open = try XCTUnwrap(corps.range(of: "try installSession(proven)", options: .backwards))
         XCTAssertTrue(suspend.lowerBound < open.lowerBound, "la session rendue se pose APRÈS la sortie de l'autre")
+        // #10518 — la fenêtre se juge AVANT de ranger le compte ouvert.
+        let lapse = try XCTUnwrap(corps.range(of: "proven.hasLapsedAdoptionWindow()"))
+        XCTAssertTrue(lapse.lowerBound < suspend.lowerBound, "une preuve échue ne range jamais le compte ouvert")
     }
 
     /// Le comportement (réessais, jeton prouvé) est éprouvé par
