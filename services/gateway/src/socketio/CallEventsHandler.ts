@@ -38,7 +38,7 @@ import { announceRecordingArrival, registerCallRecordingEvents } from './call-re
 import { evictStaleSameUserSockets } from './call-room-eviction';
 import { DISCONNECT_GRACE_MS, GRACE_EXTENSION_MS, MAX_GRACE_EXTENSIONS, alreadyActiveCallDetails, isCallRevenant } from './call-rejoin';
 import { forceLeaveSparesLiveCall } from './call-force-leave-scope';
-import { departedMemberParticipantWhere } from './departed-member-participant-where';
+import { departedMemberParticipantWhere, participantKeyWhere } from './departed-member-participant-where';
 import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
@@ -1767,8 +1767,10 @@ export class CallEventsHandler {
         );
         if (!rateLimitPassed) return;
 
+        // #10473 — la colonne se choisit sur la clé : un invité de lien se
+        // reconnecte sous son `Participant.id`, son `userId` est nul.
         const myConvs = await this.prisma.participant.findMany({
-          where: { userId, isActive: true },
+          where: { ...participantKeyWhere(userId), isActive: true },
           select: { conversationId: true }
         });
         const convIds = myConvs.map(p => p.conversationId);
@@ -1796,7 +1798,7 @@ export class CallEventsHandler {
         const callIds = activeCalls.map(c => c.id);
         const myParticipants = callIds.length > 0
           ? await this.prisma.callParticipant.findMany({
-              where: { callSessionId: { in: callIds }, participant: { userId } }
+              where: { callSessionId: { in: callIds }, participant: participantKeyWhere(userId) }
             })
           : [];
         // Vague 177 — a leave-then-rejoin (network blip, app relaunch mid-ring)

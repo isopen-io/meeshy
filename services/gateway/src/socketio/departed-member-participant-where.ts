@@ -12,8 +12,15 @@
  * un membre inscrit ne se désigne jamais par son `Participant.id`.
  */
 export function departedMemberParticipantWhere(conversationId: string, memberKey: string) {
-  return {
-    conversationId,
-    OR: [{ userId: memberKey }, { id: memberKey, type: 'anonymous' }],
-  };
+  return { conversationId, ...participantKeyWhere(memberKey) };
+}
+
+/**
+ * Le filtre `Participant` de la CLÉ d'une personne, sans autre condition
+ * (#10473) : `userId` pour un membre inscrit, `id` d'une ligne d'invité
+ * (`type: 'anonymous'`) pour un invité de lien. Toute requête `Participant`
+ * qui reçoit la clé d'une socket (`SocketUser.id`) passe par lui.
+ */
+export function participantKeyWhere(memberKey: string) {
+  return { OR: [{ userId: memberKey }, { id: memberKey, type: 'anonymous' }] };
 }
