@@ -16,6 +16,7 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
+import { deletedAccountOf, deletedAccountOfRevocation } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
 import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -199,6 +200,9 @@ export type RealtimeDeps = {
   /** `error { code: SHARE_LINK_EXPIRED }` (#10442) — l'accès de l'invité est
    * fini : la connexion se ferme d'elle-même et ne se rouvre plus. */
   readonly onGuestAccessEnded?: (reason: GuestAccessEnd) => void;
+  /** Le compte NOMMÉ supprimé (#10237) : `error { code: ACCOUNT_DELETED, accountId }`
+   * ou `auth:session-revoked { deletedAccountId }` — jamais le compte actif. */
+  readonly onAccountDeleted?: (accountId: string) => void;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
    * directement, pour que le témoin d'expiration soit déterministe. */
   readonly now?: () => number;
@@ -871,9 +875,15 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
   /* Le MOTIF voyage (#9613) : l'écran de connexion dit pourquoi la session s'est fermée. */
-  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => deps.onClearSession(payload?.reason);
+  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => {
+    deps.onClearSession(payload?.reason);
+    const deleted = deletedAccountOfRevocation(payload);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
+  };
   let guestAccessEnded = false;
   const onServerError = (payload: unknown): void => {
+    const deleted = deletedAccountOf(payload);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
     const reason = guestAccessEndOfSocketError(payload);
     if (reason === null) return;
     guestAccessEnded = true;

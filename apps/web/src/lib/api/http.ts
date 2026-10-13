@@ -3,6 +3,7 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 import type { Transport } from '../net/transport';
 
 import { anySignal, timeoutSignal } from './abort';
+import { deletedAccountOf } from './account-deleted';
 import { guestAccessEndOf, type GuestAccessEnd } from './guest-access-end';
 
 /**
@@ -196,7 +197,14 @@ export type HttpTransportOptions = {
    * sur un appel qui n'a présenté AUCUN jeton non plus : `POST /auth/login`
    * refusé (`login.ts:133`, `security: []`) déconnecterait sinon la session
    * en cours pour un mot de passe mal tapé dans un ré-authentifiant. */
-  readonly onUnauthorized?: () => void;
+  readonly onUnauthorized?: (refusal: UnauthorizedRefusal) => void;
+  /**
+   * Notifié quand un 401 dit « ce compte a été supprimé » (#10237, contrat
+   * #10264 : `code: 'ACCOUNT_DELETED'` + `accountId`) — avec le compte NOMMÉ,
+   * même si l'identité courante a changé pendant le vol : c'est l'identifiant
+   * du jeton refusé, jamais celui du compte actif.
+   */
+  readonly onAccountDeleted?: (accountId: string) => void;
   /** Notifié quand la passerelle dit à une session d'INVITÉ que son accès est
    * fini (#10442, `guest-access-end.ts`) : lien expiré ou invité retiré. Ni un
    * compte ni un appel au crédential forcé ne le déclenchent. */
@@ -206,6 +214,13 @@ export type HttpTransportOptions = {
    * DÉSACTIVE le délai (utile à un témoin qui veut isoler un autre
    * comportement) — jamais le défaut d'une passerelle réelle. */
   readonly timeoutMs?: number;
+};
+
+/** Ce que dit un 401 — lu dans son corps, pour que la fin de session sache pourquoi. */
+export type UnauthorizedRefusal = {
+  readonly status: 401;
+  readonly code?: string;
+  readonly accountId?: string;
 };
 
 export type HttpTransport = Transport & {
@@ -347,6 +362,14 @@ function abortCode(
  */
 const NEVER: Promise<never> = new Promise<never>(() => undefined);
 
+function refusalOf(envelope: Record<string, unknown>): UnauthorizedRefusal {
+  return {
+    status: 401,
+    ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
+    ...(typeof envelope.accountId === 'string' ? { accountId: envelope.accountId } : {}),
+  };
+}
+
 export function createHttpTransport(options: HttpTransportOptions): HttpTransport {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -400,11 +423,8 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       };
     }
 
-    if (staleForReader()) return NEVER;
-    /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
-       a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
-       ferme jamais la session de B ouverte entre-temps. */
-    if (response.status === 401 && presentsIdentity && !identityChanged()) options.onUnauthorized?.();
+    const unauthorized = response.status === 401 && (credential !== null || namesAnIdentity(req.headers));
+    if (staleForReader() && !unauthorized) return NEVER;
 
     let payload: unknown;
     try {
@@ -412,8 +432,19 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     } catch {
       payload = undefined;
     }
-    if (staleForReader()) return NEVER;
     const envelope = envelopeOf(payload);
+    /* Un compte supprimé est NOMMÉ par son refus : il part même si l'appareil a
+       changé de compte pendant le vol (#10237). */
+    const deletedAccount = unauthorized ? deletedAccountOf(envelope) : null;
+    if (staleForReader()) {
+      if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
+      return NEVER;
+    }
+    /* Un 401 ne dit rien de l'identité COURANTE si elle n'est plus celle qui
+       a demandé : la déconnexion d'A, rejouée sur ses en-têtes explicites, ne
+       ferme jamais la session de B ouverte entre-temps. */
+    if (unauthorized && presentsIdentity && !identityChanged()) options.onUnauthorized?.(refusalOf(envelope));
+    if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
 
     if (envelope.success === true) {
       return {

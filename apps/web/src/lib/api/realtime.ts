@@ -7,6 +7,7 @@ import { navigate } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
@@ -135,6 +136,7 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       outbox: outboxStore,
       viewerId: currentViewerId,
       onClearSession: endWithReason,
+      onAccountDeleted: retireDeletedAccountLater,
       onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
     }),
   onChange: (next) => {
