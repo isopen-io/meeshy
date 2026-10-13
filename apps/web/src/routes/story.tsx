@@ -26,6 +26,7 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
 import { ADVANCED_STORY, entryAttribution } from '@/lib/view/content-open';
+import { useStoryTelemetry } from '@/lib/telemetry/story-telemetry';
 import { useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { servedStoryIndicator } from '@/lib/stories/language-availability';
@@ -407,6 +408,25 @@ export default function StoryScreen() {
     openView: visitor,
     attribution: attributionOf,
   });
+  /* LES GESTES DU LECTEUR (#10506) — le tap et la sortie de l'utilisateur ;
+     l'avance automatique n'en est pas un. */
+  const storyTelemetry = useStoryTelemetry({
+    storyId: currentStory?.id,
+    slideIndex: playablePosition !== null && playablePosition !== 'close' ? playablePosition.storyIndex : undefined,
+    slideCount: group?.stories.length,
+    elapsedMs: () => elapsedRef.current + (paused ? 0 : performance.now() - startTsRef.current),
+  });
+  const userAdvance = useCallback(
+    (direction: 'previous' | 'next') => {
+      storyTelemetry.noteTap(direction);
+      advance(direction);
+    },
+    [storyTelemetry, advance],
+  );
+  const dismissByUser = useCallback(() => {
+    storyTelemetry.noteExit();
+    closeViewer();
+  }, [storyTelemetry, closeViewer]);
 
   const pause = useCallback(() => {
     setPaused((was) => {
@@ -505,9 +525,9 @@ export default function StoryScreen() {
      tiers gauche/droit. Les zones de tap restent (divergence admise : une
      story se REGARDE, le tap y avance). Une feuille ouverte réclame le doigt. */
   const swipe = useViewerSwipe({
-    onDismiss: closeViewer,
-    onNext: () => advance('next'),
-    onPrevious: () => advance('previous'),
+    onDismiss: dismissByUser,
+    onNext: () => userAdvance('next'),
+    onPrevious: () => userAdvance('previous'),
     enabled: !(sheetOpen || profilePeekOpen),
     rtl: typeof document !== 'undefined' && document.documentElement.dir === 'rtl',
   });
@@ -523,7 +543,7 @@ export default function StoryScreen() {
     paused,
     pause,
     resume,
-    advance,
+    advance: userAdvance,
     setChromeHidden,
     layerOpen: sheetOpen,
     swipe: swipe.handlers,
@@ -554,11 +574,11 @@ export default function StoryScreen() {
      commentaires). */
   const layerOpen = sheetOpen || profilePeekOpen || storySend.sheetOpen || language.barOpen;
   useStoryKeyboardShortcuts({
-    advance,
+    advance: userAdvance,
     paused,
     pause,
     resume,
-    closeViewer,
+    closeViewer: dismissByUser,
     showsSound,
     onToggleMute: toggleSound,
     layerOpen,
@@ -840,7 +860,7 @@ export default function StoryScreen() {
             identity={identity}
             hidden={chromeYielded}
             language={interfaceLanguage}
-            onClose={closeViewer}
+            onClose={dismissByUser}
             onSave={ownerRail.handlers.save}
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
