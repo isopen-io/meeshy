@@ -11,9 +11,13 @@ extension iPadRootView {
         // invoked through navigateToStoryReply, the context was just set and must
         // survive until ConversationView consumes it. ConversationView clears it
         // in .onAppear (see rightColumn).
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            activeConversation = conversation
-            rightPanelRoute = nil
+        // Story, réel ou plein écran en cours : le routeur les referme d'abord
+        // (#10539) — le site unique, partagé avec l'iPhone.
+        router.clearPresentedSurfaces { _ in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                activeConversation = conversation
+                rightPanelRoute = nil
+            }
         }
     }
 

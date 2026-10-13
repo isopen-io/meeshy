@@ -49,11 +49,7 @@ struct GameMissionsView: View {
     var body: some View {
         GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
             if !missions.unlocked {
-                GameNote(text: String(
-                    localized: "game.missions.locked",
-                    defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(GameCopy.formatCount(game.level.shown.level)).",
-                    bundle: .main
-                ))
+                GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
                     concept: .missions,
                     items: GameSpendRows.requirement(GameSpend.requirement(current: game.level.shown.level, required: GameMissions.minLevel)),
@@ -103,7 +99,7 @@ struct GameMissionsView: View {
                         GameNote(text: GameCopy.rerollLabel)
                         GameFactChipRow(
                             concept: .missions,
-                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes),
+                            items: GameSpendRows.spend(rerollSpend, format: GameCopy.meeshes, missing: { ConceptText.spendMissingReroll(missing: $0) }),
                             identifier: "game.missions.reroll.spend"
                         )
                     }

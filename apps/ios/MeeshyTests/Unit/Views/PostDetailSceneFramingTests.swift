@@ -147,6 +147,35 @@ final class PostDetailSceneFramingTests: XCTestCase {
         XCTAssertEqual(try taille(portrait, clavier), avant, "la scène a changé de taille pendant la saisie")
     }
 
+    /// **Le panneau « + » ne rétrécit pas la scène non plus** (#10544). Il
+    /// prend la place du clavier APRÈS avoir rendu le focus : la zone se
+    /// raccourcissait sans focus, et la scène se recalculait plus petite.
+    func test_lePanneauDesPieces_neRetrecitPasLaScene() throws {
+        let avant = try taille(portrait, page())
+        let panneau = page().recordingInputPanel(open: true)
+            .recordingViewport(CGSize(width: 402, height: 348), composerIsFocused: false)
+        XCTAssertEqual(panneau.viewport.height, 684, "la hauteur relevée a suivi le panneau")
+        XCTAssertEqual(try taille(portrait, panneau), avant, "la scène a changé de taille à l'ouverture du panneau")
+    }
+
+    /// Panneau refermé, la page reprend ce qu'elle mesure.
+    func test_lePanneauReferme_laZoneSeReleveTelleQuelle() {
+        let refermee = page().recordingInputPanel(open: true).recordingInputPanel(open: false)
+            .recordingViewport(CGSize(width: 402, height: 600), composerIsFocused: false)
+        XCTAssertEqual(refermee.viewport, CGSize(width: 402, height: 600))
+    }
+
+    /// Le détail dit le panneau à la règle AVANT qu'il ne se monte
+    /// (`onShowAttachments` est synchrone), et sa fermeture après.
+    func test_leDetail_ditLePanneauALaRegle() throws {
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        let source = try String(contentsOf: url.appendingPathComponent(
+            "Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("onShowAttachments: { sceneMeasures = sceneMeasures.recordingInputPanel(open: true) }"))
+        XCTAssertTrue(source.contains("onAttachmentsVisibilityChange: { sceneMeasures = sceneMeasures.recordingInputPanel(open: $0) }"))
+    }
+
     /// Le clavier rentré, la page reprend ce qu'elle mesure.
     func test_horsSaisie_laZoneDeDefilementSeReleveTelleQuelle() {
         let relevee = page().recordingViewport(CGSize(width: 402, height: 600), composerIsFocused: false)

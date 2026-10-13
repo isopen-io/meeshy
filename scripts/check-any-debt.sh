@@ -354,9 +354,6 @@ readonly SHARED_BASELINE=0
 # 501 → 498 (lots du 2026-10-07 : transfert gardé #9579, points par post #9569/#9584,
 # défis #9635, loi de sortie #9572) : trois `any` ont quitté la passerelle avec ces lots —
 # le progrès est inscrit, le cliquet ne peut que descendre.
-#
-# 498 → 497 (2026-10-13, audit du délai d'adoption, commit 51d9682ee6) : le `session?: any`
-# d'une route d'authentification est parti — le progrès est inscrit.
 readonly GATEWAY_BASELINE=497
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
