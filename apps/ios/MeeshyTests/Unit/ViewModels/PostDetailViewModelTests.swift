@@ -142,9 +142,7 @@ final class PostDetailViewModelTests: XCTestCase {
 
         await sut.registerDetailOpen("p1")
 
-        XCTAssertEqual(mock.recordImpressionCallCount, 1)
-        XCTAssertEqual(mock.lastRecordImpressionPostId, "p1")
-        XCTAssertEqual(mock.lastRecordImpressionSource, "detail")
+        XCTAssertEqual(mock.recordedImpressions, [.impression(postId: "p1", source: "detail", surface: .detail)])
     }
 
     func test_registerDetailOpen_optimisticallyBumpsTotalViewAndImpression() async {

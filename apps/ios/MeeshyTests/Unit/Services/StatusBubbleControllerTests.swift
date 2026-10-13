@@ -107,9 +107,13 @@ final class StatusBubbleControllerTests: XCTestCase {
         sut.dismiss()
         sut.show(entry: entry, anchor: .zero)
 
-        let counted = await waitUntil { service.viewPostCallCount == 2 }
+        let counted = await waitUntil { service.recordedViews.count == 2 }
         XCTAssertTrue(counted, "Rouvrir la bulle recompte : viewCount est le total des ouvertures.")
-        XCTAssertEqual(service.lastViewPostId, entry.id)
+        XCTAssertEqual(service.recordedViews, [
+            .view(postId: entry.id, durationMs: nil, surface: .moodAvatar),
+            .view(postId: entry.id, durationMs: nil, surface: .moodAvatar),
+        ], "La vue d'une humeur part par POST /social/events, surface mood_avatar.")
+        XCTAssertEqual(service.recordedSocialEventsCredentials, [.account, .account])
         sut.dismiss()
     }
 
@@ -120,7 +124,7 @@ final class StatusBubbleControllerTests: XCTestCase {
         sut.show(entry: makeStatusEntry(), anchor: .zero)
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.viewPostCallCount, 0)
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0)
         sut.dismiss()
     }
 

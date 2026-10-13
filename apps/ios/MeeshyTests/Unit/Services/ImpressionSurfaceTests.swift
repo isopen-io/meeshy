@@ -50,7 +50,6 @@ final class ImpressionSurfaceTests: XCTestCase {
             .impression(postId: "p1", source: "search", surface: .nearby),
         ], "Un compte compte chaque apparition, comme le fil.")
         XCTAssertEqual(service.recordedSocialEventsCredentials, [.account])
-        XCTAssertEqual(service.recordImpressionsCallCount, 0)
     }
 
     func test_sound_sendsSearchImpressions_onTheSoundSurface() async {
@@ -71,14 +70,15 @@ final class ImpressionSurfaceTests: XCTestCase {
         XCTAssertEqual(service.recordedSocialEvents, [.impression(postId: "b1", source: "profile", surface: .bookmarks)])
     }
 
-    func test_withoutSurface_theLegacyBatchRouteIsUnchanged() async {
+    /// Sans surface, le lot part AUSSI par la porte unique — plus jamais par
+    /// `POST /posts/impressions/batch` — et la file garde sa clé historique.
+    func test_withoutSurface_goesThroughTheSocialEventsDoor_andKeepsItsKey() async {
         let (sut, service) = makeBatcher(source: "feed", surface: nil)
 
         sut.record("f1")
         await sut.flushNow()
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["f1"])
-        XCTAssertEqual(service.recordSocialEventsCallCount, 0)
+        XCTAssertEqual(service.recordedSocialEvents, [.impression(postId: "f1", source: "feed", surface: nil)])
         XCTAssertEqual(ImpressionBatcher.storageKey(source: "feed", surface: nil), "meeshy.impressions.pending.feed")
     }
 

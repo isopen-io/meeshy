@@ -49,9 +49,11 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p2")
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p2"])
-        XCTAssertEqual(service.lastRecordImpressionsSource, "feed")
+        XCTAssertEqual(service.recordSocialEventBatches, [[
+            .impression(postId: "p1", source: "feed", surface: nil),
+            .impression(postId: "p2", source: "feed", surface: nil),
+        ]], "Sans surface déclarée, le lot part quand même par la porte unique, clé surface absente.")
+        XCTAssertEqual(service.recordedSocialEventsCredentials, [.account])
     }
 
     /// Une impression par apparition : les répétitions doivent survivre au lot.
@@ -63,7 +65,7 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p1")
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p1", "p1"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1", "p1", "p1"])
     }
 
     // MARK: - Sortie d'écran / arrière-plan
@@ -74,8 +76,8 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p1")
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"])
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1)
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"])
     }
 
     func test_flushNow_withNothingPending_doesNotCallTheService() async {
@@ -83,7 +85,7 @@ final class ImpressionBatcherTests: XCTestCase {
 
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 0)
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0)
     }
 
     // MARK: - Survie à la fermeture de l'app
@@ -104,7 +106,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         await revived.flushNow()
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p1", "p2"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1", "p1", "p2"])
     }
 
     /// Le rejeu ne doit pas dépendre d'une nouvelle apparition : une surface qui
@@ -122,7 +124,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         try? await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"])
         withExtendedLifetime(revived) {}
     }
 
@@ -137,7 +139,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         await revived.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 0,
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0,
                        "un lot déjà envoyé ne doit pas être recompté au lancement suivant")
     }
 
@@ -151,25 +153,25 @@ final class ImpressionBatcherTests: XCTestCase {
         profile.record("p2")
         await profile.flushNow()
 
-        XCTAssertEqual(profileService.lastRecordImpressionPostIds, ["p2"])
-        XCTAssertEqual(profileService.lastRecordImpressionsSource, "profile")
+        XCTAssertEqual(profileService.lastSocialEventPostIds, ["p2"])
+        XCTAssertEqual(profileService.recordedImpressionSources.last, "profile")
     }
 
     // MARK: - Échec réseau
 
     func test_failedFlush_keepsOccurrencesForTheNextAttempt() async {
         let (sut, service) = makeSUT(flushDelay: 60)
-        service.recordImpressionsResult = .failure(NSError(domain: "net", code: -1009))
+        service.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
         sut.record("p1")
 
         await sut.flushNow()
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1)
 
-        service.recordImpressionsResult = .success(())
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 2)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"],
+        XCTAssertEqual(service.recordSocialEventsCallCount, 2)
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"],
                        "l'occurrence perdue par le réseau doit repartir, pas disparaître")
     }
 }

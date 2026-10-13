@@ -42,9 +42,10 @@ final class ImpressionBatcher: ObservableObject {
     static let storageKeyPrefix = "meeshy.impressions.pending."
 
     private let source: String
-    /// #10483 — OÙ le contenu est apparu. Présente, le lot part par la porte
-    /// unique `POST /social/events` (qui seule la porte) et la file a sa
-    /// propre clé : deux surfaces d'une même source ne s'écrasent plus.
+    /// #10483 — OÙ le contenu est apparu. Tout lot part par la porte unique
+    /// `POST /social/events`, avec ou sans surface (clé absente du fil) ;
+    /// présente, la file a sa propre clé : deux surfaces d'une même source ne
+    /// s'écrasent plus.
     private let surface: ReachSurface?
     private let postService: PostServiceProviding
     private let flushDelay: TimeInterval
@@ -180,10 +181,6 @@ final class ImpressionBatcher: ObservableObject {
     static let socialEventsCap = 200
 
     private func send(_ batch: [String]) async throws {
-        guard let surface else {
-            try await postService.recordImpressions(postIds: batch, source: source)
-            return
-        }
         for start in stride(from: 0, to: batch.count, by: Self.socialEventsCap) {
             let chunk = batch[start..<min(start + Self.socialEventsCap, batch.count)]
             do {

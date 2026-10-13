@@ -168,9 +168,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// une liste (remplacement).
     var lastUpdateMentions: [PostMentionInput]?
 
-    var viewPostCallCount = 0
-    var lastViewPostId: String?
-
     var getPostViewsCallCount = 0
     var getUserPostsCallCount = 0
     /// Curseur reçu par le dernier `getUserPosts` — vérifie la reprise au
@@ -219,18 +216,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// commentaire notifié) : consommée en priorité, une entrée par appel.
     var getCommentsResultsQueue: [Result<PaginatedAPIResponse<[APIPostComment]>, Error>] = []
 
-    var recordImpressionsResult: Result<Void, Error> = .success(())
-    var recordImpressionsCallCount = 0
-    var lastRecordImpressionPostIds: [String]?
-    var lastRecordImpressionsSource: String?
-
-    var recordImpressionCallCount = 0
-    var lastRecordImpressionPostId: String?
-    var lastRecordImpressionSource: String?
-
-    var recordEngagementCallCount = 0
-    var lastRecordEngagementSessions: [EngagementSession]?
-
     /// #10483 — la porte `POST /social/events` : chaque lot reçu, dans l'ordre,
     /// et l'identité sous laquelle il est parti. La file de résultats est
     /// consommée en priorité, une entrée par appel.
@@ -240,6 +225,22 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
     var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
     var recordedSocialEvents: [SocialEvent] { recordedSocialEventBatches.flatMap { $0 } }
+    /// Les impressions reçues par la porte, dans l'ordre.
+    var recordedImpressions: [SocialEvent] {
+        recordedSocialEvents.filter { if case .impression = $0 { return true } else { return false } }
+    }
+    /// Les vues reçues par la porte, dans l'ordre.
+    var recordedViews: [SocialEvent] {
+        recordedSocialEvents.filter { if case .view = $0 { return true } else { return false } }
+    }
+    /// Les identifiants du dernier lot reçu par la porte.
+    var lastSocialEventPostIds: [String]? { recordedSocialEventBatches.last?.map(\.postId) }
+    /// Les identifiants des impressions reçues, dans l'ordre.
+    var recordedImpressionPostIds: [String] { recordedImpressions.map(\.postId) }
+    /// Les sources des impressions reçues, dans l'ordre.
+    var recordedImpressionSources: [String] {
+        recordedImpressions.compactMap { if case .impression(_, let source, _) = $0 { return source } else { return nil } }
+    }
 
     // MARK: - Protocol Conformance
 
@@ -591,11 +592,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                                 mediaIds: mediaIds, location: location)
     }
 
-    func viewPost(postId: String, duration: Int?) async throws {
-        viewPostCallCount += 1
-        lastViewPostId = postId
-    }
-
     func getPostViews(
         postId: String, limit: Int, offset: Int
     ) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
@@ -674,24 +670,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
             return try getCommentsResultsQueue.removeFirst().get()
         }
         return try getCommentsResult.get()
-    }
-
-    func recordImpressions(postIds: [String], source: String) async throws {
-        recordImpressionsCallCount += 1
-        lastRecordImpressionPostIds = postIds
-        lastRecordImpressionsSource = source
-        try recordImpressionsResult.get()
-    }
-
-    func recordImpression(postId: String, source: String) async throws {
-        recordImpressionCallCount += 1
-        lastRecordImpressionPostId = postId
-        lastRecordImpressionSource = source
-    }
-
-    func recordEngagement(_ sessions: [EngagementSession]) async throws {
-        recordEngagementCallCount += 1
-        lastRecordEngagementSessions = sessions
     }
 
     func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
@@ -807,8 +785,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateStoryEffects = nil
         lastUpdateMediaIds = nil
         lastUpdateLocation = nil
-        viewPostCallCount = 0
-        lastViewPostId = nil
         getPostViewsCallCount = 0
         getUserPostsCallCount = 0
         lastGetUserPostsCursor = nil
@@ -840,18 +816,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         getCommentsCallCount = 0
         lastGetCommentsPostId = nil
-
-        recordImpressionsCallCount = 0
-        lastRecordImpressionsSource = nil
-        recordImpressionsResult = .success(())
-        lastRecordImpressionPostIds = nil
-
-        recordImpressionCallCount = 0
-        lastRecordImpressionPostId = nil
-        lastRecordImpressionSource = nil
-
-        recordEngagementCallCount = 0
-        lastRecordEngagementSessions = nil
 
         recordSocialEventsCallCount = 0
         recordedSocialEventBatches = []

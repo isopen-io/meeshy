@@ -35,16 +35,23 @@ public enum ReachSurface: String, Codable, Sendable, CaseIterable {
 /// - `open` est l'engagement d'ouverture envoyé AU TAP sur un contenu d'un
 ///   listing. Il ne compte AUCUNE vue, et un serveur antérieur ne le connaît
 ///   pas : il part toujours dans une requête à lui
-///   (`SocialEventsDispatch.requests(for:)`).
+///   (`SocialEventsDispatch.requests(for:)`) ;
+/// - `dwell` est une session de consommation (durée, lecture, micro-actions)
+///   de l'`EngagementTracker` : la porte reprend tel quel le corps de l'ancien
+///   `POST /posts/engagement/batch`, augmenté du seul discriminant. Un compte
+///   seulement — un visiteur ne produit que des vues.
 public enum SocialEvent: Codable, Sendable, Equatable {
     case view(postId: String, durationMs: Int?, surface: ReachSurface?, entry: ContentEntry? = nil)
     case impression(postId: String, source: String, surface: ReachSurface?)
     case open(postId: String, origin: OpenOrigin?)
+    case dwell(EngagementSession)
 
     public var postId: String {
         switch self {
         case .view(let postId, _, _, _), .impression(let postId, _, _), .open(let postId, _):
             return postId
+        case .dwell(let session):
+            return session.postId
         }
     }
 
@@ -60,7 +67,7 @@ public enum SocialEvent: Codable, Sendable, Equatable {
     }
 
     private enum Kind: String, Codable {
-        case view, impression, open
+        case view, impression, open, dwell
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -82,6 +89,9 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             try container.encode(Kind.open, forKey: .type)
             try container.encode(postId, forKey: .postId)
             try container.encodeIfPresent(origin, forKey: .origin)
+        case .dwell(let session):
+            try container.encode(Kind.dwell, forKey: .type)
+            try session.encode(to: encoder)
         }
     }
 
@@ -109,6 +119,8 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             )
         case .open:
             self = .open(postId: postId, origin: origin)
+        case .dwell:
+            self = .dwell(try EngagementSession(from: decoder))
         }
     }
 }
@@ -144,6 +156,16 @@ public struct SocialEventsReceipt: Codable, Sendable, Equatable {
 }
 
 /// Le corps de `POST /social/events`.
+///
+/// Les dates partent en ISO 8601 : `dwell.startedAt` est une chaîne côté
+/// passerelle, et l'encodeur par défaut écrirait un nombre — le lot entier
+/// serait refusé.
 struct SocialEventsBody: Encodable {
     let events: [SocialEvent]
+
+    static func encoded(_ events: [SocialEvent]) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try encoder.encode(SocialEventsBody(events: events))
+    }
 }

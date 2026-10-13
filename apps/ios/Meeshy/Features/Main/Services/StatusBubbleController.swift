@@ -59,7 +59,10 @@ final class StatusBubbleController: ObservableObject {
         let statusId = entry.id
         Task { [postService] in
             do {
-                try await postService.viewPost(postId: statusId, duration: nil)
+                _ = try await postService.recordSocialEvents(
+                    [.view(postId: statusId, durationMs: nil, surface: .moodAvatar)],
+                    credential: .account
+                )
             } catch {
                 // Compteur de vue perdu — sans impact sur l'affichage.
                 Logger.statusBubble.error("Status view not registered: \(error.localizedDescription, privacy: .public)")

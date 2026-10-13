@@ -107,6 +107,70 @@ struct PostServiceSocialEventsTests {
     }
 }
 
+/// La session de consommation de l'`EngagementTracker` part par la porte
+/// unique, en `dwell` : le corps de l'ancien `POST /posts/engagement/batch`
+/// augmenté du discriminant, et `startedAt` en chaîne ISO 8601 — un nombre
+/// ferait refuser le lot entier par le schéma de la passerelle.
+@Suite("SocialEvent.dwell — la session de consommation passe par la porte unique")
+struct SocialEventsDwellTests {
+
+    private func session() -> EngagementSession {
+        EngagementSession(
+            sessionId: "11111111-2222-3333-4444-555555555555", userId: "u1", postId: "p1",
+            contentType: .reel, surface: .reels,
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000), dwellMs: 4000, watchMs: 3800,
+            mediaDurationMs: 15000, completed: false, truncated: false, consent: "granted",
+            actions: [EngagementAction(type: .paused, atMs: 1200)],
+            watchSamples: [WatchSample(positionMs: 1000, atMs: 1000)]
+        )
+    }
+
+    private func receiptStub() throws -> APIResponse<SocialEventsReceipt> {
+        let data = Data(#"{"success":true,"data":{"recorded":1,"rejected":0}}"#.utf8)
+        return try JSONDecoder().decode(APIResponse<SocialEventsReceipt>.self, from: data)
+    }
+
+    @Test func dwell_postsTheSessionToTheSocialEventsDoor_withAnISODate() async throws {
+        let api = MockAPIClient()
+        api.stub("/social/events", result: try receiptStub())
+        let service = PostService(api: api)
+
+        _ = try await service.recordSocialEvents([.dwell(session())], credential: .account)
+
+        let request = try #require(api.lastRequest)
+        #expect(request.endpoint == "/social/events")
+        #expect(request.method == "POST")
+        let events = try #require(request.bodyJSON?["events"] as? [[String: Any]])
+        let event = try #require(events.first)
+        #expect(event["type"] as? String == "dwell")
+        #expect(event["postId"] as? String == "p1")
+        #expect(event["sessionId"] as? String == "11111111-2222-3333-4444-555555555555")
+        #expect(event["contentType"] as? String == "REEL")
+        #expect(event["surface"] as? String == "reels")
+        #expect(event["dwellMs"] as? Int == 4000)
+        #expect(event["watchMs"] as? Int == 3800)
+        #expect(event["consent"] as? String == "granted")
+        #expect(event["startedAt"] as? String == "2023-11-14T22:13:20Z")
+        #expect((event["actions"] as? [[String: Any]])?.first?["type"] as? String == "paused")
+        #expect((event["watchSamples"] as? [[String: Any]])?.count == 1)
+    }
+
+    @Test func dwell_roundTripsThroughCodable() throws {
+        let events: [SocialEvent] = [.dwell(session()), .view(postId: "p2", durationMs: nil, surface: .detail)]
+        let data = try JSONEncoder().encode(events)
+        #expect(try JSONDecoder().decode([SocialEvent].self, from: data) == events)
+    }
+
+    @Test func dwell_isNotAnOpen_soItTravelsWithViewsAndImpressions() {
+        let requests = SocialEventsDispatch.requests(for: [
+            .dwell(session()), .open(postId: "p3", origin: .feed),
+        ])
+        #expect(requests.count == 2)
+        #expect(requests.first == [.dwell(session())])
+        #expect(SocialEvent.dwell(session()).postId == "p1")
+    }
+}
+
 @Suite("ReachImpressionCollector — les affichages d'une surface du SDK")
 @MainActor
 struct ReachImpressionCollectorTests {

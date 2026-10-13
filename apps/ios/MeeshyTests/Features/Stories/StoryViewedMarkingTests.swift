@@ -190,11 +190,11 @@ final class StoryViewedMarkingTests: XCTestCase {
         vm.recordStoryImpression(storyId: "pending_\(UUID().uuidString)")
         await settle()
 
-        XCTAssertEqual(postService.recordImpressionCallCount, 0,
+        XCTAssertEqual(postService.recordSocialEventsCallCount, 0,
                        "Un identifiant local ne doit atteindre AUCUNE route /posts/:id/*")
     }
 
-    /// Contrôle positif du garde ci-dessus — sans lui, un `recordImpressionCallCount`
+    /// Contrôle positif du garde ci-dessus — sans lui, un compteur
     /// resté à zéro pour une tout autre raison passerait pour une preuve.
     func test_serverStoryId_stillSendsItsImpression() async {
         let postService = MockPostService()
@@ -203,9 +203,9 @@ final class StoryViewedMarkingTests: XCTestCase {
         vm.recordStoryImpression(storyId: serverStoryId(0))
         await settle()
 
-        XCTAssertEqual(postService.recordImpressionCallCount, 1,
-                       "Une story servie par le serveur doit toujours compter son impression")
-        XCTAssertEqual(postService.lastRecordImpressionPostId, serverStoryId(0))
+        XCTAssertEqual(postService.recordedImpressions,
+                       [.impression(postId: serverStoryId(0), source: "story", surface: .story)],
+                       "Une story servie par le serveur compte son impression, par POST /social/events, surface story")
     }
 
     // MARK: - #9804 — une story vue reste vue après la relance

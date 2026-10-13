@@ -127,7 +127,7 @@ extension StoryViewModel {
     /// seule fois. Fire & forget : l'échec réseau est loggé, jamais toasté (bruit de fond).
     func recordStoryImpression(storyId: String) {
         // #4044 — même frontière que `markViewed` ci-dessous, et pour la même
-        // raison : `POST /posts/:id/impression` fait lever Prisma sur un
+        // raison : une impression vers un identifiant local fait lever Prisma sur un
         // identifiant local. Ici l'appel est fire-and-forget, donc rien ne
         // s'accumule — mais laisser partir la moitié jumelle reviendrait à
         // corriger le symptôme (la file) en gardant la cause (un id local qui
@@ -135,7 +135,10 @@ extension StoryViewModel {
         guard ObjectID.isValid(storyId) else { return }
         Task { [postService] in
             do {
-                try await postService.recordImpression(postId: storyId, source: "story")
+                _ = try await postService.recordSocialEvents(
+                    [.impression(postId: storyId, source: "story", surface: .story)],
+                    credential: .account
+                )
             } catch {
                 Logger.stories.error(
                     "recordStoryImpression failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")

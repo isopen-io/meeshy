@@ -44,7 +44,7 @@ final class ContentOpenReachTests: XCTestCase {
         await sut.registerDetailOpen("p1")
         await sut.registerDetailOpen("p1")
 
-        XCTAssertEqual(service.recordImpressionCallCount, 1,
+        XCTAssertEqual(service.recordedImpressions.count, 1,
                        "Le `.task` du détail se relance au retour d'un écran poussé : ce n'est pas une nouvelle ouverture.")
     }
 
@@ -58,7 +58,6 @@ final class ContentOpenReachTests: XCTestCase {
         await sut.registerDetailOpen("p1")
 
         XCTAssertEqual(views(in: service).map(\.postId), ["p1"])
-        XCTAssertEqual(service.viewPostCallCount, 0, "La vue part par la porte unique, qui seule porte la provenance.")
 
         let reopened = makeDetail(postService: service)
         await reopened.registerDetailOpen("p1")
@@ -73,7 +72,7 @@ final class ContentOpenReachTests: XCTestCase {
         await sut.registerDetailOpen("p1")
         await sut.registerDetailOpen("p2")
 
-        XCTAssertEqual(service.recordImpressionCallCount, 2)
+        XCTAssertEqual(service.recordedImpressions.count, 2)
     }
 
     func test_registerDetailOpen_fromANotification_usesTheNotificationSource() async {
@@ -84,7 +83,7 @@ final class ContentOpenReachTests: XCTestCase {
 
         await sut.registerDetailOpen("p1")
 
-        XCTAssertEqual(service.lastRecordImpressionSource, "notification")
+        XCTAssertEqual(service.recordedImpressionSources.last, "notification")
     }
 
     func test_registerDetailOpen_withoutNotification_keepsTheDetailSource() async {
@@ -93,7 +92,7 @@ final class ContentOpenReachTests: XCTestCase {
 
         await sut.registerDetailOpen("p1")
 
-        XCTAssertEqual(service.lastRecordImpressionSource, "detail")
+        XCTAssertEqual(service.recordedImpressionSources.last, "detail")
     }
 
     func test_notificationMark_isConsumedOnce() {
@@ -161,8 +160,7 @@ final class ContentOpenReachTests: XCTestCase {
         sut.recordView("r1")
         await sut.flushImpressions()
 
-        XCTAssertTrue(service.recordedSocialEvents.contains(.impression(postId: "r1", source: "feed", surface: .reels)))
-        XCTAssertEqual(service.recordImpressionCallCount, 0, "Le réel ne passe plus par la route unitaire sans surface.")
+        XCTAssertEqual(service.recordedImpressions, [.impression(postId: "r1", source: "feed", surface: .reels)])
     }
 
     // MARK: - Le tap d'un listing : un engagement d'ouverture, aucune vue
@@ -193,7 +191,6 @@ final class ContentOpenReachTests: XCTestCase {
                        "L'engagement part seul, dans sa requête.")
         XCTAssertEqual(service.recordedSocialEventsCredentials, [.account])
         XCTAssertTrue(views(in: service).isEmpty, "Le tap ne compte aucune vue : l'écran ouvert la compte.")
-        XCTAssertEqual(service.viewPostCallCount, 0)
     }
 
     func test_tapWithoutAccount_goesThroughTheVisitorQueue() async {
@@ -246,9 +243,26 @@ final class ContentOpenReachTests: XCTestCase {
 
         await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
 
-        XCTAssertEqual(service.recordImpressionCallCount, 1)
-        XCTAssertEqual(service.lastRecordImpressionSource, "detail")
+        XCTAssertEqual(service.recordedImpressions.count, 1)
+        XCTAssertEqual(service.recordedImpressionSources.last, "detail")
         XCTAssertEqual(views(in: service), [.view(postId: "p1", durationMs: nil, surface: .detail, entry: .listing(.feed))])
+    }
+
+    /// L'impression et la vue partent ENSEMBLE, dans une seule requête : un
+    /// serveur antérieur à #10483 connaît les deux types, et retire sans refus
+    /// la provenance qu'il ne connaît pas. L'impression dit la surface détail.
+    func test_detailOpen_sendsImpressionAndViewInOneRequest_onTheDetailSurface() async {
+        let service = MockPostService()
+        let entries = DetailOpenSources()
+        entries.markOpenedFromNotification("p1")
+
+        await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
+
+        XCTAssertEqual(service.recordedSocialEventBatches, [[
+            .impression(postId: "p1", source: "notification", surface: .detail),
+            .view(postId: "p1", durationMs: nil, surface: .detail, entry: .notification),
+        ]])
+        XCTAssertEqual(service.recordedSocialEventsCredentials, [.account])
     }
 
     /// Une impression NON unique et une vue à CHAQUE ouverture, même déjà vue.
@@ -262,7 +276,7 @@ final class ContentOpenReachTests: XCTestCase {
         opens.open("p1", from: .feed)
         await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
 
-        XCTAssertEqual(service.recordImpressionCallCount, 2)
+        XCTAssertEqual(service.recordedImpressions.count, 2)
         XCTAssertEqual(views(in: service), [
             .view(postId: "p1", durationMs: nil, surface: .detail, entry: .listing(.feed)),
             .view(postId: "p1", durationMs: nil, surface: .detail, entry: .listing(.feed)),
@@ -284,7 +298,7 @@ final class ContentOpenReachTests: XCTestCase {
 
         await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
 
-        XCTAssertEqual(service.lastRecordImpressionSource, "notification")
+        XCTAssertEqual(service.recordedImpressionSources.last, "notification")
         XCTAssertEqual(views(in: service), [.view(postId: "p1", durationMs: nil, surface: .detail, entry: .notification)])
     }
 
@@ -305,7 +319,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertTrue(resolved)
         await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
 
-        XCTAssertEqual(service.lastRecordImpressionSource, "shared_link", "Un lien de suivi garde la source shared_link.")
+        XCTAssertEqual(service.recordedImpressionSources.last, "shared_link", "Un lien de suivi garde la source shared_link.")
         XCTAssertEqual(views(in: service), [.view(postId: "p1", durationMs: nil, surface: .detail, entry: .trackingLink)])
     }
 
@@ -317,7 +331,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertTrue(makeRouter(entries: entries).handle(url: url))
         await makeDetail(postService: service, openSources: entries).registerDetailOpen("p1")
 
-        XCTAssertEqual(service.lastRecordImpressionSource, "shared_link")
+        XCTAssertEqual(service.recordedImpressionSources.last, "shared_link")
         XCTAssertEqual(views(in: service), [.view(postId: "p1", durationMs: nil, surface: .detail, entry: .sharedLink)])
     }
 

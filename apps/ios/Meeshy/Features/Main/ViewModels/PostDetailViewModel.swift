@@ -139,8 +139,8 @@ class PostDetailViewModel: ObservableObject {
     /// Ouvrir la page Détail d'un post est, par règle produit, une vue TOTALE
     /// (chaque ouverture compte, jamais dédupliquée) ET une impression, comptées
     /// IMMÉDIATEMENT — avant et indépendamment du tracking d'engagement (durée de
-    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
-    /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
+    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` par
+    /// l'impression `source=detail` de `POST /social/events`. On bump les compteurs affichés
     /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
     /// and-forget), impression puis vue.
     ///
@@ -155,11 +155,16 @@ class PostDetailViewModel: ObservableObject {
             post?.postOpenCount += 1
         }
         let entry = openSources.consumeEntry(for: postId)
-        try? await postService.recordImpression(postId: postId, source: entry.detailImpressionSource)
-        // `viewCount` est le TOTAL des vues : chaque ouverture en compte une,
-        // sous la même garde que l'impression, et porte par où elle est venue.
+        // Une seule requête : l'impression et la vue sont deux types qu'un
+        // serveur antérieur à #10483 connaît déjà ; la provenance et l'origine
+        // de la vue, inconnues de lui, sont retirées sans refus. `viewCount` est
+        // le TOTAL des vues : chaque ouverture en compte une, sous la même garde
+        // que l'impression, et porte par où elle est venue.
         _ = try? await postService.recordSocialEvents(
-            [.view(postId: postId, durationMs: nil, surface: .detail, entry: entry)],
+            [
+                .impression(postId: postId, source: entry.detailImpressionSource, surface: .detail),
+                .view(postId: postId, durationMs: nil, surface: .detail, entry: entry),
+            ],
             credential: .account
         )
     }
