@@ -187,8 +187,9 @@ public protocol PostServiceProviding: Sendable {
     ///
     /// Requirement SÉPARÉE avec défaut ci-dessous : un double de test qui ne la
     /// surcharge pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir
-    /// compté.
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
+    /// compté. Chaque événement porte son enveloppe (#10500) ; la forme sans
+    /// enveloppe (`[SocialEvent]`) est une commodité qui l'appose à l'appel.
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
     /// `POST /social/events` pour un lot v2 DÉJÀ encodé (`SocialEventsV2Wire
     /// .body`) — jamais mêlé à un comptage (#10500). Défaut ci-dessous.
     func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt
@@ -209,8 +210,16 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
+    }
+
+    /// Un envoi IMMÉDIAT, sans file : l'événement naît à l'appel, son
+    /// enveloppe aussi. Toute file qui peut rejouer garde la sienne et passe
+    /// par la requirement.
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        let now = Date()
+        return try await recordSocialEvents(events.map { StampedSocialEvent.stamping($0, at: now) }, credential: credential)
     }
 
     func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
@@ -388,14 +397,21 @@ public extension PostServiceProviding {
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
     public static let shared = PostService()
-    private let api: APIClientProviding
+    let api: APIClientProviding
     /// #10502 — les interactions RÉUSSIES par appel direct (réels, profil,
     /// favoris, hashtag) ; la file durable émet les siennes à l'envoi.
     private let socialEvents: SocialEventsV2Hub
+    /// L'heure de l'appareil au départ d'un lot de comptage (`context.sentAt`).
+    let clock: @Sendable () -> Date
 
-    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
+    init(
+        api: APIClientProviding = APIClient.shared,
+        socialEvents: SocialEventsV2Hub = .shared,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.api = api
         self.socialEvents = socialEvents
+        self.clock = clock
     }
 
     private func emitInteraction(_ action: SocialInteraction.Action, postId: String, destination: SocialInteraction.ShareDestination? = nil) {
@@ -958,40 +974,6 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func getCommentReplies(postId: String, commentId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         try await api.paginatedRequest(PostsEndpoint.byPostIdCommentsByCommentIdReplies(postId: postId, commentId: commentId), cursor: cursor, limit: limit)
-    }
-
-    // MARK: - Reach Tracking
-
-    /// `POST /social/events` est la SEULE porte par laquelle iOS compte ce qu'il
-    /// affiche (#10483) : vues, impressions, engagements d'ouverture et sessions
-    /// de consommation (`dwell`). Les anciennes routes (`/posts/:id/view`,
-    /// `/impression`, `/impressions/batch`, `/engagement/batch`) restent montées
-    /// pour les versions publiées ; aucune source neuve ne les appelle
-    /// (`LegacyReachRoutesGuardTests`).
-    ///
-    /// Un lot vide ne part pas : il n'y a rien à compter.
-    public func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
-        guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
-        let body = try SocialEventsBody.encoded(events)
-        let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
-            SocialEndpoint.events,
-            method: "POST",
-            body: body,
-            queryItems: nil,
-            headers: credential.headers
-        )
-        return response.data
-    }
-
-    public func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
-        let response: APIResponse<SocialEventsV2Receipt> = try await api.requestWithHeaders(
-            SocialEndpoint.events,
-            method: "POST",
-            body: body,
-            queryItems: nil,
-            headers: credential.headers
-        )
-        return response.data
     }
 }
 

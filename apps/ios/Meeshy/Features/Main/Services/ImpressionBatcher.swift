@@ -25,6 +25,10 @@ import UIKit
 /// L'`OfflineQueue` n'est délibérément PAS utilisée : elle rejoue avec un
 /// `clientMutationId` que le gateway déduplique, ce qui écraserait justement
 /// les occurrences répétées qu'on cherche à préserver.
+/// Chaque occurrence porte son enveloppe (#10500) dès son `record` : un
+/// `eventId` que la passerelle déduplique et l'heure de l'apparition. Elle
+/// voyage dans la file persistée, donc une tentative 2, 3… renvoie les mêmes
+/// identifiants, et un lot rejoué après une panne n'est pas recompté.
 /// `ObservableObject` uniquement pour pouvoir être tenu par un `@StateObject`
 /// (durée de vie alignée sur la vue). Aucune propriété `@Published` : le
 /// comptage de portée ne doit jamais provoquer de re-render.
@@ -55,8 +59,9 @@ final class ImpressionBatcher: ObservableObject {
     /// part jamais sous le JWT du compte B, même pour les files partagées
     /// (`SharedImpressionBatchers`) qui survivent à la déconnexion.
     private let accountId: @MainActor () -> String?
+    private let clock: @MainActor () -> Date
 
-    private var pending: [String] = []
+    private var pending: [PendingImpression] = []
     private var pendingAccount: String?
     private var flushTask: Task<Void, Never>?
     /// Combine plutôt que des tokens `NotificationCenter` : ceux-ci exigeraient
@@ -71,7 +76,8 @@ final class ImpressionBatcher: ObservableObject {
         postService: PostServiceProviding = PostService.shared,
         flushDelay: TimeInterval = 3,
         defaults: UserDefaults = .standard,
-        accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+        accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        clock: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.source = source
         self.surface = surface
@@ -79,11 +85,13 @@ final class ImpressionBatcher: ObservableObject {
         self.flushDelay = flushDelay
         self.defaults = defaults
         self.accountId = accountId
+        self.clock = clock
         let account = accountId()
         self.pendingAccount = account
-        self.pending = defaults.stringArray(
-            forKey: Self.storageKey(source: source, surface: surface, accountId: account)
-        ) ?? []
+        self.pending = Self.restore(
+            from: defaults,
+            key: Self.storageKey(source: source, surface: surface, accountId: account)
+        )
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
         // déclenchement, le lot ne repartait qu'à la faveur d'une NOUVELLE
@@ -96,7 +104,7 @@ final class ImpressionBatcher: ObservableObject {
         guard !postId.isEmpty else { return }
         RecentDisplayCaptureSource.shared.noteDisplayed(postId: postId, source: source, surface: surface)
         adoptCurrentAccount()
-        pending.append(postId)
+        pending.append(PendingImpression(postId: postId, stamp: .minted(at: clock())))
         persist()
         scheduleFlush()
     }
@@ -133,7 +141,7 @@ final class ImpressionBatcher: ObservableObject {
         do {
             try await send(batch)
         } catch let unsent as UnsentImpressions {
-            keepForRetry(unsent.postIds, owner: owner)
+            keepForRetry(unsent.impressions, owner: owner)
             Self.logger.debug("impression flush partially failed (rest kept for retry): \(unsent.cause.localizedDescription, privacy: .public)")
         } catch {
             keepForRetry(batch, owner: owner)
@@ -143,13 +151,13 @@ final class ImpressionBatcher: ObservableObject {
 
     /// Un échec revient dans la file de SON compte — si le compte a changé
     /// pendant l'envoi, sur le disque de celui-ci, pas dans la file courante.
-    private func keepForRetry(_ postIds: [String], owner: String?) {
+    private func keepForRetry(_ impressions: [PendingImpression], owner: String?) {
         guard owner == pendingAccount else {
             let key = Self.storageKey(source: source, surface: surface, accountId: owner)
-            defaults.set(postIds + (defaults.stringArray(forKey: key) ?? []), forKey: key)
+            Self.store(impressions + Self.restore(from: defaults, key: key), in: defaults, key: key)
             return
         }
-        pending.insert(contentsOf: postIds, at: 0)
+        pending.insert(contentsOf: impressions, at: 0)
         persist()
     }
 
@@ -171,7 +179,7 @@ final class ImpressionBatcher: ObservableObject {
         let account = accountId()
         guard account != pendingAccount else { return }
         pendingAccount = account
-        pending = defaults.stringArray(forKey: currentStorageKey) ?? []
+        pending = Self.restore(from: defaults, key: currentStorageKey)
     }
 
     private var currentStorageKey: String {
@@ -181,29 +189,57 @@ final class ImpressionBatcher: ObservableObject {
     /// Le plafond d'un lot de `POST /social/events`.
     static let socialEventsCap = 200
 
-    private func send(_ batch: [String]) async throws {
+    private func send(_ batch: [PendingImpression]) async throws {
         for start in stride(from: 0, to: batch.count, by: Self.socialEventsCap) {
             let chunk = batch[start..<min(start + Self.socialEventsCap, batch.count)]
             do {
                 _ = try await postService.recordSocialEvents(
-                    chunk.map { SocialEvent.impression(postId: $0, source: source, surface: surface) },
+                    chunk.map { StampedSocialEvent(event: .impression(postId: $0.postId, source: source, surface: surface), stamp: $0.stamp) },
                     credential: .account
                 )
             } catch {
-                throw UnsentImpressions(postIds: Array(batch[start...]), cause: error)
+                throw UnsentImpressions(impressions: Array(batch[start...]), cause: error)
             }
         }
     }
 
     /// Les paquets déjà acceptés ne repartent pas : seul le reste revient en file.
     nonisolated private struct UnsentImpressions: Error {
-        let postIds: [String]
+        let impressions: [PendingImpression]
         let cause: Error
     }
 
     private func persist() {
-        defaults.set(pending, forKey: currentStorageKey)
+        Self.store(pending, in: defaults, key: currentStorageKey)
     }
+
+    // MARK: - Format persisté (#10500)
+
+    /// Lit une file. L'ancien format (`[String]`, des identifiants seuls) est
+    /// relu sans perte — chaque occurrence reçoit un `eventId` neuf et une
+    /// heure inconnue, que la passerelle date à réception — puis RÉÉCRIT
+    /// aussitôt dans le nouveau : les tentatives suivantes réutilisent ainsi
+    /// le même `eventId`.
+    static func restore(from defaults: UserDefaults, key: String) -> [PendingImpression] {
+        if let data = defaults.data(forKey: key) {
+            return (try? JSONDecoder().decode([PendingImpression].self, from: data)) ?? []
+        }
+        guard let legacy = defaults.stringArray(forKey: key) else { return [] }
+        let migrated = legacy.filter { !$0.isEmpty }.map { PendingImpression(postId: $0, stamp: .minted(at: nil)) }
+        store(migrated, in: defaults, key: key)
+        return migrated
+    }
+
+    static func store(_ impressions: [PendingImpression], in defaults: UserDefaults, key: String) {
+        guard !impressions.isEmpty, let data = try? JSONEncoder().encode(impressions) else {
+            defaults.removeObject(forKey: key)
+            return
+        }
+        defaults.set(data, forKey: key)
+    }
+
+    /// Les occurrences en attente, enveloppes comprises.
+    var pendingImpressions: [PendingImpression] { pending }
 
     // MARK: - Logout purge (outbox-11)
 
@@ -230,5 +266,34 @@ final class ImpressionBatcher: ObservableObject {
                 .store(in: &cancellables)
         }
         #endif
+    }
+}
+
+/// Une apparition en attente : le post, et l'enveloppe posée quand il est
+/// apparu (#10500).
+nonisolated struct PendingImpression: Codable, Equatable {
+    let postId: String
+    let stamp: SocialEventStamp
+
+    private enum CodingKeys: String, CodingKey {
+        case postId
+    }
+
+    init(postId: String, stamp: SocialEventStamp) {
+        self.postId = postId
+        self.stamp = stamp
+    }
+
+    /// À plat : `{ postId, eventId, occurredAt }`.
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(postId, forKey: .postId)
+        try stamp.encode(to: encoder)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.postId = try container.decode(String.self, forKey: .postId)
+        self.stamp = (try? SocialEventStamp(from: decoder)) ?? .minted(at: nil)
     }
 }

@@ -192,3 +192,102 @@ extension ImpressionBatcherTests {
                        "seules les clés préfixées impressions sont purgées")
     }
 }
+
+/// #10500 — un lot rejoué après une panne n'est compté qu'une fois, et daté de
+/// l'APPARITION. Avant, la file ne gardait que des identifiants : chaque
+/// tentative fabriquait de nouveaux événements, que la passerelle recomptait,
+/// datés de l'envoi.
+extension ImpressionBatcherTests {
+
+    private func stamps(_ service: MockPostService) -> [[SocialEventStamp]] {
+        service.recordedStampedSocialEventBatches.map { $0.map(\.stamp) }
+    }
+
+    func test_retryAfterAFailure_sendsExactlyTheSameEventIds() async throws {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResultsQueue = [
+            .failure(NSError(domain: "net", code: -1009)),
+            .failure(NSError(domain: "net", code: -1009)),
+        ]
+        sut.record("p1")
+        sut.record("p2")
+
+        await sut.flushNow()
+        await sut.flushNow()
+        await sut.flushNow()
+
+        let attempts = stamps(service).map { $0.map(\.eventId) }
+        XCTAssertEqual(attempts.count, 3)
+        XCTAssertEqual(Set(attempts[0]).count, 2, "Deux apparitions, deux identifiants.")
+        XCTAssertEqual(attempts[1], attempts[0], "La tentative 2 renvoie les mêmes eventId.")
+        XCTAssertEqual(attempts[2], attempts[0], "La tentative 3 aussi.")
+    }
+
+    func test_retryAcrossALaunch_sendsTheSameEventIds() async throws {
+        let failing = MockPostService()
+        failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults)
+        first.record("p1")
+        await first.flushNow()
+
+        let online = MockPostService()
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults)
+        await revived.flushNow()
+
+        XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
+    }
+
+    func test_occurredAt_isTheAppearanceTime_notTheSendTime() async throws {
+        let service = MockPostService()
+        let clock = ClockBox(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let sut = ImpressionBatcher(
+            source: "feed", postService: service, flushDelay: 60, defaults: defaults,
+            accountId: { nil }, clock: { clock.now }
+        )
+        sut.record("p1")
+        clock.now = Date(timeIntervalSince1970: 1_700_000_900)
+
+        await sut.flushNow()
+
+        XCTAssertEqual(stamps(service).first?.first?.occurredAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    /// L'ancien format (`[String]`) est relu sans perte, puis réécrit : deux
+    /// relectures successives voient les MÊMES identifiants.
+    func test_legacyIdsQueue_isReadWithoutLoss_andRewrittenInTheNewFormat() async throws {
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil)
+        defaults.set(["p1", "p2", "p1"], forKey: key)
+
+        let migrated = ImpressionBatcher.restore(from: defaults, key: key)
+        let reread = ImpressionBatcher.restore(from: defaults, key: key)
+
+        XCTAssertEqual(migrated.map(\.postId), ["p1", "p2", "p1"])
+        XCTAssertTrue(migrated.allSatisfy { $0.stamp.occurredAt == nil }, "L'heure est inconnue : la passerelle date à réception.")
+        XCTAssertNil(defaults.stringArray(forKey: key), "L'ancien format est réécrit aussitôt.")
+        XCTAssertNotNil(defaults.data(forKey: key))
+        XCTAssertEqual(reread.map(\.stamp.eventId), migrated.map(\.stamp.eventId))
+    }
+
+    func test_legacyIdsQueue_isReplayedWithTheRewrittenEventIds() async throws {
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil)
+        defaults.set(["p1"], forKey: key)
+        let failing = MockPostService()
+        failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults)
+        await first.flushNow()
+
+        let online = MockPostService()
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults)
+        await revived.flushNow()
+
+        XCTAssertEqual(online.recordedImpressionPostIds, ["p1"])
+        XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
+    }
+}
+
+@MainActor
+private final class ClockBox {
+    nonisolated deinit {}
+    var now: Date
+    init(now: Date) { self.now = now }
+}

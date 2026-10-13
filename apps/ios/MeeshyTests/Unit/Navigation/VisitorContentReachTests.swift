@@ -351,3 +351,85 @@ final class MockVisitorReachReporter: VisitorReachReporting {
         flushCount += 1
     }
 }
+
+/// #10500 — la file du lecteur sans compte garde l'enveloppe de chaque
+/// événement : un rejeu renvoie les mêmes `eventId`, datés de l'occurrence.
+extension VisitorContentReachTests {
+
+    private func eventIds(_ service: MockPostService) -> [[String]] {
+        service.recordedStampedSocialEventBatches.map { $0.map(\.stamp.eventId) }
+    }
+
+    func test_retryAfterAFailure_sendsTheSameEventIds() async {
+        let service = MockPostService()
+        service.recordSocialEventsResultsQueue = [.failure(URLError(.notConnectedToInternet))]
+        let sut = makeReporter(service: service)
+        sut.record([.view(postId: "p1", durationMs: nil, surface: .visitor)])
+
+        await sut.flushNow()
+        await sut.flushNow()
+
+        let attempts = eventIds(service)
+        XCTAssertEqual(attempts.count, 2)
+        XCTAssertEqual(attempts[1], attempts[0])
+    }
+
+    func test_retryAcrossALaunch_sendsTheSameEventIds() async {
+        let offline = MockPostService()
+        offline.recordSocialEventsResult = .failure(URLError(.notConnectedToInternet))
+        let first = makeReporter(service: offline)
+        first.record([.view(postId: "p1", durationMs: 1_500, surface: .visitor)])
+        await first.flushNow()
+
+        let online = MockPostService()
+        let revived = makeReporter(service: online)
+        await revived.flushNow()
+
+        XCTAssertEqual(eventIds(online), eventIds(offline))
+    }
+
+    func test_occurredAt_isTheRecordTime_notTheSendTime() async {
+        let service = MockPostService()
+        let clock = StampClock(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let sut = VisitorReachReporter(
+            postService: service, defaults: defaults, token: { "visitor_test" },
+            knownTokens: { ["visitor_test"] }, flushDelay: 60,
+            reconnects: Empty().eraseToAnyPublisher(), clock: { clock.now }
+        )
+        sut.record([.view(postId: "p1", durationMs: nil, surface: .visitor)])
+        clock.now = Date(timeIntervalSince1970: 1_700_000_600)
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedStampedSocialEventBatches.first?.first?.stamp.occurredAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    /// Une file écrite avant #10500 (événements sans enveloppe) est relue sans
+    /// perte puis réécrite : deux lancements successifs envoient le même
+    /// `eventId`.
+    func test_legacyQueueWithoutEnvelope_isReadAndRewritten() async throws {
+        let identity = PendingVisitorEvent.identity(of: "visitor_test")
+        let legacy = #"[{"event":{"type":"view","postId":"p1"},"identity":"\#(identity)"}]"#
+        defaults.set(Data(legacy.utf8), forKey: VisitorReachReporter.storageKey)
+
+        let firstLaunch = makeReporter(service: MockPostService())
+        let secondLaunch = makeReporter(service: MockPostService())
+
+        XCTAssertEqual(firstLaunch.pendingEvents.map(\.event), [.view(postId: "p1", durationMs: nil, surface: nil)])
+        XCTAssertNil(firstLaunch.pendingEvents.first?.stamped.stamp.occurredAt)
+        XCTAssertEqual(
+            secondLaunch.pendingEvents.map(\.stamped.stamp.eventId),
+            firstLaunch.pendingEvents.map(\.stamped.stamp.eventId),
+            "L'identifiant donné à la relecture est réécrit sur le disque."
+        )
+        let rewritten = try XCTUnwrap(defaults.data(forKey: VisitorReachReporter.storageKey))
+        XCTAssertTrue(String(decoding: rewritten, as: UTF8.self).contains("eventId"))
+    }
+}
+
+@MainActor
+private final class StampClock {
+    nonisolated deinit {}
+    var now: Date
+    init(now: Date) { self.now = now }
+}

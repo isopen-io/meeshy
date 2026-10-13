@@ -221,6 +221,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// consommée en priorité, une entrée par appel.
     var recordSocialEventsCallCount = 0
     var recordedSocialEventBatches: [[SocialEvent]] = []
+    /// #10500 — les mêmes lots, enveloppes comprises (`eventId`, `occurredAt`).
+    var recordedStampedSocialEventBatches: [[StampedSocialEvent]] = []
     var recordedSocialEventsCredentials: [SocialEventsCredential] = []
     var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
     var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
@@ -683,9 +685,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try recordSocialEventsV2Result.get()
     }
 
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         recordSocialEventsCallCount += 1
-        recordedSocialEventBatches.append(events)
+        recordedSocialEventBatches.append(events.map(\.event))
+        recordedStampedSocialEventBatches.append(events)
         recordedSocialEventsCredentials.append(credential)
         if !recordSocialEventsResultsQueue.isEmpty {
             return try recordSocialEventsResultsQueue.removeFirst().get()
@@ -830,6 +833,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         recordSocialEventsCallCount = 0
         recordedSocialEventBatches = []
+        recordedStampedSocialEventBatches = []
         recordedSocialEventsCredentials = []
         recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
         recordSocialEventsResultsQueue = []

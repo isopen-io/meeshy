@@ -19,26 +19,31 @@ public final class ReachImpressionCollector: ReachImpressionRecording {
     private let source: String
     private let surface: ReachSurface
     private let postService: PostServiceProviding
-    private var pending: [String] = []
+    private let clock: @MainActor () -> Date
+    /// Chaque affichage garde l'heure où il a eu lieu, pas celle du départ.
+    private var pending: [StampedSocialEvent] = []
 
-    public init(source: String, surface: ReachSurface, postService: PostServiceProviding = PostService.shared) {
+    public init(
+        source: String,
+        surface: ReachSurface,
+        postService: PostServiceProviding = PostService.shared,
+        clock: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.source = source
         self.surface = surface
         self.postService = postService
+        self.clock = clock
     }
 
     public func record(_ postId: String) {
         guard !postId.isEmpty else { return }
-        pending.append(postId)
+        pending.append(.stamping(.impression(postId: postId, source: source, surface: surface), at: clock()))
     }
 
     public func flushNow() async {
         let batch = pending
         guard !batch.isEmpty else { return }
         pending.removeAll()
-        _ = try? await postService.recordSocialEvents(
-            batch.map { SocialEvent.impression(postId: $0, source: source, surface: surface) },
-            credential: .account
-        )
+        _ = try? await postService.recordSocialEvents(batch, credential: .account)
     }
 }

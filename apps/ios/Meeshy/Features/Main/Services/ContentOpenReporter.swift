@@ -46,8 +46,11 @@ final class ContentOpenReporter: ContentOpenReporting {
     private let visitor: VisitorReachReporting
     private let accountId: @MainActor () -> String?
     private let flushDelay: TimeInterval
+    private let clock: @MainActor () -> Date
 
-    private var pending: [SocialEvent] = []
+    /// Chaque `open` garde l'enveloppe posée au TAP (#10500) : un rejeu après
+    /// une panne renvoie le même `eventId`, daté du tap.
+    private var pending: [StampedSocialEvent] = []
     /// Le compte sous lequel les `open` en attente ont été TAPÉS : ils ne
     /// partent jamais sous le jeton d'un autre.
     private var pendingAccount: String?
@@ -59,17 +62,20 @@ final class ContentOpenReporter: ContentOpenReporting {
         postService: PostServiceProviding = PostService.shared,
         visitor: VisitorReachReporting = VisitorReachReporter.shared,
         accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
-        flushDelay: TimeInterval = 1
+        flushDelay: TimeInterval = 1,
+        clock: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.entries = entries
         self.postService = postService
         self.visitor = visitor
         self.accountId = accountId
         self.flushDelay = flushDelay
+        self.clock = clock
         subscribeToAppLifecycle()
     }
 
-    var pendingEvents: [SocialEvent] { pending }
+    var pendingEvents: [SocialEvent] { pending.map(\.event) }
+    var pendingStampedEvents: [StampedSocialEvent] { pending }
 
     func open(_ postId: String, from origin: OpenOrigin) {
         guard !postId.isEmpty else { return }
@@ -83,7 +89,7 @@ final class ContentOpenReporter: ContentOpenReporting {
             pending.removeAll()
             pendingAccount = account
         }
-        pending = Array((pending + [event]).suffix(Self.pendingCap))
+        pending = Array((pending + [.stamping(event, at: clock())]).suffix(Self.pendingCap))
         scheduleFlush()
     }
 

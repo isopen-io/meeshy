@@ -493,3 +493,35 @@ private final class ReachTrackedLinkResolver: TrackedLinkResolving, @unchecked S
 
     func recordClick(token: String) async {}
 }
+
+/// #10500 — un `open` gardé par une panne repart avec l'enveloppe posée au
+/// TAP : même `eventId`, même heure.
+extension ContentOpenReachTests {
+
+    func test_openKeptByANetworkFailure_isResentWithTheSameEnvelope() async {
+        let service = MockPostService()
+        service.recordSocialEventsResultsQueue = [.failure(MeeshyError.network(.noConnection))]
+        let clock = StampClock(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let sut = ContentOpenReporter(
+            entries: DetailOpenSources(), postService: service, visitor: MockVisitorReachReporter(),
+            accountId: { "u1" }, flushDelay: 60, clock: { clock.now }
+        )
+
+        sut.open("p1", from: .feed)
+        clock.now = Date(timeIntervalSince1970: 1_700_000_300)
+        await sut.flushNow()
+        await sut.flushNow()
+
+        let attempts = service.recordedStampedSocialEventBatches.map { $0.map(\.stamp) }
+        XCTAssertEqual(attempts.count, 2)
+        XCTAssertEqual(attempts[1], attempts[0], "La tentative 2 renvoie le même eventId.")
+        XCTAssertEqual(attempts[0].first?.occurredAt, Date(timeIntervalSince1970: 1_700_000_000), "Daté du tap, pas de l'envoi.")
+    }
+}
+
+@MainActor
+private final class StampClock {
+    nonisolated deinit {}
+    var now: Date
+    init(now: Date) { self.now = now }
+}

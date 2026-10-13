@@ -160,12 +160,22 @@ public struct SocialEventsReceipt: Codable, Sendable, Equatable {
 /// Les dates partent en ISO 8601 : `dwell.startedAt` est une chaîne côté
 /// passerelle, et l'encodeur par défaut écrirait un nombre — le lot entier
 /// serait refusé.
+///
+/// `context.sentAt` (#10500) est l'heure de l'APPAREIL au départ du lot : la
+/// passerelle en retranche l'âge `sentAt − occurredAt` de sa propre heure de
+/// réception, ce qui corrige un appareil décalé. Un serveur antérieur supprime
+/// la clé sans erreur.
 struct SocialEventsBody: Encodable {
-    let events: [SocialEvent]
+    struct Context: Encodable {
+        let sentAt: String
+    }
 
-    static func encoded(_ events: [SocialEvent]) throws -> Data {
+    let events: [StampedSocialEvent]
+    let context: Context
+
+    static func encoded(_ events: [StampedSocialEvent], sentAt: Date) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(SocialEventsBody(events: events))
+        return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: SocialEventsV2Wire.isoString(sentAt))))
     }
 }
