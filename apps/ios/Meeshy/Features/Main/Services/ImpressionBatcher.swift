@@ -38,22 +38,26 @@ final class ImpressionBatcher: ObservableObject {
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
 
-    /// outbox-11 — préfixe partagé des clés de persistance (une par HÔTE).
+    /// outbox-11 — préfixe partagé des clés de persistance (une par surface).
     static let storageKeyPrefix = "meeshy.impressions.pending."
 
-    /// Plafond d'ids par appel, aligné sur `IMPRESSION_BATCH_CAP` côté
-    /// passerelle (`routes/posts/impressions.ts`, `maxItems`). Un lot plus
-    /// gros est refusé en 400 : envoyé d'un bloc, il échouait pour toujours et
-    /// bloquait la surface entière (#10398).
-    static let maxBatchSize = 100
-
     private let source: String
+    /// #10483 — OÙ le contenu est apparu. Tout lot part par la porte unique
+    /// `POST /social/events`, avec ou sans surface (clé absente du fil) ;
+    /// présente, la file a sa propre clé : deux surfaces d'une même source ne
+    /// s'écrasent plus.
+    private let surface: ReachSurface?
     private let postService: PostServiceProviding
     private let flushDelay: TimeInterval
     private let defaults: UserDefaults
-    private let storageKey: String
+    /// Le compte sous lequel une impression est VUE. La file appartient à ce
+    /// compte, sur le disque comme en mémoire : une impression du compte A ne
+    /// part jamais sous le JWT du compte B, même pour les files partagées
+    /// (`SharedImpressionBatchers`) qui survivent à la déconnexion.
+    private let accountId: @MainActor () -> String?
 
     private var pending: [String] = []
+    private var pendingAccount: String?
     private var flushTask: Task<Void, Never>?
     /// Combine plutôt que des tokens `NotificationCenter` : ceux-ci exigeraient
     /// un `deinit` qui touche l'état isolé, ce que Swift 6 refuse (et qu'un
@@ -61,23 +65,25 @@ final class ImpressionBatcher: ObservableObject {
     /// souscriptions se résilient seules à la libération.
     private var cancellables = Set<AnyCancellable>()
 
-    /// `storageScope` distingue deux hôtes qui partagent une `source` serveur
-    /// (le profil et les favoris comptent tous deux en `profile`) : sur une
-    /// même clé, chacun écrasait la file de l'autre et la rejouait à son init
-    /// — perte d'un côté, double compte de l'autre (#10398).
     init(
         source: String,
-        storageScope: String? = nil,
+        surface: ReachSurface? = nil,
         postService: PostServiceProviding = PostService.shared,
         flushDelay: TimeInterval = 3,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.source = source
+        self.surface = surface
         self.postService = postService
         self.flushDelay = flushDelay
         self.defaults = defaults
-        self.storageKey = Self.storageKeyPrefix + (storageScope ?? source)
-        self.pending = defaults.stringArray(forKey: storageKey) ?? []
+        self.accountId = accountId
+        let account = accountId()
+        self.pendingAccount = account
+        self.pending = defaults.stringArray(
+            forKey: Self.storageKey(source: source, surface: surface, accountId: account)
+        ) ?? []
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
         // déclenchement, le lot ne repartait qu'à la faveur d'une NOUVELLE
@@ -88,6 +94,7 @@ final class ImpressionBatcher: ObservableObject {
     /// Le post `postId` vient d'apparaître à l'écran.
     func record(_ postId: String) {
         guard !postId.isEmpty else { return }
+        adoptCurrentAccount()
         pending.append(postId)
         persist()
         scheduleFlush()
@@ -114,32 +121,85 @@ final class ImpressionBatcher: ObservableObject {
     }
 
     private func flush() async {
-        guard !pending.isEmpty else { return }
+        adoptCurrentAccount()
+        let batch = pending
+        guard !batch.isEmpty else { return }
         // Vidé AVANT l'appel pour qu'une apparition concurrente ne reparte pas
         // dans le lot suivant en double ; réinséré en tête si l'envoi échoue.
-        var remaining = pending
         pending.removeAll()
         persist()
-        while !remaining.isEmpty {
-            let chunk = Array(remaining.prefix(Self.maxBatchSize))
-            remaining.removeFirst(chunk.count)
+        let owner = pendingAccount
+        do {
+            try await send(batch)
+        } catch let unsent as UnsentImpressions {
+            keepForRetry(unsent.postIds, owner: owner)
+            Self.logger.debug("impression flush partially failed (rest kept for retry): \(unsent.cause.localizedDescription, privacy: .public)")
+        } catch {
+            keepForRetry(batch, owner: owner)
+            Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Un échec revient dans la file de SON compte — si le compte a changé
+    /// pendant l'envoi, sur le disque de celui-ci, pas dans la file courante.
+    private func keepForRetry(_ postIds: [String], owner: String?) {
+        guard owner == pendingAccount else {
+            let key = Self.storageKey(source: source, surface: surface, accountId: owner)
+            defaults.set(postIds + (defaults.stringArray(forKey: key) ?? []), forKey: key)
+            return
+        }
+        pending.insert(contentsOf: postIds, at: 0)
+        persist()
+    }
+
+    /// La clé d'une surface prolonge celle de sa source : une file sans
+    /// surface garde la clé qu'elle avait avant #10483.
+    static func storageKey(source: String, surface: ReachSurface?) -> String {
+        storageKeyPrefix + source + (surface.map { ".\($0.rawValue)" } ?? "")
+    }
+
+    /// La clé d'une file appartient à un compte ; sans compte, la clé historique.
+    static func storageKey(source: String, surface: ReachSurface?, accountId: String?) -> String {
+        storageKey(source: source, surface: surface) + (accountId.map { "@\($0)" } ?? "")
+    }
+
+    /// Le compte a changé depuis la dernière écriture : la file en mémoire
+    /// appartient à l'autre compte (elle reste sur SON disque, ou a été purgée
+    /// à sa déconnexion) et cède la place à celle du compte courant.
+    private func adoptCurrentAccount() {
+        let account = accountId()
+        guard account != pendingAccount else { return }
+        pendingAccount = account
+        pending = defaults.stringArray(forKey: currentStorageKey) ?? []
+    }
+
+    private var currentStorageKey: String {
+        Self.storageKey(source: source, surface: surface, accountId: pendingAccount)
+    }
+
+    /// Le plafond d'un lot de `POST /social/events`.
+    static let socialEventsCap = 200
+
+    private func send(_ batch: [String]) async throws {
+        for start in stride(from: 0, to: batch.count, by: Self.socialEventsCap) {
+            let chunk = batch[start..<min(start + Self.socialEventsCap, batch.count)]
             do {
-                try await postService.recordImpressions(postIds: chunk, source: source)
+                _ = try await postService.recordSocialEvents(
+                    chunk.map { SocialEvent.impression(postId: $0, source: source, surface: surface) },
+                    credential: .account
+                )
             } catch let error where Self.isPermanentRejection(error) {
-                Self.logger.error("impression batch rejected (dropped \(chunk.count, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+                Self.logger.error("impression chunk rejected (dropped \(chunk.count, privacy: .public)): \(error.localizedDescription, privacy: .public)")
             } catch {
-                pending.insert(contentsOf: chunk + remaining, at: 0)
-                persist()
-                Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
-                return
+                throw UnsentImpressions(postIds: Array(batch[start...]), cause: error)
             }
         }
     }
 
     /// Un refus que le rejeu ne changera jamais : un 4xx hors 408/429 (le
-    /// lot lui-même est invalide), ou une réponse 2xx illisible (le serveur a
-    /// déjà compté — rejouer compterait deux fois). Le réseau, les 5xx, les
-    /// 429 et l'expiration de session restent rejouables.
+    /// paquet lui-même est invalide), ou une réponse 2xx illisible (le serveur
+    /// a déjà compté — rejouer compterait deux fois). Le réseau, les 5xx, les
+    /// 429 et l'expiration de session restent rejouables (#10398).
     nonisolated static func isPermanentRejection(_ error: Error) -> Bool {
         guard let apiError = error as? APIError else { return false }
         switch apiError {
@@ -152,8 +212,14 @@ final class ImpressionBatcher: ObservableObject {
         }
     }
 
+    /// Les paquets déjà acceptés ne repartent pas : seul le reste revient en file.
+    nonisolated private struct UnsentImpressions: Error {
+        let postIds: [String]
+        let cause: Error
+    }
+
     private func persist() {
-        defaults.set(pending, forKey: storageKey)
+        defaults.set(pending, forKey: currentStorageKey)
     }
 
     // MARK: - Logout purge (outbox-11)

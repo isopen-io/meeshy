@@ -32,6 +32,9 @@ import { counterWrite, postCounterWritesOf } from './helpers/posts-counter-write
 
 const POST_A = '507f1f77bcf86cd799439011';
 
+/** La PREMIÈRE vue d'un lecteur : le total ET les uniques (#10483). */
+const PREMIERE_VUE = { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } } as const;
+
 const p2002 = () => {
   const err = new Error('Unique constraint failed on the constraint: `PostView_postId_userId_key`');
   (err as Error & { code: string }).code = 'P2002';
@@ -79,7 +82,7 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     jest.clearAllMocks();
   });
 
-  it('course double-submit : P2002 au create → false, viewCount NON incrémenté, pas de log d’erreur', async () => {
+  it('course double-submit : P2002 au create → false, la vue compte au total mais pas dans les uniques, pas de log d’erreur', async () => {
     const { prisma, post, postView } = buildPrisma();
     postView.create.mockRejectedValue(p2002());
     const svc = makeService(prisma);
@@ -87,7 +90,7 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(false);
-    expect(viewCredits(prisma)).toHaveLength(0);
+    expect(viewCredits(prisma)).toEqual([counterWrite([POST_A], { viewCount: { increment: 1 } })]);
     // Dédup ATTENDUE sous course — ne doit pas polluer les logs d'erreur.
     expect(mockLog.warn).not.toHaveBeenCalled();
     expect(mockLog.error).not.toHaveBeenCalled();
@@ -111,7 +114,7 @@ describe('PostService.recordView — course P2002 + observabilité', () => {
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(true);
-    expect(viewCredits(prisma)).toEqual([counterWrite([POST_A], { viewCount: { increment: 1 } })]);
+    expect(viewCredits(prisma)).toEqual([counterWrite([POST_A], PREMIERE_VUE)]);
   });
 });
 
@@ -183,8 +186,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     expect(counted).toBe(true);
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: POST_A, userId: 'viewer-1', duration: undefined } });
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], PREMIERE_VUE));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], PREMIERE_VUE));
   });
 
   it("chaîne repost-de-repost : la RACINE (originalRepostOfId) est créditée, jamais le parent intermédiaire", async () => {
@@ -196,8 +199,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     await svc.recordView(POST_A, 'viewer-1');
 
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
-    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([INTERMEDIATE_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], PREMIERE_VUE));
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([INTERMEDIATE_ID], PREMIERE_VUE));
   });
 
   it("l'auteur de la racine visionnant un repost de son propre contenu ne gonfle pas son propre compteur (même garde que la ré-ouverture directe)", async () => {
@@ -210,8 +213,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     const counted = await svc.recordView(POST_A, 'viewer-1');
 
     expect(counted).toBe(true);
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
-    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], PREMIERE_VUE));
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([ROOT_ID], PREMIERE_VUE));
     expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: ROOT_ID }) }));
   });
 
@@ -226,7 +229,7 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     expect(counted).toBe(true);
     expect(viewCredits(prisma)).toHaveLength(1);
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], PREMIERE_VUE));
   });
 
   it('vue sur un post non-repost : comportement inchangé — une seule résolution, aucun crédit de racine', async () => {
@@ -267,7 +270,7 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
     });
     expect(counted).toBe(true);
     expect(viewCredits(prisma)).toHaveLength(1);
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([POST_A], PREMIERE_VUE));
   });
 
   it("le reposteur qui revisionne SON PROPRE repost ne le gonfle pas, mais crédite bien la racine (garde évaluée PAR POST, pas un court-circuit global)", async () => {
@@ -281,8 +284,8 @@ describe('PostService.recordView — crédit de la racine à travers un repost (
 
     // Le retour reste celui du post AFFICHÉ (pas crédité ici).
     expect(counted).toBe(false);
-    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([POST_A], { viewCount: { increment: 1 } }));
-    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], { viewCount: { increment: 1 } }));
+    expect(viewCredits(prisma)).not.toContainEqual(counterWrite([POST_A], PREMIERE_VUE));
+    expect(viewCredits(prisma)).toContainEqual(counterWrite([ROOT_ID], PREMIERE_VUE));
     expect(viewCredits(prisma)).toHaveLength(1);
     expect(postView.create).toHaveBeenCalledWith({ data: { postId: ROOT_ID, userId: 'viewer-1', duration: undefined } });
     expect(postView.create).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ postId: POST_A }) }));

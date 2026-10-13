@@ -670,6 +670,7 @@ extension iPadRootView {
         parentCommentId: String?,
         storyContext: StoryNotificationContext
     ) {
+        DetailOpenSources.shared.markOpenedFromNotification(postId)
         let surface = NotificationContentRouter.surface(
             postType: postType,
             contentType: contentType,

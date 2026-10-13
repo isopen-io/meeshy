@@ -119,8 +119,23 @@ function isCurrentHref(url: string): boolean {
 export function navigate(url: string, replace = false): void {
   if (!replace && isCurrentHref(url)) return;
   if (replace) window.history.replaceState(null, '', url);
-  else window.history.pushState(null, '', url);
+  else {
+    window.history.pushState(null, '', url);
+    navigatedInApp = true;
+  }
   notify();
+}
+
+let navigatedInApp = false;
+
+/**
+ * LE LECTEUR A-T-IL DÉJÀ AVANCÉ DANS L'APPLICATION ? (#10483) — vrai dès le
+ * premier `pushState`. `document.referrer` est celui du CHARGEMENT de la
+ * page : il ne dit d'où vient un écran que tant que cet écran est celui de
+ * l'atterrissage. Une redirection (`replace`) ne compte pas comme un pas.
+ */
+export function hasNavigatedInApp(): boolean {
+  return navigatedInApp;
 }
 
 /**

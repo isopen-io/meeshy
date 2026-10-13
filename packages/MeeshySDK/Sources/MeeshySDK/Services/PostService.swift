@@ -178,14 +178,17 @@ public protocol PostServiceProviding: Sendable {
     func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
     func unpinPost(postId: String) async throws
-    func viewPost(postId: String, duration: Int?) async throws
     func getPostViews(postId: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]>
     func getUserPosts(userId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
     func getCommentReplies(postId: String, commentId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPostComment]>
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]>
-    func recordImpressions(postIds: [String], source: String) async throws
-    func recordImpression(postId: String, source: String) async throws
-    func recordEngagement(_ sessions: [EngagementSession]) async throws
+    /// `POST /social/events` — la porte UNIQUE de la télémétrie de lecture
+    /// (#10483), pour un compte comme pour un lecteur sans compte.
+    ///
+    /// Requirement SÉPARÉE avec défaut ci-dessous : un double de test qui ne la
+    /// surcharge pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir
+    /// compté.
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
     /// `POST /posts/from-attachment` — publie une pièce jointe DÉJÀ reçue en
     /// conversation, sans la retélécharger ni la réenvoyer : le fichier est
     /// déjà sur le stockage, le serveur le duplique côté post.
@@ -203,6 +206,10 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
+    }
+
     /// Défaut : un conformeur qui ne publie pas depuis une pièce jointe (tous
     /// les doubles de test existants) reste valide. Il ÉCHOUE plutôt que de
     /// rendre un post fabriqué — un défaut silencieux ferait passer un témoin
@@ -897,23 +904,6 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     // MARK: - View Tracking
 
-    public func viewPost(postId: String, duration: Int? = nil) async throws {
-        if let duration {
-            let body = ["duration": duration]
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: APIResponse<[String: Bool]> = try await api.request(
-                PostsEndpoint.byPostIdView(postId: postId),
-                method: "POST",
-                body: bodyData
-            )
-        } else {
-            let _: APIResponse<[String: Bool]> = try await api.request(
-                PostsEndpoint.byPostIdView(postId: postId),
-                method: "POST"
-            )
-        }
-    }
-
     /// **La liste « vu par » d'une story ou d'un post — réservée à l'auteur.**
     ///
     /// La route sert l'enveloppe paginée ordinaire du dépôt : les spectateurs
@@ -950,35 +940,27 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         try await api.paginatedRequest(PostsEndpoint.byPostIdCommentsByCommentIdReplies(postId: postId, commentId: commentId), cursor: cursor, limit: limit)
     }
 
-    // MARK: - Impression Tracking
+    // MARK: - Reach Tracking
 
-    public func recordImpressions(postIds: [String], source: String = "feed") async throws {
-        guard !postIds.isEmpty else { return }
-        struct BatchBody: Encodable { let postIds: [String]; let source: String }
-        let _: APIResponse<[String: Int]> = try await api.post(
-            PostsEndpoint.impressionsBatch,
-            body: BatchBody(postIds: postIds, source: source)
+    /// `POST /social/events` est la SEULE porte par laquelle iOS compte ce qu'il
+    /// affiche (#10483) : vues, impressions, engagements d'ouverture et sessions
+    /// de consommation (`dwell`). Les anciennes routes (`/posts/:id/view`,
+    /// `/impression`, `/impressions/batch`, `/engagement/batch`) restent montées
+    /// pour les versions publiées ; aucune source neuve ne les appelle
+    /// (`LegacyReachRoutesGuardTests`).
+    ///
+    /// Un lot vide ne part pas : il n'y a rien à compter.
+    public func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
+        let body = try SocialEventsBody.encoded(events)
+        let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
+            SocialEndpoint.events,
+            method: "POST",
+            body: body,
+            queryItems: nil,
+            headers: credential.headers
         )
-    }
-
-    /// Records a single impression for one post. Unlike `recordImpressions`
-    /// (feed batch, deduped client-side per session), this is NOT deduped —
-    /// every Detail open is one more impression (`source: "detail"`).
-    public func recordImpression(postId: String, source: String = "detail") async throws {
-        struct Body: Encodable { let source: String }
-        let _: APIResponse<[String: Bool]> = try await api.post(
-            PostsEndpoint.byPostIdImpression(postId: postId),
-            body: Body(source: source)
-        )
-    }
-
-    public func recordEngagement(_ sessions: [EngagementSession]) async throws {
-        guard !sessions.isEmpty else { return }
-        struct BatchBody: Encodable { let sessions: [EngagementSession] }
-        let _: APIResponse<[String: Int]> = try await api.post(
-            PostsEndpoint.engagementBatch,
-            body: BatchBody(sessions: sessions)
-        )
+        return response.data
     }
 }
 

@@ -35,9 +35,7 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
-    /// Compté en `profile` côté serveur, mais persisté sous SA clé : la
-    /// grille du profil partage la même source et écrasait cette file (#10398).
-    @StateObject private var impressions = ImpressionBatcher(source: "profile", storageScope: "profile.bookmarks")
+    @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
@@ -203,12 +201,12 @@ struct BookmarksView: View {
         if post.isReel {
             ReelsPresenter.shared.present(
                 posts: FeedPost.reels(from: viewModel.posts),
-                startId: post.id
+                startId: post.id,
+                from: .bookmarks
             )
         } else {
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .bookmarks)
         }
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
     }
 
     private var bookmarksEmptyTitle: String {

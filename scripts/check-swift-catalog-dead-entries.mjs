@@ -491,7 +491,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `.opsHostMetrics`, `.opsStatus`, `.opsByOperation` (l'écran Opérations : hôte en direct, sauvegarde, purge) —
 // des écrans d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
 // 2026-10-13 en CI (run 38319791863 rouge sur 310) et en local.
-const BASELINE_DEAD_ENTRIES = 310;
+// 310 -> 313 (#10483, 2026-10-13) : iOS ne compte plus que par `POST /social/events` (décision du porteur) —
+// `PostsEndpoint.byPostIdView`, `.byPostIdImpression`, `.impressionsBatch` et `.engagementBatch` perdent leur
+// appelant. Les routes restent MONTÉES côté passerelle (les versions publiées de l'app les appellent encore,
+// rétrocompatibilité), donc le catalogue généré les déclare toujours ; `LegacyReachRoutesGuardTests` interdit
+// qu'une source iOS y repasse. Valeur MESURÉE le 2026-10-13 en local, branche à jour de dev.
+const BASELINE_DEAD_ENTRIES = 313;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

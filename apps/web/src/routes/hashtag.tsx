@@ -121,6 +121,7 @@ export default function HashtagScreen() {
                 key={model.id}
                 model={model}
                 impressionSource="search"
+                impressionSurface="hashtag"
                 onGesture={onGesture}
                 onShare={onShare}
                 onComment={onComment}

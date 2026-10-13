@@ -123,9 +123,9 @@ struct ThemedFeedOverlay: View {
     /// besoin. Le chemin iPad (`FeedView`) portait déjà ce montage : c'est le
     /// même correctif, qui n'avait jamais traversé.
     @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
-    /// Le fil de l'iPhone ne comptait AUCUNE impression : seul `FeedView`,
-    /// monté sur iPad, portait le batcher (#10397). Clé propre au fil iPhone.
-    @StateObject private var impressions = ImpressionBatcher(source: "feed", storageScope: "feed.phone")
+    /// #10483 — le fil iPhone compte ce qu'il liste, réels compris, comme
+    /// l'hôte iPad (`FeedView`) : une impression par apparition d'une carte.
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
@@ -516,15 +516,13 @@ struct ThemedFeedOverlay: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
                 // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                router.openPostDetail(post, from: .feed)
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
@@ -534,9 +532,8 @@ struct ThemedFeedOverlay: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
@@ -604,10 +601,10 @@ struct ThemedFeedOverlay: View {
                 togglePostBookmark(postId: postId)
             },
             onTapPost: { post in
-                router.push(.postDetail(post.id, post))
+                router.openPostDetail(post, from: .feed)
             },
             onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
+                router.openPostDetail(id: repostId, from: .feed)
             },
             onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.deletePost(postId) }
@@ -762,8 +759,8 @@ struct ThemedFeedOverlay: View {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                             viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
-                            impressions.record(post.id)
                         }
+                        .countsImpression(of: post.id) { impressions.record($0) }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)

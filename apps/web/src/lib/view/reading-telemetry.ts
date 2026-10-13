@@ -1,16 +1,24 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { currentCredential, httpTransport } from '@/lib/api/client';
+import type { Credential } from '@/lib/api/http';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionIdentityKey, sessionStore } from '@/lib/api/session';
 import {
   createSocialEventsRecorder,
   newEngagementSessionId,
+  type ContentSurface,
   type DwellContentType,
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
+import { publicWebOrigin } from '@/lib/links/public-origin';
+import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
+
+import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
+
+import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
 
 /**
  * **CE QUE LE LECTEUR A VU, DIT À LA PASSERELLE** (#10401) — le site unique
@@ -22,6 +30,19 @@ import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
  * `markStoryViewed`.
  */
 const VISITOR_KEY = 'meeshy.reading.visitor';
+
+type KeyStorage = Pick<Storage, 'getItem' | 'removeItem'>;
+
+/**
+ * La clé de visiteur n'a plus d'objet une fois un compte connecté (#10483 —
+ * « purgée quand un compte se connecte ») : un uuid sans lien avec la
+ * personne, qui ne doit pas survivre à côté de son compte.
+ */
+export function forgetVisitorKeyOnAccount(credential: Credential | null, storage: KeyStorage): void {
+  if (credential?.kind !== 'registered') return;
+  if (storage.getItem(VISITOR_KEY) === null) return;
+  storage.removeItem(VISITOR_KEY);
+}
 
 function visitorKey(): string {
   const storage = safeLocalStorage();
@@ -83,6 +104,7 @@ function isSocialEvent(value: unknown): value is SocialEvent {
   const event = value as Record<string, unknown>;
   if (typeof event.postId !== 'string') return false;
   if (event.type === 'view') return true;
+  if (event.type === 'open') return true;
   if (event.type === 'impression') return typeof event.source === 'string';
   return event.type === 'dwell' && typeof event.sessionId === 'string';
 }
@@ -168,6 +190,7 @@ function trackOpenSession(session: OpenSession): () => void {
 export const readingTelemetry = {
   record(event: SocialEvent): void {
     if (__FIXTURES__ && apiDeps.source === 'fixtures') return;
+    forgetVisitorKeyOnAccount(currentCredential(), safeLocalStorage());
     liveRecorder().record(event);
   },
   flushNow(): void {
@@ -241,20 +264,33 @@ export function observeImpression(
 
 /**
  * La référence à poser sur une carte : une impression `source` par
- * apparition. `source === null` ou `postId` absent ⇒ rien n'est observé.
- * Aucun état React : la carte ne se re-rend pas pour être observée.
+ * APPARITION, dite depuis l'écran `surface` (#10483 § 8). Règle de comptage
+ * du porteur : chaque listage compte, un aller-retour de défilement comme
+ * l'humeur d'un avatar répétée de bulle en bulle — mais jamais un simple
+ * re-rendu (la référence est stable tant que ses primitives le sont).
+ * `source === null` ou `postId` absent ⇒ rien n'est observé. Aucun état
+ * React : la carte ne se re-rend pas pour être observée.
  */
 export function useImpressionRef(
   postId: string | undefined,
   source: ImpressionSource | null,
+  surface?: ContentSurface,
 ): (node: Element | null) => void {
   const stop = useRef<(() => void) | null>(null);
   return useCallback((node: Element | null) => {
     stop.current?.();
     stop.current = null;
-    if (node === null || postId === undefined || source === null) return;
-    stop.current = observeImpression(node, () => readingTelemetry.record({ type: 'impression', postId, source }));
-  }, [postId, source]);
+    if (node === null || postId === undefined || postId === '' || source === null) return;
+    stop.current = observeImpression(node, () => {
+      readingTelemetry.record({ type: 'impression', postId, source, ...(surface === undefined ? {} : { surface }) });
+    });
+  }, [postId, source, surface]);
+}
+
+/** Deux références posées sur le MÊME nœud (la story d'une tuile ET son humeur). */
+export function useMergedRefs(...refs: readonly ((node: Element | null) => void)[]): (node: Element | null) => void {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useCallback((node: Element | null) => refs.forEach((ref) => ref(node)), refs);
 }
 
 /**
@@ -262,35 +298,47 @@ export function useImpressionRef(
  * réel actif, story à l'écran). À l'ouverture : l'impression `source` et, si
  * `openView`, la vue (comptée tout de suite, sans seuil). À la sortie : la vue
  * reprise avec sa durée (la passerelle garde la plus longue) et la séance
- * `dwell`, temps passé compris. La page qui s'en va (onglet fermé, rechargé,
- * masqué, coque en arrière-plan) ferme la séance comme une sortie ; le retour
- * en ouvre une nouvelle, sans recompter l'impression ni l'ouverture (#10519).
+ * `dwell`, temps passé compris. Pour un visiteur, la vue de sortie part
+ * aussi (sa durée) ; la séance `dwell`, réservée aux comptes, est écartée
+ * par l'émetteur. La page qui s'en va (onglet fermé, rechargé, masqué, coque
+ * en arrière-plan) ferme la séance comme une sortie ; le retour en ouvre une
+ * nouvelle, sans recompter l'impression ni l'ouverture (#10519).
  */
 export function useReadingSession(params: {
   readonly postId: string | undefined;
   readonly active: boolean;
   readonly contentType: DwellContentType;
-  readonly surface: string;
+  readonly surface: ContentSurface;
   readonly impressionSource: ImpressionSource | null;
   readonly openView: boolean;
+  /**
+   * PAR OÙ l'écran est arrivé (#10483) — lu à l'ACTIVATION, jamais une
+   * dépendance : la vue d'ouverture et la vue de sortie d'une séance portent
+   * la même provenance. Absent ⇒ la vue n'en porte aucune.
+   */
+  readonly attribution?: (postId: string) => ViewAttribution;
   readonly now?: () => number;
 }): void {
   const { postId, active, contentType, surface, impressionSource, openView } = params;
   const now = params.now ?? Date.now;
   const nowRef = useRef(now);
   nowRef.current = now;
+  const attributionRef = useRef(params.attribution);
+  attributionRef.current = params.attribution;
 
   useEffect(() => {
     if (!active || postId === undefined) return;
     let startedAt: number | null = nowRef.current();
-    if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource });
-    if (openView) readingTelemetry.record({ type: 'view', postId });
+    const attribution = attributionRef.current;
+    const provenance = attribution === undefined ? {} : viewFieldsOf(attribution(postId));
+    if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource, surface });
+    if (openView) readingTelemetry.record({ type: 'view', postId, surface, ...provenance });
     const close = () => {
       if (startedAt === null) return;
       const dwellMs = Math.max(0, nowRef.current() - startedAt);
       const opened = startedAt;
       startedAt = null;
-      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs });
+      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface, ...provenance });
       readingTelemetry.record({
         type: 'dwell',
         sessionId: newEngagementSessionId(),
@@ -313,4 +361,64 @@ export function useReadingSession(params: {
       close();
     };
   }, [postId, active, contentType, surface, impressionSource, openView]);
+}
+
+/**
+ * **LE TAP SUR UN CONTENU D'UN LISTING** (#10483) — l'engagement d'ouverture
+ * et son listing d'origine. Il ne compte AUCUNE vue : c'est l'écran ouvert
+ * qui la compte, avec sa provenance.
+ */
+export function recordContentOpen(postId: string, origin: OpenOrigin): void {
+  readingTelemetry.record({ type: 'open', postId, origin });
+}
+
+/**
+ * Les props d'un `<Link>` qui OUVRE un contenu depuis un listing : l'adresse
+ * porte `?from=<origine>` (fusionnée à sa propre requête) et le clic envoie
+ * l'engagement `open`. Sans origine (la fiche elle-même), rien n'est ajouté.
+ */
+export function openLinkProps(
+  postId: string,
+  origin: OpenOrigin | null,
+  search: Readonly<Record<string, string>> = {},
+): { readonly search: Record<string, string>; readonly onClick?: () => void } {
+  const merged = { ...search, ...openLinkSearch(origin) };
+  return origin === null ? { search: merged } : { search: merged, onClick: () => recordContentOpen(postId, origin) };
+}
+
+/**
+ * Le référent de l'ATTERRISSAGE — vide dès que le lecteur a avancé dans
+ * l'application. Un objet à méthode, comme `readingTelemetry` : un témoin le
+ * remplace pour jouer une arrivée depuis un autre site.
+ */
+export const arrival = {
+  referrer(): string {
+    if (typeof document === 'undefined' || hasNavigatedInApp()) return '';
+    return document.referrer;
+  },
+};
+
+function ownOrigins(): readonly string[] {
+  if (typeof window === 'undefined') return [];
+  return [publicWebOrigin(window.location.origin), window.location.origin];
+}
+
+/**
+ * La provenance d'un écran détail, lue UNE fois à son montage : c'est
+ * l'adresse par laquelle il est entré, pas celle où il en sera dans dix gestes.
+ */
+export function useViewAttribution(): ViewAttribution {
+  const [search] = useSearch();
+  const [attribution] = useState(() => viewProvenanceOf(search, arrival.referrer(), ownOrigins()));
+  return attribution;
+}
+
+/**
+ * La source d'une ouverture de détail (#10483 W5) — une notification pose
+ * `?from=notification`, un lien partagé `?via=<jeton>` ; sinon `detail`.
+ */
+export function detailImpressionSourceOf(search: URLSearchParams): ImpressionSource {
+  if (search.get('from') === 'notification') return 'notification';
+  if ((search.get('via') ?? '') !== '') return 'shared_link';
+  return 'detail';
 }

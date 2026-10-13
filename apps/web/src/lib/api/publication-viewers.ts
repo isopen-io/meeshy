@@ -28,6 +28,10 @@ export type { PostViewerRow };
 export type PostInteractionsPayload = {
   readonly viewers: readonly PostViewerRow[];
   readonly engagement?: PostViewersPage['engagement'];
+  /** Les lecteurs SANS compte (#10483) — un agrégat, jamais une liste :
+   * aucun visiteur n'entre dans la liste nominative. Absent d'un serveur
+   * antérieur ⇒ rien ne s'affiche. */
+  readonly anonymousViewCount?: number;
   readonly pagination: { readonly total: number; readonly offset: number; readonly limit: number; readonly hasMore: boolean };
 };
 
@@ -59,7 +63,7 @@ export async function fetchStoryViewers(
       },
     };
   }
-  const result = await params.transport.request<PostViewersPage>({
+  const result = await params.transport.request<PostViewersPage & { readonly anonymousViewCount?: unknown }>({
     method: 'GET',
     path: postsEndpoints.byPostIdInteractions(params.postId),
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
@@ -70,9 +74,14 @@ export async function fetchStoryViewers(
     data: {
       viewers: result.data.viewers,
       ...(result.data.engagement !== undefined ? { engagement: result.data.engagement } : {}),
+      ...visitorCountOf(result.data.anonymousViewCount),
       pagination: result.pagination ?? { total: result.data.viewers.length, offset: 0, limit: 50, hasMore: false },
     },
   };
+}
+
+function visitorCountOf(value: unknown): { readonly anonymousViewCount?: number } {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { anonymousViewCount: value } : {};
 }
 
 export const storyViewersQueryKey = (postId: string) => ['stories', 'viewers', postId] as const;

@@ -43,6 +43,17 @@ export interface CursorPaginationMeta {
 export interface ResponseMeta {
   conversationStats?: ConversationStats;
   /**
+   * `GET /posts/:postId/views` (#10483) — les vues de lecteurs SANS compte,
+   * annoncées en agrégat (« et N visiteurs ») à côté de la liste nommée.
+   */
+  anonymousViewCount?: number;
+  /**
+   * `GET /posts/:postId/views` (#10483) — les vues UNIQUES par jeton (comptes
+   * et anonymes) et leur part anonyme. Enregistrées, pas encore affichées.
+   */
+  uniqueViewCount?: number;
+  anonymousUniqueViewCount?: number;
+  /**
    * L'attribution de la géolocalisation (#9609) — la licence CC-BY 4.0 de
    * DB-IP Lite l'exige partout où un lieu déduit de l'adresse est servi ; la
    * ville est approximative. Valeur : `GEOLOCATION_ATTRIBUTION`

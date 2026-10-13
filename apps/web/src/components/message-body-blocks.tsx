@@ -17,6 +17,7 @@ import {
   type StoryCitation,
 } from '@/lib/view/message-body';
 import { shortRelativeTime } from '@/lib/relative-time';
+import { useImpressionRef } from '@/lib/view/reading-telemetry';
 import { META_TEXT_OPACITY, QUOTED_CARD_WIDTH } from '@/lib/reading-mode/metrics';
 
 import { GlyphSvg } from './glyph';
@@ -282,6 +283,9 @@ export function StoryCitationCard({
    * carte.
    */
   const [, setÉchecs] = useState(0);
+  /* LA STORY CITÉE EST VUE (#10483) — la carte à l'écran compte une impression
+     de la story, venue d'un partage ; une story disparue ne compte rien. */
+  const impressionRef = useImpressionRef(citation.unavailable ? undefined : citation.id, 'shared_link', 'citation');
   const vignetteSrc = citation.thumbnailUrl === null ? '' : attachmentSrc(citation.thumbnailUrl);
   const vignetteAbsente = vignetteSrc !== '' && isMediaAbsent(vignetteSrc);
   const montreVignette = vignetteSrc !== '' && !vignetteAbsente;
@@ -343,6 +347,7 @@ export function StoryCitationCard({
   );
   const card = (
     <span
+      ref={impressionRef}
       className="block overflow-hidden"
       style={{ width: QUOTED_CARD_WIDTH, borderRadius: 'var(--ios-radius-lg)' }}
       aria-hidden
@@ -414,8 +419,10 @@ export function MoodQuote({
   const body = citation.text === '' ? citation.emoji : `${citation.emoji} ${citation.text}`;
   const relativeDate = citation.createdAt === '' ? '' : shortRelativeTime(new Date(citation.createdAt), now);
   const ink = isMine ? 'var(--color-meta-mine)' : 'var(--color-ios-ink-2)';
+  const impressionRef = useImpressionRef(citation.id, 'shared_link', 'citation');
   return (
     <div
+      ref={impressionRef}
       data-mood-citation
       role="group"
       aria-label={`${title}, ${body}`}

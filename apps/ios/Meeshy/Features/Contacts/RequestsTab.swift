@@ -136,6 +136,9 @@ struct RequestsTab: View {
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
+            .countsImpression(of: statusViewModel.statusForUser(userId: request.senderId)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)

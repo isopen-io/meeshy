@@ -339,6 +339,11 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      # #10483 — clé HMAC des lecteurs SANS compte (vues et impressions anonymes) :
+      # seule l'empreinte du jeton est stockée. PROPRE à cet environnement ; sans
+      # elle la passerelle refuse de démarrer (fail-closed). La changer recompte
+      # chaque lecteur anonyme : ne pas la faire tourner.
+      - READER_KEY_HMAC_SECRET=${READER_KEY_HMAC_SECRET:?READER_KEY_HMAC_SECRET absente sur l hote. Generer avec openssl rand -hex 32}
       - AGENT_HOST=agent
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - TURN_SECRET=${TURN_SECRET}

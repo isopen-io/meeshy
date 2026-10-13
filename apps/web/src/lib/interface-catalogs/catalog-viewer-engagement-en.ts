@@ -19,6 +19,10 @@ const en = {
   'viewerEngagement.empty.subtitle': 'People who see this post will appear here.',
   'viewerEngagement.forbidden': 'You don’t have access to the list of who viewed this post.',
   'viewerEngagement.unavailable': 'Activity details are temporarily unavailable.',
+  'viewerEngagement.visitors.one': 'and {count} visitor without an account',
+  'viewerEngagement.visitors.other': 'and {count} visitors without an account',
+  'viewerEngagement.visitors.only.one': '{count} visitor without an account',
+  'viewerEngagement.visitors.only.other': '{count} visitors without an account',
 } satisfies ViewerEngagementCatalog;
 
 export default en;

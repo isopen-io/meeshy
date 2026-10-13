@@ -54,6 +54,11 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         }
     }
 
+    /// Erreur choisie REQUÊTE PAR REQUÊTE, après enregistrement — pour un
+    /// double qui refuse une requête d'un lot et accepte sa voisine sur la
+    /// même adresse (#10483 : les `open` refusés, les vues acceptées).
+    var errorForRequest: ((RecordedRequest) -> Error?)?
+
     func stub<T>(_ endpoint: String, result: T) {
         stubs[endpoint] = result
     }
@@ -105,6 +110,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems, headers: headers)
+        if let last = requests.last, let error = errorForRequest?(last) { throw error }
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {

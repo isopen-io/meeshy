@@ -1,6 +1,8 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+import type { ContentSurface } from '@meeshy/shared/types/content-surfaces';
+import type { OpenOrigin, ViewProvenance } from '@meeshy/shared/types/content-reach';
 
-import type { ApiResult, Credential, HttpTransport } from './http';
+import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 
 /**
  * **LA TÉLÉMÉTRIE DE LECTURE DU WEB** (#10401) — l'émetteur UNIQUE des
@@ -20,10 +22,23 @@ import type { ApiResult, Credential, HttpTransport } from './http';
  * - Un échec transitoire (hors ligne, 408, 429, 5xx) GARDE le lot en file :
  *   il repart au flush suivant. Un refus définitif (400, 403, 413) le jette —
  *   le rejouer bloquerait la file à jamais pour un défaut que rien ne répare.
- * - Un VISITEUR (sans compte, ou invité d'un lien) ne peut produire qu'une
- *   vue : la porte refuse en 403 un lot anonyme qui porte autre chose. Ses
- *   vues partent une à une — le seau anonyme est borné par le premier post
- *   du lot.
+ * - Un VISITEUR (sans compte, ou invité d'un lien) émet ses vues ET ses
+ *   impressions (#10483), groupées à la même cadence, sous son jeton d'invité
+ *   ou sa clé de visiteur. Vues et impressions partent en DEUX requêtes : un
+ *   serveur antérieur à #10483 refuse en 403 un lot anonyme qui porte une
+ *   impression — il ne doit refuser qu'elle, jamais la vue voisine. Le 403
+ *   retire l'impression de la file, sans rejeu. `dwell` et `download`
+ *   restent réservés aux comptes et ne partent pas.
+ * - RÈGLE DE COMPTAGE DU PORTEUR (#10483, 2026-10-13) : chaque listage est
+ *   une impression, chaque ouverture une vue — aucun dédoublonnage côté
+ *   client, ni par fenêtre de temps ni par onglet. Les vues UNIQUES sont
+ *   l'affaire de la passerelle (par compte ou par clé de lecteur).
+ * - L'ENGAGEMENT D'OUVERTURE `open` (#10483) — le tap sur un contenu d'un
+ *   listing, avec le listing d'origine ; il ne compte aucune vue. Un serveur
+ *   antérieur ne le connaît pas et refuserait en 400 le lot ENTIER (union
+ *   discriminée) : les `open` partent donc TOUJOURS dans leur propre requête,
+ *   pour un compte comme pour un visiteur, et leur refus (400, 403) les
+ *   retire sans rejeu, sans jamais emporter une vue ou une impression.
  */
 export const SOCIAL_EVENTS_BATCH_CAP = 200;
 
@@ -47,11 +62,27 @@ export type ImpressionSource =
   | 'story'
   | 'status';
 
+/**
+ * L'ÉCRAN qui a montré le contenu (#10483 § 8) — champ FACULTATIF des
+ * impressions et des vues, énuméré une fois dans `@meeshy/shared`. Un serveur
+ * antérieur l'ignore (`z.object` n'est pas strict) : rien côté client n'en
+ * dépend.
+ */
+export type { ContentSurface, OpenOrigin, ViewProvenance };
+
 export type DwellContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 
 export type SocialEvent =
-  | { readonly type: 'view'; readonly postId: string; readonly durationMs?: number }
-  | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource }
+  | {
+      readonly type: 'view';
+      readonly postId: string;
+      readonly durationMs?: number;
+      readonly surface?: ContentSurface;
+      readonly provenance?: ViewProvenance;
+      readonly origin?: OpenOrigin;
+    }
+  | { readonly type: 'open'; readonly postId: string; readonly origin?: OpenOrigin }
+  | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource; readonly surface?: ContentSurface }
   | {
       readonly type: 'dwell';
       readonly sessionId: string;
@@ -67,6 +98,14 @@ export type SocialEvent =
 
 /** `sent` : écrit · `retry` : panne transitoire, garder · `drop` : refus définitif. */
 export type SendVerdict = 'sent' | 'retry' | 'drop';
+
+/**
+ * Le résultat d'un envoi : un verdict pour le lot ENTIER, ou la part du lot
+ * à garder quand ses morceaux ont connu des sorts différents — chaque vue et
+ * chaque impression comptant, rejouer la part déjà écrite la compterait deux
+ * fois, et rejouer une part refusée la ferait refuser encore.
+ */
+export type SendOutcome = SendVerdict | { readonly retain: readonly SocialEvent[] };
 
 /**
  * `snapshot` rend ce qui n'est pas DÉJÀ parti (le lot en vol, envoyé en
@@ -103,7 +142,7 @@ export function normalizeSocialEvent(event: SocialEvent): SocialEvent {
 }
 
 export function createSocialEventsEmitter(deps: {
-  readonly send: (events: readonly SocialEvent[]) => Promise<SendVerdict>;
+  readonly send: (events: readonly SocialEvent[]) => Promise<SendOutcome>;
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
 }): SocialEventsEmitter {
@@ -142,9 +181,14 @@ export function createSocialEventsEmitter(deps: {
       while (queue.length > 0) {
         const batch = queue.slice(0, SOCIAL_EVENTS_SEND_CAP);
         inFlight = batch.length;
-        const verdict = await deps.send(batch).catch((): SendVerdict => 'retry');
+        const outcome = await deps.send(batch).catch((): SendOutcome => 'retry');
         inFlight = 0;
-        if (verdict === 'retry') break;
+        if (outcome === 'retry') break;
+        if (typeof outcome === 'object') {
+          queue = [...outcome.retain, ...queue.slice(batch.length)];
+          if (outcome.retain.length > 0) break;
+          continue;
+        }
         queue = queue.slice(batch.length);
       }
     } finally {
@@ -183,35 +227,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
-/** Un lot d'un COMPTE — le transport y pose son crédential. */
-export function sendAccountBatch(deps: SocialEventsTransportDeps) {
-  return (events: readonly SocialEvent[]): Promise<SendVerdict> =>
-    withTimeout(
-      deps.transport
-        .request<{ readonly recorded: number; readonly rejected: number }>({
-          method: 'POST',
-          path: socialEndpoints.events,
-          body: { events },
-          keepalive: true,
-        })
-        .then(verdictOf),
-      deps.timeoutMs ?? 20_000,
-      'retry',
-    );
-}
+/** L'identité d'un appel : le crédential de la session (compte), ou celle
+ * d'un visiteur figée à l'enregistrement. */
+type CallIdentity = Pick<HttpRequest, 'credential' | 'headers'>;
 
-/** Une vue d'un VISITEUR — seule, sous son jeton d'invité ou sa clé de visiteur. */
-export function sendVisitorView(deps: SocialEventsTransportDeps, event: Extract<SocialEvent, { type: 'view' }>): Promise<SendVerdict> {
-  const credential = deps.credential();
-  const identity = credential === null
-    ? { credential: null, headers: { 'X-Session-Token': deps.visitorKey() } }
-    : {};
+function postEvents(
+  deps: SocialEventsTransportDeps,
+  events: readonly SocialEvent[],
+  identity: CallIdentity,
+): Promise<SendVerdict> {
   return withTimeout(
     deps.transport
       .request<{ readonly recorded: number; readonly rejected: number }>({
         method: 'POST',
         path: socialEndpoints.events,
-        body: { events: [normalizeSocialEvent(event)] },
+        body: { events },
+        keepalive: true,
         ...identity,
       })
       .then(verdictOf),
@@ -221,37 +252,105 @@ export function sendVisitorView(deps: SocialEventsTransportDeps, event: Extract<
 }
 
 /**
- * L'émetteur câblé : un compte passe par la file groupée, un visiteur
- * n'envoie que ses vues, une à une. Décidé à l'ENREGISTREMENT — c'est le
- * crédential de cet instant qui dit qui a vu.
+ * Des PARTS d'un même lot, chacune dans sa requête. Seule la part en PANNE
+ * repart : la part écrite ne se recompte pas, la part refusée ne se fait pas
+ * refuser encore.
+ */
+async function sendParts(
+  deps: SocialEventsTransportDeps,
+  parts: readonly (readonly SocialEvent[])[],
+  identity: CallIdentity,
+): Promise<SendOutcome> {
+  const filled = parts.filter((part) => part.length > 0);
+  const verdicts = await Promise.all(filled.map((part) => postEvents(deps, part, identity)));
+  return { retain: filled.filter((_, index) => verdicts[index] === 'retry').flat() };
+}
+
+const isOpen = (event: SocialEvent): boolean => event.type === 'open';
+
+/** Un lot d'un COMPTE — le transport y pose son crédential ; ses `open` à part. */
+export function sendAccountBatch(deps: SocialEventsTransportDeps) {
+  return (events: readonly SocialEvent[]): Promise<SendOutcome> =>
+    sendParts(deps, [events.filter((event) => !isOpen(event)), events.filter(isOpen)], {});
+}
+
+/**
+ * Un lot d'un VISITEUR, sous l'identité figée à l'enregistrement. Vues,
+ * impressions et `open` partent séparément : un serveur antérieur à #10483
+ * refuse en 403 l'impression d'un anonyme, et ce refus ne doit pas emporter
+ * la vue.
+ */
+export function sendVisitorBatch(deps: SocialEventsTransportDeps, identity: CallIdentity) {
+  return (events: readonly SocialEvent[]): Promise<SendOutcome> =>
+    sendParts(
+      deps,
+      [
+        events.filter((event) => event.type === 'view'),
+        events.filter((event) => event.type === 'impression'),
+        events.filter(isOpen),
+      ],
+      identity,
+    );
+}
+
+type VisitorLane = { readonly key: string; readonly identity: () => CallIdentity };
+
+function visitorLaneOf(credential: Credential | null, deps: SocialEventsTransportDeps): VisitorLane {
+  if (credential !== null && credential.kind === 'anonymous') {
+    return { key: `guest:${credential.sessionToken}`, identity: () => ({ credential }) };
+  }
+  return { key: 'visitor', identity: () => ({ credential: null, headers: { 'X-Session-Token': deps.visitorKey() } }) };
+}
+
+/**
+ * L'émetteur câblé : un compte et un visiteur passent chacun par une file
+ * groupée. L'identité est décidée à l'ENREGISTREMENT — c'est le crédential de
+ * cet instant qui dit qui a vu ; un visiteur qui se connecte ensuite n'envoie
+ * pas ses vues d'avant sous son compte.
  */
 export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
 }) {
-  const emitter = createSocialEventsEmitter({
-    send: sendAccountBatch(deps),
+  const cadence = {
     schedule: deps.schedule,
     ...(deps.flushDelayMs === undefined ? {} : { flushDelayMs: deps.flushDelayMs }),
-  });
+  };
+  const account = createSocialEventsEmitter({ send: sendAccountBatch(deps), ...cadence });
+  const lanes = new Map<string, SocialEventsEmitter>();
 
-  const visitorViewed = new Set<string>();
+  function laneEmitter(lane: VisitorLane): SocialEventsEmitter {
+    const known = lanes.get(lane.key);
+    if (known !== undefined) return known;
+    const emitter = createSocialEventsEmitter({ send: sendVisitorBatch(deps, lane.identity()), ...cadence });
+    lanes.set(lane.key, emitter);
+    return emitter;
+  }
+
+  /* Ce qu'un visiteur envoie : chaque vue (ouverture, puis sortie avec sa
+     durée), chaque impression et chaque engagement d'ouverture. La séance
+     `dwell` et le téléchargement restent réservés aux comptes. */
+  const admitsVisitor = (event: SocialEvent): boolean => event.type === 'view' || event.type === 'impression' || event.type === 'open';
 
   function record(event: SocialEvent): void {
     const credential = deps.credential();
     if (credential?.kind === 'registered') {
-      emitter.record(event);
+      account.record(event);
       return;
     }
-    /* Un visiteur : l'OUVERTURE seule, une fois par contenu et par onglet. La
-       vue de sortie (avec durée) n'ajouterait rien — la passerelle compte une
-       ouverture anonyme par jeton — et userait son seau de 10 par minute. */
-    if (event.type !== 'view' || event.durationMs !== undefined || visitorViewed.has(event.postId)) return;
-    visitorViewed.add(event.postId);
-    void sendVisitorView(deps, event).catch(() => undefined);
+    if (!admitsVisitor(event)) return;
+    laneEmitter(visitorLaneOf(credential, deps)).record(event);
   }
 
-  return { record, flush: emitter.flush, pending: emitter.pending, snapshot: emitter.snapshot, restore: emitter.restore };
+  async function flush(): Promise<void> {
+    await Promise.all([account, ...lanes.values()].map((emitter) => emitter.flush()));
+  }
+
+  const pending = (): number => [...lanes.values()].reduce((total, lane) => total + lane.pending(), account.pending());
+
+  /* Seule la file d'un COMPTE se garde d'une page à l'autre (#10519) : celle
+     d'un visiteur part sous une identité qu'une page suivante n'a plus. */
+  return { record, flush, pending, snapshot: account.snapshot, restore: account.restore };
 }
 
 export function newEngagementSessionId(): string {

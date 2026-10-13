@@ -1,4 +1,6 @@
 import type { FeedCardRepostEmbed } from '@/lib/feed/card-model';
+import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
+import { openLinkProps } from '@/lib/view/reading-telemetry';
 import { Avatar } from './avatar';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -41,7 +43,7 @@ import { Link } from '@/routes/route-table';
  * tranche ici, #7463) : un indicateur SEUL, jamais un bouton qui promettrait
  * un geste que cette carte n'offre pas encore.
  */
-export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmbed }) {
+export function FeedRepostEmbed({ repost, openOrigin = null }: { readonly repost: FeedCardRepostEmbed; readonly openOrigin?: OpenOrigin | null }) {
   const language = currentInterfaceLanguage();
   const chipLabel = repost.isStory
     ? translate(language, 'feed.post.repost.embed.story')
@@ -146,6 +148,7 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
     <Link
       to="post"
       params={{ post: repost.id }}
+      {...openLinkProps(repost.id, openOrigin)}
       aria-label={translate(language, 'feed.post.original.open', { author: repost.author.name })}
       draggable={false}
       data-feed-repost-embed-open

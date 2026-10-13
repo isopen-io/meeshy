@@ -265,8 +265,15 @@ struct ConversationRowItem: View {
     /// montage réel est `ConversationListView.swift`, fichier possédé/gelé
     /// pour cette tâche (édition interdite). À router par Fable — probablement
     /// une micro-tâche dédiée qui édite ce fichier.
-    @ViewBuilder
+    /// #10483 — l'humeur peinte sur l'avatar de la rangée est un affichage de
+    /// cette humeur : une impression à chaque apparition de la rangée.
     private var rowCore: some View {
+        rowCoreContent
+            .countsImpression(of: moodStatus?.id) { SharedImpressionBatchers.moodAvatar.record($0) }
+    }
+
+    @ViewBuilder
+    private var rowCoreContent: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
             // La rangée élue se rend elle-même MAGNIFIÉE (2026-08-23) : plus
             // aucune carte au-dessus d'elle, donc swipe, glisser-déposer et

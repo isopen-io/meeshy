@@ -139,6 +139,8 @@ export type LensRowProps = {
   /** Le mood courant du pair d'un direct (#9065, `use-author-moods.ts`) — il
    * masque le point et se cerne de la présence. */
   peerMood?: string | undefined;
+  /** Le post de ce mood — ce que l'avatar compte quand il le montre (#10483). */
+  peerMoodPostId?: string | undefined;
   /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
@@ -166,6 +168,7 @@ function LensRowImpl({
   peerActive = false,
   peerFocused = false,
   peerMood,
+  peerMoodPostId,
   engagement,
   interfaceLanguage,
   now,
@@ -256,7 +259,9 @@ function LensRowImpl({
         hereActive: peerActive,
         hereFocused: peerFocused,
         /* DANS LA LISTE, L'HUMEUR NE BOUGE PAS (#10528). */
-        ...(peerMood === undefined ? {} : { mood: peerMood, moodStill: true }),
+        ...(peerMood === undefined
+          ? {}
+          : { mood: peerMood, moodStill: true, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }),
       };
   /* … ET ELLE SE TOUCHE, sur l'avatar qui porte déjà le profil du pair : la
      cible est le frère de ce lien-là (`Avatar.moodAuthorId`). */
@@ -676,6 +681,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if ((prev.peerActive ?? false) !== (next.peerActive ?? false)) return false;
   if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
   if (prev.peerMood !== next.peerMood) return false;
+  if (prev.peerMoodPostId !== next.peerMoodPostId) return false;
   /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;

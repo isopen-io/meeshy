@@ -2,7 +2,7 @@ import { useContext, type ComponentProps, type CSSProperties } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
-import { useAuthorMood } from '@/lib/view/use-author-moods';
+import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
 
@@ -38,9 +38,10 @@ export function AuthorAvatar({
   const active = useAuthorActive(authorId);
   const focused = useAuthorFocused(authorId);
   const mood = useAuthorMood(authorId);
+  const moodPostId = useAuthorMoodPostId(authorId);
   /* DANS LE FIL, L'HUMEUR NE BOUGE PAS (#10528) — une pastille par message,
      et des dizaines à l'écran. */
-  const still = mood === undefined ? {} : { mood, moodStill: true };
+  const still = mood === undefined ? {} : { mood, moodStill: true, ...(moodPostId === undefined ? {} : { moodPostId }) };
   const openDetails = useContext(ConversationDetailsContext);
   const worldCard = useContext(WorldParticipantCardContext);
   const guestFocus = useSpeaksAsGuest();

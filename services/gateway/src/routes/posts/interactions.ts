@@ -32,8 +32,10 @@ import { registerBookmarkRoutes } from './bookmarks';
 import { registerImpressionRoutes } from './impressions';
 import { depreciee } from '../../utils/deprecation';
 import { socialEventsDeprecation } from '../social/deprecation';
+import { admitAnonymousReader, resolveAnonymousReader } from '../social/anonymousReader';
 import {
   ingestSocialEvents,
+  refuseAnonymousBudget,
   socialEventsRateLimit,
   VIEW_ALIAS_SCHEMA,
   type SocialEventsActor,
@@ -41,6 +43,7 @@ import {
 } from '../social/events';
 import { registerShareRoutes } from './share';
 import { viewerListRequest, viewerListRefused } from './viewerListRequest';
+import { viewerListCounts } from '../../services/posts/viewerEngagement';
 import { notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
 
 export function registerInteractionRoutes(
@@ -456,18 +459,11 @@ export function registerInteractionRoutes(
 
   // ALIAS de `POST /social/events` — POST /posts/:postId/anonymous-view
   //
-  // Compte une ouverture ANONYME (sans compte). Public, dédup faible par
-  // X-Session-Token (chaîne opaque). Les clients INSCRITS (JWT présent) sont
-  // comptés via le parcours engagement → no-op ici pour éviter le
-  // double-comptage. Voir spec 2026-06-17 (§ Sécurité). Pas de `preValidation`
-  // auth : on lit l'en-tête directement, sans tenter de résoudre un Participant
-  // (un jeton de navigateur n'en est pas un → éviterait un 401).
-  //
-  // Son SEAU DE DÉBIT change : il était `posts:view:ip:{ip}` — un seul seau pour
-  // tout ce qu'une adresse observe, quel que soit le post, donc une garde
-  // inefficace et un déni de service mutuel entre visiteurs légitimes derrière
-  // une même sortie NAT. Il est désormais `social:events:{sessionToken}:{postId}`,
-  // le même que sert la porte canonique.
+  // La vue d'un lecteur SANS compte (#10483) : clé de lecteur HMAC, garde de
+  // lecture anonyme, débit par lecteur et par adresse — le cœur de la porte
+  // canonique. Un client INSCRIT (JWT) y reçoit `counted: false` : il compte
+  // par `/view`. Pas de `preValidation` : l'invité se retrouve par l'empreinte
+  // de son jeton, un jeton de navigateur n'étant pas un Participant.
   fastify.post('/posts/:postId/anonymous-view', {
     onRequest: depreciee(socialEventsDeprecation()),
     config: { rateLimit: socialEventsRateLimit },
@@ -476,15 +472,16 @@ export function registerInteractionRoutes(
       if (request.headers.authorization) {
         return sendSuccess(reply, { counted: false }); // client inscrit → parcours engagement
       }
-      const sessionKey = request.headers['x-session-token'] as string | undefined;
-      if (!sessionKey || sessionKey.length === 0 || sessionKey.length > 128) {
+      const lecteur = await resolveAnonymousReader(prisma as never, request);
+      if (!lecteur) {
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
+      if (!(await admitAnonymousReader(fastify, request, lecteur))) return refuseAnonymousBudget(reply);
 
       const { legacy } = await ingestSocialEvents(
         socialEventDeps,
         [{ type: 'view', postId: request.params.postId }],
-        { kind: 'anonymous', sessionKey },
+        lecteur,
       );
       return sendSuccess(reply, { counted: legacy.anonymousCounted });
     } catch (error) {
@@ -666,6 +663,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result.items, {
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+        meta: viewerListCounts(result),
       });
     } catch (error) {
       if (viewerListRefused(reply, error)) return;
@@ -702,7 +700,8 @@ export function registerInteractionRoutes(
 
       return sendSuccess(
         reply,
-        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
+          ...viewerListCounts(result) },
         { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
       );
     } catch (error) {

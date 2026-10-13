@@ -51,7 +51,6 @@ import {
   mockUnbookmarkPost,
   mockRecordView,
   mockGetPostById,
-  mockRecordAnonymousOpen,
   mockSharePost,
   mockShareWithTrackingLink,
   mockGetPostShareLink,
@@ -227,7 +226,6 @@ describe('POST /posts/:id/anonymous-view — session key too long', () => {
 
 describe('POST /posts/:id/anonymous-view — success', () => {
   it('returns 200 with counted: true for valid anonymous session', async () => {
-    mockRecordAnonymousOpen.mockResolvedValueOnce(true);
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST',
@@ -242,9 +240,11 @@ describe('POST /posts/:id/anonymous-view — success', () => {
 });
 
 describe('POST /posts/:id/anonymous-view — service error', () => {
-  it('returns 500 when recordAnonymousOpen throws', async () => {
-    mockRecordAnonymousOpen.mockRejectedValueOnce(new Error('DB error'));
-    const app = await buildApp();
+  it('returns 500 when the anonymous audience read throws', async () => {
+    const prisma = {
+      post: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+    };
+    const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/anonymous-view`,

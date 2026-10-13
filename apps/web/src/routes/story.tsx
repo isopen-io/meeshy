@@ -25,7 +25,8 @@ import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
-import { useReadingSession } from '@/lib/view/reading-telemetry';
+import { ADVANCED_STORY, entryAttribution } from '@/lib/view/content-open';
+import { useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { servedStoryIndicator } from '@/lib/stories/language-availability';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -394,7 +395,10 @@ export default function StoryScreen() {
   }, [currentStory, visitor]);
   /* L'IMPRESSION, LA DURÉE ET LA SÉANCE DE LA STORY (#10401) — la vue
      d'ouverture d'un compte part ci-dessus (l'anneau s'éteint tout de suite) ;
-     celle d'un visiteur part ici, sous son jeton. */
+     celle d'un visiteur part ici, sous son jeton. La première story porte la
+     provenance d'entrée du lecteur, les suivantes l'enchaînement (#10483). */
+  const entry = useViewAttribution();
+  const [attributionOf] = useState(() => entryAttribution(entry, ADVANCED_STORY));
   useReadingSession({
     postId: currentStory?.id,
     active: currentStory !== undefined,
@@ -402,6 +406,7 @@ export default function StoryScreen() {
     surface: 'story',
     impressionSource: 'story',
     openView: visitor,
+    attribution: attributionOf,
   });
 
   const pause = useCallback(() => {
@@ -968,7 +973,7 @@ export default function StoryScreen() {
           />
 
           <CommentsSheetPortal host={commentsHost} risesWithComposer />
-          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
+          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} anonymousViewCount={currentStory?.anonymousViewCount} />
         </div>
       ) : null}
       {invitation.dialog}

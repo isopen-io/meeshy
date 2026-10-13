@@ -41,6 +41,8 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — chaque story dont l'anneau apparaît est un affichage, compté
+    /// une fois par montage du rail.
     /// La hauteur de la bande — la réserve `FloatingButtonSafeZone.storyBand`
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = 120
@@ -61,6 +63,7 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: Self.trayHeight)
+        .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
         .myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
@@ -194,7 +197,10 @@ struct StoryTrayView: View {
     private func storyRingCell(for group: StoryGroup) -> some View {
         StoryRingCell(
             group: group,
-            onViewStory: { presentStory(userId: group.id) },
+            onViewStory: {
+                ContentOpenReporter.shared.openStory(of: group)
+                presentStory(userId: group.id)
+            },
             onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
             moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
             onMoodTap: statusViewModel.moodTapHandler(for: group.id)
@@ -202,6 +208,12 @@ struct StoryTrayView: View {
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
+        .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+            SharedImpressionBatchers.storyRail.record($0)
+        }
+        .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+            SharedImpressionBatchers.moodRail.record($0)
+        }
     }
 
     /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
@@ -705,6 +717,8 @@ struct PinnedStoryTrailBand: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — la mini-trail compte ses anneaux comme la grande trail, dans
+    /// la même file partagée.
 
     // Le rythme de la bascule titre → trail appartient au header : lui fait
     // disparaître le titre sur exactement la même courbe. Deux jeux de
@@ -762,6 +776,7 @@ struct PinnedStoryTrailBand: View {
                 .frame(height: Self.bandHeight * reveal, alignment: .top)
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
+                .onDisappear { Task { await SharedImpressionBatchers.flushRail() } }
                 .sheet(item: $selectedProfileUser) { user in
                     UserProfileSheet(
                         user: user,
@@ -850,13 +865,22 @@ struct PinnedStoryTrailBand: View {
                         group: group,
                         context: .storyTrayCompact,
                         showsUsername: false,
-                        onViewStory: { presentStory(userId: group.id) },
+                        onViewStory: {
+                            ContentOpenReporter.shared.openStory(of: group)
+                            presentStory(userId: group.id)
+                        },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
                         moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: group.id)
                     )
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
+                    .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {
+                        SharedImpressionBatchers.storyRail.record($0)
+                    }
+                    .countsImpression(of: statusViewModel.statusForUser(userId: group.id)?.id) {
+                        SharedImpressionBatchers.moodRail.record($0)
+                    }
                 }
             }
             .padding(.leading, MeeshySpacing.lg)

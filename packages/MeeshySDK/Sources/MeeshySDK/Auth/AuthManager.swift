@@ -754,6 +754,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
             Logger.auth.error("Refused to install another user's session over the open session")
             throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: userId)
         }
+        // #10483 — un compte compte sous son identité : la clé visiteur s'efface.
+        VisitorReaderKey(keychain: keychain).purge()
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
         // sockets need to be torn down and reconnected with the new JWT.
