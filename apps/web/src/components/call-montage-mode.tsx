@@ -7,6 +7,7 @@ import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Siz
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
+import { NO_CHROME_RESERVE } from '@/lib/calls/frames/frame-chrome-reserve';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
@@ -16,7 +17,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
-import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
+import { browserCircle, montageChromeReserve, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
 
 /**
  * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
@@ -44,6 +45,10 @@ import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type Frame
  * repeints à chaque image, jamais en miroir ; ses vignettes ne se rendent
  * que pour la fenêtre visible du carrousel (± 3). Pendant une vidéo, les
  * puces s'effacent : sur un petit écran, elles couvraient le stop.
+ * L'aperçu d'un cadre du DIRECT se resserre entre les commandes mesurées
+ * (#10481, comme iOS #9777) : aucun de ses textes ne passe dessous. La
+ * photo et la vidéo, elles, partent pleines — pendant une vidéo, l'aperçu
+ * filmé reprend donc la mise en page entière (décision de capture : #10480).
  *
  * Chunk à part (`budgets.json` › `call_montage_mode`) qui n'importe rien de
  * l'écran d'appel ; son catalogue se charge avec lui (`loadMontageModeText`).
@@ -128,6 +133,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
   const lastInMood = useRef(new Map<FrameMood, string>());
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
   const thumbs = useRef(new Map<string, HTMLCanvasElement>());
   const painted = useRef(new WeakSet<HTMLCanvasElement>());
   const current = useRef<string>(style);
@@ -156,7 +162,11 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     }
     const { studio: atelier, circle: shown } = framing.current;
     const chosen = atelier?.find(id) ?? null;
-    if (atelier !== null && shown !== null && chosen !== null) paintFramed(canvas, scene.current(), atelier, chosen, shown, tier);
+    if (atelier === null || shown === null || chosen === null) return;
+    const stage = scene.current();
+    const reserved = tier === 'preview' && !studio.recording && atelier.servesCall(chosen);
+    const reserve = reserved ? montageChromeReserve({ stage, controls: controls.current, viewport: viewport(), canvas: previewSize }) : NO_CHROME_RESERVE;
+    paintFramed(canvas, stage, atelier, chosen, shown, tier, reserve);
   };
   const paintRef = useRef(paintChoice);
   paintRef.current = paintChoice;
@@ -312,7 +322,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         />
       </div>
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div className="relative z-10 flex w-full flex-col items-center gap-3">
+      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3" data-call-montage-controls="">
         <CaptureStatus status={studio.status} />
         <CaptureHint language={language} />
         {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} />}

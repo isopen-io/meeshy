@@ -235,14 +235,14 @@ export function paintBrand(context: Surface2D, scene: TextScene, plan: TextPlan)
   if (corner !== null) paintBrandAt(context, brand, box, corner.x + corner.width / 2, corner.y + corner.height / 2, 1);
 }
 
-/** Le rectangle d'une signature posée dans un coin de l'intérieur — `null` hors des quatre coins. */
+/** Le rectangle d'une signature posée dans un coin, calé sur les réserves (sous des contrôles, elles s'écartent des bords, #10481) — `null` hors des quatre coins. */
 function cornerBrandRect(scene: TextScene, box: BrandBox): Rect | null {
   const place = scene.look.brand?.place;
   if (place === undefined || place === 'top' || place === 'bottom' || place === 'watermark') return null;
   const pad = scene.areas.unit * 0.035;
-  const inner = scene.areas.inner;
+  const { inner, top, bottom } = scene.areas;
   const x = place.endsWith('left') ? inner.x + pad : inner.x + inner.width - pad - box.width;
-  const y = place.startsWith('top') ? inner.y + pad : inner.y + inner.height - pad - box.height;
+  const y = place.startsWith('top') ? top.y + pad : bottom.y + bottom.height - pad - box.height;
   return { x, y, width: box.width, height: box.height };
 }
 

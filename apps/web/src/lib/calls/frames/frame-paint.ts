@@ -1,5 +1,6 @@
 import { coverCrop } from '../call-montage';
 import type { Rect, Size } from '../call-montage-shapes';
+import { NO_CHROME_RESERVE, type FrameChromeReserve } from './frame-chrome-reserve';
 import { BRAND_FONT, frameCanvasFont } from './frame-fonts';
 import { frameAreas, frameSlots, leavingRoomBelow, type FrameAreas, type FrameSlotBox } from './frame-layout';
 import { paintBorder, paintPattern } from './frame-paint-decor';
@@ -39,13 +40,14 @@ export type FrameScene = {
 export const MEESHY_ACCENT = { primary: '#6366F1', secondary: '#4338CA' } as const;
 
 /** Les cases de la scène : celles de la géométrie canonique, et sous chacune la place de ses noms quand ils s'y posent (#10478). */
-export function frameSlotsFor(frame: FramePaintable, people: number, size: Size): readonly FrameSlotBox[] {
-  const areas = frameAreas(frame.layout, size);
-  return leavingRoomBelow(frameSlots(frame, people, size), nameRoom(frame, areas.unit), areas.content.y + areas.content.height);
+export function frameSlotsFor(frame: FramePaintable, people: number, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): readonly FrameSlotBox[] {
+  const areas = frameAreas(frame.layout, size, reserve);
+  return leavingRoomBelow(frameSlots(frame, people, size, reserve), nameRoom(frame, areas.unit), areas.content.y + areas.content.height);
 }
 
-export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size): FrameScene {
-  return { frame, people, texts, size, areas: frameAreas(frame.layout, size), slots: frameSlotsFor(frame, people.length, size) };
+/** La scène d'un cadre ; sous des contrôles (`reserve`, #10481), aucun texte ni visage ne se pose dans leurs bandes. */
+export function frameScene(frame: FramePaintable, people: readonly FramePerson[], texts: FrameTexts, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameScene {
+  return { frame, people, texts, size, areas: frameAreas(frame.layout, size, reserve), slots: frameSlotsFor(frame, people.length, size, reserve) };
 }
 
 function paintBackground(context: Surface2D, scene: FrameScene): void {
