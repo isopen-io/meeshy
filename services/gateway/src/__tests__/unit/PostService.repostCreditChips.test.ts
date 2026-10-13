@@ -14,6 +14,10 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
 import { repostCreditIsDue, repostSnapshotStoryEffects } from '../../services/posts/repostCreditChips';
 import { postSignalText } from '../../services/posts/storyContentComposition';
+import { withMentions } from '../../services/posts/postReferences';
+import { WIRE_BROADCAST } from '../../services/posts/storyEffectsV3';
+import { StoryTextObjectTranslationService } from '../../services/posts/StoryTextObjectTranslationService';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 jest.mock('../../services/posts/PostAudioService', () => ({
   PostAudioService: {
@@ -195,5 +199,170 @@ describe('postSignalText — la puce de crédit n’est jamais le texte de l’a
 
   it('n’a rien à porter quand la puce est le seul texte', () => {
     expect(postSignalText({ storyEffects: { textObjects: [credit] } })).toBeUndefined();
+  });
+});
+
+/**
+ * #10498 — la règle s'applique aussi à la LECTURE. `postInclude` sert
+ * `repostOf.storyEffects` : le canvas de la republication intermédiaire, puce
+ * comprise, partait dans la réponse REST, la diffusion socket et le fil. Et
+ * une source PUBLIC repassée ensuite en audience restreinte laissait la puce
+ * déjà copiée chez qui l'avait republiée.
+ */
+describe('withMentions — la puce de crédit servie suit l’audience ACTUELLE de la source', () => {
+  const served = (sourceVisibility: string | null, effects: () => Record<string, unknown> = v1Effects) => ({
+    id: 'repost-1',
+    postMentions: [] as unknown[],
+    storyEffects: effects(),
+    repostOf: { id: 'source-1', visibility: sourceVisibility, moderationHiddenAt: null, storyEffects: effects() },
+  });
+
+  const readers = [
+    ['la réponse REST', { canvasCaps: 3 }],
+    ['la diffusion socket', WIRE_BROADCAST],
+  ] as const;
+
+  for (const [path, reader] of readers) {
+    it(`garde les puces d’une source PUBLIC dans ${path}`, () => {
+      const post = withMentions(served('PUBLIC'), reader) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+      expect(post.storyEffects).toEqual(v1Effects());
+      expect(post.repostOf.storyEffects).toEqual(v1Effects());
+    });
+
+    it(`retire la puce du canvas cité d’une source FRIENDS dans ${path}`, () => {
+      const post = withMentions(served('FRIENDS'), reader) as { repostOf: { storyEffects: unknown } };
+      expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
+    });
+
+    it(`retire la puce déjà copiée quand la source est repassée en audience restreinte dans ${path}`, () => {
+      const post = withMentions(served('FRIENDS'), reader) as { storyEffects: unknown };
+      expect(post.storyEffects).toEqual(v1WithoutCredit);
+    });
+  }
+
+  it('retire la puce v3 d’une source COMMUNITY, jamais un objet non textuel', () => {
+    const post = withMentions(served('COMMUNITY', v3Effects), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+    expect(post.storyEffects).toEqual(v3WithoutCredit);
+    expect(post.repostOf.storyEffects).toEqual(v3WithoutCredit);
+  });
+
+  it('retire la puce quand l’audience chargée de la source est absente (fail-closed)', () => {
+    const post = withMentions(served(null), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+    expect(post.storyEffects).toEqual(v1WithoutCredit);
+    expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
+  });
+
+  it('retire la puce propre d’une republication dont la source PRIVÉE ne voyage plus', () => {
+    const post = withMentions(served('PRIVATE'), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: unknown };
+    expect(post.repostOf).toBeNull();
+    expect(post.storyEffects).toEqual(v1WithoutCredit);
+  });
+
+  it('ne touche pas une publication qui n’est pas une republication', () => {
+    const post = withMentions({ id: 'p', postMentions: [] as unknown[], storyEffects: v1Effects() }, WIRE_BROADCAST) as { storyEffects: unknown };
+    expect(post.storyEffects).toEqual(v1Effects());
+  });
+
+  it('garde la puce d’une source disparue — la règle a été appliquée à l’écriture', () => {
+    const post = withMentions({ ...served('PUBLIC'), repostOf: null }, WIRE_BROADCAST) as { storyEffects: unknown };
+    expect(post.storyEffects).toEqual(v1Effects());
+  });
+
+  it('est idempotente sur une publication déjà projetée (rejeu d’idempotence)', () => {
+    const once = withMentions(served('PUBLIC'), WIRE_BROADCAST);
+    const twice = withMentions(once, WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+    expect(twice.storyEffects).toEqual(v1Effects());
+    expect(twice.repostOf.storyEffects).toEqual(v1Effects());
+  });
+});
+
+/**
+ * #10498, revue adversariale — le retrait à la lecture décale l'index PLAT des
+ * textes servis. `story:translation-updated` porte cet index, et les clients
+ * fusionnent par position dans le canvas SERVI : la traduction de la puce
+ * retirée s'y posait sur le texte de l'auteur.
+ */
+describe('story:translation-updated — l’index diffusé est celui du canvas SERVI', () => {
+  type Emitted = { textObjectIndex: number };
+
+  const broadcastFor = async (params: {
+    sourceVisibility: string | null;
+    storyEffects: Record<string, unknown>;
+    textObjectIndex: number;
+    isRepost?: boolean;
+  }): Promise<Emitted[]> => {
+    const emitted: Emitted[] = [];
+    const post = {
+      authorId: 'author-1',
+      visibility: 'PRIVATE',
+      visibilityUserIds: [] as string[],
+      content: null,
+      storyEffects: params.storyEffects,
+      repostOf: params.isRepost === false ? null : { visibility: params.sourceVisibility },
+    };
+    const prisma = {
+      post: { findUnique: async (_args: unknown) => post },
+      friendRequest: { findMany: async (_args: unknown) => [] as unknown[] },
+      $runCommandRaw: async (_cmd: unknown) => ({ ok: 1 }),
+    };
+    const io = {
+      to: (_room: string) => ({
+        emit: (event: string, payload: unknown) => {
+          if (event === SERVER_EVENTS.STORY_TRANSLATION_UPDATED) emitted.push(payload as Emitted);
+        },
+      }),
+    };
+    // @ts-expect-error remise à zéro du singleton privé
+    StoryTextObjectTranslationService._shared = null;
+    const service = StoryTextObjectTranslationService.init(
+      prisma as unknown as Parameters<typeof StoryTextObjectTranslationService.init>[0],
+      io as unknown as Parameters<typeof StoryTextObjectTranslationService.init>[1],
+    );
+    await service.handleTranslationCompleted({
+      postId: '507f1f77bcf86cd799439011',
+      textObjectIndex: params.textObjectIndex,
+      translations: { en: 'Hello' },
+    });
+    return emitted;
+  };
+
+  const creditFirst = () => ({ textObjects: [credit, authorText] });
+  const creditFirstV3 = () => ({
+    v: 3,
+    scenes: [{
+      id: 'scene-1',
+      objects: [
+        { id: 'credit', kind: 'text', payload: { text: 'Reposté de @ada', isLocked: true } },
+        { id: 'mine', kind: 'text', payload: { text: 'Bonjour' } },
+      ],
+    }],
+  });
+
+  it('décale l’index d’un texte posé après une puce retirée (source FRIENDS)', async () => {
+    const emitted = await broadcastFor({ sourceVisibility: 'FRIENDS', storyEffects: creditFirst(), textObjectIndex: 1 });
+    expect(emitted.map((e) => e.textObjectIndex)).toEqual([0]);
+  });
+
+  it('décale aussi l’index plat d’un document v3', async () => {
+    const emitted = await broadcastFor({ sourceVisibility: 'PRIVATE', storyEffects: creditFirstV3(), textObjectIndex: 1 });
+    expect(emitted.map((e) => e.textObjectIndex)).toEqual([0]);
+  });
+
+  it('ne diffuse pas la traduction d’une puce retirée', async () => {
+    expect(await broadcastFor({ sourceVisibility: 'FRIENDS', storyEffects: creditFirst(), textObjectIndex: 0 })).toEqual([]);
+  });
+
+  it('ne diffuse pas non plus quand l’audience de la source est absente (fail-closed)', async () => {
+    expect(await broadcastFor({ sourceVisibility: null, storyEffects: creditFirst(), textObjectIndex: 0 })).toEqual([]);
+  });
+
+  it('garde l’index enregistré quand la puce est servie (source PUBLIC)', async () => {
+    const emitted = await broadcastFor({ sourceVisibility: 'PUBLIC', storyEffects: creditFirst(), textObjectIndex: 1 });
+    expect(emitted.map((e) => e.textObjectIndex)).toEqual([1]);
+  });
+
+  it('garde l’index d’une publication qui n’est pas une republication', async () => {
+    const emitted = await broadcastFor({ sourceVisibility: null, storyEffects: creditFirst(), textObjectIndex: 1, isRepost: false });
+    expect(emitted.map((e) => e.textObjectIndex)).toEqual([1]);
   });
 });

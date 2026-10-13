@@ -1,5 +1,7 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 
+import { isCanvasV3OrNewer } from './storyEffectsV3';
+
 /**
  * **La puce « Reposté de @auteur » ne survit à une republication directe que
  * si l'original était PUBLIC** (porteur 2026-09-01, #9953, #10365).
@@ -75,4 +77,62 @@ export function repostSnapshotStoryEffects(
 ): Prisma.InputJsonValue | undefined {
   if (effects === undefined || repostCreditIsDue(originalVisibility)) return effects;
   return withoutRepostCredits(effects) as Prisma.InputJsonValue;
+}
+
+/**
+ * **La même loi à la LECTURE** (#10498) : une republication est servie avec
+ * `repostOf`, le canvas de sa source, et le sien propre. Les deux portent une
+ * puce qui nomme un tiers ; ni l'une ni l'autre ne part si la source n'est pas
+ * PUBLIC AUJOURD'HUI — ce qui couvre aussi une source repassée en audience
+ * restreinte après la copie, et les lignes écrites avant la règle.
+ *
+ * Ne décide que sur une audience CHARGÉE (`visibility` présente, même nulle :
+ * fail-closed). Absente, la publication a déjà été projetée — la projection
+ * retire la colonne — et elle est rendue telle quelle : la projection est
+ * idempotente. Une source disparue (`repostOf` nul) ne retire rien, la règle
+ * ayant été appliquée à l'écriture.
+ */
+export function withServedRepostCredits<T extends object>(post: T): T {
+  const source = (post as { repostOf?: unknown }).repostOf;
+  if (!isRecord(source) || !('visibility' in source)) return post;
+  if (repostCreditIsDue(source['visibility'] as string | null | undefined)) return post;
+  const own = (post as { storyEffects?: unknown }).storyEffects;
+  const ownServed = withoutRepostCredits(own);
+  const cited = source['storyEffects'];
+  const citedServed = withoutRepostCredits(cited);
+  if (ownServed === own && citedServed === cited) return post;
+  return {
+    ...post,
+    ...(ownServed !== own ? { storyEffects: ownServed } : {}),
+    ...(citedServed !== cited ? { repostOf: { ...source, storyEffects: citedServed } } : {}),
+  };
+}
+
+const flatTextLocks = (effects: unknown): boolean[] => {
+  if (!isRecord(effects)) return [];
+  if (isCanvasV3OrNewer(effects)) {
+    return (Array.isArray(effects['scenes']) ? effects['scenes'] : []).flatMap((scene) => (
+      isRecord(scene) && Array.isArray(scene['objects'])
+        ? scene['objects'].filter((object) => isRecord(object) && object['kind'] === 'text').map(isLockedV3Text)
+        : []
+    ));
+  }
+  return Array.isArray(effects['textObjects']) ? effects['textObjects'].map(isLockedV1Text) : [];
+};
+
+/**
+ * L'index PLAT d'un texte dans le canvas tel que `withServedRepostCredits` le
+ * SERT (#10498) — l'index que les clients fusionnent. `null` : ce texte est une
+ * puce que le lecteur ne reçoit pas, rien ne doit en partir.
+ */
+export function servedTextIndex(params: {
+  readonly storyEffects: unknown;
+  readonly sourceVisibility: string | null | undefined;
+  readonly isRepost: boolean;
+  readonly textIndex: number;
+}): number | null {
+  if (!params.isRepost || repostCreditIsDue(params.sourceVisibility)) return params.textIndex;
+  const locks = flatTextLocks(params.storyEffects);
+  if (locks[params.textIndex] === true) return null;
+  return params.textIndex - locks.slice(0, params.textIndex).filter(Boolean).length;
 }
