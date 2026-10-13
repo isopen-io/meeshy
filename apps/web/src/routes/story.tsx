@@ -57,6 +57,7 @@ import {
 import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
+import { useStoryMediaClaim } from '@/lib/view/story-media-claim';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
 import { useStoryActionRail } from '@/lib/view/use-story-action-rail';
 import { useStoryGestures } from '@/lib/view/use-story-gestures';
@@ -126,6 +127,8 @@ function authorLabel(group: StoryPlaybackGroup): string {
 
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
+  /* Ouvrir une story arrête ce qui jouait ailleurs (#9586, `StoryMediaCoordinator.activate` iOS). */
+  useStoryMediaClaim();
   const [currentId, setCurrentId] = useState(post);
   /**
    * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
