@@ -3,8 +3,9 @@ import { PushNotifications } from '@capacitor/push-notifications';
 
 import { httpTransport } from '@/lib/api/client';
 import { sessionStore } from '@/lib/api/session';
+import { openNotificationTarget } from '@/lib/notifications/open-target';
 import type { PushTapTarget } from '@/lib/notifications/target';
-import { href, navigate } from '@/routes/route-table';
+import { href } from '@/routes/route-table';
 
 import { devicePushControl, type DevicePushControl, type NotificationSettingsBridge } from './device-permission';
 import { withFcmGuard } from './fcm-guard';
@@ -72,7 +73,7 @@ export async function startShellPushInShell(): Promise<void> {
     plugin: shellPushPlugin(),
     sessionStore,
     transport: httpTransport,
-    navigate: (url) => navigate(url),
+    navigate: openNotificationTarget,
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
   });

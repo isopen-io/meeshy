@@ -206,7 +206,7 @@ export default function ComposerAudioTrim({
   /** Injectable pour les témoins ; la production décode par Web Audio. */
   readonly decode?: (file: Blob) => Promise<DecodedAudio | null>;
 }) {
-  useBackDismiss(onCancel, { escape: true });
+  useBackDismiss(onCancel, { escape: true, held: true });
   const lang = currentInterfaceLanguage();
   const url = previewUrlFor(attachment.localId, attachment.file);
   const [decoded, setDecoded] = useState<DecodedAudio | null>(null);

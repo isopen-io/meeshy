@@ -1,10 +1,11 @@
-import { memo, type CSSProperties, type ReactNode } from 'react';
+import { memo, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { openNotificationTarget } from '@/lib/notifications/open-target';
 import { notificationCallBack, type NotificationCallBack } from '@/lib/notifications/call-back';
 import { notificationAccent } from '@/lib/notifications/categories';
 import type { NotificationRecord } from '@/lib/notifications/record';
@@ -86,7 +87,20 @@ export type SurfaceProps = {
   readonly draggable?: boolean;
 };
 
-export function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: NotificationTarget }) {
+/**
+ * LA DESTINATION D'UNE NOTIFICATION S'OUVRE PAR `openNotificationTarget`
+ * (#10539) : le lien garde son adresse (clic du milieu, lecteur d'écran), le
+ * clic simple referme d'abord toute couche ouverte.
+ */
+export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readonly target: NotificationTarget }) {
+  const surface = {
+    ...rest,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      onClick();
+      event.preventDefault();
+      openNotificationTarget(event.currentTarget.getAttribute('href') ?? '/');
+    },
+  };
   switch (target.route) {
     case 'thread':
       return <Link to="thread" params={target.params} {...surface} />;

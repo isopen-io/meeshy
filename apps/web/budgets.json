@@ -894,9 +894,9 @@
       "pattern": "^assets/notification-toast-[A-Za-z0-9_-]{7}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 4,
-        "status": "CIBLE -- MESUREE PAR #8727, NON ARBITREE",
-        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9) : 2,61 Ko -- la banniere in-app en relief (`components/notification-toast.tsx`). Montee A LA DEMANDE par `components/shell.tsx` a la premiere notification reseau recue devant un onglet visible. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #8727 PUIS #10539, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis gzip -9) : 4,07 Ko -- la banniere suit desormais la modale du dessus (`lib/view/top-modal-host.ts`, #10539 : sous un `<dialog>` modal elle n'etait ni visible ni touchable), soit ~0,15 Ko sur un chunk deja a ~3,9 Ko pour un plafond de 4. Arrondi au Ko SUPERIEUR (5), sans marge. HISTORIQUE -- 4 : mesure du 2026-09-30, 2,61 Ko, la banniere in-app en relief (`components/notification-toast.tsx`), montee A LA DEMANDE par `components/shell.tsx` a la premiere notification reseau recue devant un onglet visible ; arrondi au Ko superieur (3) + 1 Ko de marge."
       }
     },
     "interface_catalogs_call_controls": {

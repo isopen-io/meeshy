@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -91,7 +92,7 @@ function subscriber(onSchemeChange: () => void): () => void {
  * moins avant le premier pixel qu'un `new URL()` gardé (le budget de la
  * courbe se tient à 0,1 Ko près).
  */
-function isCurrentHref(url: string): boolean {
+export function isCurrentHref(url: string): boolean {
   if (typeof window === 'undefined') return false;
   return url === `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
@@ -228,6 +229,16 @@ export function useRoute(): RouteContext {
  */
 export function useOptionalRoute(): RouteContext | null {
   return useContext(Context);
+}
+
+/**
+ * UNE COUCHE DE LA COQUILLE NE SURVIT PAS À L'ÉCRAN QUI L'A OUVERTE (#10539) —
+ * la loi que trois hôtes recopiaient : changer d'adresse (route ou paramètre)
+ * la referme, avant la première image de la destination.
+ */
+export function useCloseOnNavigation(close: () => void): void {
+  const address = routeKey(useRoute());
+  useLayoutEffect(() => close, [address]);
 }
 
 export function useParams<T extends string>(): ParamsOf<T> {
