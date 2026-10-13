@@ -252,7 +252,7 @@ struct AudioFullscreenPage: View, Equatable {
             HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     transcriptBlock(maxHeight: .infinity)
-                        .frame(minHeight: AudioFullscreenLayout.minTranscript, maxHeight: .infinity)
+                        .frame(minHeight: AudioFullscreenLayout.minTranscript, maxHeight: .infinity, alignment: .top)
                         .layoutPriority(-1)
                     captionAndLanguages
                         .fullscreenChromeVisibility(chromeVisible)

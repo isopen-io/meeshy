@@ -74,6 +74,10 @@ public struct MediaTranscriptionView: View {
     /// Taille de police des segments. Défaut 14 (bulle / fullscreen). Le hero
     /// d'un réel audio passe une valeur plus grande (texte immersif).
     public var fontSize: CGFloat = 14
+    /// La carte épouse son texte tant qu'il tient dans la hauteur offerte, et ne
+    /// défile qu'au-delà. Défaut `false` : la carte occupe toute la hauteur
+    /// permise, comme avant.
+    public var fitsContent: Bool = false
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
@@ -84,11 +88,12 @@ public struct MediaTranscriptionView: View {
     public init(segments: [TranscriptionDisplaySegment], currentTime: Double,
                 accentColor: String = MeeshyColors.brandPrimaryHex, maxHeight: CGFloat = 200,
                 isPlaying: Bool = true, progress: Double = 0, fontSize: CGFloat = 14,
+                fitsContent: Bool = false,
                 onSeek: ((Double) -> Void)? = nil) {
         self.segments = segments; self.currentTime = currentTime
         self.accentColor = accentColor; self.maxHeight = maxHeight
         self.isPlaying = isPlaying; self.progress = progress
-        self.fontSize = fontSize; self.onSeek = onSeek
+        self.fontSize = fontSize; self.fitsContent = fitsContent; self.onSeek = onSeek
     }
 
     /// Index du segment actif — résolu par le helper PUR partagé avec
@@ -104,6 +109,20 @@ public struct MediaTranscriptionView: View {
     }
 
     public var body: some View {
+        if fitsContent {
+            ViewThatFits(in: .vertical) {
+                flowTranscription
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .background(transcriptionBackground)
+                scrollingTranscription
+            }
+        } else {
+            scrollingTranscription
+        }
+    }
+
+    private var scrollingTranscription: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 flowTranscription

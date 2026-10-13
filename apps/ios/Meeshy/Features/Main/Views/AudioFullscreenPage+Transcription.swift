@@ -101,6 +101,7 @@ extension AudioFullscreenPage {
                     maxHeight: maxHeight,
                     isPlaying: snapshot.isPlaying,
                     progress: snapshot.progress,
+                    fitsContent: true,
                     onSeek: { time in
                         onChromeInteraction()
                         player.seekToTime(time)
@@ -109,7 +110,7 @@ extension AudioFullscreenPage {
             }
         } else {
             transcriptionEmptyState
-                .frame(maxHeight: maxHeight)
+                .frame(maxHeight: maxHeight, alignment: .top)
         }
     }
 
