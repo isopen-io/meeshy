@@ -30,7 +30,7 @@ function transportFor(status: number, body: unknown, options: { readonly identit
   const transport = createHttpTransport({
     base: 'https://gate.test',
     credential: () => ({ kind: 'registered', token: 'jwt-ada' }),
-    ...(options.identity !== undefined ? { identity: options.identity } : {}),
+    identity: options.identity ?? (() => 'u:u-ada'),
     onUnauthorized: (refusal) => unauthorized.push(refusal),
     onAccountDeleted: (accountId) => deleted.push(accountId),
     fetchImpl: replying(status, body),
@@ -126,6 +126,45 @@ describe('401 HTTP — `onUnauthorized` reçoit le corps, le compte nommé est s
   });
 });
 
+describe('le compte nommé doit être celui du jeton présenté (audit #10237)', () => {
+  const deletedBody = (accountId: string) => ({ success: false, error: 'x', code: 'ACCOUNT_DELETED', accountId });
+
+  test('un 401 émis sous Ada qui nomme Bob ne fait partir personne', async () => {
+    const { transport, deleted } = transportFor(401, deletedBody('u-bob'));
+    await transport.request({ method: 'GET', path: '/conversations' });
+    expect(deleted).toEqual([]);
+  });
+
+  test('un 401 sous une identité d’invité ne fait partir aucun compte', async () => {
+    const { transport, deleted } = transportFor(401, deletedBody('u-ada'), { identity: () => 'g:session-token' });
+    await transport.request({ method: 'GET', path: '/conversations' });
+    expect(deleted).toEqual([]);
+  });
+
+  test('crédential forcé : seulement si l’appelant déclare le propriétaire du jeton, et que c’est lui qui est nommé', async () => {
+    const forced = { kind: 'registered', token: 'jwt-other' } as const;
+    const silent = transportFor(401, deletedBody('u-ada'));
+    await silent.transport.request({ method: 'GET', path: '/me', credential: forced });
+    expect(silent.deleted).toEqual([]);
+    const declared = transportFor(401, deletedBody('u-cleo'));
+    await declared.transport.request({ method: 'GET', path: '/me', credential: forced, tokenOwner: 'u-cleo' });
+    expect(declared.deleted).toEqual(['u-cleo']);
+    const other = transportFor(401, deletedBody('u-ada'));
+    await other.transport.request({ method: 'GET', path: '/me', credential: forced, tokenOwner: 'u-cleo' });
+    expect(other.deleted).toEqual([]);
+  });
+
+  test('en-têtes explicites d’une autre session : seulement si l’appelant déclare son propriétaire', async () => {
+    const headers = { Authorization: 'Bearer jwt-cleo', 'X-Session-Token': 's-cleo' };
+    const silent = transportFor(401, deletedBody('u-cleo'));
+    await silent.transport.request({ method: 'POST', path: '/auth/logout', headers });
+    expect(silent.deleted).toEqual([]);
+    const declared = transportFor(401, deletedBody('u-cleo'));
+    await declared.transport.request({ method: 'POST', path: '/auth/logout', headers, tokenOwner: 'u-cleo' });
+    expect(declared.deleted).toEqual(['u-cleo']);
+  });
+});
+
 function fakeSocket(): SocketClient & { fire(event: string, payload: unknown): void } {
   const handlers = new Map<string, Set<SocketHandler>>();
   let connected = false;
@@ -154,7 +193,7 @@ function fakeSocket(): SocketClient & { fire(event: string, payload: unknown): v
   };
 }
 
-function connect() {
+function connect(options: { readonly account?: string | null } = {}) {
   const socket = fakeSocket();
   const socketFactory: SocketFactory = () => socket;
   const deleted: string[] = [];
@@ -169,6 +208,7 @@ function connect() {
     viewerId: () => 'u-ada',
     onClearSession: (reason) => cleared.push(reason),
     onAccountDeleted: (accountId) => deleted.push(accountId),
+    account: options.account === undefined ? 'u-ada' : options.account,
   };
   const connection = createRealtimeConnection({ token: 'jwt-ada', sessionToken: 's' }, deps);
   return { socket, deleted, cleared, destroy: connection.destroy };
@@ -202,6 +242,24 @@ describe('socket — `error` et `auth:session-revoked`', () => {
     const { socket, deleted, cleared, destroy } = connect();
     socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'x', reason: 'logout_all_devices' });
     expect(cleared).toEqual(['logout_all_devices']);
+    expect(deleted).toEqual([]);
+    destroy();
+  });
+});
+
+describe('socket — seul le compte qui a OUVERT la connexion peut être nommé (audit #10237)', () => {
+  test('une connexion ouverte par Ada qui reçoit « Bob supprimé » ne fait partir personne', () => {
+    const { socket, deleted, destroy } = connect();
+    socket.fire(SERVER_EVENTS.ERROR, { message: 'x', code: 'ACCOUNT_DELETED', accountId: 'u-bob' });
+    socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'x', reason: 'logout_all_devices', deletedAccountId: 'u-bob' });
+    expect(deleted).toEqual([]);
+    destroy();
+  });
+
+  test('une connexion d’invité (aucun compte) ne fait partir aucun compte', () => {
+    const { socket, deleted, destroy } = connect({ account: null });
+    socket.fire(SERVER_EVENTS.ERROR, { message: 'x', code: 'ACCOUNT_DELETED', accountId: 'u-ada' });
+    socket.fire(SERVER_EVENTS.AUTH_SESSION_REVOKED, { code: 'session_revoked', message: 'x', reason: 'logout_all_devices', deletedAccountId: 'u-ada' });
     expect(deleted).toEqual([]);
     destroy();
   });

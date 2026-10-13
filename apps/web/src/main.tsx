@@ -177,6 +177,17 @@ void import('@/lib/view/keyboard-viewport').then(({ installKeyboardViewport }) =
  */
 void import('@/lib/api/realtime');
 
+/**
+ * L'APPAREIL FINIT CE QU'UN RETRAIT RATÉ A LAISSÉ (audit #10237) — un compte
+ * supprimé noté mais pas retiré (module de retrait non chargé), un carnet de
+ * jeu dont la suppression n'a pas abouti. Au repos, après la première
+ * peinture : rien ici ne la retarde.
+ */
+const tidyDevice = (): void =>
+  void import('@/lib/api/account-deleted-retire').then(({ tidyDeviceAfterBoot }) => tidyDeviceAfterBoot()).catch(() => undefined);
+if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(tidyDevice, { timeout: 10_000 });
+else window.setTimeout(tidyDevice, 3_000);
+
 
 /**
  * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque

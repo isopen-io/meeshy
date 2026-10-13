@@ -3,7 +3,7 @@ import type { CursorPaginationMeta, PaginationMeta } from '@meeshy/shared/types/
 import type { Transport } from '../net/transport';
 
 import { anySignal, timeoutSignal } from './abort';
-import { deletedAccountOf } from './account-deleted';
+import { accountOfIdentityKey, deletedAccountOf, ownDeletedAccount } from './account-deleted';
 import { guestAccessEndOf, type GuestAccessEnd } from './guest-access-end';
 
 /**
@@ -163,6 +163,12 @@ export type HttpRequest = {
    * session change pendant le vol.
    */
   readonly credential?: Credential | null;
+  /**
+   * LE COMPTE PROPRIÉTAIRE du jeton que porte cet appel quand il n'est pas
+   * celui de la session (`credential` forcé, en-têtes explicites) : sans lui,
+   * un 401 « compte supprimé » ne fait partir aucun compte (audit #10237).
+   */
+  readonly tokenOwner?: string;
   /**
    * REMPLACE le délai de garde du transport POUR CET APPEL (revue-correction
    * #5668). `DEFAULT_TIMEOUT_MS` est arbitré contre le p95 d'un appel JSON
@@ -434,8 +440,10 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
     }
     const envelope = envelopeOf(payload);
     /* Un compte supprimé est NOMMÉ par son refus : il part même si l'appareil a
-       changé de compte pendant le vol (#10237). */
-    const deletedAccount = unauthorized ? deletedAccountOf(envelope) : null;
+       changé de compte pendant le vol (#10237) — mais seulement s'il est le
+       propriétaire du jeton présenté. */
+    const tokenOwner = req.tokenOwner ?? (forced || namesAnIdentity(req.headers) ? null : accountOfIdentityKey(issuedUnder));
+    const deletedAccount = unauthorized ? ownDeletedAccount(deletedAccountOf(envelope), tokenOwner) : null;
     if (staleForReader()) {
       if (deletedAccount !== null) options.onAccountDeleted?.(deletedAccount);
       return NEVER;

@@ -1,3 +1,4 @@
+import { replayPendingRetirements } from './account-deleted';
 import { heldAccountOf, sessionStore, type SessionStoreApi } from './session';
 
 /**
@@ -22,4 +23,31 @@ export function endDeletedAccount({
 export async function retireDeletedAccount(accountId: string): Promise<void> {
   const { accountVault } = await import('./device-accounts');
   endDeletedAccount({ accountId, store: sessionStore, retire: (id) => accountVault.forget(id) });
+}
+
+function browserKeys(): readonly string[] {
+  try {
+    const storage = globalThis.localStorage;
+    return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => key !== null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * APRÈS LA PREMIÈRE PEINTURE (`main.tsx`, audit #10237) : les retraits notés
+ * qu'un chargement raté a laissés se rejouent, puis les carnets des comptes
+ * que l'appareil ne connaît plus partent (`sweepOrphanNotebooks`). Le carnet
+ * ne se charge que si le navigateur sait lister ses bases.
+ */
+export async function tidyDeviceAfterBoot(): Promise<void> {
+  await replayPendingRetirements();
+  const factory = typeof indexedDB === 'undefined' ? undefined : indexedDB;
+  if (factory === undefined || typeof factory.databases !== 'function') return;
+  const { sweepOrphanNotebooks } = await import('../game-photo/notebook-legacy');
+  await sweepOrphanNotebooks({
+    factory,
+    storage: { keys: browserKeys, getItem: (key) => globalThis.localStorage.getItem(key) },
+    current: heldAccountOf(sessionStore.getState().session)?.user.id ?? null,
+  });
 }

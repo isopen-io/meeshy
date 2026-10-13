@@ -3,7 +3,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } fr
 import { notebookDbName } from '@/lib/game-photo/notebook';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { retireDeletedAccount } from './account-deleted-retire';
+import { PENDING_RETIREMENTS_KEY } from './account-deleted';
+import { retireDeletedAccount, tidyDeviceAfterBoot } from './account-deleted-retire';
 import { heldAccountOf, sessionStore, type SessionUser } from './session';
 
 /**
@@ -24,6 +25,7 @@ function memoryIndexedDb(names: readonly string[]) {
   const bases = new Set(names);
   const later = (run: () => void) => setTimeout(run, 0);
   const factory = {
+    databases: async () => [...bases].map((name) => ({ name, version: 1 })),
     deleteDatabase: (name: string) => {
       const request: { onsuccess: (() => void) | null; onerror: (() => void) | null; result: undefined; error: null } = { onsuccess: null, onerror: null, result: undefined, error: null };
       later(() => {
@@ -122,5 +124,22 @@ describe('le compte supprimé NOMMÉ quitte l’appareil, carnet compris', () =>
     expect(accountVault.list().map((account) => account.user.id)).toEqual([BOB.id]);
     expect(bases.has(notebookDbName(ADA.id))).toBe(false);
     expect(bases.has(notebookDbName(BOB.id))).toBe(true);
+  });
+});
+
+describe('au démarrage suivant, l’appareil finit ce qu’un retrait raté a laissé (audit #10237)', () => {
+  test('le retrait noté est rejoué et le carnet d’un compte qui n’est plus au coffre part ; Bob garde tout', async () => {
+    const { accountVault, bases } = await deviceWithAdaAndBob();
+    bases.add(notebookDbName('u-old'));
+    sessionStore.getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3_600 });
+    globalThis.localStorage.setItem(PENDING_RETIREMENTS_KEY, JSON.stringify([ADA.id]));
+
+    await tidyDeviceAfterBoot();
+    await settled(() => !bases.has(notebookDbName(ADA.id)) && !bases.has(notebookDbName('u-old')));
+
+    expect(accountVault.list().map((account) => account.user.id)).toEqual([BOB.id]);
+    expect(globalThis.localStorage.getItem(PENDING_RETIREMENTS_KEY)).toBeNull();
+    expect([...bases]).toEqual([notebookDbName(BOB.id)]);
+    expect(heldAccountOf(sessionStore.getState().session)?.user.id).toBe(BOB.id);
   });
 });

@@ -126,7 +126,7 @@ function currentViewerId(): string {
 
 /** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
 const liveConnection = keepRealtimeConnection<RealtimeConnection>({
-  open: (auth) =>
+  open: (auth, account) =>
     createRealtimeConnection(auth, {
       base: apiConfig.base,
       socketFactory: createSocketIOClient,
@@ -137,6 +137,7 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       viewerId: currentViewerId,
       onClearSession: endWithReason,
       onAccountDeleted: retireDeletedAccountLater,
+      account,
       onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
     }),
   onChange: (next) => {
