@@ -38,8 +38,14 @@ final class ImpressionBatcher: ObservableObject {
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
 
-    /// outbox-11 — préfixe partagé des clés de persistance (une par surface).
+    /// outbox-11 — préfixe partagé des clés de persistance (une par HÔTE).
     static let storageKeyPrefix = "meeshy.impressions.pending."
+
+    /// Plafond d'ids par appel, aligné sur `IMPRESSION_BATCH_CAP` côté
+    /// passerelle (`routes/posts/impressions.ts`, `maxItems`). Un lot plus
+    /// gros est refusé en 400 : envoyé d'un bloc, il échouait pour toujours et
+    /// bloquait la surface entière (#10398).
+    static let maxBatchSize = 100
 
     private let source: String
     private let postService: PostServiceProviding
@@ -55,8 +61,13 @@ final class ImpressionBatcher: ObservableObject {
     /// souscriptions se résilient seules à la libération.
     private var cancellables = Set<AnyCancellable>()
 
+    /// `storageScope` distingue deux hôtes qui partagent une `source` serveur
+    /// (le profil et les favoris comptent tous deux en `profile`) : sur une
+    /// même clé, chacun écrasait la file de l'autre et la rejouait à son init
+    /// — perte d'un côté, double compte de l'autre (#10398).
     init(
         source: String,
+        storageScope: String? = nil,
         postService: PostServiceProviding = PostService.shared,
         flushDelay: TimeInterval = 3,
         defaults: UserDefaults = .standard
@@ -65,7 +76,7 @@ final class ImpressionBatcher: ObservableObject {
         self.postService = postService
         self.flushDelay = flushDelay
         self.defaults = defaults
-        self.storageKey = Self.storageKeyPrefix + source
+        self.storageKey = Self.storageKeyPrefix + (storageScope ?? source)
         self.pending = defaults.stringArray(forKey: storageKey) ?? []
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
@@ -103,18 +114,41 @@ final class ImpressionBatcher: ObservableObject {
     }
 
     private func flush() async {
-        let batch = pending
-        guard !batch.isEmpty else { return }
+        guard !pending.isEmpty else { return }
         // Vidé AVANT l'appel pour qu'une apparition concurrente ne reparte pas
         // dans le lot suivant en double ; réinséré en tête si l'envoi échoue.
+        var remaining = pending
         pending.removeAll()
         persist()
-        do {
-            try await postService.recordImpressions(postIds: batch, source: source)
-        } catch {
-            pending.insert(contentsOf: batch, at: 0)
-            persist()
-            Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
+        while !remaining.isEmpty {
+            let chunk = Array(remaining.prefix(Self.maxBatchSize))
+            remaining.removeFirst(chunk.count)
+            do {
+                try await postService.recordImpressions(postIds: chunk, source: source)
+            } catch let error where Self.isPermanentRejection(error) {
+                Self.logger.error("impression batch rejected (dropped \(chunk.count, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            } catch {
+                pending.insert(contentsOf: chunk + remaining, at: 0)
+                persist()
+                Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
+                return
+            }
+        }
+    }
+
+    /// Un refus que le rejeu ne changera jamais : un 4xx hors 408/429 (le
+    /// lot lui-même est invalide), ou une réponse 2xx illisible (le serveur a
+    /// déjà compté — rejouer compterait deux fois). Le réseau, les 5xx, les
+    /// 429 et l'expiration de session restent rejouables.
+    nonisolated static func isPermanentRejection(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError else { return false }
+        switch apiError {
+        case .serverError(let code, _):
+            return (400..<500).contains(code) && code != 408 && code != 429
+        case .decodingError:
+            return true
+        default:
+            return false
         }
     }
 

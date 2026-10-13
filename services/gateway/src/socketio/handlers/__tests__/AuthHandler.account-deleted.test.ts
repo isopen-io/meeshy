@@ -12,6 +12,7 @@ import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { StatusService } from '../../../services/StatusService';
 
 const socketDe = (): Socket =>
@@ -26,7 +27,7 @@ const socketDe = (): Socket =>
   }) as unknown as Socket;
 
 const compte = (overrides: Record<string, unknown>) => ({
-  id: 'user-10264',
+  id: 'aaaaaaaaaaaaaaaaaaa10264',
   systemLanguage: 'fr',
   isActive: true,
   deletedAt: null,
@@ -38,7 +39,7 @@ const compte = (overrides: Record<string, unknown>) => ({
 });
 
 const monter = (ligne: Record<string, unknown>) => {
-  const { demandes = [], ...colonnes } = ligne as { demandes?: string[] };
+  const { demandes = [], session = liveSession(), ...colonnes } = ligne as { demandes?: string[]; session?: unknown };
   const prisma = {
     user: { findUnique: jest.fn(async () => colonnes), update: jest.fn(async () => undefined) },
     accountDeletionRequest: {
@@ -46,7 +47,7 @@ const monter = (ligne: Record<string, unknown>) => {
     },
     participant: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(async () => []) },
     callParticipant: { findMany: jest.fn(async () => []) },
-    userSession: { findFirst: jest.fn(async () => null) },
+    userSession: { findFirst: jest.fn(async () => session) },
   } as unknown as PrismaClient;
   const connectedUsers = new Map();
   const handler = new AuthHandler({
@@ -64,7 +65,7 @@ const monter = (ligne: Record<string, unknown>) => {
 
 const connecter = async (ligne: Record<string, unknown>) => {
   process.env.JWT_SECRET = 'secret-10264';
-  jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-10264' } as never);
+  jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaa10264' } as never);
   const { handler, connectedUsers, prisma } = monter(ligne);
   const socket = socketDe();
   await handler.handleTokenAuthentication(socket);
@@ -74,10 +75,12 @@ const connecter = async (ligne: Record<string, unknown>) => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('AuthHandler — un compte supprimé (#10264)', () => {
+  // La purge SUPPRIME les sessions du compte (`AccountPurgeService`) : le jeton
+  // d'un compte purgé nomme toujours une session absente (#10493).
   it('refusé, avec le code `ACCOUNT_DELETED` sur l’événement d’erreur existant', async () => {
-    const { socket, connectedUsers } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['COMPLETED'] }));
+    const { socket, connectedUsers } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['COMPLETED'], session: null }));
 
-    expect(socket.emit).toHaveBeenCalledWith('error', { message: 'Account disabled', code: 'ACCOUNT_DELETED', accountId: 'user-10264' });
+    expect(socket.emit).toHaveBeenCalledWith('error', { message: 'Account disabled', code: 'ACCOUNT_DELETED', accountId: 'aaaaaaaaaaaaaaaaaaa10264' });
     expect(socket.disconnect).toHaveBeenCalledWith(true);
     expect(connectedUsers.size).toBe(0);
   });

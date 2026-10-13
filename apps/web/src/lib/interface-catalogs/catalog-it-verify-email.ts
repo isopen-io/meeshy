@@ -44,6 +44,7 @@ const itVerifyEmail = {
   'signInLink.switchAccount.kept': '@{current} resterà tra i tuoi account su questo dispositivo.',
   'signInLink.switchAccount.busy': 'Un attimo…',
   'signInLink.switchAccount.failed': 'Impossibile aprire questo altro account al momento. Resti connesso e il link è stato chiuso.',
+  'signInLink.switchAccount.expired': 'Questo link è scaduto: richiedine uno nuovo. Resti connesso.',
   'signInLink.switchAccount.leave': 'Torna alla home',
 };
 

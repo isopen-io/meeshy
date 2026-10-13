@@ -8,6 +8,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
@@ -35,6 +36,7 @@ const createMockPrisma = (): PrismaClient => ({
     findUnique: jest.fn(),
     findMany: jest.fn().mockResolvedValue([])
   },
+  userSession: { findFirst: jest.fn(async () => liveSession()) },
   callParticipant: {
     findMany: jest.fn().mockResolvedValue([])
   }
@@ -70,7 +72,7 @@ describe('AuthHandler — la room d’un inscrit banni (#7389)', () => {
       userSockets: new Map()
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
   });
 
   afterEach(() => {
@@ -79,13 +81,13 @@ describe('AuthHandler — la room d’un inscrit banni (#7389)', () => {
 
   it("ne rejoint pas la room d'une conversation dont l'inscrit est banni, même ligne rallumée", async () => {
     const rows: MongoDocument[] = [
-      { conversationId: 'conv-banni', userId: 'user-123', isActive: true, bannedAt: new Date('2026-09-01') },
-      { conversationId: 'conv-membre', userId: 'user-123', isActive: true },
-      { conversationId: 'conv-debanni', userId: 'user-123', isActive: true, bannedAt: null },
+      { conversationId: 'conv-banni', userId: 'aaaaaaaaaaaaaaaaaaaa0123', isActive: true, bannedAt: new Date('2026-09-01') },
+      { conversationId: 'conv-membre', userId: 'aaaaaaaaaaaaaaaaaaaa0123', isActive: true },
+      { conversationId: 'conv-debanni', userId: 'aaaaaaaaaaaaaaaaaaaa0123', isActive: true, bannedAt: null },
     ];
     const mockSocket = createMockSocket({ handshake: { auth: { token: 'valid-jwt-token' } } });
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-      id: 'user-123', systemLanguage: 'en',
+      id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
       regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
     } as any);
     jest.spyOn((mockPrisma as any).participant, 'findMany').mockImplementation(

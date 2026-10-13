@@ -69,7 +69,7 @@ export class GuestLinkWatch {
 
   /**
    * #10437 — une session invitée DÉJÀ connectée sort à l'échéance de son lien.
-   * Même patron que `AuthHandler._scheduleTokenExpiry` (plafond du minuteur, désarmement
+   * Même patron que `scheduleTokenExpiry` (`tokenExpiryWatch.ts`) (plafond du minuteur, désarmement
    * au `disconnect`), à une différence près : l'échéance d'un lien se MODIFIE
    * (l'hôte peut le prolonger ou l'écourter). Le minuteur ne coupe donc pas
    * sur la date lue à la connexion : il RELIT le lien quand il sonne — à

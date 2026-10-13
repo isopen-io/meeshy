@@ -708,6 +708,42 @@ describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', 
   });
 });
 
+describe('POST /refresh — renouveler adopte une session prouvée par un lien (#10477)', () => {
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  it('une session nommée encore en attente prend son échéance normale, par une écriture conditionnelle', async () => {
+    const attendue = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const prisma = makePrisma();
+    prisma.userSession.findFirst = jest.fn<any>().mockResolvedValue({ id: SID_COURANTE, adoptedExpiresAt: attendue });
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: SID_COURANTE, isValid: true, expiresAt: { gt: expect.any(Date) }, adoptedExpiresAt: attendue },
+      data: { expiresAt: attendue, adoptedExpiresAt: null },
+    });
+    await app.close();
+  });
+
+  it('une session déjà adoptée ne réécrit rien', async () => {
+    const prisma = makePrisma();
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(updateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 // POST /refresh — fenêtre de transition d'un jeton hérité (#4264, critère 3),
 // y compris le critère de fin littéral de #3621 : extrait dans
 // magic-link-refresh-legacy-token.test.ts (#4531 — budget de taille).

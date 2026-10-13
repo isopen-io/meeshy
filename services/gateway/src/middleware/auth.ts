@@ -15,7 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM } from '../services/auth/session-jwt';
 import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../services/auth/session-admission';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
-import { AccountDeletedError, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
+import { AccountDeletedError, accountIsDeleted, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -194,14 +194,15 @@ export class AuthMiddleware {
 
   async createAuthContext(
     authorizationHeader?: string,
-    sessionToken?: string
+    sessionToken?: string,
+    options: { readonly adoptsSession?: boolean } = {}
   ): Promise<UnifiedAuthContext> {
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
     if (jwtToken) {
-      return this.createRegisteredUserContext(jwtToken, sessionToken);
+      return this.createRegisteredUserContext(jwtToken, sessionToken, options.adoptsSession !== false);
     }
 
     if (sessionToken) {
@@ -213,7 +214,8 @@ export class AuthMiddleware {
 
   private async createRegisteredUserContext(
     jwtToken: string,
-    sessionToken?: string
+    sessionToken: string | undefined,
+    adoptsSession: boolean
   ): Promise<UnifiedAuthContext> {
     try {
       // task-1-fix-round-6 — AVANT : un `jwt.TokenExpiredError` accompagné
@@ -257,7 +259,14 @@ export class AuthMiddleware {
         claims: jwtPayload,
         userId: jwtUserId,
         now: this.now(),
+        adopt: adoptsSession,
       });
+      // #10493 — la purge d'un compte SUPPRIME ses sessions : son jeton nomme
+      // une session absente. La signature étant vérifiée, le refus garde le
+      // code de #10264, qui fait purger ce compte à l'appareil.
+      if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, jwtUserId))) {
+        throw new AccountDeletedError(jwtUserId);
+      }
       if (refus) {
         authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton ne vit plus', {
           userId: jwtUserId,
@@ -680,9 +689,12 @@ export function createUnifiedAuthMiddleware(
 
   const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
+      // #10477 — franchir la porte adopte une session prouvée, sauf sur la
+      // route qui la refuse (`config.adoptsSession: false`, la déconnexion).
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
-        request.headers['x-session-token'] as string
+        request.headers['x-session-token'] as string,
+        { adoptsSession: request.routeOptions?.config?.adoptsSession !== false }
       );
 
       if (options.requireAuth && !authContext.isAuthenticated) {

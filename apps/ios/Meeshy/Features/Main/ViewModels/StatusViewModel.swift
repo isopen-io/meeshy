@@ -46,10 +46,6 @@ class StatusViewModel: ObservableObject {
     /// module core (isolation `nonisolated`) et est `@unchecked Sendable`.
     private let isOffline: @Sendable () -> Bool
 
-    /// Groupement, persistance et flush (arrière-plan / relance) portés par
-    /// `ImpressionBatcher`.
-    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
-
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
     /// rule shared by every composer. `nonisolated` so it can be read from any
@@ -89,20 +85,9 @@ class StatusViewModel: ObservableObject {
     // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
     // de moods était le seul contenu du produit dont la portée restait à zéro.
     //
-    // Même contrat que le feed : une impression par APPARITION du pill, groupée
-    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
-    // serveur par `PostView`, donc rejouable sans risque).
-
-    /// Le mood `statusId` est apparu à l'écran.
-    func trackImpression(_ statusId: String) {
-        impressions.record(statusId)
-    }
-
-    /// À appeler quand la barre disparaît : sans ce flush, le lot en cours de
-    /// groupement est perdu.
-    func flushImpressions() async {
-        await impressions.flushNow()
-    }
+    // L'impression se compte là où le mood S'AFFICHE — la bulle
+    // (`StatusBubbleController.show`, #10397) ; la vue UNIQUE part à
+    // l'ouverture (dédupliquée côté serveur par `PostView`).
 
     /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
     func markStatusViewed(_ statusId: String) {

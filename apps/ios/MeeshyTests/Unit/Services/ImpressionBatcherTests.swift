@@ -190,3 +190,86 @@ extension ImpressionBatcherTests {
                        "seules les clés préfixées impressions sont purgées")
     }
 }
+
+/// #10398 — un lot de plus de 100 ids était refusé en 400 par la passerelle
+/// (`maxItems`), réinséré, renvoyé entier, refusé encore : la surface ne
+/// comptait plus jamais rien. Et deux hôtes de la même `source` se
+/// partageaient une clé de persistance.
+extension ImpressionBatcherTests {
+
+    func test_flush_ofMoreThanTheGatewayCap_isSplitIntoBatchesOfAtMost100() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        (0..<150).forEach { sut.record("p\($0)") }
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedImpressionBatches.map(\.count), [100, 50])
+        XCTAssertEqual(service.recordedImpressionBatches.flatMap { $0 },
+                       (0..<150).map { "p\($0)" },
+                       "l'ordre des occurrences survit au découpage")
+    }
+
+    func test_aBatchRejectedWith400_isDroppedInsteadOfBlockingTheSurface() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordImpressionsResult = .failure(APIError.serverError(400, "body/postIds must NOT have more than 100 items"))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordImpressionsResult = .success(())
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordImpressionsCallCount, 1,
+                       "un refus permanent ne se rejoue pas — sinon la file ne se vide jamais")
+    }
+
+    func test_aBatchRejectedWith429_isKeptForTheNextAttempt() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordImpressionsResult = .failure(APIError.serverError(429, nil))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordImpressionsResult = .success(())
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedImpressionBatches, [["p1"], ["p1"]])
+    }
+
+    func test_aTransientFailureMidFlush_keepsTheFailedAndTheUnsentBatches() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordImpressionsResultsQueue = [
+            .success(()),
+            .failure(NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)),
+        ]
+        (0..<250).forEach { sut.record("p\($0)") }
+
+        await sut.flushNow()
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedImpressionBatches.map(\.count), [100, 100, 100, 50],
+                       "le paquet échoué ET celui qui n'est pas parti repartent, rien de plus")
+        XCTAssertEqual(service.recordedImpressionBatches.dropFirst(2).flatMap { $0 },
+                       (100..<250).map { "p\($0)" })
+    }
+
+    func test_twoHostsOfTheSameSource_doNotOverwriteEachOthersQueue() async {
+        let profileService = MockPostService()
+        let bookmarksService = MockPostService()
+        let profile = ImpressionBatcher(source: "profile", postService: profileService,
+                                        flushDelay: 60, defaults: defaults)
+        let bookmarks = ImpressionBatcher(source: "profile", storageScope: "profile.bookmarks",
+                                          postService: bookmarksService, flushDelay: 60, defaults: defaults)
+        profile.record("mine")
+        bookmarks.record("saved")
+
+        let revivedService = MockPostService()
+        let revivedProfile = ImpressionBatcher(source: "profile", postService: revivedService,
+                                               flushDelay: 60, defaults: defaults)
+        await revivedProfile.flushNow()
+
+        XCTAssertEqual(revivedService.lastRecordImpressionPostIds, ["mine"],
+                       "la file des favoris n'écrase ni ne double celle du profil")
+        await bookmarks.flushNow()
+        XCTAssertEqual(bookmarksService.lastRecordImpressionPostIds, ["saved"])
+        XCTAssertEqual(bookmarksService.lastRecordImpressionsSource, "profile")
+    }
+}

@@ -3096,6 +3096,10 @@ model UserSession {
 
   /// Lifecycle
   expiresAt         DateTime
+  /// #10477 — une session ouverte par un lien (lien magique, vérification d'adresse)
+  /// naît courte : `expiresAt` est sa fenêtre d'adoption, et ce champ l'échéance
+  /// qu'elle prend au premier usage. Nul ou absent : rien n'est en attente.
+  adoptedExpiresAt  DateTime?
   isValid           Boolean   @default(true)
   invalidatedAt     DateTime?
   invalidatedReason String? // "LOGOUT" | "PASSWORD_RESET" | "USER_REVOKED" | "ADMIN_ACTION" | "EXPIRED" | "SECURITY_BREACH"

@@ -276,7 +276,7 @@ function withFetchSocketsDeadline(
     try {
       return await withDeadline(io.in(rooms).fetchSockets(), FETCH_SOCKETS_DEADLINE_MS);
     } catch (error) {
-      if (error instanceof FetchSocketsTimeout) unresponsive = true;
+      if (error instanceof FetchSocketsTimeoutError) unresponsive = true;
       throw error;
     }
   };
@@ -286,12 +286,12 @@ function withFetchSocketsDeadline(
   };
 }
 
-class FetchSocketsTimeout extends Error {}
+class FetchSocketsTimeoutError extends Error {}
 
 function withDeadline<T>(work: Promise<T>, afterMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new FetchSocketsTimeout(`fetchSockets did not answer within ${afterMs} ms`)), afterMs);
+    timer = setTimeout(() => reject(new FetchSocketsTimeoutError(`fetchSockets did not answer within ${afterMs} ms`)), afterMs);
     timer.unref?.();
   });
   return Promise.race([work, deadline]).finally(() => clearTimeout(timer));

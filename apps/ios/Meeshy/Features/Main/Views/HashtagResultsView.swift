@@ -10,6 +10,8 @@ struct HashtagResultsView: View {
     /// `@StateObject` sur le singleton, PAS `@EnvironmentObject` — ni `RootView`
     /// ni `iPadRootView` n'injectent `ThemeManager` (même piège que `BookmarksView`).
     @StateObject private var theme = ThemeManager.shared
+    /// Des cartes likables sans impression faisaient « 3 likes · 0 vue » (#10397).
+    @StateObject private var impressions = ImpressionBatcher(source: "search", storageScope: "search.hashtag")
 
     init(tag: String) {
         _viewModel = StateObject(wrappedValue: HashtagResultsViewModel(tag: tag))
@@ -25,6 +27,7 @@ struct HashtagResultsView: View {
                     )
                         .equatable()
                         .onAppear {
+                            impressions.record(post.id)
                             if post.id == viewModel.posts.last?.id {
                                 Task { await viewModel.loadMore() }
                             }
@@ -44,5 +47,6 @@ struct HashtagResultsView: View {
         }
         .navigationTitle("#\(viewModel.tag)")
         .task { await viewModel.load() }
+        .onDisappear { Task { await impressions.flushNow() } }
     }
 }
