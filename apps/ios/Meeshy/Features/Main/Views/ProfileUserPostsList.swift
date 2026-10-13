@@ -234,8 +234,10 @@ struct ProfileUserPostsList: View {
 
                 ForEach(viewModel.visiblePosts) { post in
                     card(for: post)
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: viewModel.listedImpressions) {
+                            viewModel.visiblePosts.firstIndex { $0.id == post.id }
+                        }
                         .onAppear {
-                            viewModel.trackImpression(post.id)
                             // Prefetch anticipé : charge la suite dès qu'une
                             // carte à ≤3 de la fin apparaît — auto-ré-armé,
                             // contrairement à la sentinelle one-shot qui
@@ -262,6 +264,10 @@ struct ProfileUserPostsList: View {
         .padding(.top, MeeshySpacing.sm)
         .padding(.bottom, MeeshySpacing.xxl)
         .task { await viewModel.loadInitial() }
+        .onAppear {
+            if let visit = DiscoveryTelemetry.profileVisit(userId, viewerId: AuthManager.shared.currentUser?.id) { SocialEventsV2Reporter.shared.emit(visit) }
+        }
+        .tracksOutboundLinks(surface: SocialSurface(.profile))
         // Flush au niveau LISTE. Posé sur le `ForEach`, ce modificateur était
         // appliqué à CHAQUE carte générée : toute carte quittant l'écran
         // annulait le minuteur de groupement et postait un lot d'un seul id —
@@ -1167,6 +1173,9 @@ final class ProfileUserPostsViewModel: ObservableObject {
     func trackImpression(_ postId: String) {
         impressions.record(postId)
     }
+
+    /// La file où une carte de la liste situe son apparition (#10501).
+    var listedImpressions: ReachImpressionRecording { impressions }
 
     /// À appeler quand la liste disparaît : sans ce flush, le lot en cours de
     /// groupement est perdu.

@@ -22,6 +22,7 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import { StoryRowItem } from '@/routes/stories';
+import { countingProjection, createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
@@ -43,28 +44,13 @@ import { AuthorMoodsContext, type MoodOf } from './use-author-moods';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const NOW = new Date('2026-10-13T12:00:00.000Z');
 
-type Entry = { readonly isIntersecting: boolean; readonly intersectionRatio: number };
-let observers: Array<{ readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean }> = [];
 let native: unknown;
 
-class FakeIntersectionObserver {
-  private readonly slot: { readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean };
-  constructor(callback: (entries: readonly Entry[]) => void) {
-    this.slot = { callback, disconnected: false };
-    observers.push(this.slot);
-  }
-  observe() {}
-  unobserve() {}
-  disconnect() {
-    this.slot.disconnected = true;
-  }
-  takeRecords() {
-    return [];
-  }
-}
+const fakeObservers = createFakeIntersectionObservers();
+const FakeIntersectionObserver = fakeObservers.FakeIntersectionObserver;
 
-const live = () => observers.filter((o) => !o.disconnected);
-const show = (ratio = 1) => act(() => live().forEach((o) => o.callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }])));
+const live = () => fakeObservers.live();
+const show = (ratio = 1) => act(() => fakeObservers.emitAll(ratio));
 const hide = () => show(0);
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const dwell = () => act(async () => { await wait(IMPRESSION_DWELL_MS + 50); });
@@ -87,12 +73,12 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  observers = [];
+  fakeObservers.reset();
   native = (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = FakeIntersectionObserver;
   recorded = [];
   readingTelemetry.record = (event: SocialEvent) => {
-    recorded.push(event);
+    recorded.push(countingProjection(event));
   };
   container = document.createElement('div');
   document.body.appendChild(container);

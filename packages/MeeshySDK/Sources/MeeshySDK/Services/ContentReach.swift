@@ -86,6 +86,13 @@ public enum SocialEventsDispatch {
         return [reach, opens].filter { !$0.isEmpty }
     }
 
+    /// La même partition, enveloppes comprises (#10500).
+    public static func requests(for events: [StampedSocialEvent]) -> [[StampedSocialEvent]] {
+        let reach = events.filter { !$0.isOpen }
+        let opens = events.filter(\.isOpen)
+        return [reach, opens].filter { !$0.isEmpty }
+    }
+
     /// Un refus qu'un rejeu ne changerait pas : 401, 403, 4xx hors délai et
     /// débit. Une panne de réseau ou un 5xx se rejoue.
     public static func isPermanentRefusal(_ error: Error) -> Bool {
@@ -102,12 +109,15 @@ public enum SocialEventsDispatch {
 
     /// Envoie le lot requête par requête et rend ce qui doit être REJOUÉ. Un
     /// refus définitif retire sa requête ; il ne touche pas aux autres.
+    ///
+    /// Ce qui revient garde son enveloppe : le rejeu part avec les MÊMES
+    /// `eventId`, et la passerelle ne le recompte pas (#10500).
     public static func deliver(
-        _ events: [SocialEvent],
+        _ events: [StampedSocialEvent],
         credential: SocialEventsCredential,
         through service: PostServiceProviding
-    ) async -> [SocialEvent] {
-        var unsent: [SocialEvent] = []
+    ) async -> [StampedSocialEvent] {
+        var unsent: [StampedSocialEvent] = []
         for request in requests(for: events) {
             do {
                 _ = try await service.recordSocialEvents(request, credential: credential)
@@ -118,5 +128,15 @@ public enum SocialEventsDispatch {
             }
         }
         return unsent
+    }
+
+    /// Un lot sans file : l'enveloppe se pose à l'appel.
+    public static func deliver(
+        _ events: [SocialEvent],
+        credential: SocialEventsCredential,
+        through service: PostServiceProviding,
+        at now: Date = Date()
+    ) async -> [SocialEvent] {
+        await deliver(events.map { StampedSocialEvent.stamping($0, at: now) }, credential: credential, through: service).map(\.event)
     }
 }

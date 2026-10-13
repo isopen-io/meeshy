@@ -211,8 +211,10 @@ struct NearbyDiscoveryView: View {
                             HapticFeedback.light()
                             router.openPostDetail(post, from: .nearby)
                         }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            viewModel.posts.firstIndex { $0.id == post.id }
+                        }
                         .onAppear {
-                            impressions.record(post.id)
                             guard post.id == viewModel.posts.last?.id else { return }
                             Task { await viewModel.loadMore() }
                         }

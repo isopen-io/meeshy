@@ -1,3 +1,7 @@
+import { interactionOf, prismOf } from '@/lib/telemetry/card-context';
+import { contentTapOf } from '@/lib/telemetry/content-taps';
+import { useContentScrollTelemetry } from '@/lib/telemetry/content-scroll';
+import type { ListingContext } from '@/lib/api/social-events-v2-types';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
 
@@ -24,7 +28,7 @@ import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
 import type { ContentSurface, ImpressionSource } from '@/lib/api/social-events';
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 import { openOriginOfSurface } from '@/lib/view/content-open';
-import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
+import { openLinkProps, readingTelemetry, useImpressionRef } from '@/lib/view/reading-telemetry';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -67,9 +71,18 @@ const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
  * `FeedPostCard`, pour ne pas invalider toute la carte à chaque page
  * (`FeedPostCardCarousel.swift:20-25`).
  */
-function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCardMedia[]; readonly accent: string }) {
+function FeedMediaCarousel({ media, accent, postId }: { readonly media: readonly FeedCardMedia[]; readonly accent: string; readonly postId?: string }) {
   const [page, setPage] = useState(0);
   const clamped = Math.min(page, media.length - 1);
+  const scrollProbe = useContentScrollTelemetry({
+    target: postId === undefined || media.length < 2 ? null : { kind: 'post', id: postId },
+    contentKind: 'carousel',
+    itemsTotal: media.length,
+  });
+  const goTo = (next: number) => {
+    scrollProbe.noteIndex(next);
+    setPage(next);
+  };
   const current = media[clamped];
   const language = currentInterfaceLanguage();
   if (current === undefined) return null;
@@ -107,8 +120,8 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
           page={clamped}
           count={media.length}
           labels={{ previous: translate(language, 'feed.post.media.previous'), next: translate(language, 'feed.post.media.next') }}
-          onPrevious={() => setPage(clamped - 1)}
-          onNext={() => setPage(clamped + 1)}
+          onPrevious={() => goTo(clamped - 1)}
+          onNext={() => goTo(clamped + 1)}
         />
       </div>
       <FeedCarouselDots page={clamped} count={media.length} accent={accent} />
@@ -211,9 +224,11 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, openOrigin, hosts }:
  * traduit par le Prisme ET déjà tronqué : c'est ce que le lecteur voit qu'il
  * peut cliquer, jamais un original qu'il ne lit pas. */
 function FeedPostText({
+  postId,
   text,
   mentions,
 }: {
+  readonly postId: string;
   readonly text: FeedCardText;
   /* `| undefined` EXPLICITE, et non un `?` seul : sous `exactOptionalPropertyTypes`
      les deux ne disent pas la même chose, et c'est l'ABSENCE de distinction qui
@@ -263,13 +278,19 @@ function FeedPostText({
           active={showingOriginal ? text.originalLanguage : null}
           language={language}
           subject="post"
-          onToggle={() => setShowingOriginal((open) => !open)}
+          onToggle={() => {
+            readingTelemetry.recordV2(interactionOf(postId, showingOriginal ? 'translation_toggle' : 'original_view'));
+            setShowingOriginal(!showingOriginal);
+          }}
         />
       </div>
       {truncated.truncated ? (
         <button
           type="button"
-          onClick={() => setExpanded((e) => !e)}
+          onClick={() => {
+            if (!expanded) readingTelemetry.recordV2(interactionOf(postId, 'caption_expand'));
+            setExpanded(!expanded);
+          }}
           /* CIBLE 44 (charte du chantier, et convention de TOUT le dépôt —
              `attachment-blocks.tsx:264` pose le même 44 sur une bascule de
              texte en ligne). La première forme reprenait les 24 pt d'iOS,
@@ -616,13 +637,13 @@ function FeedPostVisual({
 
   if (model.media.length === 0) return null;
   return isPagedLayout(model.layout) || model.media.length < 2 ? (
-    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} />
+    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} postId={model.id} />
   ) : (
     <FeedMediaMosaic media={model.media} layout={model.layout as TiledLayoutMode} />
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', impressionSurface = 'feed', ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null; readonly impressionSurface?: ContentSurface } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', impressionSurface = 'feed', listing, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null; readonly impressionSurface?: ContentSurface; readonly listing?: ListingContext } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -630,10 +651,22 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // L'IMPRESSION DE LA CARTE (#10401) — une par apparition, posée ICI pour
   // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
   // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
-  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface);
+  const prism = prismOf(model.text);
+  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface, {
+    ...(listing === undefined ? {} : { listing }),
+    targetKind: model.isReel ? 'reel' : 'post',
+    ...(prism === undefined ? {} : { prism }),
+  });
   /* LE TAP OUVRE DEPUIS CE LISTING (#10483) — l'engagement `open` et
      `?from=<origine>` ; la fiche elle-même n'ouvre rien. */
   const openOrigin = isDetail ? null : openOriginOfSurface(impressionSurface);
+  /* LES TAPS D'IDENTITÉ (#10502) — un écouteur pour l'auteur, les mentions et
+     les hashtags, en CAPTURE : `peekProfileOnClick` peut arrêter le clic. */
+  const postId = model.id;
+  const onTapCapture = useCallback((event: { readonly target: EventTarget | null }) => {
+    const tap = contentTapOf(event.target);
+    if (tap !== null) readingTelemetry.recordV2(interactionOf(postId, tap));
+  }, [postId]);
 
   if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} openOrigin={openOrigin} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
@@ -655,6 +688,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
       className="flex flex-col gap-2 pb-3"
       style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18, border: '0.5px solid var(--color-edge)' }}
       data-feed-card="post"
+      onClickCapture={onTapCapture}
       /* L'IDENTITÉ DU POST, pour que la recette puisse viser UNE carte (#6864).
          `key={model.id}` existe déjà côté route, mais une clé de réconciliation
          n'est pas un attribut rendu : rien dans le DOM ne distinguait deux
@@ -665,7 +699,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
       <FeedPostHeader model={model} isDetail={isDetail} openOrigin={openOrigin} hosts={hosts} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
       {bodyText !== undefined ? (
         <FeedPostOpenZone postId={model.id} isDetail={isDetail} openOrigin={openOrigin}>
-          <FeedPostText text={bodyText} mentions={model.validatedMentions} />
+          <FeedPostText postId={model.id} text={bodyText} mentions={model.validatedMentions} />
         </FeedPostOpenZone>
       ) : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne

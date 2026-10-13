@@ -209,8 +209,8 @@ final class ImpressionSurfaceTests: XCTestCase {
             defaults: defaults, accountId: { "userA" }
         )
 
-        XCTAssertNil(defaults.stringArray(forKey: ImpressionBatcher.storageKey(source: "status", surface: .moodAvatar, accountId: "userB")))
-        XCTAssertEqual(defaults.stringArray(forKey: ImpressionBatcher.storageKey(source: "status", surface: .moodAvatar, accountId: "userA")), ["m1"])
+        XCTAssertNil(defaults.object(forKey: ImpressionBatcher.storageKey(source: "status", surface: .moodAvatar, accountId: "userB")))
+        XCTAssertEqual(ImpressionBatcher.restore(from: defaults, key: ImpressionBatcher.storageKey(source: "status", surface: .moodAvatar, accountId: "userA")).map(\.postId), ["m1"])
         _ = revivedAsB
         _ = revivedAsA
     }

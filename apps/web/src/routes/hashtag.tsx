@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useListingScrollTelemetry } from '@/lib/telemetry/listing-scroll';
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
+import { useMemo, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { FeedPostCard } from '@/components/feed-post-card';
@@ -54,6 +57,9 @@ export default function HashtagScreen() {
   const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   const page = useInfiniteQuery(hashtagInfiniteOptions({ ...apiDeps, tag: canonical }));
+  const listingSessionId = useListingSessionId();
+  const frame = useRef<HTMLElement | null>(null);
+  useListingScrollTelemetry({ frame, surface: 'hashtag', listingSessionId, loaded: page.data?.pages.length ?? 0 });
 
   const models = useMemo(
     () =>
@@ -83,7 +89,7 @@ export default function HashtagScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main id="contenu" className="scrollbar-none flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe">
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe">
         {page.isPending ? (
           <div aria-busy="true" aria-label="Chargement des publications">
             <FeedSkeleton count={2} />
@@ -116,10 +122,11 @@ export default function HashtagScreen() {
           </div>
         ) : (
           <>
-            {models.map((model) => (
+            {models.map((model, index) => (
               <FeedPostCard
                 key={model.id}
                 model={model}
+                listing={listingAt({ position: index, fallbackSource: 'hashtag', listingSessionId })}
                 impressionSource="search"
                 impressionSurface="hashtag"
                 onGesture={onGesture}

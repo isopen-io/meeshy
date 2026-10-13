@@ -27,6 +27,11 @@ export const CONTENT_SURFACES = [
   'detail',
   'story',
   'visitor',
+  'search',
+  'notifications',
+  'comments',
+  'link_preview',
+  'status',
 ] as const;
 
 export type ContentSurface = (typeof CONTENT_SURFACES)[number];

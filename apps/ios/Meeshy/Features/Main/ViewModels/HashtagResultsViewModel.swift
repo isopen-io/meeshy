@@ -14,7 +14,9 @@ final class HashtagResultsViewModel: ObservableObject {
 
     private let service: PostServiceProviding
     private let languageProvider: LanguageProviding
-    private let impressions: ReachImpressionRecording
+    /// La file des impressions de CE listing — la carte y situe son
+    /// apparition et y relaie sa visibilité (#10501).
+    let impressions: ReachImpressionRecording
     private var nextCursor: String?
     private var hasMore = true
 
@@ -38,6 +40,11 @@ final class HashtagResultsViewModel: ObservableObject {
     /// chaque apparition.
     func recordImpression(_ postId: String) {
         impressions.record(postId)
+    }
+
+    /// Le rang auquel `postId` est RENDU dans ces résultats.
+    func position(of postId: String) -> Int? {
+        posts.firstIndex { $0.id == postId }
     }
 
     /// L'écran se ferme : le lot en cours de groupement part.

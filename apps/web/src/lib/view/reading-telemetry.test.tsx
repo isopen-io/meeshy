@@ -10,6 +10,7 @@ import { REEL_STUDIO } from '@/lib/api/fixtures-reels';
 import type { SocialEvent } from '@/lib/api/social-events';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { countingProjection, createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
@@ -36,28 +37,14 @@ import { useStoryRailProps } from './use-story-rail';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
-type Entry = { readonly isIntersecting: boolean; readonly intersectionRatio: number };
-let observers: Array<{ readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean }> = [];
+type Entry = { readonly target: Element; readonly isIntersecting: boolean; readonly intersectionRatio: number };
 let native: unknown;
 
-class FakeIntersectionObserver {
-  private readonly slot: { readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean };
-  constructor(callback: (entries: readonly Entry[]) => void) {
-    this.slot = { callback, disconnected: false };
-    observers.push(this.slot);
-  }
-  observe() {}
-  unobserve() {}
-  disconnect() {
-    this.slot.disconnected = true;
-  }
-  takeRecords() {
-    return [];
-  }
-}
+const fakeObservers = createFakeIntersectionObservers();
+const FakeIntersectionObserver = fakeObservers.FakeIntersectionObserver;
 
-const live = () => observers.filter((o) => !o.disconnected);
-const show = (ratio = 1) => act(() => live().forEach((o) => o.callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }])));
+const live = () => fakeObservers.live();
+const show = (ratio = 1) => act(() => fakeObservers.emitAll(ratio));
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let recorded: SocialEvent[] = [];
@@ -83,12 +70,12 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  observers = [];
+  fakeObservers.reset();
   native = (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = FakeIntersectionObserver;
   recorded = [];
   readingTelemetry.record = (event: SocialEvent) => {
-    recorded.push(event);
+    recorded.push(countingProjection(event));
   };
   persisted = [];
   forgotten = 0;
@@ -156,10 +143,12 @@ describe('observeImpression — une impression par APPARITION', () => {
         callback = cb;
       }
       observe() {}
+      unobserve() {}
       disconnect() {}
     };
     let count = 0;
-    const stop = observeImpression(document.createElement('div'), () => { count += 1; }, {
+    const node = document.createElement('div');
+    const stop = observeImpression(node, () => { count += 1; }, {
       Observer,
       setTimer: (run, ms) => {
         expect(ms).toBe(IMPRESSION_DWELL_MS);
@@ -172,7 +161,7 @@ describe('observeImpression — une impression par APPARITION', () => {
       },
     });
     const elapse = () => timers.filter((t) => !t.cleared).forEach((t) => { t.cleared = true; t.run(); });
-    return { emit: (ratio: number) => callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }]), elapse, count: () => count, stop };
+    return { emit: (ratio: number) => callback([{ target: node, isIntersecting: ratio > 0, intersectionRatio: ratio }]), elapse, count: () => count, stop };
   }
 
   test('moins de la moitié visible ne compte pas', () => {
@@ -207,7 +196,7 @@ describe('observeImpression — une impression par APPARITION', () => {
   });
 
   test('sans IntersectionObserver (vieux navigateur), rien n’est observé ni ne lève', () => {
-    expect(() => observeImpression(document.createElement('div'), () => undefined, { Observer: undefined })).not.toThrow();
+    expect(() => observeImpression(document.createElement('div'), () => undefined, { Observer: undefined })()).not.toThrow();
   });
 });
 

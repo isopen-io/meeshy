@@ -1035,8 +1035,8 @@ struct FeedView: View {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
                                 viewModel.prefetchComments(post.id)
-                                trackImpression(postId: post.id)
                             }
+                            .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) { posts.firstIndex { $0.id == post.id } }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
@@ -1301,11 +1301,6 @@ struct FeedView: View {
                     }
                 )
             }
-    }
-    // MARK: - Impression Tracking
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
     }
 }
 

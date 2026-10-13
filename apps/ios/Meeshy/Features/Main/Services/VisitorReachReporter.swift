@@ -23,9 +23,24 @@ protocol VisitorReachReporting: AnyObject {
 /// `UserDefaults`, en clair sur le disque et dans les sauvegardes, alors que
 /// le jeton d'un invité de lien est un credential. Le jeton se relit au moment
 /// d'envoyer ; s'il n'est plus là, l'événement part avec lui.
+///
+/// L'événement est persisté AVEC son enveloppe (#10500) : une file écrite
+/// avant elle se relit (identifiant neuf, heure inconnue) puis se réécrit
+/// aussitôt, et chaque rejeu renvoie le même `eventId`.
 nonisolated struct PendingVisitorEvent: Codable, Equatable {
-    let event: SocialEvent
+    let stamped: StampedSocialEvent
     let identity: String
+
+    var event: SocialEvent { stamped.event }
+
+    init(stamped: StampedSocialEvent, identity: String) {
+        self.stamped = stamped
+        self.identity = identity
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case stamped = "event", identity
+    }
 
     static func identity(of token: String) -> String {
         SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -59,6 +74,7 @@ final class VisitorReachReporter: VisitorReachReporting {
     private let token: @MainActor () -> String
     private let knownTokens: @MainActor () -> [String]
     private let flushDelay: TimeInterval
+    private let clock: @MainActor () -> Date
 
     private var pending: [PendingVisitorEvent]
     private var flushTask: Task<Void, Never>?
@@ -70,13 +86,15 @@ final class VisitorReachReporter: VisitorReachReporting {
         token: @escaping @MainActor () -> String = VisitorReachReporter.liveToken,
         knownTokens: @escaping @MainActor () -> [String] = VisitorReachReporter.liveKnownTokens,
         flushDelay: TimeInterval = 2,
-        reconnects: AnyPublisher<Void, Never> = VisitorReachReporter.liveReconnects
+        reconnects: AnyPublisher<Void, Never> = VisitorReachReporter.liveReconnects,
+        clock: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.postService = postService
         self.defaults = defaults
         self.token = token
         self.knownTokens = knownTokens
         self.flushDelay = flushDelay
+        self.clock = clock
         self.pending = Self.restore(from: defaults)
         reconnects
             .sink { [weak self] _ in Task { @MainActor in await self?.flushNow() } }
@@ -106,6 +124,7 @@ final class VisitorReachReporter: VisitorReachReporting {
             defaults.removeObject(forKey: storageKey)
             return []
         }
+        if let rewritten = try? JSONEncoder().encode(events) { defaults.set(rewritten, forKey: storageKey) }
         return events
     }
 
@@ -121,7 +140,10 @@ final class VisitorReachReporter: VisitorReachReporting {
     func record(_ events: [SocialEvent]) {
         guard !events.isEmpty else { return }
         let identity = PendingVisitorEvent.identity(of: token())
-        pending.append(contentsOf: events.map { PendingVisitorEvent(event: $0, identity: identity) })
+        let now = clock()
+        pending.append(contentsOf: events.map {
+            PendingVisitorEvent(stamped: .stamping($0, at: now), identity: identity)
+        })
         persist()
         scheduleFlush()
     }
@@ -144,7 +166,7 @@ final class VisitorReachReporter: VisitorReachReporting {
                 continue
             }
             do {
-                _ = try await postService.recordSocialEvents(group.map(\.event), credential: .visitor(groupToken))
+                _ = try await postService.recordSocialEvents(group.map(\.stamped), credential: .visitor(groupToken))
             } catch where Self.isPermanentRefusal(error) {
                 Self.logger.debug("visitor reach refused, dropped without replay: \(error.localizedDescription, privacy: .public)")
             } catch {

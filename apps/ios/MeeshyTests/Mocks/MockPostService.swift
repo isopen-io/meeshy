@@ -221,10 +221,18 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// consommée en priorité, une entrée par appel.
     var recordSocialEventsCallCount = 0
     var recordedSocialEventBatches: [[SocialEvent]] = []
+    /// #10500 — les mêmes lots, enveloppes comprises (`eventId`, `occurredAt`).
+    var recordedStampedSocialEventBatches: [[StampedSocialEvent]] = []
     var recordedSocialEventsCredentials: [SocialEventsCredential] = []
     var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
     var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
     var recordedSocialEvents: [SocialEvent] { recordedSocialEventBatches.flatMap { $0 } }
+    /// #10500 — les lots v2, tels que partis sur le fil (corps JSON décodé).
+    var recordedSocialEventsV2Bodies: [[String: Any]] = []
+    var recordSocialEventsV2Result: Result<SocialEventsV2Receipt, Error> = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
+    var recordedSocialEventsV2Types: [String] {
+        recordedSocialEventsV2Bodies.flatMap { ($0["events"] as? [[String: Any]] ?? []).compactMap { $0["type"] as? String } }
+    }
     /// Les impressions reçues par la porte, dans l'ordre.
     var recordedImpressions: [SocialEvent] {
         recordedSocialEvents.filter { if case .impression = $0 { return true } else { return false } }
@@ -239,7 +247,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordedImpressionPostIds: [String] { recordedImpressions.map(\.postId) }
     /// Les sources des impressions reçues, dans l'ordre.
     var recordedImpressionSources: [String] {
-        recordedImpressions.compactMap { if case .impression(_, let source, _) = $0 { return source } else { return nil } }
+        recordedImpressions.compactMap { if case .impression(_, let source, _, _, _) = $0 { return source } else { return nil } }
+    }
+    /// #10501 — les impressions reçues, sans leur contexte de listing ni leur
+    /// visibilité : ce qui est COMPTÉ, quel que soit ce qui le qualifie.
+    var recordedCountedImpressions: [SocialEvent] {
+        recordedImpressions.compactMap {
+            guard case .impression(let postId, let source, let surface, _, _) = $0 else { return nil }
+            return .impression(postId: postId, source: source, surface: surface)
+        }
     }
 
     // MARK: - Protocol Conformance
@@ -672,9 +688,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getCommentsResult.get()
     }
 
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        recordedSocialEventsV2Bodies.append((try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:])
+        return try recordSocialEventsV2Result.get()
+    }
+
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         recordSocialEventsCallCount += 1
-        recordedSocialEventBatches.append(events)
+        recordedSocialEventBatches.append(events.map(\.event))
+        recordedStampedSocialEventBatches.append(events)
         recordedSocialEventsCredentials.append(credential)
         if !recordSocialEventsResultsQueue.isEmpty {
             return try recordSocialEventsResultsQueue.removeFirst().get()
@@ -819,8 +841,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         recordSocialEventsCallCount = 0
         recordedSocialEventBatches = []
+        recordedStampedSocialEventBatches = []
         recordedSocialEventsCredentials = []
         recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
         recordSocialEventsResultsQueue = []
+        recordedSocialEventsV2Bodies = []
+        recordSocialEventsV2Result = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
     }
 }

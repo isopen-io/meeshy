@@ -336,7 +336,8 @@ export type PreferencesView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error' };
 
-export type BooleanPreference = Exclude<keyof AppPreferences, 'theme'>;
+/** `allowAnalytics` est LU (#10502), jamais basculé d'ici : le web n'a pas d'interrupteur « Analytique ». */
+export type BooleanPreference = Exclude<keyof AppPreferences, 'theme' | 'allowAnalytics'>;
 
 type ToggleSpec = {
   readonly key: BooleanPreference;

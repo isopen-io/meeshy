@@ -697,6 +697,7 @@ struct GlobalSearchView: View {
             userResultRow(result)
                 .staggeredAppear(index: index, baseDelay: 0.03)
                 .onTapGesture {
+                    viewModel.noteUserResultTapped(result.id, position: index)
                     handleUserTap(result)
                 }
         }

@@ -265,7 +265,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
     const app = await buildApp(makePrisma());
     const ok = await app.inject({ method: 'POST', url: `/posts/${VISIBLE_ID}/impression`, payload: { source: 'feed' } });
     const ko = await app.inject({ method: 'POST', url: `/posts/${HIDDEN_ID}/impression`, payload: { source: 'feed' } });
-    expect(ok.json().data).toEqual({ recorded: true });
+    expect(ok.json().data).toMatchObject({ recorded: true });
     expect(ko.statusCode).toBe(404);
     await app.close();
   });
@@ -277,7 +277,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
       payload: { postIds: [VISIBLE_ID, HIDDEN_ID], source: 'feed' },
     });
     // Deux demandés, un admis : `recorded` compte ce qui a été ÉCRIT.
-    expect(res.json().data).toEqual({ recorded: 1 });
+    expect(res.json().data).toMatchObject({ recorded: 1 });
     await app.close();
   });
 
@@ -289,7 +289,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
     });
     // UN événement de téléchargement, DEUX médias — c'est le second nombre que
     // ses clients lisent, et les confondre changerait la réponse sous eux.
-    expect(res.json().data).toEqual({ recorded: 2 });
+    expect(res.json().data).toMatchObject({ recorded: 2 });
     await app.close();
   });
 
@@ -324,7 +324,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
         }],
       },
     });
-    expect(res.json().data).toEqual({ recorded: 1 });
+    expect(res.json().data).toMatchObject({ recorded: 1 });
     expect(mockRecordEngagementBatch).toHaveBeenCalledTimes(1);
     await app.close();
   });

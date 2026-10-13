@@ -314,6 +314,10 @@ public struct APIPost: Sendable {
     /// Absent (`nil`) : réponse d'écriture, lecteur sans compte, ancien
     /// serveur — « garde ce que tu sais », jamais zéro (`PostViewerPoints.kept`).
     public var viewerPoints: Int? = nil
+    /// La source de classement de CET élément dans la page qui l'a servi
+    /// (#10501) — recopiée dans `listing.rankingSource` de son impression.
+    /// `nil` sur une route ou un serveur qui ne la sert pas.
+    public var rankingSource: String? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
@@ -331,7 +335,7 @@ extension APIPost: Decodable {
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
         case currentUserReactions, mentions, referenceAccess, viaUsername
-        case trackingLinks, metadata, viewerPoints
+        case trackingLinks, metadata, viewerPoints, rankingSource
     }
 
     /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
@@ -410,6 +414,7 @@ extension APIPost: Decodable {
         referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
         viewerPoints = (try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)).flatMap { $0 >= 0 ? $0 : nil }
+        rankingSource = (try? c.decodeIfPresent(String.self, forKey: .rankingSource)) ?? nil
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
         if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {

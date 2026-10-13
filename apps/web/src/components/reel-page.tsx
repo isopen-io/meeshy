@@ -1,3 +1,4 @@
+import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -24,7 +25,9 @@ import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
 import type { ViewAttribution } from '@/lib/view/content-open';
-import { useReadingSession } from '@/lib/view/reading-telemetry';
+import { readingTelemetry, useReadingSession } from '@/lib/view/reading-telemetry';
+import { interactionOf } from '@/lib/telemetry/card-context';
+import { contentTapOf } from '@/lib/telemetry/content-taps';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -98,6 +101,7 @@ export type ReelPageProps = {
 };
 
 function ReelPlayable({
+  postId,
   media,
   tag,
   mode,
@@ -106,6 +110,7 @@ function ReelPlayable({
   language,
   onSoundBlocked,
 }: {
+  readonly postId: string;
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
   readonly mode: Exclude<ReelPageMode, 'far'>;
@@ -131,6 +136,7 @@ function ReelPlayable({
   useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
   const bar = useRef<HTMLSpanElement | null>(null);
   useFrameProgress({ media: element, playing: status === 'playing', bar });
+  usePlaybackTelemetry({ element, active, target: { kind: 'reel', id: postId }, mediaId: media.id, surface: 'reels' });
 
   return (
     <>
@@ -261,7 +267,7 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
+      <ReelPlayable postId={model.id} media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
     );
   }
   if (stage.kind === 'images') {
@@ -434,10 +440,20 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
     [noteMutes, soundOn, onToggleSound],
   );
   const chromeHidden = props.chromeHidden === true;
+  /* LES TAPS D'IDENTITÉ (#10502) — le même écouteur que la carte du fil. */
+  const postId = model.id;
+  const onTapCapture = useCallback(
+    (event: { readonly target: EventTarget | null }) => {
+      const tap = contentTapOf(event.target);
+      if (tap !== null) readingTelemetry.recordV2(interactionOf(postId, tap));
+    },
+    [postId],
+  );
 
   return (
     <article
       data-reel={model.id}
+      onClickCapture={onTapCapture}
       data-reel-index={index}
       data-reel-mode={mode}
       tabIndex={-1}

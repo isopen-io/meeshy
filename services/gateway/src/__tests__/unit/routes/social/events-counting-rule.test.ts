@@ -101,7 +101,7 @@ describe('Impressions — chaque listage compte, sans fenêtre', () => {
     const h = await reachHarness([{ id: POST }]);
     const res = await sendReach(h.app, [impressionEvent(POST), impressionEvent(POST)], visitorHeader(1));
 
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 2, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 2, rejected: 0 });
     expect(h.store.read(POST)).toMatchObject({ impressionCount: 2, anonymousImpressionCount: 2 });
     await h.app.close();
   });
@@ -150,7 +150,7 @@ describe('Surface — une valeur inconnue est ignorée, le lot passe', () => {
     const res = await sendReach(h.app, [impressionEvent(POST, { surface: 'ailleurs' }), viewEvent(POST, { surface: 'demain' })], account);
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 2, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 2, rejected: 0 });
     expect(h.impressions).toHaveLength(1);
     expect(h.impressions[0].surface ?? null).toBeNull();
     expect(h.postViews[0].surface ?? null).toBeNull();
@@ -174,7 +174,7 @@ describe('Débit — par jeton en événements, plafond élevé par adresse', ()
     const premier = await sendReach(h.app, lot, visitorHeader(1));
     const second = await sendReach(h.app, [impressionEvent(POST)], visitorHeader(1));
 
-    expect(JSON.parse(premier.payload).data).toEqual({ recorded: 60, rejected: 1 });
+    expect(JSON.parse(premier.payload).data).toMatchObject({ recorded: 60, rejected: 1 });
     expect(second.statusCode).toBe(429);
     expect(h.store.read(POST)?.impressionCount).toBe(60);
     await h.app.close();

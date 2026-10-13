@@ -160,7 +160,7 @@ final class ContentOpenReachTests: XCTestCase {
         sut.recordView("r1")
         await sut.flushImpressions()
 
-        XCTAssertEqual(service.recordedImpressions, [.impression(postId: "r1", source: "feed", surface: .reels)])
+        XCTAssertEqual(service.recordedCountedImpressions, [.impression(postId: "r1", source: "feed", surface: .reels)])
     }
 
     // MARK: - Le tap d'un listing : un engagement d'ouverture, aucune vue
@@ -363,7 +363,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertTrue(viewed)
         XCTAssertTrue(service.recordedSocialEventBatches.contains([.open(postId: "r1", origin: .feed)]))
         XCTAssertEqual(views(in: service), [.view(postId: "r1", durationMs: nil, surface: .reels, entry: .listing(.feed))])
-        XCTAssertEqual(service.recordedSocialEvents.filter { $0 == .impression(postId: "r1", source: "feed", surface: .reels) }.count, 1)
+        XCTAssertEqual(service.recordedCountedImpressions.filter { $0 == .impression(postId: "r1", source: "feed", surface: .reels) }.count, 1)
     }
 
     /// Un réel atteint par BALAYAGE : une impression et une vue de plus,
@@ -383,7 +383,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertEqual(Set(views(in: service).map(\.postId)), ["r1", "r2"])
         XCTAssertTrue(views(in: service).contains(.view(postId: "r1", durationMs: nil, surface: .reels, entry: .listing(.profile))))
         XCTAssertTrue(views(in: service).contains(.view(postId: "r2", durationMs: nil, surface: .reels, entry: .listing(.reels))))
-        XCTAssertTrue(service.recordedSocialEvents.contains(.impression(postId: "r2", source: "feed", surface: .reels)))
+        XCTAssertTrue(service.recordedCountedImpressions.contains(.impression(postId: "r2", source: "feed", surface: .reels)))
     }
 
     /// Un réel seulement LISTÉ au profil, sans tap : une impression, rien d'autre.
@@ -492,4 +492,36 @@ private final class ReachTrackedLinkResolver: TrackedLinkResolving, @unchecked S
     }
 
     func recordClick(token: String) async {}
+}
+
+/// #10500 — un `open` gardé par une panne repart avec l'enveloppe posée au
+/// TAP : même `eventId`, même heure.
+extension ContentOpenReachTests {
+
+    func test_openKeptByANetworkFailure_isResentWithTheSameEnvelope() async {
+        let service = MockPostService()
+        service.recordSocialEventsResultsQueue = [.failure(MeeshyError.network(.noConnection))]
+        let clock = StampClock(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let sut = ContentOpenReporter(
+            entries: DetailOpenSources(), postService: service, visitor: MockVisitorReachReporter(),
+            accountId: { "u1" }, flushDelay: 60, clock: { clock.now }
+        )
+
+        sut.open("p1", from: .feed)
+        clock.now = Date(timeIntervalSince1970: 1_700_000_300)
+        await sut.flushNow()
+        await sut.flushNow()
+
+        let attempts = service.recordedStampedSocialEventBatches.map { $0.map(\.stamp) }
+        XCTAssertEqual(attempts.count, 2)
+        XCTAssertEqual(attempts[1], attempts[0], "La tentative 2 renvoie le même eventId.")
+        XCTAssertEqual(attempts[0].first?.occurredAt, Date(timeIntervalSince1970: 1_700_000_000), "Daté du tap, pas de l'envoi.")
+    }
+}
+
+@MainActor
+private final class StampClock {
+    nonisolated deinit {}
+    var now: Date
+    init(now: Date) { self.now = now }
 }

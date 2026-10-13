@@ -29,7 +29,9 @@ struct HashtagResultsView: View {
                                 Task { await viewModel.loadMore() }
                             }
                         }
-                        .countsImpression(of: post.id) { viewModel.recordImpression($0) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: viewModel.impressions) {
+                            viewModel.position(of: post.id)
+                        }
                 }
                 if viewModel.isLoading {
                     ProgressView()
@@ -45,6 +47,8 @@ struct HashtagResultsView: View {
         }
         .navigationTitle("#\(viewModel.tag)")
         .task { await viewModel.load() }
+        .onAppear { SocialEventsV2Reporter.shared.emit(DiscoveryTelemetry.visit(.hashtagVisit, target: .hashtag(viewModel.tag), surface: SocialSurface(.hashtag))) }
+        .tracksOutboundLinks(surface: SocialSurface(.hashtag))
         .onDisappear { Task { await viewModel.flushImpressions() } }
     }
 }

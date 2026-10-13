@@ -7,6 +7,10 @@ import { eraseAddressBookOf } from './ContactDirectoryService';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
 import { eraseSharedTranslationsOfAccount } from './messaging/sharedTranslationErasure';
 import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
+import {
+  eraseReadingTelemetryOf,
+  type ReadingTelemetryErasure,
+} from './social/readingTelemetryErasure';
 import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
@@ -24,6 +28,8 @@ export type AccountPurgeSummary = {
   readonly sharedTranslationsDeleted: number;
   readonly game: GamePurgeSummary;
   readonly packs: PackPurgeSummary;
+  /** Ce que le compte a vu, lu, ouvert, fait défiler ou capturé (#10499, O6). */
+  readonly readingTelemetry: ReadingTelemetryErasure;
 };
 
 export type AccountPurgeOptions = {
@@ -83,7 +89,7 @@ export async function purgeAccountIsolatedData(
   userId: string,
   options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs] =
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry] =
     await Promise.all([
       prisma.userSession.deleteMany({ where: { userId } }),
       prisma.userVoiceModel.deleteMany({ where: { userId } }),
@@ -108,6 +114,7 @@ export async function purgeAccountIsolatedData(
       eraseSharedTranslationsOfAccount(prisma, userId),
       purgeGameData(prisma, userId),
       purgePackData(prisma, userId, { files: options.packFiles }),
+      eraseReadingTelemetryOf(prisma, userId),
     ]);
 
   const summary: AccountPurgeSummary = {
@@ -121,6 +128,7 @@ export async function purgeAccountIsolatedData(
     sharedTranslationsDeleted: sharedTranslations,
     game,
     packs,
+    readingTelemetry,
   };
 
   logger.info(
@@ -130,7 +138,9 @@ export async function purgeAccountIsolatedData(
       `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
       `gameDuos=${summary.game.duosDeleted} ` +
       `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
-      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted}`
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} ` +
+      `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
   );
 
   return summary;

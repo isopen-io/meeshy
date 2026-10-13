@@ -27,7 +27,17 @@ struct OutboxDispatcher: OutboxDispatching {
         return d
     }()
 
+    /// #10502 — une mutation ENVOYÉE qui est une interaction avec un contenu
+    /// (réaction, repost, commentaire, blocage) s'émet en événement v2, daté
+    /// de son enfilement. Un échec ne s'émet pas : le rejeu le fera.
     func dispatch(_ record: OutboxRecord) async throws {
+        try await route(record)
+        if let event = SocialInteractionEvents.event(forDelivered: record) {
+            SocialEventsV2Hub.shared.emit(event)
+        }
+    }
+
+    private func route(_ record: OutboxRecord) async throws {
         switch record.kind {
         case .sendMessage:
             try await dispatchSendMessage(record)
@@ -299,11 +309,21 @@ struct OutboxDispatcher: OutboxDispatching {
     /// effets côté passerelle (l'alias délègue au même cœur). Une story
     /// supprimée/expirée n'est plus un 404 mais un événement `rejected` : la
     /// ligne sort de la file dans les deux cas.
+    /// #10500 — la vue rejouée par la file garde l'identité de sa ligne
+    /// (`clientMutationId`) et l'heure de sa mise en file : une ligne
+    /// renvoyée après une réponse perdue n'est pas recomptée.
+    nonisolated static func storyView(_ payload: MarkStoryViewedPayload, queuedAt: Date) -> StampedSocialEvent {
+        StampedSocialEvent(
+            event: .view(postId: payload.storyId, durationMs: nil, surface: .story, entry: payload.entry),
+            stamp: SocialEventStamp(eventId: SocialEventStamp.stableEventId(from: payload.clientMutationId), occurredAt: queuedAt)
+        )
+    }
+
     private func dispatchMarkStoryViewed(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
         do {
             _ = try await PostService.shared.recordSocialEvents(
-                [.view(postId: payload.storyId, durationMs: nil, surface: .story, entry: payload.entry)],
+                [Self.storyView(payload, queuedAt: record.createdAt)],
                 credential: .account
             )
             logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")

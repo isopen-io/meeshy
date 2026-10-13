@@ -155,7 +155,9 @@ struct BookmarksView: View {
                         // comme n'importe quelle autre surface : leur apparition
                         // compte une impression. Elle était la dernière vue de
                         // contenu à ne rien remonter.
-                        .onAppear { trackImpression(postId: post.id) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            visiblePosts.firstIndex { $0.id == post.id }
+                        }
                     }
 
                     if viewModel.isLoading {
@@ -187,10 +189,6 @@ struct BookmarksView: View {
         .pickerStyle(.segmented)
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityLabel(String(localized: "bookmarks.filter.a11y", defaultValue: "Filtrer les favoris", bundle: .main))
-    }
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
     }
 
     /// Un réel s'ouvre dans le lecteur immersif, amorcé avec les SEULS réels

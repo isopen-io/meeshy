@@ -332,6 +332,7 @@ final class GlobalSearchViewModel: ObservableObject {
         userResults = users.items
         messageResults = msgs.items
         resultsQuery = query
+        noteSearchSubmitted(query: query, peopleCount: users.items.count)
 
         let failure = convs.failure ?? users.failure ?? msgs.failure
         remoteFailure = failure
@@ -352,6 +353,21 @@ final class GlobalSearchViewModel: ObservableObject {
     /// Rejoue la dernière requête lancée. C'est ce que fait le bouton
     /// « Réessayer » des états hors-ligne et d'erreur — un contrôle qui
     /// n'aurait pas d'effet ne serait pas un contrôle.
+    /// #10505 — une recherche de personnes : UN identifiant par requête
+    /// servie, qui relie la soumission au résultat touché. Le texte ne part pas.
+    private(set) var searchId: String?
+
+    private func noteSearchSubmitted(query: String, peopleCount: Int) {
+        let id = UUID().uuidString.lowercased()
+        searchId = id
+        guard let event = DiscoveryTelemetry.searchSubmitted(searchId: id, query: query, peopleCount: peopleCount) else { return }
+        SocialEventsV2Reporter.shared.emit(event)
+    }
+
+    func noteUserResultTapped(_ userId: String, position: Int) {
+        SocialEventsV2Reporter.shared.emit(DiscoveryTelemetry.profileResultTapped(searchId: searchId, userId: userId, position: position))
+    }
+
     func retryLastSearch() async {
         let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { return }

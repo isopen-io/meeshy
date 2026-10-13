@@ -680,7 +680,7 @@ struct ThemedFeedOverlay: View {
                     },
                     coordinateSpaceName: "feedScroll",
                     onScrollOffsetChange: { offset in
-                        scrollRelay.offset = offset
+                        scrollRelay.relayFeedOffset(offset)
                     },
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
@@ -760,7 +760,9 @@ struct ThemedFeedOverlay: View {
                             viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
                         }
-                        .countsImpression(of: post.id) { impressions.record($0) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            viewModel.posts.firstIndex { $0.id == post.id }
+                        }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
@@ -791,6 +793,7 @@ struct ThemedFeedOverlay: View {
                 feedHeader(scrollOffset: offset)
             }
         }
+        .tracksOutboundLinks(surface: SocialSurface(.feed))
         // Drapeau `Router.pendingOpenFeedComposer` (accès rapide « Publier un
         // post », 2026-08-21) : consommé à l'apparition ET quand il se lève
         // pendant que le flux est déjà là.
@@ -880,6 +883,7 @@ struct ThemedFeedOverlay: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             Task { await impressions.flushNow() }
+            ListingScrollTracker.feed.finish()
         }
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external

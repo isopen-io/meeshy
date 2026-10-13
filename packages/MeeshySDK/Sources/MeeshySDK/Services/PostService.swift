@@ -187,8 +187,12 @@ public protocol PostServiceProviding: Sendable {
     ///
     /// Requirement SÉPARÉE avec défaut ci-dessous : un double de test qui ne la
     /// surcharge pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir
-    /// compté.
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
+    /// compté. Chaque événement porte son enveloppe (#10500) ; la forme sans
+    /// enveloppe (`[SocialEvent]`) est une commodité qui l'appose à l'appel.
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
+    /// `POST /social/events` pour un lot v2 DÉJÀ encodé (`SocialEventsV2Wire
+    /// .body`) — jamais mêlé à un comptage (#10500). Défaut ci-dessous.
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt
     /// `POST /posts/from-attachment` — publie une pièce jointe DÉJÀ reçue en
     /// conversation, sans la retélécharger ni la réenvoyer : le fichier est
     /// déjà sur le stockage, le serveur le duplique côté post.
@@ -206,8 +210,20 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
-    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+    func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
+    }
+
+    /// Un envoi IMMÉDIAT, sans file : l'événement naît à l'appel, son
+    /// enveloppe aussi. Toute file qui peut rejouer garde la sienne et passe
+    /// par la requirement.
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        let now = Date()
+        return try await recordSocialEvents(events.map { StampedSocialEvent.stamping($0, at: now) }, credential: credential)
+    }
+
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        throw APIError.serverError(501, "recordSocialEventsV2 not implemented by \(Self.self)")
     }
 
     /// Défaut : un conformeur qui ne publie pas depuis une pièce jointe (tous
@@ -381,18 +397,37 @@ public extension PostServiceProviding {
 
 public final class PostService: PostServiceProviding, @unchecked Sendable {
     public static let shared = PostService()
-    private let api: APIClientProviding
+    let api: APIClientProviding
+    /// #10502 — les interactions RÉUSSIES par appel direct (réels, profil,
+    /// favoris, hashtag) ; la file durable émet les siennes à l'envoi.
+    private let socialEvents: SocialEventsV2Hub
+    /// L'heure de l'appareil au départ d'un lot de comptage (`context.sentAt`).
+    let clock: @Sendable () -> Date
+    /// #10501 — de quelle page vient chaque élément d'un listing.
+    let listings: ListingContextProviding
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(
+        api: APIClientProviding = APIClient.shared,
+        socialEvents: SocialEventsV2Hub = .shared,
+        clock: @escaping @Sendable () -> Date = { Date() },
+        listings: ListingContextProviding = ListingContextLedger.shared
+    ) {
         self.api = api
+        self.socialEvents = socialEvents
+        self.clock = clock
+        self.listings = listings
+    }
+
+    private func emitInteraction(_ action: SocialInteraction.Action, postId: String, destination: SocialInteraction.ShareDestination? = nil) {
+        socialEvents.emit(SocialInteractionEvents.interaction(action, on: SocialTarget(kind: .post, id: postId), destination: destination))
     }
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.feed, cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.feed, cursor: cursor, limit: limit), on: .feed)
     }
 
     public func getPostsByHashtag(tag: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.hashtagByTag(tag: tag), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.hashtagByTag(tag: tag), cursor: cursor, limit: limit), on: .hashtag)
     }
 
     public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
@@ -406,7 +441,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
         if let seedReelId { queryItems.append(URLQueryItem(name: "seed", value: seedReelId)) }
-        return try await api.request(PostsEndpoint.feedReels, queryItems: queryItems)
+        return listed(try await api.request(PostsEndpoint.feedReels, queryItems: queryItems), on: .reels)
     }
 
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
@@ -476,14 +511,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func like(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: postId), method: "POST")
+        emitInteraction(.react, postId: postId)
     }
 
     public func unlike(postId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdLike(postId: postId))
+        emitInteraction(.unreact, postId: postId)
     }
 
     public func bookmark(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
+        emitInteraction(.save, postId: postId)
     }
 
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
@@ -687,6 +725,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             method: "POST",
             body: bodyData
         )
+        emitInteraction(.share, postId: postId, destination: SocialInteractionEvents.shareDestination(platform: platform))
         return response.data
     }
 
@@ -713,11 +752,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func getBookmarks(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.bookmarks, cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.bookmarks, cursor: cursor, limit: limit), on: .bookmarks)
     }
 
     public func removeBookmark(postId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdBookmark(postId: postId))
+        emitInteraction(.unsave, postId: postId)
     }
 
     public func getPost(postId: String) async throws -> APIPost {
@@ -927,40 +967,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     // MARK: - Feed Variants
 
     public func getUserPosts(userId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.userByUserId(userId: userId), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.userByUserId(userId: userId), cursor: cursor, limit: limit), on: .profile)
     }
 
     public func getCommunityPosts(communityId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.communityByCommunityId(communityId: communityId), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.communityByCommunityId(communityId: communityId), cursor: cursor, limit: limit), on: .community)
     }
 
     // MARK: - Comment Replies
 
     public func getCommentReplies(postId: String, commentId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPostComment]> {
         try await api.paginatedRequest(PostsEndpoint.byPostIdCommentsByCommentIdReplies(postId: postId, commentId: commentId), cursor: cursor, limit: limit)
-    }
-
-    // MARK: - Reach Tracking
-
-    /// `POST /social/events` est la SEULE porte par laquelle iOS compte ce qu'il
-    /// affiche (#10483) : vues, impressions, engagements d'ouverture et sessions
-    /// de consommation (`dwell`). Les anciennes routes (`/posts/:id/view`,
-    /// `/impression`, `/impressions/batch`, `/engagement/batch`) restent montées
-    /// pour les versions publiées ; aucune source neuve ne les appelle
-    /// (`LegacyReachRoutesGuardTests`).
-    ///
-    /// Un lot vide ne part pas : il n'y a rien à compter.
-    public func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
-        guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
-        let body = try SocialEventsBody.encoded(events)
-        let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
-            SocialEndpoint.events,
-            method: "POST",
-            body: body,
-            queryItems: nil,
-            headers: credential.headers
-        )
-        return response.data
     }
 }
 

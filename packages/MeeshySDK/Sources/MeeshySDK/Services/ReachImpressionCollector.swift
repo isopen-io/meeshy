@@ -6,6 +6,25 @@ import Foundation
 public protocol ReachImpressionRecording: AnyObject {
     @MainActor func record(_ postId: String)
     @MainActor func flushNow() async
+    /// #10501 — l'affichage d'une carte DANS un listing, à son rang rendu.
+    /// Rend l'`eventId` de l'impression, que la mesure de visibilité de la
+    /// carte rappelle ; `nil` quand la surface ne mesure pas.
+    @MainActor func recordListed(_ postId: String, position: Int?, isVideo: Bool) -> String?
+    /// La part visible de la carte a changé (0 = hors écran).
+    @MainActor func noteVisible(fraction: Double, of eventId: String)
+    /// La carte a quitté l'écran : sa mesure se clôt.
+    @MainActor func noteGone(_ eventId: String)
+}
+
+public extension ReachImpressionRecording {
+    /// Défaut : une surface qui ne mesure pas la visibilité compte
+    /// l'impression, et rien d'autre.
+    @MainActor func recordListed(_ postId: String, position: Int?, isVideo: Bool) -> String? {
+        record(postId)
+        return nil
+    }
+    @MainActor func noteVisible(fraction: Double, of eventId: String) {}
+    @MainActor func noteGone(_ eventId: String) {}
 }
 
 /// Le collecteur minimal d'une surface du SDK : les affichages s'accumulent
@@ -19,26 +38,31 @@ public final class ReachImpressionCollector: ReachImpressionRecording {
     private let source: String
     private let surface: ReachSurface
     private let postService: PostServiceProviding
-    private var pending: [String] = []
+    private let clock: @MainActor () -> Date
+    /// Chaque affichage garde l'heure où il a eu lieu, pas celle du départ.
+    private var pending: [StampedSocialEvent] = []
 
-    public init(source: String, surface: ReachSurface, postService: PostServiceProviding = PostService.shared) {
+    public init(
+        source: String,
+        surface: ReachSurface,
+        postService: PostServiceProviding = PostService.shared,
+        clock: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.source = source
         self.surface = surface
         self.postService = postService
+        self.clock = clock
     }
 
     public func record(_ postId: String) {
         guard !postId.isEmpty else { return }
-        pending.append(postId)
+        pending.append(.stamping(.impression(postId: postId, source: source, surface: surface), at: clock()))
     }
 
     public func flushNow() async {
         let batch = pending
         guard !batch.isEmpty else { return }
         pending.removeAll()
-        _ = try? await postService.recordSocialEvents(
-            batch.map { SocialEvent.impression(postId: $0, source: source, surface: surface) },
-            credential: .account
-        )
+        _ = try? await postService.recordSocialEvents(batch, credential: .account)
     }
 }

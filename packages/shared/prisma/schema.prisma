@@ -390,6 +390,14 @@ model User {
   /// substitut. `PUT /me/consents/analytics` pose cette colonne.
   analyticsConsentAt DateTime?
 
+  /// Le REFUS d'analyse (#10499) : posé quand l'analyse ou son parent (le
+  /// traitement des données) est RETIRÉ par `PUT /me/consents`, effacé quand
+  /// l'analyse est de nouveau accordée. `analyticsConsentAt` absent ne dit pas
+  /// « refusé » (un compte neuf n'a rien tranché) ; cette date le dit. Un
+  /// compte qui a refusé ne laisse aucune ligne `ContentEvent`
+  /// (`services/gateway/src/services/social/eventPrivacy.ts`).
+  analyticsConsentWithdrawnAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.
@@ -4283,13 +4291,85 @@ model PostImpression {
   surface   String?
   createdAt DateTime @default(now())
 
+  /// Événements sociaux v2 (#10500, #10501) — tous FACULTATIFS : une ligne
+  /// d'un ancien client n'en porte aucun.
+  /// Clé HMAC de l'`eventId` du client (jamais l'identifiant brut) : un rejeu
+  /// ne crée pas de seconde ligne. Index unique PARTIEL (chaîne seulement),
+  /// posé par `ensureSocialEventIndexes` — jamais par `prisma db push`.
+  eventKey        String?
+  /// Rang rendu dans le listing (0-indexé) et source de classement servie.
+  position        Int?
+  rankingSource   String?
+  /// Identifiant opaque de la page de fil — rangé seulement si l'analyse est consentie.
+  feedRequestId   String?
+  /// Visibilité MRC : ≥ 50 % pendant ≥ 1 s (2 s pour une vidéo en lecture).
+  viewable        Boolean?
+  visibleFraction Float?
+  visibleMs       Int?
+  /// Session d'application — rangée seulement si l'analyse est consentie.
+  appSessionId    String?
+  platform        String?
+  /// Fin de conservation (90 j, index TTL `PostImpression_expiresAt_ttl`).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
+
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostImpressions", fields: [userId], references: [id])
+  user User @relation("UserPostImpressions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([userId])
   @@index([postId, userId])
   @@index([createdAt])
+}
+
+/// Un événement de télémétrie v2 (#10499, #10510) — append-only, borné par TTL.
+///
+/// Écrit en UN `insert` non ordonné par requête (`services/social/contentEvents.ts`),
+/// jamais par Prisma : les index (unique partiel de `eventKey`, TTL de
+/// `expiresAt`) sont posés par `ensureSocialEventIndexes`, à chaque démarrage
+/// et par la migration nommée — jamais par `prisma db push`.
+///
+/// `actorKind = none` : rangé SANS compte (analyse non consentie, refusée,
+/// lecteur anonyme, ou action qui ne s'attribue jamais) — aucun identifiant
+/// de session ni de requête n'y est alors rangé (revue de conformité O1).
+model ContentEvent {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  eventKey     String?
+  type         String
+  action       String
+  /// AAAAMMJJ UTC de `derivedAt` — la partition des agrégats quotidiens.
+  day          Int
+  derivedAt    DateTime
+  occurredAt   DateTime?
+  receivedAt   DateTime
+  clockSkewed  Boolean?
+  actorKind    String
+  userId       String?   @db.ObjectId
+  appSessionId String?
+  platform     String?
+  appVersion   String?
+  osName       String?
+  osVersion    String?
+  deviceClass  String?
+  network      String?
+  uiLanguage   String?
+  targetKind   String?
+  targetId     String?
+  parentKind   String?
+  parentId     String?
+  surface      String?
+  listing      Json?
+  prism        Json?
+  props        Json?
+  sampleRate   Float     @default(1)
+  expiresAt    DateTime
+
+  /// `ContentEvent_user_day` (partiel sur `userId`), l'unique partiel de
+  /// `eventKey` et le TTL de `expiresAt` ne se déclarent pas en Prisma :
+  /// `services/gateway/src/services/social/socialEventIndexes.ts` les pose.
+  @@index([targetKind, targetId, day], map: "ContentEvent_target_day")
+  @@index([type, action, day], map: "ContentEvent_type_action_day")
 }
 
 /// Session d'engagement append-only (temps + actions). N'altère NI PostView NI viewCount.
@@ -4311,6 +4391,10 @@ model PostEngagement {
   actions         Json     @default("[]")
   watchSamples    Json     @default("[]")
   createdAt       DateTime @default(now())
+  /// Fin de conservation (90 j, index TTL `PostEngagement_expiresAt_ttl`, #10510).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostEngagements", fields: [userId], references: [id])

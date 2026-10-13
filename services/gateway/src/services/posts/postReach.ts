@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { POST_ENGAGEMENT_RETENTION_MS } from '../social/contentEvents';
 import { NOT_DELETED } from './postIncludes';
 import { creditPostView } from './postViewCredit';
 import type { ViewContext } from './viewProvenance';
@@ -239,7 +240,8 @@ export async function recordEngagementBatch(
       await prisma.postEngagement.upsert({
         where: { sessionId: s.sessionId },
         update: data,
-        create: { sessionId: s.sessionId, ...data },
+        // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
+        create: { sessionId: s.sessionId, ...data, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
       });
 
       if (isInsert) {

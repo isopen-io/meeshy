@@ -1,0 +1,50 @@
+/**
+ * Le RETRAIT du consentement d'analyse (#10499, revue de conformité O4 —
+ * RGPD art. 7(3)) détache le compte de son comportement DÉJÀ rangé.
+ *
+ *  - `ContentEvent` : `actorKind` repasse à `none`, `userId` et tout ce qui
+ *    relie des événements entre eux disparaissent (session d'application,
+ *    page de fil, session de listing, recherche) ; l'OS retombe à sa version
+ *    majeure et le réseau à son type — la forme d'une ligne jamais consentie ;
+ *  - `PostImpression` : la ligne garde son compte (elle est de la MESURE, et
+ *    la suppression du compte l'efface), mais perd sa session et sa page.
+ *
+ * Idempotent (rejoué, il ne trouve plus rien à détacher) : deux commandes,
+ * quel que soit le volume.
+ */
+type RawCommandRunner = { $runCommandRaw(command: Record<string, unknown>): Promise<unknown> };
+
+const firstPart = (field: string, separator: string) => ({
+  $cond: [
+    { $eq: [{ $type: `$${field}` }, 'string'] },
+    { $arrayElemAt: [{ $split: [`$${field}`, separator] }, 0] },
+    '$$REMOVE',
+  ],
+});
+
+export async function detachBehaviourOf(prisma: RawCommandRunner, userId: string): Promise<void> {
+  await prisma.$runCommandRaw({
+    update: 'ContentEvent',
+    updates: [{
+      q: { userId: { $oid: userId } },
+      u: [
+        { $set: { actorKind: 'none', osVersion: firstPart('osVersion', '.'), network: firstPart('network', '/') } },
+        {
+          $unset: [
+            'userId', 'appSessionId', 'deviceClass',
+            'listing.feedRequestId', 'listing.listingSessionId',
+            'props.searchNonce', 'props.queryFingerprint',
+          ],
+        },
+      ],
+      multi: true,
+    }],
+  });
+  await prisma.$runCommandRaw({
+    update: 'PostImpression',
+    updates: [{ q: { userId: { $oid: userId } }, u: { $unset: { appSessionId: '', feedRequestId: '' } }, multi: true }],
+  });
+}
+
+/** Les retraits qui coupent l'analyse : la sienne, et celle de son parent. */
+export const WITHDRAWALS_THAT_DETACH: ReadonlySet<string> = new Set(['analytics', 'data-processing']);

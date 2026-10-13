@@ -50,6 +50,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
             ProtectedContentSnapshotVeil.shared.install()
             ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
+            SocialEventsV2Reporter.installHub() // #10499 — les événements v2 émis par le SDK rejoignent la file de l'app
             DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
@@ -665,6 +666,10 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
         Task { @MainActor in
             PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+            // #10507 — « affichée » au premier plan.
+            if let displayed = SocialNotificationEvents.event(.displayed, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(displayed)
+            }
 
             // Trigger real-time sync for foreground notifications so the DB
             // and cache stay fresh even when the socket is lagging or the
@@ -743,6 +748,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         logger.info("Notification response: action=\(actionIdentifier)")
 
         Task { @MainActor in
+            // #10507 — « ouverte », ou « écartée » sur une catégorie qui le déclare.
+            let action: SocialNotificationEvent.Action = actionIdentifier == UNNotificationDismissActionIdentifier ? .dismissed : .opened
+            if let event = SocialNotificationEvents.event(action, userInfo: userInfo) {
+                SocialEventsV2Reporter.shared.emit(event)
+            }
             await NotificationActionHandler.shared.handle(
                 actionIdentifier: actionIdentifier,
                 userInfo: userInfo,

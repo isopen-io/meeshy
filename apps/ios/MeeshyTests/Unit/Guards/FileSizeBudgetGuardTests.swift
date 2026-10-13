@@ -603,7 +603,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // vue derrière `PostViewThrottle` (retiré), la destination ouverte la compte. Il
     // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
     // pesait à la sortie.
-    private static let legacyLineCeiling = 34_373
+    //
+    // #10506 — 34 373 → 34 302 (−71). La navigation du lecteur de story
+    // (`goToNext`, `goToPrevious`, `dismissViewer`) sort de
+    // `StoryViewerView+Content.swift` vers `StoryViewerView+Navigation.swift`
+    // AVANT d'y recevoir la télémétrie de lecture : extraire d'abord, ajouter
+    // ensuite. Le plafond reprend exactement le mou que l'extraction ouvre.
+    private static let legacyLineCeiling = 34_302
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

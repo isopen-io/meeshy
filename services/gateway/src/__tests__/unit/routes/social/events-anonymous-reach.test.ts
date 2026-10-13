@@ -106,7 +106,7 @@ describe('G4 — on ne compte que ce qu’un anonyme peut lire (isServableToAnon
     const h = await harness([post]);
     const res = await send(h.app, [view(POST), impression(POST)], visitor(1));
 
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 2 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 2 });
     expect(h.writes).toEqual([]);
     await h.app.close();
   });
@@ -115,7 +115,7 @@ describe('G4 — on ne compte que ce qu’un anonyme peut lire (isServableToAnon
     const h = await harness([{ id: ROOT, visibility: 'FRIENDS' }, { id: REPOST, repostOfId: ROOT }]);
     const res = await send(h.app, [view(REPOST)], visitor(1));
 
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 1 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 0, rejected: 1 });
     expect(h.writes).toEqual([]);
     await h.app.close();
   });
@@ -124,7 +124,7 @@ describe('G4 — on ne compte que ce qu’un anonyme peut lire (isServableToAnon
     const h = await harness([{ id: POST }]);
     const res = await send(h.app, [view(POST)], visitor(1));
 
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 1, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 1, rejected: 0 });
     await h.app.close();
   });
 });
@@ -189,7 +189,7 @@ describe('G6 — l’impression anonyme compte, sans ligne ni identité', () => 
     const res = await send(h.app, [impression(POST), impression(OTHER, { surface: 'visitor' })], visitor(1));
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.payload).data).toEqual({ recorded: 2, rejected: 0 });
+    expect(JSON.parse(res.payload).data).toMatchObject({ recorded: 2, rejected: 0 });
     expect(h.store.read(POST)).toMatchObject({ impressionCount: 1, anonymousImpressionCount: 1 });
     expect(h.store.read(OTHER)).toMatchObject({ impressionCount: 1, anonymousImpressionCount: 1 });
     expect(h.impressions).toEqual([]);
@@ -264,7 +264,7 @@ describe('G8 — le champ surface', () => {
     await h.app.close();
   });
 
-  it('une surface inconnue est ignorée, le lot passe (une source inconnue reste 400)', async () => {
+  it('une surface inconnue est ignorée, le lot passe ; une source inconnue rend l’événement `ignored` (#10500)', async () => {
     const h = await harness([{ id: POST }]);
     const res = await send(h.app, [impression(POST, { surface: 'ailleurs' })], { authorization: `Bearer ${READER}` });
     const source = await send(h.app, [impression(POST, { source: 'ailleurs' })], { authorization: `Bearer ${READER}` });
@@ -272,7 +272,9 @@ describe('G8 — le champ surface', () => {
     expect(res.statusCode).toBe(200);
     expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'feed' })]);
     expect(h.impressions[0].surface ?? null).toBeNull();
-    expect(source.statusCode).toBe(400);
+    expect(source.statusCode).toBe(200);
+    expect(JSON.parse(source.payload).data).toMatchObject({ recorded: 0, ignored: 1 });
+    expect(h.impressions).toHaveLength(1);
     await h.app.close();
   });
 

@@ -87,6 +87,17 @@ describe('PostService.recordEngagementBatch — ingestion', () => {
     });
   });
 
+  it('une session de lecture a une durée de conservation : 90 jours (revue de conformité O7, #10510)', async () => {
+    const before = Date.now();
+    await service.recordEngagementBatch([mkSession()], 'u1');
+    const expiresAt = upsertArg().create.expiresAt as Date;
+
+    expect(expiresAt).toBeInstanceOf(Date);
+    expect(Math.round((expiresAt.getTime() - before) / 86_400_000)).toBe(90);
+    // Une mise à jour (rejeu d'un ACK perdu) ne prolonge pas la conservation.
+    expect(upsertArg().update.expiresAt).toBeUndefined();
+  });
+
   it('persists the route userId, never the client-supplied userId', async () => {
     await service.recordEngagementBatch([mkSession({ userId: 'spoofed' })], 'u1');
     const arg = upsertArg();

@@ -160,6 +160,34 @@ createRoot(root).render(
   </StrictMode>,
 );
 
+/**
+ * LE CONSENTEMENT D'ANALYSE QUE LA TÉLÉMÉTRIE DÉCLARE (#10502) — la bascule
+ * « Analytique » des réglages et le consentement que la passerelle a
+ * enregistré, relus à chaque connexion, changement de compte et écriture du
+ * cache ; déconnecté ⇒ `unknown`, sans aucune requête. Hors du premier rendu :
+ * le contexte de lot n'est lu qu'à l'envoi d'un lot.
+ */
+void Promise.all([
+  import('@/lib/telemetry/analytics-consent'),
+  import('@/lib/view/telemetry-context'),
+  import('@/lib/api/app-preferences'),
+  import('@/lib/api/consents'),
+]).then(([{ refreshAnalyticsConsentSources, syncAnalyticsConsent }, { noteAnalyticsConsent }, { appPreferencesQueryOptions }, { consentsQueryOptions }]) =>
+  syncAnalyticsConsent({
+    sessionStore,
+    queryClient: appQueryClient,
+    note: noteAnalyticsConsent,
+    refresh: () => {
+      if (apiDeps.source !== 'gateway') return;
+      refreshAnalyticsConsentSources({
+        queryClient: appQueryClient,
+        preferences: appPreferencesQueryOptions(apiDeps),
+        consents: consentsQueryOptions(apiDeps),
+      });
+    },
+  }),
+);
+
 /* Le clavier virtuel posé sur `<html>` (#10005) : Safari iOS le fait
    RECOUVRIR la page, `h-app` le retire des écrans d'application. Aucun clavier
    ne s'ouvre avant la première peinture : `import()` le tient hors d'elle. */
@@ -331,4 +359,66 @@ if (__SHELL__) {
   };
   if (document.readyState === 'complete') guetter();
   else window.addEventListener('load', guetter, { once: true });
+}
+
+/**
+ * LA CAPTURE D'UN CONTENU (#10508) — dans la coque seulement : un navigateur
+ * ne détecte aucune capture. L'écoute se charge après la première peinture ;
+ * elle déclare à la télémétrie ce que la coque détecte réellement, puis émet
+ * `screen_capture` avec ce qui était à l'écran — jamais l'image.
+ */
+if (__SHELL__) {
+  const ecouterCaptures = (): void => {
+    void Promise.all([
+      import('@/lib/telemetry/content-capture'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/view/viewability'),
+      import('@/lib/view/telemetry-context'),
+      import('@/lib/native-shell'),
+    ]).then(([{ startContentCaptureReports, captureSurfaceOf }, { readingTelemetry }, { visibleTargets }, { noteCaptureDetection }, { coqueCourante }]) =>
+      startContentCaptureReports({
+        coque: coqueCourante(),
+        record: (event) => readingTelemetry.recordV2(event),
+        collect: () => ({ surface: captureSurfaceOf(window.location.pathname), visibleTargets: visibleTargets() }),
+        now: () => Date.now(),
+        onDetection: noteCaptureDetection,
+      }),
+    );
+  };
+  if (document.readyState === 'complete') ecouterCaptures();
+  else window.addEventListener('load', ecouterCaptures, { once: true });
+}
+
+/**
+ * LE CLIC D'UN LIEN DANS UN CONTENU (#10505) — une écoute déléguée unique,
+ * posée après la première peinture : le domaine enregistrable seul, jamais
+ * l'adresse, et aucune adresse décorée.
+ */
+{
+  const ecouterLiens = (): void => {
+    void Promise.all([import('@/lib/telemetry/link-clicks'), import('@/lib/view/reading-telemetry'), import('@/lib/links/public-origin')]).then(
+      ([{ bindLinkClicks }, { readingTelemetry }, { publicWebOrigin }]) =>
+        bindLinkClicks(document, (event) => readingTelemetry.recordV2(event), () => ({
+          ownOrigins: [window.location.origin, publicWebOrigin(window.location.origin)],
+          pathname: window.location.pathname,
+        })),
+    );
+  };
+  if (document.readyState === 'complete') ecouterLiens();
+  else window.addEventListener('load', ecouterLiens, { once: true });
+}
+
+/**
+ * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
+ * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement.
+ */
+{
+  const viderNotifications = (): void => {
+    void Promise.all([import('@/lib/notifications/notification-telemetry'), import('@/lib/view/reading-telemetry')]).then(
+      ([{ drainNotificationTelemetry }, { readingTelemetry }]) =>
+        drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, (event) => readingTelemetry.recordV2(event)),
+    );
+  };
+  if (document.readyState === 'complete') viderNotifications();
+  else window.addEventListener('load', viderNotifications, { once: true });
 }
