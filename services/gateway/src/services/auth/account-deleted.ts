@@ -68,6 +68,21 @@ export async function accountIsDeleted(prisma: DeletedAccountReader, userId: str
   }
 }
 
+/**
+ * Le refus d'un compte inactif, atteint seulement APRÈS `jwt.verify` : la
+ * signature prouve que le porteur détenait un jeton de CE compte, seul
+ * destinataire légitime de « supprimé ». Tout autre compte inactif garde le
+ * refus générique.
+ */
+export async function inactiveAccountRefusal(prisma: DeletedAccountReader, userId: string): Promise<Error> {
+  if (await accountIsDeleted(prisma, userId)) return new AccountDeletedError(userId);
+  return new Error('User not found or inactive');
+}
+
+/**
+ * Même statut que le 401 générique (un ancien client ne lit que lui) ; le code
+ * permet à l'appareil de purger les données de CE compte.
+ */
 export function sendAccountDeleted(reply: FastifyReply, accountId: string): void {
   sendError(reply, 401, 'Ce compte a été supprimé', {
     code: AUTH_ERROR_CODES.ACCOUNT_DELETED,
