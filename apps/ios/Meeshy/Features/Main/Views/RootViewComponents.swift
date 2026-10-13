@@ -123,6 +123,9 @@ struct ThemedFeedOverlay: View {
     /// besoin. Le chemin iPad (`FeedView`) portait déjà ce montage : c'est le
     /// même correctif, qui n'avait jamais traversé.
     @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
+    /// Le fil de l'iPhone ne comptait AUCUNE impression : seul `FeedView`,
+    /// monté sur iPad, portait le batcher (#10397). Clé propre au fil iPhone.
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", storageScope: "feed.phone")
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
@@ -759,6 +762,7 @@ struct ThemedFeedOverlay: View {
                             Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                             viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
+                            impressions.record(post.id)
                         }
                     }
 
@@ -878,6 +882,7 @@ struct ThemedFeedOverlay: View {
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
+            Task { await impressions.flushNow() }
         }
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external

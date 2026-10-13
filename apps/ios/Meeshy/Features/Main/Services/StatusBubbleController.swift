@@ -16,6 +16,13 @@ final class StatusBubbleController: ObservableObject {
     static let shared = StatusBubbleController()
     private init() {}
 
+    /// La bulle est la SEULE surface iOS où un mood s'affiche : c'est donc là
+    /// qu'il compte son impression. Aucune vue n'appelait le batcher `status`
+    /// que portait `StatusViewModel`, et les moods restaient à 0 impression
+    /// pendant que leurs vues montaient (#10397). Une occurrence par ouverture.
+    private static let impressions = ImpressionBatcher(source: "status", storageScope: "status.bubble")
+    var recordImpression: @MainActor (String) -> Void = { StatusBubbleController.impressions.record($0) }
+
     @Published var currentEntry: StatusEntry?
     @Published var anchor: CGPoint = .zero
     /// Mood en attente de confirmation de réponse (groupe / story tray / ailleurs).
@@ -37,6 +44,7 @@ final class StatusBubbleController: ObservableObject {
         currentEntry = entry
         self.anchor = anchor
         self.repliesInline = repliesInline
+        recordImpression(entry.id)
 
         // Statut consommé : enregistrer la vue côté serveur (sauf le sien) pour
         // que la notification « X a publié un statut » (friend_new_mood) ne reste

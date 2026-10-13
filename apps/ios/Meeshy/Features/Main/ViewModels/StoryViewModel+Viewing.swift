@@ -122,24 +122,20 @@ extension StoryViewModel {
     /// UNE impression (non dédupliquée, `source: "story"`) pour CE post-slide — aligne
     /// `impressionCount` de la story sur le détail/réel (« chaque visionnage fait monter
     /// les impressions »). Volontairement SÉPARÉ de `markViewed` (vue UNIQUE, coalescée
-    /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage, pas une
-    /// seule fois. Fire & forget : l'échec réseau est loggé, jamais toasté (bruit de fond).
+    /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage.
+    ///
+    /// #10399 — elle partait dans un `Task` qui ne faisait que journaliser son
+    /// échec : hors ligne ou refusée en 429, elle était perdue pendant que sa
+    /// vue jumelle, durable, arrivait. Elle passe désormais par
+    /// `ImpressionBatcher` (persistance, rejeu, découpage, flush en
+    /// arrière-plan). La file partagée survit au lecteur : sa fenêtre de 3 s
+    /// part même quand on vient de le fermer.
     func recordStoryImpression(storyId: String) {
         // #4044 — même frontière que `markViewed` ci-dessous, et pour la même
-        // raison : `POST /posts/:id/impression` fait lever Prisma sur un
-        // identifiant local. Ici l'appel est fire-and-forget, donc rien ne
-        // s'accumule — mais laisser partir la moitié jumelle reviendrait à
-        // corriger le symptôme (la file) en gardant la cause (un id local qui
-        // atteint le serveur). Doctrine : `ObjectID`.
+        // raison : un identifiant local n'atteint aucune route /posts/:id/*.
+        // Doctrine : `ObjectID`.
         guard ObjectID.isValid(storyId) else { return }
-        Task { [postService] in
-            do {
-                try await postService.recordImpression(postId: storyId, source: "story")
-            } catch {
-                Logger.stories.error(
-                    "recordStoryImpression failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        storyImpressions.record(storyId)
     }
 
     func markViewed(storyId: String) {

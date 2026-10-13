@@ -223,6 +223,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordImpressionsCallCount = 0
     var lastRecordImpressionPostIds: [String]?
     var lastRecordImpressionsSource: String?
+    /// Chaque lot reçu, dans l'ordre — pour vérifier le découpage d'un flush.
+    var recordedImpressionBatches: [[String]] = []
+    /// Résultats consommés un par appel, avant `recordImpressionsResult`.
+    var recordImpressionsResultsQueue: [Result<Void, Error>] = []
 
     var recordImpressionCallCount = 0
     var lastRecordImpressionPostId: String?
@@ -670,6 +674,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         recordImpressionsCallCount += 1
         lastRecordImpressionPostIds = postIds
         lastRecordImpressionsSource = source
+        recordedImpressionBatches.append(postIds)
+        if !recordImpressionsResultsQueue.isEmpty {
+            return try recordImpressionsResultsQueue.removeFirst().get()
+        }
         try recordImpressionsResult.get()
     }
 
@@ -825,6 +833,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRecordImpressionsSource = nil
         recordImpressionsResult = .success(())
         lastRecordImpressionPostIds = nil
+        recordedImpressionBatches = []
+        recordImpressionsResultsQueue = []
 
         recordImpressionCallCount = 0
         lastRecordImpressionPostId = nil

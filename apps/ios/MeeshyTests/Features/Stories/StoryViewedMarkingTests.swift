@@ -186,26 +186,54 @@ final class StoryViewedMarkingTests: XCTestCase {
     func test_pendingStoryId_sendsNoImpressionEither() async {
         let postService = MockPostService()
         let vm = StoryViewModel(postService: postService)
+        vm.storyImpressions = makeIsolatedImpressions(postService)
 
         vm.recordStoryImpression(storyId: "pending_\(UUID().uuidString)")
-        await settle()
+        await vm.storyImpressions.flushNow()
 
-        XCTAssertEqual(postService.recordImpressionCallCount, 0,
-                       "Un identifiant local ne doit atteindre AUCUNE route /posts/:id/*")
+        XCTAssertEqual(postService.recordImpressionCallCount + postService.recordImpressionsCallCount, 0,
+                       "Un identifiant local ne doit atteindre AUCUNE route /posts/*")
     }
 
-    /// Contrôle positif du garde ci-dessus — sans lui, un `recordImpressionCallCount`
-    /// resté à zéro pour une tout autre raison passerait pour une preuve.
+    /// Contrôle positif du garde ci-dessus — sans lui, un compteur resté à
+    /// zéro pour une tout autre raison passerait pour une preuve.
     func test_serverStoryId_stillSendsItsImpression() async {
         let postService = MockPostService()
         let vm = StoryViewModel(postService: postService)
+        vm.storyImpressions = makeIsolatedImpressions(postService)
 
         vm.recordStoryImpression(storyId: serverStoryId(0))
-        await settle()
+        await vm.storyImpressions.flushNow()
 
-        XCTAssertEqual(postService.recordImpressionCallCount, 1,
+        XCTAssertEqual(postService.recordedImpressionBatches, [[serverStoryId(0)]],
                        "Une story servie par le serveur doit toujours compter son impression")
-        XCTAssertEqual(postService.lastRecordImpressionPostId, serverStoryId(0))
+        XCTAssertEqual(postService.lastRecordImpressionsSource, "story")
+    }
+
+    /// #10399 — l'impression partait dans un `Task` qui ne faisait que
+    /// journaliser son échec : hors ligne ou refusée en 429, elle était perdue
+    /// pendant que la vue, durable, arrivait. Elle doit repartir.
+    func test_aStoryImpressionThatFailsOffline_isSentAgainOnTheNextFlush() async {
+        let postService = MockPostService()
+        let vm = StoryViewModel(postService: postService)
+        vm.storyImpressions = makeIsolatedImpressions(postService)
+        postService.recordImpressionsResult = .failure(
+            NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet))
+
+        vm.recordStoryImpression(storyId: serverStoryId(0))
+        await vm.storyImpressions.flushNow()
+        postService.recordImpressionsResult = .success(())
+        await vm.storyImpressions.flushNow()
+
+        XCTAssertEqual(postService.recordedImpressionBatches, [[serverStoryId(0)], [serverStoryId(0)]],
+                       "l'impression perdue par le réseau repart, comme la vue")
+    }
+
+    /// File isolée (stockage jetable, fenêtre longue) : aucun test ne lit ni
+    /// n'écrit la file partagée de production.
+    private func makeIsolatedImpressions(_ postService: MockPostService) -> ImpressionBatcher {
+        let defaults = UserDefaults(suiteName: "StoryImpressions-\(UUID().uuidString)")!
+        return ImpressionBatcher(source: "story", postService: postService, flushDelay: 60, defaults: defaults)
     }
 
     // MARK: - #9804 — une story vue reste vue après la relance
