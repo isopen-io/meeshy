@@ -22,19 +22,22 @@ final class ExternalLinkRules {
 
     /**
      * #10456 — avant Android 11, `FLAG_ACTIVITY_REQUIRE_NON_BROWSER` n'existe
-     * pas : la coque applique la methode documentee par Android. Parmi les
-     * paquets qui gerent le lien (dans l'ordre de resolution), le premier qui
-     * n'est pas un navigateur l'ouvre ; aucun, et le Custom Tab prend le relais.
+     * pas : la coque applique la methode documentee par Android. Si au moins un
+     * paquet qui gere le lien n'est pas un navigateur, le lien part par un
+     * intent SANS paquet impose : le systeme applique le choix par defaut de
+     * l'utilisateur ou lui montre le selecteur. La coque ne designe jamais
+     * elle-meme l'application, sans quoi une application qui revendique un
+     * domaine sans le verifier recevrait le lien en silence.
      */
-    static String specializedHandler(List<String> handlers, List<String> browsers) {
+    static boolean hasSpecializedHandler(List<String> handlers, List<String> browsers) {
         if (handlers == null) {
-            return null;
+            return false;
         }
         for (String handler : handlers) {
             if (handler != null && !handler.isEmpty() && (browsers == null || !browsers.contains(handler))) {
-                return handler;
+                return true;
             }
         }
-        return null;
+        return false;
     }
 }

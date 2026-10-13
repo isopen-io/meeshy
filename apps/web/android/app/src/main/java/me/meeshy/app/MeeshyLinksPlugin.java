@@ -69,11 +69,9 @@ public class MeeshyLinksPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             intent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
         } else {
-            String handler = specializedHandler(url);
-            if (handler == null) {
+            if (!hasSpecializedHandler(url)) {
                 return false;
             }
-            intent.setPackage(handler);
         }
         try {
             getContext().startActivity(intent);
@@ -84,17 +82,17 @@ public class MeeshyLinksPlugin extends Plugin {
     }
 
     /**
-     * #10456 — avant Android 11, l'application qui gere le lien sans etre un
-     * navigateur : les applications qui gerent ce lien, moins celles qui gerent
-     * un lien web quelconque. La visibilite des paquets n'existe pas avant
+     * #10456 — avant Android 11, existe-t-il une application qui gere le lien
+     * sans etre un navigateur : les applications qui gerent ce lien, moins
+     * celles qui gerent un lien web quelconque. La visibilite des paquets n'existe pas avant
      * Android 11 : aucune declaration `<queries>` n'est requise.
      */
-    private String specializedHandler(Uri url) {
+    private boolean hasSpecializedHandler(Uri url) {
         PackageManager packages = getContext().getPackageManager();
         Intent anyWebLink = new Intent(Intent.ACTION_VIEW, Uri.parse("http://www.example.com"))
             .addCategory(Intent.CATEGORY_BROWSABLE);
         Intent link = new Intent(Intent.ACTION_VIEW, url).addCategory(Intent.CATEGORY_BROWSABLE);
-        return ExternalLinkRules.specializedHandler(
+        return ExternalLinkRules.hasSpecializedHandler(
             packageNames(packages.queryIntentActivities(link, 0)),
             packageNames(packages.queryIntentActivities(anyWebLink, PackageManager.MATCH_ALL))
         );

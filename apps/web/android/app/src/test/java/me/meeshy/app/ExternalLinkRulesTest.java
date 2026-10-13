@@ -1,8 +1,6 @@
 package me.meeshy.app;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
@@ -47,27 +45,21 @@ public class ExternalLinkRulesTest {
     private static final List<String> BROWSERS = Arrays.asList("com.android.chrome", "org.mozilla.firefox");
 
     @Test
-    public void beforeAndroid11AnAppThatHandlesTheLinkWithoutBeingABrowserOpensIt() {
+    public void beforeAndroid11AnAppThatHandlesTheLinkWithoutBeingABrowserSendsItToTheSystem() {
         List<String> handlers = Arrays.asList("com.android.chrome", "com.google.android.youtube", "org.mozilla.firefox");
-        assertEquals("com.google.android.youtube", ExternalLinkRules.specializedHandler(handlers, BROWSERS));
-    }
-
-    @Test
-    public void beforeAndroid11TheFirstSpecializedAppInResolutionOrderWins() {
-        List<String> handlers = Arrays.asList("com.google.android.apps.maps", "com.waze", "com.android.chrome");
-        assertEquals("com.google.android.apps.maps", ExternalLinkRules.specializedHandler(handlers, BROWSERS));
+        assertTrue(ExternalLinkRules.hasSpecializedHandler(handlers, BROWSERS));
+        assertTrue(ExternalLinkRules.hasSpecializedHandler(Arrays.asList("com.spotify.music"), null));
     }
 
     @Test
     public void beforeAndroid11OnlyBrowsersHandlingTheLinkLeavesItToTheCustomTab() {
-        assertNull(ExternalLinkRules.specializedHandler(BROWSERS, BROWSERS));
-        assertNull(ExternalLinkRules.specializedHandler(Collections.<String>emptyList(), BROWSERS));
+        assertFalse(ExternalLinkRules.hasSpecializedHandler(BROWSERS, BROWSERS));
+        assertFalse(ExternalLinkRules.hasSpecializedHandler(Collections.<String>emptyList(), BROWSERS));
     }
 
     @Test
     public void beforeAndroid11AnUnreadablePackageListLeavesItToTheCustomTab() {
-        assertNull(ExternalLinkRules.specializedHandler(null, BROWSERS));
-        assertNull(ExternalLinkRules.specializedHandler(Arrays.asList(null, ""), BROWSERS));
-        assertEquals("com.spotify.music", ExternalLinkRules.specializedHandler(Arrays.asList("com.spotify.music"), null));
+        assertFalse(ExternalLinkRules.hasSpecializedHandler(null, BROWSERS));
+        assertFalse(ExternalLinkRules.hasSpecializedHandler(Arrays.asList(null, ""), BROWSERS));
     }
 }
