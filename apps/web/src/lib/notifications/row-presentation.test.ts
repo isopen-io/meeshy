@@ -120,6 +120,43 @@ describe('réaction à un POST — le corps se tait, le pied dit le contenu', ()
   });
 });
 
+describe('une REPUBLICATION — le titre et le pied nomment le contenu republié (#10525)', () => {
+  const repost = (postType: string, title: string) =>
+    present(
+      record({
+        type: 'post_repost',
+        title,
+        content: '',
+        actor: { id: 'u-awa', username: 'awa', displayName: 'Awa', avatar: null },
+        metadata: { postType },
+      }),
+    );
+
+  test('un réel, une story, une publication : le titre servi, le pied à son icône', () => {
+    const cases: readonly (readonly [string, string, string, string])[] = [
+      ['REEL', 'Awa a republié votre réel', 'reel', 'Réel'],
+      ['STORY', 'Awa a republié votre story', 'story', 'Story'],
+      ['POST', 'Awa a republié votre publication', 'post', 'Publication'],
+    ];
+    cases.forEach(([postType, title, content, label]) => {
+      const row = repost(postType, title);
+      expect(row.title).toBe(title);
+      expect(row.footer).toEqual({ kind: 'content', content, text: label, expired: false });
+    });
+  });
+
+  test('un STATUS republié se dit « humeur » jusque dans le pied, comme le titre servi', () => {
+    const row = repost('STATUS', 'Awa a republié votre humeur');
+    expect(row.title).toBe('Awa a republié votre humeur');
+    expect(row.footer).toEqual({ kind: 'content', content: 'mood', text: 'Humeur', expired: false });
+  });
+
+  test('une réaction à un STATUS garde son libellé « statut » — seule la republication change de mot', () => {
+    const row = present(record({ type: 'status_reaction', title: 'Awa a réagi 🔥 à votre statut', content: '', metadata: { postType: 'STATUS' } }));
+    expect(row.footer).toEqual({ kind: 'content', content: 'status', text: 'Statut', expired: false });
+  });
+});
+
 describe('les messages — le groupe en pied, jamais répété', () => {
   test('le corps, puis le nom du groupe', () => {
     const row = present(

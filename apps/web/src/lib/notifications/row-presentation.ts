@@ -104,10 +104,14 @@ const MOOD_TYPES = new Set(['status_reaction', 'friend_new_mood']);
 
 const KIND_BY_POST_TYPE: Readonly<Record<string, ContentKind>> = { STORY: 'story', REEL: 'reel', MOOD: 'mood', STATUS: 'status', POST: 'post' };
 
+/** Le contenu REPUBLIÉ se nomme comme le titre servi le nomme : un STATUS est « votre humeur » (#10525). */
+const repostedKind = (notification: NotificationRecord, kind: ContentKind): ContentKind =>
+  notification.type === 'post_repost' && kind === 'status' ? 'mood' : kind;
+
 function contentKindOf(notification: NotificationRecord): ContentKind {
   const declared = (notification.metadata.postType ?? notification.metadata.contentType)?.toUpperCase();
   const kind = declared === undefined ? undefined : KIND_BY_POST_TYPE[declared];
-  if (kind !== undefined) return kind;
+  if (kind !== undefined) return repostedKind(notification, kind);
   if (STORY_TYPES.has(notification.type)) return 'story';
   if (MOOD_TYPES.has(notification.type)) return notification.type === 'status_reaction' ? 'status' : 'mood';
   return 'post';
