@@ -512,6 +512,7 @@ export default function ConversationsScreen() {
       peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
       peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
       peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
+      peerMoodPostId={moodOf.postOf?.(peerKeyIn(c, viewer.id ?? ''))}
       engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
       status={{
         /**

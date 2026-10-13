@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { AuthorAvatar } from '@/components/author-avatar';
 import { Avatar } from '@/components/avatar';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { MoodQuote, StoryCitationCard } from '@/components/message-body-blocks';
@@ -26,6 +27,10 @@ import {
   readingTelemetry,
 } from './reading-telemetry';
 import { withMoods, type StoryTrayGroup } from './story-tray';
+import { AuthorMoodsContext, type MoodOf } from './use-author-moods';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * CHAQUE AFFICHAGE EST COMPTÉ, AVEC OU SANS COMPTE (#10483) — les surfaces
@@ -166,6 +171,30 @@ describe('l’humeur d’un avatar compte son impression (W4)', () => {
   test('un avatar sans humeur, ou sans post d’humeur connu, n’observe rien', () => {
     mount(<><Avatar initials="IB" color="#000" size={40} /><Avatar initials="IB" color="#000" size={40} mood="☕" /></>);
     expect(live()).toHaveLength(0);
+  });
+});
+
+describe('l’humeur d’un auteur dans un fil compte son impression (W4)', () => {
+  test('AuthorAvatar lit le post de l’humeur dans le contexte du fil ⇒ impression `status` depuis `mood_avatar`', async () => {
+    const moodOf: MoodOf = Object.assign((id: string | undefined) => (id === 'ines' ? '☕' : undefined), {
+      postOf: (id: string | undefined) => (id === 'ines' ? 'm-ines' : undefined),
+    });
+    mount(
+      <AuthorMoodsContext.Provider value={moodOf}>
+        <AuthorAvatar authorId="ines" initials="IB" color="#000" size={32} />
+      </AuthorMoodsContext.Provider>,
+    );
+    show();
+    await dwell();
+    expect(impressions()).toEqual([{ type: 'impression', postId: 'm-ines', source: 'status', surface: 'mood_avatar' }]);
+  });
+
+  test('chaque avatar qui peint une humeur lui passe son post (`moodPostId`)', () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const read = (file: string) => readFileSync(join(here, '..', '..', file), 'utf8');
+    for (const file of ['components/thread-header.tsx', 'components/typing-roster-cell.tsx', 'components/active-members-stack.tsx', 'components/lens-row.tsx', 'routes/conversations.tsx']) {
+      expect({ file, wired: /moodPostId/i.test(read(file)) }).toEqual({ file, wired: true });
+    }
   });
 });
 

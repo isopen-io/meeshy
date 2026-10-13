@@ -23,7 +23,7 @@ import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
-import { useAuthorMood } from '@/lib/view/use-author-moods';
+import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods';
 import { useIsHere, useIsHereActive, useIsHereFocused } from '@/lib/view/use-conversation-viewing';
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
@@ -144,6 +144,7 @@ export function ThreadHeader({
   const peerFocused = useIsHereFocused(conversation.id, peerKey);
   /* … et son mood, cerné de sa présence (#9065). */
   const peerMood = useAuthorMood(peerKey);
+  const peerMoodPostId = useAuthorMoodPostId(peerKey);
   /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
      dans la grappe d'actions repliée, sous le titre déplié. */
   const engagement = useConversationEngagement(conversation);
@@ -202,7 +203,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: presenceOf(peer), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood }) };
+    : { presence: presenceOf(peer), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
   const toggleLabel = expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête';
 
   return (

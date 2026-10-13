@@ -1,4 +1,4 @@
-import { useAuthorMood } from '@/lib/view/use-author-moods';
+import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
@@ -93,6 +93,7 @@ export function TypingRosterCell({
   const leadActive = useAuthorActive(lead?.userId);
   const leadFocused = useAuthorFocused(lead?.userId);
   const leadMood = useAuthorMood(lead?.userId);
+  const leadMoodPostId = useAuthorMoodPostId(lead?.userId);
   if (lead === undefined) return null;
   /* `undefined` quand il n'y a pas de photo — jamais `''` : `Avatar` rendrait
      un `<img src="">`, qui RECHARGE la page courante. */
@@ -119,8 +120,8 @@ export function TypingRosterCell({
           here={leadHere}
           hereActive={leadActive}
           hereFocused={leadFocused}
-        {...(leadMood === undefined ? {} : { mood: leadMood })}
-          {...(leadMood === undefined ? {} : { mood: leadMood })}
+        {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
+          {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
           {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
         />
         <TypingDots color={accent} />
@@ -143,7 +144,7 @@ export function TypingRosterCell({
         here={leadHere}
         hereActive={leadActive}
         hereFocused={leadFocused}
-        {...(leadMood === undefined ? {} : { mood: leadMood })}
+        {...(leadMood === undefined ? {} : { mood: leadMood, ...(leadMoodPostId === undefined ? {} : { moodPostId: leadMoodPostId }) })}
         {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
       />
       <span
