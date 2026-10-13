@@ -23,6 +23,12 @@ export type ProvenSessionAdoption = {
    * preuve a rendu : la session (premier appel authentifié) ou le défi de
    * second facteur (`POST /auth/login/2fa`). Entier, jamais négatif. Absent
    * d'une passerelle antérieure à #10518, et d'une session que rien n'attend.
+   *
+   * C'est un PLAFOND, pas une promesse : la preuve peut mourir plus tôt. Un
+   * défi de second facteur est remplacé par tout défi plus récent du même
+   * compte (nouvelle preuve, `POST /auth/login`) ; une session peut être
+   * révoquée. Passé ce délai elle est morte à coup sûr ; avant, la passerelle
+   * seule le dit.
    */
   readonly adoptWithinSeconds?: number;
 };
@@ -43,10 +49,22 @@ export const PROVEN_ADOPTION_CLIENT_FALLBACK_MS: Readonly<Record<ProvenAdoptionK
   'second-factor': 4 * 60 * 1000,
 };
 
-/** La fenêtre (ms) qu'un client applique à l'instant où il a reçu la preuve. */
+/**
+ * La borne DURE d'un client : quoi que la réponse prétende, une preuve gardée
+ * en mémoire finit par expirer. Un témoin de la passerelle vérifie que ses
+ * vraies fenêtres tiennent dessous.
+ */
+export const PROVEN_ADOPTION_CLIENT_MAX_MS = 30 * 60 * 1000;
+
+/**
+ * La fenêtre (ms) qu'un client applique à l'instant où il a reçu la preuve.
+ * Un délai qui n'est pas un entier sûr et positif vaut un délai absent : le
+ * repli. Un délai lisible est suivi, moins la marge, jusqu'à la borne dure.
+ */
 export function provenAdoptionClientWindowMs(kind: ProvenAdoptionKind, adoptWithinSeconds: unknown): number {
-  if (typeof adoptWithinSeconds !== 'number' || !Number.isFinite(adoptWithinSeconds) || adoptWithinSeconds < 0) {
+  if (!Number.isSafeInteger(adoptWithinSeconds) || (adoptWithinSeconds as number) < 0) {
     return PROVEN_ADOPTION_CLIENT_FALLBACK_MS[kind];
   }
-  return Math.max(0, adoptWithinSeconds * 1000 - PROVEN_ADOPTION_CLIENT_MARGIN_MS);
+  const window = (adoptWithinSeconds as number) * 1000 - PROVEN_ADOPTION_CLIENT_MARGIN_MS;
+  return Math.min(Math.max(0, window), PROVEN_ADOPTION_CLIENT_MAX_MS);
 }

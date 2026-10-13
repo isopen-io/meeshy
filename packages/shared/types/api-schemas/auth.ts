@@ -428,8 +428,8 @@ export const pendingSessionTokenProperty = {
 export const adoptWithinSecondsProperty = {
   type: 'integer',
   minimum: 0,
-  example: 600,
-  description: 'Seconds left, when this response was produced, to adopt what the proof returned: the session (first authenticated call) or the second-factor challenge (POST /auth/login/2fa). A duration, to be applied to the instant the client received the response. Decided and enforced by the server alone.'
+  example: 599,
+  description: 'UPPER BOUND, in seconds, counted from when this response was produced, to adopt what the proof returned: the session (first authenticated call, at most 600) or the second-factor challenge (POST /auth/login/2fa, at most 300). A duration, to be applied to the instant the client received the response. It is a ceiling, not a promise: a newer challenge for the same account replaces this one, and a session can be revoked earlier. Decided and enforced by the server alone.'
 } as const;
 
 /**

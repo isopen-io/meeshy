@@ -18,7 +18,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
-import { createSession, initSessionService, generateSessionToken } from './SessionService';
+import { createSession, initSessionService, generateSessionToken, type SessionData } from './SessionService';
 import { signSessionToken } from './auth/session-jwt';
 import { proveEmailAddress } from './auth/email-address-proof';
 import { resolveAccountActivation } from './auth/account-activation';
@@ -310,7 +310,7 @@ export class MagicLinkService {
     user?: any;
     token?: string;
     sessionToken?: string;
-    session?: any;
+    session?: SessionData;
     rememberDevice?: boolean; // Retrieved from server-side storage
     /**
      * Branche EXCLUSIVE de la session complète (#4534) : quand elle vaut

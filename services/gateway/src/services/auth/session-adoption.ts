@@ -82,6 +82,16 @@ export function adoptionDeadlineOf(row: { readonly expiresAt?: unknown; readonly
 }
 
 /**
+ * La session telle qu'elle part vers le client : sans son échéance
+ * d'adoption, qui ne voyage que par `adoptWithinSeconds`. Écartée ICI, pour
+ * qu'aucune route ne compte sur son schéma de réponse pour la retirer.
+ */
+export function servedSession<S extends { readonly adoptBy?: Date }>(session: S): Omit<S, 'adoptBy'> {
+  const { adoptBy: _adoptBy, ...served } = session;
+  return served;
+}
+
+/**
  * Ce que la réponse d'une preuve par lien SERT au client (#10518) : les
  * secondes qui restent, sur l'horloge de la passerelle, avant l'échéance
  * d'adoption de la session. Jamais négatif, jamais plus que la fenêtre. Une

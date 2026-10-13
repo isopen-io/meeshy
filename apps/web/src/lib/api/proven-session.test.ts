@@ -375,9 +375,16 @@ describe('la fenêtre d’adoption se LIT chez la passerelle (#10518)', () => {
     expect(inTime.outcome).toBe(true);
   });
 
-  test('une passerelle qui l’ALLONGE est suivie aussi : à vingt minutes d’une fenêtre de trente, le compte s’ouvre', async () => {
-    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1800 }, 20 * MINUTE)).outcome).toBe(true);
-    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1800 }, 29 * MINUTE + 1)).outcome).toBe('expired');
+  test('une passerelle qui l’ALLONGE est suivie jusqu’à la borne : à vingt minutes d’une fenêtre de vingt-cinq, le compte s’ouvre', async () => {
+    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1500 }, 20 * MINUTE)).outcome).toBe(true);
+    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1500 }, 24 * MINUTE + 1)).outcome).toBe('expired');
+  });
+
+  test('un délai servi démesuré est PLAFONNÉ à trente minutes : la preuve finit toujours par expirer', async () => {
+    const data = { ...BOB_LOGIN, adoptWithinSeconds: 1e9 };
+    expect((await adoptAfter(data, 30 * MINUTE - 1)).outcome).toBe(true);
+    expect((await adoptAfter(data, 30 * MINUTE + 1)).outcome).toBe('expired');
+    expect((await adoptAfter(data, 24 * 60 * MINUTE)).outcome).toBe('expired');
   });
 
   test('le défi de second facteur suit le délai servi pour LUI', async () => {
@@ -386,7 +393,7 @@ describe('la fenêtre d’adoption se LIT chez la passerelle (#10518)', () => {
     expect((await adoptAfter(challenge, MINUTE - 1)).outcome).toBe(true);
   });
 
-  ['600', null, Number.NaN, -5, Number.POSITIVE_INFINITY].forEach((adoptWithinSeconds) => {
+  ['600', null, Number.NaN, -5, Number.POSITIVE_INFINITY, 1.7e308, 599.5].forEach((adoptWithinSeconds) => {
     test(`un délai illisible (${String(adoptWithinSeconds)}) vaut un délai absent : le repli de neuf minutes, jamais plus`, async () => {
       const data = { ...BOB_LOGIN, adoptWithinSeconds };
       expect((await adoptAfter(data, PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS + 1)).outcome).toBe('expired');

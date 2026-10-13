@@ -11,7 +11,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
 import { userSchema, sessionSchema, errorResponseSchema, pendingSessionTokenProperty, adoptWithinSecondsProperty } from '@meeshy/shared/types/api-schemas';
 import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
-import { provenSessionAdoption } from '../services/auth/session-adoption';
+import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
@@ -333,7 +333,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         user: result.user,
         token: result.token,
         sessionToken: result.sessionToken,
-        session: { ...result.session, isTrusted: rememberDevice },
+        session: { ...servedSession(result.session ?? {}), isTrusted: rememberDevice },
         expiresIn,
         ...provenSessionAdoption(result.session ?? {}, new Date())
       });

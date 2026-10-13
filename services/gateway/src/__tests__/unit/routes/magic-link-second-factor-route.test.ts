@@ -55,6 +55,22 @@ jest.mock('../../../routes/auth/pending-device-trust', () => ({
   rememberPendingDeviceTrust: (...args: unknown[]) => mockRememberPendingDeviceTrust(...args),
 }));
 
+// Ce que la route REMET à la réponse, avant toute sérialisation (#10518) :
+// un champ que seul le schéma retirerait y est encore visible.
+const remis: unknown[] = [];
+jest.mock('../../../utils/response.js', () => {
+  const reel = jest.requireActual('../../../utils/response') as Record<string, unknown> & {
+    sendSuccess: (...args: unknown[]) => unknown;
+  };
+  return {
+    ...reel,
+    sendSuccess: (...args: unknown[]) => {
+      remis.push(args[1]);
+      return reel.sendSuccess(...args);
+    },
+  };
+});
+
 jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: {
     child: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
@@ -199,6 +215,20 @@ describe('POST /magic-link/validate — second facteur (#4534)', () => {
       expect(data.adoptWithinSeconds).toBeGreaterThanOrEqual(595);
       expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
       expect(data.session.adoptBy).toBeUndefined();
+    });
+
+    it('l’échéance d’adoption ne quitte pas la route : absente de ce qu’elle REMET, pas seulement de ce que le schéma laisse passer', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(
+        makeFullResult({ rememberDevice: true, session: { ...makeFullResult().session, adoptBy } })
+      );
+      remis.length = 0;
+
+      await validate(app);
+
+      expect(remis).toHaveLength(1);
+      expect(JSON.stringify(remis[0])).not.toContain('adoptBy');
+      expect(remis[0]).toMatchObject({ session: { id: 'session-1', isTrusted: true }, adoptWithinSeconds: expect.any(Number) });
     });
 
     it('« se souvenir de cet appareil » n’allonge pas le délai servi : 365 jours d’`expiresIn`, dix minutes pour adopter', async () => {
