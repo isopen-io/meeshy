@@ -40,15 +40,19 @@ jest.mock('../../../../socketio/revokeShareLinkGuests', () => ({
 }));
 
 import { applyShareLinkUpdate } from '../../../../routes/links/management';
+import { ASYNC_GUEST_REVOCATION_THRESHOLD } from '../../../../socketio/closeShareLinkRevokingGuests';
 
 const ROW_ID = '507f1f77bcf86cd799439011';
 
 /** Journal d'appels PARTAGÉ : c'est lui qui rend l'ordre observable. */
 let journal: string[] = [];
 
-function buildFastify() {
+function buildFastify(activeGuests = 0) {
   return {
     prisma: {
+      participant: {
+        count: jest.fn<any>(async () => activeGuests),
+      },
       conversationShareLink: {
         // #9713 — rouvrir relit la ligne et son créateur (la loi des liens
         // actifs) ; un créateur à l'adresse prouvée n'a pas de plafond.
@@ -131,6 +135,24 @@ describe('#4351 — applyShareLinkUpdate est le site unique de l\'écriture', ()
     expect(journal).toEqual(['revoke', 'update']);
   });
 
+  it('#10470 — un GROS lien est fermé sans attendre ses invités, la révocation en attente écrite dans la fermeture', async () => {
+    const fastify = buildFastify(ASYNC_GUEST_REVOCATION_THRESHOLD + 1);
+    let releaseRevocation: () => void = () => {};
+    mockRevoke.mockImplementation(() => new Promise<void>((resolve) => {
+      journal.push('revoke');
+      releaseRevocation = resolve;
+    }));
+
+    await applyShareLinkUpdate(fastify, ROW_ID, { isActive: false });
+
+    expect(journal[0]).toBe('update');
+    expect(fastify.prisma.conversationShareLink.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: ROW_ID },
+      data: { isActive: false, guestRevocationPendingAt: expect.any(Date) },
+    }));
+    releaseRevocation();
+  });
+
   it('et si la révocation LÈVE, le lien reste ACTIF — la reprise est idempotente', async () => {
     const fastify = buildFastify();
     mockRevoke.mockImplementation(async () => { throw new Error('socket down'); });
@@ -165,7 +187,9 @@ describe('#4351 — les deux alias dépréciés DÉLÈGUENT, ils ne recopient pl
     // encore explicitement : sa réponse ne porte qu'un message, et lui faire
     // traverser `applyShareLinkUpdate` lui ferait payer une projection
     // `include` que personne n'y lit.
-    const appels = ADMIN.match(/await revokeShareLinkGuests\(/g) ?? [];
-    expect(appels).toHaveLength(1);
+    // #10470 — DELETE passe par `closeShareLinkRevokingGuests`, qui révoque
+    // avant de fermer un petit lien et diffère la révocation d'un gros.
+    expect(ADMIN.match(/revokeShareLinkGuests\(/g) ?? []).toHaveLength(0);
+    expect(ADMIN.match(/await closeShareLinkRevokingGuests\(/g) ?? []).toHaveLength(1);
   });
 });

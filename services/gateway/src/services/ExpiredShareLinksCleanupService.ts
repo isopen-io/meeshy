@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { revokeShareLinkGuests, type GuestSocketRegistry } from '../socketio/revokeShareLinkGuests';
+import { runPendingGuestRevocation } from '../socketio/closeShareLinkRevokingGuests';
 import type { DepartedMemberEphemeralState } from '../socketio/endConversationMembership';
 import { guardedInterval } from '../utils/guarded-timer';
 
@@ -117,6 +118,41 @@ export class ExpiredShareLinksCleanupService {
   }
 
   async cleanup(): Promise<{ revokedLinks: number; revokedGuests: number }> {
+    const swept = await this.revokeExpiredLinks();
+    await this.resumePendingRevocations();
+    return swept;
+  }
+
+  /**
+   * #10470 — les révocations DIFFÉRÉES d'un gros lien fermé sans les attendre,
+   * restées marquées (échec, redémarrage) : reprises ici, chacune à sa date.
+   */
+  private async resumePendingRevocations(): Promise<void> {
+    let pending: Array<{ id: string; guestRevocationPendingAt: Date | null }>;
+    try {
+      pending = await this.prisma.conversationShareLink.findMany({
+        where: { guestRevocationPendingAt: { not: null } },
+        select: { id: true, guestRevocationPendingAt: true },
+        take: this.batchSize,
+      });
+    } catch (err) {
+      log.warn('pending guest revocations query failed', { err });
+      return;
+    }
+
+    for (const link of pending) {
+      if (!link.guestRevocationPendingAt) continue;
+      await runPendingGuestRevocation({
+        prisma: this.prisma,
+        io: this.resolveIO(),
+        manager: this.resolveManager(),
+        shareLinkId: link.id,
+        pendingSince: link.guestRevocationPendingAt,
+      });
+    }
+  }
+
+  private async revokeExpiredLinks(): Promise<{ revokedLinks: number; revokedGuests: number }> {
     const now = this.now();
 
     let candidates: ExpiredShareLinkRow[];

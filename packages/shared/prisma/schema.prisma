@@ -832,6 +832,11 @@ model ConversationShareLink {
   allowedCountries       String[]  @default([])
   allowedLanguages       String[]  @default([])
   allowedIpRanges        String[]  @default([])
+  /// #10470 — la révocation des invités d'un GROS lien, fermé sans l'attendre,
+  /// est EN ATTENTE depuis cet instant (`closeShareLinkRevokingGuests`). Posée
+  /// dans l'écriture même qui ferme le lien, levée quand la révocation aboutit ;
+  /// le balayage horaire reprend toute ligne restée marquée. `null` = rien en attente.
+  guestRevocationPendingAt DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
