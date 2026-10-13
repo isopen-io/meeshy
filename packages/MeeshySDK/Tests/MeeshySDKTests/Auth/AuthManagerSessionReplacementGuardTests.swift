@@ -47,7 +47,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         // l'appellerait, donc irait sur le réseau.
         await AuthManager.shared.awaitRefusedSessionClosuresForTesting()
         await AuthManager.shared.cancelPendingTokenRefreshForTesting()
-        AuthManager.shared.isLeavingActiveSession = false
+        AuthManager.shared.activeSessionExits = 0
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.isSwitchingAccount = false
         AuthManager.shared.keychain = originalKeychain
@@ -271,7 +271,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         while authService.refreshCallCount == 0 { await Task.yield() }
         // Ce que fait `leaveActiveSession` en entrant ; `activeUserId` vaut encore A.
         auth.sessionGeneration &+= 1
-        auth.isLeavingActiveSession = true
+        auth.activeSessionExits += 1
         authService.releaseRefresh()
 
         do {
@@ -290,7 +290,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let auth = AuthManager.shared
         try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
         authService.refreshedUser = makeUser("user-a")
-        auth.isLeavingActiveSession = true
+        auth.activeSessionExits += 1
 
         do {
             _ = try await auth.refreshSession(force: true)

@@ -182,9 +182,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// ne pose rien, même si le compte qu'il rafraîchit est encore actif
     /// pendant les attentes de la sortie.
     var sessionGeneration: UInt64 = 0
-    /// #10463 — une sortie de session est en cours : aucun rafraîchissement
-    /// ne commence avant qu'elle ait retiré le compte actif.
-    var isLeavingActiveSession = false
+    /// #10463 — les sorties de session EN COURS. Un compteur, pas un drapeau :
+    /// deux sorties qui se chevauchent (déconnexion pendant une bascule) ne se
+    /// lèvent pas l'une l'autre en finissant.
+    var activeSessionExits = 0
+    /// Une sortie est en cours : aucun rafraîchissement ne commence, et aucun
+    /// refus ne démonte le compte qu'elle retire déjà (#10463).
+    var isLeavingActiveSession: Bool { activeSessionExits > 0 }
     #if DEBUG
     /// Les fermetures de sessions prouvées refusées, lancées sans être
     /// attendues (#10463) : retenues pour que les témoins les attendent.
@@ -334,9 +338,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Login
 
+    /// #10463 — refusée pendant un changement de compte ; la session qu'elle
+    /// ne peut pas poser est refermée côté passerelle.
     public func completeLoginWith2FA(code: String) async {
         guard let twoFactorToken = twoFactorToken else {
             errorMessage = "Session 2FA expirée ou invalide"
+            return
+        }
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
             return
         }
         isLoading = true
@@ -347,7 +357,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
             if let token = data.token, let user = data.user {
                 self.requires2FA = false
                 self.twoFactorToken = nil
-                try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+                try installClosingRefused(EmailProvenSession(
+                    token: token, sessionToken: data.sessionToken, user: user, origin: .login))
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -393,7 +404,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
         switch try await registerHoldingSession(request: request) {
         case .session(let proven, _):
-            try installSession(proven)
+            try installClosingRefused(proven)
             return .authenticated
         case .verificationRequired(let pending):
             return .verificationRequired(pending)
@@ -401,6 +412,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     public func register(request: RegisterRequest) async {
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
+            return
+        }
         isLoading = true
         errorMessage = nil
 
@@ -412,7 +427,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 return
             }
             if let token = data.token, let user = data.user {
-                try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+                try installClosingRefused(EmailProvenSession(
+                    token: token, sessionToken: data.sessionToken, user: user, origin: .registration))
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -476,7 +492,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// consommateur est l'écran de réglages, qui tient le type concret en
     /// `@EnvironmentObject`, et l'ajouter au protocole casserait les mocks de
     /// tous ses autres conformants sans servir personne.
+    ///
+    /// #10463 — pendant un changement de compte, la session sortante est déjà
+    /// démontée et l'entrante pas encore posée : la déconnexion attend qu'il
+    /// rende la main, puis ferme ce qui est ouvert.
     public func logout(forgettingAccount: Bool) async {
+        guard await awaitAccountSwitchEnd() else { return }
         let outgoing = activeUserId
         await leaveActiveSession(endingIt: true)
         guard let userId = outgoing else {
@@ -584,20 +605,25 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// dead account (`isActive == false`) or an auth failure surfaces
     /// re-authentication, any other error is transient and leaves the
     /// session untouched.
+    ///
+    /// #10463 — la réponse ne vaut que pour la session qui l'a demandée : une
+    /// sortie commencée, ou une autre session posée entre-temps, l'écarte.
     public func refreshCurrentUserProfile() async {
         guard isAuthenticated, let userId = activeUserId else { return }
         if let lastProfileRefreshAt, Date().timeIntervalSince(lastProfileRefreshAt) < 60 {
             return
         }
         lastProfileRefreshAt = Date()
+        let generation = sessionGeneration
 
         do {
             let user = try await authService.me()
-            updateUserAfterRevalidation(user, userId: userId)
+            guard !isLeavingActiveSession, sessionGeneration == generation, activeUserId == userId else { return }
+            updateUserAfterRevalidation(user, userId: userId, generation: generation)
         } catch let error as MeeshyError {
             switch error {
             case .auth:
-                requireReauthentication(userId: userId)
+                requireReauthentication(userId: userId, generation: generation)
             case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                 // Transient — keep session, retry on next foreground / launch.
                 break
@@ -656,7 +682,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         guard let userId = activeUserId else { return }
         Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
         sessionRevocationNotice = SessionRevocationNotice(reason: reason)
-        requireReauthentication(userId: userId)
+        requireReauthentication(userId: userId, generation: sessionGeneration)
     }
 
     /// L'utilisateur a lu l'avis de fermeture.
@@ -809,35 +835,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { await BlockService.shared.refreshCache() }
     }
 
-    /// Soft re-auth signal: the server told us the session is genuinely
-    /// invalid (revoked, expired beyond the sliding window, account
-    /// disabled). We clear the active token + sessionToken so the API
-    /// client stops sending dead credentials and flip `isAuthenticated`
-    /// to false so the UI can prompt for re-login. The saved account is
-    /// preserved — the user just needs to enter their password again.
-    func requireReauthentication(userId: String) {
-        // startup-03 — signal AVANT tout flip pour que le hook outbox
-        // (DependencyContainer) distingue une session invalidée par le
-        // serveur d'un logout volontaire (qui n'émet jamais ce signal).
-        sessionInvalidated.send(())
-        keychain.delete(forKey: tokenKey(for: userId), account: nil)
-        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
-        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
-        // #8674 — session révoquée : le cache du compte part, rien n'en est
-        // mis de côté (ses jetons viennent d'être effacés).
-        CacheAccountBinder.shared.bind(nil)
-        activeUserId = nil
-        currentUser = nil
-        // sync-04 — ce chemin ne passe PAS par logout() mais son flip
-        // isAuthenticated purge quand même les caches (container + app) :
-        // sans ce reset, la ré-auth du MÊME compte hérite d'un checkpoint
-        // pointant après des données purgées = delta partiel servi comme frais.
-        ConversationSyncEngine.shared.resetSyncCheckpoints()
-        isAuthenticated = false
-        APIClient.shared.authToken = nil
-        APIClient.shared.registeredSessionToken = nil
-    }
-
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
         let sanitized = user.droppingDataURIImages()
         do {
@@ -891,14 +888,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
     }
 
-    func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String) {
+    func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String, generation: UInt64) {
         // Server-side deactivation (admin disable, account deletion, etc.)
         // arrives as `isActive: false` on a 200 /auth/me response. The token
         // is still cryptographically valid but the account is dead — surface
         // a re-auth screen so the user knows and so the app stops issuing
         // calls on a zombie session.
         if user.isActive == false {
-            requireReauthentication(userId: userId)
+            requireReauthentication(userId: userId, generation: generation)
             return
         }
         // U3 — the revalidated /auth/me user doesn't port voicePublic (self-only
@@ -929,7 +926,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
 
         guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
-            requireReauthentication(userId: userId)
+            requireReauthentication(userId: userId, generation: sessionGeneration)
             throw MeeshyError.auth(.sessionExpired)
         }
         let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
@@ -966,14 +963,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 return newToken
             } catch let error as MeeshyError {
                 // #10463 — le refus d'une session qu'on a quittée ne ferme pas
-                // celle qui l'a remplacée.
-                guard self.sessionGeneration == generation else { throw error }
+                // celle qui l'a remplacée, et n'est pas rendu comme un refus :
+                // l'appelant (`APIClient`) le traduirait en session expirée.
+                guard self.sessionGeneration == generation else { throw CancellationError() }
                 // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
                 // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 } else if AgeGateSignal.isAgeRefusal(error) {
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 }
                 throw error
             } catch {
@@ -1138,6 +1136,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     #if DEBUG
+    /// Lève le délai d'une minute de `refreshCurrentUserProfile` (#10463) : un
+    /// témoin qui le subirait passerait sans avoir rien demandé.
+    func resetProfileRefreshThrottleForTesting() {
+        lastProfileRefreshAt = nil
+    }
+
     /// Test-only seam: cancels and clears any in-flight `tokenRefreshTask`.
     /// `handleUnauthorized()` fires a detached, fire-and-forget `Task` on
     /// every 401 (e.g. from unrelated background activity — E2EE bundle

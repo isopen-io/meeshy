@@ -756,6 +756,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             do {
                 let freshToken = try await AuthManager.shared.refreshSession()
                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+            } catch let abandoned as CancellationError {
+                // #10463 — rafraîchissement ABANDONNÉ (sortie de session en
+                // cours, session remplacée) : rien n'a été refusé, et une
+                // session expirée ferait démonter le compte qu'on quitte.
+                throw abandoned
             } catch {
                 throw MeeshyError.auth(.sessionExpired)
             }
@@ -891,6 +896,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     UpgradeGateSignal.signal(statusCode: retryStatusCode, body: retryData)
                                     throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
                                 }
+                            } catch let abandoned as CancellationError {
+                                // #10463 — même règle que le rafraîchissement
+                                // préventif : un abandon n'est pas un refus.
+                                throw abandoned
                             } catch {
                                 await AuthManager.shared.handleUnauthorized()
                                 throw MeeshyError.auth(.sessionExpired)
@@ -953,6 +962,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
             throw MeeshyError.server(statusCode: lastStatusCode, message: "Requete echouee apres \(Self.maxRetryAttempts) tentatives (status \(lastStatusCode))")
         } catch let error as MeeshyError {
+            throw error
+        } catch let error as CancellationError {
             throw error
         } catch let error as DecodingError {
             var debugInfo = "Erreur de decodage: "
