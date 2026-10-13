@@ -692,6 +692,7 @@ describe('PostService', () => {
         items: viewItems,
         total: 10,
         hasMore: true,
+        anonymousViewCount: 0,
       });
     });
 
@@ -708,6 +709,7 @@ describe('PostService', () => {
         items: expect.any(Array),
         total: 1,
         hasMore: false,
+        anonymousViewCount: 0,
       });
     });
 

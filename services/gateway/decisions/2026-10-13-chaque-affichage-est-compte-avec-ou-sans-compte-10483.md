@@ -1,10 +1,10 @@
-# Chaque affichage est compté, avec ou sans compte : une porte, une clé de lecteur HMAC, une garde d'audience (2026-10-13, #10483)
+## Chaque affichage est compté, avec ou sans compte : une porte, une clé de lecteur HMAC, une garde d'audience (2026-10-13, #10483)
 
-## Contexte
+### Contexte
 
 Un lecteur sans compte (invité d'un lien de conversation, visiteur web public, visiteur iOS ouvrant un lien universel) ne fait monter ni `viewCount` ni `impressionCount`. Sa seule trace est `AnonymousPostOpen(postId, sessionKey)` + `postOpenCount`, où `sessionKey` est la valeur BRUTE de `X-Session-Token` — pour un invité de lien, son jeton de session, que `Participant` ne garde pourtant qu'en hash. Le filtre de comptage anonyme (`filterPublicPostIds`) ne regarde que `visibility = PUBLIC`, quand la garde de lecture (`isServableToAnonymous`) regarde aussi l'expiration, l'auteur actif et l'original d'un repost. Les impressions anonymes sont refusées aux deux bouts (client web, 403 passerelle). Cartographie complète : #10483.
 
-## Décision
+### Décision
 
 1. **Une porte** : `POST /api/v1/social/events` reste le cœur unique (`ingestSocialEvents`). Corps, réponse `{ recorded, rejected }`, plafond de 200 événements : inchangés.
 2. **Clé de lecteur** : un acteur anonyme est identifié par
@@ -19,10 +19,10 @@ Un lecteur sans compte (invité d'un lien de conversation, visiteur web public, 
 9. **Alias** : les six routes restent montées. `POST /posts/:postId/impression` et `POST /posts/impressions/batch` passent en auth FACULTATIVE (branche anonyme sur `X-Session-Token`, même cœur) ; `/posts/:postId/anonymous-view` délègue au même cœur. `/posts/:postId/view` reste `requiredAuth`.
 10. **Migration** : script idempotent qui hache les `sessionKey` existants (toute valeur qui n'est pas 64 hex) et pose `expiresAt = createdAt + 90 j`. Staging d'abord ; production au feu vert du porteur, sauvegarde vérifiée.
 
-## Rétrocompatibilité
+### Rétrocompatibilité
 
 Ancien client ⇒ nouveau serveur : mêmes routes, même corps, mêmes réponses ; un ancien lot anonyme `view` compte désormais aussi dans `viewCount`. Nouveau client ⇒ ancien serveur : `surface` est ignoré ; une impression anonyme reçoit 403 et le client web la retire de sa file (comportement déjà en place pour un 403), sans rejeu.
 
-## Hors lot
+### Hors lot
 
 Commentaires (aucun modèle de portée : décision produit), écran « fil de communauté » web (inexistant), `TrackingLinkClick.ipAddress` en clair (issue séparée), exclusion de l'auteur de ses impressions (#10407), client Kotlin (gelé).

@@ -132,10 +132,7 @@ function makeNotificationService() {
 
 function makePrisma() {
   return {
-    anonymousPostOpen: {
-      create: jest.fn<any>().mockResolvedValue({}),
-      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-    },
+    anonymousPostOpen: { create: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     postImpression: {
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
@@ -167,10 +164,8 @@ function makePrisma() {
  * d'audience posé sur le favori, l'impression et le partage (issue #4146).
  */
 const publicAcl = (id: string) => ({
-  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
-  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
-  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
-  author: { isActive: true, deletedAt: null, deactivatedAt: null },
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null, deletedAt: null,
+  repostOfId: null, originalRepostOfId: null, repostOf: null, author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -680,7 +675,6 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   afterAll(async () => { await app.close(); });
 
   it('POST /posts/:postId/anonymous-view — returns 500 on service error', async () => {
-    // #10483 — la vue anonyme lit la garde par `post.findMany` : c'est elle qui tombe.
     prisma.post.findMany.mockRejectedValueOnce(new Error('DB error'));
     const res = await app.inject({
       method: 'POST',
