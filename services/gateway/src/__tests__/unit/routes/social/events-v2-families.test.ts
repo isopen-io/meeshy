@@ -413,3 +413,33 @@ describe('consentement — l’analyse sans son parent ne vaut rien', () => {
     await h.app.close();
   });
 });
+
+describe('O1 — aucun identifiant qui relie, sur une ligne sans acteur', () => {
+  const IMPRESSION_EVENT = '6a1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f';
+  const MUTATION = '507f1f77bcf86cd7994390b7';
+  const linked = [
+    { type: 'visibility', action: 'measured', target: { kind: 'post', id: POST }, impressionEventId: IMPRESSION_EVENT, viewable: true },
+    { type: 'interaction', action: 'react', target: { kind: 'post', id: POST }, mutationId: MUTATION },
+  ];
+
+  it('sans consentement : ni l’impression reliée ni la mutation REST ne sont rangées', async () => {
+    const h = await harness();
+    await sendReachV2(h.app, linked, account, CONTEXT);
+
+    const journal = JSON.stringify(h.writes);
+    expect(journal).not.toContain(IMPRESSION_EVENT);
+    expect(journal).not.toContain(MUTATION);
+    expect(h.contentEvents[0].props).toMatchObject({ viewable: true });
+    await h.app.close();
+  });
+
+  it('avec consentement : l’impression reliée est rangée par sa CLÉ (jamais l’identifiant brut), la mutation aussi', async () => {
+    const h = await harness({ consentedUserIds: [READER] });
+    await sendReachV2(h.app, linked, account, CONTEXT);
+
+    expect(JSON.stringify(h.writes)).not.toContain(IMPRESSION_EVENT);
+    expect((h.contentEvents[0].props as Record<string, unknown>).impressionEventKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(h.contentEvents[1].props).toMatchObject({ mutationId: MUTATION });
+    await h.app.close();
+  });
+});

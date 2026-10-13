@@ -127,11 +127,29 @@ const withAudiencedProps = (event: SocialEventV2Parsed, audience: Audience): Soc
 
 const ENVELOPE_KEYS: ReadonlySet<string> = new Set([
   'eventId', 'occurredAt', 'target', 'listing', 'prism', 'type', 'action', 'surface', 'searchId', 'listingSessionId',
+  'impressionEventId', 'mutationId',
 ]);
 
 /** Les propriétés propres au type — sans l'enveloppe, sans les identifiants qui relient. */
 const propsOf = (event: SocialEventV2Parsed): Record<string, unknown> =>
   compact(Object.fromEntries(Object.entries(event).filter(([key]) => !ENVELOPE_KEYS.has(key))));
+
+/**
+ * Les identifiants qui RELIENT cet événement à une autre ligne portant un
+ * compte — l'impression mesurée (sa clé est celle de `PostImpression.eventKey`)
+ * et la mutation REST (une réaction, un commentaire). Rangés seulement si
+ * l'événement est rattaché au compte : sur une ligne sans acteur, ils
+ * reconstitueraient l'auteur par jointure (revue de conformité O1).
+ */
+const linksOf = (event: SocialEventV2Parsed, attributed: boolean): Record<string, unknown> => {
+  if (!attributed) return {};
+  return compact({
+    impressionEventKey: 'impressionEventId' in event && typeof event.impressionEventId === 'string'
+      ? eventKeyOf(event.impressionEventId)
+      : undefined,
+    mutationId: 'mutationId' in event && typeof event.mutationId === 'string' ? event.mutationId : undefined,
+  });
+};
 
 /** Ce qu'un `searchId` laisse ranger : rien hors consentement (O3). */
 const searchFieldsOf = (event: SocialEventV2Parsed, attributed: boolean): Record<string, unknown> => {
@@ -184,7 +202,7 @@ function documentOf(params: {
     surface: event.surface,
     listing: storedListingOf(listingInput, effective),
     prism: keepsPrism(params.standing) ? event.prism : undefined,
-    props: { ...propsOf(event), ...searchFieldsOf(event, attributed) },
+    props: { ...propsOf(event), ...linksOf(event, attributed), ...searchFieldsOf(event, attributed) },
     sampleRate: sampleRateOf(event, params.context),
     expiresAt: ejsonDate(new Date(params.receivedAt.getTime() + contentEventRetentionMs(event.type))),
   });
