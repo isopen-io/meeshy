@@ -113,7 +113,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
     }
 
     /// La porte publique non levante refuse aussi, le dit, et rend son verdict.
-    func test_openSession_anotherUser_isRefused_andSaysSo() throws {
+    func test_openSession_anotherUser_isRefused_andSaysSo() async throws {
         let auth = AuthManager.shared
         try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
         auth.errorMessage = nil
@@ -129,7 +129,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
                        "#10463 F2 — la session refusée est refermée côté passerelle, quel que soit l'appelant")
     }
 
-    func test_openSession_withoutAnOpenSession_postsIt_andSaysSo() {
+    func test_openSession_withoutAnOpenSession_postsIt_andSaysSo() async {
         let auth = AuthManager.shared
 
         let opened = auth.openSession(EmailProvenSession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b")))
