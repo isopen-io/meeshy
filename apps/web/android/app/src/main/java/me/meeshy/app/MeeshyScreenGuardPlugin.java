@@ -1,5 +1,6 @@
 package me.meeshy.app;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Build;
 import android.view.WindowManager;
@@ -85,26 +86,28 @@ public class MeeshyScreenGuardPlugin extends Plugin {
     }
 
     @Override
+    @SuppressLint("NewApi")
     protected void handleOnStart() {
         Activity activity = getActivity();
         if (activity == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && screenshotWatch == null) {
+        if (ScreenGuardRules.detectsScreenshots(Build.VERSION.SDK_INT) && screenshotWatch == null) {
             screenshotWatch = ScreenshotWatch.start(activity, () -> notifyListeners("screenCaptured", new JSObject()));
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && recordingWatch == null) {
+        if (ScreenGuardRules.detectsRecording(Build.VERSION.SDK_INT) && recordingWatch == null) {
             recordingWatch = RecordingWatch.start(activity, this::recordingStateChanged);
         }
     }
 
     @Override
+    @SuppressLint("NewApi")
     protected void handleOnStop() {
         Activity activity = getActivity();
         if (activity == null) return;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && screenshotWatch != null) {
+        if (ScreenGuardRules.detectsScreenshots(Build.VERSION.SDK_INT) && screenshotWatch != null) {
             ScreenshotWatch.stop(activity, screenshotWatch);
             screenshotWatch = null;
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM && recordingWatch != null) {
+        if (ScreenGuardRules.detectsRecording(Build.VERSION.SDK_INT) && recordingWatch != null) {
             RecordingWatch.stop(activity, recordingWatch);
             recordingWatch = null;
         }

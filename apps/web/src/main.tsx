@@ -332,3 +332,31 @@ if (__SHELL__) {
   if (document.readyState === 'complete') guetter();
   else window.addEventListener('load', guetter, { once: true });
 }
+
+/**
+ * LA CAPTURE D'UN CONTENU (#10508) — dans la coque seulement : un navigateur
+ * ne détecte aucune capture. L'écoute se charge après la première peinture ;
+ * elle déclare à la télémétrie ce que la coque détecte réellement, puis émet
+ * `screen_capture` avec ce qui était à l'écran — jamais l'image.
+ */
+if (__SHELL__) {
+  const ecouterCaptures = (): void => {
+    void Promise.all([
+      import('@/lib/telemetry/content-capture'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/view/viewability'),
+      import('@/lib/view/telemetry-context'),
+      import('@/lib/native-shell'),
+    ]).then(([{ startContentCaptureReports, captureSurfaceOf }, { readingTelemetry }, { visibleTargets }, { noteCaptureDetection }, { coqueCourante }]) =>
+      startContentCaptureReports({
+        coque: coqueCourante(),
+        record: (event) => readingTelemetry.recordV2(event),
+        collect: () => ({ surface: captureSurfaceOf(window.location.pathname), visibleTargets: visibleTargets() }),
+        now: () => Date.now(),
+        onDetection: noteCaptureDetection,
+      }),
+    );
+  };
+  if (document.readyState === 'complete') ecouterCaptures();
+  else window.addEventListener('load', ecouterCaptures, { once: true });
+}
