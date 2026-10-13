@@ -133,7 +133,8 @@ export function counterWriteOf(command: unknown): CounterWrite | null {
   if (candidate?.findAndModify !== COUNTER_COLLECTION || !candidate.query || !candidate.update) return null;
   const set = candidate.update[0]!.$set;
   const points = stepOf(set.points);
-  const count = stepOf(set.count);
+  // Une reprise de reliquat ne touche pas aux actions : sa commande n'écrit pas `count`.
+  const count = set.count === undefined ? { operator: points.operator, amount: 0, nullSafe: true } : stepOf(set.count);
   if (!points.nullSafe || !count.nullSafe) throw new Error('écriture du compteur sans $ifNull : null ou l’absence y resteraient null');
   const kind = points.operator === '$add' ? 'credit' : candidate.new === false ? 'take-back' : 'debit';
   return {

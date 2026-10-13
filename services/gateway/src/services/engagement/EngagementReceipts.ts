@@ -25,7 +25,8 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { takeBackFromEngagementCounter } from './EngagementCounterWrites';
+import { MEESH_DEBIT_ORDER } from '@meeshy/shared/utils/meesh';
+import { takeBackAcrossEngagementCounters } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
@@ -42,31 +43,52 @@ const postIdOfReceipt = (bucket: string): string | undefined => {
 
 type ReceiptPrisma = Pick<PrismaClient, 'engagementQuota' | '$runCommandRaw'>;
 
+/** Où la reprise va chercher ce que le compteur du contenu ne peut plus rendre : l'ordre de débit de la frappe. */
+const TAKE_BACK_FALLBACK_AXES: readonly string[] = MEESH_DEBIT_ORDER.flat();
+
 /**
- * Retire `points` d'un crédit déjà écrit : le compteur de l'opération perd une
- * action et rend ce qu'il tient encore de ces points, et le score perd
- * EXACTEMENT ce que le compteur a rendu, sans descendre sous zéro. Les paliers
- * déjà franchis restent acquis.
+ * Retire `points` d'un crédit déjà écrit. Le compteur de l'opération perd une
+ * action et rend ce qu'il tient de ces points ; s'il en tient moins (une frappe
+ * l'a entamé, ou sa colonne vaut `null`), le reliquat est repris aux autres
+ * compteurs du compte, dans l'ordre de débit de la frappe, sans leur retirer
+ * d'action (`takeBackAcrossEngagementCounters`). Le score perd EXACTEMENT la
+ * somme reprise, sans descendre sous zéro. Les paliers déjà franchis restent
+ * acquis.
  *
- * **Symétrique (#10541).** La version précédente débitait le compteur sous
- * condition (`points >= p`) et le score sans condition : sur une ligne qu'une
- * frappe avait déjà entamée, ou dont la colonne valait `null`, seul le score
- * payait, et `engagementScore` passait sous `Σ(EngagementCounter.points)`. Le
- * score ne rend plus un point que le compteur n'a pas rendu — des points déjà
- * convertis en Meesh ont déjà quitté le score, à la frappe.
+ * **Symétrique (#10541).** La version d'origine débitait le compteur sous
+ * condition (`points >= p`) et le score sans condition : sur une ligne entamée
+ * par une frappe, le score payait seul et passait sous `Σ(points)`. Le score ne
+ * perd plus que ce que des compteurs ont rendu — et la reprise va chercher ce
+ * dû partout où la frappe aurait pu le prendre. La frappe a retiré le PRIX
+ * d'une Meesh, pas les points du contenu supprimé : ceux-ci restent dus tant
+ * que le compte a de quoi les rendre.
  *
- * Rend les points réellement repris au compteur et au score.
+ * **Pas de transaction** : compteurs puis score, des commandes atomiques
+ * séparées. Un compteur qui échoue en route arrête la reprise ; le score est
+ * quand même débité de ce qui a déjà été repris, puis l'erreur remonte. Seul un
+ * échec de l'écriture du SCORE laisse un écart : des compteurs débités sans
+ * leur score (`engagementScore > Σ(points)`) — jamais l'inverse, donc jamais
+ * des points convertibles que le score ne porte pas.
+ *
+ * Rend les points réellement repris.
  */
 export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, operationKey: string, points: number): Promise<number> {
-  const taken = await takeBackFromEngagementCounter(prisma, { userId, axisKey: operationKey, points });
-  if (taken <= 0) return 0;
-  await prisma.$runCommandRaw({
-    findAndModify: 'User',
-    query: { _id: { $oid: userId } },
-    update: [{ $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, taken] }] } } }],
-    new: true,
-    fields: { engagementScore: 1 },
-  } as never);
+  const { taken, failure } = await takeBackAcrossEngagementCounters(prisma, {
+    userId,
+    axisKey: operationKey,
+    points,
+    fallbackAxes: TAKE_BACK_FALLBACK_AXES,
+  });
+  if (taken > 0) {
+    await prisma.$runCommandRaw({
+      findAndModify: 'User',
+      query: { _id: { $oid: userId } },
+      update: [{ $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, taken] }] } } }],
+      new: true,
+      fields: { engagementScore: 1 },
+    } as never);
+  }
+  if (failure !== undefined) throw failure;
   return taken;
 }
 

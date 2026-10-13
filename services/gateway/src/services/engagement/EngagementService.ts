@@ -58,6 +58,7 @@ import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { creditEngagementCounter } from './EngagementCounterWrites';
+import { rawCommandNumber } from './rawCommandNumber';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 import { EngagementStreaks } from './EngagementStreaks';
@@ -817,13 +818,16 @@ export class EngagementService {
       update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, points] } } }],
       new: true,
       fields: { engagementScore: 1, levelRecord: 1 },
-    } as never)) as unknown as { value?: { engagementScore?: number; levelRecord?: number | null } | null };
+    } as never)) as unknown as { value?: { engagementScore?: unknown; levelRecord?: unknown } | null };
 
-    const newScore = result?.value?.engagementScore;
+    // Le score et le record se lisent par `rawCommandNumber` (#10541) : la
+    // colonne est un `long` sur la plupart des comptes, qu'une commande brute
+    // peut rendre en `{ $numberLong }`.
+    const newScore = rawCommandNumber(result?.value?.engagementScore);
     // Compte introuvable (supprimé entre l'activité et ce crédit) : rien à
     // notifier, et surtout pas un palier calculé sur `undefined`.
-    if (typeof newScore !== 'number') return;
-    await this.afterScore(userId, points, newScore, result?.value?.levelRecord ?? null);
+    if (newScore === null) return;
+    await this.afterScore(userId, points, newScore, rawCommandNumber(result?.value?.levelRecord));
   }
 
   /** Les paliers que `points` vient de franchir, et la Gloire du premier passage. */

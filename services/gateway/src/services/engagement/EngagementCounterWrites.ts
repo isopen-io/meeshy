@@ -33,7 +33,19 @@
  *     la commande DANS une transaction annulée     ->  rien n'est écrit
  *     la commande en conflit dans une transaction  ->  P2034, comme une écriture typée
  *
- * Les deux dernières lignes sont ce qui permet à `creditGamePoints` et à la
+ * Et sur des lignes semées en `NumberLong` — la norme en production, 616 lignes
+ * sur 675 — avec des opérandes Int32 :
+ *
+ *     `$gte` / `$gt` Int32 contre un `long` stocké  ->  comparaison numérique, juste
+ *     `$add` / `$subtract` `long` ± Int32            ->  la colonne RESTE `long`
+ *     `$max: [0, …]` qui retombe à zéro              ->  la colonne devient `int` (le 0 littéral)
+ *     colonne `null` créditée                        ->  `int`
+ *     la valeur rendue par la commande               ->  un nombre nu, `long` compris
+ *
+ * `int`, `long` et `double` se relisent tous par Prisma (`Int`) : le type BSON
+ * d'une colonne peut changer à zéro sans que rien ne le voie.
+ *
+ * Les deux lignes sur la transaction sont ce qui permet à `creditGamePoints` et à la
  * frappe de passer par ici sans perdre leur atomicité : `tx.$runCommandRaw`
  * s'exécute dans la session de la transaction et se rejoue avec elle.
  *
@@ -47,6 +59,8 @@
  *
  * Garde de source : `__tests__/unit/engagement-counter-points-write-guard.test.ts`.
  */
+
+import { rawCommandNumber } from './rawCommandNumber';
 
 /** `prisma` ou le client d'une transaction : les deux exécutent la commande dans leur session. */
 export type EngagementCounterDb = {
@@ -77,13 +91,16 @@ const rowQuery = ({ userId, axisKey }: EngagementCounterKey) => ({ userId: { $oi
 /** La colonne telle qu'elle doit se lire : `null` et l'absence valent zéro. */
 const held = (column: 'count' | 'points') => ({ $ifNull: [`$${column}`, 0] });
 
-const numberOr = (value: unknown, fallback: number): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-
+/**
+ * La ligne que la commande rend. Ses colonnes se lisent par `rawCommandNumber` :
+ * un `long` peut revenir en `{ $numberLong }`, et le lire zéro détruirait des
+ * points. `null` et l'absence d'une colonne valent zéro — c'est l'état fautif
+ * que ce module répare, pas une valeur illisible.
+ */
 const stateOf = (result: unknown): EngagementCounterState | null => {
   const value = (result as FindAndModifyResult | null | undefined)?.value;
   if (value === null || value === undefined) return null;
-  return { count: numberOr(value.count, 0), points: numberOr(value.points, 0) };
+  return { count: rawCommandNumber(value.count) ?? 0, points: rawCommandNumber(value.points) ?? 0 };
 };
 
 /**
@@ -160,21 +177,20 @@ export async function debitEngagementCounter(
 }
 
 /**
- * Reprend JUSQU'À `points` à la ligne, et une action — un contenu retiré.
+ * Reprend JUSQU'À `points` à la ligne, et `actions` actions (une pour le
+ * compteur du contenu retiré, zéro pour un compteur qui ne fait que payer un
+ * reliquat — voir `takeBackAcrossEngagementCounters`).
  *
- * Rend ce que la ligne a RÉELLEMENT rendu, que l'appelant retire du score : pas
- * un point de plus. Une ligne qu'une frappe a déjà entamée rend ce qui lui
- * reste ; une ligne vide, `null` ou absente ne rend rien et n'est pas touchée.
- * C'est ce qui tient l'invariant dans ce sens-là : la version précédente
- * débitait le compteur sous condition et le score sans condition, donc une
- * reprise sur une ligne déjà convertie en Meesh faisait payer le score seul.
+ * Rend ce que la ligne a RÉELLEMENT rendu. Une ligne entamée rend ce qui lui
+ * reste ; une ligne vide, `null` ou absente ne rend rien et n'est pas touchée,
+ * pas même son compte d'actions. Jamais de négatif.
  *
  * Le montant se lit dans l'image d'AVANT que la même commande rend (`new:
  * false`) : une seule écriture, aucune fenêtre entre la lecture et le débit.
  */
 export async function takeBackFromEngagementCounter(
   db: EngagementCounterDb,
-  reclaim: EngagementCounterKey & { readonly points: number },
+  reclaim: EngagementCounterKey & { readonly points: number; readonly actions: 0 | 1 },
 ): Promise<number> {
   if (!(reclaim.points > 0)) return 0;
   const result = await db.$runCommandRaw({
@@ -183,7 +199,7 @@ export async function takeBackFromEngagementCounter(
     update: [
       {
         $set: {
-          count: { $max: [0, { $subtract: [held('count'), 1] }] },
+          ...(reclaim.actions > 0 ? { count: { $max: [0, { $subtract: [held('count'), reclaim.actions] }] } } : {}),
           points: { $max: [0, { $subtract: [held('points'), reclaim.points] }] },
           updatedAt: '$$NOW',
         },
@@ -195,4 +211,62 @@ export async function takeBackFromEngagementCounter(
   const before = stateOf(result);
   if (before === null) return 0;
   return Math.min(reclaim.points, Math.max(0, before.points));
+}
+
+/** Ce qu'une reprise a rendu, et ce qui l'a interrompue si un compteur a failli. */
+export type EngagementTakeBack = {
+  readonly taken: number;
+  readonly failure?: unknown;
+};
+
+/**
+ * Reprend `points` au COMPTE : d'abord au compteur du contenu retiré, qui perd
+ * une action, puis — s'il rend moins — le reliquat aux compteurs de
+ * `fallbackAxes`, dans l'ordre donné, sans leur retirer d'action.
+ *
+ * ## Pourquoi le reliquat va chercher ailleurs
+ *
+ * La frappe retire au score le PRIX d'une Meesh, pas les points d'un contenu :
+ * elle les prend au rang le plus renouvelable qui en tient, donc souvent sur le
+ * compteur même du contenu qu'on supprimera ensuite. Borner la reprise à ce
+ * seul compteur laissait au compte ce que la frappe y avait pris : deux réels
+ * publiés (2 000), une frappe (1 221), les deux réels supprimés — le score
+ * gardait 1 221 points d'un contenu disparu, soit une Meesh gratuite, rejouable
+ * chaque jour (audit du 2026-10-13). Le reliquat se prend donc là où la frappe
+ * l'aurait pris : l'appelant passe l'ordre de débit (`MEESH_DEBIT_ORDER`).
+ *
+ * Les autres compteurs ne perdent que des POINTS : leurs actions tiennent leurs
+ * badges, et le contenu retiré n'en était pas une chez eux.
+ *
+ * ## Ce que l'appelant fait du résultat
+ *
+ * `taken` est la somme RÉELLEMENT reprise, à retirer du score : c'est ce qui
+ * tient `engagementScore == Σ(points)`. Un compte qui n'a plus rien nulle part
+ * rend ce qui existe, jamais plus.
+ *
+ * **Pas de transaction.** Chaque compteur est débité par sa propre commande
+ * atomique. Si l'une d'elles échoue en route, la fonction s'arrête et rend ce
+ * qu'elle a déjà repris, avec `failure` : l'appelant retire CE montant du score
+ * avant de relancer l'erreur, pour que les compteurs déjà débités ne restent
+ * pas sans leur débit de score.
+ */
+export async function takeBackAcrossEngagementCounters(
+  db: EngagementCounterDb,
+  reclaim: EngagementCounterKey & { readonly points: number; readonly fallbackAxes: readonly string[] },
+): Promise<EngagementTakeBack> {
+  const steps: readonly { readonly axisKey: string; readonly actions: 0 | 1 }[] = [
+    { axisKey: reclaim.axisKey, actions: 1 },
+    ...reclaim.fallbackAxes.filter((axisKey) => axisKey !== reclaim.axisKey).map((axisKey) => ({ axisKey, actions: 0 as const })),
+  ];
+  let taken = 0;
+  for (const step of steps) {
+    const remaining = reclaim.points - taken;
+    if (remaining <= 0) break;
+    try {
+      taken += await takeBackFromEngagementCounter(db, { userId: reclaim.userId, axisKey: step.axisKey, points: remaining, actions: step.actions });
+    } catch (failure) {
+      return { taken, failure };
+    }
+  }
+  return { taken };
 }

@@ -253,6 +253,36 @@ describe('publier, frapper, supprimer : un contenu retiré rend TOUS ses points'
   });
 });
 
+/**
+ * La reprise multi-compteurs n'est PAS dans une transaction : chaque compteur
+ * est débité par sa propre commande atomique. Ce témoin fige ce qu'une panne en
+ * route laisse — le score suit ce qui a déjà été repris, l'invariant tient.
+ */
+describe('une reprise interrompue par une panne entre deux compteurs', () => {
+  it('retire du score ce qui a déjà été repris, puis remonte l’erreur : score == Σ points', async () => {
+    const db = verifiedAccount({ engagementScore: 5000 });
+    seedCounter(db, 'conversation.private', { count: 50, points: 5000 });
+    missionsAwaitOtherGestures(db);
+    const engagement = service(db);
+    await engagement.recordActivity(USER, 'content.reel', { targetId: 'r1', variant: 'public' });
+    db.engagementCounter.rows.find((r) => r.axisKey === 'content.reel')!.points = 400;
+    db.user.rows.find((r) => r.id === USER)!.engagementScore = 5400;
+    const client = db.prisma as unknown as { $runCommandRaw: (command: { findAndModify: string }) => Promise<unknown> };
+    const raw = client.$runCommandRaw;
+    let counterCommands = 0;
+    client.$runCommandRaw = async (command) => {
+      if (command.findAndModify === 'EngagementCounter' && (counterCommands += 1) === 2) throw new Error('compteur indisponible');
+      return raw(command);
+    };
+
+    await expect(engagement.reclaimContent(USER, 'content.reel', 'r1')).rejects.toThrow('compteur indisponible');
+
+    expect(rawPoints(db, 'content.reel')).toBe(0);
+    expect(score(db)).toBe(5000);
+    expect(pointsHeld(db)).toBe(score(db));
+  });
+});
+
 describe('une reprise sur un compte qui n’a plus rien nulle part', () => {
   it('reprend ce qui existe, et ni le score ni un compteur ne passe sous zéro', async () => {
     const db = verifiedAccount();
