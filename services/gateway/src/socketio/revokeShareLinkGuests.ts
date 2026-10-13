@@ -144,7 +144,7 @@ export async function revokeShareLinkGuests(
   // la participation, et la session embarquée en repli (#10440) — les deux
   // sont posées à l'entrée par lien, et une ligne qui ne porterait que la
   // seconde échapperait sinon à la révocation.
-  const guests = await prisma.participant.findMany({
+  const candidates = await prisma.participant.findMany({
     where: {
       type: 'anonymous',
       isActive: true,
@@ -153,12 +153,24 @@ export async function revokeShareLinkGuests(
     select: { id: true, conversationId: true, displayName: true },
   });
 
-  if (guests.length === 0) return [];
+  if (candidates.length === 0) return [];
 
-  await prisma.participant.updateMany({
-    where: { id: { in: guests.map(guest => guest.id) } },
-    data: { isActive: false, leftAt: revokedAt },
-  });
+  // #10457 — une écriture CONDITIONNELLE par ligne (`isActive: true` dans le
+  // `where`) : seul l'invité que CETTE révocation a fait passer à inactif est
+  // annoncé, évincé et compté. Deux balayages concurrents (nettoyage admin et
+  // journalier, ou un geste de l'hôte pendant un balayage) lisaient les mêmes
+  // invités actifs et émettaient chacun leur départ.
+  const transitions = await Promise.all(
+    candidates.map(guest =>
+      prisma.participant.updateMany({
+        where: { id: guest.id, isActive: true },
+        data: { isActive: false, leftAt: revokedAt },
+      })
+    )
+  );
+  const guests = candidates.filter((_guest, index) => transitions[index].count > 0);
+
+  if (guests.length === 0) return [];
 
   // Un lien n'a qu'une conversation, mais l'effectif se lit sur la ligne de
   // CHAQUE invité plutôt que sur un paramètre : une ligne pendante ne peut

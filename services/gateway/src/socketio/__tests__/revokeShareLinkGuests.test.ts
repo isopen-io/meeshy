@@ -53,7 +53,7 @@ function makePrisma(guests: Guest[], remaining: unknown[] = []) {
       }),
       updateMany: jest.fn<any>(async () => {
         calls.push('update');
-        return { count: guests.length };
+        return { count: 1 };
       }),
     },
   };
@@ -154,7 +154,7 @@ describe('revokeShareLinkGuests', () => {
     });
 
     expect(prisma.participant.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [GUEST_A] } },
+      where: { id: GUEST_A, isActive: true },
       data: { isActive: false, leftAt: revokedAt },
     });
     // L'écriture précède la lecture de l'effectif restant : l'annonce porte
@@ -259,5 +259,77 @@ describe('revokeShareLinkGuests', () => {
 
     expect(order).toContain(`leave:${ROOMS.user(GUEST_A)}:${ROOMS.conversation(CONV_ID)}`);
     expect(order).toContain(`leave:${ROOMS.user(GUEST_B)}:${ROOMS.conversation(otherConv)}`);
+  });
+
+  /**
+   * #10457 — deux balayages CONCURRENTS (le nettoyage admin et le journalier,
+   * ou un geste de l'hôte pendant un balayage) lisaient les mêmes invités
+   * actifs et annonçaient chacun leur départ : deux `participant-left` par
+   * invité. Seule l'écriture qui a fait passer la ligne à inactif l'annonce.
+   */
+  it("deux révocations concurrentes n'annoncent, n'évincent et ne rendent chaque invité qu'UNE fois", async () => {
+    const rows = [
+      { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A', isActive: true },
+      { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B', isActive: true },
+    ];
+    const prisma = {
+      participant: {
+        findMany: jest.fn<any>(async (args: any) =>
+          args?.where?.OR
+            ? rows.filter(row => row.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+            : []
+        ),
+        updateMany: jest.fn<any>(async ({ where, data }: any) => {
+          const row = rows.find(candidate => candidate.id === where.id && candidate.isActive === where.isActive);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        }),
+      },
+    };
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    const [first, second] = await Promise.all([
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID }),
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID }),
+    ]);
+
+    expect([...first, ...second].sort()).toEqual([GUEST_A, GUEST_B].sort());
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(2);
+    const announced = (emitConversationMemberCountEvent as jest.Mock).mock.calls.map(([arg]: any) => arg.payload.participantId);
+    expect(announced.sort()).toEqual([GUEST_A, GUEST_B].sort());
+    expect(order.filter(step => step.startsWith('disconnect:'))).toHaveLength(2);
+    expect(order.filter(step => step.startsWith('end-call:'))).toHaveLength(2);
+  });
+
+  it("un invité qu'une autre écriture a déjà désactivé n'est ni annoncé, ni évincé, ni rendu", async () => {
+    const prisma = makePrisma([
+      { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' },
+      { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B' },
+    ]);
+    prisma.participant.updateMany.mockImplementation(async ({ where }: any) => ({ count: where.id === GUEST_A ? 1 : 0 }));
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    const revoked = await revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID });
+
+    expect(revoked).toEqual([GUEST_A]);
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(1);
+    expect(order).not.toContain(`disconnect:${ROOMS.user(GUEST_B)}`);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+  });
+
+  it("n'annonce rien quand chaque invité lu a déjà été désactivé par une autre écriture", async () => {
+    const prisma = makePrisma([{ id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A' }]);
+    prisma.participant.updateMany.mockResolvedValue({ count: 0 });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    const revoked = await revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID });
+
+    expect(revoked).toEqual([]);
+    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+    expect(order).toEqual([]);
   });
 });
