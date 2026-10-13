@@ -93,6 +93,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { endConversationMembership } from './endConversationMembership';
 import {
   emitConversationMemberCountEvent,
@@ -108,6 +109,7 @@ import { announceConversationLanguageChange } from '../services/message-translat
  * `endConversationMembership` utilise, et la coupure qu'elle ne fait pas.
  */
 interface RevocableSocket {
+  readonly rooms: ReadonlySet<string>;
   leave(room: string): void | Promise<void>;
   disconnect(close?: boolean): void;
 }
@@ -118,7 +120,7 @@ interface RevocableSocket {
  * `MembershipRoomReader`, dont c'est un sur-ensemble.
  */
 export type GuestSocketRegistry = ConversationRoomEmitter & {
-  in(room: string): { fetchSockets(): Promise<ReadonlyArray<RevocableSocket>> };
+  in(room: string | string[]): { fetchSockets(): Promise<ReadonlyArray<RevocableSocket>> };
 };
 
 export interface ShareLinkRevocation {
@@ -195,10 +197,21 @@ export async function revokeShareLinkGuests(
     await settle(failures, () => announceDepartures({ prisma, io, conversationId, guests: departed, revokedAt }));
   }
 
+  // #10472 — les inactifs que la passe n'a PAS écrits sont, pour l'immense
+  // majorité, partis depuis longtemps : sans socket ni appel. Un seul
+  // `fetchSockets` sur leurs rooms et une seule lecture d'appels désignent
+  // ceux qui tiennent encore quelque chose de vivant ; les autres ne coûtent
+  // aucun aller-retour. Si la détection lève, tous repassent par le chemin
+  // complet : l'éviction ne dépend jamais d'elle.
+  const departedIds = new Set(departed.map(guest => guest.id));
+  const leftovers = evicted.filter(guest => !departedIds.has(guest.id));
+  const liveness = await settle(failures, () => leftoverLiveness(prisma, io, leftovers));
+  const connected = liveness ? leftovers.filter(guest => liveness.connected.has(guest.id)) : leftovers;
+
   // #10468 — invité par invité : l'échec de l'un (délai inter-nœuds de
   // `fetchSockets` sur l'adaptateur Redis) ne laisse plus les suivants dans
   // la room, dans l'appel et connectés.
-  for (const guest of evicted) {
+  for (const guest of [...departed, ...connected]) {
     await settle(failures, () =>
       endConversationMembership({
         io,
@@ -210,6 +223,17 @@ export async function revokeShareLinkGuests(
       })
     );
     await settle(failures, () => disconnectGuest(io, guest.id));
+  }
+
+  // Les inactifs déconnectés : la position vive est un état serveur (sans
+  // réseau), l'appel ne se défait que pour ceux qui en tiennent un.
+  for (const guest of liveness ? leftovers.filter(candidate => !liveness.connected.has(candidate.id)) : []) {
+    await settle(failures, async () => {
+      manager?.endLiveLocationForDepartedMember?.(guest.conversationId, guest.id);
+      if (liveness?.inCall.has(guest.id)) {
+        await manager?.endCallParticipationForDepartedMember?.(guest.conversationId, guest.id);
+      }
+    });
   }
 
   // #10472 (R3) — et retombent APRÈS l'éviction : une lecture concurrente a pu
@@ -284,6 +308,34 @@ async function disconnectGuest(io: GuestSocketRegistry | null | undefined, guest
   if (!io) return;
   const sockets = await io.in(ROOMS.user(guestId)).fetchSockets();
   for (const socket of sockets) socket.disconnect(true);
+}
+
+/**
+ * Lesquels de ces invités tiennent encore une socket, et lesquels — parmi les
+ * autres — une participation d'appel ouverte : deux requêtes, quel que soit
+ * leur nombre.
+ */
+async function leftoverLiveness(
+  prisma: PrismaClient,
+  io: GuestSocketRegistry | null | undefined,
+  guests: ReadonlyArray<RevocationCandidate>
+): Promise<{ connected: ReadonlySet<string>; inCall: ReadonlySet<string> }> {
+  if (guests.length === 0) return { connected: new Set(), inCall: new Set() };
+  const sockets = io ? await io.in(guests.map(guest => ROOMS.user(guest.id))).fetchSockets() : [];
+  const occupied = new Set(sockets.flatMap(socket => [...socket.rooms]));
+  const connected = new Set(guests.filter(guest => occupied.has(ROOMS.user(guest.id))).map(guest => guest.id));
+  const disconnected = guests.filter(guest => !connected.has(guest.id)).map(guest => guest.id);
+  const participations = disconnected.length === 0
+    ? []
+    : await prisma.callParticipant.findMany({
+        where: {
+          participantId: { in: disconnected },
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+          callSession: { status: { notIn: [...CALL_TERMINAL_STATUSES] } },
+        },
+        select: { participantId: true },
+      });
+  return { connected, inCall: new Set(participations.map(participation => participation.participantId)) };
 }
 
 async function readCommittedRejections(

@@ -68,26 +68,30 @@ function makePrisma(guests: Guest[], remaining: unknown[] = [], inactive: Guest[
 }
 
 function makeIo(order: string[]) {
-  const socketsByRoom = new Map<string, Array<{ id: string; leave: jest.Mock; disconnect: jest.Mock }>>();
+  const socketsByRoom = new Map<string, Array<{ id: string; rooms: Set<string>; leave: jest.Mock; disconnect: jest.Mock }>>();
   const broadcast: any = { emit: jest.fn<any>(), to: jest.fn<any>(() => broadcast) };
+  const socketsOf = (room: string) => {
+    const existing = socketsByRoom.get(room);
+    if (existing) return existing;
+    const created = [
+      {
+        id: `${room}#0`,
+        rooms: new Set([room]),
+        leave: jest.fn<any>((left: string) => { order.push(`leave:${room}:${left}`); }),
+        disconnect: jest.fn<any>(() => { order.push(`disconnect:${room}`); }),
+      },
+    ];
+    socketsByRoom.set(room, created);
+    return created;
+  };
   const io = {
     // `emitConversationMemberCountEvent` est doublé dans ce fichier : `to`
     // n'est là que pour satisfaire le contrat structurel de l'émetteur.
     to: jest.fn<any>(() => broadcast),
-    in: jest.fn<any>((room: string) => ({
-      fetchSockets: jest.fn<any>(async () => {
-        const existing = socketsByRoom.get(room);
-        if (existing) return existing;
-        const created = [
-          {
-            id: `${room}#0`,
-            leave: jest.fn<any>((left: string) => { order.push(`leave:${room}:${left}`); }),
-            disconnect: jest.fn<any>(() => { order.push(`disconnect:${room}`); }),
-          },
-        ];
-        socketsByRoom.set(room, created);
-        return created;
-      }),
+    // Chaque room personnelle porte une socket ; `in` accepte une LISTE de
+    // rooms, comme Socket.IO (#10472).
+    in: jest.fn<any>((rooms: string | string[]) => ({
+      fetchSockets: jest.fn<any>(async () => [rooms].flat().flatMap(socketsOf)),
     })),
   };
   return { io, socketsByRoom };
@@ -503,13 +507,14 @@ describe('revokeShareLinkGuests', () => {
     const broadcast: any = { emit: jest.fn<any>(), to: jest.fn<any>(() => broadcast) };
     return {
       to: jest.fn<any>(() => broadcast),
-      in: jest.fn<any>((room: string) => ({
+      in: jest.fn<any>((rooms: string | string[]) => ({
         fetchSockets: jest.fn<any>(async () => {
-          if (room === ROOMS.user(failFetchFor)) throw new Error('timeout reached while waiting for fetchSockets response');
-          return [{
+          if ([rooms].flat().includes(ROOMS.user(failFetchFor))) throw new Error('timeout reached while waiting for fetchSockets response');
+          return [rooms].flat().map(room => ({
+            rooms: new Set([room]),
             leave: jest.fn<any>((left: string) => { order.push(`leave:${room}:${left}`); }),
             disconnect: jest.fn<any>(() => { order.push(`disconnect:${room}`); }),
-          }];
+          }));
         }),
       })),
     };
