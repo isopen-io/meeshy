@@ -203,6 +203,28 @@ Le web n'émet donc AUCUN `screen_capture` et déclare `capabilities` sans `scre
 - Rien n'est affiché en v2 : la capture précède l'exploitation, comme demandé. Chaque lecture future est une issue à part.
 - Android Kotlin (gelé) ne reçoit rien ; la coque Android de `apps/web` reçoit le greffon de capture (API 34+).
 
+### Mise en œuvre de la passerelle (2026-10-13) — ce qui s'écarte du texte ci-dessus, et pourquoi
+
+La revue de conformité (huit corrections O1–O8, recommandations R1–R8) prime sur le texte d'origine. La passerelle l'applique ainsi :
+
+| point | ce que fait le code | site |
+|---|---|---|
+| idempotence | l'`eventId` BRUT n'est rangé nulle part : sa CLÉ HMAC (`eventKey`, secret des clés de lecteur) l'est — sur `PostImpression` pour l'impression d'un compte, dans un REÇU sans acteur ni contexte (`ContentEvent`, `action = receipt`, 4 j) pour une vue, une ouverture ou une impression anonyme, sur la ligne v2 sinon. Le « sel du jour » de O1 n'est pas nécessaire : un `eventId` est propre à UN événement, une ligne n'en porte qu'un, et sa clé ne relie rien | `services/social/contentEvents.ts`, `countingReplays.ts`, `impressionRows.ts` |
+| lecture du lot | `events: unknown[] ≤ 200` puis `safeParse` par élément ; type inconnu, événement invalide, v2 > 2 Kio ou > 72 h ⇒ `ignored`. Seule la FORME du lot reste un 400 | `routes/social/eventsEnvelope.ts` |
+| consentement | `granted` ⇔ `analyticsConsentAt` ET `dataProcessingConsentAt` posés, client non `denied`, âge déclaré ≥ 15 ans (R8). `denied` ⇒ ni contexte, ni listing, ni Prisme, ni colonnes de mesure sur `PostImpression` (O4). Lu une fois par lot, et seulement si une écriture en dépend | `services/social/eventPrivacy.ts` |
+| sans acteur (O1, O2, R4, R5) | ni `userId`, ni `appSessionId`, ni `feedRequestId`, ni `listingSessionId`, ni `searchId`, ni `impressionEventId`, ni `mutationId` ; OS en majeure, réseau sans sous-type ; anonyme : plateforme et langue d'interface seules ; bloquer / masquer / faire taire un auteur ne s'attribue jamais | `services/social/socialEventsV2.ts` |
+| retrait (O4) | `PUT /me/consents/analytics` ou `data-processing` à `false` détache `ContentEvent` (sans acteur, identifiants de liaison retirés, OS en majeure) et retire session et page de `PostImpression` | `services/social/consentWithdrawal.ts` |
+| recherche (O3) | `meta.searchId` OPAQUE et SIGNÉ (`nonce.empreinte.signature`) sur `/users/search` et `/communities/search`, sans état côté passerelle ; empreinte rangée seulement pour un compte consenti ; `q`, `query`, `search`, `term` tus dans toute adresse journalisée. Sans `SEARCH_FINGERPRINT_SECRET` valable en production, AUCUNE empreinte n'est calculée et la recherche répond quand même (fail-closed sans casser la recherche) | `services/social/searchFingerprint.ts`, `utils/redact-reader-file-url.ts` |
+| mesure ≠ personnalisation (O5) | la fatigue d'impression du fil (lecture de `PostImpression` par compte) n'a lieu qu'avec le consentement ; une garde interdit toute autre lecture par `userId` | `services/posts/seenCounts.ts` |
+| effacement, export (O6) | la purge efface `PostImpression`, `PostEngagement`, `PostView` et `ContentEvent` du compte ; `GET /me/export` gagne `readingActivity` ; `PostImpression.user` reçoit `onDelete: Cascade` | `services/social/readingTelemetryErasure.ts`, `routes/me/export-reading.ts` |
+| conservation (O7) | `PostImpression` et `PostEngagement` neuves : `expiresAt` à 90 j ; index TTL et unique partiel posés à chaque démarrage (`ensureSocialEventIndexes`) ; l'EXISTANT reçoit `createdAt + 90 j` par la migration nommée `scripts/migrations/2026-10-13-social-events-v2-retention.ts` — en production après feu vert du porteur et sauvegarde vérifiée | `services/social/socialEventIndexes.ts`, `socialEventsRetentionMigration.ts` |
+| O8 | une garde interdit à toute route de lire `ContentEvent` (hors écriture, purge, retrait, index, export de soi) et de nommer `screen_capture` / `profile_visit` | `__tests__/security/social-events-v2-privacy-guard.test.ts` |
+| listing | `meta.feedRequestId` (tiré au hasard, gardé nulle part) et `rankingSource` par élément sur les huit scopes de `GET /social/posts` qui passent par `envoyerFeedUnifie` | `services/social/listingContext.ts` |
+
+Restes, chacun à suivre par son issue : `feedRequestId` sur les scopes `hashtag`, `sound`, `nearby` (leur réponse doit rester identique clé à clé à leur route historique) ; l'exclusion des réels déjà vus lit `PostView` par compte sans consentement — qualification à trancher avec #10511 ; `SEARCH_FINGERPRINT_SECRET` à poser dans les compose de staging et de production (agent `sre-infra`) ; les agrégats quotidiens et leur seuil k ≥ 10 (#10512).
+
+Note de pilotage : plusieurs commits de la passerelle citent `#10506` pour la recherche et `#10509` pour le consentement ; selon la table ci-dessous, la recherche relève de `#10505` et le consentement de `#10500`/`#10502`.
+
 ### Pilotage
 
 Milestone #175 « Chaque interaction avec un contenu est capturée, exploitable plus tard » (échéance 2026-10-27). Chapeau #10499.
