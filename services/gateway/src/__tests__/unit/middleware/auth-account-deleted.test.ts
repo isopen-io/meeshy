@@ -73,7 +73,7 @@ const prismaFor = (ligne: Record<string, unknown> | null) => {
       accountDeletionRequest: {
         findFirst: jest.fn(async ({ where }: { where: { status: string } }) => (demandes.includes(where.status) ? { id: 'req-1' } : null)),
       },
-      userSession: { findFirst: jest.fn(async () => null), update: jest.fn(async () => ({})) },
+      userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })), update: jest.fn(async () => ({})) },
       participant: { findFirst: jest.fn(async () => null) },
     } as never,
     findUnique,
@@ -81,7 +81,7 @@ const prismaFor = (ligne: Record<string, unknown> | null) => {
 };
 
 const signe = (options: jwt.SignOptions = { expiresIn: '1h' }, secret = JWT_SECRET): string =>
-  jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: 'sess-1' }, secret, options);
+  jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: '507f1f77bcf86cd799439031' }, secret, options);
 
 const monter = async (ligne: Record<string, unknown> | null) => {
   const app = Fastify({ logger: false });

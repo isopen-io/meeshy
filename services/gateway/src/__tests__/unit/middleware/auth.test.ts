@@ -41,7 +41,7 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       findUnique: overrides.userFindUnique ?? jest.fn().mockResolvedValue(null),
     },
     userSession: {
-      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue(null),
+      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: overrides.sessionUpdate ?? jest.fn().mockResolvedValue({}),
     },
     participant: {
@@ -116,7 +116,7 @@ function createTestParticipant(tokenHash: string, overrides: Record<string, unkn
 }
 
 function signJwt(userId: string): string {
-  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' })
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' })
 }
 
 describe('AuthMiddleware', () => {

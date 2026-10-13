@@ -225,12 +225,12 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         // autre, qui décide. `userId` est dans le `where` : sans lui, un `sid`
         // valide appartenant à un AUTRE compte suffirait à passer la garde.
         //
-        // Le filtre s'arrête à `isValid`, comme la règle de compte qu'il
-        // remplace : y ajouter `expiresAt` resserrerait au-delà de l'issue et
-        // déconnecterait des porteurs que #4213 laissait passer. Ce
-        // durcissement se mesure à part.
+        // #10328 — `expiresAt` aussi : le REST refuse une session échue, et
+        // la renouveler ici ferait boucler le client (401 → refresh → 401).
+        // Le balayage (`cleanupExpiredSessions`) l'invalidait déjà à son
+        // passage ; seul l'intervalle entre l'échéance et le balayage change.
         const sessionNommee = await context.prisma.userSession.findFirst({
-          where: { id: sid, userId: decoded.userId, isValid: true },
+          where: { id: sid, userId: decoded.userId, isValid: true, expiresAt: { gt: new Date() } },
           select: { id: true },
         });
 

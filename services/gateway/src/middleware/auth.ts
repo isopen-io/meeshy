@@ -9,10 +9,11 @@ import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { loadGuestShareLinkGate, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
 import { guestAccessEnd } from '../services/guestAccessEnd';
-import { sendUnauthorized, sendForbidden } from '../utils/response';
+import { sendUnauthorized, sendForbidden, sendError } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
+import { SESSION_CLAIM } from '../services/auth/session-jwt';
+import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../services/auth/session-admission';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
 import { AccountDeletedError, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
@@ -151,31 +152,7 @@ export async function findTrustedSession(
   });
 }
 
-// ===== VIE D'UNE SESSION NOMMÉE (#4264 critère 4) =====
-
-/**
- * Verdict d'une lecture de session — TROIS états, jamais deux, comme
- * `NotificationService.messageLiveness` (`services/gateway/CLAUDE.md`
- * § « Une garde d'admission se pose sur CHAQUE chemin ») : `UserSession`
- * n'est JAMAIS supprimée physiquement dans ce dépôt (seul `isValid` bascule —
- * `SessionService.invalidateSession`, `services/gateway/src/services/SessionService.ts`),
- * donc une ligne ABSENTE ne PROUVE rien.
- *
- *  - `live`    — la ligne existe, `isValid` est vrai. Admettre.
- *  - `gone`    — la ligne existe, `isValid` est FAUX : la révocation est
- *    ÉCRITE en base, donc PROUVÉE. Refuser (fail-CLOSED sur la preuve).
- *  - `unknown` — la ligne n'a pas été trouvée, ou la lecture a levé : rien
- *    n'est prouvé. Un secondaire en retard sur le jeu de réplicas rend
- *    `null` pour une session tout juste créée — le cas nominal du PREMIER
- *    appel REST suivant un `POST /auth/login` — et ce n'est pas une preuve
- *    de révocation. Admettre (fail-OPEN sur l'absence de preuve).
- *
- * Ne JAMAIS filtrer `isValid` dans le `where` de la lecture (voir
- * `AuthMiddleware.sessionLiveness`) : cela confondrait `gone` et `unknown`
- * sous un seul « non trouvé », et ferait perdre exactement la distinction
- * qui protège la connexion qui vient d'avoir lieu.
- */
-type SessionLiveness = 'live' | 'gone' | 'unknown';
+// ===== REFUS DE SESSION (#4264 critère 4, #10328) =====
 
 /**
  * Motif de refus interne — jamais transmis au client, qui n'apprend que le
@@ -234,37 +211,6 @@ export class AuthMiddleware {
     return this.createUnauthenticatedContext();
   }
 
-  /**
-   * Verdict de vie de la session NOMMÉE par le claim `sid` d'un JWT — voir
-   * {@link SessionLiveness}. Lit par IDENTITÉ (`id` + `userId`), JAMAIS en
-   * filtrant `isValid` dans le `where` : c'est ce qui permet de distinguer
-   * `gone` (prouvé — la ligne existe et porte `isValid: false`) de `unknown`
-   * (rien trouvé, y compris par retard de réplication).
-   *
-   * `userId` est dans le `where` par défense en profondeur, comme pour
-   * `findTrustedSession` ci-dessus : sans lui, un `sid` valide appartenant à
-   * un AUTRE compte suffirait à passer la garde. En pratique cela ne peut
-   * pas arriver avec un JWT authentique — `signSessionToken` signe toujours
-   * `userId` et `sid` pour le MÊME utilisateur (`session-jwt.ts`) — mais le
-   * filtre ne coûte rien et documente l'invariant sur place.
-   */
-  private async sessionLiveness(sid: string, userId: string): Promise<SessionLiveness> {
-    try {
-      const session = await this.prisma.userSession.findFirst({
-        where: { id: sid, userId },
-        select: { isValid: true },
-      });
-      if (!session) return 'unknown';
-      return session.isValid ? 'live' : 'gone';
-    } catch (error) {
-      authLogger.warn(
-        '[AUTH] Lecture de session en échec — admission fail-open, aucune preuve de révocation (#4264 critère 4)',
-        { sid, userId, error }
-      );
-      return 'unknown';
-    }
-  }
-
   private async createRegisteredUserContext(
     jwtToken: string,
     sessionToken?: string
@@ -301,55 +247,24 @@ export class AuthMiddleware {
 
       const jwtUserId = jwtPayload.userId as string;
 
-      // #4264 critère 4 — la garde REST porte enfin le même gain que
-      // `POST /auth/refresh` (#4213, #4264 critères 1-3 — voir
-      // `routes/auth/magic-link.ts` et `services/auth/session-jwt.ts`) : un
-      // JWT dont la session NOMMÉE est révoquée ne doit plus ouvrir de
-      // requête authentifiée, pas seulement un rafraîchissement. Posée ICI,
-      // avant tout accès au cache `auth:user:*` ou à la ligne `User` — une
-      // session PROUVÉE révoquée n'a besoin de rien charger de plus.
+      // #4264 critère 4, #10328 — la session NOMMÉE par le jeton doit vivre :
+      // inconnue, révoquée ou échue ⇒ refus ; jeton sans `sid` ⇒ butoir daté.
+      // Posée avant tout accès au cache `auth:user:*` ou à la ligne `User`.
+      // Une lecture qui lève remonte en `SessionLookupUnavailableError` (503).
       const sidClaim = jwtPayload[SESSION_CLAIM];
       const sid = typeof sidClaim === 'string' ? sidClaim : undefined;
-
-      if (sid) {
-        // Régime NOMINAL — comme `refresh` : c'est la session NOMMÉE par le
-        // jeton, et aucune autre, qui décide. `sessionLiveness` ne filtre
-        // JAMAIS `isValid` dans son `where` (cf. sa doc) : une ligne ABSENTE
-        // (réplica en retard sur un login tout juste fait) n'est PAS une
-        // preuve de révocation — c'est le témoin « deux sessions, une
-        // révoquée » qui exerce cette branche.
-        const verdict = await this.sessionLiveness(sid, jwtUserId);
-        if (verdict === 'gone') {
-          authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton a été révoquée', {
-            userId: jwtUserId,
-            sid,
-          });
-          throw new SessionRevokedError('Session révoquée');
-        }
-        // 'live' ou 'unknown' : admettre (fail-OPEN sur l'absence de preuve).
-      } else {
-        // Régime de TRANSITION — jeton émis avant #4264, sans `sid`. Même
-        // butoir daté que `refresh` (`legacyTokenRefusal`,
-        // `services/auth/session-jwt.ts`) : ne PAS le réinventer ici, sous
-        // peine de désaccorder les deux portes le jour où la fenêtre bouge.
-        //
-        // `refresh` applique EN PLUS, pour ce même régime, la règle de
-        // compte de #4213 (« au moins une session valide pour le compte »).
-        // Cette route-ci s'arrête au butoir de fenêtre : l'étendre à CHAQUE
-        // requête REST demande la même requête `count()` que `refresh`, dont
-        // le site vit hors du territoire de ce lot (`routes/auth/magic-link.ts`) —
-        // voir le commentaire de livraison pour le suivi.
-        const iatClaim = jwtPayload.iat;
-        const iat = typeof iatClaim === 'number' ? iatClaim : undefined;
-        const refus = legacyTokenRefusal({ iat }, new Date());
-
-        if (refus) {
-          authLogger.warn('[AUTH] Requête REST refusée : jeton hérité hors de la fenêtre de transition (#4264)', {
-            userId: jwtUserId,
-            motif: refus,
-          });
-          throw new SessionRevokedError('Jeton hérité hors fenêtre de transition');
-        }
+      const refus = await sessionAdmissionRefusal(this.prisma, {
+        claims: jwtPayload,
+        userId: jwtUserId,
+        now: this.now(),
+      });
+      if (refus) {
+        authLogger.warn('[AUTH] Requête REST refusée : la session nommée par le jeton ne vit plus', {
+          userId: jwtUserId,
+          sid,
+          motif: refus,
+        });
+        throw new SessionRevokedError(refus);
       }
 
       const cacheKey = `auth:user:${jwtUserId}`;
@@ -536,6 +451,7 @@ export class AuthMiddleware {
     } catch (error) {
       if (error instanceof ActivationBlockedError) throw error;
       if (error instanceof AccountDeletedError) throw error;
+      if (error instanceof SessionLookupUnavailableError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -843,6 +759,17 @@ export function createUnifiedAuthMiddleware(
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
       }
 
+      // #10328 — la session n'a pas pu être lue : ni admis, ni 401 (qui ferait
+      // déconnecter le client sur un accroc de la base). Une route facultative
+      // retombe en visiteur, comme pour tout autre échec.
+      if (options.requireAuth && error instanceof SessionLookupUnavailableError) {
+        const cause = error.cause as { message?: string; code?: string } | undefined;
+        authLogger.error('[AUTH] Lecture de session en échec — 503 (#10328)', { message: cause?.message, code: cause?.code });
+        return sendError(reply, 503, 'Authentification momentanément indisponible', { code: 'AUTH_UNAVAILABLE' });
+      }
+
+      // #10264 — même statut que le 401 générique (un ancien client ne lit que
+      // lui) ; le code permet à l'appareil de purger les données de CE compte.
       if (options.requireAuth && error instanceof AccountDeletedError) {
         return sendAccountDeleted(reply, error.accountId);
       }
