@@ -121,7 +121,7 @@ function replacementIn(store: SessionStoreApi): AccountReplacement {
 }
 
 describe('createProvenSessionGestures — accepter ou refuser', () => {
-  test('refuser : la session ouverte reste intacte, la session prouvée est refermée par la déconnexion, avec SES jetons', async () => {
+  test('refuser : la session ouverte reste intacte, la session prouvée est refermée par la déconnexion, avec SES jetons, en keepalive pour survivre à la fermeture de l’onglet', async () => {
     const store = memoryStore();
     signedInAsAda(store);
     const before = store.getState().session;
@@ -139,6 +139,7 @@ describe('createProvenSessionGestures — accepter ou refuser', () => {
         path: '/api/v1/auth/logout',
         credential: { kind: 'registered', token: 'jwt-bob' },
         headers: { 'X-Session-Token': 'sess-bob' },
+        keepalive: true,
       },
     ]);
   });

@@ -51,16 +51,26 @@ export function AccountReplacementPrompt({
 
   /* Recharger, fermer l'onglet ou tuer l'appli pendant la question vaut
      « non » aussi : le démontage n'a pas lieu, la déconnexion part donc au
-     `pagehide`, en keepalive (#10474). */
+     `pagehide`, en keepalive (#10474). Une page rendue par le cache de pages
+     (« Précédent ») ne remontre pas une question déjà refusée : elle la quitte. */
   useEffect(() => {
+    let abandonedOnHide = false;
     const onPageHide = () => {
       if (answered.current) return;
       answered.current = true;
+      abandonedOnHide = true;
       gestures.abandon(replacement);
     };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted && abandonedOnHide) onDiscarded();
+    };
     window.addEventListener('pagehide', onPageHide);
-    return () => window.removeEventListener('pagehide', onPageHide);
-  }, [gestures, replacement]);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [gestures, replacement, onDiscarded]);
 
   /* Quitter l'écran sans répondre vaut « non » : la session prouvée ne reste
      jamais ouverte côté passerelle. Le refus attend un tour, pour qu'un
@@ -77,7 +87,6 @@ export function AccountReplacementPrompt({
     };
   }, [gestures, replacement]);
   const proven = replacement.proven.user;
-  const name = proven.displayName?.trim() || proven.username;
   const shownName = proven.displayName?.trim() ?? '';
   const email = provenEmailOf(replacement.proven);
 
@@ -145,7 +154,7 @@ export function AccountReplacementPrompt({
         className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-start"
         style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)' }}
       >
-        <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={52} {...(proven.avatar ? { src: proven.avatar } : {})} />
+        <Avatar initials={initialsOf(proven.username)} color="var(--color-ios-brand)" size={52} {...(proven.avatar ? { src: proven.avatar } : {})} />
         {/* Le @pseudo d'abord (#10474) : unique et vérifié par la passerelle,
             il dit QUEL compte s'ouvrirait ; le nom affiché, que n'importe qui
             choisit (« Support Meeshy »), ne vient qu'en second. */}

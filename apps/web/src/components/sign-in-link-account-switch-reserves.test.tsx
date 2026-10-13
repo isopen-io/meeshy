@@ -170,6 +170,39 @@ describe('R2 — décharger la page pendant la question referme la session prouv
   });
 });
 
+describe('retour par le cache de pages après un déchargement', () => {
+  test('pagehide persisted puis pageshow persisted ⇒ la question refusée est quittée, sans rejouer le refus', async () => {
+    const { gestures, abandoned, discarded } = recordingGestures();
+    const leaves: string[] = [];
+    prompt(bobReplacement(), gestures, () => leaves.push('discarded'));
+    await settle();
+
+    await act(async () => {
+      window.dispatchEvent(Object.assign(new Event('pagehide'), { persisted: true }));
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    });
+    await settle();
+
+    expect(abandoned.length).toBe(1);
+    expect(discarded).toEqual([]);
+    expect(leaves).toEqual(['discarded']);
+  });
+
+  test('un pageshow sans déchargement préalable ne quitte pas la question', async () => {
+    const { gestures } = recordingGestures();
+    const leaves: string[] = [];
+    const el = prompt(bobReplacement(), gestures, () => leaves.push('discarded'));
+    await settle();
+
+    await act(async () => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    });
+
+    expect(leaves).toEqual([]);
+    expect(button(el, 'confirm')).not.toBeNull();
+  });
+});
+
 describe('R3 — les gestes de l’appareil ne se chargent pas', () => {
   test('« Ouvrir » qui échoue ⇒ la question se ferme sur un message, la session de Bob est refermée, Ada reste', async () => {
     const replacement = bobReplacement();

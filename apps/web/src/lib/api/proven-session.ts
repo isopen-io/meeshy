@@ -121,7 +121,7 @@ export type ProvenSessionCloser = {
 };
 
 export function createProvenSessionCloser(transport: ProvenTransport): ProvenSessionCloser {
-  const close = ({ proven }: AccountReplacement, keepalive: boolean): Promise<void> => {
+  const close = ({ proven }: AccountReplacement): Promise<void> => {
     if (proven.kind !== 'session') return Promise.resolve();
     return transport
       .request<{ message: string }>({
@@ -129,17 +129,19 @@ export function createProvenSessionCloser(transport: ProvenTransport): ProvenSes
         path: authEndpoints.logout,
         credential: { kind: 'registered', token: proven.token },
         headers: { 'X-Session-Token': proven.sessionToken },
-        ...(keepalive ? { keepalive: true } : {}),
+        keepalive: true,
       })
       .then(
         () => undefined,
         () => undefined,
       );
   };
+  /* Toujours en keepalive : un refus en vol survit à la fermeture de l'onglet
+     qui l'interromprait (#10474). */
   return {
-    discard: (replacement) => close(replacement, false),
+    discard: (replacement) => close(replacement),
     abandon: (replacement) => {
-      void close(replacement, true);
+      void close(replacement);
     },
   };
 }
