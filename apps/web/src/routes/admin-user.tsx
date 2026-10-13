@@ -40,6 +40,7 @@ import { AdminMemberImagesSection } from './admin-member-images';
 import { AdminMemberLifecycle } from './admin-member-lifecycle';
 import { AdminMemberMeta } from './admin-member-meta';
 import { AdminMemberQuickActions } from './admin-member-quick-actions';
+import { AdminMemberQuickEdit } from './admin-member-quick-edit';
 import { AdminMemberRoleSection } from './admin-member-role';
 import { AdminMemberSecuritySection } from './admin-member-security';
 import { AdminMemberStats } from './admin-member-stats';
@@ -72,6 +73,10 @@ import { AdminUserPreferencesTab } from './admin-user-preferences';
  * s'est scindé en quatre cartes — identité, contact, mot de passe et protections,
  * rôle et statut ; un lien d'hier `?tab=<onglet>` ouvre la modale du même nom.
  * Aucune section ne lit sa route tant que sa modale est fermée.
+ *
+ * **L'ÉDITION RAPIDE EN TÊTE** (#10562) — pseudo, noms, naissance, rôle, compte, présence et
+ * tentatives s'éditent là où ils s'affichent (clic, perte du focus = validé), dans une carte
+ * repliable qui range aussi TOUS les gestes du compte ; les modales gardent le détail.
  *
  * **Éditée EN PLACE, section par section** (#8289) — plus de bouton « Modifier » :
  * chaque section porte son « Enregistrer ». Les gestes lourds — changer le rôle, suspendre, réinitialiser un
@@ -251,8 +256,24 @@ export function AdminUserFiche({
         stats={<AdminMemberStats userId={membre.id} language={language} deps={deps} />}
         aside={<AdminMemberMeta membre={membre} language={language} now={now} onAnnounce={annonceur.announce} />}
       >
-        <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-        <AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+        {/* L'ÉDITION RAPIDE (#10562) : l'essentiel du membre s'édite en place, en tête de fiche,
+            et TOUS les gestes du compte vivent dans sa carte — plus de cartes d'un seul bouton. */}
+        <AdminMemberQuickEdit
+          key={`quick-${membre.id}`}
+          membre={membre}
+          language={language}
+          onAnnounce={annonceur.announce}
+          onOpenPassword={() => setMotDePasse(true)}
+          onOpenBan={() => setBannissement(true)}
+          deps={deps}
+          now={now}
+          gestures={
+            <>
+              <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />
+              <AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />
+            </>
+          }
+        />
         <section aria-labelledby={dossierTitle} className="@container grid gap-3" data-admin-member-cards>
           <h2 id={dossierTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
             {translateAdmin(language, 'admin.people.cards.title')}

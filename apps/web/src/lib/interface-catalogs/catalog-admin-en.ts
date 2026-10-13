@@ -14,6 +14,7 @@ import engagementScaleEn from './admin/engagement-scale-en';
 import gestesEn from './admin/gestes-en';
 import operationsEn from './admin/operations-en';
 import gameSeasonsEn from './admin/game-seasons-en';
+import ergonomieEn from './admin/ergonomie-en';
 
 const en = {
   'admin.role': 'Your role: {role}',
@@ -385,6 +386,7 @@ const en = {
   ...gestesEn,
   ...operationsEn,
   ...gameSeasonsEn,
+  ...ergonomieEn,
 } satisfies AdminInterfaceCatalog;
 
 export default en;

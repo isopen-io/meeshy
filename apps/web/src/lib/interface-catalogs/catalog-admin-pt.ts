@@ -14,6 +14,7 @@ import engagementScalePt from './admin/engagement-scale-pt';
 import gestesPt from './admin/gestes-pt';
 import operationsPt from './admin/operations-pt';
 import gameSeasonsPt from './admin/game-seasons-pt';
+import ergonomiePt from './admin/ergonomie-pt';
 
 const pt = {
   'admin.role': 'Seu papel: {role}',
@@ -385,6 +386,7 @@ const pt = {
   ...gestesPt,
   ...operationsPt,
   ...gameSeasonsPt,
+  ...ergonomiePt,
 } satisfies AdminInterfaceCatalog;
 
 export default pt;
