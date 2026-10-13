@@ -55,63 +55,50 @@ export function ownDeletedAccount(namedAccount: string | null, owner: string | n
  * LE COMPTE À RETIRER EST NOTÉ AVANT LE GESTE (audit #10237) : le geste est un
  * module chargé au signal, et le signal ne repasse pas. Un chargement qui
  * échoue laisse la note ; le prochain démarrage la rejoue
- * (`replayPendingRetirements`) ; un geste abouti l'efface.
+ * (`replayPendingRetirements`, `account-deleted-retire.ts`) ; un geste abouti
+ * l'efface. Une ligne par compte.
  */
 export const PENDING_RETIREMENTS_KEY = 'meeshy.accountDeleted.pending';
 
-type MarkStorage = {
-  readonly getItem: (key: string) => string | null;
-  readonly setItem: (key: string, value: string) => void;
-  readonly removeItem: (key: string) => void;
-};
-
-type RetireGesture = { readonly retireDeletedAccount: (accountId: string) => Promise<void> };
+export type MarkStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 export type RetireDeps = {
   readonly storage?: MarkStorage | null;
-  readonly load?: () => Promise<RetireGesture>;
+  readonly load?: () => Promise<{ readonly retireDeletedAccount: (accountId: string) => Promise<void> }>;
 };
 
-const browserStorage = (): MarkStorage | null => {
-  try {
-    return globalThis.localStorage ?? null;
-  } catch {
-    return null;
-  }
-};
-
-/** Les comptes notés « à retirer » ; une note illisible n'en nomme aucun. */
+/** Les comptes notés « à retirer » ; ce qui n'a pas la forme d'un identifiant n'en nomme aucun. */
 export function pendingRetirements(storage: MarkStorage | null): readonly string[] {
   try {
-    const parsed: unknown = JSON.parse(storage?.getItem(PENDING_RETIREMENTS_KEY) ?? '[]');
-    return Array.isArray(parsed) ? parsed.flatMap((id: unknown) => (typeof id === 'string' && id !== '' ? [id] : [])) : [];
+    return (storage?.getItem(PENDING_RETIREMENTS_KEY) ?? '').split('\n').filter((id) => /^[\w-]+$/.test(id));
   } catch {
     return [];
   }
 }
 
-function noteRetirements(storage: MarkStorage | null, ids: readonly string[]): void {
+function note(storage: MarkStorage | null, ids: readonly string[]): void {
   try {
     if (ids.length === 0) storage?.removeItem(PENDING_RETIREMENTS_KEY);
-    else storage?.setItem(PENDING_RETIREMENTS_KEY, JSON.stringify(ids));
+    else storage?.setItem(PENDING_RETIREMENTS_KEY, [...new Set(ids)].join('\n'));
   } catch {
     /* stockage plein ou refusé : le geste part quand même */
   }
 }
 
+const browserStorage = (): MarkStorage | null => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+};
+
 /** Le geste, chargé au signal : ni le transport ni le socle n'embarquent le coffre ni le carnet. */
 export function retireDeletedAccountLater(accountId: string, deps: RetireDeps = {}): Promise<void> {
   const storage = deps.storage === undefined ? browserStorage() : deps.storage;
-  const load = deps.load ?? (() => import('./account-deleted-retire'));
-  noteRetirements(storage, [...new Set([...pendingRetirements(storage), accountId])]);
-  return load()
+  note(storage, [...pendingRetirements(storage), accountId]);
+  return (deps.load ?? (() => import('./account-deleted-retire')))()
     .then(({ retireDeletedAccount }) => retireDeletedAccount(accountId))
-    .then(() => noteRetirements(storage, pendingRetirements(storage).filter((id) => id !== accountId)))
+    .then(() => note(storage, pendingRetirements(storage).filter((id) => id !== accountId)))
     .catch(() => undefined);
-}
-
-/** Au démarrage : rejoue les retraits notés qu'un chargement raté a laissés. */
-export async function replayPendingRetirements(deps: RetireDeps = {}): Promise<void> {
-  const storage = deps.storage === undefined ? browserStorage() : deps.storage;
-  for (const accountId of pendingRetirements(storage)) await retireDeletedAccountLater(accountId, { ...deps, storage });
 }

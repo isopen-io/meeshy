@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { PENDING_RETIREMENTS_KEY, pendingRetirements, replayPendingRetirements, retireDeletedAccountLater } from './account-deleted';
+import { PENDING_RETIREMENTS_KEY, pendingRetirements, retireDeletedAccountLater } from './account-deleted';
+import { replayPendingRetirements } from './account-deleted-retire';
 
 /**
  * **UN RETRAIT QUI N'A PAS PU SE CHARGER SE REJOUE** (audit #10237) — le geste
@@ -29,7 +30,7 @@ describe('le compte à retirer est noté avant le geste, effacé après', () => 
   });
 
   test('un geste abouti efface la note de CE compte seulement', async () => {
-    const storage = memoryStorage({ [PENDING_RETIREMENTS_KEY]: JSON.stringify(['u-bob']) });
+    const storage = memoryStorage({ [PENDING_RETIREMENTS_KEY]: 'u-bob' });
     const retired: string[] = [];
     await retireDeletedAccountLater('u-ada', { storage, load: async () => ({ retireDeletedAccount: async (id) => void retired.push(id) }) });
     expect(retired).toEqual(['u-ada']);
@@ -46,7 +47,7 @@ describe('le compte à retirer est noté avant le geste, effacé après', () => 
   });
 
   test('une note illisible ne rejoue rien et ne lève pas ; sans stockage non plus', async () => {
-    const storage = memoryStorage({ [PENDING_RETIREMENTS_KEY]: '{oops' });
+    const storage = memoryStorage({ [PENDING_RETIREMENTS_KEY]: '{"oops": 1}' });
     expect(pendingRetirements(storage)).toEqual([]);
     const retired: string[] = [];
     await replayPendingRetirements({ storage, load: async () => ({ retireDeletedAccount: async (id) => void retired.push(id) }) });

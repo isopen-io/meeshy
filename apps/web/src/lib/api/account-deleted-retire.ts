@@ -1,4 +1,4 @@
-import { replayPendingRetirements } from './account-deleted';
+import { pendingRetirements, retireDeletedAccountLater, type MarkStorage, type RetireDeps } from './account-deleted';
 import { heldAccountOf, sessionStore, type SessionStoreApi } from './session';
 
 /**
@@ -23,6 +23,20 @@ export function endDeletedAccount({
 export async function retireDeletedAccount(accountId: string): Promise<void> {
   const { accountVault } = await import('./device-accounts');
   endDeletedAccount({ accountId, store: sessionStore, retire: (id) => accountVault.forget(id) });
+}
+
+const browserMarks = (): MarkStorage | null => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+/** Au démarrage : rejoue les retraits notés qu'un chargement raté a laissés. */
+export async function replayPendingRetirements(deps: RetireDeps = {}): Promise<void> {
+  const storage = deps.storage === undefined ? browserMarks() : deps.storage;
+  for (const accountId of pendingRetirements(storage)) await retireDeletedAccountLater(accountId, { ...deps, storage });
 }
 
 function browserKeys(): readonly string[] {

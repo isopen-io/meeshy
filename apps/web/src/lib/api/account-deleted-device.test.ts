@@ -132,7 +132,7 @@ describe('au démarrage suivant, l’appareil finit ce qu’un retrait raté a l
     const { accountVault, bases } = await deviceWithAdaAndBob();
     bases.add(notebookDbName('u-old'));
     sessionStore.getState().establish({ user: BOB, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 3_600 });
-    globalThis.localStorage.setItem(PENDING_RETIREMENTS_KEY, JSON.stringify([ADA.id]));
+    globalThis.localStorage.setItem(PENDING_RETIREMENTS_KEY, ADA.id);
 
     await tidyDeviceAfterBoot();
     await settled(() => !bases.has(notebookDbName(ADA.id)) && !bases.has(notebookDbName('u-old')));
