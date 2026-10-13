@@ -498,7 +498,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         tokenLock.withLock { $0 }
     }
 
-    private init() {
+    private convenience init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
@@ -515,12 +515,17 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
-        self.urlSession = URLSession(
+        self.init(urlSession: URLSession(
             configuration: config,
             delegate: CertificatePinningDelegate(),
             delegateQueue: nil
-        )
+        ))
+    }
 
+    /// Un client sur une session FOURNIE : les témoins y posent leur
+    /// `URLProtocol` et observent ce qui part sur le fil (#10463).
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
         self.decoder = Self.makeAPIPayloadDecoder()
     }
 
