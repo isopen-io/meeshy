@@ -174,6 +174,9 @@ export type HttpRequest = {
    * DÉSACTIVE le délai — seul le signal de l'appelant tranche alors.
    */
   readonly timeoutMs?: number;
+  /** Transmis à `fetch` : la requête survit au déchargement de la page
+   * (`pagehide`), pour un dernier appel qu'on n'attendra pas (#10474). */
+  readonly keepalive?: boolean;
 };
 
 export type HttpTransportOptions = {
@@ -383,6 +386,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         method: req.method,
         headers,
         ...(signal !== undefined ? { signal } : {}),
+        ...(req.keepalive === true ? { keepalive: true } : {}),
         ...(req.body !== undefined ? { body: formBody ?? JSON.stringify(req.body) } : {}),
       });
     } catch (error) {

@@ -43,6 +43,8 @@ const deVerifyEmail = {
   'signInLink.switchAccount.confirm': 'Dieses andere Konto öffnen',
   'signInLink.switchAccount.kept': '@{current} bleibt in deinen Konten auf diesem Gerät.',
   'signInLink.switchAccount.busy': 'Einen Moment…',
+  'signInLink.switchAccount.failed': 'Dieses andere Konto lässt sich gerade nicht öffnen. Du bleibst angemeldet, und der Link wurde geschlossen.',
+  'signInLink.switchAccount.leave': 'Zurück zur Startseite',
 };
 
 export default deVerifyEmail;

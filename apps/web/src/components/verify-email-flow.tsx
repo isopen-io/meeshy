@@ -23,7 +23,7 @@ import { AccountReplacementPrompt } from './account-replacement-prompt';
 import { ArrivalCelebration } from './arrival-celebration';
 import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
-import { EmailCodeForm, verifyEmailErrorText, withStrongEmail } from './email-code-form';
+import { awaitsSecondFactor, EmailCodeForm, goToSecondFactor, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
 
 /**
@@ -161,7 +161,11 @@ export function VerifyEmailFlow({
         return;
       }
       const outcome = resolveVerifyEmailOutcome(result);
-      if (outcome.kind === 'signed-in') {
+      if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
+        goToSecondFactor();
+        return;
+      }
+      if (outcome.kind === 'signed-in' || outcome.kind === 'second-factor') {
         setLinkPhase('celebrating');
         return;
       }
@@ -223,7 +227,7 @@ export function VerifyEmailFlow({
             language={language}
             replacement={replacement}
             {...(deps.accountGestures === undefined ? {} : { gestures: deps.accountGestures })}
-            onAdopted={() => setLinkPhase('celebrating')}
+            onAdopted={() => (replacement.proven.kind === 'second-factor' ? goToSecondFactor() : setLinkPhase('celebrating'))}
             onDiscarded={() => {
               forgetPendingVerification();
               navigate(href('list'), true);

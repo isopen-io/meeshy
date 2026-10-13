@@ -43,6 +43,8 @@ const frVerifyEmail = {
   'signInLink.switchAccount.confirm': 'Ouvrir cet autre compte',
   'signInLink.switchAccount.kept': '@{current} restera dans vos comptes sur cet appareil.',
   'signInLink.switchAccount.busy': 'Un instant…',
+  'signInLink.switchAccount.failed': 'Impossible d’ouvrir cet autre compte pour le moment. Votre session reste ouverte, et le lien est refermé.',
+  'signInLink.switchAccount.leave': 'Revenir à l’accueil',
 } as const;
 
 export default frVerifyEmail;

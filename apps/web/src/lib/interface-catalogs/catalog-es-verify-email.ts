@@ -43,6 +43,8 @@ const esVerifyEmail = {
   'signInLink.switchAccount.confirm': 'Abrir esta otra cuenta',
   'signInLink.switchAccount.kept': '@{current} seguirá en tus cuentas en este dispositivo.',
   'signInLink.switchAccount.busy': 'Un momento…',
+  'signInLink.switchAccount.failed': 'No se puede abrir esta otra cuenta en este momento. Tu sesión sigue abierta y el enlace se ha cerrado.',
+  'signInLink.switchAccount.leave': 'Volver al inicio',
 };
 
 export default esVerifyEmail;

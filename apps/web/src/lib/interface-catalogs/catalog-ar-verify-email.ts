@@ -43,6 +43,8 @@ const arVerifyEmail = {
   'signInLink.switchAccount.confirm': 'فتح هذا الحساب الآخر',
   'signInLink.switchAccount.kept': 'سيبقى @{current} ضمن حساباتك على هذا الجهاز.',
   'signInLink.switchAccount.busy': 'لحظة…',
+  'signInLink.switchAccount.failed': 'تعذّر فتح هذا الحساب الآخر حاليًا. تبقى جلستك مفتوحة، وقد أُغلق الرابط.',
+  'signInLink.switchAccount.leave': 'العودة إلى الصفحة الرئيسية',
 };
 
 export default arVerifyEmail;

@@ -43,6 +43,8 @@ const enVerifyEmail = {
   'signInLink.switchAccount.confirm': 'Open this other account',
   'signInLink.switchAccount.kept': '@{current} will stay in your accounts on this device.',
   'signInLink.switchAccount.busy': 'One moment…',
+  'signInLink.switchAccount.failed': 'This other account can’t be opened right now. You stay signed in, and the link has been closed.',
+  'signInLink.switchAccount.leave': 'Back to home',
 };
 
 export default enVerifyEmail;

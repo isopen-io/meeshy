@@ -43,6 +43,8 @@ const ptVerifyEmail = {
   'signInLink.switchAccount.confirm': 'Abrir esta outra conta',
   'signInLink.switchAccount.kept': '@{current} continuará nas suas contas neste dispositivo.',
   'signInLink.switchAccount.busy': 'Um momento…',
+  'signInLink.switchAccount.failed': 'Não é possível abrir esta outra conta agora. Sua sessão continua aberta e o link foi fechado.',
+  'signInLink.switchAccount.leave': 'Voltar ao início',
 };
 
 export default ptVerifyEmail;

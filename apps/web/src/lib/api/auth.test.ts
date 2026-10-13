@@ -684,6 +684,31 @@ describe('verifyEmail() — la vérification OUVRE la session (#8034, contrat #8
     expect(session.status === 'authenticated' ? session.token : null).toBe('jwt-v');
   });
 
+  test('un compte à SECOND FACTEUR (#10474) ⇒ la saisie du code attend, aucune session posée', async () => {
+    const store = memoryStore();
+    const challenge = { verified: true, requires2FA: true, twoFactorToken: 'tf-1', user: { id: 'u-9', username: 'neuf', email: 'neuf@x.io' } };
+    const { transport } = stubTransport([{ ok: true, data: challenge, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', code: '123456' });
+
+    const session = store.getState().session;
+    expect(session.status === 'pending2fa' ? [session.twoFactorToken, session.user.id] : session.status).toEqual(['tf-1', 'u-9']);
+  });
+
+  test('le second facteur d’un AUTRE compte que le compte ouvert (#10474) ⇒ la session ouverte reste', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-a', sessionToken: 'sess-a', expiresIn: 60 });
+    const before = store.getState().session;
+    const challenge = { verified: true, requires2FA: true, twoFactorToken: 'tf-1', user: { id: 'u-9', username: 'neuf' } };
+    const { transport } = stubTransport([{ ok: true, data: challenge, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', token: 'tok' });
+
+    expect(store.getState().session).toBe(before);
+  });
+
   test('un échec n’écrit rien', async () => {
     const store = memoryStore();
     const { transport } = stubTransport([{ ok: false, status: 400, error: 'Invalid' }]);

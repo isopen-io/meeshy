@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { httpTransport } from '@/lib/api/client';
 import { maskEmail } from '@/lib/api/email-mask';
-import { provenEmailOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
+import { createProvenSessionCloser, provenEmailOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
@@ -18,11 +19,15 @@ import { Glyph } from './glyph';
  * demandé se refuse d'une touche.
  */
 
-/** Les gestes de l'appareil, chargés au geste : l'écran du lien n'embarque
- * pas le coffre des comptes tant que personne ne répond. */
+/** Les gestes de l'appareil. Accepter charge le coffre des comptes au geste :
+ * l'écran du lien ne l'embarque pas tant que personne ne répond. Refuser et
+ * abandonner n'en ont pas besoin — la session prouvée se referme même quand ce
+ * chargement échoue, ou que la page se décharge (#10474). */
+const closer = createProvenSessionCloser(httpTransport);
+
 export const deviceProvenSessions: ProvenSessionGestures = {
   adopt: (replacement) => import('@/lib/api/device-accounts').then(({ provenSessions }) => provenSessions.adopt(replacement)),
-  discard: (replacement) => import('@/lib/api/device-accounts').then(({ provenSessions }) => provenSessions.discard(replacement)),
+  ...closer,
 };
 
 export function AccountReplacementPrompt({
@@ -39,9 +44,23 @@ export function AccountReplacementPrompt({
   readonly onDiscarded: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const answered = useRef(false);
   const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
   const current = replacement.current.username;
+
+  /* Recharger, fermer l'onglet ou tuer l'appli pendant la question vaut
+     « non » aussi : le démontage n'a pas lieu, la déconnexion part donc au
+     `pagehide`, en keepalive (#10474). */
+  useEffect(() => {
+    const onPageHide = () => {
+      if (answered.current) return;
+      answered.current = true;
+      gestures.abandon(replacement);
+    };
+    window.addEventListener('pagehide', onPageHide);
+    return () => window.removeEventListener('pagehide', onPageHide);
+  }, [gestures, replacement]);
 
   /* Quitter l'écran sans répondre vaut « non » : la session prouvée ne reste
      jamais ouverte côté passerelle. Le refus attend un tour, pour qu'un
@@ -59,18 +78,56 @@ export function AccountReplacementPrompt({
   }, [gestures, replacement]);
   const proven = replacement.proven.user;
   const name = proven.displayName?.trim() || proven.username;
+  const shownName = proven.displayName?.trim() ?? '';
   const email = provenEmailOf(replacement.proven);
+
+  /* Les gestes de l'appareil qui ne se chargent pas (réseau coupé, version
+     déployée entre-temps) : la session ouverte n'a pas été touchée, la session
+     prouvée est refermée, et la question se ferme sur un message (#10474). */
+  async function adoptOrFail(): Promise<boolean | 'failed'> {
+    try {
+      return await gestures.adopt(replacement);
+    } catch {
+      await gestures.discard(replacement);
+      return 'failed';
+    }
+  }
 
   async function answer(adopt: boolean) {
     if (answered.current) return;
     answered.current = true;
     setBusy(true);
-    if (adopt && (await gestures.adopt(replacement))) {
-      onAdopted();
+    if (!adopt) {
+      await gestures.discard(replacement);
+      onDiscarded();
       return;
     }
-    if (!adopt) await gestures.discard(replacement);
-    onDiscarded();
+    const opened = await adoptOrFail();
+    if (opened === 'failed') {
+      setFailed(true);
+      return;
+    }
+    if (opened) onAdopted();
+    else onDiscarded();
+  }
+
+  if (failed) {
+    return (
+      <section role="alert" className="grid gap-5 text-center">
+        <Glyph name="warningCircle" size={44} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
+        <p style={{ color: 'var(--color-ios-ink)' }}>{translate(language, 'signInLink.switchAccount.failed')}</p>
+        <button
+          type="button"
+          data-action="leave"
+          autoFocus
+          onClick={onDiscarded}
+          className="grid place-items-center rounded-field px-6 font-bold text-ios-on-brand focus-visible:outline-2"
+          style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'signInLink.switchAccount.leave')}
+        </button>
+      </section>
+    );
   }
 
   return (
@@ -89,13 +146,18 @@ export function AccountReplacementPrompt({
         style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 25%, transparent)' }}
       >
         <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={52} {...(proven.avatar ? { src: proven.avatar } : {})} />
+        {/* Le @pseudo d'abord (#10474) : unique et vérifié par la passerelle,
+            il dit QUEL compte s'ouvrirait ; le nom affiché, que n'importe qui
+            choisit (« Support Meeshy »), ne vient qu'en second. */}
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {name}
-          </span>
-          <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+          <strong data-proven-handle className="truncate text-body font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {`@${proven.username}`}
-          </span>
+          </strong>
+          {shownName === '' || shownName === proven.username ? null : (
+            <span data-proven-name className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {shownName}
+            </span>
+          )}
           {email === null ? null : (
             <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
               {maskEmail(email)}

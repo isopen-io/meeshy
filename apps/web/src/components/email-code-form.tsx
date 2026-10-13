@@ -108,6 +108,22 @@ export function goToLanding(next: string | null): void {
   navigate(landingAfterSession(next, href('list')), true);
 }
 
+/**
+ * UN COMPTE À SECOND FACTEUR (#10474) — la preuve a ouvert un défi, pas une
+ * session : la saisie du code attend sur l'écran de connexion, jamais la
+ * célébration ni `onSignedIn`. Un défi pour le compte DÉJÀ ouvert ne pose
+ * rien (`admitProvenSession`) : sa session vaut, et l'écran continue comme
+ * après une connexion.
+ */
+export function awaitsSecondFactor(): boolean {
+  return sessionStore.getState().session.status === 'pending2fa';
+}
+
+export function goToSecondFactor(): void {
+  forgetPendingVerification();
+  navigate(href('login'), true);
+}
+
 export function EmailCodeForm({
   email,
   next,
@@ -165,12 +181,17 @@ export function EmailCodeForm({
       return;
     }
     const outcome = resolveVerifyEmailOutcome(result);
-    if (outcome.kind === 'signed-in' && onSignedIn !== undefined) {
+    if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
+      goToSecondFactor();
+      return;
+    }
+    const signedIn = outcome.kind === 'signed-in' || outcome.kind === 'second-factor';
+    if (signedIn && onSignedIn !== undefined) {
       forgetPendingVerification();
       onSignedIn();
       return;
     }
-    if (outcome.kind === 'signed-in') {
+    if (signedIn) {
       goToLanding(next);
       return;
     }
@@ -189,6 +210,10 @@ export function EmailCodeForm({
         replacement={replacement}
         {...(accountGestures === undefined ? {} : { gestures: accountGestures })}
         onAdopted={() => {
+          if (replacement.proven.kind === 'second-factor') {
+            goToSecondFactor();
+            return;
+          }
           if (onSignedIn === undefined) {
             goToLanding(next);
             return;

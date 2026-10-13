@@ -107,14 +107,48 @@ export function admitProvenSession(store: SessionStoreApi, proven: ProvenSession
   state.establish({ user: proven.user, token: proven.token, sessionToken: proven.sessionToken, expiresIn: proven.expiresIn });
 }
 
-export type ProvenSessionGestures = {
+type ProvenTransport = { request<T>(request: HttpRequest): Promise<ApiResult<T>> };
+
+/** Ce qui REFERME une session prouvée refusée — sans le coffre des comptes,
+ * pour que l'écran puisse la refermer même quand les gestes de l'appareil ne
+ * se chargent pas (#10474). */
+export type ProvenSessionCloser = {
+  /** « Annuler » — la déconnexion avec les jetons prouvés, attendue. */
+  discard(replacement: AccountReplacement): Promise<void>;
+  /** La page se décharge pendant la question — la même déconnexion, en
+   * `keepalive`, sans l'attendre : elle survit à la fermeture de l'onglet. */
+  abandon(replacement: AccountReplacement): void;
+};
+
+export function createProvenSessionCloser(transport: ProvenTransport): ProvenSessionCloser {
+  const close = ({ proven }: AccountReplacement, keepalive: boolean): Promise<void> => {
+    if (proven.kind !== 'session') return Promise.resolve();
+    return transport
+      .request<{ message: string }>({
+        method: 'POST',
+        path: authEndpoints.logout,
+        credential: { kind: 'registered', token: proven.token },
+        headers: { 'X-Session-Token': proven.sessionToken },
+        ...(keepalive ? { keepalive: true } : {}),
+      })
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+  };
+  return {
+    discard: (replacement) => close(replacement, false),
+    abandon: (replacement) => {
+      void close(replacement, true);
+    },
+  };
+}
+
+export type ProvenSessionGestures = ProvenSessionCloser & {
   /** « Ouvrir cet autre compte » — le compte quitté reste au sélecteur.
    * `false` : la session ouverte n'a pas pu être démontée, rien n'est posé et
    * la session prouvée est refermée — l'écran n'annonce aucune connexion. */
   adopt(replacement: AccountReplacement): Promise<boolean>;
-  /** « Annuler » — rien ne change sur l'appareil ; la session prouvée est
-   * refermée côté passerelle. */
-  discard(replacement: AccountReplacement): Promise<void>;
 };
 
 export function createProvenSessionGestures({
@@ -124,35 +158,25 @@ export function createProvenSessionGestures({
   noteActive,
 }: {
   readonly store: SessionStoreApi;
-  readonly transport: { request<T>(request: HttpRequest): Promise<ApiResult<T>> };
+  readonly transport: ProvenTransport;
   /** Range le compte ouvert sans l'oublier (`accountSwitcher.suspend`). */
   readonly suspend: () => void;
   /** Le compte ouvert entre dans la liste de l'appareil (`accountVault.noteActive`). */
   readonly noteActive: (user: SessionUser) => void;
 }): ProvenSessionGestures {
-  async function discard({ proven }: AccountReplacement): Promise<void> {
-    if (proven.kind !== 'session') return;
-    await transport
-      .request<{ message: string }>({
-        method: 'POST',
-        path: authEndpoints.logout,
-        credential: { kind: 'registered', token: proven.token },
-        headers: { 'X-Session-Token': proven.sessionToken },
-      })
-      .catch(() => undefined);
-  }
+  const closer = createProvenSessionCloser(transport);
 
   return {
     adopt: async (replacement) => {
       suspend();
       if (heldAccountOf(store.getState().session) !== null) {
-        await discard(replacement);
+        await closer.discard(replacement);
         return false;
       }
       admitProvenSession(store, replacement.proven);
       if (replacement.proven.kind === 'session') noteActive(replacement.proven.user);
       return true;
     },
-    discard,
+    ...closer,
   };
 }

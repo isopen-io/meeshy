@@ -6,7 +6,6 @@ import { accountReplacementOf, admitProvenSession, provenSessionOf } from './pro
 import type { PendingUser, SessionStoreApi, SessionUser } from './session';
 import { sessionStore } from './session';
 import {
-  verificationOpensSession,
   verifyEmailBody,
   type VerificationStatusData,
   type VerifyEmailData,
@@ -410,7 +409,8 @@ export function createAuthClient({ transport, store }: AuthDeps) {
    * (#8034), par le même `establish` que la connexion ; sans session (ancienne
    * passerelle), le magasin reste tel quel. Le lien comme le code suivent la
    * règle du lien magique (#10451) : la session d'un AUTRE compte que le
-   * compte ouvert n'est pas posée sans la question. */
+   * compte ouvert n'est pas posée sans la question, et un défi de second
+   * facteur ouvre la saisie du code (#10474), comme au lien magique. */
   async function verifyEmail(request: VerifyEmailRequest): Promise<ApiResult<VerifyEmailData>> {
     const result = await transport.request<VerifyEmailData>({
       method: 'POST',
@@ -418,7 +418,7 @@ export function createAuthClient({ transport, store }: AuthDeps) {
       body: verifyEmailBody(request),
       credential: null,
     });
-    if (!result.ok || !verificationOpensSession(result.data)) return result;
+    if (!result.ok) return result;
 
     admitUnlessReplacing(result.data);
     return result;

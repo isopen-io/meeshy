@@ -76,6 +76,7 @@ function recordingGestures() {
     discard: async (replacement) => {
       discarded.push(replacement);
     },
+    abandon: () => undefined,
   };
   return { gestures, adopted, discarded };
 }

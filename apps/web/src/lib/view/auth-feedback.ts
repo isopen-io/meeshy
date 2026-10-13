@@ -3,7 +3,8 @@ import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
 import { decodeEmailOwner, type EmailOwner } from '../api/email-owner';
 import type { ApiFailure, ApiResult } from '../api/http';
-import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
+import { provenSessionOf } from '../api/proven-session';
+import type { VerifyEmailData } from '../api/verify-email';
 
 /**
  * LE PLACEMENT D'UN REFUS DE CONNEXION / D'INSCRIPTION (#5555, E5) — pur,
@@ -303,6 +304,7 @@ export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkV
 
 export type VerifyEmailOutcome =
   | { readonly kind: 'signed-in' }
+  | { readonly kind: 'second-factor' }
   | { readonly kind: 'verified' }
   | { readonly kind: 'rate-limited' }
   | { readonly kind: 'invalid-code' }
@@ -316,10 +318,17 @@ export type VerifyEmailOutcome =
  * `alreadyVerified` (magic-link.ts:349-354) est un SUCCÈS, jamais un refus :
  * l'écran affiche le même overlay de confirmation. Une réponse qui porte une
  * SESSION (#8034, contrat #8033) est `signed-in` : l'écran quitte la
- * vérification pour l'accueil, comme après une connexion.
+ * vérification pour l'accueil, comme après une connexion. Un défi de SECOND
+ * FACTEUR est `second-factor` (#10474) : l'écran mène à la saisie du code,
+ * jamais à la célébration. La lecture de la réponse est celle de la décision
+ * (`provenSessionOf`) : une seule règle.
  */
 export function resolveVerifyEmailOutcome(result: ApiResult<VerifyEmailData>): VerifyEmailOutcome {
-  if (result.ok) return verificationOpensSession(result.data) ? { kind: 'signed-in' } : { kind: 'verified' };
+  if (result.ok) {
+    const proven = provenSessionOf(result.data);
+    if (proven === null) return { kind: 'verified' };
+    return proven.kind === 'second-factor' ? { kind: 'second-factor' } : { kind: 'signed-in' };
+  }
   if (result.status === 0) return { kind: 'offline' };
   if (result.status === 400) return { kind: 'invalid-code' };
   if (result.status === 429) return { kind: 'rate-limited' };

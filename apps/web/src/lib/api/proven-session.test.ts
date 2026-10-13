@@ -143,6 +143,27 @@ describe('createProvenSessionGestures — accepter ou refuser', () => {
     ]);
   });
 
+  test('abandonner (page déchargée, #10474) : la déconnexion part SANS attendre, en keepalive, avec les jetons prouvés', () => {
+    const store = memoryStore();
+    signedInAsAda(store);
+    const before = store.getState().session;
+    const { calls, transport } = recordingTransport();
+    const gestures = createProvenSessionGestures({ store, transport, suspend: () => undefined, noteActive: () => undefined });
+
+    gestures.abandon(replacementIn(store));
+
+    expect(store.getState().session).toBe(before);
+    expect(calls).toEqual([
+      {
+        method: 'POST',
+        path: '/api/v1/auth/logout',
+        credential: { kind: 'registered', token: 'jwt-bob' },
+        headers: { 'X-Session-Token': 'sess-bob' },
+        keepalive: true,
+      },
+    ]);
+  });
+
   test('refuser un défi de second facteur : rien à refermer, rien ne part', async () => {
     const store = memoryStore();
     signedInAsAda(store);
