@@ -218,8 +218,9 @@ extension AuthManager {
 
     /// `discardProvenSession` sans faire attendre l'appelant (#10463).
     func closeRefusedProvenSession(_ proven: EmailProvenSession) {
-        let closure = Task { [weak self] in
-            await self?.discardProvenSession(proven)
+        let closure: Task<Void, Never> = Task { [weak self] in
+            guard let self else { return }
+            await self.discardProvenSession(proven)
         }
         #if DEBUG
         refusedSessionClosuresForTesting.append(closure)
