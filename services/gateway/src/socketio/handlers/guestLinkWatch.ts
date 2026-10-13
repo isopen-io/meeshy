@@ -148,6 +148,7 @@ export class GuestLinkWatch {
         linkExpiresAt: current,
         linkRevocationPendingAt: gate.revocationPendingAt,
         linkIsActive: gate.isActive,
+        linkMissing: gate.missing,
         participation,
         now: new Date(),
       });

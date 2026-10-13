@@ -71,11 +71,12 @@ export async function cleanupExpiredData(prisma: PrismaClient, live: ShareLinkRe
       logger.info(`🧹 ${endedWriterSessions.count} sessions anonymes expirées terminées (auteurs conservés, #6501)`);
     }
 
-    // #10437 — un lien SUPPRIMÉ ne ferme plus rien : les portes du lien échu
-    // (`middleware/auth.ts`, `AuthHandler`, les lectures par route) tiennent un
-    // lien introuvable pour ouvert, parce qu'un lien retiré à la main révoque
-    // ses invités. Supprimer un lien expiré sans terminer ses invités leur
-    // RENDAIT l'accès au balayage suivant : ils sont donc révoqués D'ABORD.
+    // #10437 — un lien SUPPRIMÉ n'a plus d'échéance à opposer : les lectures
+    // par route tiennent un lien introuvable pour ouvert, parce qu'un lien
+    // retiré révoque ses invités. Supprimer un lien expiré sans terminer ses
+    // invités leur RENDAIT l'accès au balayage suivant : ils sont donc
+    // révoqués D'ABORD. (#10492 — la garde commune d'un invité refuse en plus
+    // celui qui survit à son lien.)
     //
     // #10440 — révoqués par `revokeShareLinkGuests`, l'unité du balayage
     // horaire et des gestes de l'hôte, jamais par un `updateMany` appauvri qui

@@ -531,6 +531,7 @@ export class AuthHandler {
       linkExpiresAt,
       linkRevocationPendingAt: linkGate.revocationPendingAt,
       linkIsActive: linkGate.isActive,
+      linkMissing: linkGate.missing,
       participation: participant,
       now: new Date(),
     });

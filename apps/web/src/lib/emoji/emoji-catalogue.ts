@@ -11,6 +11,8 @@
  */
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
+import { skinToneKey } from './emoji-skin-tone';
+
 export const EMOJI_GROUP_IDS = ['smileys', 'people', 'animals', 'food', 'activities', 'travel', 'objects', 'symbols', 'flags'] as const;
 
 export type EmojiGroupId = (typeof EMOJI_GROUP_IDS)[number];
@@ -25,14 +27,18 @@ export type EmojiEntry = {
   readonly level: number;
   /** Son rang dans la table entière : la ligne de son nom dans `emoji-names-<langue>.ts`. */
   readonly position: number;
+  /** Accepte-t-il une teinte de peau (`emoji-skin-tone.ts`) ? */
+  readonly toned: boolean;
 };
 
 export type EmojiIndex = {
   readonly all: readonly EmojiEntry[];
   readonly byGroup: ReadonlyMap<EmojiGroupId, readonly EmojiEntry[]>;
+  /** Les emojis qui acceptent une teinte, par leur clé (`skinToneKey`) : une variante y retrouve sa base. */
+  readonly tonable: ReadonlyMap<string, string>;
 };
 
-type RawGroup = readonly [id: string, emojis: string, levels: string];
+type RawGroup = readonly [id: string, emojis: string, levels: string, tones?: string];
 
 type Sized = { readonly entries: readonly EmojiEntry[]; readonly groups: ReadonlyArray<readonly [EmojiGroupId, readonly EmojiEntry[]]> };
 
@@ -43,12 +49,23 @@ export function buildEmojiIndex(groups: readonly RawGroup[]): EmojiIndex {
       if (raw === undefined) return built;
       const emojis = raw[1].split(' ');
       if (emojis.length !== raw[2].length) throw new Error(`Table des emojis « ${id} » : ${emojis.length} emojis pour ${raw[2].length} paliers.`);
-      const entries = emojis.map((emoji, rank) => ({ emoji, level: Number.parseInt(raw[2].charAt(rank), 36), position: built.entries.length + rank }));
+      const tones = raw[3] ?? '';
+      if (tones !== '' && tones.length !== emojis.length) throw new Error(`Table des emojis « ${id} » : ${emojis.length} emojis pour ${tones.length} drapeaux de teinte.`);
+      const entries = emojis.map((emoji, rank) => ({
+        emoji,
+        level: Number.parseInt(raw[2].charAt(rank), 36),
+        position: built.entries.length + rank,
+        toned: tones.charAt(rank) === '1',
+      }));
       return { entries: [...built.entries, ...entries], groups: [...built.groups, [id, entries] as const] };
     },
     { entries: [], groups: [] },
   );
-  return { all: sized.entries, byGroup: new Map(sized.groups) };
+  return {
+    all: sized.entries,
+    byGroup: new Map(sized.groups),
+    tonable: new Map(sized.entries.filter((entry) => entry.toned).map((entry) => [skinToneKey(entry.emoji), entry.emoji])),
+  };
 }
 
 type OnDemand<T> = { value: T | null; pending: Promise<T> | null };

@@ -98,6 +98,15 @@ const flatTextLocks = (effects: unknown): boolean[] => {
 };
 
 /**
+ * Les textes du canvas moins ses puces — `texts` suit l'énumération PLATE des
+ * textes (`storyTranslatableTexts`), celle des verrous.
+ */
+export function textsWithoutCredits<T>(storyEffects: unknown, texts: readonly T[]): T[] {
+  const locks = flatTextLocks(storyEffects);
+  return texts.filter((_, index) => locks[index] !== true);
+}
+
+/**
  * L'index PLAT d'un texte dans le canvas tel que `withServedRepostCredits` le
  * SERT (#10498) — l'index que les clients fusionnent. `null` : ce texte est une
  * puce que le lecteur ne reçoit pas, rien ne doit en partir.

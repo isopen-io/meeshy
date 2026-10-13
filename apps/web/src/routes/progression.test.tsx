@@ -319,7 +319,7 @@ describe('MeeshDetail — le héros des Meeshes (#5743)', () => {
       mintCost: 1221,
     });
     expect(rendu).toContain('Aucune Meesh');
-    expect(rendu).toContain('Encore 1121 points convertibles');
+    expect(rendu).toContain('Encore 1121 points à convertir');
     // Le sort des points de conversation doit être DIT : ils partiront en
     // dernier, sans éteindre de badge (option C, #5743).
     expect(rendu).toContain('1300 points de conversation');

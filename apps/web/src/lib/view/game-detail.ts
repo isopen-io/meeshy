@@ -25,6 +25,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { badgeGuideView, type BadgeGuideView } from '@/lib/view/badge-guide-view';
 import {
   boundedPercent,
+  convertiblePointsLabel,
   daysLabel,
   difficultyName,
   editionName,
@@ -127,10 +128,11 @@ const earned = (date: string | null): DetailState => ({
   line: date === null ? gameText('game.detail.earned') : gameText('game.detail.earned_on', { date }),
 });
 
+/** `missing` est une PHRASE qui nomme sa cible (#10540) : « Il manque 37 pour la première étoile », jamais « Il manque 37 ». */
 const locked = (missing: string | null = null, gauge: number | null = null): DetailState => ({
   kind: 'locked',
   line: gameText('game.detail.locked'),
-  missing: missing === null ? null : gameText('game.detail.missing', { missing }),
+  missing,
   gauge,
 });
 
@@ -177,7 +179,10 @@ export function badgeDetail(axis: EngagementAxisProgress): ElementDetail {
   const detail = ofFamily('badge', axis.axisKey, 'badges', {
     emblem: { kind: 'medal', axis },
     name,
-    state: medal.material === null ? locked(medal.missing === null ? null : formatCount(medal.missing), axis.progress) : earned(isoDate(lastReached?.reachedAt ?? null)),
+    state:
+      medal.material === null
+        ? locked(medal.missing === null ? null : gameText('game.detail.badge.missing', { missing: formatCount(medal.missing) }), axis.progress)
+        : earned(isoDate(lastReached?.reachedAt ?? null)),
     how: { label: 'obtain', text: view.next },
     facts: present([
       medal.material === null ? null : row(gameText('game.fact.material'), materialName(medal.material)),
@@ -266,7 +271,7 @@ export function stepDetail(season: GameSeasonBlock, step: number): ElementDetail
       ? earned(null)
       : reached
         ? value(gameText('game.season.step.ready'))
-        : locked(translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', season.starsToNext), season.progress),
+        : locked(gameText('game.season.to_next', { stars: translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', season.starsToNext) }), season.progress),
     facts: reward === null ? [] : [row(gameText('game.detail.gives_label'), reward)],
   });
 }
@@ -299,7 +304,7 @@ export function gemDetail(league: GameLeagueBlock): ElementDetail {
     facts: present([
       row(gameText('game.fact.week_points'), pointsLabel(current.weekPoints)),
       row(gameText('game.fact.state'), zoneLabel(current.zone)),
-      toPromotion === null || toPromotion === 0 ? null : row(gameText('game.fact.missing'), pointsLabel(toPromotion)),
+      toPromotion === null || toPromotion === 0 ? null : row(gameText('game.fact.missing_for.promotion'), pointsLabel(toPromotion)),
     ]),
   });
 }
@@ -325,7 +330,9 @@ export function rankDetail(glory: GameGlory, level: number | null = null): Eleme
     state: value(gameText('game.rank.glory', { glory: formatCount(glory.glory) }), next === null ? null : glory.progress),
     facts: present([
       next === null ? row(gameText('game.fact.next_rank'), gameText('game.rank.top')) : row(gameText('game.fact.next_rank'), next),
-      glory.gloryMissing === null ? null : row(gameText('game.fact.missing'), formatCount(glory.gloryMissing)),
+      glory.gloryMissing === null || next === null
+        ? null
+        : row(gameText('game.fact.missing_for.rank', { rank: next }), gameText('game.rank.glory', { glory: formatCount(glory.gloryMissing) })),
     ]),
   });
 }
@@ -409,7 +416,9 @@ export function coinDetail(view: EngagementWithGame): ElementDetail | null {
         ? null
         : row(gameText('game.fact.next_meesh'), `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(mint.edition)}`),
       mint === undefined ? null : row(gameText('game.mint.row.price'), pointsLabel(mint.price)),
-      mint === undefined || mint.canMint ? null : row(gameText('game.fact.missing'), pointsLabel(mint.missingPoints)),
+      mint === undefined || mint.canMint
+        ? null
+        : row(gameText('game.fact.missing_for.meesh', { number: formatCount(mint.number) }), convertiblePointsLabel(mint.missingPoints)),
       view.meesh === undefined ? null : row(gameText('game.fact.minted'), formatCount(view.meesh.mintedLifetime)),
     ]),
   });
@@ -427,7 +436,7 @@ export function ringDetail(served: GameLevel): ElementDetail {
       atTop ? null : level.progress,
     ),
     facts: present([
-      row(gameText('game.concept.points.name'), pointsLabel(level.score)),
+      row(gameText('game.concept.fact.held'), pointsLabel(level.score)),
       level.record > level.level ? row(gameText('game.fact.record'), gameText('game.banner.level', { level: formatCount(level.record) })) : null,
     ]),
   });
@@ -451,7 +460,10 @@ export function levelStepDetail(game: Pick<GameBlockForStep, 'level' | 'glory'>,
     name: levelStepLine(step),
     state: step.met
       ? earned(null)
-      : locked(fraction(Math.min(step.current, step.target), step.target), step.target <= 0 ? null : Math.min(1, step.current / step.target)),
+      : locked(
+          gameText('game.detail.levelstep.progress', { progress: fraction(Math.min(step.current, step.target), step.target) }),
+          step.target <= 0 ? null : Math.min(1, step.current / step.target),
+        ),
     facts: all.map((entry) => row(gameText('game.banner.level', { level: formatCount(entry.level) }), `${levelStepWhat(entry)} · ${stepProgress(entry)}`)),
   });
 }
@@ -461,11 +473,12 @@ type GameBlockForStep = { readonly level: GameLevel; readonly glory: GameGlory }
 /** LE PALIER du trésor. */
 export function treasuryDetail(treasury: GameTreasury): ElementDetail {
   const next = treasury.next;
+  const nextLine = next === null ? null : gameText('game.treasury.next', { missing: meeshCount(next.missing), tier: treasuryName(next.key) });
   return ofFamily('treasury', treasury.tier ?? 'none', 'meesh', {
     emblem: { kind: 'coin', edition: 'silver' },
     name: treasury.tier === null ? gameText('game.gauge.treasury') : treasuryName(treasury.tier),
-    state: treasury.tier === null ? locked(next === null ? null : meeshCount(next.missing)) : value(meeshCount(treasury.held)),
-    facts: next === null ? [] : [row(gameText('game.fact.next_tier'), gameText('game.treasury.next', { missing: meeshCount(next.missing), tier: treasuryName(next.key) }))],
+    state: treasury.tier === null ? locked(nextLine) : value(meeshCount(treasury.held)),
+    facts: nextLine === null ? [] : [row(gameText('game.fact.next_tier'), nextLine)],
   });
 }
 

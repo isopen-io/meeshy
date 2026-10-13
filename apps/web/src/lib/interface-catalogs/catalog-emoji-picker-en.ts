@@ -21,6 +21,13 @@ const en = {
   'emojiPicker.category.objects': 'Objects',
   'emojiPicker.category.symbols': 'Symbols',
   'emojiPicker.category.flags': 'Flags',
+  'emojiPicker.tones': 'Skin tones',
+  'emojiPicker.tone.default': 'Default',
+  'emojiPicker.tone.light': 'Light',
+  'emojiPicker.tone.medium-light': 'Medium-light',
+  'emojiPicker.tone.medium': 'Medium',
+  'emojiPicker.tone.medium-dark': 'Medium-dark',
+  'emojiPicker.tone.dark': 'Dark',
 } as const satisfies EmojiPickerCatalog;
 
 export default en;

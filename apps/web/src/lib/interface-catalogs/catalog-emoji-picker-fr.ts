@@ -19,6 +19,13 @@ const fr = {
   'emojiPicker.category.objects': 'Objets',
   'emojiPicker.category.symbols': 'Symboles',
   'emojiPicker.category.flags': 'Drapeaux',
+  'emojiPicker.tones': 'Teintes de peau',
+  'emojiPicker.tone.default': 'Par défaut',
+  'emojiPicker.tone.light': 'Claire',
+  'emojiPicker.tone.medium-light': 'Moyennement claire',
+  'emojiPicker.tone.medium': 'Moyenne',
+  'emojiPicker.tone.medium-dark': 'Moyennement foncée',
+  'emojiPicker.tone.dark': 'Foncée',
 } as const;
 
 export default fr;

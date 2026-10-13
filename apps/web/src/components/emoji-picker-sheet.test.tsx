@@ -2,9 +2,11 @@ import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { EMOJI_CATEGORY_IDS, loadEmojiIndex, loadEmojiNames } from '@/lib/emoji/emoji-catalogue';
+import { EMOJI_SKIN_TONE_KEY } from '@/lib/emoji/emoji-skin-tone';
 import { EMOJI_RECENTS_KEY } from '@/lib/emoji-recents';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadEmojiPickerCatalog } from '@/lib/i18n-emoji-picker-catalog';
+import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -265,5 +267,219 @@ describe('la feuille d’emojis — choisir', () => {
     expect(document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('Insérer un emoji');
     await mounter.click(host.querySelector<HTMLButtonElement>('[data-sheet-close]'));
     expect(closed).toEqual(['fermée']);
+  });
+});
+
+/**
+ * LES TEINTES DE PEAU (#10533) — un appui long, un clic droit ou Maj+F10 sur
+ * un emoji qui en accepte ouvre ses six variantes ; la teinte choisie est
+ * retenue sur l'appareil et s'applique ensuite d'office à TOUS les emojis qui
+ * en acceptent une (une préférence, comme `message.emojiSkinTone`).
+ */
+describe('la feuille d’emojis — les teintes de peau', () => {
+  /* La table ET le menu des teintes arrivent par import() : le témoin les attend, puis lit. */
+  const ready = async (host: HTMLElement) => {
+    await Promise.all([loadEmojiIndex(), import('./emoji-tone-menu')]);
+    await mounter.settle();
+    await mounter.settle();
+    return host;
+  };
+  const menu = (host: HTMLElement) => host.querySelector<HTMLElement>('[data-emoji-tones]');
+  const tones = (host: HTMLElement) => [...host.querySelectorAll<HTMLButtonElement>('[data-emoji-tones] [role="menuitemradio"]')];
+  const tone = (host: HTMLElement, name: string) => {
+    const found = host.querySelector<HTMLButtonElement>(`[data-emoji-tone="${name}"]`);
+    if (found === null) throw new Error(`teinte absente : ${name}`);
+    return found;
+  };
+  /* `lazy` suspend à son premier rendu, même module déjà chargé : un tour le laisse se poser. */
+  const shiftF10 = async (target: HTMLElement) => {
+    act(() => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+    });
+    await mounter.settle();
+  };
+  const rightClick = async (target: HTMLElement): Promise<boolean> => {
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+    await mounter.settle();
+    return event.defaultPrevented;
+  };
+
+  test('un emoji qui accepte une teinte l’annonce ; les autres non', async () => {
+    const host = await ready(await open());
+    expect(cell(host, '👍').getAttribute('aria-haspopup')).toBe('menu');
+    expect(cell(host, '👍').dataset.emojiBase).toBe('👍');
+    expect(cell(host, '😂').getAttribute('aria-haspopup')).toBeNull();
+    expect(cell(host, '😂').dataset.emojiBase).toBeUndefined();
+    expect(menu(host)).toBeNull();
+  });
+
+  test('Maj+F10 ouvre ses six variantes : un menu nommé, des cibles de 44 points, le focus sur la teinte en cours', async () => {
+    const host = await ready(await open());
+    await shiftF10(cell(host, '👍'));
+
+    expect(menu(host)?.getAttribute('role')).toBe('menu');
+    expect(menu(host)?.getAttribute('aria-label')).toBe('Teintes de peau 👍');
+    expect(tones(host).map((button) => button.textContent)).toEqual(['👍', '👍🏻', '👍🏼', '👍🏽', '👍🏾', '👍🏿']);
+    expect(tones(host).map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Par défaut',
+      'Claire',
+      'Moyennement claire',
+      'Moyenne',
+      'Moyennement foncée',
+      'Foncée',
+    ]);
+    expect(tones(host).map((button) => button.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false', 'false', 'false']);
+    for (const button of tones(host)) expect({ height: button.style.minHeight, width: button.style.minWidth }).toEqual({ height: '44px', width: '44px' });
+    expect(document.activeElement).toBe(tone(host, 'default'));
+  });
+
+  test('le clic droit l’ouvre aussi ; sur un emoji sans teinte, il reste celui du navigateur', async () => {
+    const host = await ready(await open());
+
+    expect(await rightClick(cell(host, '😂'))).toBe(false);
+    expect(menu(host)).toBeNull();
+    expect(await rightClick(cell(host, '🙏'))).toBe(true);
+    expect(menu(host)?.dataset.emojiTones).toBe('🙏');
+  });
+
+  test('l’appui long l’ouvre, et le relâcher qui suit ne choisit pas l’emoji', async () => {
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+    const target = cell(host, '👏');
+    act(() => {
+      target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: 10 }));
+    });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40)));
+    act(() => {
+      target.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, button: 0 }));
+      target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+
+    expect(menu(host)?.dataset.emojiTones).toBe('👏');
+    expect(picked).toEqual([]);
+  });
+
+  test('une fois le relâcher passé, Entrée sur le même emoji le choisit de nouveau', async () => {
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+    const target = cell(host, '👏');
+    act(() => {
+      target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: 10 }));
+    });
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, LONG_PRESS_MS + 40)));
+    act(() => {
+      target.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    await mounter.settle();
+    await mounter.click(target);
+
+    expect(picked).toEqual(['👏']);
+  });
+
+  test('un appui court choisit l’emoji, sans ouvrir ses teintes', async () => {
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+    await mounter.click(cell(host, '👍'));
+
+    expect(picked).toEqual(['👍']);
+    expect(menu(host)).toBeNull();
+  });
+
+  test('choisir une teinte rend la variante à l’hôte, la retient, et la range dans les récents', async () => {
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+    await shiftF10(cell(host, '👍'));
+    await mounter.click(tone(host, 'medium'));
+
+    expect(picked).toEqual(['👍🏽']);
+    expect(localStorage.getItem(EMOJI_SKIN_TONE_KEY)).toBe('medium');
+    expect(localStorage.getItem(EMOJI_RECENTS_KEY)).toBe('["👍🏽"]');
+    expect(menu(host)).toBeNull();
+  });
+
+  test('la teinte retenue s’applique ensuite d’office, à tous les emojis qui en acceptent une', async () => {
+    localStorage.setItem(EMOJI_SKIN_TONE_KEY, 'medium-dark');
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+
+    expect(cell(host, '👍🏾').dataset.emojiBase).toBe('👍');
+    expect(cell(host, '🙏🏾').dataset.emojiBase).toBe('🙏');
+    expect(cells(host)).toContain('😂');
+    expect(cells(host)).not.toContain('👍');
+
+    await mounter.click(tab(host, 'people'));
+    await mounter.settle();
+    expect(cells(host)).toContain('👋🏾');
+    expect(cells(host)).not.toContain('👋');
+    expect(cells(host)).toContain('🧑‍🤝‍🧑');
+
+    await mounter.click(cell(host, '👋🏾'));
+    expect(picked).toEqual(['👋🏾']);
+  });
+
+  test('le menu d’un emoji déjà teinté coche la teinte en cours, et « Par défaut » y revient', async () => {
+    localStorage.setItem(EMOJI_SKIN_TONE_KEY, 'dark');
+    const picked: string[] = [];
+    const host = await ready(await open((emoji) => picked.push(emoji)));
+    await shiftF10(cell(host, '👍🏿'));
+
+    expect(tones(host).map((button) => button.getAttribute('aria-checked'))).toEqual(['false', 'false', 'false', 'false', 'false', 'true']);
+    expect(document.activeElement).toBe(tone(host, 'dark'));
+
+    await mounter.click(tone(host, 'default'));
+    expect(picked).toEqual(['👍']);
+    expect(localStorage.getItem(EMOJI_SKIN_TONE_KEY)).toBe('default');
+  });
+
+  test('un récent garde la teinte avec laquelle il a été envoyé, et offre encore ses variantes', async () => {
+    localStorage.setItem(EMOJI_RECENTS_KEY, JSON.stringify(['👍🏻']));
+    localStorage.setItem(EMOJI_SKIN_TONE_KEY, 'dark');
+    const host = await ready(await open());
+
+    expect(cells(host).slice(0, 1)).toEqual(['👍🏻']);
+    await shiftF10(cell(host, '👍🏻'));
+    expect(menu(host)?.dataset.emojiTones).toBe('👍');
+  });
+
+  test('au clavier : les flèches parcourent les teintes, Échap referme le menu sans fermer la feuille et rend le focus à l’emoji', async () => {
+    const closed: string[] = [];
+    const host = await ready(await open(() => {}, () => closed.push('fermée')));
+    await shiftF10(cell(host, '👍'));
+
+    press(tone(host, 'default'), 'ArrowRight');
+    expect(document.activeElement).toBe(tone(host, 'light'));
+    press(tone(host, 'light'), 'End');
+    expect(document.activeElement).toBe(tone(host, 'dark'));
+    press(tone(host, 'dark'), 'ArrowLeft');
+    expect(document.activeElement).toBe(tone(host, 'medium-dark'));
+
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    act(() => {
+      tone(host, 'medium-dark').dispatchEvent(escape);
+    });
+    expect(escape.defaultPrevented).toBe(true);
+    expect(menu(host)).toBeNull();
+    expect(closed).toEqual([]);
+    expect(document.activeElement).toBe(cell(host, '👍'));
+    expect(localStorage.getItem(EMOJI_SKIN_TONE_KEY)).toBeNull();
+  });
+
+  test('de droite à gauche, la flèche gauche avance dans les teintes', async () => {
+    document.documentElement.lang = 'ar';
+    const host = await ready(await open());
+    await shiftF10(cell(host, '👍'));
+    press(tone(host, 'default'), 'ArrowLeft');
+
+    expect(document.activeElement).toBe(tone(host, 'light'));
+  });
+
+  test('changer de catégorie ou chercher referme le menu', async () => {
+    const host = await ready(await open());
+    await shiftF10(cell(host, '👍'));
+    await mounter.click(tab(host, 'animals'));
+    expect(menu(host)).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useLayoutEffect } from 'react';
 
-import { routeKey, useRoute } from '@/lib/router';
+import { useCloseOnNavigation } from '@/lib/router';
 import { closeMoodPeek, registerMoodPeekHost, useMoodPeek } from '@/lib/view/mood-peek';
 
 /**
@@ -13,10 +13,9 @@ const LazyMoodPeekSheet = lazy(() => import('@/components/mood-peek-sheet').then
 
 export function MoodPeekHost() {
   const peek = useMoodPeek();
-  const address = routeKey(useRoute());
 
   useLayoutEffect(() => registerMoodPeekHost(), []);
-  useLayoutEffect(() => closeMoodPeek, [address]);
+  useCloseOnNavigation(closeMoodPeek);
 
   return peek === null ? null : (
     <Suspense fallback={null}>

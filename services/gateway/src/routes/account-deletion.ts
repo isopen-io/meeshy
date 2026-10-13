@@ -274,7 +274,12 @@ export async function accountDeletionRoutes(fastify: FastifyInstance) {
         // `etatAttendu`) a déjà purgé ces trois tables ISOLÉES depuis
         // `MaintenanceService` (#3632). Idempotent — rejouer ici ne coûte que
         // trois requêtes vides si la passe horaire est déjà passée.
-        await purgeAccountIsolatedData(fastify.prisma, demande.userId).catch((error) =>
+        await purgeAccountIsolatedData(fastify.prisma, demande.userId, {
+          shareLinkLive: {
+            resolveIO: () => fastify.socketIOHandler?.getManager?.()?.getIO(),
+            resolveManager: () => fastify.socketIOHandler?.getManager?.(),
+          },
+        }).catch((error) =>
           logger.warn(`[Deletion] purge des données isolées échouée user=${demande.userId}`, error)
         );
 

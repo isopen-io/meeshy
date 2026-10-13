@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 
 import {
   EMOJI_CATEGORY_IDS,
@@ -10,14 +10,27 @@ import {
   type EmojiCategoryId,
 } from '@/lib/emoji/emoji-catalogue';
 import { isGridKey, nextGridIndex } from '@/lib/emoji/emoji-grid-keys';
+import {
+  readEmojiSkinTone,
+  recordEmojiSkinTone,
+  skinToneKey,
+  skinToneOf,
+  withSkinTone,
+  type EmojiSkinTone,
+} from '@/lib/emoji/emoji-skin-tone';
 import { supportedEmojiLevel } from '@/lib/emoji/emoji-support';
 import { readEmojiRecents, recordEmojiRecent } from '@/lib/emoji-recents';
 import { emojiPickerText, loadEmojiPickerCatalog, type EmojiPickerCatalogKey } from '@/lib/i18n-emoji-picker-catalog';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useLongPress } from '@/lib/view/long-press';
 import { EXTENDED_REACTIONS } from '@/lib/view/message-actions';
 
 import { Sheet } from './sheet';
+
+/** Le menu des teintes voyage À PART : la feuille le demande à son ouverture, sans l'attendre. */
+const loadToneMenu = () => import('./emoji-tone-menu');
+const EmojiToneMenu = lazy(() => loadToneMenu().then((m) => ({ default: m.EmojiToneMenu })));
 
 /**
  * LA FEUILLE D'EMOJIS COMPLÈTE (#10531) — miroir d'`EmojiPickerSheet`
@@ -40,6 +53,12 @@ import { Sheet } from './sheet';
  * AU CLAVIER : la rangée de catégories est une liste d'onglets (flèches, Début,
  * Fin), chaque grille n'a qu'un arrêt de tabulation et se parcourt aux
  * flèches ; de droite à gauche, gauche et droite s'inversent.
+ *
+ * LES TEINTES DE PEAU (#10533) : un appui long, un clic droit ou Maj+F10 sur un
+ * emoji qui en accepte ouvre ses six variantes (`EmojiToneMenu`). La teinte
+ * choisie est UNE préférence, retenue sur l'appareil : elle s'applique ensuite
+ * d'office à tous les emojis qui en acceptent une — sauf aux récents, qui
+ * gardent la teinte avec laquelle ils ont été envoyés.
  */
 export const EMOJI_SEARCH_LIMIT = 120;
 
@@ -52,6 +71,7 @@ export const EMOJI_SEARCH_LIMIT = 120;
  */
 export function prepareEmojiPickerSheet(): Promise<void> {
   void loadEmojiIndex().catch(() => undefined);
+  void loadToneMenu().catch(() => undefined);
   return loadEmojiPickerCatalog(currentInterfaceLanguage()).then(() => undefined);
 }
 
@@ -67,6 +87,11 @@ const CATEGORY_ICON: Readonly<Record<EmojiCategoryId, string>> = {
   symbols: '❤️',
   flags: '🏳️',
 };
+
+const NO_TONABLE: ReadonlyMap<string, string> = new Map();
+
+/** L'emoji de base d'un emoji qui accepte une teinte — `null` pour les autres. */
+type BaseOf = (emoji: string) => string | null;
 
 const CATEGORY_LABEL: Readonly<Record<EmojiCategoryId, EmojiPickerCatalogKey>> = {
   recent: 'emojiPicker.category.recent',
@@ -128,14 +153,39 @@ function EmojiCells({
   emojis,
   label,
   rtl,
+  baseOf,
   onPick,
+  onTones,
 }: {
   readonly emojis: readonly string[];
   readonly label: string;
   readonly rtl: boolean;
+  readonly baseOf: BaseOf;
   readonly onPick: (emoji: string) => void;
+  readonly onTones: (base: string, opener: HTMLElement) => void;
 }) {
   const [active, setActive] = useState(0);
+  /* L'APPUI LONG OUVRE LES TEINTES, ET LE RELÂCHER QUI SUIT NE CHOISIT RIEN —
+     même garde que le cadre des emojis rapides (`composer-quick-emoji.tsx`). */
+  const holding = useRef(false);
+  const pressOpened = useRef(false);
+  const longPress = useLongPress({
+    onOpen: ({ element }) => {
+      const base = element.dataset.emojiBase;
+      if (base === undefined) return;
+      pressOpened.current = holding.current;
+      onTones(base, element);
+    },
+  });
+  /* Le clic d'un relâcher suit dans le même tour ; passé ce tour, la garde
+     retombe — sans quoi Entrée sur le même emoji serait avalée une fois. */
+  const release = () => {
+    holding.current = false;
+    longPress.onPointerUp();
+    setTimeout(() => {
+      pressOpened.current = false;
+    }, 0);
+  };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!isGridKey(event.key)) return;
@@ -155,21 +205,62 @@ function EmojiCells({
       style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}
       onKeyDown={onKeyDown}
     >
-      {emojis.map((emoji, index) => (
-        <button
-          key={emoji}
-          type="button"
-          data-emoji={emoji}
-          aria-label={emoji}
-          tabIndex={index === Math.min(active, emojis.length - 1) ? 0 : -1}
-          onFocus={() => setActive(index)}
-          onClick={() => onPick(emoji)}
-          className="grid place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
-        >
-          {emoji}
-        </button>
-      ))}
+      {emojis.map((emoji, index) => {
+        const base = baseOf(emoji);
+        const tones =
+          base === null
+            ? {}
+            : {
+                ...longPress,
+                'data-emoji-base': base,
+                'aria-haspopup': 'menu' as const,
+                'aria-keyshortcuts': 'Shift+F10',
+                onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+                  holding.current = event.button === 0;
+                  pressOpened.current = false;
+                  longPress.onPointerDown(event);
+                },
+                onPointerUp: release,
+                onPointerCancel: release,
+              };
+        return (
+          <button
+            key={emoji}
+            type="button"
+            data-emoji={emoji}
+            aria-label={emoji}
+            tabIndex={index === Math.min(active, emojis.length - 1) ? 0 : -1}
+            onFocus={() => setActive(index)}
+            {...tones}
+            onClick={() => {
+              if (pressOpened.current) {
+                pressOpened.current = false;
+                return;
+              }
+              onPick(emoji);
+            }}
+            className="relative grid place-items-center rounded-chip text-2xl focus-visible:outline-2 focus-visible:outline-offset-2"
+            style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)', WebkitTouchCallout: 'none', userSelect: 'none' }}
+          >
+            {emoji}
+            {base === null ? null : (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute"
+                style={{
+                  insetInlineEnd: 5,
+                  bottom: 5,
+                  width: 5,
+                  height: 5,
+                  opacity: 0.5,
+                  backgroundColor: 'var(--color-ios-ink-2)',
+                  clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -225,36 +316,64 @@ export function EmojiPickerSheet({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<EmojiCategoryId>('recent');
   const [recents] = useState(() => readEmojiRecents());
+  const [tone, setTone] = useState(() => readEmojiSkinTone());
+  const [toning, setToning] = useState<{ readonly base: string; readonly opener: HTMLElement } | null>(null);
   const searching = query.trim().length > 0;
 
   const index = useOnDemand(true, loadedEmojiIndex, loadEmojiIndex);
   const names = useOnDemand(searching, () => loadedEmojiNames(language), () => loadEmojiNames(language));
   const maxLevel = useMemo(() => supportedEmojiLevel(), []);
 
+  const tonable = index.value?.tonable ?? NO_TONABLE;
+  const { baseOf, toned } = useMemo(() => {
+    const base: BaseOf = (emoji) => tonable.get(skinToneKey(emoji)) ?? null;
+    const tint = (emoji: string): string => {
+      const known = tone === 'default' ? null : base(emoji);
+      return known === null ? emoji : withSkinTone(known, tone);
+    };
+    return { baseOf: base, toned: (emojis: readonly string[]): readonly string[] => emojis.map(tint) };
+  }, [tonable, tone]);
+
   const results = useMemo(
     () =>
       searching && index.value !== null && names.value !== null
-        ? searchEmojis({ index: index.value, names: names.value, query, maxLevel, limit: EMOJI_SEARCH_LIMIT })
+        ? toned(searchEmojis({ index: index.value, names: names.value, query, maxLevel, limit: EMOJI_SEARCH_LIMIT }))
         : null,
-    [searching, index.value, names.value, query, maxLevel],
+    [searching, index.value, names.value, query, maxLevel, toned],
   );
   const grouped = useMemo(
     () =>
       category === 'recent' || index.value === null
         ? null
-        : (index.value.byGroup.get(category) ?? []).filter((entry) => entry.level <= maxLevel).map((entry) => entry.emoji),
-    [category, index.value, maxLevel],
+        : toned((index.value.byGroup.get(category) ?? []).filter((entry) => entry.level <= maxLevel).map((entry) => entry.emoji)),
+    [category, index.value, maxLevel, toned],
   );
+  const suggested = useMemo(() => toned(EXTENDED_REACTIONS), [toned]);
 
   const pick = (emoji: string) => {
+    setToning(null);
     recordEmojiRecent(emoji);
     onPick(emoji);
   };
 
+  const pickTone = (base: string, chosen: EmojiSkinTone) => {
+    recordEmojiSkinTone(chosen);
+    setTone(chosen);
+    pick(withSkinTone(base, chosen));
+  };
+
+  const dismissTones = () => {
+    toning?.opener.focus();
+    setToning(null);
+  };
+
   const choose = (id: EmojiCategoryId) => {
+    setToning(null);
     setQuery('');
     setCategory(id);
   };
+
+  const cellProps = { rtl, baseOf, onPick: pick, onTones: (base: string, opener: HTMLElement) => setToning({ base, opener }) };
 
   const onTabKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!isGridKey(event.key)) return;
@@ -279,25 +398,25 @@ export function EmojiPickerSheet({
       }
       if (results === null) return loading;
       if (results.length === 0) return <Notice label={text('emojiPicker.search.empty')} />;
-      return <EmojiCells key={`search:${query}`} emojis={results} label={text('emojiPicker.search')} rtl={rtl} onPick={pick} />;
+      return <EmojiCells key={`search:${query}`} emojis={results} label={text('emojiPicker.search')} {...cellProps} />;
     }
     if (category === 'recent') {
       return (
         <>
           {recents.length === 0 ? null : (
             <Section title={text('emojiPicker.section.recent')}>
-              <EmojiCells emojis={recents} label={text('emojiPicker.section.recent')} rtl={rtl} onPick={pick} />
+              <EmojiCells emojis={recents} label={text('emojiPicker.section.recent')} {...cellProps} />
             </Section>
           )}
           <Section title={text('emojiPicker.section.suggested')}>
-            <EmojiCells emojis={EXTENDED_REACTIONS} label={text('emojiPicker.section.suggested')} rtl={rtl} onPick={pick} />
+            <EmojiCells emojis={suggested} label={text('emojiPicker.section.suggested')} {...cellProps} />
           </Section>
         </>
       );
     }
     if (index.status === 'failed') return tableFailed;
     if (grouped === null) return loading;
-    return <EmojiCells key={category} emojis={grouped} label={text(CATEGORY_LABEL[category])} rtl={rtl} onPick={pick} />;
+    return <EmojiCells key={category} emojis={grouped} label={text(CATEGORY_LABEL[category])} {...cellProps} />;
   })();
 
   return (
@@ -307,7 +426,10 @@ export function EmojiPickerSheet({
       searchLabel={text('emojiPicker.search')}
       searchPlaceholder={text('emojiPicker.search')}
       search={query}
-      onSearchChange={setQuery}
+      onSearchChange={(value) => {
+        setToning(null);
+        setQuery(value);
+      }}
       dialogData={{ 'data-emoji-picker': '' }}
       onClose={onClose}
     >
@@ -352,8 +474,24 @@ export function EmojiPickerSheet({
         data-emoji-panel={searching ? 'search' : category}
         {...(searching ? { 'aria-label': text('emojiPicker.search') } : { 'aria-labelledby': tabId(category) })}
         className="min-h-0 flex-1 overflow-y-auto px-4 pt-1"
+        onPointerDown={(event) => {
+          if (toning !== null && !(event.target instanceof Element && event.target.closest('[data-emoji-tones]') !== null)) setToning(null);
+        }}
       >
         {body}
+        {toning === null ? null : (
+          <Suspense fallback={null}>
+            <EmojiToneMenu
+              base={toning.base}
+              tone={skinToneOf(toning.opener.dataset.emoji ?? '')}
+              label={text('emojiPicker.tones')}
+              toneLabel={(candidate) => text(`emojiPicker.tone.${candidate}`)}
+              rtl={rtl}
+              onChoose={(chosen) => pickTone(toning.base, chosen)}
+              onDismiss={dismissTones}
+            />
+          </Suspense>
+        )}
       </div>
     </Sheet>
   );

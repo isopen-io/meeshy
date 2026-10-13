@@ -28,6 +28,7 @@ import { shareLinkActiveGuestsWhere } from './shareLinkGuestsWhere';
 import type { DepartedMemberEphemeralState } from './endConversationMembership';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { pendingRevocationAdmissionCutoff } from '../services/guestAccessEnd';
 
 const logger = enhancedLogger.child({ module: 'CloseShareLinkRevokingGuests' });
 
@@ -110,12 +111,13 @@ export async function runPendingGuestRevocation(
     // Audit de #10470 — tant que le lien reste FERMÉ, tous ses invités actifs
     // partent, y compris celui dont la réservation a précédé la fermeture et la
     // création a suivi la marque. Bornée par la marque seulement si le lien a
-    // été ROUVERT : ses nouveaux venus restent.
+    // été ROUVERT : ses nouveaux venus restent. #10492 — la borne porte la
+    // marge d'horloge de la garde commune : les deux retirent les mêmes invités.
     const link = await prisma.conversationShareLink.findUnique({
       where: { id: shareLinkId },
       select: { isActive: true },
     });
-    const admittedUntil = link?.isActive === true ? pendingSince : undefined;
+    const admittedUntil = link?.isActive === true ? pendingRevocationAdmissionCutoff(pendingSince) : undefined;
     await revokeShareLinkGuests({ ...params, revokedAt: pendingSince, admittedUntil });
     await prisma.conversationShareLink.updateMany({
       where: { id: shareLinkId, guestRevocationPendingAt: pendingSince },

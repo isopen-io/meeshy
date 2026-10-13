@@ -16,8 +16,8 @@
  * arabe (U+2066 … U+2069) : sans cela l'algorithme bidirectionnel le retourne.
  */
 const fr = {
-  'game.points.convertible.one': '{count} point convertible',
-  'game.points.convertible.other': '{count} points convertibles',
+  'game.points.convertible.one': '{count} point à convertir',
+  'game.points.convertible.other': '{count} points à convertir',
   'game.actions.one': '{count} action',
   'game.actions.other': '{count} actions',
   'game.levels.one': '{count} niveau',
@@ -98,7 +98,7 @@ const fr = {
   'game.mission.invite_joined.one': 'Faire rejoindre Meeshy à une personne invitée',
   'game.mission.invite_joined.other': 'Faire rejoindre Meeshy à {count} personnes invitées',
   'game.mission.generic': 'Mission du jour',
-  'game.error.insufficient_points': 'Pas assez de points convertibles pour frapper une Meesh.',
+  'game.error.insufficient_points': 'Pas assez de points à convertir pour frapper une Meesh.',
   'game.error.insufficient_meeshes': 'Il te faut une Meesh de plus pour ça.',
   'game.error.freeze_at_maximum': 'Tu as déjà deux gels en réserve : c’est le maximum.',
   'game.error.relight_not_allowed': 'La Flamme ne peut pas être rallumée maintenant.',
@@ -405,7 +405,7 @@ const fr = {
   'game.family.tool': 'Outils',
   'game.family.social': 'Lien social',
   'game.hero.earn_title': 'Comment gagner des points',
-  'game.hero.earn_chip': '{family} jusqu’à +{points}',
+  'game.hero.earn_chip': '{family} jusqu’à {points}',
   'game.hero.earn_chip_a11y': '{family} : jusqu’à {points} par geste. Voir les règles.',
   'game.hero.mint_title': 'Comment frapper',
   'game.hero.mint_price': '{price} → une Meesh',

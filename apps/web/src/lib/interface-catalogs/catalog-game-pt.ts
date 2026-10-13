@@ -2,8 +2,8 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 
 /** Le catalogue du jeu, pt (#9379) — mêmes clés et mêmes paramètres que le français ; textes de l'app iOS quand elle les porte. */
 const pt = {
-  'game.points.convertible.one': '{count} ponto conversível',
-  'game.points.convertible.other': '{count} pontos conversíveis',
+  'game.points.convertible.one': '{count} ponto para converter',
+  'game.points.convertible.other': '{count} pontos para converter',
   'game.actions.one': '{count} ação',
   'game.actions.other': '{count} ações',
   'game.levels.one': '{count} nível',
@@ -84,7 +84,7 @@ const pt = {
   'game.mission.invite_joined.one': 'Fazer uma pessoa convidada entrar no Meeshy',
   'game.mission.invite_joined.other': 'Fazer {count} pessoas convidadas entrarem no Meeshy',
   'game.mission.generic': 'Missão do dia',
-  'game.error.insufficient_points': 'Você não tem pontos conversíveis suficientes para cunhar uma Meesh.',
+  'game.error.insufficient_points': 'Você não tem pontos para converter suficientes para cunhar uma Meesh.',
   'game.error.insufficient_meeshes': 'Você precisa de mais uma Meesh para isso.',
   'game.error.freeze_at_maximum': 'Você já tem dois congelamentos em reserva: é o máximo.',
   'game.error.relight_not_allowed': 'A Chama não pode ser reacendida agora.',
@@ -391,7 +391,7 @@ const pt = {
   'game.family.tool': 'Ferramentas',
   'game.family.social': 'Laços',
   'game.hero.earn_title': 'Como ganhar pontos',
-  'game.hero.earn_chip': '{family} até +{points}',
+  'game.hero.earn_chip': '{family} até {points}',
   'game.hero.earn_chip_a11y': '{family}: até {points} por gesto. Ver as regras.',
   'game.hero.mint_title': 'Como cunhar',
   'game.hero.mint_price': '{price} → uma Meesh',

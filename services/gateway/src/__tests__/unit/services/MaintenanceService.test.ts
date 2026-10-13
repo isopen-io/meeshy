@@ -713,7 +713,8 @@ describe('processAccountDeletionRequests — la fin de période de grâce coupe 
 
     expect(prisma.userSession.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' } });
+    // #10492 — les liens du compte sont LUS, leurs invités révoqués, puis supprimés.
+    expect(prisma.conversationShareLink.findMany).toHaveBeenCalledWith({ where: { createdBy: 'user-a' }, select: { id: true } });
     expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: 'user-a' } });
     expect(prisma.userContact.deleteMany).toHaveBeenCalledWith({ where: { ownerId: 'user-a' } });
     expect(prisma.contactJoinNotice.deleteMany).toHaveBeenCalledWith({ where: { recipientId: 'user-a' } });
