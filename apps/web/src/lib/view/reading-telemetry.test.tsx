@@ -170,21 +170,21 @@ describe('FeedPostCard — la carte compte son impression, quel que soit l’éc
     mount(<FeedPostCard model={cardModel()} />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'feed' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'feed', surface: 'feed' }]);
   });
 
   test('la source suit l’écran : un hashtag compte en `search`', async () => {
-    mount(<FeedPostCard model={cardModel()} impressionSource="search" />);
+    mount(<FeedPostCard model={cardModel()} impressionSource="search" impressionSurface="hashtag" />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'search' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'search', surface: 'hashtag' }]);
   });
 
   test('un réel dans le fil compte aussi son impression', async () => {
-    mount(<FeedPostCard model={cardModel(REEL_STUDIO)} impressionSource="profile" />);
+    mount(<FeedPostCard model={cardModel(REEL_STUDIO)} impressionSource="profile" impressionSurface="profile" />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: REEL_STUDIO.id, source: 'profile' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: REEL_STUDIO.id, source: 'profile', surface: 'profile' }]);
   });
 
   test('la carte du DÉTAIL n’observe rien : le détail compte la sienne à l’ouverture', () => {
@@ -212,21 +212,21 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     const clock = () => t;
     mount(<SessionProbe postId={POST.id} active clock={clock} openView />);
     expect(calls()).toEqual([
-      { type: 'impression', postId: POST.id, source: 'detail' },
-      { type: 'view', postId: POST.id },
+      { type: 'impression', postId: POST.id, source: 'detail', surface: 'detail' },
+      { type: 'view', postId: POST.id, surface: 'detail' },
     ]);
     t = 8_500;
     act(() => root?.unmount());
     root = null;
     const closing = calls().slice(2);
-    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 7_500 });
+    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 7_500, surface: 'detail' });
     expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, contentType: 'POST', surface: 'detail', dwellMs: 7_500, completed: false });
     expect((closing[1] as { sessionId: string }).sessionId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   test('openView faux (la story d’un compte, déjà vue par son propre chemin) : pas de seconde vue d’ouverture', () => {
     mount(<SessionProbe postId={POST.id} active clock={() => 0} openView={false} />);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'detail' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'detail', surface: 'detail' }]);
   });
 
   test('rien ne s’ouvre tant que le contenu n’est pas servi', () => {
@@ -252,8 +252,8 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     );
     mount(page('active'));
     expect(calls().slice(0, 2)).toEqual([
-      { type: 'impression', postId: REEL_STUDIO.id, source: 'feed' },
-      { type: 'view', postId: REEL_STUDIO.id },
+      { type: 'impression', postId: REEL_STUDIO.id, source: 'feed', surface: 'reels' },
+      { type: 'view', postId: REEL_STUDIO.id, surface: 'reels' },
     ]);
     act(() => root?.render(page('near')));
     const types = calls().slice(2).map((e) => e.type);
@@ -283,7 +283,7 @@ describe('le plateau compte les humeurs qu’il montre', () => {
     expect([...moodsByAuthor(moods)]).toEqual([['u-a', '🎉'], ['u-c', '☕']]);
   });
 
-  test('le plateau monté émet une impression `status` par humeur d’autrui affichée', async () => {
+  test('le plateau ne compte plus les humeurs à la réception du corpus — la tuile les compte à l’écran (#10483)', async () => {
     function RailProbe() {
       useStoryRailProps('u-moi');
       return null;
@@ -294,14 +294,12 @@ describe('le plateau compte les humeurs qu’il montre', () => {
         <RailProbe />
       </QueryClientProvider>,
     );
-    for (let i = 0; i < 20 && !calls().some((e) => e.type === 'impression'); i += 1) {
+    for (let i = 0; i < 10; i += 1) {
       await act(async () => {
         await wait(10);
       });
     }
-    const statuses = calls().filter((e) => e.type === 'impression' && e.source === 'status');
-    expect(statuses.length).toBeGreaterThan(0);
-    expect(statuses).toContainEqual({ type: 'impression', postId: 'st-humeur-ines', source: 'status' });
+    expect(calls().filter((e) => e.type === 'impression')).toEqual([]);
     client.clear();
   });
 });

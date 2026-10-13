@@ -2,7 +2,7 @@ import { useContext, type ComponentProps, type CSSProperties } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
-import { useAuthorMood } from '@/lib/view/use-author-moods';
+import { useAuthorMood, useAuthorMoodPostId } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 import { WorldParticipantCardContext } from '@/lib/view/world-participant-card-context';
 
@@ -38,6 +38,8 @@ export function AuthorAvatar({
   const active = useAuthorActive(authorId);
   const focused = useAuthorFocused(authorId);
   const mood = useAuthorMood(authorId);
+  const moodPostId = useAuthorMoodPostId(authorId);
+  const moodProps = mood === undefined ? {} : { mood, ...(moodPostId === undefined ? {} : { moodPostId }) };
   const openDetails = useContext(ConversationDetailsContext);
   const worldCard = useContext(WorldParticipantCardContext);
   const guestFocus = useSpeaksAsGuest();
@@ -61,7 +63,7 @@ export function AuthorAvatar({
      L'anneau de story part avec la porte, pour ne rien promettre au doigt. */
   if (guestFocus) {
     const { profileUsername: _profile, storyRing: _ring, ...visual } = props;
-    return <CardTriggerAvatar {...(mood === undefined ? {} : { mood })} {...visual} {...decorated} />;
+    return <CardTriggerAvatar {...moodProps} {...visual} {...decorated} />;
   }
 
   /* LA FICHE DE WORLD WIDE (#10102) — quand le fil l'ouvre (équipe, World
@@ -86,7 +88,7 @@ export function AuthorAvatar({
           className="avatar-profile-link cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ '--avatar-size': `${props.size}px`, outlineColor: 'var(--accent)' } as CSSProperties}
         >
-          <CardTriggerAvatar {...(mood === undefined ? {} : { mood })} {...visual} {...decorated} />
+          <CardTriggerAvatar {...moodProps} {...visual} {...decorated} />
         </button>
       </AvatarMenuTrigger>
     );
@@ -98,7 +100,7 @@ export function AuthorAvatar({
       name={props.name ?? props.profileUsername ?? ''}
       onOpenDetails={openDetails ?? undefined}
     >
-      <Avatar {...(mood === undefined ? {} : { mood })} {...props} here={decorated.here} hereActive={decorated.hereActive} hereFocused={decorated.hereFocused} />
+      <Avatar {...moodProps} {...props} here={decorated.here} hereActive={decorated.hereActive} hereFocused={decorated.hereFocused} />
     </AvatarMenuTrigger>
   );
 }

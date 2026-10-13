@@ -93,7 +93,9 @@ export function TargetLink({ target, ...surface }: SurfaceProps & { readonly tar
     case 'story':
       return <Link to="story" params={target.params} {...surface} />;
     case 'post':
-      return <Link to="post" params={target.params} {...surface} />;
+      /* `?from=notification` (#10483) — le détail compte son impression en
+         `notification`, pas en `detail`. */
+      return <Link to="post" params={target.params} search={{ from: 'notification' }} {...surface} />;
     case 'discover':
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
          (#7173), la ligne ne le reconstruit pas. */

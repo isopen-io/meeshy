@@ -1,4 +1,5 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+import type { ContentSurface } from '@meeshy/shared/types/content-surfaces';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 
@@ -52,24 +53,11 @@ export type ImpressionSource =
 
 /**
  * L'ÉCRAN qui a montré le contenu (#10483 § 8) — champ FACULTATIF des
- * impressions et des vues. Un serveur antérieur l'ignore (`z.object` n'est
- * pas strict) : rien côté client n'en dépend.
+ * impressions et des vues, énuméré une fois dans `@meeshy/shared`. Un serveur
+ * antérieur l'ignore (`z.object` n'est pas strict) : rien côté client n'en
+ * dépend.
  */
-export type ContentSurface =
-  | 'feed'
-  | 'reels'
-  | 'profile'
-  | 'bookmarks'
-  | 'hashtag'
-  | 'community'
-  | 'nearby'
-  | 'sound'
-  | 'story_rail'
-  | 'mood_avatar'
-  | 'citation'
-  | 'detail'
-  | 'story'
-  | 'visitor';
+export type { ContentSurface };
 
 export type DwellContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 

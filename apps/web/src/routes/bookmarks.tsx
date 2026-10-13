@@ -288,6 +288,7 @@ export default function BookmarksScreen() {
                 <FeedPostCard
                   model={model}
                   impressionSource="profile"
+                  impressionSurface="bookmarks"
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={onComment}

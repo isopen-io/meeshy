@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { currentCredential, httpTransport } from '@/lib/api/client';
+import type { Credential } from '@/lib/api/http';
 import { apiDeps } from '@/lib/api/deps';
 import {
   createSocialEventsRecorder,
   newEngagementSessionId,
+  type ContentSurface,
   type DwellContentType,
+  type FlushOptions,
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
@@ -21,6 +24,36 @@ import { safeLocalStorage } from '@/lib/storage';
  * `markStoryViewed`.
  */
 const VISITOR_KEY = 'meeshy.reading.visitor';
+
+type KeyStorage = Pick<Storage, 'getItem' | 'removeItem'>;
+
+/**
+ * La clé de visiteur n'a plus d'objet une fois un compte connecté (#10483 —
+ * « purgée quand un compte se connecte ») : un uuid sans lien avec la
+ * personne, qui ne doit pas survivre à côté de son compte.
+ */
+export function forgetVisitorKeyOnAccount(credential: Credential | null, storage: KeyStorage): void {
+  if (credential?.kind !== 'registered') return;
+  if (storage.getItem(VISITOR_KEY) === null) return;
+  storage.removeItem(VISITOR_KEY);
+}
+
+/**
+ * LA SORTIE DE PAGE NE PERD RIEN (#10483 W3) — `pagehide` et le passage en
+ * arrière-plan vident la file en `keepalive` : la requête survit au
+ * déchargement de l'onglet. Le retour en ligne rejoue la file normalement.
+ */
+export function bindPageExitFlush(
+  flush: (options?: FlushOptions) => Promise<void>,
+  targets: { readonly window: Pick<Window, 'addEventListener'>; readonly document: Pick<Document, 'addEventListener' | 'visibilityState'> },
+): void {
+  const leaving = () => void flush({ keepalive: true });
+  targets.window.addEventListener('online', () => void flush());
+  targets.window.addEventListener('pagehide', leaving);
+  targets.document.addEventListener('visibilitychange', () => {
+    if (targets.document.visibilityState === 'hidden') leaving();
+  });
+}
 
 function visitorKey(): string {
   const storage = safeLocalStorage();
@@ -44,12 +77,7 @@ function liveRecorder(): ReturnType<typeof createSocialEventsRecorder> {
     },
   });
   if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    const flushNow = () => void recorder.flush();
-    window.addEventListener('online', flushNow);
-    window.addEventListener('pagehide', flushNow);
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') flushNow();
-    });
+    bindPageExitFlush(recorder.flush, { window, document });
   }
   live = recorder;
   return recorder;
@@ -58,6 +86,7 @@ function liveRecorder(): ReturnType<typeof createSocialEventsRecorder> {
 export const readingTelemetry = {
   record(event: SocialEvent): void {
     if (__FIXTURES__ && apiDeps.source === 'fixtures') return;
+    forgetVisitorKeyOnAccount(currentCredential(), safeLocalStorage());
     liveRecorder().record(event);
   },
 };
@@ -120,20 +149,40 @@ export function observeImpression(
 
 /**
  * La référence à poser sur une carte : une impression `source` par
- * apparition. `source === null` ou `postId` absent ⇒ rien n'est observé.
- * Aucun état React : la carte ne se re-rend pas pour être observée.
+ * apparition, dite depuis l'écran `surface` (#10483 § 8). `source === null`
+ * ou `postId` absent ⇒ rien n'est observé. `oncePerMount` : un contenu qui
+ * reste monté ne recompte pas à chaque retour à l'écran (l'humeur d'un
+ * avatar, répétée de bulle en bulle). Aucun état React : la carte ne se
+ * re-rend pas pour être observée.
  */
 export function useImpressionRef(
   postId: string | undefined,
   source: ImpressionSource | null,
+  surface?: ContentSurface,
+  options: { readonly oncePerMount?: boolean } = {},
 ): (node: Element | null) => void {
   const stop = useRef<(() => void) | null>(null);
+  const counted = useRef<Set<string>>(new Set());
+  const once = options.oncePerMount === true;
   return useCallback((node: Element | null) => {
     stop.current?.();
     stop.current = null;
-    if (node === null || postId === undefined || source === null) return;
-    stop.current = observeImpression(node, () => readingTelemetry.record({ type: 'impression', postId, source }));
-  }, [postId, source]);
+    if (node === null || postId === undefined || postId === '' || source === null) return;
+    if (once && counted.current.has(postId)) return;
+    stop.current = observeImpression(node, () => {
+      if (once) {
+        if (counted.current.has(postId)) return;
+        counted.current.add(postId);
+      }
+      readingTelemetry.record({ type: 'impression', postId, source, ...(surface === undefined ? {} : { surface }) });
+    });
+  }, [postId, source, surface, once]);
+}
+
+/** Deux références posées sur le MÊME nœud (la story d'une tuile ET son humeur). */
+export function useMergedRefs(...refs: readonly ((node: Element | null) => void)[]): (node: Element | null) => void {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useCallback((node: Element | null) => refs.forEach((ref) => ref(node)), refs);
 }
 
 /**
@@ -141,13 +190,15 @@ export function useImpressionRef(
  * réel actif, story à l'écran). À l'ouverture : l'impression `source` et, si
  * `openView`, la vue (comptée tout de suite, sans seuil). À la sortie : la vue
  * reprise avec sa durée (la passerelle garde la plus longue) et la séance
- * `dwell`, temps passé compris.
+ * `dwell`, temps passé compris. Pour un visiteur, la vue de sortie part
+ * aussi (sa durée) ; la séance `dwell`, réservée aux comptes, est écartée
+ * par l'émetteur.
  */
 export function useReadingSession(params: {
   readonly postId: string | undefined;
   readonly active: boolean;
   readonly contentType: DwellContentType;
-  readonly surface: string;
+  readonly surface: ContentSurface;
   readonly impressionSource: ImpressionSource | null;
   readonly openView: boolean;
   readonly now?: () => number;
@@ -160,11 +211,11 @@ export function useReadingSession(params: {
   useEffect(() => {
     if (!active || postId === undefined) return;
     const startedAt = nowRef.current();
-    if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource });
-    if (openView) readingTelemetry.record({ type: 'view', postId });
+    if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource, surface });
+    if (openView) readingTelemetry.record({ type: 'view', postId, surface });
     return () => {
       const dwellMs = Math.max(0, nowRef.current() - startedAt);
-      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs });
+      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface });
       readingTelemetry.record({
         type: 'dwell',
         sessionId: newEngagementSessionId(),
@@ -177,4 +228,14 @@ export function useReadingSession(params: {
       });
     };
   }, [postId, active, contentType, surface, impressionSource, openView]);
+}
+
+/**
+ * La source d'une ouverture de détail (#10483 W5) — une notification pose
+ * `?from=notification`, un lien partagé `?via=<jeton>` ; sinon `detail`.
+ */
+export function detailImpressionSourceOf(search: URLSearchParams): ImpressionSource {
+  if (search.get('from') === 'notification') return 'notification';
+  if ((search.get('via') ?? '') !== '') return 'shared_link';
+  return 'detail';
 }

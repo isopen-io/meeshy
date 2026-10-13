@@ -19,6 +19,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
+import { useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -136,6 +137,12 @@ function StoryTile({
   const cellule = railCellWidth(size, showsLabel);
   const hitPad = railHitPad(cellule);
   const trait = railStroke(size, group.hasUnseen);
+  /* LA TUILE À L'ÉCRAN EST VUE (#10483) — la story d'entrée ET l'humeur
+     qu'elle porte, chacune une impression par apparition (50 % pendant une
+     seconde), jamais à la réception du corpus. Ma tuile ne compte rien. */
+  const storyRef = useImpressionRef(group.isMine ? undefined : group.entryStoryId, 'story', 'story_rail');
+  const moodRef = useImpressionRef(group.isMine || !group.moodEmoji ? undefined : group.moodPostId, 'status', 'story_rail');
+  const impressionRef = useMergedRefs(storyRef, moodRef);
   const authorAriaLabel =
     combien > 1
       ? `${label}, ${combien} stories${group.hasUnseen ? ', non vues' : ''}`
@@ -249,6 +256,7 @@ function StoryTile({
        mesurable ne peut être gardé par rien, et la cote redérive en silence
        (leçon 575). */
     <li
+      ref={impressionRef}
       data-story-tile={size}
       data-rail-tile={size}
       className="flex shrink-0 flex-col items-center gap-1"

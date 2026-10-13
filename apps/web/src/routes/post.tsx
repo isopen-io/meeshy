@@ -19,7 +19,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
-import { dwellContentTypeOf, useReadingSession } from '@/lib/view/reading-telemetry';
+import { detailImpressionSourceOf, dwellContentTypeOf, useReadingSession } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -183,7 +183,7 @@ export default function PostDetailScreen() {
     active: model !== undefined,
     contentType: dwellContentTypeOf(post.data?.type),
     surface: 'detail',
-    impressionSource: 'detail',
+    impressionSource: detailImpressionSourceOf(search),
     openView: true,
   });
 

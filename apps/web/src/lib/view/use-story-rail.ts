@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { StoryRailProps } from '@/components/story-rail';
@@ -7,8 +7,7 @@ import type { StatusMoodPost } from '@/lib/api/stories';
 import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { selfRailEntry } from '@/lib/view/story-rail-self';
-import { currentMoodPosts, groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
-import { readingTelemetry } from '@/lib/view/reading-telemetry';
+import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
 
 const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
 
@@ -50,22 +49,10 @@ export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: s
     [tray.data, viewerId, moods.data, seenNow],
   );
 
-  /* LES HUMEURS AFFICHÉES SONT VUES (#10401) — une impression `status` par
-     humeur d'autrui que le plateau montre, à son arrivée à l'écran. Miroir
-     `StatusViewModel` (iOS). La clé est une CHAÎNE : un même corpus relu ne
-     recompte pas. */
-  const shownMoodIds = useMemo(
-    () =>
-      [...currentMoodPosts(moods.data ?? EMPTY_STATUS_MOODS)]
-        .filter(([authorId]) => authorId !== viewerId)
-        .map(([, post]) => post.id)
-        .join(','),
-    [moods.data, viewerId],
-  );
-  useEffect(() => {
-    if (shownMoodIds === '') return;
-    for (const postId of shownMoodIds.split(',')) readingTelemetry.record({ type: 'impression', postId, source: 'status' });
-  }, [shownMoodIds]);
+  /* LES HUMEURS DU PLATEAU se comptent À L'ÉCRAN (#10483) : chaque tuile
+     observe l'humeur qu'elle porte (`StoryTile`, `moodPostId`), au seuil de
+     visibilité — plus à la réception du corpus, qui comptait aussi les
+     humeurs d'auteurs sans tuile. */
 
   const language = currentInterfaceLanguage();
 

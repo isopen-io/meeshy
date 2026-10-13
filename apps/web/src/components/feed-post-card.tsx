@@ -21,7 +21,7 @@ import { feedCardBody, reelPosterOf, type FeedCardMedia, type FeedCardModel, typ
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
-import type { ImpressionSource } from '@/lib/api/social-events';
+import type { ContentSurface, ImpressionSource } from '@/lib/api/social-events';
 import { useImpressionRef } from '@/lib/view/reading-telemetry';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -616,7 +616,7 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', impressionSurface = 'feed', ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null; readonly impressionSurface?: ContentSurface } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -624,7 +624,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // L'IMPRESSION DE LA CARTE (#10401) — une par apparition, posée ICI pour
   // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
   // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
-  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource);
+  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface);
 
   if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 

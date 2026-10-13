@@ -125,6 +125,7 @@ export function ProfilePostsPanel({
             key={model.id}
             model={model}
             impressionSource="profile"
+            impressionSurface="profile"
             onGesture={gestures.onGesture}
             onShare={gestures.onShare}
             onComment={gestures.onComment}
