@@ -239,6 +239,11 @@ struct FocalQuotedReplyView: View, Equatable {
     private func jumpToOriginal() {
         guard reference.opensQuotedTarget else { return }
         if reply.isStory {
+            // #10483 — la story citée s'ouvre depuis la citation : un
+            // engagement d'ouverture, origine `citation` ; le lecteur compte la vue.
+            if let storyId = CitationReach.citedContentId(of: reference), onStoryReplyTap != nil {
+                ContentOpenReporter.shared.open(storyId, from: .citation)
+            }
             onStoryReplyTap?(reference.messageId)
         } else {
             onReplyTap?(reference.messageId)
