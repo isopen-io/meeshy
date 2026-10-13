@@ -1,7 +1,13 @@
 package me.meeshy.app;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 
 import org.junit.Test;
 
@@ -37,5 +43,20 @@ public class ExternalLinkRulesTest {
         assertFalse(ExternalLinkRules.opensOutside(null, "example.com", APP));
         assertFalse(ExternalLinkRules.opensOutside("https", null, APP));
         assertFalse(ExternalLinkRules.opensOutside("https", "", APP));
+    }
+
+    @Test
+    public void beforeAndroid11AnAppThatIsNotABrowserTakesTheLink() {
+        assertEquals("com.google.android.youtube", ExternalLinkRules.specializedHandler(
+            Arrays.asList("com.android.chrome", "com.google.android.youtube"),
+            new HashSet<>(Arrays.asList("com.android.chrome", "org.mozilla.firefox"))));
+    }
+
+    @Test
+    public void beforeAndroid11OnlyBrowsersLeaveTheLinkToTheCustomTab() {
+        assertNull(ExternalLinkRules.specializedHandler(
+            Arrays.asList("com.android.chrome", "org.mozilla.firefox"),
+            new HashSet<>(Arrays.asList("com.android.chrome", "org.mozilla.firefox"))));
+        assertNull(ExternalLinkRules.specializedHandler(Collections.<String>emptyList(), Collections.<String>emptySet()));
     }
 }

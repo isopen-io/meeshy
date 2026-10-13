@@ -38,6 +38,13 @@ describe('un lien externe dans la coque Android (#9858)', () => {
     expect(plugin).toContain('ActivityNotFoundException');
   });
 
+  test("avant Android 11, l'app qui gère le lien sans être un navigateur l'ouvre, comme dans Chrome (#10456)", () => {
+    expect(plugin).not.toMatch(/SDK_INT < Build\.VERSION_CODES\.R\)\s*\{\s*return false;/);
+    expect(plugin).toContain('ExternalLinkRules.specializedHandler(');
+    expect(plugin).toContain('queryIntentActivities(');
+    expect(plugin).toContain('.setPackage(');
+  });
+
   test('la coque embarque androidx.browser, à une version déclarée', () => {
     const app = readFileSync(join(ANDROID, 'app', 'build.gradle'), 'utf8');
     const variables = readFileSync(join(ANDROID, 'variables.gradle'), 'utf8');
