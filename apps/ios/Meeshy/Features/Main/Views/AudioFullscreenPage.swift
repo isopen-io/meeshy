@@ -249,6 +249,8 @@ struct AudioFullscreenPage: View, Equatable {
             hero(diameter: layout.heroDiameter)
             identity
             transcriptBlock(maxHeight: .infinity, fontSize: layout.lyricSize, asLyrics: true)
+                // Les paroles s'arrêtent au bord du rail : aucun mot ne passe dessous.
+                .padding(.trailing, offer.isEmpty ? 0 : FullscreenChromeMetrics.tapTarget)
                 .frame(minHeight: AudioFullscreenLayout.minLyrics, maxHeight: .infinity, alignment: .top)
                 .layoutPriority(-1)
                 .overlay(alignment: .bottom) { floatingControls }
