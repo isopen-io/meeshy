@@ -14,7 +14,9 @@ systemd .path reveille ce runner, qui :
   - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat ;
   - n'execute que deux gestes fixes : la sauvegarde de l'environnement (son
     unite systemd) et la purge des images Docker inutilisees (jamais un volume,
-    jamais `system prune`) ;
+    jamais `system prune`) ; la purge vaut pour tout l'hote, production comprise :
+    elle prend le verrou de la promotion de la production, pour ne jamais
+    effacer l'image qu'une promotion vient de tirer et n'a pas encore demarree ;
   - publie l'etat dans state/ops.json et l'usage Docker dans state/docker.json,
     seuls fichiers montes (en lecture seule) dans la passerelle.
 
@@ -26,6 +28,7 @@ Execute par `python3 -I` (aucun module du dossier courant n'est importe).
 """
 
 import datetime
+import fcntl
 import json
 import os
 import re
@@ -262,7 +265,44 @@ def run_backup(paths, started):
     return "succeeded", None, None
 
 
+PROMOTION_LOCK = "/run/lock/meeshy-promotion.lock"
+
+
+def promotion_lock():
+    """Le verrou de meeshy-promote-production.sh, pris sans le tronquer ni suivre un lien.
+
+    Rend le descripteur verrouille, ou None si une promotion le tient encore au bout
+    de l'attente (ou si le verrou ne s'ouvre pas : on ne purge pas a l'aveugle).
+    """
+    path = os.environ.get("OPS_PROMOTION_LOCK") or PROMOTION_LOCK
+    wait = int(os.environ.get("OPS_PROMOTION_LOCK_WAIT") or 600)
+    try:
+        descriptor = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o644)
+    except OSError:
+        return None
+    deadline = time.monotonic() + wait
+    while True:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return descriptor
+        except OSError:
+            if time.monotonic() >= deadline:
+                os.close(descriptor)
+                return None
+            time.sleep(1)
+
+
 def run_image_prune(paths):
+    lock = promotion_lock()
+    if lock is None:
+        return "failed", None, "promotion-in-progress"
+    try:
+        return prune_images(paths)
+    finally:
+        os.close(lock)
+
+
+def prune_images(paths):
     reclaimed = 0
     for command in PRUNE_COMMANDS:
         result = subprocess.run(list(command), capture_output=True, text=True, timeout=1800)

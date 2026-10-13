@@ -10,7 +10,7 @@
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -101,6 +101,7 @@ beforeEach(() => {
     OPS_BACKUP_STATUS_FILE: path.join(root, 'etat.json'),
     OPS_NOW: NOW,
     FAKE_LOG: path.join(root, 'calls.log'),
+    OPS_PROMOTION_LOCK: path.join(root, 'meeshy-promotion.lock'),
     FAKE_VERDICT: verdict('2026-10-12T22:03:00Z'),
   };
 });
@@ -178,6 +179,41 @@ describe('la purge des images', () => {
     run('process', { FAKE_FAIL: 'prune' });
     assert.equal(opsState().runs['image-prune'].status, 'failed');
     assert.equal(opsState().runs['image-prune'].code, 'prune-failed');
+  });
+});
+
+describe('la purge et la promotion de la production partagent l’hôte', () => {
+  const holdLock = async (file) => {
+    const holder = spawn('python3', ['-I', '-c', `import fcntl,sys,time
+f=open(sys.argv[1],'a')
+fcntl.flock(f, fcntl.LOCK_EX)
+print('held', flush=True)
+time.sleep(30)`, file], { stdio: ['ignore', 'pipe', 'inherit'] });
+    await new Promise((resolve) => holder.stdout.once('data', resolve));
+    return holder;
+  };
+
+  it('n’efface aucune image tant qu’une promotion tient son verrou : la purge échoue sous une clé fixe', async () => {
+    const holder = await holdLock(env.OPS_PROMOTION_LOCK);
+    try {
+      drop(request({ action: 'image-prune' }));
+      const result = run('process', { OPS_PROMOTION_LOCK_WAIT: '1' });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(calls().filter((call) => call.includes('prune')).length, 0);
+      const state = opsState();
+      assert.equal(state.runs['image-prune'].status, 'failed');
+      assert.equal(state.runs['image-prune'].code, 'promotion-in-progress');
+    } finally {
+      holder.kill();
+    }
+  });
+
+  it('purge sous le verrou de promotion quand personne ne le tient', () => {
+    drop(request({ action: 'image-prune' }));
+    const result = run();
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(opsState().runs['image-prune'].status, 'succeeded');
+    assert.ok(existsSync(env.OPS_PROMOTION_LOCK));
   });
 });
 
