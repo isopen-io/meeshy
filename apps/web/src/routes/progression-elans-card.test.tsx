@@ -150,3 +150,14 @@ describe('le concept se dit « Momentum » en anglais, sur la fiche comme sur la
     for (const key of elanKeys) expect(catalog[key]).toMatch(/momentum/i);
   });
 });
+
+describe('le concept n’a qu’un mot en arabe, الزخم, celui d’iOS (#10444)', () => {
+  test('la fiche, l’astuce, la pastille et le détail disent الزخم, et aucune clé du concept ne dit اندفاع', async () => {
+    const catalog = await loadGameCatalog('ar');
+    expect(catalog['game.concept.elans.name']).toBe('الزخم');
+    const elanKeys = ['game.concept.elans.name', 'game.concept.elans.why', 'game.concept.elans.title', 'game.concept.elans.factor', 'game.concept.points.tip.2', 'game.concept.chip.no_elan', 'game.detail.elan.how'] as const;
+    expect(elanKeys.filter((key) => !(catalog[key] ?? '').includes('زخم'))).toEqual([]);
+    const conceptValues = Object.entries(catalog).filter(([key]) => key.startsWith('game.concept.') || key.startsWith('game.detail.elan.'));
+    expect(conceptValues.filter(([, value]) => value.includes('اندفاع'))).toEqual([]);
+  });
+});
