@@ -16,7 +16,8 @@ import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { avatarOf, initialsOf, isGroup, peerOf, presenceOf, titleOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, isGroup, peerOf, titleOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
 import { useIsCurrentPath } from '@/lib/router';
 import { Link, href } from '@/routes/route-table';
@@ -251,10 +252,13 @@ function LensRowImpl({
     now,
   });
   const typing = typists !== undefined && typists.length > 0;
+  /* LA PRÉSENCE VIVANTE DU PAIR (#10571) : la rangée mémoïsée se repeint seule
+     quand SA pastille change — un `user:status`, ou un seuil 1/3/5 franchi. */
+  const peerPresence = usePresence(group ? undefined : peerOf(conversation, viewerId), now === undefined ? undefined : { now });
   const peerSignals = group
     ? {}
     : {
-        presence: typing ? ('online' as const) : presenceOf(peerOf(conversation, viewerId)),
+        presence: typing ? ('online' as const) : peerPresence,
         here: peerHere,
         hereActive: peerActive,
         hereFocused: peerFocused,

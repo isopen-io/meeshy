@@ -18,7 +18,8 @@ import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
 import { sessionStore } from '@/lib/api/session';
-import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, peerOf, presenceKeyOf } from '@/lib/view/conversation';
+import { usePresences } from '@/lib/view/use-presence';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
@@ -123,7 +124,7 @@ export function ThreadHeader({
   readonly onSelectReadingMode: (mode: ConversationReadingMode) => void;
   readonly onResetReadingModeToAuto: () => void;
 }) {
-  /* DÉRIVÉ ICI, comme `presenceOf(peerOf(...))` plus bas (#6975) : cette
+  /* DÉRIVÉ ICI, comme la présence du pair plus bas (#6975) : cette
      coquille ne porte aucune RÈGLE, mais elle descend déjà les deux lois de
      `view/conversation` qui dépendent du pair, et une prop de plus pour la
      photo aurait fait un troisième chemin pour la même donnée. */
@@ -153,8 +154,14 @@ export function ThreadHeader({
     headerFlameShown({ expanded, preview, dismissed: flameDismissed, hasEngagement: (engagement?.totalPoints ?? 0) > 0 });
   /* LA PRÉSENCE DES PLUS ACTIFS (#9031) — vert, orange ou gris comme partout,
      l'indigo « ici » primant (`ActiveMembersStack`). */
-  const memberPresence = (memberId: string) =>
-    presenceOf(conversation.participants.find((p) => (p.userId ?? p.user?.id ?? p.id) === memberId));
+  const memberIds = (activeMembers ?? []).map((member) => member.id);
+  /* VIVANTES (#10571) : le pair et les plus actifs suivent `user:status` et la
+     loi 1/3/5, l'en-tête ne se repeignant que si l'une de LEURS pastilles change. */
+  const [peerPresence = 'offline', ...memberPresences] = usePresences([
+    peer,
+    ...memberIds.map((memberId) => conversation.participants.find((p) => presenceKeyOf(p) === memberId)),
+  ]);
+  const memberPresence = (memberId: string) => memberPresences[memberIds.indexOf(memberId)] ?? 'offline';
   /* L'INVITÉ SANS COMPTE LIT SON FIL EN FOCUS (#10100) : aucun retour vers une
      liste qu'il n'a pas, et la place libérée dit où il est — le nom, comme
      l'aperçu et l'ordinateur. */
@@ -203,7 +210,7 @@ export function ThreadHeader({
   const bandToggles = avatarDoor.kind !== 'toggle' && !preview;
   const peerSignals = group
     ? {}
-    : { presence: presenceOf(peer), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
+    : { presence: peerPresence, here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO, ...(peerMood === undefined ? {} : { mood: peerMood, ...(peerMoodPostId === undefined ? {} : { moodPostId: peerMoodPostId }) }) };
   const toggleLabel = expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête';
 
   return (

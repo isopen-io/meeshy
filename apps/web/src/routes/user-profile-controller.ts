@@ -18,6 +18,7 @@ import type { PersonSummary } from '@/lib/api/friend-requests';
 import { publicProfileQueryOptions, type PublicProfile } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
+import { presenceStore } from '@/lib/api/presence-store';
 import { sessionStore } from '@/lib/api/session';
 import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -28,6 +29,7 @@ import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionK
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { moodsByAuthor } from '@/lib/view/story-tray';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { useMinute } from '@/lib/view/use-minute';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -165,8 +167,16 @@ export function useProfileController(username: string, language: InterfaceLangua
   const name = shown?.displayName ?? shown?.username ?? `@${username}`;
   const accent = person === undefined ? 'var(--color-ios-brand)' : authorAccentColor(person.id, name);
   /* La présence d'un AMI (#9063) — telle que la passerelle l'a servie, et
-     jamais sur une fiche bloquée : la pastille ne survit pas au geste. */
-  const presence = relation.kind === 'blocked' ? null : profilePresenceLine(view.data?.presence ?? null, new Date(), language);
+     jamais sur une fiche bloquée : la pastille ne survit pas au geste.
+     VIVANTE (#10571) : une fiche dont la passerelle sert la présence suit
+     ensuite `user:status`, et sa ligne vieillit à la minute (« vu il y a… »). */
+  const livePresence = useStore(presenceStore, (state) => (person === undefined ? undefined : state.byUser[person.id]));
+  useMinute();
+  const servedPresence = view.data?.presence ?? null;
+  const presence =
+    relation.kind === 'blocked' || servedPresence === null
+      ? null
+      : profilePresenceLine(livePresence ?? servedPresence, new Date(), language);
   /* L'HUMEUR DU MOMENT (#10528) — lue dans le corpus que le rail a déjà chargé
      (même clé, même fraîcheur que `useStatusMoods`) : le serveur décide qui la
      voit, la fiche ne demande rien de plus. Un visiteur sans compte n'a pas de

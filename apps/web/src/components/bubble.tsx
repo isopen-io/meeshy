@@ -4,7 +4,8 @@ import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline'
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { prismFor, served } from '@/lib/api/prism';
@@ -186,6 +187,8 @@ export function Bubble({
   const openDetail =
     onOpenDetail === undefined || selected !== undefined ? undefined : () => onOpenDetail(message.id);
   const nowMs = now();
+  /* LA PRÉSENCE VIVANTE DE L'EXPÉDITEUR (#10571) — avant tout retour anticipé. */
+  const senderPresence = usePresence(message.sender, { now });
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
   /** L'accusé QUE CETTE PEAU A LE DROIT DE PEINDRE — `null` ⇒ rien
@@ -641,11 +644,10 @@ export function Bubble({
                      rangée plate — les deux tenues du même message ne peuvent
                      pas servir deux visages différents. */
                   {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
-                  /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
-                     INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
-                     sienne en paramètre précisément pour que la loi 1/3/5 se
-                     mesure sans dépendre de l'horloge réelle (revue #5935). */
-                  presence={presenceOf(message.sender, nowMs)}
+                  /* L'horloge INJECTABLE de cette bulle (prop `now`) est celle
+                     que `usePresence` reçoit : la loi 1/3/5 se mesure sans
+                     dépendre de l'horloge réelle (revue #5935). */
+                  presence={senderPresence}
                 />
               ) : null}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
