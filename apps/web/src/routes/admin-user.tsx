@@ -20,6 +20,7 @@ import {
   memberSummaryOf,
   type AdminMemberSection,
 } from '@/lib/admin/member-summaries';
+import { adminMotiveOf } from '@/lib/admin/use-admin-motive';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { userEntityOf } from '@/lib/admin/user-entity';
@@ -296,7 +297,15 @@ export function AdminUserFiche({
       ))}
 
       {motDePasse ? (
-        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={() => setMotDePasse(false)} onAnnounce={annonceur.announce} deps={deps} sovereign={reach.isSovereign} />
+        <AdminUserPasswordSheet
+          userId={membre.id}
+          language={language}
+          onClose={() => setMotDePasse(false)}
+          onAnnounce={annonceur.announce}
+          deps={deps}
+          sovereign={reach.isSovereign}
+          motiveFallback={adminMotiveOf(reach, language).fallback}
+        />
       ) : null}
 
       {bannissement ? (

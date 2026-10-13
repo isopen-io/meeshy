@@ -11,6 +11,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { MemberSection, useMemberWrite } from './admin-member-parts';
@@ -55,7 +56,8 @@ export function AdminMemberRoleSection({
   const edit = roleEditOf(membre, draft);
   const sensibles = sensitiveChangesOf(edit);
   const doitConfirmer = sensibles.length > 0 && confirmation.armed === null;
-  const motifEnvoye = motiveState({ text: motif, ...REGLE_MOTIF }).sent;
+  const motifPropose = useAdminMotive(language).fallback;
+  const motifEnvoye = motiveState({ text: motif, ...REGLE_MOTIF, fallback: motifPropose }).sent;
 
   const poser = (partie: Partial<RoleDraft>) => {
     setTouches((precedent) => ({ ...precedent, ...partie }));
@@ -105,6 +107,7 @@ export function AdminMemberRoleSection({
         value={motif}
         onValue={setMotif}
         {...REGLE_MOTIF}
+        fallback={motifPropose}
       />
       {sensibles.map((sensible) => (
         <AdminInlineNotice

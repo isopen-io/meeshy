@@ -185,7 +185,18 @@ describe('AdminConfirmSheet — tout geste sensible passe par ici', () => {
     expect(host.querySelector('dialog h2')?.textContent).toBe('Fermer le lien');
     expect(host.querySelector('[data-admin-confirm]')?.textContent).toContain('perdent l’accès');
     expect(confirmer(host)?.textContent).toBe('Fermer le lien');
-    expect(confirmer(host)?.style.minHeight).toBe('44px');
+    expect(confirmer(host)?.style.minHeight).toBe('52px');
+    expect(annuler(host)?.style.minHeight).toBe('52px');
+  });
+
+  test('un disque de ton ouvre la feuille : avertissement pour un danger, information sinon (#10562)', async () => {
+    const danger = await ouvrir();
+    expect(danger.host.querySelector('[data-admin-confirm]')?.getAttribute('data-admin-confirm-tone')).toBe('danger');
+    expect(danger.host.querySelector('[data-admin-confirm-glyph] svg')).not.toBeNull();
+    expect(danger.host.querySelector('[data-admin-confirm-glyph]')?.getAttribute('aria-hidden')).toBe('true');
+    mounter.unmountAll();
+    const primaire = await ouvrir({ tone: 'primary' });
+    expect(primaire.host.querySelector('[data-admin-confirm]')?.getAttribute('data-admin-confirm-tone')).toBe('primary');
   });
 
   test('sans motif demandé : le focus va sur « Annuler » — « Entrée » ne confirme jamais par inadvertance', async () => {
@@ -291,8 +302,43 @@ describe('AdminConfirmSheet — le rang souverain n’écrit pas de motif (spec 
     expect(confirmations).toEqual([null]);
   });
 
-  test('ADMIN : le champ obligatoire reste, la confirmation bloquée sous le minimum', async () => {
-    const { host } = await ouvrirEnTantQue(ADMIN, true);
+  test('ADMIN : le motif est PROPOSÉ, replié, et la confirmation l’envoie tel quel (#10562)', async () => {
+    const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
+    expect(host.querySelector('[data-admin-motive-proposed]')?.textContent).toContain('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(document.activeElement).toBe(host.querySelector('[data-admin-action="cancel"]'));
+    const bouton = host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]');
+    expect(bouton?.disabled).toBe(false);
+    await act(async () => bouton?.click());
+    expect(confirmations).toEqual(['Contrôle aléatoire, test de fonctionnalité et suivi client']);
+  });
+
+  test('ADMIN : « Modifier le motif » ouvre le champ déjà rempli ; le motif réécrit part à sa place', async () => {
+    const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-motive-edit]')?.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-motive]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(document.activeElement).toBe(champ);
+    mounter.type(host, '[data-admin-motive]', 'compte compromis signalé');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.click());
+    expect(confirmations).toEqual(['compte compromis signalé']);
+  });
+
+  test('ADMIN : un champ vidé renvoie au motif proposé, jamais à un blocage', async () => {
+    const { host, confirmations } = await ouvrirEnTantQue(ADMIN, true);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-motive-edit]')?.click());
+    mounter.type(host, '[data-admin-motive]', '');
+    expect(host.querySelector('[data-admin-motive-count]')?.textContent).toBe('Laissé vide, le motif proposé part tel quel.');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.click());
+    expect(confirmations).toEqual(['Contrôle aléatoire, test de fonctionnalité et suivi client']);
+  });
+
+  test('MODERATOR : rien n’est proposé — le champ obligatoire reste, la confirmation bloquée sous le minimum', async () => {
+    const { host } = await ouvrirEnTantQue(adminIdentityFixture({ role: 'MODERATOR' }), true);
+    expect(host.querySelector('[data-admin-motive-proposed]')).toBeNull();
     expect(host.querySelector('[data-admin-motive]')).not.toBeNull();
     expect(host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.disabled).toBe(true);
   });
