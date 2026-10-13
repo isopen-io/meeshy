@@ -111,6 +111,27 @@ public final class SharedAVPlayerManager: ObservableObject {
         return true
     }
 
+    /// La file enchaînera d'elle-même à la fin de l'élément en cours.
+    private static func advancesToQueuedSuccessor(_ player: AVPlayer) -> Bool {
+        guard let queue = player as? AVQueuePlayer else { return false }
+        return queue.actionAtItemEnd == .advance && queue.items().count > 1
+    }
+
+    /// **La part du média jouée, lue SUR le lecteur à l'instant de l'appel
+    /// (#10555).** `currentTime` n'est publié que 2 à 5 fois par seconde
+    /// (`MediaThermalPolicy.timeObserverInterval`) : une barre qui le lit
+    /// avance par à-coups et reprend le tour de boucle jusqu'à une demi-seconde
+    /// après l'image. Une barre rafraîchie par l'affichage lit ceci — le temps
+    /// de l'élément EN COURS, donc zéro dès que la file enchaîne. Un
+    /// déplacement en vol affiche sa cible, pas la tête qu'il quitte.
+    public func liveProgress() -> Double {
+        guard let player, let item = player.currentItem else { return 0 }
+        return PlaybackProgressLaw.fraction(
+            itemSeconds: seekInFlight ? currentTime : Self.finiteSeconds(player.currentTime()),
+            durationSeconds: PlaybackProgressLaw.heldDuration(
+                reported: item.duration.seconds, known: duration, isLoopSuccessor: shouldLoop))
+    }
+
     private static func dropLoopSuccessors(of player: AVPlayer) {
         guard let queue = player as? AVQueuePlayer else { return }
         queue.items().dropFirst().forEach { queue.remove($0) }
@@ -460,6 +481,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// — le contraire de ce qu'un scrub progressif doit produire.
     private var seekInFlight = false
     private var pendingSeek: (seconds: Double, precise: Bool)?
+    /// Le chargement auquel un déplacement en vol appartient : sa complétion,
+    /// arrivée après un changement de média, ne touche plus l'état du suivant.
+    private var seekGeneration = 0
 
     public func seek(to seconds: Double) {
         seek(to: seconds, precise: true)
@@ -479,9 +503,16 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// glissement produit ainsi autant de déplacements que le décodeur peut en
     /// servir, jamais autant que le doigt en demande.
     public func seek(to seconds: Double, precise: Bool) {
+        // Sans lecteur, la complétion ne viendrait jamais et tout déplacement
+        // suivant resterait en attente derrière celui-ci (#10555).
+        guard player != nil else { return }
         // Relevé AVANT le déplacement : c'est jusque-là que le visionnage a
         // porté. Le traqueur ignore de lui-même un déplacement à l'arrêt.
         stretchTracker.seek(from: positionMs, to: max(0, Int(seconds * 1000)))
+        // La tête publiée EST la tête demandée (#10555) : la barre s'y pose,
+        // au lieu de revenir à l'ancienne position jusqu'au tick suivant.
+        let head = PlaybackProgressLaw.headAfterSeek(target: seconds, durationSeconds: duration)
+        if currentTime != head { currentTime = head }
 
         guard !seekInFlight else {
             pendingSeek = (seconds, precise)
@@ -495,11 +526,13 @@ public final class SharedAVPlayerManager: ObservableObject {
         qoeObserver?.noteSeek()
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.5, preferredTimescale: 600)
+        let generation = seekGeneration
         player?.seek(to: time, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] _ in
             guard let self else { return }
             // La complétion d'AVPlayer arrive hors du MainActor ; l'état
             // coalescé lui appartient, on y revient avant de le toucher.
             Task { @MainActor in
+                guard generation == self.seekGeneration else { return }
                 self.seekInFlight = false
                 if let next = self.pendingSeek {
                     self.pendingSeek = nil
@@ -928,15 +961,36 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // La durée suit l'élément EN COURS, et lui seul (#10555) : un
+        // successeur de boucle qui n'a pas encore relu la sienne garde celle
+        // de son média au lieu de la faire retomber à zéro.
         player.publisher(for: \.currentItem)
             .compactMap { $0 }
-            .flatMap { $0.publisher(for: \.duration) }
+            .map { $0.publisher(for: \.duration) }
+            .switchToLatest()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] cmDuration in
                 guard let self else { return }
-                let seconds = cmDuration.seconds
-                self.duration = seconds.isNaN || seconds.isInfinite ? 0 : seconds
+                let held = PlaybackProgressLaw.heldDuration(
+                    reported: cmDuration.seconds, known: self.duration, isLoopSuccessor: self.shouldLoop)
+                if self.duration != held { self.duration = held }
                 self.applyResumePositionIfAvailable()
+            }
+            .store(in: &cancellables)
+
+        // La file a enchaîné sur le successeur (#10555) : la tête publiée
+        // repart avec l'image, sans attendre le tick suivant, et le tour
+        // d'après reçoit son successeur ICI — pas à la notification de fin,
+        // qui peut arriver avant l'enchaînement et laisser la file sans suite.
+        player.publisher(for: \.currentItem)
+            .dropFirst()
+            .compactMap { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, let player = self.player else { return }
+                self.applyLoop(to: player)
+                let head = Self.finiteSeconds(player.currentTime())
+                if self.currentTime != head { self.currentTime = head }
             }
             .store(in: &cancellables)
 
@@ -967,7 +1021,13 @@ public final class SharedAVPlayerManager: ObservableObject {
                     // successeur. Sans file, la tête revient au début.
                     // Reset watchStartTime pour que la prochaine fin de cycle
                     // puisse encore report progress.
-                    if self.player?.currentItem === finished {
+                    // Fin lue AVANT l'enchaînement de la file : elle
+                    // enchaînera seule, et y ramener la tête rejouerait
+                    // l'élément fini (`PlaybackLoopTurn`, #10555).
+                    if PlaybackLoopTurn.action(
+                        finishedIsCurrent: self.player?.currentItem === finished,
+                        successorQueued: self.player.map { Self.advancesToQueuedSuccessor($0) } ?? false
+                    ) == .rewindCurrentItem {
                         self.engineItems.insert(ObjectIdentifier(finished))
                         self.seek(to: 0)
                         self.player?.rate = Float(self.playbackSpeed.rawValue)
@@ -1014,6 +1074,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         timeObserver = nil
         cancellables.removeAll()
         engineItems.removeAll()
+        seekGeneration &+= 1
+        seekInFlight = false
+        pendingSeek = nil
         player?.pause()
         if player != nil { player = nil }
         if isPlaying { isPlaying = false }
