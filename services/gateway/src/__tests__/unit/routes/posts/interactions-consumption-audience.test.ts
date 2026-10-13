@@ -318,7 +318,7 @@ describe('POST /posts/:postId/impression — l’unitaire cesse d’être un ora
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
     expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
-      data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'detail' }],
+      data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'detail', expiresAt: expect.any(Date) }],
     });
     await app.close();
   });
@@ -339,7 +339,7 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(1);
     expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
-      data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'feed' }],
+      data: [{ postId: PUBLIC_ID, userId: VIEWER_ID, source: 'feed', expiresAt: expect.any(Date) }],
     });
     const touchedIds = postCounterWritesOf(prisma.$runCommandRaw).flatMap((write) => write.ids);
     expect(touchedIds).toEqual([PUBLIC_ID]);
@@ -423,7 +423,7 @@ describe('POST /posts/impressions/batch — le LOT réduit ses ids par audience 
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(60);
     expect(prisma.postImpression.createMany).toHaveBeenCalledWith({
-      data: bulkIds.map((postId) => ({ postId, userId: VIEWER_ID, source: 'feed' })),
+      data: bulkIds.map((postId) => ({ postId, userId: VIEWER_ID, source: 'feed', expiresAt: expect.any(Date) })),
     });
     await app.close();
   });

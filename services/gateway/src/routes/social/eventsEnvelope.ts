@@ -100,8 +100,8 @@ export function readSocialEventsBody(body: unknown, receivedAt: Date): SocialEve
   const shape = BodySchema.safeParse(body ?? {});
   if (!shape.success) return { ok: false };
 
-  const parsedContext = SocialEventsContextSchema.safeParse(shape.data.context ?? {});
-  const context: ParsedSocialEventsContext = parsedContext.success ? parsedContext.data : {};
+  // Le contexte est FACULTATIF : un contexte qui n'est pas un objet est ôté, il ne refuse pas le lot.
+  const context: ParsedSocialEventsContext = SocialEventsContextSchema.catch({}).parse(shape.data.context ?? {});
 
   const counting: CountingEventRead[] = [];
   const v2: V2EventRead[] = [];

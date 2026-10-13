@@ -184,3 +184,54 @@ describe('annonce — le serveur v2 dit ce qu’il accepte', () => {
     await h.app.close();
   });
 });
+
+describe('contexte de listing et visibilité MRC sur l’impression (#10501)', () => {
+  const listed = (viewable: boolean, eventId?: string) => impressionEvent(POST, {
+    source: 'feed',
+    surface: 'feed',
+    ...(eventId ? { eventId } : {}),
+    listing: { feedRequestId: 'fr_page1', position: 3, rankingSource: 'for_you' },
+    visibility: { maxVisibleFraction: viewable ? 0.8 : 0.2, visibleMs: viewable ? 1400 : 300, viewable },
+  });
+
+  it('une impression en position 3, visible au sens MRC, porte son rang et sa visibilité sur sa ligne', async () => {
+    const h = await reachHarness([{ id: POST }]);
+    await sendReachV2(h.app, [listed(true)], account, { platform: 'web', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
+
+    expect(h.impressions[0]).toMatchObject({
+      position: 3, rankingSource: 'for_you', viewable: true, visibleFraction: 0.8, visibleMs: 1400, platform: 'web',
+    });
+    // Sans consentement d'analyse : rien qui relie cette ligne à une page ou à une session.
+    expect(h.impressions[0].feedRequestId).toBeUndefined();
+    expect(h.impressions[0].appSessionId).toBeUndefined();
+    await h.app.close();
+  });
+
+  it('avec consentement, la page et la session sont rangées aussi — par le chemin à clé comme par l’autre', async () => {
+    const h = await reachHarness([{ id: POST }], undefined, { consentedUserIds: [READER] });
+    await sendReachV2(h.app, [listed(true), listed(true, EVENT_A)], account, { appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' });
+
+    expect(h.impressions).toHaveLength(2);
+    h.impressions.forEach((row) => expect(row).toMatchObject({ feedRequestId: 'fr_page1', appSessionId: '5e1c2b9e-1d2a-4c55-9a1e-0a4b5c6d7e8f' }));
+    await h.app.close();
+  });
+
+  it('impressionCount monte de 1 par listing, visible ou non — la règle de comptage ne change pas', async () => {
+    const h = await reachHarness([{ id: POST }]);
+    await sendReachV2(h.app, [listed(true), listed(false)], account);
+
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 2 });
+    await h.app.close();
+  });
+
+  it('un refus déclaré par le client ne laisse que le comptage', async () => {
+    const h = await reachHarness([{ id: POST }]);
+    await sendReachV2(h.app, [listed(true)], account, { consent: 'denied', platform: 'ios' });
+
+    expect(h.impressions[0].position).toBeUndefined();
+    expect(h.impressions[0].viewable).toBeUndefined();
+    expect(h.impressions[0].platform).toBeUndefined();
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1 });
+    await h.app.close();
+  });
+});
