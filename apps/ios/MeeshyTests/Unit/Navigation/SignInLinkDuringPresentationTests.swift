@@ -59,16 +59,17 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
 @MainActor
 private final class MockAccountReplacementConfirmation: AccountReplacementConfirming {
     nonisolated deinit {}
-    let answer: Bool
+    let decision: AccountReplacementDecision
     private(set) var questions: [[String]] = []
     private(set) var askedUsers: [(current: MeeshyUser?, incoming: MeeshyUser)] = []
 
-    init(answer: Bool) { self.answer = answer }
+    init(answer: Bool) { self.decision = answer ? .accepted : .declined }
+    init(decision: AccountReplacementDecision) { self.decision = decision }
 
-    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool {
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> AccountReplacementDecision {
         questions.append([current?.username ?? "", incoming.username])
         askedUsers.append((current, incoming))
-        return answer
+        return decision
     }
 }
 
@@ -382,15 +383,47 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_answer_isGivenOnce_andAReleasedQuestionSaysNo() async {
         let first = await withCheckedContinuation { continuation in
             let answer = AccountReplacementAnswer(continuation)
-            answer.give(true)
-            answer.give(false)
+            answer.give(.accepted)
+            answer.give(.declined)
         }
         let released = await withCheckedContinuation { continuation in
             _ = AccountReplacementAnswer(continuation)
         }
 
-        XCTAssertTrue(first)
-        XCTAssertFalse(released)
+        XCTAssertEqual(first, .accepted)
+        XCTAssertEqual(released, .unavailable, "personne n'a répondu : ni oui, ni un refus silencieux")
+    }
+
+    // MARK: - #10463 F6 — une question qui ne s'est pas posée se DIT
+
+    /// L'alerte n'a pas pu se présenter : rien ne s'ouvre, la session prouvée
+    /// est refermée, et l'utilisateur lit pourquoi le lien n'a rien fait —
+    /// au lieu d'un refus qu'il n'a jamais exprimé.
+    func test_anotherAccount_questionNotShown_saysSo_andClosesTheServedSession() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(decision: .unavailable)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "discard"])
+        XCTAssertEqual(auth.discardedSessions, ["jwt-link"])
+        XCTAssertEqual(auth.switchedSessions, [])
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(toasts.successMessages, [])
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.sessionNotOpened()])
+    }
+
+    /// Un « Annuler » touché reste silencieux : l'utilisateur sait ce qu'il a fait.
+    func test_anotherAccount_declined_raisesNoError() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(decision: .declined)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.discardedSessions, ["jwt-link"])
+        XCTAssertEqual(toasts.errorMessages, [])
     }
 
     func test_replacesSignedInAccount_judgesOnTheProvenId() {

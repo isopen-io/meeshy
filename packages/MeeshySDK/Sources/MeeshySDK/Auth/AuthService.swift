@@ -65,10 +65,13 @@ public extension AuthServiceProviding {
 public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public static let shared = AuthService()
     let api: APIClientProviding
+    /// La déconnexion PAR JETON passe par là, jamais par `api` (#10463).
+    let pinned: any PinnedRequesting
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, pinned: any PinnedRequesting = APIClient.shared) {
         self.api = api
+        self.pinned = pinned
     }
 
     // MARK: - Login
@@ -331,17 +334,21 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         let _: APIResponse<[String: Bool]> = try await api.request(AuthEndpoint.logout, method: "POST")
     }
 
-    /// D5.hygiene — sends the explicit `token` as the Authorization header
-    /// via `requestWithHeaders`, instead of relying on `APIClient.shared.authToken`
-    /// (which `AuthManager.logout()` may have already wiped to `nil` by the
-    /// time this retry loop actually sends its request).
+    /// D5.hygiene — ferme la session de `token`, jamais celle du jeton courant
+    /// d'`APIClient.shared` (que la déconnexion a peut-être déjà effacé).
+    ///
+    /// #10463 — par `requestPinned`, pas par `requestWithHeaders` : ce dernier,
+    /// sur un 401, rafraîchit le compte ACTIF et REJOUE en remplaçant
+    /// `Authorization` par son jeton. Une session prouvée refusée, ou le compte
+    /// qu'on quitte, dont la fermeture recevait un 401 faisait alors fermer
+    /// côté serveur la session du compte actif. Un 401 est rendu tel quel.
     public func logoutThrowing(token: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.requestWithHeaders(
+        let _: APIResponse<[String: Bool]> = try await pinned.requestPinned(
             AuthEndpoint.logout,
             method: "POST",
             body: nil,
-            queryItems: nil,
-            headers: ["Authorization": "Bearer \(token)"]
+            headers: [:],
+            bearerToken: token
         )
     }
 }

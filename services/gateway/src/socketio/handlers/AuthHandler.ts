@@ -27,6 +27,8 @@ import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-c
 import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
+import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -255,8 +257,17 @@ export class AuthHandler {
     // moment de la désactivation (`UserManagementService.updateStatus` /
     // `.deleteUser`) — cette porte couvre le cas qu'il ne peut pas voir : une
     // reconnexion ultérieure avec le même JWT, encore valide.
+    //
+    // #10264 — un compte SUPPRIMÉ reçoit le même refus, plus le code qui permet
+    // à l'appareil de purger les données de CE compte. La signature vient
+    // d'être vérifiée : seul le porteur d'un jeton du compte l'apprend.
     if (user.isActive === false) {
-      socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled' });
+      socket.emit(
+        SERVER_EVENTS.ERROR,
+        (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, user.id))
+          ? { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: user.id }
+          : { message: 'Account disabled' },
+      );
       socket.disconnect(true);
       return;
     }

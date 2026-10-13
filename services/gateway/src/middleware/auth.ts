@@ -14,6 +14,7 @@ import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import { AccountDeletedError, inactiveAccountRefusal, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -197,7 +198,7 @@ export type AuthMiddlewareOptions = {
   readonly sessionActivity?: SessionActivitySampler;
 };
 
-export { ActivationBlockedError };
+export { ActivationBlockedError, AccountDeletedError };
 
 // ===== SERVICE =====
 
@@ -412,7 +413,7 @@ export class AuthMiddleware {
 
       if (cachedRow) {
         if (!cachedRow.isActive) {
-          throw new Error('User not found or inactive');
+          throw await inactiveAccountRefusal(this.prisma as unknown as DeletedAccountReader, jwtUserId);
         }
         user = deserializeCachedUser(cachedRow);
       }
@@ -484,7 +485,7 @@ export class AuthMiddleware {
       }
 
       if (!user || !user.isActive) {
-        throw new Error('User not found or inactive');
+        throw await inactiveAccountRefusal(this.prisma as unknown as DeletedAccountReader, jwtUserId);
       }
 
       // #8238 — lu sur la ligne, fraîche ou en cache : le délai dépend de
@@ -534,6 +535,7 @@ export class AuthMiddleware {
 
     } catch (error) {
       if (error instanceof ActivationBlockedError) throw error;
+      if (error instanceof AccountDeletedError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -833,6 +835,10 @@ export function createUnifiedAuthMiddleware(
 
       if (options.requireAuth && error instanceof ActivationBlockedError) {
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      if (options.requireAuth && error instanceof AccountDeletedError) {
+        return sendAccountDeleted(reply, error.accountId);
       }
 
       if (options.requireAuth) {

@@ -11,7 +11,8 @@ import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
-import { isRowCallAction, type RowActionId } from '@/lib/view/row-actions';
+import { isRowCallAction, type RowActionId, type RowFlagActionId } from '@/lib/view/row-actions';
+import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -99,7 +100,7 @@ export type LensRowProps = {
    * passe désormais une fonction MODULE-LEVEL, stable par construction —
    * cette rangée n'a plus besoin de fermer sur rien pour agir.
    */
-  onRowAction: (conversationId: string, id: RowActionId) => void;
+  onRowAction: (conversationId: string, id: RowFlagActionId) => void;
   /**
    * OUVRE LA FICHE D'UNE CONVERSATION NON DIRECTE (#10300) — toucher l'avatar
    * d'un groupe, d'une publique, de la globale ou d'une communauté ouvre ses
@@ -228,6 +229,7 @@ function LensRowImpl({
      à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
   const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
   const onAction = (id: RowActionId) => {
+    if (id === 'delete') return requestDeparture({ conversationId: conversation.id, kind: 'delete', returnToList: false });
     if (!isRowCallAction(id)) return onRowAction(conversation.id, id);
     callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
   };
@@ -628,6 +630,7 @@ function LensRowImpl({
         magnified={status.magnified}
         language={currentInterfaceLanguage()}
         canCall={canCall}
+        canDelete={canCall}
         onAction={onAction}
       />
     </li>

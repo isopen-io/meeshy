@@ -5,6 +5,8 @@ import { Glyph } from '@/components/glyph';
 import { PasswordInput } from '@/components/password-input';
 import { inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
 import type { ApiResult } from '@/lib/api/http';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PASSWORD_MIN } from '@/lib/signup-form';
 import { isReferralCodeShaped, normalizeReferralCode, referralCodeFromLocation } from '@/lib/view/referral-code';
 import { recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
@@ -33,7 +35,7 @@ export const INDIGO_TINT = 'var(--ios-indigo-500)';
  * discrète qui se déplie. Le détail reste dans le DOM replié (`hidden`) : il
  * ne se lit qu'à la demande, sans surcharger l'écran (#6441).
  */
-function PasswordWhy() {
+function PasswordWhy({ language }: { readonly language: InterfaceLanguage }) {
   const [isOpen, setOpen] = useState(false);
   return (
     <div className="grid" data-signup-password-why>
@@ -45,12 +47,11 @@ function PasswordWhy() {
         className={`inline-flex items-center gap-1 justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
         style={{ minHeight: 44 }}
       >
-        Pourquoi mettre un mot de passe maintenant ?
+        {translate(language, 'signup.password.why')}
         <Glyph name="caretDown" size={12} style={{ transform: isOpen ? 'rotate(180deg)' : undefined, transition: 'transform 0.2s' }} />
       </button>
       <p id="signup-password-why" hidden={!isOpen} className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Vous pouvez activer votre mot de passe dès maintenant si vous le souhaitez. Sans mot de passe, vous vous
-        connecterez toujours à partir d’un e-mail reçu dans votre boîte.
+        {translate(language, 'signup.password.why.detail')}
       </p>
     </div>
   );
@@ -63,6 +64,7 @@ function PasswordWhy() {
  * jamais la couleur seule).
  */
 export function SignupPasswordBlock({
+  language,
   password,
   onPassword,
   focused,
@@ -71,6 +73,7 @@ export function SignupPasswordBlock({
   isStrong,
   error,
 }: {
+  readonly language: InterfaceLanguage;
   readonly password: string;
   readonly onPassword: (value: string) => void;
   readonly focused: boolean;
@@ -81,7 +84,7 @@ export function SignupPasswordBlock({
 }) {
   return (
     <div className="grid gap-1" data-signup-password-block>
-      <Field id="signup-password" label="Mot de passe" tint={INDIGO_TINT} focused={focused} valid={isStrong} error={error}>
+      <Field id="signup-password" label={translate(language, 'signup.password.label')} tint={INDIGO_TINT} focused={focused} valid={isStrong} error={error}>
         {({ id, describedBy }) => (
           <PasswordInput
             id={id}
@@ -90,7 +93,7 @@ export function SignupPasswordBlock({
             onValue={onPassword}
             onFocus={onFocus}
             onBlur={onBlur}
-            placeholder={`${PASSWORD_MIN} caractères minimum`}
+            placeholder={translate(language, 'signup.password.placeholder', { min: String(PASSWORD_MIN) })}
             describedBy={describedBy}
             invalid={error !== undefined}
           />
@@ -98,10 +101,10 @@ export function SignupPasswordBlock({
       </Field>
       {isStrong ? (
         <p role="status" className="text-caption" style={{ color: 'var(--color-success)' }}>
-          Votre compte sera actif immédiatement.
+          {translate(language, 'signup.password.active')}
         </p>
       ) : null}
-      <PasswordWhy />
+      <PasswordWhy language={language} />
     </div>
   );
 }
@@ -177,11 +180,13 @@ export type SignupReferral = ReturnType<typeof useSignupReferral>;
  * d'inscription — le compte se crée, seule la relation est perdue.
  */
 export function SignupReferralBlock({
+  language,
   referral,
   focused,
   onFocus,
   onBlur,
 }: {
+  readonly language: InterfaceLanguage;
   readonly referral: SignupReferral;
   readonly focused: boolean;
   readonly onFocus: () => void;
@@ -196,14 +201,14 @@ export function SignupReferralBlock({
         className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
         style={{ minHeight: 44 }}
       >
-        J’ai un code de parrainage
+        {translate(language, 'signup.referral.toggle')}
       </button>
     );
   }
   const { status } = referral;
   return (
     <div className="grid gap-1">
-      <Field id="signup-referral" label="Code de parrainage" tint={INDIGO_TINT} focused={focused} valid={status.kind === 'valid'}>
+      <Field id="signup-referral" label={translate(language, 'signup.referral.label')} tint={INDIGO_TINT} focused={focused} valid={status.kind === 'valid'}>
         {({ id, describedBy }) => (
           <input
             id={id}
@@ -219,7 +224,7 @@ export function SignupReferralBlock({
               onBlur();
               void referral.check();
             }}
-            placeholder="Le code reçu de la personne qui vous invite"
+            placeholder={translate(language, 'signup.referral.placeholder')}
             className="w-full bg-transparent py-3 text-input outline-none"
             style={{ color: 'var(--color-ios-ink)' }}
             aria-describedby={describedBy}
@@ -233,12 +238,8 @@ export function SignupReferralBlock({
         style={{ color: status.kind === 'valid' ? 'var(--color-success)' : 'var(--color-ios-ink-2)' }}
       >
         {status.kind === 'valid'
-          ? `${status.inviter} vous a invité — vous serez rattaché à son parrainage.`
-          : status.kind === 'invalid'
-            ? 'Ce code n’est plus valable. Vous pouvez créer votre compte sans lui.'
-            : status.kind === 'checking'
-              ? 'Vérification du code…'
-              : 'Vous pouvez laisser ce champ vide.'}
+          ? translate(language, 'signup.referral.valid', { inviter: status.inviter })
+          : translate(language, status.kind === 'invalid' ? 'signup.referral.invalid' : status.kind === 'checking' ? 'signup.referral.checking' : 'signup.referral.optional')}
       </p>
     </div>
   );

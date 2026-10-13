@@ -383,12 +383,16 @@ export class MeeshySocketIOManager {
     // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
     // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
     // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    //
+    // #10264 — la fin de grâce n'est PAS une suppression : l'annulation rend
+    // encore le compte. Ses sockets tombent sans nommer de compte supprimé
+    // (`deletedAccountId`), que seule la purge confirmée (`COMPLETED`) émet.
     this.maintenanceService.setSessionRevoker((userId: string) =>
       disconnectRevokedSessions({
         io: this.io,
         userId,
         reason: 'logout_all_devices',
-        message: 'Your account was deleted — every session was signed out.',
+        message: 'Your account deletion grace period ended — every session was signed out.',
         onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
       })
     );

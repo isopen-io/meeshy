@@ -23,6 +23,7 @@ import { markCaughtUp } from '@/lib/api/receipts';
 import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
+import { requestDeparture } from '@/lib/conversation-departure';
 import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
@@ -163,6 +164,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    */
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  /* QUITTER / SUPPRIMER depuis les détails (#7837, #7285) : un compte, comme la passerelle l'exige. */
+  const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const storyRingOf = useAuthorStoryRings(viewer);
   const moodOf = useAuthorMoods(viewer);
 
@@ -963,6 +966,9 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           setDetailsOpen(false);
           jump.requestJump(messageId);
         }}
+        onRequestDeparture={
+          signedIn ? (kind) => requestDeparture({ conversationId: conversation.id, kind, returnToList: true }) : undefined
+        }
       />
 
       <ThreadMessageSheets

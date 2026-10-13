@@ -498,7 +498,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         tokenLock.withLock { $0 }
     }
 
-    private init() {
+    private convenience init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
@@ -515,12 +515,17 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
-        self.urlSession = URLSession(
+        self.init(urlSession: URLSession(
             configuration: config,
             delegate: CertificatePinningDelegate(),
             delegateQueue: nil
-        )
+        ))
+    }
 
+    /// Un client sur une session FOURNIE : les témoins y posent leur
+    /// `URLProtocol` et observent ce qui part sur le fil (#10463).
+    init(urlSession: URLSession) {
+        self.urlSession = urlSession
         self.decoder = Self.makeAPIPayloadDecoder()
     }
 
@@ -751,6 +756,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             do {
                 let freshToken = try await AuthManager.shared.refreshSession()
                 urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+            } catch let abandoned as CancellationError {
+                // #10463 — rafraîchissement ABANDONNÉ (sortie de session en
+                // cours, session remplacée) : rien n'a été refusé, et une
+                // session expirée ferait démonter le compte qu'on quitte.
+                throw abandoned
             } catch {
                 throw MeeshyError.auth(.sessionExpired)
             }
@@ -886,6 +896,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                     UpgradeGateSignal.signal(statusCode: retryStatusCode, body: retryData)
                                     throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
                                 }
+                            } catch let abandoned as CancellationError {
+                                // #10463 — même règle que le rafraîchissement
+                                // préventif : un abandon n'est pas un refus.
+                                throw abandoned
                             } catch {
                                 await AuthManager.shared.handleUnauthorized()
                                 throw MeeshyError.auth(.sessionExpired)
@@ -948,6 +962,8 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
             throw MeeshyError.server(statusCode: lastStatusCode, message: "Requete echouee apres \(Self.maxRetryAttempts) tentatives (status \(lastStatusCode))")
         } catch let error as MeeshyError {
+            throw error
+        } catch let error as CancellationError {
             throw error
         } catch let error as DecodingError {
             var debugInfo = "Erreur de decodage: "

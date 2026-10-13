@@ -15,7 +15,7 @@ import type { Attachment } from '@/lib/api/types';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { previewUrlFor } from './attachment-preview-url';
-import type { GuestKind } from './guest-attachment-kinds';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
 import { guestAttachmentVerdict, guestRefusalText } from './guest-attachment-policy';
 
 /**
@@ -149,7 +149,7 @@ export function acceptPendingFiles(params: {
   readonly rights?: ParticipantPermissions;
   /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003) — ses familles priment
    * sur ses droits instantanés (#10029), et le refus nomme ce qui passe. */
-  readonly guest?: { readonly kinds: readonly GuestKind[]; readonly language: InterfaceLanguage };
+  readonly guest?: { readonly kinds: readonly GuestAttachmentKind[]; readonly language: InterfaceLanguage };
 }): { readonly list: readonly PendingAttachment[]; readonly refusal?: string } {
   const guest = params.guest;
   if (guest !== undefined) {

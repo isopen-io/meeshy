@@ -1,6 +1,9 @@
 import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
+import { translate } from '../i18n-catalog';
+import type { InterfaceLanguage } from '../interface-language';
+
 import { decodeEmailOwner, type EmailOwner } from '../api/email-owner';
 import type { ApiFailure, ApiResult } from '../api/http';
 import { provenSessionOf } from '../api/proven-session';
@@ -56,14 +59,14 @@ const VALIDATION_ERROR_CODE = 'VALIDATION_ERROR';
  * saisie, et à la place du texte d'Ajv quand la passerelle refuse le pseudo.
  * Les bornes sont LUES sur le schéma partagé, jamais recopiées.
  */
-export function usernameRefusalMessage(refusal: UsernameRefusal): string {
+export function usernameRefusalMessage(language: InterfaceLanguage, refusal: UsernameRefusal): string {
   switch (refusal) {
     case 'too-long':
-      return `${usernameMaxLength} caractères au plus.`;
+      return translate(language, 'signup.username.tooLong', { max: String(usernameMaxLength) });
     case 'too-short':
-      return `${usernameMinLength} caractères au moins.`;
+      return translate(language, 'signup.username.tooShort', { min: String(usernameMinLength) });
     case 'invalid-characters':
-      return 'Lettres sans accent, chiffres, - et _ uniquement — pas d’espace.';
+      return translate(language, 'signup.username.invalidCharacters');
   }
 }
 

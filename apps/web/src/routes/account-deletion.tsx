@@ -14,6 +14,7 @@ import {
   type DeletionRequestFailure,
   type DeletionResolution,
 } from '@/lib/api/account-deletion';
+import { retireDeletedAccountLater } from '@/lib/api/account-deleted';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
 import type { ReachFailure } from '@/lib/api/link-failure';
@@ -51,7 +52,8 @@ export type AccountDeletionDeps = {
 };
 
 const GATEWAY_DEPS: AccountDeletionDeps = {
-  resolve: (link) => resolveAccountDeletion(apiDeps, link),
+  resolve: (link) =>
+    resolveAccountDeletion({ ...apiDeps, onAccountDeleted: retireDeletedAccountLater }, link),
   request: (currentPassword) => requestAccountDeletion(apiDeps, currentPassword),
 };
 

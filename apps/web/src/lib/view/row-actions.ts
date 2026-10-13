@@ -16,9 +16,13 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * vocabulaire (directive « même mot, même icône, même couleur de contexte »).
  * `ConversationListView.swift:929-943` précalcule les MÊMES couples.
  */
-export type RowActionId = 'callAudio' | 'callVideo' | 'pin' | 'mute' | 'read' | 'archive';
+export type RowActionId = 'callAudio' | 'callVideo' | 'pin' | 'mute' | 'read' | 'archive' | 'delete';
 
 export type RowCallActionId = Extract<RowActionId, 'callAudio' | 'callVideo'>;
+
+/** Les actions de DRAPEAU — celles que `performRowAction` arbitre. L'appel et la
+ * suppression ont chacun leur chemin (`callActions`, `requestDeparture`). */
+export type RowFlagActionId = Exclude<RowActionId, RowCallActionId | 'delete'>;
 
 export const isRowCallAction = (id: RowActionId): id is RowCallActionId => id === 'callAudio' || id === 'callVideo';
 
@@ -27,12 +31,14 @@ export const isRowCallAction = (id: RowActionId): id is RowCallActionId => id ==
  * NON importé ici : `src/lib/` reste en amont de `src/components/`, jamais
  * l'inverse. `RowActions` vérifie la compatibilité structurelle à l'usage.
  */
-export type RowActionGlyph = 'phone' | 'videoCamera' | 'pushPin' | 'bell' | 'bellSlash' | 'envelopeOpen' | 'archive';
+export type RowActionGlyph = 'phone' | 'videoCamera' | 'pushPin' | 'bell' | 'bellSlash' | 'envelopeOpen' | 'archive' | 'trash';
 
 export type RowMenuItem = {
   readonly id: RowActionId;
   readonly label: string;
   readonly glyph: RowActionGlyph;
+  /** Un geste qui RETIRE : rendu en rouge, comme le `role: .destructive` d'iOS. */
+  readonly destructive?: true;
 };
 
 /**
@@ -52,15 +58,18 @@ type RowMenuLabelKey =
   | 'rowActions.read'
   | 'rowActions.unread'
   | 'rowActions.archive'
-  | 'rowActions.unarchive';
+  | 'rowActions.unarchive'
+  | 'rowActions.delete';
 
 export function rowMenuItems(params: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
   readonly language: InterfaceLanguage;
   readonly canCall?: boolean;
+  /** Un compte : « Supprimer » ferme le menu, comme dans la liste iOS (#7285). */
+  readonly canDelete?: boolean;
 }): readonly RowMenuItem[] {
-  const { flags, unread, language, canCall = false } = params;
+  const { flags, unread, language, canCall = false, canDelete = false } = params;
   const label = (key: RowMenuLabelKey) => translate(language, key);
   return [
     ...(canCall
@@ -75,5 +84,6 @@ export function rowMenuItems(params: {
     ...(flags.archiveLocked === true
       ? []
       : [{ id: 'archive', label: label(flags.isArchived ? 'rowActions.unarchive' : 'rowActions.archive'), glyph: 'archive' } as const]),
+    ...(canDelete ? [{ id: 'delete', label: label('rowActions.delete'), glyph: 'trash', destructive: true } as const] : []),
   ];
 }

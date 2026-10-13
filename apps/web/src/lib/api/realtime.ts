@@ -7,6 +7,7 @@ import { navigate } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
@@ -125,7 +126,7 @@ function currentViewerId(): string {
 
 /** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
 const liveConnection = keepRealtimeConnection<RealtimeConnection>({
-  open: (auth) =>
+  open: (auth, account) =>
     createRealtimeConnection(auth, {
       base: apiConfig.base,
       socketFactory: createSocketIOClient,
@@ -135,6 +136,8 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       outbox: outboxStore,
       viewerId: currentViewerId,
       onClearSession: endWithReason,
+      onAccountDeleted: retireDeletedAccountLater,
+      account,
       onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
     }),
   onChange: (next) => {
