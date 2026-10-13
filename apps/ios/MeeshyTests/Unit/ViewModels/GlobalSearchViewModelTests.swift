@@ -289,8 +289,9 @@ final class GlobalSearchViewModelTests: XCTestCase {
         let ordinary = SearchTestMessageRecordFactory.make(
             localId: "local-ordinary", conversationId: "conv-exit", content: "rendezvous public"
         )
+        let records = [viewOnce, timedFlame, afterRead, ordinary]
         try await pool.write { db in
-            for record in [viewOnce, timedFlame, afterRead, ordinary] { try record.insert(db) }
+            for record in records { try record.insert(db) }
         }
         let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(
             searchService: MessageSearchService(reader: pool)
