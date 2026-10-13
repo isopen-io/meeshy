@@ -31,6 +31,10 @@ export const OPEN_ORIGINS = [
   'mood_avatar',
   'citation',
   'search',
+  'notifications',
+  'comments',
+  'link_preview',
+  'status',
 ] as const;
 
 export type OpenOrigin = (typeof OPEN_ORIGINS)[number];
