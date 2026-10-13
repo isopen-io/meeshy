@@ -62,4 +62,9 @@ export type PostViewerRow = {
 export type PostViewersPage = {
   readonly viewers: readonly PostViewerRow[];
   readonly engagement?: 'unavailable';
+  /**
+   * Les vues de lecteurs SANS compte (#10483) : un agrégat, jamais une ligne —
+   * le client l'affiche « et N visiteurs ». Absent d'un ancien serveur.
+   */
+  readonly anonymousViewCount?: number;
 };

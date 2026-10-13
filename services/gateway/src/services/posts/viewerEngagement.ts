@@ -126,7 +126,19 @@ export type ViewerInteractionsPage = {
   readonly total: number;
   readonly hasMore: boolean;
   readonly engagement?: PostViewersPage['engagement'];
+  /** Les vues de lecteurs SANS compte (#10483) — un agrégat, jamais une ligne nommée. */
+  readonly anonymousViewCount?: number;
 };
+
+/**
+ * Ce que la porte lit du contenu — et, dans la MÊME lecture, le nombre de
+ * visiteurs sans compte que la liste annonce (« et N visiteurs », #10483) :
+ * il ne sort qu'à qui la porte ouvre la liste.
+ */
+const VIEWER_LIST_POST_SELECT = { id: true, authorId: true, type: true, anonymousViewCount: true } as const;
+
+const anonymousViewsOf = (post: { readonly anonymousViewCount?: number | null }): number =>
+  post.anonymousViewCount ?? 0;
 
 /**
  * Comment la liste s'ouvre à ce lecteur :
@@ -487,11 +499,12 @@ export async function readViewerInteractions(
 ): Promise<ViewerInteractionsPage | null> {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
-    select: { id: true, authorId: true, type: true },
+    select: VIEWER_LIST_POST_SELECT,
   });
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'interactions', { limit, offset });
-  return readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
+  const page = await readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
+  return { ...page, anonymousViewCount: anonymousViewsOf(post) };
 }
 
 /**
@@ -511,7 +524,7 @@ export async function readPostViews(
 ) {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
-    select: { id: true, authorId: true, type: true },
+    select: VIEWER_LIST_POST_SELECT,
   });
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'views', { limit, offset });
@@ -527,5 +540,5 @@ export async function readPostViews(
     }),
     prisma.postView.count({ where }),
   ]);
-  return { items, total, hasMore: offset + limit < total };
+  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post) };
 }

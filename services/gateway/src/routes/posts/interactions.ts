@@ -661,6 +661,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result.items, {
         pagination: { total: result.total, offset, limit, hasMore: result.hasMore },
+        meta: { anonymousViewCount: result.anonymousViewCount },
       });
     } catch (error) {
       if (viewerListRefused(reply, error)) return;
@@ -697,7 +698,8 @@ export function registerInteractionRoutes(
 
       return sendSuccess(
         reply,
-        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}) },
+        { viewers: result.viewers, ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
+          ...(result.anonymousViewCount !== undefined ? { anonymousViewCount: result.anonymousViewCount } : {}) },
         { pagination: { total: result.total, offset, limit, hasMore: result.hasMore } },
       );
     } catch (error) {

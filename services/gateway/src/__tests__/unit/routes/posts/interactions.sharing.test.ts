@@ -311,6 +311,25 @@ describe('GET /posts/:id/interactions — success', () => {
   });
 });
 
+describe('« et N visiteurs » — les deux listes servent la part anonyme des vues (#10483)', () => {
+  it('/interactions la porte dans data, à côté des lecteurs nommés', async () => {
+    mockGetPostInteractions.mockResolvedValueOnce({ viewers: [], total: 0, hasMore: false, anonymousViewCount: 4 });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/interactions` });
+    expect(res.json().data).toEqual({ viewers: [], anonymousViewCount: 4 });
+    await app.close();
+  });
+
+  it('/views garde sa liste en data et porte le nombre en meta — un ancien client lit la même liste', async () => {
+    mockGetPostViews.mockResolvedValueOnce({ items: [], total: 0, hasMore: false, anonymousViewCount: 4 });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/views` });
+    expect(res.json().data).toEqual([]);
+    expect(res.json().meta).toEqual({ anonymousViewCount: 4 });
+    await app.close();
+  });
+});
+
 describe('GET /posts/:id/interactions — post not found', () => {
   it('returns 404 when getPostInteractions returns null', async () => {
     mockGetPostInteractions.mockResolvedValueOnce(null);
