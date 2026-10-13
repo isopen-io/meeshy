@@ -8,6 +8,8 @@ struct CallDetailSheet: View {
     let record: APICallRecord
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     @State private var networkJournal: CallNetworkJournalPresentation?
     @State private var transcript: CallTranscript?
     private var theme: ThemeManager { ThemeManager.shared }
@@ -66,13 +68,16 @@ struct CallDetailSheet: View {
 
     private var header: some View {
         let name = record.displayName(fallback: unknownCallerFallback)
+        let peerUserId: String? = record.peer?.userId
         return VStack(spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .profileSheet,
                 accentColor: accentHex,
                 avatarURL: record.avatarURL,
-                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
+                moodEmoji: peerUserId.flatMap { moodEmojiResolver?($0) },
+                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline),
+                onMoodTap: peerUserId.flatMap { moodTapResolver?($0) }
             )
             Text(name)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
