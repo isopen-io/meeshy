@@ -186,6 +186,13 @@ public protocol PostServiceProviding: Sendable {
     func recordImpressions(postIds: [String], source: String) async throws
     func recordImpression(postId: String, source: String) async throws
     func recordEngagement(_ sessions: [EngagementSession]) async throws
+    /// `POST /social/events` — la porte UNIQUE de la télémétrie de lecture
+    /// (#10483), pour un compte comme pour un lecteur sans compte.
+    ///
+    /// Requirement SÉPARÉE avec défaut ci-dessous : un double de test qui ne la
+    /// surcharge pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir
+    /// compté.
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
     /// `POST /posts/from-attachment` — publie une pièce jointe DÉJÀ reçue en
     /// conversation, sans la retélécharger ni la réenvoyer : le fichier est
     /// déjà sur le stockage, le serveur le duplique côté post.
@@ -203,6 +210,10 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
+    }
+
     /// Défaut : un conformeur qui ne publie pas depuis une pièce jointe (tous
     /// les doubles de test existants) reste valide. Il ÉCHOUE plutôt que de
     /// rendre un post fabriqué — un défaut silencieux ferait passer un témoin
@@ -970,6 +981,20 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             PostsEndpoint.byPostIdImpression(postId: postId),
             body: Body(source: source)
         )
+    }
+
+    /// Un lot vide ne part pas : il n'y a rien à compter.
+    public func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
+        let body = try JSONEncoder().encode(SocialEventsBody(events: events))
+        let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
+            SocialEndpoint.events,
+            method: "POST",
+            body: body,
+            queryItems: nil,
+            headers: credential.headers
+        )
+        return response.data
     }
 
     public func recordEngagement(_ sessions: [EngagementSession]) async throws {

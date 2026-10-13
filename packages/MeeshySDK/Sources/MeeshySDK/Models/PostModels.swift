@@ -265,6 +265,10 @@ public struct APIPost: Sendable {
     public var qualifiedViewCount: Int? = nil
     public var playCount: Int? = nil
     public var impressionCount: Int? = nil
+    /// Part ANONYME de `viewCount` / `impressionCount` (#10483) — les totaux
+    /// l'incluent déjà. `nil` d'un serveur antérieur : rien à dire, jamais zéro.
+    public var anonymousViewCount: Int? = nil
+    public var anonymousImpressionCount: Int? = nil
     public let bookmarkCount: Int?
     public let shareCount: Int?
     public let reactionSummary: [String: Int]?
@@ -316,6 +320,7 @@ extension APIPost: Decodable {
         case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt, location
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
+        case anonymousViewCount, anonymousImpressionCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
         case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
         case audioUrl, audioDuration, storyEffects, translations
@@ -352,6 +357,8 @@ extension APIPost: Decodable {
         qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount)
         playCount = try c.decodeIfPresent(Int.self, forKey: .playCount)
         impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount)
+        anonymousViewCount = try c.decodeIfPresent(Int.self, forKey: .anonymousViewCount)
+        anonymousImpressionCount = try c.decodeIfPresent(Int.self, forKey: .anonymousImpressionCount)
         bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount)
         shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
         reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
@@ -604,6 +611,7 @@ extension APIPost {
         feedPost.viewCount = viewCount ?? 0
         feedPost.postOpenCount = postOpenCount ?? 0
         feedPost.impressionCount = impressionCount ?? 0
+        feedPost.anonymousViewCount = anonymousViewCount
         feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.playCount = playCount ?? 0
         // Story canvas + legacy audio (top-level story posts). The init keeps a
