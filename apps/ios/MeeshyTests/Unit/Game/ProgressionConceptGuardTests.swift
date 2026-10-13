@@ -220,12 +220,20 @@ final class ProgressionConceptGuardTests: XCTestCase {
         } + elanNamingKeys
         for key in Set(conceptKeys) {
             let text = table[key]?["ar"] ?? ""
-            XCTAssertFalse(text.contains("اندفاع"), "\(key) [ar] : l'ancien mot du concept — « \(text) »")
+            XCTAssertFalse(spells(text, "اندفاع"), "\(key) [ar] : l'ancien mot du concept — « \(text) »")
         }
         for key in elanNamingKeys + ["progression.elans.title"] {
             let text = try XCTUnwrap(table[key]?["ar"], "\(key) [ar] : absente du catalogue")
-            XCTAssertTrue(text.contains("زخم"), "\(key) [ar] : le concept ne dit pas الزخم — « \(text) »")
+            XCTAssertTrue(spells(text, "زخم"), "\(key) [ar] : le concept ne dit pas الزخم — « \(text) »")
         }
+    }
+
+    /// Cherche le mot lettre par lettre : `String.contains` compare des graphèmes, et le tanwîn de « زخمًا » soude
+    /// son م au signe qui le suit, si bien que « زخم » n'y serait jamais trouvé.
+    private func spells(_ text: String, _ word: String) -> Bool {
+        let letters = Array(text.unicodeScalars), needle = Array(word.unicodeScalars)
+        guard needle.count <= letters.count else { return false }
+        return (0...(letters.count - needle.count)).contains { Array(letters[$0..<$0 + needle.count]) == needle }
     }
 
     /// Le titre, l'invitation et l'invitation sans famille de la carte ont leur portugais (`pt`) : la phrase et les
