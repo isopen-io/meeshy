@@ -72,6 +72,12 @@ export function interactionOf(
   return { type: 'interaction', action, ...located(postId, now), ...extra };
 }
 
+/** Un geste ABOUTI dans un COMMENTAIRE — la cible est le commentaire, la publication son parent. */
+export function commentInteractionOf(postId: string, commentId: string, action: InteractionAction, now: number = Date.now()): SocialEventV2Input {
+  const { target, ...where } = located(postId, now);
+  return { type: 'interaction', action, target: { kind: 'comment', id: commentId, parent: target }, ...where };
+}
+
 export function negativeOf(postId: string, action: NegativeAction, extra: { readonly reasonCode?: string; readonly visibleMs?: number } = {}, now: number = Date.now()): SocialEventV2Input {
   const { dwellBeforeMs: _dwell, ...where } = located(postId, now);
   return { type: 'negative', action, ...where, ...extra };

@@ -32,6 +32,7 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let v2: SocialEventV2Input[] = [];
 const original = readingTelemetry.recordV2;
+const keepHere = (event: Event) => event.preventDefault();
 const scope = () => `u_${resolveViewer({ source: apiDeps.source, session: sessionStore.getState().session }).id ?? ''}`;
 
 beforeAll(async () => {
@@ -67,7 +68,7 @@ async function until(predicate: () => boolean): Promise<void> {
   for (let tour = 0; tour < 100 && !predicate(); tour += 1) await settle();
 }
 
-async function sendComment(): Promise<void> {
+async function mountThread(): Promise<HTMLDivElement> {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -79,7 +80,11 @@ async function sendComment(): Promise<void> {
     );
   });
   await settle();
-  const host = container;
+  return container;
+}
+
+async function sendComment(): Promise<void> {
+  const host = await mountThread();
   await act(async () => {
     const field = host.querySelector<HTMLTextAreaElement>('[data-comment-field]');
     if (field === null) throw new Error('champ absent');
@@ -96,5 +101,21 @@ describe('CommentThread — comment_submit', () => {
     expect(v2).toHaveLength(1);
     expect(v2[0]).toMatchObject({ type: 'interaction', action: 'comment_submit', target: { kind: 'post', id: POST }, surface: 'feed' });
     expect(JSON.stringify(v2)).not.toContain('coucher');
+  });
+
+  test('toucher l’auteur d’un commentaire émet profile_tap sur CE commentaire, rattaché à sa publication', async () => {
+    const host = await mountThread();
+    await until(() => host.querySelector('[data-comment-row="cm-r2-1"]') !== null);
+    window.addEventListener('click', keepHere, true);
+    await act(async () => host.querySelector<HTMLElement>('[data-comment-row="cm-r2-1"] a.avatar-profile-link')?.click());
+    window.removeEventListener('click', keepHere, true);
+    expect(v2).toHaveLength(1);
+    expect(v2[0]).toMatchObject({
+      type: 'interaction',
+      action: 'profile_tap',
+      target: { kind: 'comment', id: 'cm-r2-1', parent: { kind: 'post', id: POST } },
+      surface: 'feed',
+    });
+    expect(JSON.stringify(v2)).not.toContain('ines');
   });
 });

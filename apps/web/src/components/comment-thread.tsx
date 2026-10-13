@@ -18,7 +18,8 @@ import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
-import { interactionOf } from '@/lib/telemetry/card-context';
+import { commentInteractionOf, interactionOf } from '@/lib/telemetry/card-context';
+import { commentTapOf } from '@/lib/telemetry/content-taps';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -430,9 +431,19 @@ export function CommentThread({
     [postId, expanded, toggleReplies, language, reader.languages, reader.locale, now, gestures],
   );
 
+  /* LES TAPS D'IDENTITÉ DES RANGÉES (#10502) — un écouteur pour tout le fil. */
+  const onTapCapture = useCallback(
+    (event: { readonly target: EventTarget | null }) => {
+      const found = commentTapOf(event.target);
+      if (found !== null) readingTelemetry.recordV2(commentInteractionOf(postId, found.commentId, found.tap));
+    },
+    [postId],
+  );
+
   return (
     <section
       data-comment-thread={postId}
+      onClickCapture={onTapCapture}
       aria-label={translate(language, 'comments.title')}
       /* LA DESTINATION DE REPLI DU FOCUS quand la rangée qui le portait vient
          d'être supprimée (défaut majeur 6) : `-1` la rend focalisable au

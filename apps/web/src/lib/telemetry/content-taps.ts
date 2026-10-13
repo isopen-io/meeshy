@@ -23,3 +23,12 @@ export function contentTapOf(target: EventTarget | null): ContentTap | null {
   if (match(PROFILE, path) === null) return null;
   return link.closest('[data-rich-text]') === null ? 'profile_tap' : 'mention_tap';
 }
+
+/** Le même tap, posé dans une rangée de commentaire CONFIRMÉE — une rangée provisoire n'a pas d'identifiant serveur. */
+export function commentTapOf(target: EventTarget | null): { readonly tap: ContentTap; readonly commentId: string } | null {
+  const tap = contentTapOf(target);
+  const row = tap === null || !(target instanceof Element) ? null : target.closest('[data-comment-row]');
+  const commentId = row?.getAttribute('data-comment-row');
+  if (tap === null || row === null || row === undefined || row.hasAttribute('data-comment-pending') || !commentId) return null;
+  return { tap, commentId };
+}
