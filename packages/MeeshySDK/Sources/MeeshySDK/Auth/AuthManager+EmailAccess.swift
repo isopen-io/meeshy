@@ -107,23 +107,27 @@ extension AuthManager {
         }
     }
 
-    /// Pose la session prouvée par `verifyEmail`, comme une connexion réussie.
-    /// La session d'un AUTRE utilisateur que celui de la session ouverte est
-    /// REFUSÉE (#10446) — rien n'est posé, `errorMessage` le dit ; y passer se
-    /// fait par `switchToProvenAccount`.
-    public func openSession(_ proven: EmailProvenSession) {
+    /// Pose la session prouvée par `verifyEmail`, comme une connexion réussie,
+    /// et rend son VERDICT (#10450) : `true` si la session est posée. La session
+    /// d'un AUTRE utilisateur que celui de la session ouverte est REFUSÉE
+    /// (#10446) — rien n'est posé, `errorMessage` le dit, et l'appelant
+    /// n'annonce aucun succès ; y passer se fait par `switchToProvenAccount`.
+    @discardableResult
+    public func openSession(_ proven: EmailProvenSession) -> Bool {
         do {
             try installSession(proven)
+            return true
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return false
         }
     }
 
     /// La porte LEVANTE de `openSession` : rend `SessionReplacementRefused` à
     /// l'appelant qui sait le traiter.
-    func installSession(_ proven: EmailProvenSession, switchingAccount: Bool = false) throws {
+    func installSession(_ proven: EmailProvenSession) throws {
         try applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user,
-                         origin: proven.origin, switchingAccount: switchingAccount)
+                         origin: proven.origin)
     }
 
     // MARK: - Un lien qui ouvre un AUTRE compte (#10445)
@@ -133,36 +137,56 @@ extension AuthManager {
     /// le compte quitté reste au sélecteur et se reprend sans mot de passe.
     /// Rien n'est écrit au trousseau pour le compte entrant avant cet appel :
     /// la session rendue par la preuve n'existe qu'en mémoire jusque-là.
-    public func switchToProvenAccount(_ proven: EmailProvenSession) async {
+    ///
+    /// #10450 — aucune dérogation à la garde de `applySession` : la session
+    /// prouvée ne se pose que sur une session DÉMONTÉE. Si la sortie n'a pas
+    /// eu lieu (compte actif inconnu), si un autre changement de compte est en
+    /// cours, ou si une session s'est rouverte pendant la pause, rien n'est
+    /// posé et la session prouvée est refermée côté passerelle. Rend `true`
+    /// si la session prouvée est posée.
+    @discardableResult
+    public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
+        guard !isSwitchingAccount else {
+            await discardProvenSession(proven)
+            return false
+        }
         guard isAuthenticated, proven.user.id != activeUserId else {
-            openSession(proven)
-            return
+            return openSession(proven)
         }
         isSwitchingAccount = true
         defer { isSwitchingAccount = false }
         await suspendActiveSession()
+        guard !isAuthenticated else {
+            await discardProvenSession(proven)
+            return false
+        }
         // Même image à l'état « sorti » que `switchAccount(to:)` : sans elle,
         // `false` puis `true` dans le même tour échappent aux observateurs.
         try? await Task.sleep(for: .milliseconds(150))
+        guard !isAuthenticated else {
+            await discardProvenSession(proven)
+            return false
+        }
         await CacheAccountBinder.shared.bind(accountKey(for: proven.user.id)).value
-        // Le changement de compte EXPLICITE (#10446) : la session sortante est
-        // quittée ci-dessus, c'est le seul chemin qui pose un autre utilisateur.
         do {
-            try installSession(proven, switchingAccount: true)
+            try installSession(proven)
+            return true
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            // Une session s'est posée pendant la liaison du cache : il revient
+            // au compte qui est ouvert, jamais à celui qu'on a refusé.
+            await CacheAccountBinder.shared.bind(accountKey(for: activeUserId)).value
+            await discardProvenSession(proven)
+            return false
         }
     }
 
-    /// Ferme côté passerelle une session prouvée que l'utilisateur a REFUSÉE :
-    /// la preuve a consommé le jeton et ouvert une session serveur, qui ne doit
-    /// pas survivre à un « Annuler ». Rien ne change sur l'appareil.
+    /// Ferme côté passerelle une session prouvée que l'utilisateur a REFUSÉE,
+    /// ou que l'appareil n'a pas pu poser : la preuve a consommé le jeton et
+    /// ouvert une session serveur, qui ne doit pas leur survivre. Rien ne
+    /// change sur l'appareil. Réessaie comme la déconnexion (#10450).
     public func discardProvenSession(_ proven: EmailProvenSession) async {
-        do {
-            try await authService.logoutThrowing(token: proven.token)
-        } catch {
-            Logger.auth.warning("Refused proven session could not be closed server-side: \(error.localizedDescription, privacy: .public)")
-        }
+        await performServerLogoutWithRetries(token: proven.token)
     }
 }
 
@@ -231,7 +255,9 @@ public struct EmailProvenSession: Sendable {
 @MainActor
 public protocol EmailVerificationConfirming: AnyObject {
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
-    func openSession(_ proven: EmailProvenSession)
+    /// `true` si la session est posée (#10450) : un refus n'annonce rien.
+    @discardableResult
+    func openSession(_ proven: EmailProvenSession) -> Bool
 }
 
 extension AuthManager: EmailVerificationConfirming {}

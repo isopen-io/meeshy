@@ -655,17 +655,26 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     /// #10446 — la loi de `applySession` : une session ouverte n'accepte que
-    /// son propre utilisateur (rotation), sauf par le changement de compte
-    /// explicite. Un compte actif INCONNU (`nil`) sous une session ouverte
-    /// n'est pas une permission : il refuse aussi.
+    /// son propre utilisateur (rotation). Un compte actif INCONNU (`nil`) sous
+    /// une session ouverte n'est pas une permission : il refuse aussi.
+    ///
+    /// #10450 — la loi n'a AUCUNE dérogation. Changer de compte, c'est d'abord
+    /// DÉMONTER la session ouverte ; ce qui la pose ensuite passe ici comme une
+    /// première connexion. Un drapeau « changement de compte » laissait passer
+    /// l'autre utilisateur précisément quand le démontage n'avait pas eu lieu.
     nonisolated static func refusesSessionReplacement(
         currentlyAuthenticated: Bool,
         currentActiveUserId: String?,
-        newUserId: String,
-        switchingAccount: Bool
+        newUserId: String
     ) -> Bool {
-        guard currentlyAuthenticated, !switchingAccount else { return false }
+        guard currentlyAuthenticated else { return false }
         return currentActiveUserId != newUserId
+    }
+
+    /// #10450 — un rafraîchissement ne s'applique qu'au compte qui l'a
+    /// demandé, s'il est TOUJOURS le compte actif.
+    nonisolated static func appliesRefreshedSession(refreshedUserId: String, currentActiveUserId: String?) -> Bool {
+        currentActiveUserId == refreshedUserId
     }
 
     /// `origin` par défaut à `.restored` : un renouvellement de jeton (la
@@ -674,22 +683,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
     ///
     /// #10446 — refuse d'installer un AUTRE utilisateur par-dessus une session
     /// ouverte : poser une session sans démonter la précédente laisserait ses
-    /// sockets, ses files et ses caches servir le compte entrant. Le seul
-    /// passage est le changement de compte explicite (`switchingAccount`), qui
-    /// a d'abord quitté la session sortante. Le refus précède toute écriture.
+    /// sockets, ses files et ses caches servir le compte entrant. Passer à un
+    /// autre compte quitte d'abord la session sortante (`switchToProvenAccount`,
+    /// `switchAccount(to:)`). Le refus précède toute écriture.
     internal func applySession(
         token: String,
         sessionToken: String?,
         user: MeeshyUser,
-        origin: SessionOrigin = .restored,
-        switchingAccount: Bool = false
+        origin: SessionOrigin = .restored
     ) throws {
         let userId = user.id
         if Self.refusesSessionReplacement(
             currentlyAuthenticated: isAuthenticated,
             currentActiveUserId: activeUserId,
-            newUserId: userId,
-            switchingAccount: switchingAccount
+            newUserId: userId
         ) {
             Logger.auth.error("Refused to install another user's session over the open session")
             throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: userId)
@@ -913,6 +920,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 let data = try await self.authService.refreshToken(token, sessionToken: sessionToken)
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+                }
+                // #10450 — le compte rafraîchi a pu être QUITTÉ pendant l'appel
+                // (changement de compte, déconnexion) : sa session rafraîchie
+                // est abandonnée, jamais réinstallée. Pas une `MeeshyError` :
+                // les jetons d'un compte gardé au sélecteur restent intacts.
+                guard Self.appliesRefreshedSession(refreshedUserId: userId, currentActiveUserId: self.activeUserId) else {
+                    Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
+                    throw CancellationError()
                 }
                 try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken

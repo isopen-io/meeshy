@@ -105,6 +105,13 @@ enum EmailProofErrorText {
         }
     }
 
+    /// La preuve a rendu une session, mais l'appareil ne l'a pas posée : un
+    /// autre compte y est déjà ouvert (#10450). Jamais « Connexion réussie ! ».
+    static func sessionNotOpened(bundle: Bundle = .main) -> String {
+        String(localized: "emailProof.sessionNotOpened",
+               defaultValue: "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir.", bundle: bundle)
+    }
+
     /// L'adresse est prouvée mais le compte attend son second facteur
     /// (#10445) : ce n'est ni un refus ni un « Email vérifié ! ».
     private static func secondFactorRequired(_ bundle: Bundle) -> String {

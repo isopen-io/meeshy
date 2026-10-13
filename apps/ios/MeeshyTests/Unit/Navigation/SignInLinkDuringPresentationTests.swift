@@ -19,6 +19,9 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
     private(set) var switchedSessions: [String] = []
     private(set) var discardedSessions: [String] = []
     private(set) var events: [String] = []
+    /// Faux ⇒ la garde du SDK refuse la session (#10450).
+    var opens = true
+    var switches = true
 
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         events.append("verify")
@@ -30,17 +33,21 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
         return try magicResult.get()
     }
 
-    func openSession(_ proven: EmailProvenSession) {
+    func openSession(_ proven: EmailProvenSession) -> Bool {
         events.append("open")
         openedSessions.append(proven.token)
+        guard opens else { return false }
         isAuthenticated = true
+        return true
     }
 
-    func switchToProvenAccount(_ proven: EmailProvenSession) async {
+    func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
         events.append("switch")
         switchedSessions.append(proven.token)
+        guard switches else { return false }
         currentUser = proven.user
         isAuthenticated = true
+        return true
     }
 
     func discardProvenSession(_ proven: EmailProvenSession) async {
@@ -54,11 +61,13 @@ private final class MockAccountReplacementConfirmation: AccountReplacementConfir
     nonisolated deinit {}
     let answer: Bool
     private(set) var questions: [[String]] = []
+    private(set) var askedUsers: [(current: MeeshyUser?, incoming: MeeshyUser)] = []
 
     init(answer: Bool) { self.answer = answer }
 
-    func confirmReplacing(signedIn current: String, with incoming: String) async -> Bool {
-        questions.append([current, incoming])
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool {
+        questions.append([current?.username ?? "", incoming.username])
+        askedUsers.append((current, incoming))
         return answer
     }
 }
@@ -279,6 +288,109 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertEqual(auth.events, ["verify"])
         XCTAssertTrue(auth.isAuthenticated)
         XCTAssertEqual(toasts.successMessages, [])
+    }
+
+    // MARK: - #10450 — un succès ne s'annonce que sur une session POSÉE
+
+    func test_link_refusedByTheDevice_announcesNoSuccess() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.opens = false
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(auth.openedSessions, ["jwt-link"])
+        XCTAssertEqual(toasts.successMessages, [], "jamais « Connexion réussie ! » sur une session refusée")
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.sessionNotOpened()])
+        XCTAssertEqual(celebration.celebratedUserIds, [])
+    }
+
+    /// Sous une feuille, le succès attend que la session soit vraiment posée.
+    func test_link_whilePresented_announcesItsSuccessOnlyOnceTheSessionIsPosted() async {
+        let (gate, auth, toasts) = makeSUT(presenting: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+
+        XCTAssertEqual(toasts.successMessages, [])
+        gate.presentationEnded()
+        XCTAssertEqual(toasts.successMessages.count, 1)
+    }
+
+    func test_anotherAccount_accepted_butNotInstalled_announcesNoSuccess() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        auth.switches = false
+        let confirmation = MockAccountReplacementConfirmation(answer: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "switch"], "le SDK referme lui-même la session qu'il n'a pas posée")
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(toasts.successMessages, [])
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.sessionNotOpened()])
+    }
+
+    // MARK: - #10450 — la question dit « un AUTRE compte » et nomme les deux
+
+    func test_question_receivesBothAccounts_withTheirNamesAndHandles() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.isAuthenticated = true
+        auth.currentUser = MeeshyUser(id: "me", username: "moi", displayName: "Moi Même")
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(confirmation.askedUsers.first?.current?.displayName, "Moi Même")
+        XCTAssertEqual(confirmation.askedUsers.first?.incoming.displayName, "Link")
+        XCTAssertEqual(confirmation.askedUsers.first?.incoming.username, "link")
+    }
+
+    func test_accountLabel_showsTheDisplayNameAndTheHandle() {
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "Awa Diallo", username: "awa"), "Awa Diallo (@awa)")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "  ", username: "awa"), "@awa")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: nil, username: "awa"), "@awa")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "awa", username: "awa"), "@awa")
+    }
+
+    func test_alert_saysAnotherAccount_inEveryLanguage() throws {
+        let catalog = try AppSourceGuard.unit("Meeshy/Localizable.xcstrings")
+        let data = try XCTUnwrap(catalog.data(using: .utf8))
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let languages = ["fr", "en", "es", "de", "it", "pt-BR", "ar"]
+        for key in ["signInLink.switchAccount.title", "signInLink.switchAccount.message",
+                    "signInLink.switchAccount.messageUnknownCurrent", "emailProof.sessionNotOpened"] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], key)
+            XCTAssertEqual(Set(localizations.keys), Set(languages), key)
+        }
+    }
+
+    /// « Annuler » est l'action mise en avant ; une question qui ne s'est pas
+    /// présentée, ou qui a été retirée sans bouton, répond « non ».
+    func test_alert_prefersCancel_andAlwaysAnswers() throws {
+        let opener = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Auth/SignInLinkOpener.swift"))
+
+        XCTAssertTrue(opener.contains("alert.preferredAction = cancel"))
+        XCTAssertTrue(opener.contains("override func viewDidDisappear"))
+        XCTAssertGreaterThanOrEqual(opener.components(separatedBy: "presentingViewController == nil").count - 1, 3,
+                                    "présentation refusée, complétion sans parent, sortie sans bouton")
+    }
+
+    /// La réponse est UNIQUE : la première l'emporte, et une question libérée
+    /// sans réponse dit « non » au lieu de laisser la reprise en suspens.
+    func test_answer_isGivenOnce_andAReleasedQuestionSaysNo() async {
+        let first = await withCheckedContinuation { continuation in
+            let answer = AccountReplacementAnswer(continuation)
+            answer.give(true)
+            answer.give(false)
+        }
+        let released = await withCheckedContinuation { continuation in
+            _ = AccountReplacementAnswer(continuation)
+        }
+
+        XCTAssertTrue(first)
+        XCTAssertFalse(released)
     }
 
     func test_replacesSignedInAccount_judgesOnTheProvenId() {

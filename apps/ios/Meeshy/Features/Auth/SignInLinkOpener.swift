@@ -62,8 +62,13 @@ protocol SignInLinkAuthorizing: AnyObject {
     var currentUser: MeeshyUser? { get }
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
     func verifyMagicLink(token: String) async throws -> EmailProvenSession
-    func openSession(_ proven: EmailProvenSession)
-    func switchToProvenAccount(_ proven: EmailProvenSession) async
+    /// `true` si la session est posée (#10450).
+    @discardableResult
+    func openSession(_ proven: EmailProvenSession) -> Bool
+    /// `true` si la session prouvée est posée (#10450) ; sinon rien n'a changé
+    /// sur l'appareil et la session prouvée est refermée côté passerelle.
+    @discardableResult
+    func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool
     func discardProvenSession(_ proven: EmailProvenSession) async
 }
 
@@ -105,11 +110,16 @@ enum SignInLinkOpener {
             return
         }
         let celebrates = link.celebratesArrival(isAuthenticated: auth.isAuthenticated)
+        // #10450 — le succès ne s'annonce qu'une fois la session POSÉE : une
+        // session refusée par la garde du SDK ne dit pas « Connexion réussie ! ».
         sessionGate.open {
-            auth.openSession(proven)
+            guard auth.openSession(proven) else {
+                toasts.showError(EmailProofErrorText.sessionNotOpened())
+                return
+            }
             if celebrates { celebration.begin(userId: proven.user.id) }
+            toasts.showSuccess(Self.signedInMessage)
         }
-        toasts.showSuccess(signedInMessage)
     }
 
     /// La session rendue n'existe qu'EN MÉMOIRE le temps de la question : rien
@@ -122,15 +132,15 @@ enum SignInLinkOpener {
         toasts: FeedbackToastSurfacing,
         confirmation: AccountReplacementConfirming
     ) async {
-        let accepted = await confirmation.confirmReplacing(
-            signedIn: auth.currentUser?.username ?? "",
-            with: proven.user.username
-        )
+        let accepted = await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user)
         guard accepted else {
             await auth.discardProvenSession(proven)
             return
         }
-        await auth.switchToProvenAccount(proven)
+        guard await auth.switchToProvenAccount(proven) else {
+            toasts.showError(EmailProofErrorText.sessionNotOpened())
+            return
+        }
         toasts.showSuccess(signedInMessage)
     }
 
@@ -150,45 +160,80 @@ enum SignInLinkOpener {
 }
 
 /// La question posée avant qu'un lien n'ouvre un AUTRE compte que le compte
-/// connecté (#10445) : « Ce lien ouvre le compte @x. Quitter @moi ? ».
+/// connecté (#10445, #10450) : elle dit « un AUTRE compte », nomme les deux
+/// comptes par leur nom affiché et leur @, et met « Annuler » en avant.
 @MainActor
 protocol AccountReplacementConfirming: AnyObject {
-    func confirmReplacing(signedIn current: String, with incoming: String) async -> Bool
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool
 }
 
 /// Posée par UIKit, depuis le contrôleur le plus haut : une alerte SwiftUI
 /// accrochée à la racine ne se présente pas quand une feuille l'est déjà, et la
 /// question attendrait pour toujours (même raison que `EmailVerificationGateScreen`).
+///
+/// #10450 — la question rend UNE réponse, toujours : « non » si l'alerte n'a
+/// pas pu se présenter (contrôleur déjà en présentation, hors fenêtre), si elle
+/// a été retirée sans qu'un bouton soit touché (sa feuille refermée sous
+/// elle), ou si elle disparaît de la mémoire sans réponse. Une question restée
+/// sans réponse gardait la session prouvée en mémoire et ouverte au serveur.
 @MainActor
 final class AccountReplacementAlert: AccountReplacementConfirming {
     nonisolated deinit {}
     static let shared = AccountReplacementAlert()
 
-    func confirmReplacing(signedIn current: String, with incoming: String) async -> Bool {
+    /// Les gestionnaires d'un `UIAlertAction` s'exécutent APRÈS la sortie de
+    /// l'alerte : le « non » d'une sortie sans bouton les attend.
+    private static let unansweredDismissalGrace: Duration = .milliseconds(500)
+
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool {
         guard let top = Self.topMostController() else { return false }
-        let alert = UIAlertController(
-            title: String(localized: "signInLink.switchAccount.title", defaultValue: "Changer de compte ?", bundle: .main),
+        let alert = AccountReplacementAlertController(
+            title: String(localized: "signInLink.switchAccount.title", defaultValue: "Ouvrir un autre compte ?", bundle: .main),
             message: Self.message(signedIn: current, incoming: incoming),
             preferredStyle: .alert
         )
         return await withCheckedContinuation { continuation in
-            alert.addAction(UIAlertAction(
+            let answer = AccountReplacementAnswer(continuation)
+            let cancel = UIAlertAction(
                 title: String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main),
                 style: .cancel
-            ) { _ in continuation.resume(returning: false) })
+            ) { _ in answer.give(false) }
+            alert.addAction(cancel)
             alert.addAction(UIAlertAction(
                 title: String(localized: "signInLink.switchAccount.confirm", defaultValue: "Ouvrir ce compte", bundle: .main),
                 style: .default
-            ) { _ in continuation.resume(returning: true) })
-            top.present(alert, animated: true)
+            ) { _ in answer.give(true) })
+            alert.preferredAction = cancel
+            alert.onDisappear = { [weak alert] in
+                Task { @MainActor [weak alert] in
+                    try? await Task.sleep(for: Self.unansweredDismissalGrace)
+                    guard alert?.presentingViewController == nil else { return }
+                    answer.give(false)
+                }
+            }
+            top.present(alert, animated: true) { [weak alert] in
+                if alert?.presentingViewController == nil { answer.give(false) }
+            }
+            // Une présentation refusée par UIKit ne rappelle jamais sa
+            // complétion : elle se lit tout de suite, l'alerte n'a pas de parent.
+            if alert.presentingViewController == nil { answer.give(false) }
         }
     }
 
-    private static func message(signedIn current: String, incoming: String) -> String {
-        guard !current.isEmpty else {
-            return String(localized: "signInLink.switchAccount.messageUnknownCurrent", defaultValue: "Ce lien ouvre le compte @\(incoming). Quitter le compte ouvert ?", bundle: .main)
+    /// « Nom (@handle) », ou « @handle » quand le nom affiché manque ou le répète.
+    nonisolated static func label(displayName: String?, username: String) -> String {
+        let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !name.isEmpty, name != username else { return "@\(username)" }
+        return "\(name) (@\(username))"
+    }
+
+    private static func message(signedIn current: MeeshyUser?, incoming: MeeshyUser) -> String {
+        let incomingLabel = label(displayName: incoming.displayName, username: incoming.username)
+        guard let current, !current.username.isEmpty else {
+            return String(localized: "signInLink.switchAccount.messageUnknownCurrent", defaultValue: "Ce lien ouvre un AUTRE compte que celui qui est ouvert : \(incomingLabel).\n\nN'ouvrez ce compte que s'il vous appartient.", bundle: .main)
         }
-        return String(localized: "signInLink.switchAccount.message", defaultValue: "Ce lien ouvre le compte @\(incoming). Quitter @\(current) ?", bundle: .main)
+        let currentLabel = label(displayName: current.displayName, username: current.username)
+        return String(localized: "signInLink.switchAccount.message", defaultValue: "Ce lien ouvre un AUTRE compte que le vôtre : \(incomingLabel).\n\nVous êtes connecté en tant que \(currentLabel). N'ouvrez ce compte que s'il vous appartient.", bundle: .main)
     }
 
     private static func topMostController() -> UIViewController? {
@@ -197,5 +242,40 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
             top = presented
         }
         return top
+    }
+}
+
+/// L'alerte qui dit quand elle a QUITTÉ l'écran — un bouton touché, ou la
+/// feuille qui la portait refermée sous elle.
+final class AccountReplacementAlertController: UIAlertController {
+    nonisolated deinit {}
+    var onDisappear: (() -> Void)?
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        onDisappear?()
+    }
+}
+
+/// La réponse UNIQUE à la question : la première donnée l'emporte, les
+/// suivantes sont ignorées, et une question libérée sans réponse dit « non ».
+nonisolated final class AccountReplacementAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Bool, Never>?
+
+    init(_ continuation: CheckedContinuation<Bool, Never>) {
+        self.continuation = continuation
+    }
+
+    func give(_ answer: Bool) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume(returning: answer)
+    }
+
+    deinit {
+        continuation?.resume(returning: false)
     }
 }

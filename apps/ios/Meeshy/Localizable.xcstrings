@@ -288524,6 +288524,53 @@
         }
       }
     },
+    "emailProof.sessionNotOpened": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حساب آخر مفتوح بالفعل على هذا الجهاز: تعذّر فتح هذا الحساب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät ist bereits ein anderes Konto geöffnet: Dieses Konto konnte nicht geöffnet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another account is already open on this device: this account could not be opened."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya hay otra cuenta abierta en este dispositivo: no se ha podido abrir esta cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su questo dispositivo è già aperto un altro account: non è stato possibile aprire questo account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outra conta já está aberta neste dispositivo: não foi possível abrir esta conta."
+          }
+        }
+      }
+    },
     "signInLink.switchAccount.confirm": {
       "extractionState": "manual",
       "localizations": {
@@ -288577,43 +288624,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفتح هذا الرابط الحساب @%1$@. هل تريد مغادرة @%2$@؟"
+            "value": "يفتح هذا الرابط حسابًا آخر غير حسابك: %1$@.\n\nأنت مسجّل الدخول باسم %2$@. لا تفتح هذا الحساب إلا إذا كان ملكك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Link öffnet das Konto @%1$@. @%2$@ verlassen?"
+            "value": "Dieser Link öffnet ein ANDERES Konto als deins: %1$@.\n\nDu bist als %2$@ angemeldet. Öffne dieses Konto nur, wenn es dir gehört."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This link opens the account @%1$@. Leave @%2$@?"
+            "value": "This link opens ANOTHER account than yours: %1$@.\n\nYou are signed in as %2$@. Only open this account if it belongs to you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este enlace abre la cuenta @%1$@. ¿Salir de @%2$@?"
+            "value": "Este enlace abre OTRA cuenta distinta de la tuya: %1$@.\n\nHas iniciado sesión como %2$@. Abre esta cuenta solo si te pertenece."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce lien ouvre le compte @%1$@. Quitter @%2$@ ?"
+            "value": "Ce lien ouvre un AUTRE compte que le vôtre : %1$@.\n\nVous êtes connecté en tant que %2$@. N'ouvrez ce compte que s'il vous appartient."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo link apre l'account @%1$@. Uscire da @%2$@?"
+            "value": "Questo link apre un ALTRO account diverso dal tuo: %1$@.\n\nHai effettuato l'accesso come %2$@. Apri questo account solo se è tuo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este link abre a conta @%1$@. Sair de @%2$@?"
+            "value": "Este link abre OUTRA conta, diferente da sua: %1$@.\n\nVocê está conectado como %2$@. Só abra esta conta se ela for sua."
           }
         }
       }
@@ -288624,43 +288671,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفتح هذا الرابط الحساب @%@. هل تريد مغادرة الحساب المفتوح؟"
+            "value": "يفتح هذا الرابط حسابًا آخر غير الحساب المفتوح: %@.\n\nلا تفتح هذا الحساب إلا إذا كان ملكك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Link öffnet das Konto @%@. Das geöffnete Konto verlassen?"
+            "value": "Dieser Link öffnet ein ANDERES Konto als das geöffnete: %@.\n\nÖffne dieses Konto nur, wenn es dir gehört."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This link opens the account @%@. Leave the open account?"
+            "value": "This link opens ANOTHER account than the one that is open: %@.\n\nOnly open this account if it belongs to you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este enlace abre la cuenta @%@. ¿Salir de la cuenta abierta?"
+            "value": "Este enlace abre OTRA cuenta distinta de la que está abierta: %@.\n\nAbre esta cuenta solo si te pertenece."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce lien ouvre le compte @%@. Quitter le compte ouvert ?"
+            "value": "Ce lien ouvre un AUTRE compte que celui qui est ouvert : %@.\n\nN'ouvrez ce compte que s'il vous appartient."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo link apre l'account @%@. Uscire dall'account aperto?"
+            "value": "Questo link apre un ALTRO account diverso da quello aperto: %@.\n\nApri questo account solo se è tuo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este link abre a conta @%@. Sair da conta aberta?"
+            "value": "Este link abre OUTRA conta, diferente da que está aberta: %@.\n\nSó abra esta conta se ela for sua."
           }
         }
       }
@@ -288671,43 +288718,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تبديل الحساب؟"
+            "value": "فتح حساب آخر؟"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Konto wechseln?"
+            "value": "Ein anderes Konto öffnen?"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Switch account?"
+            "value": "Open another account?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Cambiar de cuenta?"
+            "value": "¿Abrir otra cuenta?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer de compte ?"
+            "value": "Ouvrir un autre compte ?"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cambiare account?"
+            "value": "Aprire un altro account?"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trocar de conta?"
+            "value": "Abrir outra conta?"
           }
         }
       }

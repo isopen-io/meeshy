@@ -65,21 +65,23 @@ final class EmailProvenAccountSwitchTests: XCTestCase {
     /// indisponible dans le binaire de test SPM — la moitié comportementale se
     /// vérifie au simulateur et dans `SignInLinkDuringPresentationTests`.
     func test_switchToProvenAccount_suspendsTheCurrentAccount_neverLogsOut() throws {
-        let corps = try body(of: "public func switchToProvenAccount(_ proven: EmailProvenSession) async {", in: try source())
+        let corps = try body(of: "public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {", in: try source())
 
         XCTAssertTrue(corps.contains("await suspendActiveSession()"),
                       "le compte quitté reste au sélecteur, repris sans mot de passe")
         XCTAssertFalse(corps.contains("logout("), "un lien ne déconnecte jamais")
         XCTAssertFalse(corps.contains("endingIt: true"))
         let suspend = try XCTUnwrap(corps.range(of: "await suspendActiveSession()"))
-        let open = try XCTUnwrap(corps.range(of: "openSession(proven)", options: .backwards))
+        let open = try XCTUnwrap(corps.range(of: "try installSession(proven)", options: .backwards))
         XCTAssertTrue(suspend.lowerBound < open.lowerBound, "la session rendue se pose APRÈS la sortie de l'autre")
     }
 
+    /// Le comportement (réessais, jeton prouvé) est éprouvé par
+    /// `AuthManagerSessionReplacementGuardTests.test_discardProvenSession_retriesUntilTheGatewayCloses`.
     func test_discardProvenSession_closesItServerSide_withItsOwnToken() throws {
         let corps = try body(of: "public func discardProvenSession(_ proven: EmailProvenSession) async {", in: try source())
 
-        XCTAssertTrue(corps.contains("logoutThrowing(token: proven.token)"))
+        XCTAssertTrue(corps.contains("performServerLogoutWithRetries(token: proven.token)"))
         XCTAssertFalse(corps.contains("applySession("), "refuser n'écrit rien sur l'appareil")
     }
 }
