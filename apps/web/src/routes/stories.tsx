@@ -13,7 +13,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { useSearch } from '@/lib/router';
-import { useImpressionRef } from '@/lib/view/reading-telemetry';
+import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
 /* LA COQUILLE COMMUNE (#6149) — extraite dans `stories-parts.tsx` pour que
@@ -82,6 +82,7 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
     <Link
       to="story"
       params={{ post: group.entryStoryId }}
+      {...(group.isMine ? {} : openLinkProps(group.entryStoryId, 'story_rail'))}
       className="flex w-full items-center gap-3 rounded-card px-3 py-2.5"
       style={{ backgroundColor: 'var(--color-ios-card)' }}
     >

@@ -19,7 +19,7 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { READING_COLUMN_STYLE } from '@/lib/view/reading-column';
-import { detailImpressionSourceOf, dwellContentTypeOf, useReadingSession } from '@/lib/view/reading-telemetry';
+import { detailImpressionSourceOf, dwellContentTypeOf, useReadingSession, useViewAttribution } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -177,7 +177,10 @@ export default function PostDetailScreen() {
   const body = postDetailBodyOf({ served: model !== undefined, visitor, refused: isRefusal(post.error), failed: post.isError });
   /* LA LECTURE DU DÉTAIL (#10401) — ouvrir une publication est une
      impression `detail` ET une vue, comptées tout de suite ; la durée et la
-     séance partent à la sortie. Miroir `PostDetailViewModel` (iOS). */
+     séance partent à la sortie. Miroir `PostDetailViewModel` (iOS). La vue
+     porte PAR OÙ la fiche est arrivée (#10483) : un tap de listing, une
+     notification, un lien de suivi ou de partage, un autre site, ou rien. */
+  const attribution = useViewAttribution();
   useReadingSession({
     postId: model?.id,
     active: model !== undefined,
@@ -185,6 +188,7 @@ export default function PostDetailScreen() {
     surface: 'detail',
     impressionSource: detailImpressionSourceOf(search),
     openView: true,
+    attribution: () => attribution,
   });
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE

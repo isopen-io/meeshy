@@ -91,7 +91,8 @@ export function TargetLink({ target, ...surface }: SurfaceProps & { readonly tar
     case 'thread':
       return <Link to="thread" params={target.params} {...surface} />;
     case 'story':
-      return <Link to="story" params={target.params} {...surface} />;
+      /* `?from=notification` (#10483) — la vue de la story porte la provenance `notification`. */
+      return <Link to="story" params={target.params} search={{ from: 'notification' }} {...surface} />;
     case 'post':
       /* `?from=notification` (#10483) — le détail compte son impression en
          `notification`, pas en `detail`. */

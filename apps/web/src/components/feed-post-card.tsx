@@ -22,7 +22,9 @@ import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
 import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
 import type { ContentSurface, ImpressionSource } from '@/lib/api/social-events';
-import { useImpressionRef } from '@/lib/view/reading-telemetry';
+import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
+import { openOriginOfSurface } from '@/lib/view/content-open';
+import { openLinkProps, useImpressionRef } from '@/lib/view/reading-telemetry';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -128,7 +130,7 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
  * grande porte (`grandesPortes`, dérivée du relevé). Le calque du texte peut
  * donc faire une ligne de haut sans que rien ne devienne inatteignable.
  */
-function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail: boolean; readonly hosts: CardHosts }) {
+function FeedPostHeader({ model, storyRing, mood, isDetail, openOrigin, hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail: boolean; readonly openOrigin: OpenOrigin | null; readonly hosts: CardHosts }) {
   const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
@@ -171,6 +173,7 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, hosts }: { readonly 
             <Link
               to="post"
               params={{ post: model.id }}
+              {...openLinkProps(model.id, openOrigin)}
               aria-label={translate(language, 'feed.post.open', { author: model.author.name })}
               data-feed-post-open="heure"
               className="inline-flex shrink-0 items-center text-check focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -326,7 +329,7 @@ function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardMo
   );
 }
 
-function FeedReelCard({ model, impressionRef, ...hosts }: { readonly model: FeedCardModel; readonly impressionRef: (node: Element | null) => void } & CardHosts) {
+function FeedReelCard({ model, impressionRef, openOrigin, ...hosts }: { readonly model: FeedCardModel; readonly impressionRef: (node: Element | null) => void; readonly openOrigin: OpenOrigin | null } & CardHosts) {
   const poster = reelPosterOf(model);
   const ratio = poster?.ratio ?? 1.25;
   const language = currentInterfaceLanguage();
@@ -358,7 +361,7 @@ function FeedReelCard({ model, impressionRef, ...hosts }: { readonly model: Feed
           le défilement du fil. */}
       <Link
         to="reels"
-        search={{ seed: model.id }}
+        {...openLinkProps(model.id, openOrigin, { seed: model.id })}
         aria-label={translate(language, 'reels.open', { author: model.author.name })}
         draggable={false}
         data-feed-reel-open
@@ -489,10 +492,12 @@ type SceneHosts = {
 function FeedPostOpenZone({
   postId,
   isDetail,
+  openOrigin,
   children,
 }: {
   readonly postId: string;
   readonly isDetail: boolean;
+  readonly openOrigin: OpenOrigin | null;
   readonly children: ReactNode;
 }) {
   if (isDetail) {
@@ -503,6 +508,7 @@ function FeedPostOpenZone({
       <Link
         to="post"
         params={{ post: postId }}
+        {...openLinkProps(postId, openOrigin)}
         aria-hidden
         tabIndex={-1}
         draggable={false}
@@ -625,8 +631,11 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
   // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
   const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface);
+  /* LE TAP OUVRE DEPUIS CE LISTING (#10483) — l'engagement `open` et
+     `?from=<origine>` ; la fiche elle-même n'ouvre rien. */
+  const openOrigin = isDetail ? null : openOriginOfSurface(impressionSurface);
 
-  if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
+  if (model.isReel) return <FeedReelCard model={model} impressionRef={impressionRef} openOrigin={openOrigin} {...hostsOf(hosts)} {...(hosts.menu === undefined ? {} : { menu: hosts.menu })} />;
 
   // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
   // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
@@ -653,9 +662,9 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} isDetail={isDetail} hosts={hosts} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
+      <FeedPostHeader model={model} isDetail={isDetail} openOrigin={openOrigin} hosts={hosts} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
       {bodyText !== undefined ? (
-        <FeedPostOpenZone postId={model.id} isDetail={isDetail}>
+        <FeedPostOpenZone postId={model.id} isDetail={isDetail} openOrigin={openOrigin}>
           <FeedPostText text={bodyText} mentions={model.validatedMentions} />
         </FeedPostOpenZone>
       ) : null}
@@ -679,7 +688,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
           différentes ne s'imbriquent pas. */}
       {body.repostOf !== undefined ? (
         <div className="px-3">
-          <FeedRepostEmbed repost={body.repostOf} />
+          <FeedRepostEmbed repost={body.repostOf} openOrigin={openOrigin} />
         </div>
       ) : null}
       <div className="px-3">

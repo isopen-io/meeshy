@@ -23,6 +23,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
+import type { ViewAttribution } from '@/lib/view/content-open';
 import { useReadingSession } from '@/lib/view/reading-telemetry';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
@@ -83,6 +84,10 @@ export type ReelPageProps = {
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
   readonly onSoundBlocked: () => void;
+  /** PAR OÙ ce réel est arrivé à l'écran (#10483) — l'entrée du lecteur pour
+   * le premier, le balayage pour les suivants (`entryAttribution`). Stable
+   * chez l'hôte : la page ne se re-rend pas pour elle. */
+  readonly viewAttribution?: (postId: string) => ViewAttribution;
   /** Injectable pour les témoins UNIQUEMENT — la production prend les
    * dépendances de `BackgroundTrackAudio` ; sans elle, « la piste protégée
    * est refusée » ne s'éprouve qu'en laissant partir un vrai `fetch`. */
@@ -411,6 +416,7 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
     surface: 'reels',
     impressionSource: 'feed',
     openView: true,
+    ...(props.viewAttribution === undefined ? {} : { attribution: props.viewAttribution }),
   });
   const sceneSound =
     stage.kind === 'scene' &&

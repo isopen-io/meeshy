@@ -19,7 +19,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
-import { useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
+import { openLinkProps, useImpressionRef, useMergedRefs } from '@/lib/view/reading-telemetry';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -273,7 +273,7 @@ function StoryTile({
           {body}
         </Link>
       ) : (
-        <Link to="story" params={{ post: group.entryStoryId }} aria-label={authorAriaLabel} {...linkProps}>
+        <Link to="story" params={{ post: group.entryStoryId }} {...openLinkProps(group.entryStoryId, 'story_rail')} aria-label={authorAriaLabel} {...linkProps}>
           {body}
         </Link>
       )}

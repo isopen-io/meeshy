@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { currentCredential, httpTransport } from '@/lib/api/client';
 import type { Credential } from '@/lib/api/http';
@@ -12,7 +12,12 @@ import {
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
+import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage } from '@/lib/storage';
+
+import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
+
+import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
 
 /**
  * **CE QUE LE LECTEUR A VU, DIT À LA PASSERELLE** (#10401) — le site unique
@@ -194,21 +199,31 @@ export function useReadingSession(params: {
   readonly surface: ContentSurface;
   readonly impressionSource: ImpressionSource | null;
   readonly openView: boolean;
+  /**
+   * PAR OÙ l'écran est arrivé (#10483) — lu à l'ACTIVATION, jamais une
+   * dépendance : la vue d'ouverture et la vue de sortie d'une séance portent
+   * la même provenance. Absent ⇒ la vue n'en porte aucune.
+   */
+  readonly attribution?: (postId: string) => ViewAttribution;
   readonly now?: () => number;
 }): void {
   const { postId, active, contentType, surface, impressionSource, openView } = params;
   const now = params.now ?? Date.now;
   const nowRef = useRef(now);
   nowRef.current = now;
+  const attributionRef = useRef(params.attribution);
+  attributionRef.current = params.attribution;
 
   useEffect(() => {
     if (!active || postId === undefined) return;
     const startedAt = nowRef.current();
+    const attribution = attributionRef.current;
+    const provenance = attribution === undefined ? {} : viewFieldsOf(attribution(postId));
     if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource, surface });
-    if (openView) readingTelemetry.record({ type: 'view', postId, surface });
+    if (openView) readingTelemetry.record({ type: 'view', postId, surface, ...provenance });
     return () => {
       const dwellMs = Math.max(0, nowRef.current() - startedAt);
-      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface });
+      readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface, ...provenance });
       readingTelemetry.record({
         type: 'dwell',
         sessionId: newEngagementSessionId(),
@@ -221,6 +236,53 @@ export function useReadingSession(params: {
       });
     };
   }, [postId, active, contentType, surface, impressionSource, openView]);
+}
+
+/**
+ * **LE TAP SUR UN CONTENU D'UN LISTING** (#10483) — l'engagement d'ouverture
+ * et son listing d'origine. Il ne compte AUCUNE vue : c'est l'écran ouvert
+ * qui la compte, avec sa provenance.
+ */
+export function recordContentOpen(postId: string, origin: OpenOrigin): void {
+  readingTelemetry.record({ type: 'open', postId, origin });
+}
+
+/**
+ * Les props d'un `<Link>` qui OUVRE un contenu depuis un listing : l'adresse
+ * porte `?from=<origine>` (fusionnée à sa propre requête) et le clic envoie
+ * l'engagement `open`. Sans origine (la fiche elle-même), rien n'est ajouté.
+ */
+export function openLinkProps(
+  postId: string,
+  origin: OpenOrigin | null,
+  search: Readonly<Record<string, string>> = {},
+): { readonly search: Record<string, string>; readonly onClick?: () => void } {
+  const merged = { ...search, ...openLinkSearch(origin) };
+  return origin === null ? { search: merged } : { search: merged, onClick: () => recordContentOpen(postId, origin) };
+}
+
+/**
+ * Le référent de l'ATTERRISSAGE — vide dès que le lecteur a avancé dans
+ * l'application. Un objet à méthode, comme `readingTelemetry` : un témoin le
+ * remplace pour jouer une arrivée depuis un autre site.
+ */
+export const arrival = {
+  referrer(): string {
+    if (typeof document === 'undefined' || hasNavigatedInApp()) return '';
+    return document.referrer;
+  },
+};
+
+/**
+ * La provenance d'un écran détail, lue UNE fois à son montage : c'est
+ * l'adresse par laquelle il est entré, pas celle où il en sera dans dix gestes.
+ */
+export function useViewAttribution(): ViewAttribution {
+  const [search] = useSearch();
+  const [attribution] = useState(() =>
+    viewProvenanceOf(search, arrival.referrer(), typeof window === 'undefined' ? '' : window.location.origin),
+  );
+  return attribution;
 }
 
 /**
