@@ -1,4 +1,8 @@
-import type { ScrollContentKind, ScrollContentSummary, ScrollListingSummary, VelocityHistogram } from '@/lib/api/social-events-v2-types';
+import type { ScrollListingSummary, VelocityHistogram } from '@/lib/api/social-events-v2-types';
+
+import { ratio2 } from './content-accumulator';
+
+export { createContentScrollAccumulator } from './content-accumulator';
 
 /**
  * **LE DÉFILEMENT, AGRÉGÉ PAR PASSAGE** (#10509, décision § 5) — jamais par
@@ -19,8 +23,6 @@ const bucketOf = (velocity: number): number => {
   const index = VELOCITY_EDGES.findIndex((edge) => velocity < edge);
   return index === -1 ? VELOCITY_EDGES.length : index;
 };
-
-const ratio2 = (part: number, whole: number): number => (whole <= 0 ? 0 : Math.round((part / whole) * 100) / 100);
 
 export function createListingScrollAccumulator(startedAt: number) {
   let since = startedAt;
@@ -182,39 +184,5 @@ export function bindDecimatedScroll(
     target.removeEventListener('scroll', onScroll);
     if (pending) deps.cancel(handle);
     pending = false;
-  };
-}
-
-/** Le défilement À L'INTÉRIEUR d'un contenu — carrousel, texte long, commentaires, slides. */
-export function createContentScrollAccumulator(params: { readonly contentKind: ScrollContentKind; readonly itemsTotal: number; readonly startedAt: number }) {
-  let index = 0;
-  let maxIndex = 0;
-  let swipes = 0;
-  let maxScroll = 0;
-  let readThrough = 0;
-
-  return {
-    noteIndex(next: number): void {
-      if (next === index) return;
-      swipes += 1;
-      index = next;
-      maxIndex = Math.max(maxIndex, next);
-    },
-    noteFraction(scrollFraction: number, readThroughFraction: number): void {
-      maxScroll = Math.max(maxScroll, scrollFraction);
-      readThrough = Math.max(readThrough, readThroughFraction);
-    },
-    hasActivity: (): boolean => swipes > 0 || maxScroll > 0,
-    summary(at: number): ScrollContentSummary {
-      return {
-        contentKind: params.contentKind,
-        itemsTotal: params.itemsTotal,
-        maxIndexReached: maxIndex,
-        swipes,
-        maxScrollFraction: ratio2(maxScroll, 1),
-        readThroughFraction: ratio2(readThrough, 1),
-        durationMs: Math.max(0, Math.round(at - params.startedAt)),
-      };
-    },
   };
 }

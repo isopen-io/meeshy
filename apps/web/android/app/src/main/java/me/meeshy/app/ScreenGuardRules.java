@@ -28,7 +28,7 @@ final class ScreenGuardRules {
     /** API 35 : `WindowManager.addScreenRecordingCallback`. */
     static final int RECORDING_MIN_SDK = 35;
 
-    /** #10508 — la coque sait-elle qu'une capture d'ecran a eu lieu ? */
+    /** #10508 — la coque sait-elle qu'une capture d'ecran a eu lieu ? Meme seuil que la garde `UPSIDE_DOWN_CAKE` du greffon (garde `android-screen-guard.test.ts`). */
     static boolean detectsScreenshots(int sdk) {
         return sdk >= SCREENSHOT_MIN_SDK;
     }

@@ -6,7 +6,8 @@ import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { depthOf, useContentScrollTelemetry, type ContentScrollProbe } from './content-scroll';
+import { useContentScrollTelemetry, type ContentScrollProbe } from './content-scroll';
+import { depthOf } from './scroll-depth';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 let v2: SocialEventV2Input[] = [];

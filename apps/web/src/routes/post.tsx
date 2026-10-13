@@ -1,4 +1,4 @@
-import { useScrollDepthTelemetry } from '@/lib/telemetry/content-scroll';
+import { useScrollDepthTelemetry } from '@/lib/telemetry/scroll-depth';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
