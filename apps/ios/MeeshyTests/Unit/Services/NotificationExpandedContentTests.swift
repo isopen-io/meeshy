@@ -251,6 +251,25 @@ final class NotificationExpandedContentTests: XCTestCase {
         XCTAssertEqual(resolve(payload), .ephemeral(deadline: Date(timeIntervalSince1970: 1_800_000_300)))
     }
 
+    func test_expirySleep_beforeTheDeadline_sleepsUntilIt() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: now.addingTimeInterval(30), now: now), 30_000_000_000)
+    }
+
+    func test_expirySleep_pastTheDeadline_isZero() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: now.addingTimeInterval(-5), now: now), 0)
+    }
+
+    func test_expirySleep_absurdDeadlines_areCapped_neverTrapping() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let cap = NotificationExpandedContent.expirySleepCapNanoseconds
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: .distantFuture, now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .greatestFiniteMagnitude), now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .infinity), now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .nan), now: now), cap)
+    }
+
     func test_countdownRange_beforeTheDeadline_runsFromNowToTheDeadline() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let deadline = now.addingTimeInterval(300)

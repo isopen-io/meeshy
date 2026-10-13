@@ -75,6 +75,21 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
         min(now, deadline)...deadline
     }
 
+    /// Plafond du sommeil avant de retirer une notification d'éphémère :
+    /// sept jours, au-delà de toute durée d'éphémère.
+    static let expirySleepCapNanoseconds: UInt64 = 7 * 24 * 3_600 * 1_000_000_000
+
+    /// Le sommeil, en nanosecondes, jusqu'à l'échéance. L'échéance vient de la
+    /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit
+    /// jamais faire piéger la conversion en `UInt64` — elle est plafonnée.
+    static func expirySleepNanoseconds(deadline: Date, now: Date) -> UInt64 {
+        let delay = deadline.timeIntervalSince(now)
+        guard delay.isFinite else { return expirySleepCapNanoseconds }
+        guard delay > 0 else { return 0 }
+        let cap = Double(expirySleepCapNanoseconds)
+        return UInt64(min(delay * 1_000_000_000, cap))
+    }
+
     /// Le fichier à jouer : celui que l'extension de service a déjà ATTACHÉ
     /// (sur disque, sans réseau), sinon la piste distante — la même, élue par
     /// le Prisme côté serveur.

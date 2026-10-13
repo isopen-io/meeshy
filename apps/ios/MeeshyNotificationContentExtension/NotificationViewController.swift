@@ -50,9 +50,9 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     /// retirent aussi, mais aucun ne tourne pendant qu'elle est déployée.
     private func scheduleExpiry(at deadline: Date, identifier: String) {
         expiry?.cancel()
-        let delay = max(0, deadline.timeIntervalSinceNow)
+        let sleep = NotificationExpandedContent.expirySleepNanoseconds(deadline: deadline, now: Date())
         expiry = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: sleep)
             guard !Task.isCancelled else { return }
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
             self?.extensionContext?.dismissNotificationContentExtension()
