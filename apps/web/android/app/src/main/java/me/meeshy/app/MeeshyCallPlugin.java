@@ -110,6 +110,7 @@ public class MeeshyCallPlugin extends Plugin {
         video = wantsVideo;
         CallForegroundService.start(getContext(), wantsVideo);
         keepScreenOn(true);
+        if (starting) volumeKeys(true);
         if (starting && audio != null) {
             audio.setMode(AudioManager.MODE_IN_COMMUNICATION);
             applyRoute(audio, CallAudioRoutes.defaultRoute(wantsVideo, CallAudioRoutes.available(deviceTypes(audio))));
@@ -268,7 +269,15 @@ public class MeeshyCallPlugin extends Plugin {
         updateProximity();
         AudioManager audio = audio();
         if (wasActive && audio != null) restoreAudio(audio);
+        if (wasActive) volumeKeys(false);
         route = null;
+    }
+
+    /** #10375 — pendant l'appel, les touches de volume reglent la voix ; ensuite, les medias. */
+    private void volumeKeys(boolean inCall) {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> activity.setVolumeControlStream(VolumeStreamRules.stream(inCall)));
     }
 
     private AudioManager audio() {
