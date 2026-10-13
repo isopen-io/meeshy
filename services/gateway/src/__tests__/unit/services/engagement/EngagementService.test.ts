@@ -779,6 +779,22 @@ describe('EngagementService level tracking (#5545)', () => {
     });
   });
 
+  it.each([
+    ['{ $numberLong }', { $numberLong: '10' }],
+    ['{ $numberInt }', { $numberInt: '10' }],
+    ['{ $numberDouble }', { $numberDouble: '10' }],
+  ])('awards LEVEL_UP when the raw command returns the new score as %s (#10541)', async (_form, engagementScore) => {
+    const create = jest.fn().mockResolvedValue({});
+    const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore, levelRecord: { $numberLong: '0' } } });
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private');
+
+    expect(create).toHaveBeenCalledWith({ data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' } });
+  });
+
   it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
     const create = jest.fn().mockRejectedValue(p2002Error());
     const prisma = makeLevelPrisma({ create, runCommandRaw: makeRawScore(10) });

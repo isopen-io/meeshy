@@ -75,6 +75,19 @@ const pointsHeld = (db: FakeGameDb): number =>
 
 const score = (db: FakeGameDb): number => (db.user.rows.find((row) => row.id === USER)?.engagementScore as number | undefined) ?? 0;
 
+/**
+ * Les missions du jour déjà tirées, toutes sur un geste que ces témoins ne font
+ * pas : le crédit observé est celui du SEUL geste, quel que soit le tirage du jour.
+ */
+const missionsAwaitOtherGestures = (db: FakeGameDb) =>
+  db.dailyMission.rows.push(
+    ...[0, 1, 2].map((slot) => ({
+      id: `m-other-${slot}`, userId: USER, dayKey: dayKey(), slot, templateKey: 'publish-posts', difficulty: 'easy',
+      signal: 'axis:content.post', prism: false, target: 2, progress: 0, reward: 60, glory: 0, seen: [],
+      completedAt: null, paidPoints: null, rerolledAt: null,
+    })),
+  );
+
 const verifiedAccount = (fields: Record<string, unknown> = {}): FakeGameDb => {
   const db = fakeGameDb();
   seedUser(db, { engagementScore: 0, emailVerifiedAt: new Date('2026-01-01T00:00:00Z'), ...fields });
@@ -130,7 +143,7 @@ describe.each(BROKEN_COLUMNS)('une ligne dont la colonne `points` est $name', ({
     expect(pointsHeld(db)).toBe(score(db));
   });
 
-  it('une reprise ne débite le score que de ce que le compteur a rendu', async () => {
+  it('une reprise prend aux autres compteurs ce que la ligne ne peut pas rendre, et le score perd autant', async () => {
     const db = verifiedAccount();
     const engagement = service(db);
     await engagement.recordActivity(USER, 'content.reel', { targetId: 'r1', variant: 'public' });
@@ -141,10 +154,15 @@ describe.each(BROKEN_COLUMNS)('une ligne dont la colonne `points` est $name', ({
     const row = db.engagementCounter.rows.find((r) => r.axisKey === 'content.reel')!;
     delete row.points;
     Object.assign(row, column);
+    seedCounter(db, 'conversation.private', { count: 50, points: 5000 });
+    db.user.rows.find((r) => r.id === USER)!.engagementScore = credited + 5000;
     const gapBefore = score(db) - pointsHeld(db);
 
     await engagement.reclaimContent(USER, 'content.reel', 'r1');
 
+    expect(score(db)).toBe(5000);
+    expect(rawPoints(db, 'conversation.private')).toBe(5000 - credited);
+    expect(db.engagementCounter.rows.find((r) => r.axisKey === 'conversation.private')?.count).toBe(50);
     expect(score(db) - pointsHeld(db)).toBe(gapBefore);
   });
 
@@ -170,28 +188,89 @@ describe.each(BROKEN_COLUMNS)('une ligne dont la colonne `points` est $name', ({
   });
 });
 
-describe('une reprise sur un compteur que la frappe a déjà entamé', () => {
-  it('rend ce que le compteur tient encore, et le score ne perd rien de plus', async () => {
-    const db = verifiedAccount();
+/**
+ * Le scénario de l'audit adversarial du 2026-10-13, chiffres exacts. La frappe
+ * retire au score le PRIX d'une Meesh, pas les points du contenu : elle les
+ * prend au rang le plus renouvelable qui en tient. Une reprise bornée au seul
+ * compteur du contenu laissait donc au compte 1 221 points d'un contenu
+ * supprimé, devenus une Meesh gratuite — rejouable chaque jour.
+ */
+describe('publier, frapper, supprimer : un contenu retiré rend TOUS ses points', () => {
+  const PRICE = meeshPrice(1);
+
+  const publishedThenMinted = async () => {
+    // Aucun niveau record : le Vent arrière (+25 % sous le record) ne gonfle pas les crédits.
+    const db = verifiedAccount({ engagementScore: 5000, meeshBalance: 0, meeshMintedLifetime: 0 });
+    seedCounter(db, 'conversation.private', { count: 50, points: 5000 });
+    missionsAwaitOtherGestures(db);
     const engagement = service(db);
     await engagement.recordActivity(USER, 'content.reel', { targetId: 'r1', variant: 'public' });
-    const credited = score(db);
-    const minted = Math.floor(credited / 4);
-    // Une frappe a repris `minted` points : au compteur ET au score, d'un même montant.
-    const row = db.engagementCounter.rows.find((r) => r.axisKey === 'content.reel')!;
-    row.points = credited - minted;
-    db.user.rows.find((r) => r.id === USER)!.engagementScore = credited - minted;
-    seedCounter(db, 'content.text_message', { count: 10, points: 0 });
-    await engagement.creditGamePoints(USER, 300, 'content.text_message');
+    await engagement.recordActivity(USER, 'content.reel', { targetId: 'r2', variant: 'public' });
+    expect(rawPoints(db, 'content.reel')).toBe(2000);
+    expect(score(db)).toBe(7000);
+    const outcome = await new MeeshService(db.prisma).mint(USER, 'mint-between-publish-and-delete');
+    expect(outcome.status).toBe('minted');
+    expect(PRICE).toBe(1221);
+    expect(rawPoints(db, 'content.reel')).toBe(779);
+    expect(score(db)).toBe(5779);
+    return { db, engagement };
+  };
+
+  it('le score retombe à 3 779 : les 2 000 points des deux réels supprimés sont repris, pas 779', async () => {
+    const { db, engagement } = await publishedThenMinted();
 
     await engagement.reclaimContent(USER, 'content.reel', 'r1');
+    await engagement.reclaimContent(USER, 'content.reel', 'r2');
 
+    expect(score(db)).toBe(3779);
     expect(rawPoints(db, 'content.reel')).toBe(0);
-    expect(score(db)).toBe(300);
+    expect(rawPoints(db, 'conversation.private')).toBe(3779);
     expect(pointsHeld(db)).toBe(score(db));
   });
 
-  it('une ligne déjà vide ne rend rien : le score ne bouge pas', async () => {
+  it('le reliquat se prend dans l’ordre de débit de la frappe : le texte avant les conversations', async () => {
+    const { db, engagement } = await publishedThenMinted();
+    seedCounter(db, 'content.text_message', { count: 30, points: 90 });
+    db.user.rows.find((r) => r.id === USER)!.engagementScore = score(db) + 90;
+
+    await engagement.reclaimContent(USER, 'content.reel', 'r1');
+    await engagement.reclaimContent(USER, 'content.reel', 'r2');
+
+    expect(rawPoints(db, 'content.text_message')).toBe(0);
+    expect(rawPoints(db, 'conversation.private')).toBe(5000 - (PRICE - 90));
+    expect(pointsHeld(db)).toBe(score(db));
+  });
+
+  it('le reliquat ne retire AUCUNE action aux autres compteurs : c’est une reprise de points, pas une frappe', async () => {
+    const { db, engagement } = await publishedThenMinted();
+    seedCounter(db, 'content.text_message', { count: 30, points: 90 });
+
+    await engagement.reclaimContent(USER, 'content.reel', 'r1');
+    await engagement.reclaimContent(USER, 'content.reel', 'r2');
+
+    expect(db.engagementCounter.rows.find((r) => r.axisKey === 'content.text_message')?.count).toBe(30);
+    expect(db.engagementCounter.rows.find((r) => r.axisKey === 'conversation.private')?.count).toBe(50);
+  });
+});
+
+describe('une reprise sur un compte qui n’a plus rien nulle part', () => {
+  it('reprend ce qui existe, et ni le score ni un compteur ne passe sous zéro', async () => {
+    const db = verifiedAccount();
+    const engagement = service(db);
+    await engagement.recordActivity(USER, 'content.reel', { targetId: 'r1', variant: 'public' });
+    expect(score(db)).toBe(1000);
+    // Le compte a dépensé le reste : 300 points tenus, sur deux compteurs.
+    db.engagementCounter.rows.find((r) => r.axisKey === 'content.reel')!.points = 200;
+    seedCounter(db, 'tool.sticker', { count: 100, points: 100 });
+    db.user.rows.find((r) => r.id === USER)!.engagementScore = 300;
+
+    await engagement.reclaimContent(USER, 'content.reel', 'r1');
+
+    expect(score(db)).toBe(0);
+    expect(db.engagementCounter.rows.filter((r) => r.userId === USER).map((r) => r.points)).toEqual([0, 0]);
+  });
+
+  it('une ligne vide et aucun autre compteur : rien ne bouge, pas même le compte d’actions', async () => {
     const db = verifiedAccount();
     const engagement = service(db);
     await engagement.recordActivity(USER, 'content.reel', { targetId: 'r1', variant: 'public' });
@@ -199,13 +278,11 @@ describe('une reprise sur un compteur que la frappe a déjà entamé', () => {
     const actions = row.count;
     row.points = 0;
     db.user.rows.find((r) => r.id === USER)!.engagementScore = 0;
-    seedCounter(db, 'content.text_message', { count: 10, points: 0 });
-    await engagement.creditGamePoints(USER, 300, 'content.text_message');
 
     await engagement.reclaimContent(USER, 'content.reel', 'r1');
 
-    expect(score(db)).toBe(300);
-    expect(pointsHeld(db)).toBe(300);
+    expect(score(db)).toBe(0);
+    expect(row.points).toBe(0);
     expect(row.count).toBe(actions);
   });
 });
