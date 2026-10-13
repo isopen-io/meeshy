@@ -135,3 +135,13 @@ struct ComposerTopBar: View {
         }
     }
 }
+
+/// **Qui PEINT le visage d'un menu de la barre haute** (#10542).
+nonisolated enum ComposerTopBarMenuFace: Equatable, Sendable {
+    /// Le visage est le libellé du `Menu`.
+    case label
+    /// Le visage est peint HORS du `Menu`, qui ne garde qu'une cible vide.
+    case detached
+
+    static func resolve(nativeGlass: Bool) -> ComposerTopBarMenuFace { .label }
+}

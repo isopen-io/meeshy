@@ -211,4 +211,29 @@ nonisolated enum ComposerRailGeometry {
     /// Une rangée se mesure LÀ, jamais sur l'appareil de développement : le
     /// débordement du 2026-08-31 a été vu sur 393 pt, il commençait à 375.
     static let narrowestSupportedScreenWidth: CGFloat = 375
+
+    // MARK: - La bande VERTICALE du rail droit (#10542)
+
+    /// **La hauteur qu'une colonne flottante REQUIERT** : `n × 44 + (n−1) × 2`.
+    /// Quinze entrées — les sous-outils d'un texte, ses actions, le `(x)` et
+    /// l'historique — demandent **688 pt**, quand une carte 9:16 de 393 pt de
+    /// large en offre 699. Le ressort d'une colonne dont le pied reste au pouce
+    /// ajoute son plancher et l'écart qui l'entoure.
+    static func columnHeight(entries: Int, withSpring: Bool = false) -> CGFloat {
+        guard entries > 0 else { return 0 }
+        return CGFloat(entries) * railWidth
+            + CGFloat(entries - 1 + (withSpring ? 2 : 0)) * floatingEntrySpacing
+    }
+
+    /// **Où le rail droit se pose dans la scène libre** — ses deux marges,
+    /// depuis le haut et depuis le bas de cette zone.
+    static func trailingRailBand(freeZone: CGRect, card: CGRect, columnHeight: CGFloat) -> ComposerRailBand {
+        ComposerRailBand(top: gutter, bottom: floatingBottomInset)
+    }
+}
+
+/// Les deux marges verticales d'un rail dans la scène libre (#10542).
+nonisolated struct ComposerRailBand: Equatable, Sendable {
+    let top: CGFloat
+    let bottom: CGFloat
 }
