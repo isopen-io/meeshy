@@ -4,7 +4,9 @@
  *
  *  - `ContentEvent` : `actorKind` repasse à `none`, `userId` et tout ce qui
  *    relie des événements entre eux disparaissent (session d'application,
- *    page de fil, session de listing, recherche) ; l'OS retombe à sa version
+ *    page de fil, session de listing, recherche, clé de l'impression mesurée,
+ *    identifiant de la mutation — ces deux derniers pointent une ligne qui
+ *    porte encore le compte) ; l'OS retombe à sa version
  *    majeure et le réseau à son type — la forme d'une ligne jamais consentie ;
  *  - `PostImpression` : la ligne garde son compte (elle est de la MESURE, et
  *    la suppression du compte l'efface), mais perd sa session et sa page.
@@ -34,6 +36,7 @@ export async function detachBehaviourOf(prisma: RawCommandRunner, userId: string
             'userId', 'appSessionId', 'deviceClass',
             'listing.feedRequestId', 'listing.listingSessionId',
             'props.searchNonce', 'props.queryFingerprint',
+            'props.impressionEventKey', 'props.mutationId',
           ],
         },
       ],

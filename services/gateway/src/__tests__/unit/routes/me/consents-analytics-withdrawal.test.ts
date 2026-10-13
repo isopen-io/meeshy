@@ -70,6 +70,19 @@ describe('PUT /me/consents/analytics — le retrait détache le comportement dé
     await app.close();
   });
 
+  it('retirer l’analyse ôte des lignes détachées ce qui les relierait encore à une ligne portant le compte', async () => {
+    const { prisma, commands } = fakePrisma();
+    const app = await buildApp(prisma);
+    await put(app, 'analytics', false);
+
+    const detach = commands.find((command) => command.update === 'ContentEvent') as {
+      updates: { u: Record<string, unknown>[] }[];
+    };
+    const unset = detach.updates.flatMap((update) => update.u).flatMap((stage) => (stage.$unset as string[] | undefined) ?? []);
+    expect(unset).toEqual(expect.arrayContaining(['userId', 'props.impressionEventKey', 'props.mutationId']));
+    await app.close();
+  });
+
   it('retirer le traitement des données (parent de l’analyse) détache aussi', async () => {
     const { prisma, commands } = fakePrisma();
     const app = await buildApp(prisma);
