@@ -494,6 +494,10 @@ final class DependencyContainer {
                     // PendingStatusQueue. (pending_mark_read App Group est
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
                     ImpressionBatcher.purgeAllPendingImpressions()
+                    // #10500 — la file v2 et l'approximation des contenus
+                    // affichés appartiennent au compte sortant.
+                    await SocialEventsV2Outbox.shared.purgeAll()
+                    await MainActor.run { RecentDisplayCaptureSource.shared.reset() }
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,
                     // sans compte : un post vu des deux comptes rendait au

@@ -225,6 +225,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
     var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
     var recordedSocialEvents: [SocialEvent] { recordedSocialEventBatches.flatMap { $0 } }
+    /// #10500 — les lots v2, tels que partis sur le fil (corps JSON décodé).
+    var recordedSocialEventsV2Bodies: [[String: Any]] = []
+    var recordSocialEventsV2Result: Result<SocialEventsV2Receipt, Error> = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
+    var recordedSocialEventsV2Types: [String] {
+        recordedSocialEventsV2Bodies.flatMap { ($0["events"] as? [[String: Any]] ?? []).compactMap { $0["type"] as? String } }
+    }
     /// Les impressions reçues par la porte, dans l'ordre.
     var recordedImpressions: [SocialEvent] {
         recordedSocialEvents.filter { if case .impression = $0 { return true } else { return false } }
@@ -672,6 +678,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getCommentsResult.get()
     }
 
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        recordedSocialEventsV2Bodies.append((try? JSONSerialization.jsonObject(with: body) as? [String: Any]) ?? [:])
+        return try recordSocialEventsV2Result.get()
+    }
+
     func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         recordSocialEventsCallCount += 1
         recordedSocialEventBatches.append(events)
@@ -822,5 +833,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         recordedSocialEventsCredentials = []
         recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
         recordSocialEventsResultsQueue = []
+        recordedSocialEventsV2Bodies = []
+        recordSocialEventsV2Result = .success(SocialEventsV2Receipt(recorded: 0, rejected: 0))
     }
 }

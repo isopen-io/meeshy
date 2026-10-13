@@ -389,9 +389,17 @@ public extension PostServiceProviding {
 public final class PostService: PostServiceProviding, @unchecked Sendable {
     public static let shared = PostService()
     private let api: APIClientProviding
+    /// #10502 — les interactions RÉUSSIES par appel direct (réels, profil,
+    /// favoris, hashtag) ; la file durable émet les siennes à l'envoi.
+    private let socialEvents: SocialEventsV2Hub
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
+        self.socialEvents = socialEvents
+    }
+
+    private func emitInteraction(_ action: SocialInteraction.Action, postId: String, destination: SocialInteraction.ShareDestination? = nil) {
+        socialEvents.emit(SocialInteractionEvents.interaction(action, on: SocialTarget(kind: .post, id: postId), destination: destination))
     }
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -483,14 +491,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func like(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdLike(postId: postId), method: "POST")
+        emitInteraction(.react, postId: postId)
     }
 
     public func unlike(postId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdLike(postId: postId))
+        emitInteraction(.unreact, postId: postId)
     }
 
     public func bookmark(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(PostsEndpoint.byPostIdBookmark(postId: postId), method: "POST")
+        emitInteraction(.save, postId: postId)
     }
 
     func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
@@ -694,6 +705,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             method: "POST",
             body: bodyData
         )
+        emitInteraction(.share, postId: postId, destination: SocialInteractionEvents.shareDestination(platform: platform))
         return response.data
     }
 
@@ -725,6 +737,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func removeBookmark(postId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdBookmark(postId: postId))
+        emitInteraction(.unsave, postId: postId)
     }
 
     public func getPost(postId: String) async throws -> APIPost {

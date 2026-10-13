@@ -1,0 +1,103 @@
+import XCTest
+import MeeshySDK
+@testable import Meeshy
+
+/// #10500 — la file v2 de l'app : requête à part, contexte une fois, sommeil
+/// après un 400, types d'un visiteur, échantillonnage servi.
+@MainActor
+final class SocialEventsV2ReporterTests: XCTestCase {
+
+    @MainActor
+    private final class StubContext: SocialEventContextProviding {
+        nonisolated deinit {}
+        func appSessionId(at now: Date) -> String { "sess-1" }
+        func context(at now: Date, sampling: [String: Double]) -> SocialEventContext {
+            SocialEventContext(appSessionId: "sess-1", uiLanguage: "fr", consent: .granted, sampling: sampling.isEmpty ? nil : sampling)
+        }
+    }
+
+    private static let epoch = Date(timeIntervalSince1970: 1_760_000_000)
+
+    private func makeReporter(
+        service: MockPostService,
+        identity: SocialEventsV2Identity? = SocialEventsV2Identity(owner: "u1", credential: .account)
+    ) -> SocialEventsV2Reporter {
+        SocialEventsV2Reporter(
+            outbox: SocialEventsV2Outbox(dbPath: nil, clock: { Self.epoch }),
+            postService: service,
+            contextProvider: StubContext(),
+            identity: { identity },
+            now: { Self.epoch },
+            flushInterval: .seconds(3_600),
+            observesLifecycle: false
+        )
+    }
+
+    private func save(_ id: String = "p1") -> SocialEventV2 {
+        SocialEventV2(occurredAt: Self.epoch, target: SocialTarget(kind: .post, id: id), payload: .interaction(SocialInteraction(action: .save)))
+    }
+
+    private func scroll() -> SocialEventV2 {
+        var session = ScrollListingSession(listingSessionId: "L", startedAtMs: 0)
+        let summary = session.finish(atMs: 1_000)!
+        return SocialEventV2(occurredAt: Self.epoch, target: SocialTarget(kind: .post, id: "p1"), payload: .scrollListing(summary))
+    }
+
+    func test_emitThenFlush_sendsOneV2Request_withTheContextOnce() async {
+        let service = MockPostService()
+        let reporter = makeReporter(service: service)
+
+        reporter.emit(save("p1"))
+        reporter.emit(save("p2"))
+        await reporter.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventsV2Bodies.count, 1)
+        XCTAssertEqual(service.recordedSocialEventsV2Types, ["interaction", "interaction"])
+        XCTAssertTrue(service.recordedSocialEventBatches.isEmpty, "aucun comptage ne part avec la v2")
+        let context = service.recordedSocialEventsV2Bodies.first?["context"] as? [String: Any]
+        XCTAssertEqual(context?["appSessionId"] as? String, "sess-1")
+        XCTAssertEqual(context?["schemaVersion"] as? Int, 2)
+    }
+
+    func test_a400_dropsTheV2Queue_andSleeps() async {
+        let service = MockPostService()
+        service.recordSocialEventsV2Result = .failure(MeeshyError.server(statusCode: 400, message: "Invalid discriminator value"))
+        let reporter = makeReporter(service: service)
+
+        reporter.emit(save())
+        await reporter.flushNow()
+        XCTAssertFalse(reporter.gate.isOpen(at: Self.epoch))
+
+        service.recordSocialEventsV2Result = .success(SocialEventsV2Receipt(recorded: 1, rejected: 0))
+        reporter.emit(save("p2"))
+        await reporter.flushNow()
+        XCTAssertEqual(service.recordedSocialEventsV2Bodies.count, 1, "la file dort : rien ne repart avant une heure")
+    }
+
+    func test_aVisitor_neverSendsAnInteraction_butSendsAScroll() async {
+        let service = MockPostService()
+        let reporter = makeReporter(service: service, identity: SocialEventsV2Identity(owner: "visitor:abc", credential: .visitor("visitor_k")))
+
+        reporter.emit(save())
+        reporter.emit(scroll())
+        await reporter.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventsV2Types, ["scroll"])
+        let context = service.recordedSocialEventsV2Bodies.first?["context"] as? [String: Any]
+        XCTAssertNil(context?["appSessionId"], "un visiteur ne porte aucun identifiant de session")
+    }
+
+    func test_aServedSamplingOfZero_dropsTheNextScroll_butNeverAnInteraction() async {
+        let service = MockPostService()
+        service.recordSocialEventsV2Result = .success(SocialEventsV2Receipt(recorded: 1, rejected: 0, sampling: ["scroll": 0]))
+        let reporter = makeReporter(service: service)
+
+        reporter.emit(save())
+        await reporter.flushNow()
+        reporter.emit(scroll())
+        reporter.emit(save("p2"))
+        await reporter.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventsV2Types, ["interaction", "interaction"])
+    }
+}

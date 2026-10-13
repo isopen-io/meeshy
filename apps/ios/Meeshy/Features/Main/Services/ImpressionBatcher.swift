@@ -94,6 +94,7 @@ final class ImpressionBatcher: ObservableObject {
     /// Le post `postId` vient d'apparaître à l'écran.
     func record(_ postId: String) {
         guard !postId.isEmpty else { return }
+        RecentDisplayCaptureSource.shared.noteDisplayed(postId: postId, source: source, surface: surface)
         adoptCurrentAccount()
         pending.append(postId)
         persist()

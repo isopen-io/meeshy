@@ -137,7 +137,9 @@ public struct SocialSurface: RawRepresentable, Encodable, Sendable, Equatable, H
 public struct SocialEventV2: Encodable, Sendable, Equatable {
     public let eventId: String
     public let occurredAt: Date
-    public let target: SocialTarget
+    /// Absente d'un résumé de LISTING (`scroll.listing`) : il ne porte sur
+    /// aucun contenu en particulier.
+    public let target: SocialTarget?
     public let surface: SocialSurface?
     public let listing: SocialListing?
     public let prism: SocialPrism?
@@ -146,7 +148,7 @@ public struct SocialEventV2: Encodable, Sendable, Equatable {
     public init(
         eventId: String = SocialEventV2.newEventId(),
         occurredAt: Date = Date(),
-        target: SocialTarget,
+        target: SocialTarget?,
         surface: SocialSurface? = nil,
         listing: SocialListing? = nil,
         prism: SocialPrism? = nil,
@@ -177,7 +179,7 @@ public struct SocialEventV2: Encodable, Sendable, Equatable {
         try container.encode(payload.action, forKey: .action)
         try container.encode(eventId, forKey: .eventId)
         try container.encode(SocialEventsV2Wire.isoString(occurredAt), forKey: .occurredAt)
-        try container.encode(target, forKey: .target)
+        try container.encodeIfPresent(target, forKey: .target)
         try container.encodeIfPresent(surface, forKey: .surface)
         try container.encodeIfPresent(listing, forKey: .listing)
         try container.encodeIfPresent(prism, forKey: .prism)
@@ -235,6 +237,15 @@ public enum SocialEventV2Payload: Sendable, Equatable {
     public var isSampleable: Bool {
         switch self {
         case .scrollListing, .scrollContent, .playback, .visibility: return true
+        default: return false
+        }
+    }
+
+    /// Les types qu'un lecteur SANS compte peut produire (`ANONYMOUS_V2_TYPES`) :
+    /// ni interaction, ni négatif, ni story, ni notification.
+    public var isAllowedForVisitor: Bool {
+        switch self {
+        case .visibility, .playback, .scrollListing, .scrollContent, .screenCapture, .link, .discovery: return true
         default: return false
         }
     }

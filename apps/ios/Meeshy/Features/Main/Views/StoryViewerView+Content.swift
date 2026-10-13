@@ -455,63 +455,13 @@ extension StoryViewerView {
         resumeTimer()
     }
 
-    // MARK: - Navigation
-
-    // Pas de haptic ici : `goToNext`/`goToPrevious` sont aussi le chemin de
-    // l'auto-advance (timer `onCompletion`) — vibrer à chaque slide casse la
-    // fluidité de lecture (retour user 2026-07-13 : « 3 retours haptiques par
-    // slide »). Le tick unique par navigation MANUELLE vit au point de geste
-    // (touchUp nav dans +Canvas, commit de swipe de groupe ci-dessus).
-    func goToNext() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-        guard let group = currentGroup else { return }
-
-        if currentStoryIndex < group.stories.count - 1 {
-            crossFadeStory {
-                currentStoryIndex += 1
-                progressClock.reset()
-            }
-        } else if currentGroupIndex < groups.count - 1 {
-            if isPreviewMode {
-                isPresented = false
-                return
-            }
-            groupTransition(forward: true) {
-                currentGroupIndex += 1
-                currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progressClock.reset()
-            }
-        } else {
-            if isPreviewMode {
-                isPresented = false
-                return
-            }
-            dismissViewer()
-        }
-    }
-
-    func goToPrevious() {
-        guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-
-        if currentStoryIndex > 0 {
-            crossFadeStory {
-                currentStoryIndex -= 1
-                progressClock.reset()
-            }
-        } else if currentGroupIndex > 0 {
-            groupTransition(forward: false) {
-                currentGroupIndex -= 1
-                currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progressClock.reset()
-            }
-        }
-    }
-
     /// True cross-dissolve for stories within the same user.
     /// Old content stays visible (outgoing layer) while new content fades in on top —
     /// eliminates the flash caused by AsyncImage reloading between swaps.
     /// Supports StoryTransitionEffect: fade, zoom, slide, reveal.
-    private func crossFadeStory(update: @escaping () -> Void) {
+    // Non-private : appelée par `goToNext`/`goToPrevious`
+    // (`StoryViewerView+Navigation.swift`).
+    func crossFadeStory(update: @escaping () -> Void) {
         isTransitioning = true
 
         // 1. Snapshot current story as outgoing (already rendered, no reload needed)
@@ -633,27 +583,6 @@ extension StoryViewerView {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 isTransitioning = false
             }
-        }
-    }
-
-    /// Dismiss — shrink to small card and fly toward top
-    func dismissViewer() {
-        guard !isDismissing else { return }
-        isTransitioning = true
-        slideTimer.setPaused(true)
-        // Le son s'éteint en fondu pendant le ressort, avant la coupure de `stopAll()` (#9867).
-        Task { await PlaybackCoordinator.shared.fadeOutAllExternal(duration: 0.4) }
-
-        // isDismissing MUST be inside withAnimation so computed transforms animate
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.82)) {
-            isDismissing = true
-            dragOffset = 0
-            horizontalDrag = 0
-            groupSlide = 0
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            isPresented = false
         }
     }
 

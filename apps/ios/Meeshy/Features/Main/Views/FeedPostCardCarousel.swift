@@ -38,8 +38,11 @@ struct FeedPostCardCarousel: View {
     let captions: [String: String]
     let accentColor: String
     let onOpen: (FeedMedia) -> Void
+    /// #10509 — le contenu dont on mesure le parcours (`scroll.content`).
+    var scrollTarget: SocialTarget? = nil
 
     @State private var index: Int = 0
+    @State private var scrollTracker: ContentScrollTracker?
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
@@ -92,6 +95,16 @@ struct FeedPostCardCarousel: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .adaptiveOnChange(of: index) { _, newIndex in
+            scrollTracker?.noteIndex(newIndex)
+        }
+        .onAppear {
+            guard scrollTracker == nil, let scrollTarget else { return }
+            scrollTracker = ContentScrollTracker(target: scrollTarget, contentKind: .carousel, itemsTotal: media.count, surface: SocialSurface(.feed))
+        }
+        .onDisappear {
+            scrollTracker?.finish()
+        }
     }
 
     @ViewBuilder

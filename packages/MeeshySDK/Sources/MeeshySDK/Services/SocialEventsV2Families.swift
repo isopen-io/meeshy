@@ -124,7 +124,7 @@ public struct SocialDiscovery: Encodable, Sendable, Equatable {
     }
 
     public enum ResultKind: String, Encodable, Sendable, CaseIterable {
-        case post, user, hashtag, sound, community, conversation, other
+        case post, profile, hashtag, sound, community, mixed, other
     }
 
     public let action: Action
@@ -213,12 +213,13 @@ public struct SocialNotificationEvent: Encodable, Sendable, Equatable {
 public struct SocialVisibleTarget: Encodable, Sendable, Equatable {
     public let kind: SocialTargetKind
     public let id: String
-    public let visibleFraction: Double
+    /// `nil` : la surface sait que le contenu est à l'écran, pas dans quelle part.
+    public let visibleFraction: Double?
 
-    public init(kind: SocialTargetKind, id: String, visibleFraction: Double) {
+    public init(kind: SocialTargetKind, id: String, visibleFraction: Double? = nil) {
         self.kind = kind
         self.id = id
-        self.visibleFraction = SocialEventsV2Wire.fraction(visibleFraction)
+        self.visibleFraction = visibleFraction.map(SocialEventsV2Wire.fraction)
     }
 }
 

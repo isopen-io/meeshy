@@ -27,7 +27,17 @@ struct OutboxDispatcher: OutboxDispatching {
         return d
     }()
 
+    /// #10502 — une mutation ENVOYÉE qui est une interaction avec un contenu
+    /// (réaction, repost, commentaire, blocage) s'émet en événement v2, daté
+    /// de son enfilement. Un échec ne s'émet pas : le rejeu le fera.
     func dispatch(_ record: OutboxRecord) async throws {
+        try await route(record)
+        if let event = SocialInteractionEvents.event(forDelivered: record) {
+            SocialEventsV2Hub.shared.emit(event)
+        }
+    }
+
+    private func route(_ record: OutboxRecord) async throws {
         switch record.kind {
         case .sendMessage:
             try await dispatchSendMessage(record)

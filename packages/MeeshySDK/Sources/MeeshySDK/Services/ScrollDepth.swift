@@ -206,11 +206,11 @@ public struct ScrollContentSummary: Encodable, Sendable, Equatable {
     }
 
     public let contentKind: ContentKind
-    public let itemsTotal: Int?
-    public let maxIndexReached: Int?
+    public let itemsTotal: Int
+    public let maxIndexReached: Int
     public let swipes: Int
-    public let maxScrollFraction: Double?
-    public let readThroughFraction: Double?
+    public let maxScrollFraction: Double
+    public let readThroughFraction: Double
     public let durationMs: Int
 }
 
@@ -248,11 +248,11 @@ public struct ScrollContentAccumulator: Sendable, Equatable {
         guard maxIndex != nil || maxFraction != nil else { return nil }
         return ScrollContentSummary(
             contentKind: contentKind,
-            itemsTotal: itemsTotal,
-            maxIndexReached: maxIndex,
+            itemsTotal: itemsTotal ?? 0,
+            maxIndexReached: maxIndex ?? 0,
             swipes: swipes,
-            maxScrollFraction: maxFraction,
-            readThroughFraction: readThrough,
+            maxScrollFraction: maxFraction ?? 0,
+            readThroughFraction: readThrough ?? maxFraction ?? 0,
             durationMs: max(0, atMs - startedAtMs)
         )
     }

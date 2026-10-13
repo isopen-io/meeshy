@@ -680,7 +680,7 @@ struct ThemedFeedOverlay: View {
                     },
                     coordinateSpaceName: "feedScroll",
                     onScrollOffsetChange: { offset in
-                        scrollRelay.offset = offset
+                        scrollRelay.relayFeedOffset(offset)
                     },
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
