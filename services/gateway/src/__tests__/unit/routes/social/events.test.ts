@@ -62,6 +62,7 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 
 import {
   registerSocialEventRoutes,
+  socialEventsRateLimit,
   socialEventsRateLimitKey,
   SOCIAL_EVENTS_BATCH_CAP,
 } from '../../../../routes/social/events';
@@ -403,9 +404,16 @@ describe('critère 7.3 — la clé anonyme est la clé de LECTEUR (#10483), jama
     const a = socialEventsRateLimitKey(requete({ userId: USER_ID, postId: VISIBLE_ID, ip: '203.0.113.7' }));
     const b = socialEventsRateLimitKey(requete({ userId: USER_ID, postId: HIDDEN_ID, ip: '198.51.100.9' }));
     expect(a).toBe(`social:events:${USER_ID}`);
-    // Le seau d'un compte ne se scinde PAS par post : 30/min couvre le lot
+    // Le seau d'un compte ne se scinde PAS par post : son débit couvre le lot
     // entier, quel que soit ce qu'il observe.
     expect(a).toBe(b);
+  });
+
+  it('un compte a 120 requêtes par minute — la porte unique reçoit tout ce que six portes se partageaient', () => {
+    const compte = socialEventsRateLimit.max(requete({ userId: USER_ID, postId: VISIBLE_ID }));
+    const visiteur = socialEventsRateLimit.max(requete({ sessionToken: 'jeton-a', postId: VISIBLE_ID }));
+    expect(compte).toBe(120);
+    expect(visiteur).toBe(60);
   });
 });
 

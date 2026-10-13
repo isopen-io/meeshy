@@ -678,7 +678,16 @@ export function socialEventsRateLimitKey(request: FastifyRequest): string {
 }
 
 /**
- * Débits du compte (30/min) et du lecteur anonyme (60/min par clé de lecteur),
+ * Le débit d'un COMPTE sur la porte unique (#10483). Les six anciennes portes
+ * avaient chacune leur seau ; iOS et le web y versent désormais TOUT (impressions
+ * de chaque liste, vues, ouvertures, sessions de lecture) : 30/min faisait perdre
+ * les événements « tirés et oubliés » (ouverture de détail, vue d'une humeur)
+ * dès qu'un fil défilait vite.
+ */
+export const ACCOUNT_SOCIAL_EVENTS_BUDGET = 120;
+
+/**
+ * Débits du compte (ACCOUNT_SOCIAL_EVENTS_BUDGET/min) et du lecteur anonyme (60/min par clé de lecteur),
  * sur la MÊME route ; `max` est une FONCTION pour cela.
  *
  *  - `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut à
@@ -691,7 +700,7 @@ export function socialEventsRateLimitKey(request: FastifyRequest): string {
  */
 export const socialEventsRateLimit = {
   max: (request: FastifyRequest) =>
-    ((request as UnifiedAuthRequest).authContext?.registeredUser ? 30 : ANONYMOUS_READER_BUDGET),
+    ((request as UnifiedAuthRequest).authContext?.registeredUser ? ACCOUNT_SOCIAL_EVENTS_BUDGET : ANONYMOUS_READER_BUDGET),
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
   skipOnError: false,
