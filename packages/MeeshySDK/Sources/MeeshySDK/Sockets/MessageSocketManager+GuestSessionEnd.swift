@@ -18,7 +18,8 @@ extension MessageSocketManager {
     @discardableResult
     func handleSocketError(_ data: [Any], center: NotificationCenter = .default) -> GuestSessionEnd? {
         guard let end = GuestSessionEnd.from(socketErrorPayload: data) else {
-            Logger.socket.error("MessageSocket error: \(data)")
+            // #10482 — un compte supprimé arrête aussi le transport.
+            if handleAccountDeletedError(data, center: center) == nil { Logger.socket.error("MessageSocket error: \(data)") }
             return nil
         }
         Logger.socket.warning("MessageSocket: guest session ended (\(end.rawValue, privacy: .public)) — reconnection stopped")
