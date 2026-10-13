@@ -37,4 +37,13 @@ describe('le retrait du consentement d’analyse détache le comportement déjà
     const unset = unsetOf(updateOf(await commandsOf(USER), 'ContentEvent'));
     expect(unset).toEqual(expect.arrayContaining(['props.impressionEventKey', 'props.mutationId']));
   });
+
+  it('ramène les impressions du compte à ce qu’un compte qui REFUSE l’analyse laisse : le comptage, sans mesure ni contexte', async () => {
+    const update = updateOf(await commandsOf(USER), 'PostImpression');
+    expect(update.q).toEqual({ userId: { $oid: USER } });
+    expect(update.multi).toBe(true);
+    expect(Object.keys((update.u as { $unset: Record<string, string> }).$unset).sort()).toEqual([
+      'appSessionId', 'feedRequestId', 'platform', 'position', 'rankingSource', 'viewable', 'visibleFraction', 'visibleMs',
+    ]);
+  });
 });

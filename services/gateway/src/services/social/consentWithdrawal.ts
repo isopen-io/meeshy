@@ -8,8 +8,10 @@
  *    garde le compte (clé de l'impression comptée, identifiant de la mutation
  *    REST) ; l'OS retombe à sa version
  *    majeure et le réseau à son type — la forme d'une ligne jamais consentie ;
- *  - `PostImpression` : la ligne garde son compte (elle est de la MESURE, et
- *    la suppression du compte l'efface), mais perd sa session et sa page.
+ *  - `PostImpression` : la ligne garde son compte (elle est du COMPTAGE, et
+ *    la suppression du compte l'efface), et retombe à ce qu'un compte qui
+ *    refuse l'analyse laisse : ni session, ni page, ni rang, ni visibilité,
+ *    ni plateforme.
  *
  * Idempotent (rejoué, il ne trouve plus rien à détacher) : deux commandes,
  * quel que soit le volume.
@@ -23,6 +25,12 @@ const firstPart = (field: string, separator: string) => ({
     '$$REMOVE',
   ],
 });
+
+/** Ce qu'une impression d'un compte qui REFUSE l'analyse ne range jamais (`impressionRowOf`). */
+const DENIED_IMPRESSION_UNSET = {
+  appSessionId: '', feedRequestId: '', position: '', rankingSource: '',
+  viewable: '', visibleFraction: '', visibleMs: '', platform: '',
+} as const;
 
 export async function detachBehaviourOf(prisma: RawCommandRunner, userId: string): Promise<void> {
   await prisma.$runCommandRaw({
@@ -45,7 +53,7 @@ export async function detachBehaviourOf(prisma: RawCommandRunner, userId: string
   });
   await prisma.$runCommandRaw({
     update: 'PostImpression',
-    updates: [{ q: { userId: { $oid: userId } }, u: { $unset: { appSessionId: '', feedRequestId: '' } }, multi: true }],
+    updates: [{ q: { userId: { $oid: userId } }, u: { $unset: DENIED_IMPRESSION_UNSET }, multi: true }],
   });
 }
 
