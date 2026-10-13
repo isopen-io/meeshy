@@ -333,7 +333,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             if let token = data.token, let user = data.user {
                 self.requires2FA = false
                 self.twoFactorToken = nil
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+                try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -379,7 +379,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
         switch try await registerHoldingSession(request: request) {
         case .session(let proven, _):
-            openSession(proven)
+            try installSession(proven)
             return .authenticated
         case .verificationRequired(let pending):
             return .verificationRequired(pending)
@@ -398,7 +398,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 return
             }
             if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+                try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -654,16 +654,46 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
+    /// #10446 — la loi de `applySession` : une session ouverte n'accepte que
+    /// son propre utilisateur (rotation), sauf par le changement de compte
+    /// explicite. Un compte actif INCONNU (`nil`) sous une session ouverte
+    /// n'est pas une permission : il refuse aussi.
+    nonisolated static func refusesSessionReplacement(
+        currentlyAuthenticated: Bool,
+        currentActiveUserId: String?,
+        newUserId: String,
+        switchingAccount: Bool
+    ) -> Bool {
+        guard currentlyAuthenticated, !switchingAccount else { return false }
+        return currentActiveUserId != newUserId
+    }
+
     /// `origin` par défaut à `.restored` : un renouvellement de jeton (la
     /// rotation, plus bas) est bien une session REPRISE, et les suites qui
     /// posent une session à la main n'ont pas d'origine à déclarer.
+    ///
+    /// #10446 — refuse d'installer un AUTRE utilisateur par-dessus une session
+    /// ouverte : poser une session sans démonter la précédente laisserait ses
+    /// sockets, ses files et ses caches servir le compte entrant. Le seul
+    /// passage est le changement de compte explicite (`switchingAccount`), qui
+    /// a d'abord quitté la session sortante. Le refus précède toute écriture.
     internal func applySession(
         token: String,
         sessionToken: String?,
         user: MeeshyUser,
-        origin: SessionOrigin = .restored
-    ) {
+        origin: SessionOrigin = .restored,
+        switchingAccount: Bool = false
+    ) throws {
         let userId = user.id
+        if Self.refusesSessionReplacement(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId,
+            switchingAccount: switchingAccount
+        ) {
+            Logger.auth.error("Refused to install another user's session over the open session")
+            throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: userId)
+        }
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
         // sockets need to be torn down and reconnected with the new JWT.
@@ -884,7 +914,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
                 }
-                self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
                 // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :

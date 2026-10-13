@@ -29,7 +29,7 @@ extension AuthManager {
         defer { isLoading = false }
 
         do {
-            openSession(try await verifyMagicLink(token: token))
+            try installSession(try await verifyMagicLink(token: token))
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
         } catch {
@@ -57,7 +57,7 @@ extension AuthManager {
     @discardableResult
     public func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
         guard let proven = try await verifyEmail(request) else { return false }
-        openSession(proven)
+        try installSession(proven)
         return true
     }
 
@@ -108,8 +108,22 @@ extension AuthManager {
     }
 
     /// Pose la session prouvée par `verifyEmail`, comme une connexion réussie.
+    /// La session d'un AUTRE utilisateur que celui de la session ouverte est
+    /// REFUSÉE (#10446) — rien n'est posé, `errorMessage` le dit ; y passer se
+    /// fait par `switchToProvenAccount`.
     public func openSession(_ proven: EmailProvenSession) {
-        applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user, origin: proven.origin)
+        do {
+            try installSession(proven)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// La porte LEVANTE de `openSession` : rend `SessionReplacementRefused` à
+    /// l'appelant qui sait le traiter.
+    func installSession(_ proven: EmailProvenSession, switchingAccount: Bool = false) throws {
+        try applySession(token: proven.token, sessionToken: proven.sessionToken, user: proven.user,
+                         origin: proven.origin, switchingAccount: switchingAccount)
     }
 
     // MARK: - Un lien qui ouvre un AUTRE compte (#10445)
@@ -131,7 +145,13 @@ extension AuthManager {
         // `false` puis `true` dans le même tour échappent aux observateurs.
         try? await Task.sleep(for: .milliseconds(150))
         await CacheAccountBinder.shared.bind(accountKey(for: proven.user.id)).value
-        openSession(proven)
+        // Le changement de compte EXPLICITE (#10446) : la session sortante est
+        // quittée ci-dessus, c'est le seul chemin qui pose un autre utilisateur.
+        do {
+            try installSession(proven, switchingAccount: true)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
     }
 
     /// Ferme côté passerelle une session prouvée que l'utilisateur a REFUSÉE :
@@ -143,6 +163,22 @@ extension AuthManager {
         } catch {
             Logger.auth.warning("Refused proven session could not be closed server-side: \(error.localizedDescription, privacy: .public)")
         }
+    }
+}
+
+/// #10446 — `applySession` refuse d'installer un autre utilisateur par-dessus
+/// une session ouverte, hors du changement de compte explicite.
+public struct SessionReplacementRefused: LocalizedError, Equatable, Sendable {
+    public let activeUserId: String?
+    public let incomingUserId: String
+
+    public init(activeUserId: String?, incomingUserId: String) {
+        self.activeUserId = activeUserId
+        self.incomingUserId = incomingUserId
+    }
+
+    public var errorDescription: String? {
+        "Another account is already signed in on this device"
     }
 }
 
