@@ -118,6 +118,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     name,
     accent,
     presence,
+    mood,
     relation,
     actions,
     signedIn,
@@ -193,6 +194,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
               name={name}
               accent={accent}
               presence={presence}
+              mood={mood}
               game={
                 /* LE JEU SUR LA BANNIÈRE (#10092) — niveau et rang ; sur celle d'un autre, ce que SA visibilité autorise, rien sinon. */
                 relation.kind === 'blocked' ? null : isSelf ? (

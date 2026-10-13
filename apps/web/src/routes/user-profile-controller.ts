@@ -19,12 +19,14 @@ import { publicProfileQueryOptions, type PublicProfile } from '@/lib/api/public-
 import { appQueryClient } from '@/lib/api/query-client';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { sessionStore } from '@/lib/api/session';
+import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { knownPerson, type KnownPerson } from '@/lib/profile/known-people';
 import { profilePresenceLine } from '@/lib/profile/presence-line';
 import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
+import { moodsByAuthor } from '@/lib/view/story-tray';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { href, navigate } from '@/routes/route-table';
 
@@ -165,6 +167,13 @@ export function useProfileController(username: string, language: InterfaceLangua
   /* La présence d'un AMI (#9063) — telle que la passerelle l'a servie, et
      jamais sur une fiche bloquée : la pastille ne survit pas au geste. */
   const presence = relation.kind === 'blocked' ? null : profilePresenceLine(view.data?.presence ?? null, new Date(), language);
+  /* L'HUMEUR DU MOMENT (#10528) — lue dans le corpus que le rail a déjà chargé
+     (même clé, même fraîcheur que `useStatusMoods`) : le serveur décide qui la
+     voit, la fiche ne demande rien de plus. Un visiteur sans compte n'a pas de
+     corpus ; une fiche bloquée n'en montre rien, comme la présence. */
+  const moods = useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: signedIn }, appQueryClient);
+  const servedMood = useMemo(() => (person === undefined ? undefined : moodsByAuthor(moods.data ?? []).get(person.id)), [moods.data, person]);
+  const mood = relation.kind === 'blocked' ? undefined : servedMood;
 
   const deps: FriendActionDeps = useMemo(
     () => ({
@@ -268,6 +277,7 @@ export function useProfileController(username: string, language: InterfaceLangua
     presence,
     relation,
     actions,
+    mood,
     viewerId,
     signedIn,
     busy,

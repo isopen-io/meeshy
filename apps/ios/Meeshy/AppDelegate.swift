@@ -50,6 +50,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
             ProtectedContentSnapshotVeil.shared.install()
             ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
+            DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that

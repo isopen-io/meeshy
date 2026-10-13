@@ -911,6 +911,8 @@ const fr = {
   'story.action.reply': 'Répondre',
   'story.action.forward': 'Envoyer',
   'story.action.repost': 'Republier',
+  'story.viewer.repost': 'Republication',
+  'story.viewer.repostOf': 'Republication de @{handle}',
   'story.action.views': 'Vues',
   'story.action.share': 'Partager',
   'story.action.save': 'Enregistrer',

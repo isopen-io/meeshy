@@ -877,6 +877,8 @@ const ar = {
   'story.action.reply': 'رد',
   'story.action.forward': 'إرسال',
   'story.action.repost': 'إعادة نشر',
+  'story.viewer.repost': 'إعادة نشر',
+  'story.viewer.repostOf': 'أُعيد نشره من @{handle}',
   'story.action.views': 'المشاهدات',
   'story.action.share': 'مشاركة',
   'story.action.save': 'حفظ',

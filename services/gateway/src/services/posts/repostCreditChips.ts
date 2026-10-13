@@ -1,28 +1,18 @@
-import type { Prisma } from '@meeshy/shared/prisma/client';
-
 import { isCanvasV3OrNewer } from './storyEffectsV3';
 
 /**
- * **La puce « Reposté de @auteur » ne survit à une republication directe que
- * si l'original était PUBLIC** (porteur 2026-09-01, #9953, #10365).
+ * **Aucune puce « Reposté de @auteur » ne voyage** (porteur 2026-10-13,
+ * #10524) : le crédit d'une republication vit dans l'EN-TÊTE, après la date,
+ * sur les deux clients. La règle d'audience de #10365, #10497 et #10498, qui
+ * gardait la puce d'un original PUBLIC, est retirée.
  *
  * La puce est un texte VERROUILLÉ du canvas (`isLocked: true`) : v1
- * `textObjects[]`, v3 `scenes[].objects[kind=text].payload`. Elle NOMME un
- * auteur devant tous ceux qui verront la republication — sur un original
- * d'amis, privé ou communautaire, elle le nommerait auprès d'un public que son
- * original n'avait pas. iOS applique la règle dans le composer
- * (`StoryRepostCredit.isDue` / `stripped`, qui tient les textes verrouillés
- * pour exclusivement des crédits) ; `repostPost` ne passe pas par le composer
- * et recopiait `storyEffects` tel quel.
- *
- * Fail-closed : une audience absente ou inconnue n'accorde pas la puce. La loi
- * d'audience interdisant d'élargir, un original PUBLIC garantit que toute la
- * chaîne l'était.
+ * `textObjects[]`, v3 `scenes[].objects[kind=text].payload`. Le verrou n'existe
+ * que sur elle (`StorySceneObjectPredicates.isLocked`, SDK) : tout texte
+ * verrouillé est une puce, et se retire sans condition, à l'écriture comme à
+ * la lecture — ce qui couvre les lignes écrites avant la règle, sans
+ * migration.
  */
-export function repostCreditIsDue(originalVisibility: string | null | undefined): boolean {
-  return originalVisibility === 'PUBLIC';
-}
-
 type JsonRecord = Record<string, unknown>;
 
 const isRecord = (value: unknown): value is JsonRecord =>
@@ -70,41 +60,28 @@ export function withoutRepostCredits(effects: unknown): unknown {
   };
 }
 
-/** Les effets que la copie d'une republication directe emporte. */
-export function repostSnapshotStoryEffects(
-  effects: Prisma.InputJsonValue | undefined,
-  originalVisibility: string | null | undefined,
-): Prisma.InputJsonValue | undefined {
-  if (effects === undefined || repostCreditIsDue(originalVisibility)) return effects;
-  return withoutRepostCredits(effects) as Prisma.InputJsonValue;
+/** Les effets qu'une écriture enregistre : jamais de puce de crédit. */
+export function storyEffectsWithoutCredits<T>(effects: T): T {
+  return withoutRepostCredits(effects) as T;
 }
 
 /**
- * **La même loi à la LECTURE** (#10498) : une republication est servie avec
- * `repostOf`, le canvas de sa source, et le sien propre. Les deux portent une
- * puce qui nomme un tiers ; ni l'une ni l'autre ne part si la source n'est pas
- * PUBLIC AUJOURD'HUI — ce qui couvre aussi une source repassée en audience
- * restreinte après la copie, et les lignes écrites avant la règle.
- *
- * Ne décide que sur une audience CHARGÉE (`visibility` présente, même nulle :
- * fail-closed). Absente, la publication a déjà été projetée — la projection
- * retire la colonne — et elle est rendue telle quelle : la projection est
- * idempotente. Une source disparue (`repostOf` nul) ne retire rien, la règle
- * ayant été appliquée à l'écriture.
+ * **La même loi à la LECTURE** : une publication est servie avec son canvas
+ * et, pour une republication, celui de sa source (`repostOf`). Ni l'un ni
+ * l'autre ne garde de puce, quelle que soit l'audience de la source, chargée
+ * ou non, et même quand la source a disparu. Idempotente.
  */
 export function withServedRepostCredits<T extends object>(post: T): T {
   const source = (post as { repostOf?: unknown }).repostOf;
-  if (!isRecord(source) || !('visibility' in source)) return post;
-  if (repostCreditIsDue(source['visibility'] as string | null | undefined)) return post;
   const own = (post as { storyEffects?: unknown }).storyEffects;
   const ownServed = withoutRepostCredits(own);
-  const cited = source['storyEffects'];
+  const cited = isRecord(source) ? source['storyEffects'] : undefined;
   const citedServed = withoutRepostCredits(cited);
   if (ownServed === own && citedServed === cited) return post;
   return {
     ...post,
     ...(ownServed !== own ? { storyEffects: ownServed } : {}),
-    ...(citedServed !== cited ? { repostOf: { ...source, storyEffects: citedServed } } : {}),
+    ...(citedServed !== cited && isRecord(source) ? { repostOf: { ...source, storyEffects: citedServed } } : {}),
   };
 }
 
@@ -127,11 +104,8 @@ const flatTextLocks = (effects: unknown): boolean[] => {
  */
 export function servedTextIndex(params: {
   readonly storyEffects: unknown;
-  readonly sourceVisibility: string | null | undefined;
-  readonly isRepost: boolean;
   readonly textIndex: number;
 }): number | null {
-  if (!params.isRepost || repostCreditIsDue(params.sourceVisibility)) return params.textIndex;
   const locks = flatTextLocks(params.storyEffects);
   if (locks[params.textIndex] === true) return null;
   return params.textIndex - locks.slice(0, params.textIndex).filter(Boolean).length;

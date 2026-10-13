@@ -5,11 +5,12 @@ import MeeshySDK
 @MainActor
 private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
     nonisolated deinit {}
-    static let proven = EmailProvenSession(
+    /// Datée à CHAQUE lecture (#10513) : l'ouverture lit l'âge de la preuve.
+    static var proven: EmailProvenSession { EmailProvenSession(
         token: "jwt-link",
         sessionToken: "session-link",
         user: MeeshyUser(id: "link-user", username: "link", displayName: "Link")
-    )
+    ) }
 
     var isAuthenticated = false
     var currentUser: MeeshyUser?
@@ -315,6 +316,26 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertEqual(toasts.successMessages, [])
         gate.presentationEnded()
         XCTAssertEqual(toasts.successMessages.count, 1)
+    }
+
+    /// #10513 — accepter après la fenêtre d'adoption : le compte ouvert reste
+    /// ouvert, rien n'est basculé, la session prouvée est refermée, et l'écran
+    /// dit que le lien a expiré.
+    func test_anotherAccount_acceptedPastTheAdoptionWindow_keepsTheAccount_andSaysTheLinkExpired() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let stale = MockSignInLinkAuthorizer.proven
+        auth.magicResult = .success(EmailProvenSession(
+            token: stale.token, sessionToken: stale.sessionToken, user: stale.user,
+            receivedAt: Date().addingTimeInterval(-(EmailProvenSession.adoptionWindow + 1))))
+        let confirmation = MockAccountReplacementConfirmation(answer: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "discard"])
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(toasts.successMessages, [])
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.linkExpired()])
     }
 
     func test_anotherAccount_accepted_butNotInstalled_announcesNoSuccess() async {

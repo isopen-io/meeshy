@@ -80,6 +80,22 @@ final class PinnedLogoutHTTPTests: XCTestCase {
         auth.isAuthenticated = true
     }
 
+    /// Le jeton de A est un JWT VIVANT (échéance en 2100) : un jeton non JWT
+    /// est lu « expiré » (`AuthManager.isTokenExpired`), et toute requête
+    /// d'arrière-plan au nom de A le rafraîchirait — un rafraîchissement
+    /// légitime, étranger à la déconnexion épinglée de B, qui faisait rougir
+    /// ces témoins selon l'ordre des suites (CI dev d55cfaaf3f, run 38368531512).
+    static let liveTokenA: String = {
+        func part(_ json: String) -> String {
+            Data(json.utf8).base64EncodedString()
+                .replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_")
+                .replacingOccurrences(of: "=", with: "")
+        }
+        return [part(#"{"alg":"HS256","typ":"JWT"}"#), part(#"{"userId":"user-a","exp":4102444800}"#), "signature"]
+            .joined(separator: ".")
+    }()
+
     private func makeStubbedClient() -> APIClient {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [PinnedLogoutStubProtocol.self]
@@ -89,7 +105,7 @@ final class PinnedLogoutHTTPTests: XCTestCase {
     /// Le témoin au niveau du client : B reçoit 401, rien ne part sous A.
     func test_logoutThrowingWithToken_on401_sendsNothingButThePinnedToken() async throws {
         let auth = AuthManager.shared
-        try openAccount(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try openAccount(token: Self.liveTokenA, sessionToken: "sess-a", user: makeUser("user-a"))
         refreshDouble.refreshedUser = makeUser("user-a")
         let client = makeStubbedClient()
         let service = AuthService(api: client, pinned: client)
@@ -107,7 +123,7 @@ final class PinnedLogoutHTTPTests: XCTestCase {
         XCTAssertEqual(refreshDouble.refreshCallCount, 0, "le compte actif n'est pas rafraîchi pour la requête d'un autre")
         XCTAssertEqual(auth.activeAccountId, "user-a")
         XCTAssertTrue(auth.isAuthenticated)
-        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+        XCTAssertEqual(APIClient.shared.authToken, Self.liveTokenA)
     }
 
     /// Le chemin réel : « Annuler » devant l'alerte referme la session prouvée
@@ -115,7 +131,7 @@ final class PinnedLogoutHTTPTests: XCTestCase {
     /// reste ouvert.
     func test_discardProvenSession_on401_neverSpeaksForTheActiveAccount() async throws {
         let auth = AuthManager.shared
-        try openAccount(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        try openAccount(token: Self.liveTokenA, sessionToken: "sess-a", user: makeUser("user-a"))
         let client = makeStubbedClient()
         auth.authService = AuthService(api: client, pinned: client)
 
@@ -127,8 +143,8 @@ final class PinnedLogoutHTTPTests: XCTestCase {
         XCTAssertEqual(PinnedLogoutStubProtocol.paths, [AuthEndpoint.logout.path])
         XCTAssertEqual(auth.activeAccountId, "user-a", "la session du compte ouvert survit")
         XCTAssertTrue(auth.isAuthenticated)
-        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
-        XCTAssertEqual(auth.keychain.load(forKey: auth.tokenKey(for: "user-a"), account: nil), "tok-a")
+        XCTAssertEqual(APIClient.shared.authToken, Self.liveTokenA)
+        XCTAssertEqual(auth.keychain.load(forKey: auth.tokenKey(for: "user-a"), account: nil), Self.liveTokenA)
     }
 }
 

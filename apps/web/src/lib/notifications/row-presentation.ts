@@ -28,7 +28,7 @@ import { MESSAGE_NOTIFICATION_TYPES, notificationTitle, type NotificationRecord 
  * (`metadata.postPreview` / `commentPreview`) : aucune descente de langue ici.
  */
 
-export type ContentKind = 'story' | 'reel' | 'mood' | 'status' | 'post';
+export type ContentKind = 'story' | 'reel' | 'mood' | 'post';
 
 export type MilestoneGlyph = ProgressionGlyph | 'trophy' | 'star' | 'fire';
 
@@ -102,14 +102,15 @@ const FRIEND_CONTENT_TYPES = new Set(['friend_new_story', 'friend_new_post', 'fr
 const STORY_TYPES = new Set(['story_reaction', 'story_new_comment', 'friend_story_comment', 'story_thread_reply', 'friend_new_story']);
 const MOOD_TYPES = new Set(['status_reaction', 'friend_new_mood']);
 
-const KIND_BY_POST_TYPE: Readonly<Record<string, ContentKind>> = { STORY: 'story', REEL: 'reel', MOOD: 'mood', STATUS: 'status', POST: 'post' };
+/** Un STATUS se nomme comme le titre servi le nomme — « humeur », quel que soit le geste (#10525, #10526). */
+const KIND_BY_POST_TYPE: Readonly<Record<string, ContentKind>> = { STORY: 'story', REEL: 'reel', MOOD: 'mood', STATUS: 'mood', POST: 'post' };
 
 function contentKindOf(notification: NotificationRecord): ContentKind {
   const declared = (notification.metadata.postType ?? notification.metadata.contentType)?.toUpperCase();
   const kind = declared === undefined ? undefined : KIND_BY_POST_TYPE[declared];
   if (kind !== undefined) return kind;
   if (STORY_TYPES.has(notification.type)) return 'story';
-  if (MOOD_TYPES.has(notification.type)) return notification.type === 'status_reaction' ? 'status' : 'mood';
+  if (MOOD_TYPES.has(notification.type)) return 'mood';
   return 'post';
 }
 

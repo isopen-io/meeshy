@@ -880,6 +880,8 @@ const en = {
   'story.action.reply': 'Reply',
   'story.action.forward': 'Send',
   'story.action.repost': 'Repost',
+  'story.viewer.repost': 'Repost',
+  'story.viewer.repostOf': 'Reposted from @{handle}',
   'story.action.views': 'Views',
   'story.action.share': 'Share',
   'story.action.save': 'Save',

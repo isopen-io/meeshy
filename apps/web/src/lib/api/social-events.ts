@@ -16,8 +16,9 @@ import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
  *
  * - Un COMPTE groupe ses événements : un lot part au plus toutes les
  *   `flushDelayMs` (la porte plafonne un compte à 30 lots par minute), coupé à
- *   {@link SOCIAL_EVENTS_BATCH_CAP} — le plafond de la porte, au-delà duquel
- *   le lot ENTIER serait refusé.
+ *   {@link SOCIAL_EVENTS_SEND_CAP}, sous le plafond de la porte
+ *   ({@link SOCIAL_EVENTS_BATCH_CAP}) au-delà duquel le lot ENTIER serait
+ *   refusé, et sous les 64 Kio d'un envoi `keepalive`.
  * - Un échec transitoire (hors ligne, 408, 429, 5xx) GARDE le lot en file :
  *   il repart au flush suivant. Un refus définitif (400, 403, 413) le jette —
  *   le rejouer bloquerait la file à jamais pour un défaut que rien ne répare.
@@ -40,6 +41,13 @@ import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
  *   retire sans rejeu, sans jamais emporter une vue ou une impression.
  */
 export const SOCIAL_EVENTS_BATCH_CAP = 200;
+
+/**
+ * Un lot part en `keepalive` (il survit à la fermeture de l'onglet), et un
+ * navigateur n'accorde que 64 Kio à un tel envoi : 100 séances pleines y
+ * tiennent, 200 non.
+ */
+export const SOCIAL_EVENTS_SEND_CAP = 100;
 
 /** La file ne grossit pas sans borne quand le réseau manque longtemps. */
 export const SOCIAL_EVENTS_PENDING_CAP = 1000;
@@ -100,8 +108,10 @@ export type SendVerdict = 'sent' | 'retry' | 'drop';
 export type SendOutcome = SendVerdict | { readonly retain: readonly SocialEvent[] };
 
 /**
- * `snapshot` rend la file (lot en vol compris) pour qu'une page qui s'en va
- * la garde ; `restore` la reprend au chargement suivant, devant les nouveaux.
+ * `snapshot` rend ce qui n'est pas DÉJÀ parti (le lot en vol, envoyé en
+ * keepalive, arrive ou se perd : le garder le compterait deux fois) pour
+ * qu'une page qui s'en va le garde ; `restore` le reprend au chargement
+ * suivant, devant les nouveaux.
  */
 export type SocialEventsEmitter = {
   readonly record: (event: SocialEvent) => void;
@@ -140,6 +150,7 @@ export function createSocialEventsEmitter(deps: {
   let queue: readonly SocialEvent[] = [];
   let scheduled = false;
   let flushing = false;
+  let inFlight = 0;
 
   function arm(): void {
     if (scheduled || queue.length === 0) return;
@@ -168,8 +179,10 @@ export function createSocialEventsEmitter(deps: {
     flushing = true;
     try {
       while (queue.length > 0) {
-        const batch = queue.slice(0, SOCIAL_EVENTS_BATCH_CAP);
+        const batch = queue.slice(0, SOCIAL_EVENTS_SEND_CAP);
+        inFlight = batch.length;
         const outcome = await deps.send(batch).catch((): SendOutcome => 'retry');
+        inFlight = 0;
         if (outcome === 'retry') break;
         if (typeof outcome === 'object') {
           queue = [...outcome.retain, ...queue.slice(batch.length)];
@@ -180,10 +193,11 @@ export function createSocialEventsEmitter(deps: {
       }
     } finally {
       flushing = false;
+      inFlight = 0;
     }
   }
 
-  return { record, flush, pending: () => queue.length, snapshot: () => queue, restore };
+  return { record, flush, pending: () => queue.length, snapshot: () => queue.slice(inFlight), restore };
 }
 
 /** Le verdict d'un appel — ce qui mérite d'être rejoué, ce qui ne le mérite pas. */
@@ -228,6 +242,7 @@ function postEvents(
         method: 'POST',
         path: socialEndpoints.events,
         body: { events },
+        keepalive: true,
         ...identity,
       })
       .then(verdictOf),

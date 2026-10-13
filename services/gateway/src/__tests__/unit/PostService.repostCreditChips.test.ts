@@ -1,10 +1,12 @@
 /**
  * @jest-environment node
  *
- * #10365 — la puce « Reposté de @auteur » (texte VERROUILLÉ du canvas) ne
- * survit à une republication DIRECTE que si l'original était PUBLIC, en v1
- * (`textObjects`) comme en v3 (`scenes[].objects`), et l'ignorance de
- * l'audience ne se lit jamais comme une permission de nommer.
+ * #10524 — plus AUCUNE puce « Reposté de @auteur » (texte VERROUILLÉ du
+ * canvas), quelle que soit l'audience de l'original : le crédit vit dans
+ * l'en-tête, après la date (décision porteur 2026-10-13). Elle remplace la
+ * règle d'audience de #10365, #10497 et #10498. Le retrait vaut à l'écriture
+ * (`repostPost`, `POST /posts`, `updatePost`) comme à la lecture
+ * (`withMentions`), en v1 (`textObjects`) comme en v3 (`scenes[].objects`).
  */
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
@@ -12,7 +14,7 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import { PostType } from '@meeshy/shared/prisma/client';
 import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
-import { repostCreditIsDue, repostSnapshotStoryEffects } from '../../services/posts/repostCreditChips';
+import { withoutRepostCredits } from '../../services/posts/repostCreditChips';
 import { postSignalText } from '../../services/posts/storyContentComposition';
 import { withMentions } from '../../services/posts/postReferences';
 import { WIRE_BROADCAST } from '../../services/posts/storyEffectsV3';
@@ -58,7 +60,9 @@ const v3WithoutCredit = {
   ],
 };
 
-describe('repostPost — la puce de crédit suit l’audience de l’original', () => {
+const AUDIENCES = ['PUBLIC', 'FRIENDS', 'PRIVATE', null] as const;
+
+describe('repostPost — la copie n’emporte jamais la puce de crédit', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
   let service: PostService;
 
@@ -85,56 +89,36 @@ describe('repostPost — la puce de crédit suit l’audience de l’original', 
     return call?.data.storyEffects;
   };
 
-  it('garde la puce v1 d’un original PUBLIC', async () => {
-    expect(await repostStory('PUBLIC', v1Effects())).toEqual(v1Effects());
-  });
+  for (const visibility of AUDIENCES) {
+    it(`retire la puce v1 d’un original ${visibility ?? 'sans audience'}, et rien d’autre`, async () => {
+      expect(await repostStory(visibility, v1Effects())).toEqual(v1WithoutCredit);
+    });
+  }
 
-  it('garde la puce v3 d’un original PUBLIC', async () => {
-    expect(await repostStory('PUBLIC', v3Effects())).toEqual(v3Effects());
-  });
-
-  it('retire la puce v1 d’un original FRIENDS, et rien d’autre', async () => {
-    expect(await repostStory('FRIENDS', v1Effects())).toEqual(v1WithoutCredit);
-  });
-
-  it('retire la puce v3 d’un original PRIVATE, jamais un objet non textuel', async () => {
-    expect(await repostStory('PRIVATE', v3Effects())).toEqual(v3WithoutCredit);
-  });
-
-  it('retire la puce quand l’audience de l’original est absente (fail-closed)', async () => {
-    expect(await repostStory(null, v1Effects())).toEqual(v1WithoutCredit);
+  it('retire la puce v3 d’un original PUBLIC, jamais un objet non textuel', async () => {
+    expect(await repostStory('PUBLIC', v3Effects())).toEqual(v3WithoutCredit);
   });
 });
 
-describe('repostCreditIsDue', () => {
-  it('n’accorde la puce qu’à un original PUBLIC', () => {
-    expect(repostCreditIsDue('PUBLIC')).toBe(true);
-    for (const visibility of ['FRIENDS', 'PRIVATE', 'COMMUNITY', 'EXCEPT', 'ONLY', 'public', '', null, undefined]) {
-      expect(repostCreditIsDue(visibility)).toBe(false);
-    }
-  });
-});
-
-describe('repostSnapshotStoryEffects', () => {
+describe('withoutRepostCredits', () => {
   it('retire aussi un textObjects v1 resté à côté des scènes d’un document v3', () => {
     const mixed = { ...v3Effects(), textObjects: [authorText, credit] };
-    expect(repostSnapshotStoryEffects(mixed, 'FRIENDS')).toEqual({ ...v3WithoutCredit, textObjects: [authorText] });
+    expect(withoutRepostCredits(mixed)).toEqual({ ...v3WithoutCredit, textObjects: [authorText] });
   });
 
   it('rend le blob intact quand il ne porte aucune puce', () => {
     const effects = { textObjects: [authorText] };
-    expect(repostSnapshotStoryEffects(effects, 'FRIENDS')).toBe(effects);
-    expect(repostSnapshotStoryEffects(undefined, 'FRIENDS')).toBeUndefined();
+    expect(withoutRepostCredits(effects)).toBe(effects);
+    expect(withoutRepostCredits(undefined)).toBeUndefined();
   });
 });
 
 /**
  * #10497 — la seconde porte. `POST /posts` avec `repostOfId` (composer de
- * republication, « publier aussi en réel ») recevait le canvas tel que le
- * client l'envoie : un client antérieur à la règle y posait la puce sans
- * condition. Le serveur l'applique lui-même, sur la SOURCE désignée.
+ * republication, « publier aussi en réel ») reçoit le canvas tel que le client
+ * l'envoie : un client antérieur à #10524 y pose encore la puce.
  */
-describe('createPost avec repostOfId — la puce de crédit suit l’audience de la source', () => {
+describe('createPost avec repostOfId — la puce envoyée par un ancien client est retirée', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
   let service: PostService;
 
@@ -165,12 +149,8 @@ describe('createPost avec repostOfId — la puce de crédit suit l’audience de
     return call?.data.storyEffects;
   };
 
-  it('garde la puce d’une source PUBLIC', async () => {
-    expect(await publishRepost({ sourceVisibility: 'PUBLIC', storyEffects: v1Effects() })).toEqual(v1Effects());
-  });
-
-  it('retire la puce v1 d’une source FRIENDS, et rien d’autre', async () => {
-    expect(await publishRepost({ sourceVisibility: 'FRIENDS', storyEffects: v1Effects(), visibility: 'FRIENDS' }))
+  it('retire la puce v1 d’une source PUBLIC, et rien d’autre', async () => {
+    expect(await publishRepost({ sourceVisibility: 'PUBLIC', storyEffects: v1Effects(), visibility: 'PUBLIC' }))
       .toEqual(v1WithoutCredit);
   });
 
@@ -178,13 +158,41 @@ describe('createPost avec repostOfId — la puce de crédit suit l’audience de
     expect(await publishRepost({ sourceVisibility: 'PRIVATE', storyEffects: v3Effects() })).toEqual(v3WithoutCredit);
   });
 
-  it('retire la puce quand l’audience de la source est absente (fail-closed)', async () => {
-    expect(await publishRepost({ sourceVisibility: null, storyEffects: v1Effects() })).toEqual(v1WithoutCredit);
+  it('retire aussi la puce du réel publié par la même porte', async () => {
+    expect(await publishRepost({ sourceVisibility: 'PUBLIC', storyEffects: v1Effects(), type: PostType.REEL, visibility: 'PUBLIC' }))
+      .toEqual(v1WithoutCredit);
+  });
+});
+
+/**
+ * #10522 — `updatePost` réécrivait `storyEffects` tel que le client l'envoie :
+ * un ancien client qui renvoie son blob en cache réintroduisait la puce.
+ */
+describe('updatePost — une édition ne réintroduit pas la puce de crédit', () => {
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let service: PostService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = createMockPrisma();
+    service = new PostService(prisma, new MediaService(), undefined, createMockPostReactionService());
   });
 
-  it('retire aussi la puce du réel publié par la même porte', async () => {
-    expect(await publishRepost({ sourceVisibility: 'FRIENDS', storyEffects: v1Effects(), type: PostType.REEL, visibility: 'FRIENDS' }))
-      .toEqual(v1WithoutCredit);
+  const editedEffects = async (storyEffects: Record<string, unknown>) => {
+    const existing = makePost({ id: 'story-repost', authorId: 'user-1', type: PostType.STORY, repostOfId: 'story-src', media: [] });
+    prisma.post.findFirst.mockResolvedValue(existing);
+    prisma.post.update.mockImplementation(async (args: { data: Record<string, unknown> }) => ({ ...existing, ...args.data }));
+    await service.updatePost('story-repost', 'user-1', { storyEffects });
+    const call = prisma.post.update.mock.calls[0]?.[0] as { data: { storyEffects?: unknown } } | undefined;
+    return call?.data.storyEffects;
+  };
+
+  it('retire la puce v1 du canvas édité, et rien d’autre', async () => {
+    expect(await editedEffects(v1Effects())).toEqual(v1WithoutCredit);
+  });
+
+  it('retire la puce v3 du canvas édité, jamais un objet non textuel', async () => {
+    expect(await editedEffects(v3Effects())).toEqual(v3WithoutCredit);
   });
 });
 
@@ -203,13 +211,12 @@ describe('postSignalText — la puce de crédit n’est jamais le texte de l’a
 });
 
 /**
- * #10498 — la règle s'applique aussi à la LECTURE. `postInclude` sert
- * `repostOf.storyEffects` : le canvas de la republication intermédiaire, puce
- * comprise, partait dans la réponse REST, la diffusion socket et le fil. Et
- * une source PUBLIC repassée ensuite en audience restreinte laissait la puce
- * déjà copiée chez qui l'avait republiée.
+ * La règle s'applique aussi à la LECTURE : les lignes écrites avant #10524
+ * portent encore la puce, dans leur canvas comme dans le canvas qu'elles
+ * citent. Le retrait au service les couvre sans migration, quelle que soit
+ * l'audience de la source, chargée ou non, et même quand la source a disparu.
  */
-describe('withMentions — la puce de crédit servie suit l’audience ACTUELLE de la source', () => {
+describe('withMentions — aucune puce de crédit n’est servie', () => {
   const served = (sourceVisibility: string | null, effects: () => Record<string, unknown> = v1Effects) => ({
     id: 'repost-1',
     postMentions: [] as unknown[],
@@ -223,33 +230,23 @@ describe('withMentions — la puce de crédit servie suit l’audience ACTUELLE 
   ] as const;
 
   for (const [path, reader] of readers) {
-    it(`garde les puces d’une source PUBLIC dans ${path}`, () => {
+    it(`retire les puces d’une source PUBLIC dans ${path}`, () => {
       const post = withMentions(served('PUBLIC'), reader) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
-      expect(post.storyEffects).toEqual(v1Effects());
-      expect(post.repostOf.storyEffects).toEqual(v1Effects());
-    });
-
-    it(`retire la puce du canvas cité d’une source FRIENDS dans ${path}`, () => {
-      const post = withMentions(served('FRIENDS'), reader) as { repostOf: { storyEffects: unknown } };
+      expect(post.storyEffects).toEqual(v1WithoutCredit);
       expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
     });
 
-    it(`retire la puce déjà copiée quand la source est repassée en audience restreinte dans ${path}`, () => {
-      const post = withMentions(served('FRIENDS'), reader) as { storyEffects: unknown };
+    it(`retire les puces d’une source FRIENDS dans ${path}`, () => {
+      const post = withMentions(served('FRIENDS'), reader) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
       expect(post.storyEffects).toEqual(v1WithoutCredit);
+      expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
     });
   }
 
-  it('retire la puce v3 d’une source COMMUNITY, jamais un objet non textuel', () => {
-    const post = withMentions(served('COMMUNITY', v3Effects), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+  it('retire la puce v3, jamais un objet non textuel', () => {
+    const post = withMentions(served('PUBLIC', v3Effects), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
     expect(post.storyEffects).toEqual(v3WithoutCredit);
     expect(post.repostOf.storyEffects).toEqual(v3WithoutCredit);
-  });
-
-  it('retire la puce quand l’audience chargée de la source est absente (fail-closed)', () => {
-    const post = withMentions(served(null), WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
-    expect(post.storyEffects).toEqual(v1WithoutCredit);
-    expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
   });
 
   it('retire la puce propre d’une republication dont la source PRIVÉE ne voyage plus', () => {
@@ -258,21 +255,25 @@ describe('withMentions — la puce de crédit servie suit l’audience ACTUELLE 
     expect(post.storyEffects).toEqual(v1WithoutCredit);
   });
 
-  it('ne touche pas une publication qui n’est pas une republication', () => {
-    const post = withMentions({ id: 'p', postMentions: [] as unknown[], storyEffects: v1Effects() }, WIRE_BROADCAST) as { storyEffects: unknown };
-    expect(post.storyEffects).toEqual(v1Effects());
+  it('retire la puce d’une republication dont la source a disparu', () => {
+    const post = withMentions({ ...served('PUBLIC'), repostOf: null }, WIRE_BROADCAST) as { storyEffects: unknown };
+    expect(post.storyEffects).toEqual(v1WithoutCredit);
   });
 
-  it('garde la puce d’une source disparue — la règle a été appliquée à l’écriture', () => {
-    const post = withMentions({ ...served('PUBLIC'), repostOf: null }, WIRE_BROADCAST) as { storyEffects: unknown };
-    expect(post.storyEffects).toEqual(v1Effects());
+  it('retire la puce même quand le select n’a pas chargé l’audience de la source', () => {
+    const post = withMentions(
+      { id: 'repost-1', postMentions: [] as unknown[], storyEffects: v1Effects(), repostOf: { id: 'source-1', storyEffects: v1Effects() } },
+      WIRE_BROADCAST,
+    ) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
+    expect(post.storyEffects).toEqual(v1WithoutCredit);
+    expect(post.repostOf.storyEffects).toEqual(v1WithoutCredit);
   });
 
   it('est idempotente sur une publication déjà projetée (rejeu d’idempotence)', () => {
     const once = withMentions(served('PUBLIC'), WIRE_BROADCAST);
     const twice = withMentions(once, WIRE_BROADCAST) as { storyEffects: unknown; repostOf: { storyEffects: unknown } };
-    expect(twice.storyEffects).toEqual(v1Effects());
-    expect(twice.repostOf.storyEffects).toEqual(v1Effects());
+    expect(twice.storyEffects).toEqual(v1WithoutCredit);
+    expect(twice.repostOf.storyEffects).toEqual(v1WithoutCredit);
   });
 });
 
@@ -280,16 +281,15 @@ describe('withMentions — la puce de crédit servie suit l’audience ACTUELLE 
  * #10498, revue adversariale — le retrait à la lecture décale l'index PLAT des
  * textes servis. `story:translation-updated` porte cet index, et les clients
  * fusionnent par position dans le canvas SERVI : la traduction de la puce
- * retirée s'y posait sur le texte de l'auteur.
+ * retirée s'y posait sur le texte de l'auteur. La correction reste, la puce
+ * n'étant plus jamais servie.
  */
 describe('story:translation-updated — l’index diffusé est celui du canvas SERVI', () => {
   type Emitted = { textObjectIndex: number };
 
   const broadcastFor = async (params: {
-    sourceVisibility: string | null;
     storyEffects: Record<string, unknown>;
     textObjectIndex: number;
-    isRepost?: boolean;
   }): Promise<Emitted[]> => {
     const emitted: Emitted[] = [];
     const post = {
@@ -298,7 +298,6 @@ describe('story:translation-updated — l’index diffusé est celui du canvas S
       visibilityUserIds: [] as string[],
       content: null,
       storyEffects: params.storyEffects,
-      repostOf: params.isRepost === false ? null : { visibility: params.sourceVisibility },
     };
     const prisma = {
       post: { findUnique: async (_args: unknown) => post },
@@ -338,31 +337,22 @@ describe('story:translation-updated — l’index diffusé est celui du canvas S
     }],
   });
 
-  it('décale l’index d’un texte posé après une puce retirée (source FRIENDS)', async () => {
-    const emitted = await broadcastFor({ sourceVisibility: 'FRIENDS', storyEffects: creditFirst(), textObjectIndex: 1 });
+  it('décale l’index d’un texte posé après une puce retirée', async () => {
+    const emitted = await broadcastFor({ storyEffects: creditFirst(), textObjectIndex: 1 });
     expect(emitted.map((e) => e.textObjectIndex)).toEqual([0]);
   });
 
   it('décale aussi l’index plat d’un document v3', async () => {
-    const emitted = await broadcastFor({ sourceVisibility: 'PRIVATE', storyEffects: creditFirstV3(), textObjectIndex: 1 });
+    const emitted = await broadcastFor({ storyEffects: creditFirstV3(), textObjectIndex: 1 });
     expect(emitted.map((e) => e.textObjectIndex)).toEqual([0]);
   });
 
   it('ne diffuse pas la traduction d’une puce retirée', async () => {
-    expect(await broadcastFor({ sourceVisibility: 'FRIENDS', storyEffects: creditFirst(), textObjectIndex: 0 })).toEqual([]);
+    expect(await broadcastFor({ storyEffects: creditFirst(), textObjectIndex: 0 })).toEqual([]);
   });
 
-  it('ne diffuse pas non plus quand l’audience de la source est absente (fail-closed)', async () => {
-    expect(await broadcastFor({ sourceVisibility: null, storyEffects: creditFirst(), textObjectIndex: 0 })).toEqual([]);
-  });
-
-  it('garde l’index enregistré quand la puce est servie (source PUBLIC)', async () => {
-    const emitted = await broadcastFor({ sourceVisibility: 'PUBLIC', storyEffects: creditFirst(), textObjectIndex: 1 });
-    expect(emitted.map((e) => e.textObjectIndex)).toEqual([1]);
-  });
-
-  it('garde l’index d’une publication qui n’est pas une republication', async () => {
-    const emitted = await broadcastFor({ sourceVisibility: null, storyEffects: creditFirst(), textObjectIndex: 1, isRepost: false });
+  it('garde l’index d’un canvas sans puce', async () => {
+    const emitted = await broadcastFor({ storyEffects: { textObjects: [authorText, { id: 'b', text: 'Salut' }] }, textObjectIndex: 1 });
     expect(emitted.map((e) => e.textObjectIndex)).toEqual([1]);
   });
 });

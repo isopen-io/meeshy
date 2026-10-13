@@ -34,7 +34,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const profile = useProfileController(username, language);
-  const { view, person, seed, name, accent, presence, relation, actions, signedIn, busy, onAction } = profile;
+  const { view, person, seed, name, accent, presence, mood, relation, actions, signedIn, busy, onAction } = profile;
   const isSelf = view.data?.isSelf === true;
   const onSignIn = useCallback(() => navigate(href('login')), []);
 
@@ -50,6 +50,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 name={name}
                 accent={accent}
                 presence={presence}
+                mood={mood}
                 game={
                   relation.kind === 'blocked' ? null : isSelf ? (
                     <GameBannerOwnSlot enabled={signedIn} />
