@@ -33,6 +33,7 @@
  */
 
 import crypto from 'crypto';
+import type { ProvenSessionAdoption } from '@meeshy/shared/utils/proven-session-adoption';
 
 /**
  * Ce qu'il faut d'un client Prisma. Le strict nécessaire, pour que les bancs
@@ -51,6 +52,14 @@ export type PendingTwoFactorStore = {
  * désormais, et nulle part ailleurs.
  */
 export const PENDING_TWO_FACTOR_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Ce que la réponse d'une preuve par lien sert avec un défi (#10518) : sa
+ * durée de vie, pour que le client ne recopie pas la constante ci-dessus.
+ */
+export const provenChallengeAdoption = (): ProvenSessionAdoption => ({
+  adoptWithinSeconds: Math.floor(PENDING_TWO_FACTOR_TTL_MS / 1000),
+});
 
 /** Un jeton d'étape 2 : 32 octets, rendus en hexadécimal. */
 const TOKEN_BYTES = 32;

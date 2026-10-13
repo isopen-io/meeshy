@@ -20,7 +20,13 @@ import { describe, it, expect, jest } from '@jest/globals';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { createSession, initSessionService, markSessionTrusted } from '../../SessionService';
 import { sessionAdmissionRefusal } from '../session-admission';
-import { PROVEN_SESSION_ADOPTION_WINDOW_MS, adoptProvenSession } from '../session-adoption';
+import { PROVEN_SESSION_ADOPTION_WINDOW_MS, adoptProvenSession, provenSessionAdoption } from '../session-adoption';
+import { PENDING_TWO_FACTOR_TTL_MS, provenChallengeAdoption } from '../pending-two-factor';
+import {
+  PROVEN_ADOPTION_CLIENT_FALLBACK_MS,
+  PROVEN_ADOPTION_CLIENT_MARGIN_MS,
+  provenAdoptionClientWindowMs,
+} from '@meeshy/shared/utils/proven-session-adoption';
 import type { RequestContext } from '../../GeoIPService';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -213,5 +219,87 @@ describe('« se souvenir de cet appareil » ne court-circuite pas l’adoption',
     await admit(MINUTE);
 
     expect((row().expiresAt as Date).getTime()).toBeGreaterThan(openedAt + 364 * DAY);
+  });
+});
+
+describe('la passerelle SERT la fenêtre qu’elle applique (#10518)', () => {
+  const WINDOW_SECONDS = PROVEN_SESSION_ADOPTION_WINDOW_MS / 1000;
+  const bornAt = (row: Row) => (row.expiresAt as Date).getTime() - PROVEN_SESSION_ADOPTION_WINDOW_MS;
+
+  it.each<SessionLoginMethod>(['magic_link', 'email_verification'])(
+    '%s : à sa naissance, le délai servi est la fenêtre entière — lue sur la ligne, pas recopiée',
+    async (loginMethod) => {
+      const { session, row } = await open(loginMethod);
+
+      expect(session.adoptBy).toEqual(row().expiresAt);
+      expect(provenSessionAdoption(session, new Date(bornAt(row())))).toEqual({ adoptWithinSeconds: WINDOW_SECONDS });
+    }
+  );
+
+  it('le délai servi est ce qui RESTE sur l’horloge du serveur, arrondi vers le bas', async () => {
+    const { session, row } = await open('magic_link');
+
+    expect(provenSessionAdoption(session, new Date(bornAt(row()) + 3 * MINUTE + 400))).toEqual({
+      adoptWithinSeconds: WINDOW_SECONDS - 3 * 60 - 1,
+    });
+  });
+
+  it('passé l’échéance : zéro, jamais un délai négatif', async () => {
+    const { session, row } = await open('magic_link');
+
+    expect(provenSessionAdoption(session, new Date(bornAt(row()) + PROVEN_SESSION_ADOPTION_WINDOW_MS + MINUTE))).toEqual({
+      adoptWithinSeconds: 0,
+    });
+  });
+
+  it('jamais plus que la fenêtre de la passerelle, même quand son horloge a reculé entre-temps', async () => {
+    const { session, row } = await open('magic_link');
+
+    expect(provenSessionAdoption(session, new Date(bornAt(row()) - 60 * MINUTE))).toEqual({ adoptWithinSeconds: WINDOW_SECONDS });
+  });
+
+  it('« se souvenir de cet appareil » ne l’allonge pas : l’échéance d’adoption reste celle de la ligne', async () => {
+    const { session, row } = await open('magic_link');
+
+    await markSessionTrusted(session.id, { userId: USER_ID, source: 'magic_link' });
+
+    expect(session.adoptBy).toEqual(row().expiresAt);
+  });
+
+  it('une session ouverte par mot de passe n’attend rien : rien n’est servi', async () => {
+    const { session } = await open('password');
+
+    expect(session.adoptBy).toBeUndefined();
+    expect(provenSessionAdoption(session, new Date())).toEqual({});
+  });
+
+  it.each([undefined, null, new Date(Number.NaN), '2099-01-01T00:00:00.000Z', 4102444800000])(
+    'une échéance absente ou illisible (%p) ne sert rien — le client garde son repli, plus court',
+    (adoptBy) => {
+      expect(provenSessionAdoption({ adoptBy } as never, new Date())).toEqual({});
+    }
+  );
+
+  it('un défi de second facteur sert sa propre durée de vie', () => {
+    expect(provenChallengeAdoption()).toEqual({ adoptWithinSeconds: PENDING_TWO_FACTOR_TTL_MS / 1000 });
+  });
+
+  it('ce qu’un client en tire se ferme AVANT le refus de la passerelle', async () => {
+    const { session, row, openedAt, admit } = await open('magic_link');
+    const served = provenSessionAdoption(session, new Date(bornAt(row()))).adoptWithinSeconds;
+    const clientWindow = provenAdoptionClientWindowMs('session', served);
+
+    expect(clientWindow).toBeLessThan(PROVEN_SESSION_ADOPTION_WINDOW_MS);
+    expect((row().expiresAt as Date).getTime()).toBeGreaterThan(openedAt + clientWindow);
+    expect(await admit(clientWindow)).toBeNull();
+  });
+
+  it('le repli d’un client sans délai servi tient dans les VRAIES fenêtres de la passerelle, marge comprise', () => {
+    expect(PROVEN_ADOPTION_CLIENT_FALLBACK_MS.session + PROVEN_ADOPTION_CLIENT_MARGIN_MS).toBeLessThanOrEqual(
+      PROVEN_SESSION_ADOPTION_WINDOW_MS
+    );
+    expect(PROVEN_ADOPTION_CLIENT_FALLBACK_MS['second-factor'] + PROVEN_ADOPTION_CLIENT_MARGIN_MS).toBeLessThanOrEqual(
+      PENDING_TWO_FACTOR_TTL_MS
+    );
   });
 });

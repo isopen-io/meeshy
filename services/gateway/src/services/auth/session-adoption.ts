@@ -25,6 +25,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
+import type { ProvenSessionAdoption } from '@meeshy/shared/utils/proven-session-adoption';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'SessionAdoption' });
@@ -66,6 +67,33 @@ export function openingExpiry(params: {
     expiresAt: new Date(params.now.getTime() + PROVEN_SESSION_ADOPTION_WINDOW_MS),
     adoptedExpiresAt: params.expiresAt,
   };
+}
+
+/**
+ * L'échéance d'adoption d'une ligne de session : son `expiresAt` tant qu'une
+ * échéance normale attend dans `adoptedExpiresAt`, rien sinon. Lue sur la
+ * LIGNE écrite, pour que ce que la passerelle sert soit ce qu'elle applique.
+ */
+export function adoptionDeadlineOf(row: { readonly expiresAt?: unknown; readonly adoptedExpiresAt?: unknown }): {
+  readonly adoptBy?: Date;
+} {
+  if (!(row.adoptedExpiresAt instanceof Date) || !(row.expiresAt instanceof Date)) return {};
+  return { adoptBy: row.expiresAt };
+}
+
+/**
+ * Ce que la réponse d'une preuve par lien SERT au client (#10518) : les
+ * secondes qui restent, sur l'horloge de la passerelle, avant l'échéance
+ * d'adoption de la session. Jamais négatif, jamais plus que la fenêtre. Une
+ * échéance absente ou illisible ne sert rien : le client garde son repli,
+ * plus court. Ce délai INFORME ; l'adoption reste décidée par
+ * `sessionAdmissionRefusal` et `adoptProvenSession`, sur la ligne.
+ */
+export function provenSessionAdoption(session: { readonly adoptBy?: Date }, now: Date): ProvenSessionAdoption {
+  const deadline = session.adoptBy instanceof Date ? session.adoptBy.getTime() : Number.NaN;
+  if (!Number.isFinite(deadline)) return {};
+  const left = Math.min(Math.max(deadline - now.getTime(), 0), PROVEN_SESSION_ADOPTION_WINDOW_MS);
+  return { adoptWithinSeconds: Math.floor(left / 1000) };
 }
 
 /**

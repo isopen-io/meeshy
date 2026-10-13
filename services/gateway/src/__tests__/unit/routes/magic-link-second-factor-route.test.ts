@@ -179,6 +179,64 @@ describe('POST /magic-link/validate — second facteur (#4534)', () => {
     });
   });
 
+  describe('le délai d’adoption servi avec la preuve (#10518)', () => {
+    it('second facteur : le délai du DÉFI, et toujours aucune session à côté', async () => {
+      mockValidateMagicLink.mockResolvedValue(makePendingResult());
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.adoptWithinSeconds).toBe(300);
+      expect(data.token).toBeUndefined();
+      expect(data.sessionToken).toBeUndefined();
+    });
+
+    it('session prouvée : ce qui reste avant l’échéance de la SESSION, à travers le schéma réel', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(makeFullResult({ session: { ...makeFullResult().session, adoptBy } }));
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.adoptWithinSeconds).toBeGreaterThanOrEqual(595);
+      expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+      expect(data.session.adoptBy).toBeUndefined();
+    });
+
+    it('« se souvenir de cet appareil » n’allonge pas le délai servi : 365 jours d’`expiresIn`, dix minutes pour adopter', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(
+        makeFullResult({ rememberDevice: true, session: { ...makeFullResult().session, adoptBy } })
+      );
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.expiresIn).toBe(365 * 24 * 60 * 60);
+      expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+    });
+
+    it('le corps du client ne décide de rien', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(makeFullResult({ session: { ...makeFullResult().session, adoptBy } }));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/magic-link/validate',
+        payload: { token: 'raw-token', adoptWithinSeconds: 31536000 },
+      });
+
+      expect(response.json().data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+      expect(JSON.stringify(mockValidateMagicLink.mock.calls)).not.toContain('31536000');
+    });
+
+    it('une session que rien n’attend ne sert aucun délai', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeFullResult());
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.token).toBe('jwt-token-abc');
+      expect(data.adoptWithinSeconds).toBeUndefined();
+    });
+  });
+
   describe('compte SANS second facteur', () => {
     it('sert bien token et sessionToken', async () => {
       mockValidateMagicLink.mockResolvedValue(makeFullResult());
