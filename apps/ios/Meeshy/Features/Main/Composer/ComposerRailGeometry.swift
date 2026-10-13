@@ -226,9 +226,30 @@ nonisolated enum ComposerRailGeometry {
     }
 
     /// **Où le rail droit se pose dans la scène libre** — ses deux marges,
-    /// depuis le haut et depuis le bas de cette zone.
+    /// depuis le haut et depuis le bas de cette zone (retour porteur
+    /// 2026-10-13, iOS 17.5 : le premier outil d'un texte sortait de la carte).
+    ///
+    /// Un outil ouvert retire la barre haute (#9138) : la scène libre remonte
+    /// alors jusqu'à la zone sûre, au-dessus de la carte, que son calque cadre
+    /// sur une hauteur constante. Le rail part donc du haut de la CARTE, jamais
+    /// de celui de la zone.
+    ///
+    /// En bas, il garde la remontée que les deux rails partagent
+    /// (`floatingBottomInset`) et ne la rend que si la colonne ne tient pas
+    /// au-dessus — jusqu'au bord bas de la carte au plus. Ce qui ne tient
+    /// toujours pas DÉFILE (`ViewThatFits`, dans le rail) : resserrer, puis
+    /// défiler, jamais déborder.
+    ///
+    /// Les deux cadres sont dans le même repère. Sans mesure, ou si la carte
+    /// ne laisse pas la place d'un bouton, les marges de repos.
     static func trailingRailBand(freeZone: CGRect, card: CGRect, columnHeight: CGFloat) -> ComposerRailBand {
-        ComposerRailBand(top: gutter, bottom: floatingBottomInset)
+        let repos = ComposerRailBand(top: gutter, bottom: floatingBottomInset)
+        guard !freeZone.isNull, !card.isNull, freeZone.height > 0, card.height > 0 else { return repos }
+        let top = max(repos.top, card.minY - freeZone.minY)
+        guard freeZone.height - top - repos.bottom >= railWidth else { return repos }
+        let plancher = min(repos.bottom, max(gutter, freeZone.maxY - card.maxY))
+        let requis = freeZone.height - top - columnHeight
+        return ComposerRailBand(top: top, bottom: min(repos.bottom, max(plancher, requis)))
     }
 }
 
