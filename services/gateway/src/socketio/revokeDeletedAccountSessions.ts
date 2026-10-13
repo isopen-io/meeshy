@@ -1,10 +1,11 @@
 import { disconnectRevokedSessions, type RevokedSessionIO } from './disconnectRevokedSessions';
 
 /**
- * Couper les sockets d'un compte qui vient d'être SUPPRIMÉ — fin de grâce
- * (`MaintenanceService`, via le révocateur du manager) ou purge immédiate
- * (`routes/account-deletion.ts`). Un seul site pour les deux, sans quoi l'un
- * nommerait le compte supprimé et l'autre non (#10264).
+ * Couper les sockets d'un compte dont la suppression est CONFIRMÉE — la purge
+ * (`routes/account-deletion.ts`, demande passée à `COMPLETED`, irréversible),
+ * en NOMMANT le compte supprimé (`deletedAccountId`, #10264). La fin de grâce
+ * (`MaintenanceService`) n'y passe PAS : l'annulation y rend encore le compte,
+ * et un appareil qui purgerait ses données sur sa foi les perdrait pour rien.
  */
 export function revokeDeletedAccountSessions(params: {
   io: RevokedSessionIO | null | undefined;

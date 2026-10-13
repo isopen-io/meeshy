@@ -79,10 +79,11 @@ export const AUTH_ERROR_CODES = {
   /** Bearer présenté et refusé (signature/expiration/compte) — distinct de l'absence de créance. */
   TOKEN_INVALID: 'TOKEN_INVALID',
   /**
-   * Jeton à la signature VÉRIFIÉE d'un compte SUPPRIMÉ (`isActive: false` +
-   * `deletedAt`) — distinct d'un jeton expiré ou d'une session révoquée,
-   * après lesquels le compte existe toujours : l'appareil peut purger les
-   * données locales de CE compte (#10264). Sites : `middleware/auth.ts`,
+   * Jeton à la signature VÉRIFIÉE d'un compte SUPPRIMÉ de façon IRRÉVERSIBLE
+   * (demande de suppression `COMPLETED`) — distinct d'un jeton expiré, d'une
+   * session révoquée, d'une fin de grâce ou d'une suppression de modération,
+   * après lesquels le compte peut revenir. La réponse porte `accountId` :
+   * l'appareil purge les données locales de CE compte (#10264). Sites : `middleware/auth.ts`,
    * `routes/auth/magic-link.ts` (`POST /refresh`), et le refus de connexion
    * de `socketio/handlers/AuthHandler.ts`. Règle : `services/auth/account-deleted.ts`.
    */

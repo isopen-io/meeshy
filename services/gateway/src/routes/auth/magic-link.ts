@@ -20,7 +20,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
-import { accountIsDeleted } from '../../services/auth/account-deleted';
+import { accountIsDeleted, sendAccountDeleted } from '../../services/auth/account-deleted';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import {
   legacyTokenRefusal,
@@ -173,8 +173,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // #10264 — « supprimé » ne se dit qu'ici, APRÈS la vérification de la
       // signature : seul le porteur d'un jeton de CE compte l'apprend. C'est le
       // chemin nominal d'un appareil resté hors ligne (jeton expiré).
-      const refuseDeletedAccount = () =>
-        sendUnauthorized(reply, 'Ce compte a été supprimé', { code: AUTH_ERROR_CODES.ACCOUNT_DELETED });
+      const refuseDeletedAccount = () => sendAccountDeleted(reply, decoded.userId);
       const refuseSession = async (userId: string) =>
         (await accountIsDeleted(context.prisma, userId))
           ? refuseDeletedAccount()

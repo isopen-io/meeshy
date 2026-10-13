@@ -38,8 +38,12 @@ const compte = (overrides: Record<string, unknown>) => ({
 });
 
 const monter = (ligne: Record<string, unknown>) => {
+  const { demandes = [], ...colonnes } = ligne as { demandes?: string[] };
   const prisma = {
-    user: { findUnique: jest.fn(async () => ligne), update: jest.fn(async () => undefined) },
+    user: { findUnique: jest.fn(async () => colonnes), update: jest.fn(async () => undefined) },
+    accountDeletionRequest: {
+      findFirst: jest.fn(async ({ where }: { where: { status: string } }) => (demandes.includes(where.status) ? { id: 'req-1' } : null)),
+    },
     participant: { findFirst: jest.fn(), findUnique: jest.fn(), findMany: jest.fn(async () => []) },
     callParticipant: { findMany: jest.fn(async () => []) },
     userSession: { findFirst: jest.fn(async () => null) },
@@ -71,9 +75,9 @@ afterEach(() => jest.restoreAllMocks());
 
 describe('AuthHandler — un compte supprimé (#10264)', () => {
   it('refusé, avec le code `ACCOUNT_DELETED` sur l’événement d’erreur existant', async () => {
-    const { socket, connectedUsers } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z') }));
+    const { socket, connectedUsers } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['COMPLETED'] }));
 
-    expect(socket.emit).toHaveBeenCalledWith('error', { message: 'Account disabled', code: 'ACCOUNT_DELETED' });
+    expect(socket.emit).toHaveBeenCalledWith('error', { message: 'Account disabled', code: 'ACCOUNT_DELETED', accountId: 'user-10264' });
     expect(socket.disconnect).toHaveBeenCalledWith(true);
     expect(connectedUsers.size).toBe(0);
   });
@@ -85,9 +89,9 @@ describe('AuthHandler — un compte supprimé (#10264)', () => {
     expect(socket.disconnect).toHaveBeenCalledWith(true);
   });
 
-  it('lit `deletedAt` dans la même requête que le compte', async () => {
-    const { prisma } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z') }));
+  it('grâce expirée, encore annulable : le refus d’avant, sans code', async () => {
+    const { socket } = await connecter(compte({ isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['GRACE_PERIOD_EXPIRED'] }));
 
-    expect(prisma.user.findUnique).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ deletedAt: true }) }));
+    expect(socket.emit).toHaveBeenCalledWith('error', { message: 'Account disabled' });
   });
 });

@@ -14,8 +14,7 @@ import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
-import { AccountDeletedError, accountIsDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
-import { AUTH_ERROR_CODES } from '../utils/auth-error-codes';
+import { AccountDeletedError, accountIsDeleted, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -853,7 +852,7 @@ export function createUnifiedAuthMiddleware(
       // #10264 — même statut que le 401 générique (un ancien client ne lit que
       // lui) ; le code permet à l'appareil de purger les données de CE compte.
       if (options.requireAuth && error instanceof AccountDeletedError) {
-        return sendUnauthorized(reply, 'Ce compte a été supprimé', { code: AUTH_ERROR_CODES.ACCOUNT_DELETED });
+        return sendAccountDeleted(reply, error.accountId);
       }
 
       if (options.requireAuth) {

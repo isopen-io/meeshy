@@ -59,13 +59,20 @@ const compte = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const supprime = () => compte({ isActive: false, deletedAt: DELETED_AT });
+// La purge CONFIRMÉE : seule preuve d'une suppression irréversible.
+const supprime = () => compte({ isActive: false, deletedAt: DELETED_AT, demandes: ['COMPLETED'] });
+const graceExpiree = () => compte({ isActive: false, deletedAt: DELETED_AT, demandes: ['GRACE_PERIOD_EXPIRED'] });
+const suppressionDeModeration = () => compte({ isActive: false, deactivatedAt: DELETED_AT, deletedAt: DELETED_AT, deletedBy: 'admin-id' });
 
 const prismaFor = (ligne: Record<string, unknown> | null) => {
-  const findUnique = jest.fn(async () => ligne);
+  const { demandes = [], ...colonnes } = (ligne ?? {}) as { demandes?: string[] };
+  const findUnique = jest.fn(async () => (ligne ? colonnes : null));
   return {
     prisma: {
       user: { findUnique },
+      accountDeletionRequest: {
+        findFirst: jest.fn(async ({ where }: { where: { status: string } }) => (demandes.includes(where.status) ? { id: 'req-1' } : null)),
+      },
       userSession: { findFirst: jest.fn(async () => null), update: jest.fn(async () => ({})) },
       participant: { findFirst: jest.fn(async () => null) },
     } as never,
@@ -123,11 +130,21 @@ describe('AuthMiddleware — un jeton signé d’un compte supprimé', () => {
 });
 
 describe('createUnifiedAuthMiddleware — la réponse servie, à travers le sérialiseur', () => {
-  it('compte supprimé : 401 `ACCOUNT_DELETED`', async () => {
+  it('compte supprimé : 401 `ACCOUNT_DELETED` qui NOMME le compte du jeton', async () => {
     const res = await appeler(supprime(), signe());
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_DELETED' });
+    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_DELETED', accountId: USER_ID });
+  });
+
+  it.each([
+    ['grâce expirée, encore annulable', graceExpiree],
+    ['suppression de modération, annulable par restoreUser', suppressionDeModeration],
+  ])('%s : 401 `AUTH_FAILED`, jamais « supprimé »', async (_cas, ligne) => {
+    const res = await appeler(ligne(), signe());
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toMatchObject({ code: 'AUTH_FAILED' });
   });
 
   it('compte désactivé (non supprimé) : 401 `AUTH_FAILED`, comme avant', async () => {

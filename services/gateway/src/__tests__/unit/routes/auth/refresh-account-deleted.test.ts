@@ -52,14 +52,19 @@ jest.mock('../../../../services/notifications/contact-joined', () => ({
 
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
 
-type Ligne = { isActive: boolean; deletedAt: Date | null };
-const SUPPRIME: Ligne = { isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z') };
+type Ligne = { isActive: boolean; deletedAt: Date | null; demandes?: readonly string[] };
+const SUPPRIME: Ligne = { isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['COMPLETED'] };
+const GRACE_EXPIREE: Ligne = { isActive: false, deletedAt: new Date('2026-10-01T00:00:00Z'), demandes: ['GRACE_PERIOD_EXPIRED'] };
 const DESACTIVE: Ligne = { isActive: false, deletedAt: null };
 
 const monter = async (opts: { ligne: Ligne; sessionValide: boolean }): Promise<{ app: FastifyInstance; findUnique: jest.Mock<any> }> => {
-  const findUnique = jest.fn<any>(async () => ({ ...opts.ligne, birthDate: null }));
+  const { demandes = [], ...colonnes } = opts.ligne;
+  const findUnique = jest.fn<any>(async () => ({ ...colonnes, birthDate: null }));
   const prisma = {
     user: { findUnique },
+    accountDeletionRequest: {
+      findFirst: jest.fn<any>(async ({ where }: { where: { status: string } }) => (demandes.includes(where.status) ? { id: 'req-1' } : null)),
+    },
     userSession: {
       findFirst: jest.fn<any>(async () => (opts.sessionValide ? { id: 'sess-1' } : null)),
       update: jest.fn<any>(async () => ({})),
@@ -96,14 +101,23 @@ const rafraichir = async (app: FastifyInstance) => {
 const jetonNomme = () => mockVerify.mockReturnValue({ userId: USER_ID, sid: 'sess-1', iat: Math.floor(Date.now() / 1000) });
 
 describe('POST /auth/refresh — un jeton signé d’un compte supprimé', () => {
-  it('session effacée par la purge : 401 `ACCOUNT_DELETED`', async () => {
+  it('session effacée par la purge : 401 `ACCOUNT_DELETED` qui NOMME le compte du jeton', async () => {
     jetonNomme();
     const { app } = await monter({ ligne: SUPPRIME, sessionValide: false });
 
     const res = await rafraichir(app);
 
     expect(res.statusCode).toBe(401);
-    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_DELETED' });
+    expect(res.json()).toMatchObject({ success: false, code: 'ACCOUNT_DELETED', accountId: USER_ID });
+  });
+
+  it('grâce expirée, encore annulable : `SESSION_REVOKED`, jamais `ACCOUNT_DELETED`', async () => {
+    jetonNomme();
+    const { app } = await monter({ ligne: GRACE_EXPIREE, sessionValide: false });
+
+    const res = await rafraichir(app);
+
+    expect(res.json()).toMatchObject({ code: 'SESSION_REVOKED' });
   });
 
   it('jeton hérité (sans `sid`), aucune session restante : 401 `ACCOUNT_DELETED`', async () => {

@@ -5161,13 +5161,13 @@ describe('MeeshySocketIOManager', () => {
       disconnectRevokedSessions.mockClear();
       const revoke = mockMaintenanceServiceInstance.setSessionRevoker.mock.calls[0][0];
       await revoke('user-expired');
-      expect(disconnectRevokedSessions).toHaveBeenCalledTimes(1);
-      expect(disconnectRevokedSessions).toHaveBeenCalledWith(expect.objectContaining({
+      expect(disconnectRevokedSessions.mock.calls).toEqual([[{
         io: (manager as any).io,
         userId: 'user-expired',
         reason: 'logout_all_devices',
+        message: expect.any(String),
         onError: expect.any(Function),
-      }));
+      }]]);
     });
 
     it('setIsCurrentlyConnected callback returns true for connected user', () => {

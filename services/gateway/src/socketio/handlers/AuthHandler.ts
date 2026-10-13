@@ -27,7 +27,7 @@ import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-c
 import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
-import { isDeletedAccountRow } from '../../services/auth/account-deleted';
+import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
@@ -240,7 +240,6 @@ export class AuthHandler {
         customDestinationLanguage: true,
         deviceLocale: true,
         isActive: true,
-        deletedAt: true,
         ...ACTIVATION_SELECT,
       }
     });
@@ -265,7 +264,9 @@ export class AuthHandler {
     if (user.isActive === false) {
       socket.emit(
         SERVER_EVENTS.ERROR,
-        isDeletedAccountRow(user) ? { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED } : { message: 'Account disabled' },
+        (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, user.id))
+          ? { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: user.id }
+          : { message: 'Account disabled' },
       );
       socket.disconnect(true);
       return;
