@@ -555,6 +555,77 @@ describe('PATCH /guest-sessions/me — participation morte (#10457)', () => {
   });
 });
 
+// ─── PATCH /guest-sessions/me — le lien se lit comme aux autres portes (#10464) ─
+
+/**
+ * #10464 — le rafraîchissement lisait le lien de l'invité sur la seule session
+ * embarquée (`anonymousSession.shareLinkId`), quand les trois autres portes le
+ * lisent par `guestShareLinkId` : la colonne de la participation d'abord, la
+ * session en repli. Un invité dont seule la colonne porte le lien était traité
+ * comme sans lien (410 LINK_DEACTIVATED) ; un invité dont les deux divergent
+ * était jugé sur un autre lien que partout ailleurs.
+ */
+describe('PATCH /guest-sessions/me — le lien de l\'invité se lit par la colonne d\'abord (#10464)', () => {
+  const OTHER_LINK_DB_ID = '507f1f77bcf86cd799439033';
+  const patch = (app: FastifyInstance) =>
+    app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+  const guestRow = (extra: Record<string, unknown>) => ({
+    id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+    permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    ...extra,
+  });
+
+  it('lien porté par la seule COLONNE ⇒ lu et rafraîchi, plus traité comme un lien disparu', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('colonne et session divergent ⇒ la COLONNE fait foi, comme aux autres portes', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { shareLinkId: OTHER_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect((app as any).prisma.conversationShareLink.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: OTHER_LINK_DB_ID } })
+    );
+  });
+
+  it('colonne vide ⇒ la session embarquée en repli', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: null,
+      anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect(res.statusCode).toBe(200);
+  });
+});
+
 // ─── DELETE /guest-sessions/me — idempotence (critère 4 + critère 6) ─────────
 
 describe('DELETE /guest-sessions/me', () => {

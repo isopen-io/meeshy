@@ -22,7 +22,7 @@ jest.mock('../emitConversationMemberCount', () => ({
   emitConversationMemberCountEvent: jest.fn(),
 }));
 
-import { revokeShareLinkGuests } from '../revokeShareLinkGuests';
+import { revokeShareLinkGuests, REVOCATION_WRITE_BATCH } from '../revokeShareLinkGuests';
 import { emitConversationMemberCountEvent } from '../emitConversationMemberCount';
 import {
   cacheParticipant,
@@ -331,5 +331,106 @@ describe('revokeShareLinkGuests', () => {
     expect(revoked).toEqual([]);
     expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
     expect(order).toEqual([]);
+  });
+  /**
+   * #10464 (R1) — un `Promise.all` rejetait dès qu'une écriture levait : les
+   * invités DÉJÀ passés à inactif n'étaient ni annoncés, ni évincés, ni retirés
+   * du cache, et la reprise ne les retrouvait plus (ils ne sont plus actifs).
+   * Leur socket lisait le fil jusqu'à la relecture suivante.
+   */
+  it("annonce, évince et invalide l'invité écrit même si l'écriture d'un AUTRE invité lève, puis relance l'erreur", async () => {
+    const rows = [
+      { id: GUEST_A, conversationId: CONV_ID, displayName: 'Invité A', isActive: true },
+      { id: GUEST_B, conversationId: CONV_ID, displayName: 'Invité B', isActive: true },
+    ];
+    let failB = true;
+    const prisma = {
+      participant: {
+        findMany: jest.fn<any>(async (args: any) =>
+          args?.where?.OR
+            ? rows.filter(row => row.isActive).map(({ id, conversationId, displayName }) => ({ id, conversationId, displayName }))
+            : []
+        ),
+        updateMany: jest.fn<any>(async ({ where, data }: any) => {
+          if (where.id === GUEST_B && failB) throw new Error('pool timeout');
+          const row = rows.find(candidate => candidate.id === where.id && candidate.isActive === where.isActive);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        }),
+      },
+    };
+    cacheParticipant(GUEST_A, CONV_ID, { id: GUEST_A, conversationId: CONV_ID, isActive: true });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID })
+    ).rejects.toThrow('pool timeout');
+
+    const announcedFirst = (emitConversationMemberCountEvent as jest.Mock).mock.calls.map(([arg]: any) => arg.payload.participantId);
+    expect(announcedFirst).toEqual([GUEST_A]);
+    expect(order).toContain(`end-call:${CONV_ID}:${GUEST_A}`);
+    expect(order).toContain(`leave:${ROOMS.user(GUEST_A)}:${ROOMS.conversation(CONV_ID)}`);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+    expect(order).not.toContain(`disconnect:${ROOMS.user(GUEST_B)}`);
+    expect(getCachedParticipant(GUEST_A, CONV_ID)).toBeUndefined();
+
+    // La reprise (l'appelant garde le lien ouvert) retrouve B, et lui seul.
+    failB = false;
+    const retried = await revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID });
+
+    expect(retried).toEqual([GUEST_B]);
+    expect(rows.every(row => !row.isActive)).toBe(true);
+    const announced = (emitConversationMemberCountEvent as jest.Mock).mock.calls.map(([arg]: any) => arg.payload.participantId);
+    expect(announced).toEqual([GUEST_A, GUEST_B]);
+  });
+
+  it("une écriture qui lève n'arrête pas les paquets suivants : chaque autre invité est écrit et annoncé", async () => {
+    const guests = Array.from({ length: REVOCATION_WRITE_BATCH * 2 + 3 }, (_unused, index) => ({
+      id: `guest-${index}`, conversationId: CONV_ID, displayName: `Invité ${index}`,
+    }));
+    const failing = guests[0].id;
+    const prisma = makePrisma(guests);
+    prisma.participant.updateMany.mockImplementation(async ({ where }: any) => {
+      if (where.id === failing) throw new Error('write failed');
+      return { count: 1 };
+    });
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io: null, manager: null, shareLinkId: LINK_ID })
+    ).rejects.toThrow('write failed');
+
+    expect(prisma.participant.updateMany).toHaveBeenCalledTimes(guests.length);
+    expect(emitConversationMemberCountEvent).toHaveBeenCalledTimes(guests.length - 1);
+  });
+
+  /**
+   * #10464 (R2) — un lien sans limite d'usage lançait autant d'écritures
+   * concurrentes que d'invités actifs : de quoi saturer le pool de connexions.
+   */
+  it("n'a jamais plus de REVOCATION_WRITE_BATCH écritures en vol, et les écrit toutes", async () => {
+    expect(REVOCATION_WRITE_BATCH).toBeGreaterThanOrEqual(25);
+    expect(REVOCATION_WRITE_BATCH).toBeLessThanOrEqual(50);
+    const guests = Array.from({ length: REVOCATION_WRITE_BATCH * 3 + 7 }, (_unused, index) => ({
+      id: `guest-${index}`, conversationId: CONV_ID, displayName: `Invité ${index}`,
+    }));
+    const prisma = makePrisma(guests);
+    let inFlight = 0;
+    let peak = 0;
+    prisma.participant.updateMany.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setImmediate(resolve));
+      inFlight -= 1;
+      return { count: 1 };
+    });
+
+    const revoked = await revokeShareLinkGuests({ prisma: prisma as never, io: null, manager: null, shareLinkId: LINK_ID });
+
+    expect(peak).toBeLessThanOrEqual(REVOCATION_WRITE_BATCH);
+    expect(peak).toBeGreaterThan(1);
+    expect(prisma.participant.updateMany).toHaveBeenCalledTimes(guests.length);
+    expect(revoked).toHaveLength(guests.length);
   });
 });

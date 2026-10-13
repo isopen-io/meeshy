@@ -344,7 +344,7 @@ describe('POST /anonymous/refresh', () => {
   });
 
   it('returns 410 when share link not found', async () => {
-    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({ ...mockParticipant, anonymousSession: { shareLinkId: null } });
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({ ...mockParticipant, shareLinkId: null, anonymousSession: { shareLinkId: null } });
     const res = await app.inject({ method: 'POST', url: '/anonymous/refresh', payload: { sessionToken: 'some-token' } });
     expect(res.statusCode).toBe(410);
   });

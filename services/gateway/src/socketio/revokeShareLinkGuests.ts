@@ -160,17 +160,17 @@ export async function revokeShareLinkGuests(
   // annoncé, évincé et compté. Deux balayages concurrents (nettoyage admin et
   // journalier, ou un geste de l'hôte pendant un balayage) lisaient les mêmes
   // invités actifs et émettaient chacun leur départ.
-  const transitions = await Promise.all(
-    candidates.map(guest =>
-      prisma.participant.updateMany({
-        where: { id: guest.id, isActive: true },
-        data: { isActive: false, leftAt: revokedAt },
-      })
-    )
-  );
-  const guests = candidates.filter((_guest, index) => transitions[index].count > 0);
+  //
+  // #10464 — par paquets bornés, et chaque issue est lue : une écriture qui
+  // lève ne prive plus de leur annonce et de leur éviction les invités DÉJÀ
+  // passés à inactif (la reprise ne les retrouverait plus), et un lien sans
+  // limite d'usage ne sature plus le pool de connexions.
+  const { written: guests, failure } = await deactivateGuests(prisma, candidates, revokedAt);
 
-  if (guests.length === 0) return [];
+  if (guests.length === 0) {
+    if (failure) throw failure.reason;
+    return [];
+  }
 
   // Un lien n'a qu'une conversation, mais l'effectif se lit sur la ligne de
   // CHAQUE invité plutôt que sur un paramètre : une ligne pendante ne peut
@@ -225,5 +225,47 @@ export async function revokeShareLinkGuests(
     }
   }
 
+  // L'appelant garde le lien ouvert sur un échec : la reprise retrouve les
+  // invités restés actifs, et eux seuls.
+  if (failure) throw failure.reason;
+
   return guests.map(guest => guest.id);
+}
+
+/** Écritures concurrentes au plus — entre 25 et 50 (#10464). */
+export const REVOCATION_WRITE_BATCH = 25;
+
+type RevocationCandidate = { readonly id: string; readonly conversationId: string; readonly displayName: string };
+
+async function deactivateGuests(
+  prisma: PrismaClient,
+  candidates: ReadonlyArray<RevocationCandidate>,
+  revokedAt: Date
+): Promise<{ written: ReadonlyArray<RevocationCandidate>; failure: PromiseRejectedResult | undefined }> {
+  const batches = Array.from(
+    { length: Math.ceil(candidates.length / REVOCATION_WRITE_BATCH) },
+    (_unused, index) => candidates.slice(index * REVOCATION_WRITE_BATCH, (index + 1) * REVOCATION_WRITE_BATCH)
+  );
+
+  const outcomes: Array<PromiseSettledResult<{ count: number }>> = [];
+  for (const batch of batches) {
+    outcomes.push(
+      ...(await Promise.allSettled(
+        batch.map(guest =>
+          prisma.participant.updateMany({
+            where: { id: guest.id, isActive: true },
+            data: { isActive: false, leftAt: revokedAt },
+          })
+        )
+      ))
+    );
+  }
+
+  return {
+    written: candidates.filter((_guest, index) => {
+      const outcome = outcomes[index];
+      return outcome.status === 'fulfilled' && outcome.value.count > 0;
+    }),
+    failure: outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'),
+  };
 }

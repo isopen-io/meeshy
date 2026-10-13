@@ -9,6 +9,7 @@ import { hashSessionToken } from '../../utils/session-token';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import type { ParticipantRow, ShareLinkWithConversation } from './link-admission';
 
 export interface GuestSessionParams {
@@ -44,7 +45,9 @@ export async function refreshGuestSession(params: GuestSessionParams): Promise<R
   });
   if (!participant) return { kind: 'invalid' };
 
-  const shareLinkId = participant.anonymousSession?.shareLinkId;
+  // #10464 — le lien se lit comme aux autres portes : la colonne de la
+  // participation d'abord, la session embarquée en repli.
+  const shareLinkId = guestShareLinkId(participant);
   const shareLink = shareLinkId
     ? ((await prisma.conversationShareLink.findUnique({
         where: { id: shareLinkId },
