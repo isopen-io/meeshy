@@ -17,15 +17,9 @@ public enum SocialEventsV2Wire {
     /// Au-delà de 72 h, la passerelle l'ignorerait : il ne part pas.
     public static let maxAge: TimeInterval = 72 * 3_600
 
-    nonisolated(unsafe) private static let formatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    public static func isoString(_ date: Date) -> String { WireDate.string(from: date) }
 
-    public static func isoString(_ date: Date) -> String { formatter.string(from: date) }
-
-    public static func date(fromISO text: String) -> Date? { formatter.date(from: text) }
+    public static func date(fromISO text: String) -> Date? { WireDate.date(from: text) }
 
     /// Une fraction 0…1 à deux décimales.
     public static func fraction(_ value: Double) -> Double {

@@ -176,6 +176,6 @@ struct SocialEventsBody: Encodable {
     static func encoded(_ events: [StampedSocialEvent], sentAt: Date) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: SocialEventsV2Wire.isoString(sentAt))))
+        return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: WireDate.string(from: sentAt))))
     }
 }

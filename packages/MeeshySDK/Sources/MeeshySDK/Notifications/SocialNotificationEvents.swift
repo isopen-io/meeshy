@@ -28,10 +28,7 @@ public enum SocialNotificationEvents {
 
     static func deliveryLatencyMs(_ raw: Any?, at date: Date) -> Int? {
         guard let text = raw as? String else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let sent = formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)
-        guard let sent else { return nil }
+        guard let sent = WireDate.date(from: text) else { return nil }
         let ms = Int(date.timeIntervalSince(sent) * 1_000)
         return (0...SocialEventsV2Wire.maxAgeMs).contains(ms) ? ms : nil
     }

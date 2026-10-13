@@ -67,7 +67,7 @@ public struct SocialEventStamp: Codable, Sendable, Equatable, Hashable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(eventId, forKey: .eventId)
-        try container.encodeIfPresent(occurredAt.map(SocialEventsV2Wire.isoString), forKey: .occurredAt)
+        try container.encodeIfPresent(occurredAt.map(WireDate.string(from:)), forKey: .occurredAt)
     }
 
     public init(from decoder: Decoder) throws {
@@ -79,7 +79,7 @@ public struct SocialEventStamp: Codable, Sendable, Equatable, Hashable {
     /// Une heure illisible se lit comme absente, jamais comme une erreur.
     static func decodedDate(in container: KeyedDecodingContainer<CodingKeys>) -> Date? {
         guard let text = (try? container.decodeIfPresent(String.self, forKey: .occurredAt)) ?? nil else { return nil }
-        return SocialEventsV2Wire.date(fromISO: text) ?? ISO8601DateFormatter().date(from: text)
+        return WireDate.date(from: text)
     }
 }
 
