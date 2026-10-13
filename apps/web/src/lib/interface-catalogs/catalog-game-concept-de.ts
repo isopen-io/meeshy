@@ -297,7 +297,7 @@ const de = {
   'game.concept.points.use': 'Für den Aufstieg zählen deine Punkte im Besitz. Für eine Meesh zählen deine Punkte zum Tauschen: Dieses Guthaben muss den Preis erreichen. Eine Prägung zieht ihren Preis von beiden Guthaben ab.',
   'game.concept.meesh.what': 'Eine Meesh ist eine Münze, die du selbst prägst. Jede Münze trägt ihre Nummer: Jede hundertste ist aus Gold, jede tausendste aus Prisma.',
   'game.concept.meesh.use': 'Behalte deine Meeshes: Sie füllen deinen Schatz, der auf deinem Profil zu sehen ist. Oder gib sie aus: ein Eis für deine Flamme, eine Mission zum Tauschen, das Siegel der Saison. Jede Prägung bringt außerdem Ruhm.',
-  'game.concept.glory.what': 'Ruhm ist ein Zähler, der nie sinkt. Er bestimmt deinen Rang: elf Ränge, jeder mit seinen Divisionen.',
+  'game.concept.glory.what': 'Ruhm ist ein Zähler, der nie sinkt. Er bestimmt deinen Rang, einen von elf.',
   'game.concept.glory.use': 'Dein Rang zeigt sich auf deinem Wappen und auf deinem Profil. Er öffnet auch die Level: bis 499 unter Botschafter, 1000 ab Botschafter, ohne Grenze ab Orakel.',
   'game.concept.flame.what': 'Deine Flamme ist deine Serie von Tagen: Sie wächst an jedem Tag, an dem du mindestens eine Aktion machst, und ändert dabei ihre Form.',
   'game.concept.flame.use': 'Jeder Tag der Serie bringt 2 % mehr auf deine Missionsbelohnungen, bis zu 50 %. Ein Eis deckt einen verpassten Tag ab. Ist sie erloschen, entzündest du sie 48 Stunden lang mit Meeshes neu.',

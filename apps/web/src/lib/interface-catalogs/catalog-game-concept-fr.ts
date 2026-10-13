@@ -295,7 +295,7 @@ const fr = {
   'game.concept.points.use': 'Pour monter de niveau, regarde tes points en poche. Pour frapper une Meesh, regarde tes points à convertir : c’est ce solde qui doit atteindre le prix. Une frappe retire son prix des deux soldes.',
   'game.concept.meesh.what': 'Une Meesh est une pièce que tu frappes toi-même. Chaque pièce porte son numéro : une sur cent est en or, une sur mille en prisme.',
   'game.concept.meesh.use': 'Garde tes Meeshes : elles remplissent ton trésor, visible sur ton profil. Ou dépense-les : un gel pour ta Flamme, une mission à changer, le Sceau de la saison. Chaque frappe ajoute aussi de la Gloire.',
-  'game.concept.glory.what': 'La Gloire est un compteur qui ne redescend jamais. Elle donne ton rang : onze rangs, chacun avec ses divisions.',
+  'game.concept.glory.what': 'La Gloire est un compteur qui ne redescend jamais. Elle donne ton rang, parmi onze.',
   'game.concept.glory.use': 'Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi les niveaux : jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle.',
   'game.concept.flame.what': 'Ta Flamme est ta série de jours : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant.',
   'game.concept.flame.use': 'Chaque jour de série ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué. Éteinte, elle se rallume avec des Meeshes pendant 48 h.',

@@ -297,7 +297,7 @@ const es = {
   'game.concept.points.use': 'Para subir de nivel, mira tus puntos en mano. Para acuñar una Meesh, mira tus puntos por convertir: ese es el saldo que debe alcanzar el precio. Una acuñación resta su precio de los dos saldos.',
   'game.concept.meesh.what': 'Una Meesh es una moneda que acuñas tú. Cada moneda lleva su número: una de cada cien es de oro, una de cada mil de prisma.',
   'game.concept.meesh.use': 'Guarda tus Meeshes: llenan tu tesoro, visible en tu perfil. O gástalas: una congelación para tu Llama, una misión que cambiar, el Sello de la temporada. Cada acuñación suma además Gloria.',
-  'game.concept.glory.what': 'La Gloria es un contador que nunca baja. Te da tu rango: once rangos, cada uno con sus divisiones.',
+  'game.concept.glory.what': 'La Gloria es un contador que nunca baja. Te da tu rango, uno entre once.',
   'game.concept.glory.use': 'Tu rango se muestra en tu blasón y en tu perfil. También abre los niveles: hasta 499 bajo Embajador, 1000 desde Embajador, sin límite desde Oráculo.',
   'game.concept.flame.what': 'Tu Llama es tu racha de días: crece cada día en que haces al menos un gesto, y cambia de forma al crecer.',
   'game.concept.flame.use': 'Cada día de racha suma un 2 % a tus recompensas de misión, hasta un 50 %. Una congelación cubre un día perdido. Apagada, se vuelve a encender con Meeshes durante 48 h.',

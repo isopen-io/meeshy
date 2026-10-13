@@ -297,7 +297,7 @@ const en = {
   'game.concept.points.use': 'To level up, look at your points in hand. To mint a Meesh, look at your points to convert: that is the balance that must reach the price. A mint takes its price out of both balances.',
   'game.concept.meesh.what': 'A Meesh is a coin you mint yourself. Each coin carries its number: one in a hundred is gold, one in a thousand is prism.',
   'game.concept.meesh.use': 'Keep your Meeshes: they fill your treasury, shown on your profile. Or spend them: a freeze for your Flame, a mission to change, the season Seal. Every mint also adds Glory.',
-  'game.concept.glory.what': 'Glory is a counter that never goes down. It gives you your rank: eleven ranks, each with its divisions.',
+  'game.concept.glory.what': 'Glory is a counter that never goes down. It gives you your rank, one of eleven.',
   'game.concept.glory.use': 'Your rank shows on your crest and on your profile. It also opens the levels: up to 499 below Ambassador, 1000 from Ambassador, no limit from Oracle.',
   'game.concept.flame.what': 'Your Flame is your streak of days: it grows every day you do at least one action, and changes shape as it grows.',
   'game.concept.flame.use': 'Each day of your streak adds 2% to your mission rewards, up to 50%. A freeze covers a missed day. Once out, it can be relit with Meeshes for 48 hours.',

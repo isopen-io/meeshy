@@ -297,7 +297,7 @@ const pt = {
   'game.concept.points.use': 'Para subir de nível, olhe seus pontos em mãos. Para cunhar uma Meesh, olhe seus pontos para converter: é esse saldo que precisa alcançar o preço. Uma cunhagem tira o preço dos dois saldos.',
   'game.concept.meesh.what': 'Uma Meesh é uma moeda que você mesmo cunha. Cada moeda tem o seu número: uma em cem é de ouro, uma em mil é de prisma.',
   'game.concept.meesh.use': 'Guarde suas Meeshes: elas enchem o seu tesouro, visível no seu perfil. Ou gaste-as: um congelamento para sua Chama, uma missão para trocar, o Selo da temporada. Cada cunhagem também soma Glória.',
-  'game.concept.glory.what': 'A Glória é um contador que nunca cai. Ela dá o seu rank: onze ranks, cada um com suas divisões.',
+  'game.concept.glory.what': 'A Glória é um contador que nunca cai. Ela dá o seu rank, um entre onze.',
   'game.concept.glory.use': 'Seu rank aparece no seu brasão e no seu perfil. Ele também abre os níveis: até 499 abaixo de Embaixador, 1000 a partir de Embaixador, sem limite a partir de Oráculo.',
   'game.concept.flame.what': 'Sua Chama é a sua sequência de dias: ela cresce a cada dia em que você faz ao menos um gesto, e muda de forma ao crescer.',
   'game.concept.flame.use': 'Cada dia de sequência soma 2% às suas recompensas de missão, até 50%. Um congelamento cobre um dia perdido. Apagada, ela se reacende com Meeshes durante 48 h.',

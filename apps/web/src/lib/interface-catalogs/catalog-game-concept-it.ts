@@ -297,7 +297,7 @@ const it = {
   'game.concept.points.use': 'Per salire di livello, guarda i punti in tasca. Per coniare una Meesh, guarda i punti da convertire: è quel saldo che deve raggiungere il prezzo. Un conio toglie il prezzo da entrambi i saldi.',
   'game.concept.meesh.what': 'Una Meesh è una moneta che conii tu. Ogni moneta porta il suo numero: una su cento è d’oro, una su mille di prisma.',
   'game.concept.meesh.use': 'Tieni le tue Meesh: riempiono il tuo tesoro, visibile sul profilo. Oppure spendile: un congelamento per la Fiamma, una missione da cambiare, il Sigillo della stagione. Ogni conio aggiunge anche Gloria.',
-  'game.concept.glory.what': 'La Gloria è un contatore che non scende mai. Ti dà il rango: undici ranghi, ognuno con le sue divisioni.',
+  'game.concept.glory.what': 'La Gloria è un contatore che non scende mai. Ti dà il rango, uno fra undici.',
   'game.concept.glory.use': 'Il tuo rango si vede sul blasone e sul profilo. Apre anche i livelli: fino a 499 sotto Ambasciatore, 1000 da Ambasciatore, senza limite da Oracolo.',
   'game.concept.flame.what': 'La tua Fiamma è la tua serie di giorni: cresce ogni giorno in cui fai almeno un gesto, e cambia forma crescendo.',
   'game.concept.flame.use': 'Ogni giorno di serie aggiunge il 2% ai premi delle missioni, fino al 50%. Un congelamento copre un giorno saltato. Spenta, si riaccende con le Meesh per 48 ore.',
