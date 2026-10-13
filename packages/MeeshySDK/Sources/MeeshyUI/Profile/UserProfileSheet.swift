@@ -245,6 +245,9 @@ public struct UserProfileSheet: View {
         if effectiveIsLoading {
             loadingPlaceholder
                 .padding(.horizontal, MeeshySpacing.xl)
+        } else if loader.profileLoadFailed {
+            profileLoadFailedState
+                .padding(.horizontal, MeeshySpacing.xl)
         } else {
             switch selectedTab {
             case .posts:
@@ -254,6 +257,47 @@ public struct UserProfileSheet: View {
             case .details:
                 detailsTab
             }
+        }
+    }
+
+    // MARK: - Profil non chargé (#8025)
+
+    /// Le profil n'a pas pu se charger et le cache n'a rien à montrer : la
+    /// fiche le dit et propose de réessayer, au lieu d'onglets vides.
+    private var profileLoadFailedState: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(MeeshyFont.relative(28, weight: .light))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+            Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                HapticFeedback.light()
+                Task { await retryProfile() }
+            } label: {
+                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .background(Capsule().fill(Color(hex: resolvedAccent)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.xl)
+    }
+
+    private func retryProfile() async {
+        await loader.retry(userId: user.userId, username: user.username)
+        resolveConnectionStatus()
+        if internalConversations.isEmpty {
+            await loadConversationsIfNeeded()
         }
     }
 
