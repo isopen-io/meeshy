@@ -13,6 +13,7 @@ import {
   loadedEmojiIndex,
   searchEmojis,
 } from './emoji-catalogue';
+import { EMOJI_SKIN_TONES, skinToneKey, withSkinTone } from './emoji-skin-tone';
 
 /**
  * LA TABLE DES EMOJIS ET SA RECHERCHE (#10531) — la feuille propose tous les
@@ -64,6 +65,50 @@ describe('la table des emojis', () => {
 
   test('une table dont les paliers ne suivent pas les emojis est refusée', () => {
     expect(() => buildEmojiIndex([['smileys', '😀 😃', '0']])).toThrow();
+  });
+});
+
+/**
+ * QUI ACCEPTE UNE TEINTE (#10533) — un drapeau par emoji dans la table
+ * générée, vérifié par le générateur contre la liste d'Unicode : les cinq
+ * variantes calculées existent toutes. Les emojis à plusieurs personnages, qui
+ * exigent un modificateur par personne, ne le portent pas.
+ */
+describe('les emojis qui acceptent une teinte de peau', () => {
+  const baseOf = async (emoji: string) => (await loadEmojiIndex()).tonable.get(skinToneKey(emoji));
+
+  test('une main, une personne, un métier l’acceptent ; un visage jaune, un objet, un drapeau non', async () => {
+    for (const emoji of ['👍', '👋', '☝️', '🙏', '💪', '🧑', '🕵️‍♂️', '🤦‍♀️', '🧑‍🚀']) expect({ emoji, base: await baseOf(emoji) }).toEqual({ emoji, base: emoji });
+    for (const emoji of ['😀', '❤️', '🔥', '🇫🇷', '🐱']) expect({ emoji, base: await baseOf(emoji) }).toEqual({ emoji, base: undefined });
+  });
+
+  test('un emoji à plusieurs personnages, qui veut un modificateur par personne, ne l’accepte pas', async () => {
+    for (const emoji of ['🧑‍🤝‍🧑', '👩‍❤️‍👨', '👨‍👩‍👧']) expect({ emoji, base: await baseOf(emoji) }).toEqual({ emoji, base: undefined });
+  });
+
+  test('ils sont plusieurs centaines, tous dans « Personnes et gestes », et l’entrée le dit', async () => {
+    const index = await loadEmojiIndex();
+    const toned = index.all.filter((entry) => entry.toned);
+    expect(toned.length).toBeGreaterThan(250);
+    expect(index.tonable.size).toBe(toned.length);
+    expect(toned.filter((entry) => !(index.byGroup.get('people') ?? []).includes(entry))).toEqual([]);
+  });
+
+  test('une variante retrouve sa base, et chacune ne porte qu’UN modificateur', async () => {
+    const index = await loadEmojiIndex();
+    expect(await baseOf('👍🏽')).toBe('👍');
+    expect(await baseOf('☝🏿')).toBe('☝️');
+    const tones = EMOJI_SKIN_TONES.filter((tone) => tone !== 'default');
+    const wrong = [...index.tonable.values()].filter((base) =>
+      tones.some((tone) => (withSkinTone(base, tone).match(/[\u{1F3FB}-\u{1F3FF}]/gu) ?? []).length !== 1),
+    );
+    expect(wrong).toEqual([]);
+  });
+
+  test('une table dont les drapeaux ne suivent pas les emojis est refusée', () => {
+    expect(() => buildEmojiIndex([['people', '👋 🤚', '00', '1']])).toThrow();
+    expect(buildEmojiIndex([['people', '👋 👀', '00', '10']]).all.map((entry) => entry.toned)).toEqual([true, false]);
+    expect(buildEmojiIndex([['smileys', '😀 😃', '00']]).tonable.size).toBe(0);
   });
 });
 

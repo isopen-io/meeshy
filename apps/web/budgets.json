@@ -1019,9 +1019,9 @@
     "emoji_picker_sheet": {
       "pattern": "^assets/emoji-picker-sheet-[A-Za-z0-9_-]+\\.js$",
       "kb": {
-        "value": 5,
-        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
-        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 4,04 Ko pour la feuille d emojis complete (`components/emoji-picker-sheet.tsx` : rangee de categories, recherche, recents, grille au clavier ; `lib/emoji/emoji-catalogue.ts`, `emoji-support.ts`, `emoji-grid-keys.ts`, `lib/emoji-recents.ts`, et le chargeur de ses libelles `lib/i18n-emoji-picker-catalog.ts`, qui voyage avec elle par `prepareEmojiPickerSheet`). Elle remplace la grille des vingt (`emoji-grid`, 0,25 Ko). Pas de `dynamic_only` ICI : ses deux hotes l importent statiquement, et ce sont EUX qui ne s atteignent que par import() (`emoji_sheet_hosts`). Arrondi au Ko SUPERIEUR (5)."
+        "value": 6,
+        "status": "CIBLE -- REMESUREE PAR #10533, NON ARBITREE",
+        "source": "REMESURE le 2026-10-13 par les teintes de peau (#10533) : 5,18 Ko gzip -9 (`bun run build` puis `node scripts/measure-weight.mjs`, sur un export `git archive` de dev afd5b95a35 avec le lot), contre 4,04 avant. Ce qui entre dans la feuille : l appui long, le clic droit et Maj+F10 sur un emoji qui accepte une teinte, la teinte retenue sur l appareil et appliquee d office (`lib/emoji/emoji-skin-tone.ts`), le drapeau de teinte de l index. Ce qui n y entre PAS : le menu des six variantes (`components/emoji-tone-menu.tsx`, 0,87 Ko), sorti dans son propre chunk et demande a l ouverture de la feuille sans etre attendu. Plafond porte de 5 a 6 : arrondi au Ko SUPERIEUR, meme regle. HISTORIQUE : Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 4,04 Ko pour la feuille d emojis complete (`components/emoji-picker-sheet.tsx` : rangee de categories, recherche, recents, grille au clavier ; `lib/emoji/emoji-catalogue.ts`, `emoji-support.ts`, `emoji-grid-keys.ts`, `lib/emoji-recents.ts`, et le chargeur de ses libelles `lib/i18n-emoji-picker-catalog.ts`, qui voyage avec elle par `prepareEmojiPickerSheet`). Elle remplace la grille des vingt (`emoji-grid`, 0,25 Ko). Pas de `dynamic_only` ICI : ses deux hotes l importent statiquement, et ce sont EUX qui ne s atteignent que par import() (`emoji_sheet_hosts`). Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "emoji_sheet_hosts": {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { EMOJI_CATEGORY_IDS } from './emoji/emoji-catalogue';
+import { EMOJI_SKIN_TONES } from './emoji/emoji-skin-tone';
 import { catalogPlaceholders } from './i18n-catalog';
 import { emojiPickerText, loadEmojiPickerCatalog, type EmojiPickerCatalog } from './i18n-emoji-picker-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from './inline-interface-language-bootstrap.js';
@@ -32,6 +33,19 @@ describe('le catalogue de la feuille d’emojis', () => {
     expect(emojiPickerText('fr', 'emojiPicker.category.recent')).toBe('Récents');
     expect(emojiPickerText('fr', 'emojiPicker.category.animals')).toBe('Animaux et nature');
     expect(emojiPickerText('en', 'emojiPicker.category.flags')).toBe('Flags');
+  });
+
+  test('chaque teinte de peau a son nom, et leur menu aussi (#10533)', async () => {
+    const french = await loadEmojiPickerCatalog('fr');
+    expect(sorted(Object.keys(french).filter((key) => key.startsWith('emojiPicker.tone.')))).toEqual(
+      sorted(EMOJI_SKIN_TONES.map((tone) => `emojiPicker.tone.${tone}`)),
+    );
+    await loadAll();
+    expect(emojiPickerText('fr', 'emojiPicker.tones')).toBe('Teintes de peau');
+    expect(emojiPickerText('fr', 'emojiPicker.tone.default')).toBe('Par défaut');
+    expect(emojiPickerText('fr', 'emojiPicker.tone.medium')).toBe('Moyenne');
+    expect(emojiPickerText('en', 'emojiPicker.tone.medium-dark')).toBe('Medium-dark');
+    expect(emojiPickerText('ar', 'emojiPicker.tones')).not.toBe(emojiPickerText('fr', 'emojiPicker.tones'));
   });
 
   test('chaque valeur est un texte sans paramètre, jamais vide', async () => {

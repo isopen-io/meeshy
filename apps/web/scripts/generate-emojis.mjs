@@ -20,7 +20,13 @@
  * mots-clés dont chaque mot figure déjà dans la ligne).
  *
  * Les variantes de teinte de peau et le groupe « Component » n'entrent pas dans
- * la table : la feuille propose l'emoji de base, comme `EmojiPickerSheet` sur iOS.
+ * la table : elle ne porte que l'emoji de base, et UN DRAPEAU pour ceux qui
+ * acceptent une teinte (#10533). La variante se CALCULE (`withSkinTone`,
+ * `src/lib/emoji/emoji-skin-tone.ts` : le modificateur après le premier
+ * caractère, à la place du sélecteur de présentation) ; le drapeau n'est posé
+ * que si les CINQ variantes ainsi calculées figurent dans la liste d'Unicode —
+ * un emoji à plusieurs personnages, qui veut un modificateur par personne, ne
+ * le reçoit donc pas.
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -82,6 +88,13 @@ async function source(name) {
 
 const SKIN_TONE = /[\u{1F3FB}-\u{1F3FF}]/u;
 const VARIATION_SELECTOR = /️/g;
+const SKIN_TONE_MODIFIERS = ['\u{1F3FB}', '\u{1F3FC}', '\u{1F3FD}', '\u{1F3FE}', '\u{1F3FF}'];
+
+/** La jumelle de `withSkinTone` (`src/lib/emoji/emoji-skin-tone.ts`) — le témoin `emoji-catalogue.test.ts` tient les deux ensemble. */
+function withSkinTone(emoji, modifier) {
+  const [head, ...rest] = [...emoji];
+  return [head, modifier, ...(rest[0] === '\uFE0F' ? rest.slice(1) : rest)].join('');
+}
 
 /** Le PALIER d'un emoji : la version majeure d'Unicode Emoji qui l'a introduit (0 avant la 1.0). */
 const levelOf = (version) => Math.floor(Number(version));
@@ -89,6 +102,7 @@ const levelOf = (version) => Math.floor(Number(version));
 function parseEmojiTest(text) {
   const byGroup = new Map(GROUPS.map(([id]) => [id, []]));
   const idOf = new Map(GROUPS.map(([id, title]) => [title, id]));
+  const variants = new Set();
   let current = null;
   for (const line of text.split('\n')) {
     const group = /^# group: (.+)$/.exec(line);
@@ -100,8 +114,14 @@ function parseEmojiTest(text) {
     const entry = /^[0-9A-F ]+; fully-qualified\s+# (\S+) E(\d+\.\d+) (.+)$/.exec(line);
     if (entry === null) continue;
     const [, emoji, version, name] = entry;
-    if (SKIN_TONE.test(emoji)) continue;
+    if (SKIN_TONE.test(emoji)) {
+      variants.add(emoji);
+      continue;
+    }
     byGroup.get(current).push({ emoji, level: levelOf(version), name });
+  }
+  for (const emojis of byGroup.values()) {
+    for (const entry of emojis) entry.toned = SKIN_TONE_MODIFIERS.every((modifier) => variants.has(withSkinTone(entry.emoji, modifier)));
   }
   return byGroup;
 }
@@ -142,11 +162,13 @@ const table = [
   '/**',
   ' * Une ligne par catégorie : son identifiant, ses emojis séparés par une espace, et le PALIER de chacun',
   ' * (un caractère en base 36 par emoji, dans le même ordre : la version majeure d’Unicode Emoji qui l’a introduit).',
+  ' * Une catégorie dont des emojis acceptent une TEINTE DE PEAU porte un quatrième champ : un `1` ou un `0` par emoji.',
   ' */',
-  'export const EMOJI_GROUPS: ReadonlyArray<readonly [id: string, emojis: string, levels: string]> = [',
+  'export const EMOJI_GROUPS: ReadonlyArray<readonly [id: string, emojis: string, levels: string, tones?: string]> = [',
   ...GROUPS.map(([id]) => {
     const emojis = byGroup.get(id);
-    return `  ['${id}', '${emojis.map(({ emoji }) => emoji).join(' ')}', '${emojis.map(({ level }) => level.toString(36)).join('')}'],`;
+    const tones = emojis.some(({ toned }) => toned) ? `, '${emojis.map(({ toned }) => (toned ? '1' : '0')).join('')}'` : '';
+    return `  ['${id}', '${emojis.map(({ emoji }) => emoji).join(' ')}', '${emojis.map(({ level }) => level.toString(36)).join('')}'${tones}],`;
   }),
   '];',
   '',
@@ -165,4 +187,6 @@ for (const language of LANGUAGES) {
   );
 }
 
-console.log(`${flat.length} emojis, ${GROUPS.length} catégories, ${LANGUAGES.length} langues → ${outDir}`);
+console.log(
+  `${flat.length} emojis (${flat.filter(({ toned }) => toned).length} acceptent une teinte de peau), ${GROUPS.length} catégories, ${LANGUAGES.length} langues → ${outDir}`,
+);
