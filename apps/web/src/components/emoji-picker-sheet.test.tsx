@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { EMOJI_CATEGORY_IDS, loadEmojiIndex } from '@/lib/emoji/emoji-catalogue';
+import { EMOJI_CATEGORY_IDS, loadEmojiIndex, loadEmojiNames } from '@/lib/emoji/emoji-catalogue';
 import { EMOJI_RECENTS_KEY } from '@/lib/emoji-recents';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadEmojiPickerCatalog } from '@/lib/i18n-emoji-picker-catalog';
@@ -61,6 +61,9 @@ const press = (target: HTMLElement, key: string) => {
 };
 const search = async (host: HTMLElement, query: string) => {
   mounter.type(host, 'input[type="search"]', query);
+  // La table et les noms arrivent par import() à la première recherche : sur
+  // une machine froide, deux tours de boucle ne suffisent pas à les voir posés.
+  await Promise.all([loadEmojiIndex(), loadEmojiNames('fr'), loadEmojiNames('ar')]);
   await mounter.settle();
   await mounter.settle();
 };
