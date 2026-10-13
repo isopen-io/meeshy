@@ -160,6 +160,34 @@ createRoot(root).render(
   </StrictMode>,
 );
 
+/**
+ * LE CONSENTEMENT D'ANALYSE QUE LA TÉLÉMÉTRIE DÉCLARE (#10502) — la bascule
+ * « Analytique » des réglages et le consentement que la passerelle a
+ * enregistré, relus à chaque connexion, changement de compte et écriture du
+ * cache ; déconnecté ⇒ `unknown`, sans aucune requête. Hors du premier rendu :
+ * le contexte de lot n'est lu qu'à l'envoi d'un lot.
+ */
+void Promise.all([
+  import('@/lib/telemetry/analytics-consent'),
+  import('@/lib/view/telemetry-context'),
+  import('@/lib/api/app-preferences'),
+  import('@/lib/api/consents'),
+]).then(([{ refreshAnalyticsConsentSources, syncAnalyticsConsent }, { noteAnalyticsConsent }, { appPreferencesQueryOptions }, { consentsQueryOptions }]) =>
+  syncAnalyticsConsent({
+    sessionStore,
+    queryClient: appQueryClient,
+    note: noteAnalyticsConsent,
+    refresh: () => {
+      if (apiDeps.source !== 'gateway') return;
+      refreshAnalyticsConsentSources({
+        queryClient: appQueryClient,
+        preferences: appPreferencesQueryOptions(apiDeps),
+        consents: consentsQueryOptions(apiDeps),
+      });
+    },
+  }),
+);
+
 /* Le clavier virtuel posé sur `<html>` (#10005) : Safari iOS le fait
    RECOUVRIR la page, `h-app` le retire des écrans d'application. Aucun clavier
    ne s'ouvre avant la première peinture : `import()` le tient hors d'elle. */
