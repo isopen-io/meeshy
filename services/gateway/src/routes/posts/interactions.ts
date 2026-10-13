@@ -41,6 +41,7 @@ import {
 } from '../social/events';
 import { registerShareRoutes } from './share';
 import { viewerListRequest, viewerListRefused } from './viewerListRequest';
+import { notifyRepostedAuthor, readRepostedSource } from './repostedAuthorNotification';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -957,25 +958,14 @@ export function registerInteractionRoutes(
       // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
       // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
       // écriture actée (#6524).
+      // Site UNIQUE partagé avec `POST /posts { repostOfId }` (#10525).
       const notifService = fastify.notificationService;
-      if (notifService && repost.repostOfId && isFreshRepost) {
+      const sourcePostId = repost.repostOfId;
+      if (notifService && sourcePostId && isFreshRepost) {
         const actorId = authContext.registeredUser.id;
         void (async () => {
-          // Même garde que la route de traduction : sans le viewer, le lookup
-          // applique le filtre anonyme et ne retrouve pas une story réservée aux
-          // contacts — l'auteur d'une story repartagée n'était alors jamais
-          // notifié.
-          const original = await postService.getPostById(postId, actorId);
-          if (!original?.authorId) return;
-          await notifService.createPostRepostNotification({
-            actorId,
-            originalPostId: postId,
-            postAuthorId: original.authorId,
-            repostId: repost.id,
-            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
-            postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
-            postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          });
+          const source = await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, actorId);
+          await notifyRepostedAuthor(notifService, { actorId, source, sourcePostId, repostId: repost.id });
         })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 

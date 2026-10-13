@@ -460,6 +460,16 @@ const wirePostKind = (kind: NotificationPostLabelKind): NotificationPostKind =>
   kind === 'MOOD' ? 'STATUS' : kind;
 
 /**
+ * Le mot qu'un auteur lit pour SON contenu republié : un STATUS est son
+ * « humeur » (§ 7). Prose seulement — le discriminant du fil reste STATUS.
+ * Site unique, partagé par le titre et par le bâtisseur de la passerelle.
+ */
+export function repostProseKind(kind?: string | null): NotificationPostLabelKind | undefined {
+  const normalized = normalizePostKind(kind);
+  return normalized === 'STATUS' ? 'MOOD' : normalized;
+}
+
+/**
  * L'action d'une arrivée de membre, SANS l'acteur — « a rejoint Les Amis ».
  * Site UNIQUE : le titre persisté (`buildNotificationDisplay`) et le corps de
  * push (`fanout/member-joined.ts`) la composent ici, donc ne divergent pas.
@@ -588,12 +598,18 @@ export function buildNotificationDisplay(
     case 'member_joined':
       return framed(memberJoinedAction(L, input.conversationTitle), null);
 
-    // ── Partage / repost ──
-    case 'post_repost':
+    // ── Republication (#10525) : « a republié votre réel / story / humeur / publication » ──
+    //
+    // Le verbe est celui du bouton (« Republier »), jamais « partager » — qui
+    // nomme l'envoi d'un lien dans une conversation. Un STATUS se DIT « humeur » :
+    // `repostProseKind` tient la frontière du § 7, le fil garde STATUS.
+    case 'post_repost': {
+      const reposted = repostProseKind(kind);
       return framed(
-        ns('repost', kind ?? 'POST'),
-        kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
+        ns('repost', reposted ?? 'POST'),
+        reposted ? notificationString(L, 'comment.subtitleOwner', { postType: reposted }) : null,
       );
+    }
 
     // ── Nouveau contenu d'un ami ──
     case 'friend_new_story':

@@ -6,7 +6,7 @@
  *    (« Votre humeur : « … » », « En réponse à « … » ») ;
  *  - story / publication / humeur — fan-out typé (« Story de X »,
  *    « Nouvelle humeur ») au lieu d'un wording story hardcodé ;
- *  - partage (repost) typé (« a partagé votre story ») ;
+ *  - republication typée (« a republié votre story », #10525) ;
  *  - un commentaire sur un post non-story ne déclenche PLUS le bucket auteur
  *    story_new_comment (double notification avec post_comment).
  *
@@ -315,7 +315,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
   });
 
   describe('createPostRepostNotification', () => {
-    it('wording typé « a partagé votre story » + extrait en subtitle', async () => {
+    it('wording typé « a republié votre story » + extrait en subtitle', async () => {
       prisma.post = { ...prisma.post, findUnique: jest.fn().mockResolvedValue(liveExcerptSource('Coucher de soleil à Douala')) };
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
@@ -327,10 +327,10 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       const payload = payloadOfType(mockIO, 'post_repost');
       expect(payload.content).toBe('Coucher de soleil à Douala');
-      expect(payload.subtitle).toBe('a partagé votre story');
+      expect(payload.subtitle).toBe('a republié votre story');
     });
 
-    it('défaut « a partagé votre publication » sans type ni extrait', async () => {
+    it('défaut « a republié votre publication » sans type ni extrait', async () => {
       await service.createPostRepostNotification({
         actorId: ACTOR_ID,
         originalPostId: POST_ID,
@@ -341,7 +341,84 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_repost');
       // Sans texte ni média, le corps nomme l'entité plutôt que de rester vide.
       expect(payload.content).toBe('Votre publication');
-      expect(payload.subtitle).toBe('a partagé votre publication');
+      expect(payload.subtitle).toBe('a republié votre publication');
+    });
+
+    it.each([
+      ['REEL', 'a republié votre réel', 'Votre réel'],
+      ['STORY', 'a republié votre story', 'Votre story'],
+      ['STATUS', 'a republié votre humeur', 'Votre humeur'],
+      ['POST', 'a republié votre publication', 'Votre publication'],
+    ] as const)('#10525 — un %s republié se NOMME dans la bannière, le titre et la ligne persistée', async (postType, action, cible) => {
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType,
+      });
+
+      const payload = payloadOfType(mockIO, 'post_repost');
+      expect(payload.subtitle).toBe(action);
+      const persisted = prisma.notification.create.mock.calls[0][0].data;
+      expect(persisted.title).toBe(`Bob Commentateur ${action}`);
+      expect(persisted.subtitle).toBe(cible);
+      expect(persisted.metadata.postType).toBe(postType);
+    });
+
+    it('#10525 — cadrée dans la langue du DESTINATAIRE, pas de l’acteur', async () => {
+      prisma.user.findUnique.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === ACTOR_ID
+            ? { username: 'bob', displayName: 'Bob Commentateur', avatar: null, systemLanguage: 'fr' }
+            : { username: 'alice', displayName: 'Alice Autrice', avatar: null, systemLanguage: 'ar' }
+        )
+      );
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'REEL',
+      });
+
+      expect(prisma.notification.create.mock.calls[0][0].data.title).toBe('Bob Commentateur أعاد نشر ريلك');
+    });
+
+    it('#10525 — l’auteur qui ne peut pas VOIR la republication n’en apprend rien', async () => {
+      prisma.post.findFirst.mockImplementation(({ where }: any) =>
+        Promise.resolve(
+          where.id === 'cccccccccccccccccccccccc'
+            ? { id: where.id, authorId: ACTOR_ID, visibility: 'EXCEPT', visibilityUserIds: [RECIPIENT_ID], expiresAt: null }
+            : { id: where.id, authorId: RECIPIENT_ID, visibility: 'PUBLIC', visibilityUserIds: [], expiresAt: null }
+        )
+      );
+
+      const result = await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'STORY',
+      });
+
+      expect(result).toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('#10525 — une republication PRIVÉE ne s’annonce pas', async () => {
+      prisma.post.findFirst.mockResolvedValue({
+        id: 'cccccccccccccccccccccccc', authorId: ACTOR_ID, visibility: 'PRIVATE', visibilityUserIds: [], expiresAt: null,
+      });
+
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+      });
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('persiste postExpiresAt/postCreatedAt en contexte (story partagée expirée)', async () => {

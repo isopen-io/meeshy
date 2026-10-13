@@ -26,7 +26,7 @@
  * un nom qui ne le déclenche pas coûte moins qu'une ligne de plus dessus.
  */
 import type { Notification } from '@meeshy/shared/types/notification';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, repostProseKind } from '@meeshy/shared/utils/notification-strings';
 import { buildOwnerSubtitleWithDetail, targetPreviewBody } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { loadServedPostExcerpt } from '../served-post-excerpt';
@@ -224,6 +224,12 @@ export async function createPostRepostNotification(
 ): Promise<Notification | null> {
   if (params.actorId === params.postAuthorId) return null;
 
+  // #10525 — la notification DIT qu'une republication existe : l'auteur de
+  // l'original ne l'apprend que s'il peut la VOIR (republication privée, ou
+  // dont l'audience l'exclut). Même verdict, fail-closed, que les autres
+  // notifications à destinataire unique du fil.
+  if (!(await deps.canNotifyAboutPost(params.repostId, params.postAuthorId))) return null;
+
   const actor = await deps.prisma.user.findUnique({
     where: { id: params.actorId },
     select: { username: true, displayName: true, avatar: true },
@@ -234,17 +240,18 @@ export async function createPostRepostNotification(
   const lang = prism.lang;
   const trimmedPostPreview = await servedExcerpt(deps, params.originalPostId, prism.ordered);
   const media = await resolvePostMedia(deps.prisma, params.originalPostId);
-  // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
-  // détail du contenu partagé descend donc dans le corps.
-  const subtitle = notificationString(lang, 'comment.subtitleOwner', {
-    postType: params.postType ?? 'POST',
-  });
+  // Le mot que l'auteur lit pour SON contenu — un STATUS est son « humeur »,
+  // comme dans le titre (`buildNotificationDisplay`). Le fil garde STATUS.
+  const reposted = repostProseKind(params.postType) ?? 'POST';
+  // Cf. `targetPreviewBody` : une republication n'apporte aucun contenu neuf,
+  // le détail du contenu republié descend donc dans le corps.
+  const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: reposted });
 
   return deps.createNotification({
     userId: params.postAuthorId,
     type: 'post_repost',
     priority: 'normal',
-    content: targetPreviewBody(lang, params.postType ?? 'POST', {
+    content: targetPreviewBody(lang, reposted, {
       textPreview: trimmedPostPreview,
       mediaType: media?.mediaType,
     }),

@@ -264,7 +264,7 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
 
     // Repost — avec et sans entité.
     expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F', postType: 'STORY' }))
-      .toEqual({ title: 'F a partagé votre story', subtitle: 'Votre story', action: 'a partagé votre story' });
+      .toEqual({ title: 'F a republié votre story', subtitle: 'Votre story', action: 'a republié votre story' });
     expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F' }).subtitle).toBeNull();
 
     // Nouveau contenu d'un ami (post / réel / humeur).
@@ -457,5 +457,37 @@ describe('contact_recently_active — « X était sur Meeshy récemment » (#828
         expect(notificationString(lang, key)).not.toContain('contact.');
       }
     }
+  });
+});
+
+describe('post_repost — « X a republié votre réel, story, mood ou post » (#10525)', () => {
+  const ATTENDU = {
+    fr: { REEL: 'Awa a republié votre réel', STORY: 'Awa a republié votre story', STATUS: 'Awa a republié votre humeur', POST: 'Awa a republié votre publication' },
+    en: { REEL: 'Awa reposted your reel', STORY: 'Awa reposted your story', STATUS: 'Awa reposted your mood', POST: 'Awa reposted your post' },
+    es: { REEL: 'Awa republicó tu reel', STORY: 'Awa republicó tu historia', STATUS: 'Awa republicó tu estado de ánimo', POST: 'Awa republicó tu publicación' },
+    pt: { REEL: 'Awa republicou seu reel', STORY: 'Awa republicou sua story', STATUS: 'Awa republicou seu humor', POST: 'Awa republicou sua publicação' },
+    de: { REEL: 'Awa hat deinen Reel erneut geteilt', STORY: 'Awa hat deine Story erneut geteilt', STATUS: 'Awa hat deine Stimmung erneut geteilt', POST: 'Awa hat deinen Beitrag erneut geteilt' },
+    it: { REEL: 'Awa ha ripubblicato il tuo reel', STORY: 'Awa ha ripubblicato la tua storia', STATUS: 'Awa ha ripubblicato il tuo stato d’animo', POST: 'Awa ha ripubblicato il tuo post' },
+    ar: { REEL: 'Awa أعاد نشر ريلك', STORY: 'Awa أعاد نشر قصتك', STATUS: 'Awa أعاد نشر مزاجك', POST: 'Awa أعاد نشر منشورك' },
+  } as const;
+
+  for (const [lang, parType] of Object.entries(ATTENDU)) {
+    for (const [postType, titre] of Object.entries(parType)) {
+      it(`${lang} · ${postType} — le titre NOMME le contenu republié`, () => {
+        expect(buildNotificationDisplay(lang, { type: 'post_repost', actorName: 'Awa', postType }).title).toBe(titre);
+      });
+    }
+  }
+
+  it('un STATUS se dit « humeur » jusque dans le sous-titre — le mot que l’auteur lit (§ 7)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'Awa', postType: 'STATUS' }).subtitle).toBe('Votre humeur');
+  });
+
+  it('une charge déjà persistée en « MOOD » se rend encore', () => {
+    expect(buildNotificationDisplay('en', { type: 'post_repost', actorName: 'Awa', postType: 'MOOD' }).title).toBe('Awa reposted your mood');
+  });
+
+  it('sans type, l’ancien contrat reste juste : une publication', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'Awa' }).title).toBe('Awa a republié votre publication');
   });
 });
