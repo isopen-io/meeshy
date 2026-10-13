@@ -1,3 +1,4 @@
+import { useContentScrollTelemetry } from '@/lib/telemetry/content-scroll';
 import type { ListingContext } from '@/lib/api/social-events-v2-types';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
@@ -68,9 +69,18 @@ const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
  * `FeedPostCard`, pour ne pas invalider toute la carte à chaque page
  * (`FeedPostCardCarousel.swift:20-25`).
  */
-function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCardMedia[]; readonly accent: string }) {
+function FeedMediaCarousel({ media, accent, postId }: { readonly media: readonly FeedCardMedia[]; readonly accent: string; readonly postId?: string }) {
   const [page, setPage] = useState(0);
   const clamped = Math.min(page, media.length - 1);
+  const scrollProbe = useContentScrollTelemetry({
+    target: postId === undefined || media.length < 2 ? null : { kind: 'post', id: postId },
+    contentKind: 'carousel',
+    itemsTotal: media.length,
+  });
+  const goTo = (next: number) => {
+    scrollProbe.noteIndex(next);
+    setPage(next);
+  };
   const current = media[clamped];
   const language = currentInterfaceLanguage();
   if (current === undefined) return null;
@@ -108,8 +118,8 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
           page={clamped}
           count={media.length}
           labels={{ previous: translate(language, 'feed.post.media.previous'), next: translate(language, 'feed.post.media.next') }}
-          onPrevious={() => setPage(clamped - 1)}
-          onNext={() => setPage(clamped + 1)}
+          onPrevious={() => goTo(clamped - 1)}
+          onNext={() => goTo(clamped + 1)}
         />
       </div>
       <FeedCarouselDots page={clamped} count={media.length} accent={accent} />
@@ -617,7 +627,7 @@ function FeedPostVisual({
 
   if (model.media.length === 0) return null;
   return isPagedLayout(model.layout) || model.media.length < 2 ? (
-    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} />
+    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} postId={model.id} />
   ) : (
     <FeedMediaMosaic media={model.media} layout={model.layout as TiledLayoutMode} />
   );

@@ -1,3 +1,4 @@
+import { useScrollDepthTelemetry } from '@/lib/telemetry/content-scroll';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { CommentThread } from '@/components/comment-thread';
@@ -181,6 +182,7 @@ export default function PostDetailScreen() {
      porte PAR OÙ la fiche est arrivée (#10483) : un tap de listing, une
      notification, un lien de suivi ou de partage, un autre site, ou rien. */
   const attribution = useViewAttribution();
+  useScrollDepthTelemetry({ frame, target: model === undefined ? null : { kind: 'post', id: model.id }, contentKind: 'thread', surface: 'detail' });
   useReadingSession({
     postId: model?.id,
     active: model !== undefined,
