@@ -58,12 +58,7 @@ extension AuthManager {
     @discardableResult
     public func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
         guard let proven = try await verifyEmail(request) else { return false }
-        do {
-            try installOutsideAccountSwitch(proven)
-        } catch {
-            closeRefusedProvenSession(proven)
-            throw error
-        }
+        try installClosingRefused(proven)
         return true
     }
 
@@ -143,6 +138,18 @@ extension AuthManager {
             throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: proven.user.id)
         }
         try installSession(proven)
+    }
+
+    /// #10463 — la porte des sessions que le serveur vient d'OUVRIR (connexion,
+    /// second facteur, inscription, vérification) : refusée, elle est refermée
+    /// côté passerelle, puis le refus est rendu à l'appelant.
+    func installClosingRefused(_ proven: EmailProvenSession) throws {
+        do {
+            try installOutsideAccountSwitch(proven)
+        } catch {
+            closeRefusedProvenSession(proven)
+            throw error
+        }
     }
 
     /// La porte LEVANTE de `openSession` : rend `SessionReplacementRefused` à
@@ -252,6 +259,16 @@ public struct SessionReplacementRefused: LocalizedError, Equatable, Sendable {
 
     public var errorDescription: String? {
         "Another account is already signed in on this device"
+    }
+}
+
+/// #10463 — une connexion, un second facteur ou une inscription demandés
+/// pendant un changement de compte : refusés, rien n'est envoyé au serveur.
+public struct AccountSwitchUnderway: LocalizedError, Equatable, Sendable {
+    public init() {}
+
+    public var errorDescription: String? {
+        "An account switch is in progress on this device"
     }
 }
 

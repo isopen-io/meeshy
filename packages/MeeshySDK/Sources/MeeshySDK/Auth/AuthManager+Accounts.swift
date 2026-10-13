@@ -27,8 +27,16 @@ extension AuthManager {
     /// au compte SUPPLÉMENTAIRE (`offersKeepSignedIn`). Elle part au serveur
     /// (`rememberDevice`) et reste attachée au compte : un compte non gardé
     /// est fermé quand on le quitte.
+    ///
+    /// #10463 — refusée pendant un changement de compte, qui seul pose la
+    /// session entrante ; une session rendue pendant qu'il s'engage est
+    /// refermée côté passerelle.
     @discardableResult
     public func login(username: String, password: String, keepSignedIn: Bool) async -> LoginOutcome {
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
+            return .failed
+        }
         isLoading = true
         errorMessage = nil
         requires2FA = false
@@ -50,7 +58,8 @@ extension AuthManager {
             guard let token = data.token, let user = data.user else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-            try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+            try installClosingRefused(EmailProvenSession(
+                token: token, sessionToken: data.sessionToken, user: user, origin: .login))
             return .authenticated
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
@@ -122,11 +131,33 @@ extension AuthManager {
         // #8674 — le cache du compte qui revient est rendu AVANT que la session
         // ne s'ouvre : le premier écran le lit, jamais un cache vide.
         await CacheAccountBinder.shared.bind(accountKey(for: userId)).value
+        // Une session s'est posée pendant la liaison du cache : c'est un REFUS,
+        // pas un trousseau vide. Elle reste ouverte, le cache lui revient.
+        if Self.refusesSessionReplacement(
+            currentlyAuthenticated: isAuthenticated, currentActiveUserId: activeUserId, newUserId: userId
+        ) {
+            await CacheAccountBinder.shared.bind(accountKey(for: activeUserId)).value
+            return false
+        }
+        // Le trousseau du compte demandé s'est vidé pendant la bascule.
         guard installStoredSession(for: userId) else {
             CacheAccountBinder.shared.bind(nil)
             activeUserId = nil
             isAuthenticated = false
             return false
+        }
+        return true
+    }
+
+    /// Attend la fin d'un changement de compte (#10463). `false` si la tâche
+    /// appelante est annulée pendant l'attente : rien ne doit alors suivre.
+    func awaitAccountSwitchEnd() async -> Bool {
+        while isSwitchingAccount {
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return false
+            }
         }
         return true
     }
@@ -152,8 +183,8 @@ extension AuthManager {
         // attentes ci-dessous, et un rafraîchissement qui reviendrait là
         // rouvrirait ses sockets. Aucun ne commence, aucun en vol ne se pose.
         sessionGeneration &+= 1
-        isLeavingActiveSession = true
-        defer { isLeavingActiveSession = false }
+        activeSessionExits += 1
+        defer { activeSessionExits -= 1 }
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
@@ -311,17 +342,18 @@ extension AuthManager {
 
         // Background revalidation (stale-while-revalidate for the profile).
         // Auth failures surface a re-auth state; the saved account is kept.
+        let generation = sessionGeneration
         Task { [weak self] in
             guard let self else { return }
             do {
                 let user = try await self.authService.me()
-                guard self.activeUserId == userId else { return }
-                self.updateUserAfterRevalidation(user, userId: userId)
+                guard self.activeUserId == userId, self.sessionGeneration == generation,
+                      !self.isLeavingActiveSession else { return }
+                self.updateUserAfterRevalidation(user, userId: userId, generation: generation)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    guard self.activeUserId == userId else { return }
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                     break
                 }
