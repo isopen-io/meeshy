@@ -51,7 +51,10 @@ const prismaPour = (status: string) => {
     },
     userSession: { deleteMany: jest.fn(async () => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async () => ({ count: 0 })) },
-    conversationShareLink: { deleteMany: jest.fn(async () => ({ count: 0 })) },
+    conversationShareLink: {
+      findMany: jest.fn(async () => [] as Array<{ id: string }>),
+      deleteMany: jest.fn(async () => ({ count: 0 })),
+    },
   };
 };
 

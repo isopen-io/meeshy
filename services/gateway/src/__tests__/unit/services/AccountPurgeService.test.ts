@@ -27,7 +27,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
   return {
     userSession: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     userVoiceModel: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-    conversationShareLink: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    conversationShareLink: shareLinkTable([]),
     notification: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -49,6 +49,33 @@ function fakePrisma(overrides: Record<string, any> = {}) {
     ...packTables(fakePackDb({})),
     ...overrides,
   } as any;
+}
+
+const LINK_A = '507f1f77bcf86cd7994390a1';
+const LINK_B = '507f1f77bcf86cd7994390a2';
+const LINK_C = '507f1f77bcf86cd7994390a3';
+
+type ShareLinkRow = { id: string; createdBy: string; isActive?: boolean; guestRevocationPendingAt?: Date | null };
+
+/** Une table de liens en mémoire : la purge se lit sur les lignes qui RESTENT. */
+function shareLinkTable(initial: ShareLinkRow[]) {
+  const table = {
+    rows: [...initial],
+    findMany: jest.fn<any>(async ({ where }: { where: { createdBy: string } }) =>
+      table.rows.filter((row) => row.createdBy === where.createdBy)
+    ),
+    updateMany: jest.fn<any>(async ({ where, data }: { where: { id: { in: string[] } }; data: Partial<ShareLinkRow> }) => {
+      const touched = table.rows.filter((row) => where.id.in.includes(row.id));
+      touched.forEach((row) => Object.assign(row, data));
+      return { count: touched.length };
+    }),
+    deleteMany: jest.fn<any>(async ({ where }: { where: { id: { in: string[] } } }) => {
+      const before = table.rows.length;
+      table.rows = table.rows.filter((row) => !where.id.in.includes(row.id));
+      return { count: before - table.rows.length };
+    }),
+  };
+  return table;
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
@@ -74,10 +101,58 @@ describe('purgeAccountIsolatedData', () => {
   });
 
   it('deletes share links CREATED by the account, not links it merely used to join', async () => {
-    const prisma = fakePrisma({ conversationShareLink: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 2 }) } });
+    const links = shareLinkTable([
+      { id: LINK_A, createdBy: USER_ID },
+      { id: LINK_B, createdBy: USER_ID },
+      { id: LINK_C, createdBy: '507f1f77bcf86cd799439012' },
+    ]);
+    const prisma = fakePrisma({ conversationShareLink: links });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
-    expect(prisma.conversationShareLink.deleteMany).toHaveBeenCalledWith({ where: { createdBy: USER_ID } });
+    expect(links.rows.map((row) => row.id)).toEqual([LINK_C]);
     expect(summary.shareLinksDeleted).toBe(2);
+  });
+
+  // #10492 — supprimer la ligne d'un lien emportait la marque d'une révocation
+  // différée et laissait ses invités actifs : ils sont révoqués AVANT.
+  it('révoque les invités des liens du compte avant de supprimer leurs lignes', async () => {
+    const links = shareLinkTable([{ id: LINK_A, createdBy: USER_ID, guestRevocationPendingAt: new Date('2026-10-13T09:30:00Z') }]);
+    const guests = [{ id: '507f1f77bcf86cd799439021', conversationId: '507f1f77bcf86cd799439031', displayName: 'Invité', isActive: true }];
+    const linkCountAtRevocation: number[] = [];
+    const prisma = fakePrisma({
+      conversationShareLink: links,
+      participant: {
+        findMany: jest.fn<any>(async ({ where }: { where: Record<string, unknown> }) =>
+          where.type === 'anonymous' ? guests.filter((guest) => guest.isActive === where.isActive) : []
+        ),
+        updateMany: jest.fn<any>(async ({ where }: { where: { id: string } }) => {
+          linkCountAtRevocation.push(links.rows.length);
+          const touched = guests.filter((guest) => guest.id === where.id && guest.isActive);
+          touched.forEach((guest) => { guest.isActive = false; });
+          return { count: touched.length };
+        }),
+      },
+      callParticipant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    });
+
+    await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+
+    expect(guests.map((guest) => guest.isActive)).toEqual([false]);
+    expect(linkCountAtRevocation).toEqual([1]);
+    expect(links.rows).toEqual([]);
+  });
+
+  it('une révocation d’invités qui échoue fait échouer la purge et garde le lien, fermé', async () => {
+    const links = shareLinkTable([{ id: LINK_A, createdBy: USER_ID, isActive: true }]);
+    const prisma = fakePrisma({
+      conversationShareLink: links,
+      participant: { findMany: jest.fn<any>().mockRejectedValue(new Error('mongo down')) },
+    });
+
+    await expect(purgeAccountIsolatedData(prisma, USER_ID, NO_FILES)).rejects.toThrow('mongo down');
+
+    expect(links.rows).toHaveLength(1);
+    expect(links.rows[0].isActive).toBe(false);
+    expect(links.rows[0].guestRevocationPendingAt).toBeInstanceOf(Date);
   });
 
   it('runs every deletion even when every table is already empty (idempotent)', async () => {

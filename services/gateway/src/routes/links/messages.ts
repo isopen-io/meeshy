@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
@@ -244,9 +245,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const participantShareLink = anonymousParticipant?.anonymousSession?.shareLinkId
+      // #10492 — le lien de l'invité se lit comme aux autres portes : la
+      // colonne de la participation d'abord, la session embarquée en repli.
+      const participantShareLinkId = anonymousParticipant ? guestShareLinkId(anonymousParticipant) : null;
+      const participantShareLink = participantShareLinkId
         ? await fastify.prisma.conversationShareLink.findUnique({
-            where: { id: anonymousParticipant.anonymousSession.shareLinkId },
+            where: { id: participantShareLinkId },
             select: {
               id: true,
               conversationId: true,

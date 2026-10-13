@@ -18,7 +18,9 @@ function buildPrisma(overrides: Partial<AnonymousUploadIdentityPrisma> = {}): An
       findFirst: jest.fn<any>().mockResolvedValue(null),
     },
     conversationShareLink: {
-      findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Un lien VIVANT par défaut : un invité dont le lien n'existe plus est
+      // refusé (#10492), ce que ses propres témoins couvrent.
+      findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true, guestRevocationPendingAt: null }),
     },
     ...overrides,
   } as unknown as AnonymousUploadIdentityPrisma;
@@ -155,7 +157,7 @@ describe('fetchShareLinkAnonymousFlags', () => {
   });
 
   it('rend null quand le lien n\'existe plus', async () => {
-    const prisma = buildPrisma();
+    const prisma = buildPrisma({ conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) } as any });
     const flags = await fetchShareLinkAnonymousFlags(prisma, 'deleted-link');
     expect(flags).toBeNull();
   });

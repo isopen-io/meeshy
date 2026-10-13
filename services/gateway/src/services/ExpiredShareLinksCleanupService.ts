@@ -68,6 +68,10 @@ interface ExpiredShareLinkRow {
   id: string;
 }
 
+type PendingRevocationRow = { id: string; guestRevocationPendingAt: Date | null };
+
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+
 export interface ExpiredShareLinksCleanupOptions {
   /** Liens balayés par passe. */
   batchSize?: number;
@@ -87,6 +91,7 @@ export const EXPIRED_SHARE_LINKS_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 export class ExpiredShareLinksCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
   private running = false;
+  private pendingCursor: string | null = null;
   private readonly batchSize: number;
   private readonly now: () => Date;
   private readonly resolveIO: () => GuestSocketRegistry | null | undefined;
@@ -130,6 +135,7 @@ export class ExpiredShareLinksCleanupService {
     try {
       const swept = await this.revokeExpiredLinks();
       await this.resumePendingRevocations();
+      await this.revokeGuestsOfMissingLinks();
       return swept;
     } finally {
       this.running = false;
@@ -139,20 +145,21 @@ export class ExpiredShareLinksCleanupService {
   /**
    * #10470 — les révocations DIFFÉRÉES d'un gros lien fermé sans les attendre,
    * restées marquées (échec, redémarrage) : reprises ici, chacune à sa date.
+   *
+   * #10492 — par fournées TOURNANTES, dans l'ordre des identifiants : une
+   * fournée saturée laisse son curseur, et la passe suivante repart après lui.
+   * Triée par date et relue depuis le début, une fournée entière de liens en
+   * échec permanent affamait tous les plus récents.
    */
   private async resumePendingRevocations(): Promise<void> {
-    let pending: Array<{ id: string; guestRevocationPendingAt: Date | null }>;
+    let pending: PendingRevocationRow[];
     try {
-      pending = await this.prisma.conversationShareLink.findMany({
-        where: { guestRevocationPendingAt: { not: null } },
-        select: { id: true, guestRevocationPendingAt: true },
-        orderBy: { guestRevocationPendingAt: 'asc' },
-        take: this.batchSize,
-      });
+      pending = await this.nextPendingRevocations();
     } catch (err) {
       log.warn('pending guest revocations query failed', { err });
       return;
     }
+    this.pendingCursor = pending.length === this.batchSize ? pending[pending.length - 1].id : null;
 
     for (const link of pending) {
       if (!link.guestRevocationPendingAt) continue;
@@ -163,6 +170,75 @@ export class ExpiredShareLinksCleanupService {
         shareLinkId: link.id,
         pendingSince: link.guestRevocationPendingAt,
       });
+    }
+  }
+
+  private async nextPendingRevocations(): Promise<PendingRevocationRow[]> {
+    const page = (id: { gt: string } | { lte: string } | undefined, take: number) =>
+      this.prisma.conversationShareLink.findMany({
+        where: { guestRevocationPendingAt: { not: null }, ...(id ? { id } : {}) },
+        select: { id: true, guestRevocationPendingAt: true },
+        orderBy: { id: 'asc' },
+        take,
+      });
+    const cursor = this.pendingCursor;
+    if (!cursor) return page(undefined, this.batchSize);
+
+    const afterCursor = await page({ gt: cursor }, this.batchSize);
+    if (afterCursor.length === this.batchSize) return afterCursor;
+    return [...afterCursor, ...(await page({ lte: cursor }, this.batchSize - afterCursor.length))];
+  }
+
+  /**
+   * #10492 — les invités ACTIFS dont le lien n'existe plus. Toute suppression
+   * de lien révoque d'abord ses invités ; ceux qui lui survivent (purge
+   * d'avant cette règle, purge interrompue, admission en vol) sont déjà
+   * refusés par la garde commune, et relevés ici pour sortir de la room.
+   *
+   * Un lien n'est tenu pour disparu qu'après avoir été relu SEUL : une liste
+   * incomplète ne révoque personne. Une lecture qui échoue passe son tour.
+   */
+  private async revokeGuestsOfMissingLinks(): Promise<void> {
+    let missing: string[];
+    try {
+      const held = await this.prisma.participant.groupBy({
+        by: ['shareLinkId'],
+        where: { type: 'anonymous', isActive: true, shareLinkId: { not: null } },
+      });
+      const heldIds = held
+        .map((group) => group.shareLinkId)
+        .filter((id): id is string => typeof id === 'string' && OBJECT_ID.test(id));
+      if (heldIds.length === 0) return;
+      const found = await this.prisma.conversationShareLink.findMany({
+        where: { id: { in: heldIds } },
+        select: { id: true },
+      });
+      const foundIds = new Set(found.map((link) => link.id));
+      missing = heldIds.filter((id) => !foundIds.has(id)).slice(0, this.batchSize);
+    } catch (err) {
+      log.warn('guests of missing share links query failed', { err });
+      return;
+    }
+
+    const now = this.now();
+    for (const shareLinkId of missing) {
+      try {
+        const reread = await this.prisma.conversationShareLink.findUnique({
+          where: { id: shareLinkId },
+          select: { id: true },
+        });
+        if (reread) continue;
+        const revoked = await revokeShareLinkGuests({
+          prisma: this.prisma,
+          io: this.resolveIO(),
+          manager: this.resolveManager(),
+          shareLinkId,
+          revokedAt: now,
+        });
+        log.info('guests of a missing share link revoked', { shareLinkId, revokedGuests: revoked.length });
+      } catch (err) {
+        log.warn('revocation of the guests of a missing share link failed', { shareLinkId, err });
+      }
     }
   }
 

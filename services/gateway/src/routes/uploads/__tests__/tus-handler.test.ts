@@ -559,21 +559,20 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       ).rejects.toMatchObject({ status_code: 401 });
     });
 
+    // #10492 — un invité qui survit à son lien n'a plus d'identité : refusé dès la création.
     it('refuse quand le participant existe mais son lien de partage a disparu', async () => {
       const prisma = buildFakePrisma({
         participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'deleted-link' } },
         shareLink: null,
       });
 
-      const result = await runFullUpload({
+      await expect(runFullUpload({
         prisma,
         headers: ANONYMOUS_HEADERS,
         filename: 'document.pdf',
         filetype: 'application/pdf',
         bytes: PDF_BYTES,
-      });
-
-      expect(result.status_code).toBe(403);
+      })).rejects.toMatchObject({ status_code: 401 });
       expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
   });
@@ -925,7 +924,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     it('autorise le PROPRIÉTAIRE anonyme (participantId) via son X-Session-Token', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       const prisma = buildFakePrisma({
-        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sl-1' } },
+        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sl-1' } }, shareLink: { isActive: true },
       });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
@@ -942,7 +941,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     it("refuse un AUTRE participant anonyme que le propriétaire", async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       const prisma = buildFakePrisma({
-        participant: { id: 'participant-intruder', anonymousSession: { shareLinkId: 'sl-1' } },
+        participant: { id: 'participant-intruder', anonymousSession: { shareLinkId: 'sl-1' } }, shareLink: { isActive: true },
       });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');

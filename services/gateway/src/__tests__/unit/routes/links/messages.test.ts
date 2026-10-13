@@ -239,6 +239,34 @@ describe('POST /links/:identifier/messages — anonymous', () => {
     expect((app as any).prisma.message.create).not.toHaveBeenCalled();
   });
 
+  // #10492 — le lien de l'invité se lit par la COLONNE de sa participation
+  // d'abord, la session embarquée en repli (`guestShareLinkId`), comme aux
+  // autres portes : ici la colonne désigne un lien fermé, la session un lien
+  // ouvert.
+  it('lit le lien de l’invité par la colonne de sa participation avant la session embarquée', async () => {
+    const columnLinkId = '507f1f77bcf86cd799439099';
+    const readLinkIds: unknown[] = [];
+    (app as any).prisma.conversationShareLink.findUnique.mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async (opts: any) => {
+        readLinkIds.push(opts?.where?.id);
+        return opts?.where?.id === columnLinkId
+          ? { ...mockParticipantShareLink, id: columnLinkId, isActive: false }
+          : mockParticipantShareLink;
+      });
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({ ...mockAnonParticipant, shareLinkId: columnLinkId });
+    (app as any).prisma.message.create.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
+      headers: { 'x-session-token': SESSION_TOKEN },
+      payload: VALID_BODY,
+    });
+
+    expect(readLinkIds).toEqual([columnLinkId]);
+    expect(res.statusCode).toBe(410);
+    expect((app as any).prisma.message.create).not.toHaveBeenCalled();
+  });
+
   it('returns 500 on service error', async () => {
     (app as any).prisma.conversationShareLink.findUnique.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({

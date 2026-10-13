@@ -115,8 +115,8 @@ export async function resolveAnonymousUploadIdentity(
 
   // #10440 — la garde du lien échu que `middleware/auth.ts` pose sur toute
   // requête REST d'un invité (#10437) : ce chemin ne la traverse pas. Même
-  // lecture du lien (colonne, puis session embarquée), même règle (seule
-  // l'échéance ferme, un lien introuvable ne ferme rien), même cause typée.
+  // lecture du lien (colonne, puis session embarquée), même règle, même cause
+  // typée. #10492 — un lien introuvable refuse l'invité qui lui survit.
   // Une lecture qui échoue PROPAGE — fail-closed, jamais une identité servie.
   const shareLinkId = guestShareLinkId(participant) ?? '';
   if (shareLinkId) {
@@ -131,6 +131,7 @@ export async function resolveAnonymousUploadIdentity(
       linkExpiresAt: null,
       linkIsActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
       linkRevocationPendingAt: link?.guestRevocationPendingAt ?? null,
+      linkMissing: link === null || link === undefined,
       participation: { isActive: true, bannedAt: participant.bannedAt ?? null, joinedAt: participant.joinedAt ?? null },
       now: new Date(),
     });

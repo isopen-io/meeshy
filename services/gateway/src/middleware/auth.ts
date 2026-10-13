@@ -537,6 +537,7 @@ export class AuthMiddleware {
         linkExpiresAt: linkGate.expiresAt,
         linkRevocationPendingAt: linkGate.revocationPendingAt,
         linkIsActive: linkGate.isActive,
+        linkMissing: linkGate.missing,
         participation: participant,
         now: new Date(),
       });
