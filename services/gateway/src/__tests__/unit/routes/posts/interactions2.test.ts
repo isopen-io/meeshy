@@ -21,7 +21,6 @@ const mockLikePost = jest.fn<any>();
 const mockUnlikePost = jest.fn<any>();
 const mockGetPostById = jest.fn<any>();
 const mockRecordView = jest.fn<any>();
-const mockRecordAnonymousOpen = jest.fn<any>();
 const mockPinPost = jest.fn<any>();
 const mockUnpinPost = jest.fn<any>();
 const mockGetPostViews = jest.fn<any>();
@@ -41,7 +40,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: jest.fn<any>().mockResolvedValue({ bookmarkCount: 0 }),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -134,6 +132,10 @@ function makeNotificationService() {
 
 function makePrisma() {
   return {
+    anonymousPostOpen: {
+      create: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     postImpression: {
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
@@ -166,6 +168,9 @@ function makePrisma() {
  */
 const publicAcl = (id: string) => ({
   id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
+  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+  author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -230,7 +235,6 @@ beforeEach(() => {
     id: POST_ID, type: 'POST', authorId: AUTHOR_ID, viewCount: 1,
   });
   mockRecordView.mockResolvedValue(true);
-  mockRecordAnonymousOpen.mockResolvedValue(true);
   mockPinPost.mockResolvedValue({ id: POST_ID });
   mockUnpinPost.mockResolvedValue({ id: POST_ID });
   mockGetPostViews.mockResolvedValue({ items: [], total: 0, hasMore: false });
@@ -676,7 +680,8 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   afterAll(async () => { await app.close(); });
 
   it('POST /posts/:postId/anonymous-view — returns 500 on service error', async () => {
-    mockRecordAnonymousOpen.mockRejectedValueOnce(new Error('DB error'));
+    // #10483 — la vue anonyme lit la garde par `post.findMany` : c'est elle qui tombe.
+    prisma.post.findMany.mockRejectedValueOnce(new Error('DB error'));
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/anonymous-view`,

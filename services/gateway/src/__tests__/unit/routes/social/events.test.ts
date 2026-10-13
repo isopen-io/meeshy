@@ -19,14 +19,13 @@
  *    porté exactement ce défaut (500 P2025 = « il existe », 200 = « il
  *    n'existe pas »).
  *
- * 3. **La clé de seau anonyme** — elle varie avec `(sessionToken, postId)` et
- *    JAMAIS avec l'adresse. L'ancienne clé (`posts:view:ip:…`) était UN SEUL
- *    seau pour tous les visiteurs d'une même sortie, quel que soit le post :
- *    inefficace comme garde, et déni de service mutuel entre visiteurs
- *    légitimes. Le témoin fait varier chaque composante à son tour — deux
- *    jetons, deux posts, deux adresses — parce qu'un témoin qui n'en varie
- *    qu'une ne distingue pas « la clé contient le jeton » de « la clé est le
- *    jeton ».
+ * 3. **La clé de seau anonyme** — depuis #10483, la CLÉ DE LECTEUR (HMAC du
+ *    jeton), jamais la valeur brute du jeton ni l'adresse. L'ancienne clé
+ *    (`posts:view:ip:…`) était UN SEUL seau pour tous les visiteurs d'une même
+ *    sortie : inefficace comme garde, et déni de service mutuel entre
+ *    visiteurs légitimes. Le seau par adresse existe à part
+ *    (`admitAnonymousReader`, empreinte tournante). Le témoin fait varier
+ *    chaque composante à son tour — deux jetons, deux posts, deux adresses.
  *
  * @jest-environment node
  */
@@ -38,7 +37,6 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 const mockRecordView = jest.fn<any>().mockResolvedValue(true);
 const mockGetPostById = jest.fn<any>().mockResolvedValue(null);
-const mockRecordAnonymousOpen = jest.fn<any>().mockResolvedValue(true);
 const mockRecordMediaDownloads = jest.fn<any>().mockResolvedValue({ recorded: 1 });
 const mockRecordEngagementBatch = jest.fn<any>().mockResolvedValue(1);
 
@@ -46,7 +44,6 @@ jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordMediaDownloads: (...a: any[]) => mockRecordMediaDownloads(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
   })),
@@ -121,10 +118,17 @@ function makePrisma() {
             visibilityUserIds: [] as string[],
             expiresAt: null,
           }));
-        // Le filtre ANONYME ne demande que l'id, et la base ne rend alors que
-        // ce qui est PUBLIC : `HIDDEN_ID` n'en sort pas.
-        if (select && Object.keys(select).length === 1 && select.id === true) {
-          return Promise.resolve(lignes.filter((l) => l.visibility === 'PUBLIC').map((l) => ({ id: l.id })));
+        // La garde ANONYME (`readServableToAnonymous`) lit l'auteur et
+        // l'original : c'est elle, et non la requête, qui écarte `HIDDEN_ID`.
+        if (select?.author) {
+          return Promise.resolve(lignes.map((l) => ({
+            ...l,
+            deletedAt: null,
+            repostOfId: null,
+            originalRepostOfId: null,
+            repostOf: null,
+            author: { isActive: true, deletedAt: null, deactivatedAt: null },
+          })));
         }
         return Promise.resolve(lignes);
       }),
@@ -134,6 +138,10 @@ function makePrisma() {
     postImpression: {
       create: journalise('postImpression', 'create', {}),
       createMany: journalise('postImpression', 'createMany', { count: 1 }),
+    },
+    anonymousPostOpen: {
+      create: journalise('anonymousPostOpen', 'create', {}),
+      updateMany: journalise('anonymousPostOpen', 'updateMany', { count: 0 }),
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postMention: { findFirst: jest.fn<any>().mockResolvedValue(null) },
@@ -173,7 +181,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockRecordView.mockResolvedValue(true);
   mockGetPostById.mockResolvedValue(null);
-  mockRecordAnonymousOpen.mockResolvedValue(true);
   mockRecordMediaDownloads.mockResolvedValue({ recorded: 1 });
   mockRecordEngagementBatch.mockResolvedValue(1);
 });
@@ -347,13 +354,16 @@ describe('critère 7.2 — un post inexistant et un post hors audience sont indi
 // TÉMOIN 3 — la clé de seau anonyme
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('critère 7.3 — la clé anonyme varie avec (sessionToken, postId), jamais avec l’IP', () => {
-  const requete = (opts: { sessionToken?: string; postId?: string; ip?: string; userId?: string }) =>
+describe('critère 7.3 — la clé anonyme est la clé de LECTEUR (#10483), jamais le jeton ni l’IP', () => {
+  const requete = (opts: { sessionToken?: string; postId?: string; ip?: string; userId?: string; visiteur?: boolean }) =>
     ({
       ip: opts.ip ?? '203.0.113.7',
       headers: opts.sessionToken ? { 'x-session-token': opts.sessionToken } : {},
       body: opts.postId ? { events: [{ type: 'view', postId: opts.postId }] } : undefined,
-      authContext: opts.userId ? { userId: opts.userId, registeredUser: { id: opts.userId } } : undefined,
+      authContext: opts.userId
+        ? { userId: opts.userId, registeredUser: { id: opts.userId } }
+        // Le contexte NON authentifié du vrai middleware porte `userId: 'anonymous'`.
+        : opts.visiteur ? { type: 'anonymous', isAuthenticated: false, isAnonymous: true, userId: 'anonymous' } : undefined,
     }) as unknown as FastifyRequest;
 
   it('change quand le JETON change, à post et adresse constants', () => {
@@ -362,10 +372,10 @@ describe('critère 7.3 — la clé anonyme varie avec (sessionToken, postId), ja
     expect(a).not.toBe(b);
   });
 
-  it('change quand le POST change, à jeton et adresse constants', () => {
+  it('ne change PAS quand le post change — le seau est celui du LECTEUR, pas du contenu', () => {
     const a = socialEventsRateLimitKey(requete({ sessionToken: 'jeton-a', postId: VISIBLE_ID }));
     const b = socialEventsRateLimitKey(requete({ sessionToken: 'jeton-a', postId: HIDDEN_ID }));
-    expect(a).not.toBe(b);
+    expect(a).toBe(b);
   });
 
   it('ne change PAS quand seule l’adresse change — la clé n’en dépend pas', () => {
@@ -376,9 +386,17 @@ describe('critère 7.3 — la clé anonyme varie avec (sessionToken, postId), ja
     expect(a).not.toContain('198.51.100.9');
   });
 
-  it('porte le jeton ET le post — un seul seau pour la plateforme est exclu', () => {
+  it('porte la clé HMAC du lecteur, jamais la valeur brute du jeton', () => {
     const cle = socialEventsRateLimitKey(requete({ sessionToken: 'jeton-a', postId: VISIBLE_ID }));
-    expect(cle).toBe(`social:events:jeton-a:${VISIBLE_ID}`);
+    expect(cle).toMatch(/^social:events:reader:[0-9a-f]{64}$/);
+    expect(cle).not.toContain('jeton-a');
+  });
+
+  it('un visiteur du contexte non authentifié (userId « anonymous ») n’est pas versé dans un seau partagé', () => {
+    const a = socialEventsRateLimitKey(requete({ sessionToken: 'jeton-a', visiteur: true }));
+    const b = socialEventsRateLimitKey(requete({ sessionToken: 'jeton-b', visiteur: true }));
+    expect(a).not.toBe(b);
+    expect(a).not.toBe('social:events:anonymous');
   });
 
   it('compte un appelant AUTHENTIFIÉ sur son compte, jamais sur son adresse', () => {
@@ -611,7 +629,11 @@ describe('critère 4 — la variante anonyme est la MÊME route', () => {
       payload: { events: [{ type: 'view', postId: VISIBLE_ID }] },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockRecordAnonymousOpen).toHaveBeenCalledWith(VISIBLE_ID, 'jeton-visiteur');
+    const ouvertures = (app.prisma as unknown as ReturnType<typeof makePrisma>).ecritures
+      .filter((e) => e.modele === 'anonymousPostOpen');
+    expect(ouvertures).toHaveLength(1);
+    expect(ouvertures[0].args.data.postId).toBe(VISIBLE_ID);
+    expect(ouvertures[0].args.data.sessionKey).toMatch(/^[0-9a-f]{64}$/);
     await app.close();
   });
 
@@ -624,7 +646,7 @@ describe('critère 4 — la variante anonyme est la MÊME route', () => {
       payload: { events: [{ type: 'view', postId: HIDDEN_ID }] },
     });
     expect(JSON.parse(res.payload).data).toEqual({ recorded: 0, rejected: 1 });
-    expect(mockRecordAnonymousOpen).not.toHaveBeenCalled();
+    expect((app.prisma as unknown as ReturnType<typeof makePrisma>).ecritures).toEqual([]);
     await app.close();
   });
 

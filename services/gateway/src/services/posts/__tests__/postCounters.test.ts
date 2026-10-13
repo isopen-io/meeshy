@@ -15,6 +15,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters, postCounterIncrementCommand } from '../postCounters';
 import { creditPostView } from '../postViewCredit';
 import { makeMongoPostCounterStore, type StoredPost } from '../../../__tests__/helpers/mongo-post-counter-store';
+import { makeReachPrisma } from '../../../__tests__/helpers/reach-prisma';
 import { PostService } from '../../PostService';
 import { ingestSocialEvents, type SocialEventsDeps } from '../../../routes/social/events';
 
@@ -179,17 +180,12 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
     expect(store.read(POST_A)?.viewCount).toBe(1);
   });
 
-  it('une ouverture anonyme compte sur un postOpenCount null', async () => {
-    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
-    const prisma = {
-      post: { findFirst: async () => ({ id: POST_A }), update: store.update },
-      anonymousPostOpen: { create: async () => ({}) },
-      $runCommandRaw: store.runCommandRaw,
-    } as unknown as PrismaClient;
+  it('une vue anonyme compte sur un viewCount et un postOpenCount null', async () => {
+    const fake = makeReachPrisma([legacyPost(POST_A)]);
 
-    const counted = await new PostService(prisma).recordAnonymousOpen(POST_A, 'session-key');
+    const counted = await new PostService(fake.prisma as never).recordAnonymousView(POST_A, 'a'.repeat(64));
 
     expect(counted).toBe(true);
-    expect(store.read(POST_A)?.postOpenCount).toBe(1);
+    expect(fake.store.read(POST_A)).toMatchObject({ viewCount: 1, postOpenCount: 1, anonymousViewCount: 1 });
   });
 });
