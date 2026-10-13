@@ -39,7 +39,9 @@ export function AuthorAvatar({
   const focused = useAuthorFocused(authorId);
   const mood = useAuthorMood(authorId);
   const moodPostId = useAuthorMoodPostId(authorId);
-  const moodProps = mood === undefined ? {} : { mood, ...(moodPostId === undefined ? {} : { moodPostId }) };
+  /* DANS LE FIL, L'HUMEUR NE BOUGE PAS (#10528) — une pastille par message,
+     et des dizaines à l'écran. */
+  const still = mood === undefined ? {} : { mood, moodStill: true, ...(moodPostId === undefined ? {} : { moodPostId }) };
   const openDetails = useContext(ConversationDetailsContext);
   const worldCard = useContext(WorldParticipantCardContext);
   const guestFocus = useSpeaksAsGuest();
@@ -63,7 +65,7 @@ export function AuthorAvatar({
      L'anneau de story part avec la porte, pour ne rien promettre au doigt. */
   if (guestFocus) {
     const { profileUsername: _profile, storyRing: _ring, ...visual } = props;
-    return <CardTriggerAvatar {...moodProps} {...visual} {...decorated} />;
+    return <CardTriggerAvatar {...still} {...visual} {...decorated} />;
   }
 
   /* LA FICHE DE WORLD WIDE (#10102) — quand le fil l'ouvre (équipe, World
@@ -88,7 +90,7 @@ export function AuthorAvatar({
           className="avatar-profile-link cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ '--avatar-size': `${props.size}px`, outlineColor: 'var(--accent)' } as CSSProperties}
         >
-          <CardTriggerAvatar {...moodProps} {...visual} {...decorated} />
+          <CardTriggerAvatar {...still} {...visual} {...decorated} />
         </button>
       </AvatarMenuTrigger>
     );
@@ -100,7 +102,16 @@ export function AuthorAvatar({
       name={props.name ?? props.profileUsername ?? ''}
       onOpenDetails={openDetails ?? undefined}
     >
-      <Avatar {...moodProps} {...props} here={decorated.here} hereActive={decorated.hereActive} hereFocused={decorated.hereFocused} />
+      {/* … ET ELLE SE TOUCHE (#10528) : ici l'avatar n'est dans aucun bouton,
+          la cible de l'humeur peut se poser à côté de son lien de profil. */}
+      <Avatar
+        {...still}
+        {...(authorId === undefined ? {} : { moodAuthorId: authorId })}
+        {...props}
+        here={decorated.here}
+        hereActive={decorated.hereActive}
+        hereFocused={decorated.hereFocused}
+      />
     </AvatarMenuTrigger>
   );
 }

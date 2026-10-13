@@ -1,6 +1,6 @@
 import { memo, useMemo, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { Avatar, MoodPeekTarget } from '@/components/avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
@@ -53,12 +53,16 @@ export const ProfileHero = memo(function ProfileHero({
   name,
   accent,
   presence,
+  mood,
   game,
 }: {
   readonly profile: PublicProfile;
   readonly name: string;
   readonly accent: string;
   readonly presence: ProfilePresenceLine | null;
+  /** L'humeur du moment, telle que le corpus servi la porte (#10528) —
+   * `useProfileController`. Absente : aucune pastille. */
+  readonly mood?: string | undefined;
   readonly game?: ReactNode;
 }) {
   const images = useMemo(() => ({ avatar: profile.avatar, banner: profile.banner }), [profile.avatar, profile.banner]);
@@ -71,6 +75,7 @@ export const ProfileHero = memo(function ProfileHero({
       name={name}
       {...(profile.avatar === null ? {} : { src: profile.avatar })}
       {...(presence === null ? {} : { presence: presence.status })}
+      {...(mood === undefined ? {} : { mood })}
     />
   );
   return (
@@ -89,7 +94,7 @@ export const ProfileHero = memo(function ProfileHero({
         )}
         {game}
       </div>
-      <span className="block rounded-chip" style={{ marginTop: -45, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
+      <span className="relative block rounded-chip" style={{ marginTop: -45, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
         {profile.avatar === null ? (
           avatar
         ) : (
@@ -97,6 +102,10 @@ export const ProfileHero = memo(function ProfileHero({
             {avatar}
           </ProfileImageButton>
         )}
+        {/* L'HUMEUR SE TOUCHE (#10528) — sa cible est posée ICI, à côté du
+            bouton de la photo : un bouton dans un bouton n'est pas du HTML
+            valide. `inset` = le liseré de 4 px qui entoure l'avatar. */}
+        {mood === undefined || mood === '' ? null : <MoodPeekTarget authorId={profile.id} emoji={mood} name={name} size={90} inset={4} />}
       </span>
       <div className="grid max-w-full justify-items-center gap-0.5 pt-2 text-center">
         <p className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>

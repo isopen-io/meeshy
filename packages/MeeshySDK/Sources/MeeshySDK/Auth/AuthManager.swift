@@ -126,6 +126,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// sortante est quittée, l'entrante pas encore reprise. La racine y montre
     /// un écran neutre plutôt que la connexion.
     @Published public internal(set) var isSwitchingAccount = false
+    /// #10482 — le verrou de bascule est tenu par le retrait du compte ACTIF.
+    var isRetiringActiveAccount = false
     /// #9612 — la fermeture que le serveur vient de prononcer, à EXPLIQUER
     /// avant la reconnexion (« fermée par l'équipe Meeshy », « depuis un autre
     /// appareil »…). `nil` dès que l'utilisateur l'a lue.
@@ -679,7 +681,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Le motif (#9612) est gardé pour l'avis que la racine montre avant la
     /// reconnexion ; il ne change rien au chemin de fermeture.
     public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
-        guard let userId = activeUserId else { return }
+        guard let userId = activeUserId, !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
         Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
         sessionRevocationNotice = SessionRevocationNotice(reason: reason)
         requireReauthentication(userId: userId, generation: sessionGeneration)

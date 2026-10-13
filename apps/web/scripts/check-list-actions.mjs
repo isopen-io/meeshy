@@ -47,7 +47,8 @@
  *     son menu plutôt que de tomber sur le conteneur muet qui l'enveloppe.
  *  9. LE MENU NE DÉBORDE JAMAIS DU BAS DE L'ÉCRAN — #5559 revue-correction,
  *     défaut 7 : sur un viewport de 390×640, le menu de la DERNIÈRE rangée
- *     se RETOURNE au-dessus de son ancre et ses SIX lignes restent
+ *     se RETOURNE au-dessus de son ancre et ses SEPT lignes (« Supprimer »
+ *     compris, #7285) restent
  *     atteignables.
  * 10. « 0 CONTRÔLE SANS GESTIONNAIRE » (#5652) — les trois boutons ronds de
  *     l'en-tête ont chacun leur effet MESURÉ (feuille ouverte + retour
@@ -615,8 +616,8 @@ const menuFit = await shortPage.evaluate(() => {
   };
 });
 check(
-  menuFit.count === 6 && menuFit.allInView,
-  `à 390×640, les SIX lignes du menu de la dernière rangée (deux appels, quatre actions) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
+  menuFit.count === 7 && menuFit.allInView,
+  `à 390×640, les SEPT lignes du menu de la dernière rangée (deux appels, quatre actions, « Supprimer » — #7285) ont leur centre dans l'écran (${JSON.stringify(menuFit)})`,
 );
 
 await shortContext.close();
@@ -762,7 +763,7 @@ await enTetePage.click('[data-rail="grande"] a[data-story-author]');
    chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
 await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
 const surLecteur = await enTetePage.evaluate(() => ({
-  pathname: window.location.pathname,
+  pathname: `${window.location.pathname}${window.location.search}`,
   scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
   auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
@@ -974,7 +975,7 @@ for (const scheme of ['light', 'dark']) {
   const opened = await enPage.waitForSelector('[role="menu"][aria-label="Conversation actions"]', { timeout: 2000 }).then(() => true, () => false);
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
-    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive']),
+    JSON.stringify(labels) === JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Archive', 'Delete']),
     `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
   );
   await enContext.close();

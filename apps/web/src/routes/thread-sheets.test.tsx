@@ -270,7 +270,8 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
       }),
       [ownMessage()],
     );
-    const firstEmoji = host.querySelector<HTMLButtonElement>('button[aria-label]:not([aria-label="Fermer"])');
+    await mounter.settle();
+    const firstEmoji = host.querySelector<HTMLButtonElement>('[data-emoji]');
     const emoji = firstEmoji?.getAttribute('aria-label') ?? '';
     expect(emoji).not.toBe('');
     await mounter.click(firstEmoji);

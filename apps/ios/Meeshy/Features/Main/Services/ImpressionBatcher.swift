@@ -244,9 +244,27 @@ final class ImpressionBatcher: ObservableObject {
                     ), stamp: $0.stamp) },
                     credential: .account
                 )
+            } catch let error where Self.isPermanentRejection(error) {
+                Self.logger.error("impression chunk rejected (dropped \(chunk.count, privacy: .public)): \(error.localizedDescription, privacy: .public)")
             } catch {
                 throw UnsentImpressions(impressions: Array(batch[start...]), cause: error)
             }
+        }
+    }
+
+    /// Un refus que le rejeu ne changera jamais : un 4xx hors 408/429 (le
+    /// paquet lui-même est invalide), ou une réponse 2xx illisible (le serveur
+    /// a déjà compté — rejouer compterait deux fois). Le réseau, les 5xx, les
+    /// 429 et l'expiration de session restent rejouables (#10398).
+    nonisolated static func isPermanentRejection(_ error: Error) -> Bool {
+        guard let apiError = error as? APIError else { return false }
+        switch apiError {
+        case .serverError(let code, _):
+            return (400..<500).contains(code) && code != 408 && code != 429
+        case .decodingError:
+            return true
+        default:
+            return false
         }
     }
 

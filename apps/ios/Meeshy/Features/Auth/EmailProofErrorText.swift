@@ -112,6 +112,14 @@ enum EmailProofErrorText {
                defaultValue: "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir.", bundle: bundle)
     }
 
+    /// La question « un AUTRE compte » a reçu sa réponse après la fenêtre
+    /// d'adoption de la session prouvée (#10513) : rien n'a changé, il faut un
+    /// nouveau lien.
+    static func linkExpired(bundle: Bundle = .main) -> String {
+        String(localized: "auth.magiclink.expired",
+               defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: bundle)
+    }
+
     /// L'adresse est prouvée mais le compte attend son second facteur
     /// (#10445) : ce n'est ni un refus ni un « Email vérifié ! ».
     private static func secondFactorRequired(_ bundle: Bundle) -> String {

@@ -2,8 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import {
-  KEEPALIVE_BATCH_CAP,
   SOCIAL_EVENTS_BATCH_CAP,
+  SOCIAL_EVENTS_SEND_CAP,
   SOCIAL_EVENTS_PENDING_CAP,
   createSocialEventsEmitter,
   createSocialEventsRecorder,
@@ -46,15 +46,25 @@ describe('createSocialEventsEmitter — le lot', () => {
     expect(emitter.pending()).toBe(2);
   });
 
-  test(`le lot est coupé à ${SOCIAL_EVENTS_BATCH_CAP} — la porte refuse le lot ENTIER au-delà`, async () => {
+  test(`le lot est coupé à ${SOCIAL_EVENTS_SEND_CAP} — sous le plafond de la porte (${SOCIAL_EVENTS_BATCH_CAP}) et sous les 64 Kio d'un envoi keepalive`, async () => {
+    expect(SOCIAL_EVENTS_SEND_CAP).toBeLessThanOrEqual(SOCIAL_EVENTS_BATCH_CAP);
     const sent: (readonly SocialEvent[])[] = [];
     const clock = manualScheduler();
     const emitter = createSocialEventsEmitter({ send: async (events) => { sent.push(events); return 'sent'; }, schedule: clock.schedule });
-    for (let n = 0; n < 450; n += 1) emitter.record(impression(n));
+    for (let n = 0; n < 250; n += 1) emitter.record(impression(n));
     clock.fire();
     await settle();
-    expect(sent.map((batch) => batch.length)).toEqual([200, 200, 50]);
+    expect(sent.map((batch) => batch.length)).toEqual([100, 100, 50]);
     expect(emitter.pending()).toBe(0);
+  });
+
+  test('un lot plein de séances tient sous les 64 Kio qu’un navigateur accorde à un envoi keepalive', () => {
+    const dwell = (n: number): SocialEvent => ({
+      type: 'dwell', sessionId: '0f8fad5b-d9cb-469f-a165-70867728950e', postId: OID(n), contentType: 'STATUS',
+      surface: 'detail', startedAt: new Date(0).toISOString(), dwellMs: 300_000, watchMs: 300_000, mediaDurationMs: 300_000, completed: false,
+    });
+    const body = JSON.stringify({ events: Array.from({ length: SOCIAL_EVENTS_SEND_CAP }, (_, n) => dwell(n)) });
+    expect(new TextEncoder().encode(body).length).toBeLessThan(64 * 1024);
   });
 
   test('un échec transitoire GARDE les événements : ils repartent au flush suivant', async () => {
@@ -141,6 +151,7 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
     expect(requests[0]?.method).toBe('POST');
     expect(requests[0]?.path).toContain('/social/events');
     expect(requests[0]?.body).toEqual({ events: [impression(1), { type: 'view', postId: OID(1) }] });
+    expect(requests[0]?.keepalive).toBe(true);
     expect(recorder.pending()).toBe(0);
   });
 
@@ -304,32 +315,6 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
   });
 });
 
-describe('la fermeture de la page ne perd plus rien (W3)', () => {
-  test('un flush de sortie part en keepalive, pour un compte comme pour un visiteur', async () => {
-    for (const credential of [{ kind: 'registered', token: 't' } as Credential, null]) {
-      const { recorder, requests } = recorderWith(credential);
-      recorder.record(impression(1));
-      await recorder.flush({ keepalive: true });
-      expect(requests).toHaveLength(1);
-      expect(requests[0]?.keepalive).toBe(true);
-    }
-  });
-
-  test('un flush ordinaire ne demande pas keepalive', async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    recorder.record(impression(1));
-    await recorder.flush();
-    expect(requests[0]?.keepalive).toBeUndefined();
-  });
-
-  test(`un lot keepalive est coupé à ${KEEPALIVE_BATCH_CAP} — le navigateur refuse un corps keepalive de plus de 64 Kio`, async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    for (let n = 0; n < KEEPALIVE_BATCH_CAP + 10; n += 1) recorder.record(impression(n));
-    await recorder.flush({ keepalive: true });
-    expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(KEEPALIVE_BATCH_CAP);
-  });
-});
-
 describe('l’engagement d’ouverture `open` voyage à part (#10483)', () => {
   const opening: SocialEvent = { type: 'open', postId: OID(9), origin: 'feed' };
   const statusBy = (open: number) => {
@@ -486,5 +471,48 @@ describe('l’enveloppe v2 sur les événements de comptage (#10500)', () => {
     await recorder.flush();
     const context = (requests[0]?.body as { context: Record<string, unknown> }).context;
     expect(context).toEqual({ schemaVersion: 2, sentAt: CONTEXT.sentAt, platform: 'web', uiLanguage: 'fr', capabilities: ['scroll'], sampling: CONTEXT.sampling });
+  });
+});
+
+describe('ce qui reste en file quand la page s’en va se reprend au prochain chargement (#10519)', () => {
+  test('`snapshot()` rend ce qui n’est pas DÉJÀ parti — le lot en vol, envoyé en keepalive, arrive ou se perd, il ne se rejoue pas', async () => {
+    let release: (verdict: SendVerdict) => void = () => undefined;
+    let calls = 0;
+    const emitter = createSocialEventsEmitter({
+      send: () => {
+        calls += 1;
+        return calls === 1 ? new Promise<SendVerdict>((resolve) => { release = resolve; }) : Promise.resolve('sent');
+      },
+      schedule: () => undefined,
+    });
+    emitter.record(impression(1));
+    const inFlight = emitter.flush();
+    emitter.record({ type: 'view', postId: OID(1), durationMs: 4000 });
+    expect(emitter.snapshot()).toEqual([{ type: 'view', postId: OID(1), durationMs: 4000 }]);
+    release('sent');
+    await inFlight;
+    expect(emitter.snapshot()).toEqual([]);
+  });
+
+  test('`restore()` remet les événements repris AVANT les nouveaux et arme un envoi', async () => {
+    const sent: (readonly SocialEvent[])[] = [];
+    const clock = manualScheduler();
+    const emitter = createSocialEventsEmitter({ send: async (events) => { sent.push(events); return 'sent'; }, schedule: clock.schedule });
+    emitter.record(impression(2));
+    clock.fire();
+    await settle();
+    emitter.record(impression(3));
+    emitter.restore([impression(1)]);
+    expect(emitter.snapshot()).toEqual([impression(1), impression(3)]);
+    expect(clock.armed()).toBe(1);
+    clock.fire();
+    await settle();
+    expect(sent[1]).toEqual([impression(1), impression(3)]);
+  });
+
+  test('`restore()` garde la borne de la file', () => {
+    const emitter = createSocialEventsEmitter({ send: async () => 'sent', schedule: () => undefined });
+    emitter.restore(Array.from({ length: SOCIAL_EVENTS_PENDING_CAP + 10 }, (_, n) => impression(n)));
+    expect(emitter.pending()).toBe(SOCIAL_EVENTS_PENDING_CAP);
   });
 });

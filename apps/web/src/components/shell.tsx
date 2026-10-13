@@ -21,6 +21,7 @@ import { useRoute } from '@/lib/router';
 import { CallLayer } from './call-layer';
 import { LazyFloatingMenus as FloatingMenus, loadFloatingMenus } from './floating-menus-lazy';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
+import { MoodPeekHost } from './mood-peek-host';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
 import { TopBand } from './top-band';
@@ -249,6 +250,9 @@ export default function Shell({ children }: { children: ReactNode }) {
           routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
           premier toucher. */}
       <ProfilePeekHost />
+      {/* L'HUMEUR TOUCHÉE S'OUVRE PAR-DESSUS L'ÉCRAN (#10528), comme la bulle
+          d'iOS (`StatusBubbleController`) — chargée au premier toucher. */}
+      <MoodPeekHost />
       {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}

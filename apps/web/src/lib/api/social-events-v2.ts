@@ -7,7 +7,10 @@ import {
 } from '@meeshy/shared/types/social-events-v2';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
-import { eventsBody, type EnvelopeStamp, type FlushOptions } from './social-events';
+import { eventsBody, type EnvelopeStamp } from './social-events';
+
+/** La sortie de page part en `keepalive`, par lots plus courts (64 Kio). */
+export type FlushOptions = { readonly keepalive?: boolean };
 import type { SamplingRates, SocialEventsContext } from './social-events-context';
 import {
   SAMPLED_V2_TYPES,

@@ -458,6 +458,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// rail, notification, lien) ; la vue de la story les porte.
     var storyViewEntries: DetailOpenSourceProviding = DetailOpenSources.shared
 
+    /// #10399 — l'impression d'une story est DURABLE comme sa vue : persistée,
+    /// rejouée à la relance, vidée en sortie de lecteur et en arrière-plan.
+    /// UNE file partagée par toutes les instances (une clé de persistance par
+    /// file) ; les tests en injectent une isolée.
+    static let sharedStoryImpressions = ImpressionBatcher(source: "story", surface: .story)
+    lazy var storyImpressions: ImpressionBatcher = StoryViewModel.sharedStoryImpressions
+
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {

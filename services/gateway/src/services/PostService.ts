@@ -32,6 +32,7 @@ import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { storyEffectsWithoutCredits } from './posts/repostCreditChips';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
@@ -220,6 +221,13 @@ export class PostService {
 
     let repostOfId: string | undefined;
     let originalRepostOfId: string | undefined;
+
+    // #10524 — aucune puce « Reposté de @auteur » ne s'enregistre : un client
+    // antérieur à la règle l'envoie encore. Appliqué AVANT toute lecture du
+    // canvas, donc aussi aux traductions, aux signaux et au réel.
+    if (data.storyEffects !== undefined) {
+      data = { ...data, storyEffects: storyEffectsWithoutCredits(data.storyEffects) };
+    }
 
     if (data.repostOfId) {
       const sourcePost = await this.prisma.post.findFirst({
@@ -1038,7 +1046,9 @@ export class PostService {
     const updateData: any = {
       ...rest,
       visibility: data.visibility,
-      storyEffects: (data.storyEffects as any) ?? undefined,
+      // #10522, #10524 — un ancien client renvoie son canvas en cache, puce
+      // de crédit comprise : elle ne se réintroduit pas.
+      storyEffects: (storyEffectsWithoutCredits(data.storyEffects) as any) ?? undefined,
       isEdited: true,
     };
     if (data.visibilityUserIds !== undefined) {
@@ -2082,7 +2092,9 @@ export class PostService {
         }
 
         snapshotMedia = duplicatedMedia;
-        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+        snapshotStoryEffects = storyEffectsWithoutCredits(
+          original.storyEffects as Prisma.InputJsonValue | undefined,
+        );
 
         // STATUS carries its text in `content` (the mood caption); STORY carries
         // its text inside `storyEffects` (rendered on the canvas). Inherit the

@@ -335,7 +335,14 @@ describe('POST /conversations/join/:linkId — maxUses (#4353, TDD : ce bloc tom
 
     expect(res.statusCode).toBe(200);
     expect((app as any).prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
-      where: { id: SHARE_LINK_DB_ID, OR: [{ maxUses: null }, { currentUses: { lt: 5 } }] },
+      where: {
+        id: SHARE_LINK_DB_ID,
+        isActive: true,
+        AND: [
+          { OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: expect.any(Date) } }] },
+          { OR: [{ maxUses: null }, { currentUses: { lt: 5 } }] },
+        ],
+      },
       data: { currentUses: { increment: 1 } },
     });
     // L'ancien corps appelait `update` — plus aucun appelant ne doit le faire

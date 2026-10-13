@@ -178,8 +178,17 @@ extension AuthManager {
     /// #10463 — la session refusée se referme dans une tâche à part : sous
     /// `isSwitchingAccount`, ses réessais (jusqu'à quelques secondes hors
     /// ligne) tenaient toute autre bascule refusée.
+    ///
+    /// #10513 — une preuve plus vieille que sa fenêtre d'adoption
+    /// (`EmailProvenSession.adoptionWindow`) ne range rien et ne pose rien :
+    /// la passerelle ne l'adopterait plus, et le premier appel déconnecterait.
+    /// Elle est refermée côté passerelle.
     @discardableResult
     public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
+        guard !proven.hasLapsedAdoptionWindow() else {
+            closeRefusedProvenSession(proven)
+            return false
+        }
         guard !isSwitchingAccount else {
             closeRefusedProvenSession(proven)
             return false
@@ -291,12 +300,25 @@ public struct EmailProvenSession: Sendable {
     /// CONNEXION ; la carte de l'inscription (#8288) tient celle d'un compte
     /// qu'elle vient de CRÉER, et le report de la demande de notifications en dépend.
     public let origin: SessionOrigin
+    /// L'instant où la preuve a été reçue (#10513) : l'âge de la session.
+    public let receivedAt: Date
 
-    public init(token: String, sessionToken: String?, user: MeeshyUser, origin: SessionOrigin = .login) {
+    /// La passerelle n'adopte une session prouvée par un lien que dans ses DIX
+    /// premières minutes (`PROVEN_SESSION_ADOPTION_WINDOW_MS`, #10477) ;
+    /// l'appareil s'arrête une minute avant (#10513).
+    public static let adoptionWindow: TimeInterval = 9 * 60
+
+    public init(token: String, sessionToken: String?, user: MeeshyUser, origin: SessionOrigin = .login, receivedAt: Date = Date()) {
         self.token = token
         self.sessionToken = sessionToken
         self.user = user
         self.origin = origin
+        self.receivedAt = receivedAt
+    }
+
+    /// La preuve a-t-elle passé la fenêtre où l'adopter vaut encore ?
+    public func hasLapsedAdoptionWindow(now: Date = Date()) -> Bool {
+        now.timeIntervalSince(receivedAt) > Self.adoptionWindow
     }
 
     /// La session que sert une réponse de preuve d'adresse. `nil` ⇒ adresse
@@ -312,7 +334,7 @@ public struct EmailProvenSession: Sendable {
 
     /// La même session, sous une autre origine.
     public func originating(from origin: SessionOrigin) -> EmailProvenSession {
-        EmailProvenSession(token: token, sessionToken: sessionToken, user: user, origin: origin)
+        EmailProvenSession(token: token, sessionToken: sessionToken, user: user, origin: origin, receivedAt: receivedAt)
     }
 }
 

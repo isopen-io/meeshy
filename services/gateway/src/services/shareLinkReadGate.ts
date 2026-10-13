@@ -148,13 +148,38 @@ export async function loadGuestShareLinkExpiry(
   prisma: Pick<PrismaClient, 'conversationShareLink'>,
   guest: GuestShareLinkRow,
 ): Promise<Date | null> {
+  return (await loadGuestShareLinkGate(prisma, guest)).expiresAt;
+}
+
+/**
+ * Ce que la garde commune d'un invité lit de son lien, en UNE lecture :
+ * l'échéance, et la révocation DIFFÉRÉE en attente (#10470) — un gros lien
+ * fermé sans attendre l'éviction de ses invités. Mêmes règles que
+ * `loadGuestShareLinkExpiry` : `null` sans lien ou lien introuvable, erreurs
+ * propagées (fail-CLOSED).
+ */
+export type GuestShareLinkGate = {
+  readonly expiresAt: Date | null;
+  readonly revocationPendingAt: Date | null;
+  /** `null` : lien introuvable (ou sans lien) — rien n'est décidé par cette lecture. */
+  readonly isActive: boolean | null;
+};
+
+export async function loadGuestShareLinkGate(
+  prisma: Pick<PrismaClient, 'conversationShareLink'>,
+  guest: GuestShareLinkRow,
+): Promise<GuestShareLinkGate> {
   const shareLinkId = guestShareLinkId(guest);
-  if (!shareLinkId) return null;
+  if (!shareLinkId) return { expiresAt: null, revocationPendingAt: null, isActive: null };
   const link = await prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
-    select: { expiresAt: true },
+    select: { expiresAt: true, guestRevocationPendingAt: true, isActive: true },
   });
-  return link?.expiresAt ? new Date(link.expiresAt) : null;
+  return {
+    expiresAt: link?.expiresAt ? new Date(link.expiresAt) : null,
+    revocationPendingAt: link?.guestRevocationPendingAt ? new Date(link.guestRevocationPendingAt) : null,
+    isActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
+  };
 }
 
 /**

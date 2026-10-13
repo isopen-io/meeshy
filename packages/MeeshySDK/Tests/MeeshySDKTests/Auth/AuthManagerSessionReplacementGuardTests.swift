@@ -399,6 +399,42 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         await auth.awaitRefusedSessionClosuresForTesting()
         XCTAssertEqual(authService.loggedOutTokens, ["tok-b"])
     }
+
+    // MARK: - #10513 — accepter après la fenêtre d'adoption ne quitte rien
+
+    /// La passerelle n'adopte une session prouvée par un lien que dans ses dix
+    /// premières minutes (#10477). Une réponse plus tardive à la question
+    /// rangeait le compte ouvert, posait une session déjà échue, et le premier
+    /// appel déconnectait : ni sortie, ni installation, la session prouvée est
+    /// refermée.
+    func test_switchToProvenAccount_pastTheAdoptionWindow_neitherSuspendsNorInstalls() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        let proven = EmailProvenSession(
+            token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"),
+            receivedAt: Date().addingTimeInterval(-(EmailProvenSession.adoptionWindow + 1)))
+
+        let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertFalse(switched)
+        XCTAssertTrue(auth.isAuthenticated, "le compte ouvert n'a pas été rangé")
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+        XCTAssertFalse(auth.hasPreservedSession(for: "user-b"), "rien du compte du lien n'est écrit au trousseau")
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"], "la session prouvée est refermée côté passerelle")
+        XCTAssertFalse(auth.isSwitchingAccount)
+    }
+
+    func test_emailProvenSession_keepsTheInstantItWasReceived_acrossOrigins() {
+        let receivedAt = Date(timeIntervalSince1970: 1_000)
+        let proven = EmailProvenSession(token: "t", sessionToken: nil, user: makeUser("u"), receivedAt: receivedAt)
+
+        XCTAssertEqual(proven.originating(from: .registration).receivedAt, receivedAt)
+        XCTAssertEqual(EmailProvenSession.adoptionWindow, 9 * 60, "une minute de marge sur les dix de la passerelle")
+        XCTAssertFalse(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(9 * 60)))
+        XCTAssertTrue(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(9 * 60 + 1)))
+    }
 }
 
 /// Un double de la passerelle : un rafraîchissement qu'on peut RETENIR, et une

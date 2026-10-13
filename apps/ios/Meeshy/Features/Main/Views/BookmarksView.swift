@@ -72,6 +72,7 @@ struct BookmarksView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadBookmarks() }
+        .onDisappear { Task { await impressions.flushNow() } }
         .fullScreenCover(isPresented: Binding(
             get: { storyAuthorUserId != nil },
             set: { if !$0 { storyAuthorUserId = nil } }

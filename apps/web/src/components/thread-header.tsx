@@ -446,6 +446,7 @@ export function ThreadHeader({
                 profileUsername={avatarDoor.username}
                 {...(photo === undefined ? {} : { src: photo })}
                 {...peerSignals}
+                {...(peerKey === undefined ? {} : { moodAuthorId: peerKey })}
               />
             </span>
           ) : (

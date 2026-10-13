@@ -51,6 +51,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             ProtectedContentSnapshotVeil.shared.install()
             ContentCaptureReporter.shared.install() // #9617 — une capture d'un contenu qui disparaît s'annonce
             SocialEventsV2Reporter.installHub() // #10499 — les événements v2 émis par le SDK rejoignent la file de l'app
+            DeletedAccountRetirement.shared.install() // #10482 — un compte supprimé quitte l'appareil, avec son jeu
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that

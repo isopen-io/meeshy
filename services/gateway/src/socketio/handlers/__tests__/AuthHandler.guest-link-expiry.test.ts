@@ -12,7 +12,7 @@
  *   `error { code: SHARE_LINK_EXPIRED }`, déconnexion, aucune room ;
  * - une session DÉJÀ connectée est sortie À L'ÉCHÉANCE par un minuteur armé à
  *   l'authentification (même patron que l'expiration du JWT,
- *   `_scheduleTokenExpiry`), qui RELIT le lien quand il sonne : un lien
+ *   `scheduleTokenExpiry`), qui RELIT le lien quand il sonne : un lien
  *   prolongé entre-temps réarme, un lien échu coupe le socket.
  *
  * Le double de Prisma JUGE chaque `where` contre des documents.

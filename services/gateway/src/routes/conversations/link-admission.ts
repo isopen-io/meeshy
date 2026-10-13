@@ -218,10 +218,18 @@ async function claimLinkUse(
   maxUses: number | null,
   extraIncrements: Record<string, { increment: number }> = {}
 ): Promise<boolean> {
+  // #10470 (R2) — l'état du lien se revérifie AU MOMENT de la réservation : une
+  // fermeture ou une échéance tombée depuis la lecture d'admission refuse, sans
+  // quoi l'invité entrerait après la fermeture et échapperait à la révocation.
+  const now = new Date();
   const claim = await prisma.conversationShareLink.updateMany({
     where: {
       id: linkId,
-      ...(maxUses === null ? {} : { OR: [{ maxUses: null }, { currentUses: { lt: maxUses } }] }),
+      isActive: true,
+      AND: [
+        { OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: now } }] },
+        ...(maxUses === null ? [] : [{ OR: [{ maxUses: null }, { currentUses: { lt: maxUses } }] }]),
+      ],
     },
     data: { currentUses: { increment: 1 }, ...extraIncrements },
   });

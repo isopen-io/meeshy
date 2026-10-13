@@ -6,7 +6,6 @@ import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/messa
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageMenu } from '@/components/message-menu';
 import { reactionEntries } from '@/components/message-blocks';
-import { ReactionSheet } from '@/components/reaction-sheet';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
@@ -21,6 +20,13 @@ import { MessageExportSheet } from './thread-export-sheet';
 /** « PLUS… » se charge au geste (#10149) : la fiche détail et sa section
  * d'accusés nominatifs ne servent qu'au message visé, jamais au premier rendu
  * du fil — les embarquer gonflait le chunk « thread » au-delà de son plafond. */
+/** « ＋ AJOUTER UNE RÉACTION » se charge au geste (#10531) : la feuille d'emojis
+ * complète et ses libellés (`emojiPicker.*`, `prepareEmojiPickerSheet`) n'entrent pas dans le chunk
+ * « thread », et n'arrivent qu'au premier « ＋ » du rail. */
+const ReactionSheet = lazy(() =>
+  import('@/components/reaction-sheet').then((m) => m.prepareEmojiPickerSheet().then(() => ({ default: m.ReactionSheet }))),
+);
+
 const MessageDetailSheet = lazy(() => import('@/components/message-detail-sheet').then((m) => ({ default: m.MessageDetailSheet })));
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
@@ -136,13 +142,15 @@ export function ThreadMessageSheets({
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
       {((messageId) =>
         messageId === null ? null : (
-          <ReactionSheet
-            onPick={(emoji) => {
-              messageMenu.onMenuReact(messageId, emoji);
-              messageMenu.setReactionSheetFor(null);
-            }}
-            onClose={() => messageMenu.setReactionSheetFor(null)}
-          />
+          <Suspense fallback={null}>
+            <ReactionSheet
+              onPick={(emoji) => {
+                messageMenu.onMenuReact(messageId, emoji);
+                messageMenu.setReactionSheetFor(null);
+              }}
+              onClose={() => messageMenu.setReactionSheetFor(null)}
+            />
+          </Suspense>
         ))(messageMenu.reactionSheetFor)}
       {((detailFor) => {
         if (detailFor === null) return null;

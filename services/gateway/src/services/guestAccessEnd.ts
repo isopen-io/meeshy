@@ -27,13 +27,40 @@ export type GuestAccessEnd = 'link-expired' | 'revoked' | null;
 export type GuestAccessState = {
   /** L'échéance du lien de l'invité — `null` sans lien, sans échéance, ou lien introuvable. */
   readonly linkExpiresAt: Date | null;
+  /**
+   * #10470 — la révocation DIFFÉRÉE d'un gros lien fermé : en attente depuis
+   * cet instant. Tout invité entré avant (ou à) cet instant n'a plus accès,
+   * même tant que sa ligne n'est pas encore écrite inactive.
+   */
+  readonly linkRevocationPendingAt?: Date | null;
+  /**
+   * #10470 — un lien FERMÉ (`false`) ne donne plus accès à aucun invité :
+   * toute fermeture révoque ses invités, et une réouverture ne ranime jamais
+   * une ligne. Lu ici, il ferme la course d'une admission réservée avant la
+   * fermeture et créée après la marque. `null`/absent : lien introuvable ou
+   * non lu, rien n'est décidé.
+   */
+  readonly linkIsActive?: boolean | null;
   /** La ligne de l'invité — `null` quand elle n'existe plus. */
-  readonly participation: { readonly isActive?: boolean | null; readonly bannedAt?: Date | null } | null;
+  readonly participation: {
+    readonly isActive?: boolean | null;
+    readonly bannedAt?: Date | null;
+    readonly joinedAt?: Date | null;
+  } | null;
   readonly now: Date;
 };
 
 export function guestAccessEnd(state: GuestAccessState): GuestAccessEnd {
   if (shareLinkHasExpired({ expiresAt: state.linkExpiresAt }, state.now)) return 'link-expired';
   if (!state.participation || !participationEstVivante(state.participation)) return 'revoked';
+  if (state.linkIsActive === false) return 'revoked';
+  if (admittedBeforePendingRevocation(state.participation.joinedAt, state.linkRevocationPendingAt)) return 'revoked';
   return null;
+}
+
+/** Une date d'entrée inconnue sous une marque posée vaut « entré avant » : fail-closed. */
+function admittedBeforePendingRevocation(joinedAt: Date | null | undefined, pendingAt: Date | null | undefined): boolean {
+  if (!pendingAt) return false;
+  if (!joinedAt) return true;
+  return new Date(joinedAt).getTime() <= new Date(pendingAt).getTime();
 }

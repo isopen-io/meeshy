@@ -59,13 +59,15 @@ const compte = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-// La purge CONFIRMÉE : seule preuve d'une suppression irréversible.
-const supprime = () => compte({ isActive: false, deletedAt: DELETED_AT, demandes: ['COMPLETED'] });
+// La purge CONFIRMÉE : seule preuve d'une suppression irréversible. Elle
+// SUPPRIME les sessions du compte : le jeton nomme une session absente (#10493).
+const supprime = () => compte({ isActive: false, deletedAt: DELETED_AT, demandes: ['COMPLETED'], session: null });
 const graceExpiree = () => compte({ isActive: false, deletedAt: DELETED_AT, demandes: ['GRACE_PERIOD_EXPIRED'] });
 const suppressionDeModeration = () => compte({ isActive: false, deactivatedAt: DELETED_AT, deletedAt: DELETED_AT, deletedBy: 'admin-id' });
 
 const prismaFor = (ligne: Record<string, unknown> | null) => {
-  const { demandes = [], ...colonnes } = (ligne ?? {}) as { demandes?: string[] };
+  const vivante = { isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) };
+  const { demandes = [], session = vivante, ...colonnes } = (ligne ?? {}) as { demandes?: string[]; session?: unknown };
   const findUnique = jest.fn(async () => (ligne ? colonnes : null));
   return {
     prisma: {
@@ -73,7 +75,7 @@ const prismaFor = (ligne: Record<string, unknown> | null) => {
       accountDeletionRequest: {
         findFirst: jest.fn(async ({ where }: { where: { status: string } }) => (demandes.includes(where.status) ? { id: 'req-1' } : null)),
       },
-      userSession: { findFirst: jest.fn(async () => null), update: jest.fn(async () => ({})) },
+      userSession: { findFirst: jest.fn(async () => session), update: jest.fn(async () => ({})) },
       participant: { findFirst: jest.fn(async () => null) },
     } as never,
     findUnique,
@@ -81,7 +83,7 @@ const prismaFor = (ligne: Record<string, unknown> | null) => {
 };
 
 const signe = (options: jwt.SignOptions = { expiresIn: '1h' }, secret = JWT_SECRET): string =>
-  jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: 'sess-1' }, secret, options);
+  jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: '507f1f77bcf86cd799439031' }, secret, options);
 
 const monter = async (ligne: Record<string, unknown> | null) => {
   const app = Fastify({ logger: false });

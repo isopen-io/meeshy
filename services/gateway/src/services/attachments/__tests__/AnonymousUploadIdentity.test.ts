@@ -51,7 +51,7 @@ describe('resolveAnonymousUploadIdentity', () => {
         type: 'anonymous',
         isActive: true,
       },
-      select: { id: true, shareLinkId: true, anonymousSession: true },
+      select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
     });
   });
 
@@ -140,7 +140,7 @@ describe('fetchShareLinkAnonymousFlags', () => {
     expect(flags).toEqual({ allowAnonymousFiles: false, allowAnonymousImages: true });
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: 'sharelink-1' },
-      select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } }, expiresAt: true },
+      select: { allowAnonymousFiles: true, allowAnonymousImages: true, allowedAttachmentKinds: true, conversation: { select: { identifier: true } }, expiresAt: true, isActive: true, guestRevocationPendingAt: true },
     });
   });
 
@@ -196,5 +196,46 @@ describe('readFilePrefix', () => {
     const prefix = await readFilePrefix(filePath, 32);
 
     expect(prefix.length).toBe(0);
+  });
+});
+
+describe('resolveAnonymousUploadIdentity — la garde commune d’un invité ferme aussi le chemin resumable (#10470)', () => {
+  const CLOSED_AT = new Date('2026-10-13T09:30:00Z');
+  const guestJoined = (joinedAt: Date, extra: Record<string, unknown> = {}) =>
+    jest.fn<any>().mockResolvedValue({ id: 'p-guest', shareLinkId: 'link-col', anonymousSession: null, joinedAt, bannedAt: null, ...extra });
+
+  it('refuse un invité entré avant la marque d’un lien rouvert', async () => {
+    const findFirst = guestJoined(new Date('2026-10-13T09:00:00Z'));
+    const findUnique = jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true, guestRevocationPendingAt: CLOSED_AT });
+    const prisma = buildPrisma({ participant: { findFirst } as any, conversationShareLink: { findUnique } as any });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).resolves.toBeNull();
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ joinedAt: true, bannedAt: true }) }));
+    expect(findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ isActive: true, guestRevocationPendingAt: true }),
+    }));
+  });
+
+  it('refuse un invité dont le lien est fermé, et un invité banni', async () => {
+    const closed = buildPrisma({
+      participant: { findFirst: guestJoined(new Date('2026-10-13T09:45:00Z')) } as any,
+      conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: false }) } as any,
+    });
+    const banned = buildPrisma({
+      participant: { findFirst: guestJoined(new Date('2026-10-13T09:45:00Z'), { bannedAt: CLOSED_AT }) } as any,
+      conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true }) } as any,
+    });
+
+    await expect(resolveAnonymousUploadIdentity(closed, 'token')).resolves.toBeNull();
+    await expect(resolveAnonymousUploadIdentity(banned, 'token')).resolves.toBeNull();
+  });
+
+  it('admet un invité entré après la réouverture', async () => {
+    const prisma = buildPrisma({
+      participant: { findFirst: guestJoined(new Date('2026-10-13T09:45:00Z')) } as any,
+      conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true, guestRevocationPendingAt: CLOSED_AT }) } as any,
+    });
+
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).resolves.toEqual({ participantId: 'p-guest', shareLinkId: 'link-col' });
   });
 });

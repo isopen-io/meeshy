@@ -12,6 +12,7 @@ import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
 import type { SessionBoundTokenPayload } from '../../services/auth/session-jwt';
+import { sessionAdmissionRefusal } from '../../services/auth/session-admission';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -21,10 +22,11 @@ import { recordSessionClientInfo } from '../../services/auth/session-client-info
 import { ACTIVATION_SELECT, isActivationBlocked } from '../../services/auth/account-activation';
 import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifications/contact-recently-active';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { scheduleTokenExpiry } from './tokenExpiryWatch';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
+import { loadGuestShareLinkGate } from '../../services/shareLinkReadGate';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
 import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
@@ -231,6 +233,40 @@ export class AuthHandler {
     const decoded = jwt.verify(token, jwtSecret) as Pick<SessionBoundTokenPayload, 'userId' | 'exp' | 'sid'>;
     const userId = decoded.userId;
 
+    // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
+    // vivre. Inconnue, révoquée, échue ⇒ refus ; jeton sans `sid` ⇒ butoir
+    // daté de #4264, fermé ; charge d'usage (`action`, `aud`) ⇒ refus. Posée
+    // avant la lecture du profil. Une lecture qui lève remonte au `catch` de
+    // l'appelant : socket fermé, sans annoncer une révocation non prouvée.
+    //
+    // La purge d'un compte SUPPRIME ses sessions : son jeton nomme donc une
+    // session absente. La signature étant vérifiée, le refus garde alors le
+    // code de #10264, qui fait purger ce compte à l'appareil.
+    const refus = await sessionAdmissionRefusal(this.prisma, {
+      claims: decoded,
+      userId,
+      now: this.now(),
+    });
+    if (refus && (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, userId))) {
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: userId });
+      socket.disconnect(true);
+      return;
+    }
+    if (refus) {
+      logger.info('socket refusé — la session nommée par le jeton ne vit plus', {
+        socketId: socket.id,
+        userId,
+        motif: refus,
+      });
+      socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
+        code: 'session_revoked',
+        message: 'Session expired — please sign in again.',
+        reason: 'session_expired',
+      });
+      socket.disconnect(true);
+      return;
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -285,53 +321,13 @@ export class AuthHandler {
       return;
     }
 
-    // #5712 — un JWT authentique reste utilisable jusqu'à SA PROPRE expiration
-    // (24h, `TOKEN_TTL`) même quand la `UserSession` qui l'a émis est, elle,
-    // périmée depuis des mois : `POST /auth/refresh` continue de le renouveler
-    // (son filtre s'arrête à `isValid`, décision assumée et documentée sur
-    // place dans `routes/auth/magic-link.ts` — un durcissement qu'elle diffère
-    // explicitement), et jusqu'ici rien côté socket ne relisait jamais la
-    // session nommée. Mesuré en production : 34 comptes actifs sur des
-    // sessions expirées depuis jusqu'à six mois.
-    //
-    // Le claim `sid` (`services/auth/session-jwt.ts`) NOMME la session ; on la
-    // relit ici et on refuse la reconnexion si elle n'est plus `isValid` OU si
-    // son `expiresAt` est dépassé. Contrairement à `/refresh`, cette porte est
-    // NEUVE : durcir dès sa création n'est pas le « durcissement mesuré à
-    // part » que `/refresh` diffère, c'est la garde que #5712 demande.
-    //
-    // Un jeton SANS `sid` (émis avant #4264) n'est PAS bloqué : refuser
-    // d'emblée déconnecterait tout le parc installé pour fermer un cas
-    // étroit, exactement le compromis que #4213 avait déjà écarté pour
-    // `/refresh`.
-    if (decoded.sid) {
-      const namedSession = await this.prisma.userSession.findFirst({
-        where: { id: decoded.sid, userId: user.id, isValid: true, expiresAt: { gt: new Date() } },
-        select: { id: true },
-      });
-
-      if (!namedSession) {
-        logger.info('socket refusé — la session nommée par le JWT n\'est plus valide ou a expiré', {
-          socketId: socket.id,
-          userId: user.id,
-        });
-        socket.emit(SERVER_EVENTS.AUTH_SESSION_REVOKED, {
-          code: 'session_revoked',
-          message: 'Session expired — please sign in again.',
-          reason: 'session_expired',
-        });
-        socket.disconnect(true);
-        return;
-      }
-
-      // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
-      // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
-      void recordSessionClientInfo(this.prisma, {
-        sessionId: namedSession.id,
-        userId: user.id,
-        declared: readClientSessionAuth(socket.handshake.auth),
-      }).catch(() => undefined);
-    }
+    // #9610 — la socket remet sous `auth.client` ce qu'une requête porte en
+    // en-têtes ; la session nommée le retient. Détaché, ne lève jamais.
+    void recordSessionClientInfo(this.prisma, {
+      sessionId: decoded.sid,
+      userId: user.id,
+      declared: readClientSessionAuth(socket.handshake.auth),
+    }).catch(() => undefined);
 
     const resolvedLanguages = resolveUserLanguagesOrdered(user, {
       deviceLocale: user.deviceLocale ?? undefined,
@@ -384,7 +380,7 @@ export class AuthHandler {
     await this._joinUserConversations(socket, user.id, false);
 
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
-    this._scheduleTokenExpiry(socket, decoded.exp);
+    scheduleTokenExpiry(socket, decoded.exp);
     // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
     // d'une session invitée antérieure sur ce socket ne le coupera pas.
     this.guestLinkWatch.dispose(socket);
@@ -513,7 +509,8 @@ export class AuthHandler {
         shareLinkId: true,
         anonymousSession: true,
         isActive: true,
-        bannedAt: true
+        bannedAt: true,
+        joinedAt: true
       }
     });
 
@@ -527,8 +524,16 @@ export class AuthHandler {
     // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
     // la connexion comme à chaque reconnexion. Un lien illisible lève, et
     // `handleTokenAuthentication` coupe le socket SANS code (fail-closed).
-    const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
-    const end = guestAccessEnd({ linkExpiresAt, participation: participant, now: new Date() });
+    // #10470 — et la révocation DIFFÉRÉE d'un gros lien fermé.
+    const linkGate = await loadGuestShareLinkGate(this.prisma, participant);
+    const linkExpiresAt = linkGate.expiresAt;
+    const end = guestAccessEnd({
+      linkExpiresAt,
+      linkRevocationPendingAt: linkGate.revocationPendingAt,
+      linkIsActive: linkGate.isActive,
+      participation: participant,
+      now: new Date(),
+    });
     if (end === 'link-expired') {
       refuseExpiredGuestLink(socket);
       return;
@@ -614,52 +619,6 @@ export class AuthHandler {
       logger.error('failed to emit viewing snapshots for anonymous', { anonymousId: socketUser.id, error });
     });
   }
-
-  // Node's `setTimeout` truncates any delay above ~24.8 days (a 32-bit signed
-  // int of ms) and fires IMMEDIATELY instead of throwing — a `rememberDevice`
-  // JWT (365 days, `session-jwt.ts`) would otherwise disconnect a fresh login
-  // right away. Capped below that ceiling and re-armed against the real `exp`
-  // on every fire, so a long-lived token is re-checked periodically rather
-  // than scheduled once for a delay it cannot express.
-  private static readonly MAX_EXPIRY_TIMER_MS = 20 * 24 * 60 * 60 * 1000; // 20 days
-
-  /**
-   * #3625 — un socket ne revérifie jamais son JWT après le handshake : un
-   * compte dont le token reste valide 24h (ou 365 jours, `rememberDevice`)
-   * gardait un accès temps réel jusqu'à la prochaine reconnexion, bien après
-   * l'expiration réelle du jeton. Arme un minuteur sur `exp` qui émet
-   * `auth:token-expired` et coupe le socket — le même signal que
-   * `jwt.TokenExpiredError` au connect (l.129-133), pour un jeton qui expire
-   * pendant que le socket est ouvert plutôt qu'avant.
-   *
-   * Le minuteur se désarme lui-même sur `disconnect` : un socket qui part
-   * avant l'échéance ne doit pas laisser un timer actif derrière lui.
-   */
-  private _scheduleTokenExpiry(socket: Socket, exp: number | undefined): void {
-    if (typeof exp !== 'number') return;
-
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let disposed = false;
-    socket.on('disconnect', () => {
-      disposed = true;
-      if (timer) clearTimeout(timer);
-    });
-
-    const arm = () => {
-      if (disposed) return;
-      const msRemaining = exp * 1000 - Date.now();
-      if (msRemaining <= 0) {
-        logger.info('socket JWT expired while connected — disconnecting', { socketId: socket.id });
-        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
-        socket.disconnect(true);
-        return;
-      }
-      timer = guardedTimeout({ name: 'socket-token-expiry', afterMs: Math.min(msRemaining, AuthHandler.MAX_EXPIRY_TIMER_MS), logger, run: arm });
-    };
-
-    arm();
-  }
-
 
   /**
    * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le

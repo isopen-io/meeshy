@@ -44,6 +44,7 @@ const deVerifyEmail = {
   'signInLink.switchAccount.kept': '@{current} bleibt in deinen Konten auf diesem Gerät.',
   'signInLink.switchAccount.busy': 'Einen Moment…',
   'signInLink.switchAccount.failed': 'Dieses andere Konto lässt sich gerade nicht öffnen. Du bleibst angemeldet, und der Link wurde geschlossen.',
+  'signInLink.switchAccount.expired': 'Dieser Link ist abgelaufen: Fordere einen neuen an. Du bleibst angemeldet.',
   'signInLink.switchAccount.leave': 'Zurück zur Startseite',
 };
 

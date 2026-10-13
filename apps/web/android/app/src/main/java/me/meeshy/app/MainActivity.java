@@ -266,6 +266,9 @@ public class MainActivity extends BridgeActivity {
         String route = savedInstanceState == null ? null : savedInstanceState.getString(ShellRoute.KEY);
         if (route != null) setIntent(new Intent(Intent.ACTION_VIEW, Uri.parse(route)));
         super.onCreate(savedInstanceState);
+        // #10375 — les touches de volume reglent les medias, comme dans Chrome,
+        // et non la sonnerie ; un appel les rend a la voix (`MeeshyCallPlugin`).
+        setVolumeControlStream(VolumeStreamRules.stream(false));
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(ShellLocale.wrap(this));
         photoPicker = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::photosPicked);

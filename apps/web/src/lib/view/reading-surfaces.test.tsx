@@ -27,7 +27,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import {
   IMPRESSION_DWELL_MS,
-  bindPageExitFlush,
   detailImpressionSourceOf,
   forgetVisitorKeyOnAccount,
   readingTelemetry,
@@ -381,20 +380,6 @@ describe('le réel d’un visiteur (W6)', () => {
     expect(sent).toContainEqual({ type: 'impression', postId: REEL_STUDIO.id, source: 'feed', surface: 'reels' });
     expect(sent).toContainEqual({ type: 'view', postId: REEL_STUDIO.id, surface: 'reels' });
     expect(requests.every((r) => r.headers?.['X-Session-Token'] === 'visitor_abc')).toBe(true);
-  });
-});
-
-describe('la sortie de page ne perd rien (W3)', () => {
-  test('pagehide et le passage en arrière-plan vident la file en keepalive ; le retour en ligne, normalement', () => {
-    const calls: unknown[] = [];
-    const win = new EventTarget();
-    const doc = Object.assign(new EventTarget(), { visibilityState: 'visible' as DocumentVisibilityState });
-    bindPageExitFlush(async (options) => { calls.push(options); }, { window: win as unknown as Window, document: doc as unknown as Document });
-    win.dispatchEvent(new Event('pagehide'));
-    doc.visibilityState = 'hidden';
-    doc.dispatchEvent(new Event('visibilitychange'));
-    win.dispatchEvent(new Event('online'));
-    expect(calls).toEqual([{ keepalive: true }, { keepalive: true }, undefined]);
   });
 });
 

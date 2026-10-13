@@ -215,6 +215,30 @@ describe('POST /links/:identifier/messages — anonymous', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // #10470 — la garde commune d'un invité : la révocation DIFFÉRÉE d'un gros
+  // lien (marque posée, lien rouvert depuis) retire l'écriture à tout invité
+  // entré avant la marque ; un invité banni n'écrit plus non plus.
+  it.each([
+    ['entré avant la marque d’un lien rouvert', { joinedAt: new Date('2026-10-13T09:00:00Z'), bannedAt: null }],
+    ['banni', { joinedAt: new Date('2026-10-13T09:45:00Z'), bannedAt: new Date('2026-10-13T09:50:00Z') }],
+  ])('returns 410 GUEST_ACCESS_REVOKED pour un invité %s, sans rien écrire', async (_label, participation) => {
+    (app as any).prisma.conversationShareLink.findUnique.mockImplementationOnce(async () => mockShareLink)
+      .mockImplementationOnce(async () => ({ ...mockParticipantShareLink, guestRevocationPendingAt: new Date('2026-10-13T09:30:00Z') }));
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({ ...mockAnonParticipant, ...participation });
+    (app as any).prisma.message.create.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/links/' + IDENTIFIER + '/messages',
+      headers: { 'x-session-token': SESSION_TOKEN },
+      payload: VALID_BODY,
+    });
+
+    // Le code du corps n'est pas observable ici : ce harnais double les
+    // schémas partagés (`api-schemas`), ce qui vide le corps d'erreur.
+    expect(res.statusCode).toBe(410);
+    expect((app as any).prisma.message.create).not.toHaveBeenCalled();
+  });
+
   it('returns 500 on service error', async () => {
     (app as any).prisma.conversationShareLink.findUnique.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({

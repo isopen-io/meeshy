@@ -103,6 +103,7 @@ import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
 import type { DepartedMemberEphemeralState } from './endConversationMembership';
 import type { ConversationRoomEmitter } from './emitToConversationParticipants';
 import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
+import { shareLinkActiveGuestsWhere, shareLinkGuestsOf } from './shareLinkGuestsWhere';
 
 /**
  * Un socket, réduit aux deux verbes dont cette unité a besoin : celui que
@@ -131,6 +132,11 @@ export interface ShareLinkRevocation {
   readonly shareLinkId: string;
   /** Injectable pour que le témoin d'ordre n'ait pas à deviner l'horloge. */
   readonly revokedAt?: Date;
+  /**
+   * #10470 — une révocation DIFFÉRÉE ne retire que les invités entrés avant la
+   * fermeture : un lien rouvert entre-temps garde ses nouveaux venus.
+   */
+  readonly admittedUntil?: Date;
 }
 
 /**
@@ -140,15 +146,19 @@ export interface ShareLinkRevocation {
 export async function revokeShareLinkGuests(
   params: ShareLinkRevocation
 ): Promise<ReadonlyArray<string>> {
-  const { prisma, io, manager, shareLinkId, revokedAt = new Date() } = params;
+  const { prisma, io, manager, shareLinkId, admittedUntil, revokedAt = new Date() } = params;
+  const live = withFetchSocketsDeadline(io);
 
   // Le lien d'un invité se lit comme `guestShareLinkId` le lit : la colonne de
   // la participation, et la session embarquée en repli (#10440) — les deux
   // sont posées à l'entrée par lien, et une ligne qui ne porterait que la
   // seconde échapperait sinon à la révocation.
-  const ofThisLink = { OR: [{ shareLinkId }, { anonymousSession: { is: { shareLinkId } } }] };
+  const ofThisLink = shareLinkGuestsOf(shareLinkId);
   const candidates = await prisma.participant.findMany({
-    where: { type: 'anonymous', isActive: true, ...ofThisLink },
+    where: {
+      ...shareLinkActiveGuestsWhere(shareLinkId),
+      ...(admittedUntil ? { joinedAt: { lte: admittedUntil } } : {}),
+    },
     select: { id: true, conversationId: true, displayName: true },
   });
 
@@ -205,7 +215,7 @@ export async function revokeShareLinkGuests(
   // complet : l'éviction ne dépend jamais d'elle.
   const departedIds = new Set(departed.map(guest => guest.id));
   const leftovers = evicted.filter(guest => !departedIds.has(guest.id));
-  const liveness = await settle(failures, () => leftoverLiveness(prisma, io, leftovers));
+  const liveness = await settle(failures, () => leftoverLiveness(prisma, live, leftovers));
   const connected = liveness ? leftovers.filter(guest => liveness.connected.has(guest.id)) : leftovers;
 
   // #10468 — invité par invité : l'échec de l'un (délai inter-nœuds de
@@ -214,7 +224,7 @@ export async function revokeShareLinkGuests(
   for (const guest of [...departed, ...connected]) {
     await settle(failures, () =>
       endConversationMembership({
-        io,
+        io: live,
         manager,
         conversationId: guest.conversationId,
         // Room personnelle : `Participant.id` pour un invité de lien partagé —
@@ -222,7 +232,7 @@ export async function revokeShareLinkGuests(
         userId: guest.id,
       })
     );
-    await settle(failures, () => disconnectGuest(io, guest.id));
+    await settle(failures, () => disconnectGuest(live, guest.id));
   }
 
   // Les inactifs déconnectés : la position vive est un état serveur (sans
@@ -245,6 +255,46 @@ export async function revokeShareLinkGuests(
   if (failures.length > 0) throw failures[0];
 
   return guests.map(guest => guest.id);
+}
+
+/**
+ * #10470 — un `fetchSockets` qui ne répond plus (Redis tombé :
+ * `maxRetriesPerRequest: null` met la requête de l'adaptateur en file sans
+ * fin) rejette au bout de `FETCH_SOCKETS_DEADLINE_MS` au lieu de pendre : la
+ * passe le compte comme un échec, et l'appelant garde le lien ouvert.
+ */
+function withFetchSocketsDeadline(
+  io: GuestSocketRegistry | null | undefined
+): GuestSocketRegistry | null | undefined {
+  if (!io) return io;
+  // R3 — le délai borne la PASSE, pas chaque appel : après un premier
+  // dépassement, le registre est tenu pour muet et les appels suivants
+  // échouent sur-le-champ. Sans quoi N invités coûtaient N fois le délai.
+  let unresponsive = false;
+  const fetchWithin = async (rooms: string | string[]) => {
+    if (unresponsive) throw new Error('fetchSockets skipped: the socket registry already timed out in this pass');
+    try {
+      return await withDeadline(io.in(rooms).fetchSockets(), FETCH_SOCKETS_DEADLINE_MS);
+    } catch (error) {
+      if (error instanceof FetchSocketsTimeoutError) unresponsive = true;
+      throw error;
+    }
+  };
+  return {
+    to: (room: string) => io.to(room),
+    in: (rooms: string | string[]) => ({ fetchSockets: () => fetchWithin(rooms) }),
+  };
+}
+
+class FetchSocketsTimeoutError extends Error {}
+
+function withDeadline<T>(work: Promise<T>, afterMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new FetchSocketsTimeoutError(`fetchSockets did not answer within ${afterMs} ms`)), afterMs);
+    timer.unref?.();
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
 }
 
 function uniqueById(guests: ReadonlyArray<RevocationCandidate>): ReadonlyArray<RevocationCandidate> {
@@ -349,6 +399,9 @@ async function readCommittedRejections(
     select: { id: true, conversationId: true, displayName: true },
   });
 }
+
+/** Délai d'un `fetchSockets` avant d'être tenu pour un échec (#10470). */
+export const FETCH_SOCKETS_DEADLINE_MS = 5_000;
 
 /** Écritures concurrentes au plus — entre 25 et 50 (#10464). */
 export const REVOCATION_WRITE_BATCH = 25;
