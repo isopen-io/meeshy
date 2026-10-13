@@ -9,6 +9,7 @@ import { publicWebOrigin } from '@/lib/links/public-origin';
 import { cardWithMembership, conversationCardQueryKey, conversationCardsFilter, leaveConversation, loadConversationCard } from '@/lib/api/conversation-card';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
+import { guestAccessEndedOf, type GuestAccessEnd } from '@/lib/api/guest-access-end';
 import type { ApiResult } from '@/lib/api/http';
 import {
   guestRefusalOf,
@@ -37,6 +38,7 @@ import { useParams, useSearch } from '@/lib/router';
 import { partagerLien, portailDuNavigateur, type ResultatInvitation } from '@/lib/view/invitation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { defaultGuestLanguage, GuestForm, guestEntryOf, guestLanguageOptions, GuestSubmit, type GuestEntry } from '@/routes/chat-join-guest';
+import { GuestAccessEndedNotice } from '@/routes/chat-join-ended';
 import { takeLandingHandoff, type HandoffStorage } from '@/routes/chat-join-handoff';
 import { focusGuestOf } from '@/lib/view/guest-focus';
 import { MemberActions, MembershipPending, useLinkMembership, type MembershipDeps } from '@/routes/chat-join-member';
@@ -214,7 +216,14 @@ const PASSING_REFUSALS: ReadonlySet<LinkRefusal> = new Set<LinkRefusal>(['rate-l
 export default function ChatJoinScreen() {
   const { link } = useParams<'/chat/$link'>();
   const [search] = useSearch();
-  return <ChatJoin link={link} anonymousRequested={search.get('mode') === ANONYMOUS_MODE} entry={guestEntryOf(search)} />;
+  return (
+    <ChatJoin
+      link={link}
+      anonymousRequested={search.get('mode') === ANONYMOUS_MODE}
+      entry={guestEntryOf(search)}
+      ended={guestAccessEndedOf(search.get('ended'))}
+    />
+  );
 }
 
 const MISSING_KEY: Readonly<Record<GuestField, Extract<InviteCatalogKey, `invite.missing.${GuestField}`>>> = {
@@ -241,6 +250,7 @@ export function ChatJoin({
   link,
   anonymousRequested = false,
   entry = null,
+  ended = null,
   deps = DEFAULT_DEPS,
 }: {
   readonly link: string;
@@ -248,6 +258,8 @@ export function ChatJoin({
   readonly anonymousRequested?: boolean;
   /** Le nom et la langue choisis sur la landing (#10003, `guestEntryOf`). */
   readonly entry?: GuestEntry | null;
+  /** `?ended=` (#10442) — l'accès d'invité que ce lien ouvrait vient de finir. */
+  readonly ended?: GuestAccessEnd | null;
   readonly deps?: ChatJoinDeps;
 }) {
   const language = currentInterfaceLanguage();
@@ -509,15 +521,21 @@ export function ChatJoin({
     <div className="relative flex h-dvh flex-col overflow-y-auto pt-safe" style={{ background: PAGE_BACKGROUND }} lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <InviteHeader language={language} next={isAccount ? null : next} />
       <main id="contenu" className="mx-auto grid w-full max-w-[1280px] flex-1 content-start px-4 md:px-12 md:pb-12">
-        {load.kind === 'loading' || (entering && load.kind === 'ready') ? <InvitationPending language={language} /> : null}
+        {ended !== null ? (
+          <div className="mx-auto grid w-full max-w-md content-center py-8">
+            <GuestAccessEndedNotice language={language} ended={ended} onOpen={(path) => deps.go(path, false)} />
+          </div>
+        ) : null}
 
-        {load.kind === 'refused' ? (
+        {ended === null && (load.kind === 'loading' || (entering && load.kind === 'ready')) ? <InvitationPending language={language} /> : null}
+
+        {ended === null && load.kind === 'refused' ? (
           <div className="mx-auto grid w-full max-w-md content-center py-8">
             <RefusalBanner language={language} refusal={load.refusal} {...(PASSING_REFUSALS.has(load.refusal) && online ? { onRetry: retryLoad } : {})} />
           </div>
         ) : null}
 
-        {invitation === null || entering ? null : (
+        {ended !== null || invitation === null || entering ? null : (
           <div
             data-invite-layout
             className="grid gap-4 md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] md:grid-rows-[auto_auto_auto_1fr] md:items-start md:gap-x-8 md:gap-y-4"

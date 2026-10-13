@@ -1,12 +1,12 @@
-import { parseCanvasDocument } from '@/lib/canvas/document';
+import type { CanvasDocument } from '@/lib/canvas/document';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import type { AdminPostMedia } from '@/lib/api/admin-posts-detail';
 
 /**
  * **L'APERÇU D'UNE PUBLICATION SANS QUITTER LA LISTE** (#10393) — fonctions PURES :
  *
- * - `previewPlanOf` : une story, un réel (ou un post) qui porte une SCÈNE (`storyEffects`
- *   v3) se rend par le lecteur de scène de l'application, celui du fil — sinon chaque
+ * - `previewPlanOf` : une story, un réel (ou un post) qui porte une SCÈNE v3 (lue par la
+ *   fiche) se rend par le lecteur de scène de l'application, celui du fil — sinon chaque
  *   média dans son lecteur : vidéo lue, audio lu, image en plein format ; un fichier
  *   reste un lien. Rien à montrer ⇒ le texte seul.
  * - `sceneCarrierOf` : les médias que la scène adresse, comme le fil les lui remet.
@@ -31,8 +31,8 @@ const playerOf = (mimeType: string): PreviewMediaPlayer => {
 
 const sceneModeOf = (type: string | null): 'story' | 'reel' | 'card' => (type === 'STORY' ? 'story' : type === 'REEL' ? 'reel' : 'card');
 
-export function previewPlanOf(post: { readonly type: string | null; readonly storyEffects: unknown; readonly media: readonly AdminPostMedia[] }): PreviewPlan {
-  if (parseCanvasDocument(post.storyEffects) !== null) return { kind: 'scene', mode: sceneModeOf(post.type) };
+export function previewPlanOf(post: { readonly type: string | null; readonly canvas: CanvasDocument | null; readonly media: readonly AdminPostMedia[] }): PreviewPlan {
+  if (post.canvas !== null) return { kind: 'scene', mode: sceneModeOf(post.type) };
   const items = post.media.flatMap((media): PreviewMediaItem[] =>
     media.fileUrl === null ? [] : [{ id: media.id, player: playerOf(media.mimeType), src: media.fileUrl, poster: media.thumbnailUrl }],
   );

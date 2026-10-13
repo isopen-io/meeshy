@@ -101,6 +101,7 @@ jest.mock('../../../services/MaintenanceService', () => ({
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
       setSessionRevoker: jest.fn(),
+      setShareLinkRevocationLive: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),

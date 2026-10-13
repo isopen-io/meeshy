@@ -18,7 +18,6 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostQueryKey, loadAdminPost, type AdminPostFiche } from '@/lib/api/admin-posts-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { parseCanvasDocument } from '@/lib/canvas/document';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
@@ -160,7 +159,7 @@ function PreviewBody({
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
   readonly listOptimistic?: { readonly key: QueryKey; readonly apply: (before: unknown, postId: string, intent: PostGestureIntent, now: Date) => unknown };
 }) {
-  const plan = previewPlanOf({ type: fiche.type, storyEffects: fiche.storyEffects, media: fiche.media });
+  const plan = previewPlanOf({ type: fiche.type, canvas: fiche.canvas, media: fiche.media });
   const state = postStateOf(fiche, now);
   const author = fiche.author === null ? personLabel(null, language) : personLabel(fiche.author, language);
 
@@ -235,7 +234,7 @@ function PreviewMedia({ language, item }: { readonly language: AdminLanguage; re
 }
 
 function PreviewScene({ language, fiche, mode }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche; readonly mode: 'story' | 'reel' | 'card' }) {
-  const document = useMemo(() => parseCanvasDocument(fiche.storyEffects), [fiche.storyEffects]);
+  const document = fiche.canvas;
   const carrier = useMemo(() => sceneCarrierOf(fiche.id, fiche.media, attachmentSrc), [fiche.id, fiche.media]);
   const [sceneIndex, setSceneIndex] = useState(0);
   if (document === null) return null;

@@ -926,6 +926,11 @@ model Participant {
   @@index([type])
   @@index([sessionTokenHash])
   @@index([shareLinkId, joinedAt])
+  /// #10443 — la révocation des invités d'un lien (`revokeShareLinkGuests`)
+  /// lit aussi la session embarquée (`OR` sur `anonymousSession.shareLinkId`) :
+  /// sans cet index, la branche parcourait tous les participants anonymes.
+  /// Posé par `migrations/2026-10-13-participant-anonymous-session-share-link-index.mongodb.js`.
+  @@index([anonymousSession.shareLinkId])
 }
 
 /// Message dans une conversation

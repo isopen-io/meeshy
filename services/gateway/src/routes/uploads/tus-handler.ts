@@ -23,7 +23,9 @@ import {
   classifyGuestFileOnDisk,
   guestRefusalResponse,
   guestUploadSizeRefusal,
+  shareLinkExpiredTusRefusal,
 } from '../../services/attachments/AnonymousUploadIdentity';
+import { ShareLinkExpiredError } from '../../services/shareLinkReadGate';
 import {
   classifyAnonymousAttachment,
   guestAttachmentNeedsFullContent,
@@ -202,8 +204,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
    * échoue désormais, là où il était rattrapé jusqu'ici. Une signature
    * invalide (jeton forgé) reste, comme avant, refusée sans aucun recours.
    *
-   * Retourne `null` sur tout échec d'authentification — ne lève jamais
-   * elle-même : chaque appelant choisit son propre code HTTP.
+   * Retourne `null` sur tout échec d'authentification — chaque appelant
+   * choisit son propre code HTTP. Une seule exception, levée sous la forme
+   * que `@tus/server` rend telle quelle : l'invité dont le lien a expiré
+   * (403 `SHARE_LINK_EXPIRED`, #10440).
    */
   async function resolveUploadCallerIdentity(headers: unknown): Promise<UploadCallerIdentity | null> {
     const h = headers as any;
@@ -232,7 +236,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // correspondait à un `Participant` actif ni consulter son lien de
       // partage. Même résolution que `AuthMiddleware.createAnonymousUserContext`
       // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
-      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
+      // #10440 — un lien échu se refuse en 403 `SHARE_LINK_EXPIRED`, le code
+      // des autres portes, jamais en 401 : le client doit savoir que rejouer
+      // la session ne servira à rien. Toute autre levée remonte (500).
+      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken)).catch((error: unknown) => {
+        if (error instanceof ShareLinkExpiredError) throw shareLinkExpiredTusRefusal();
+        throw error;
+      });
       if (!identity) return null;
       return { userId: identity.participantId, isAnonymous: true, anonymousShareLinkId: identity.shareLinkId };
     }

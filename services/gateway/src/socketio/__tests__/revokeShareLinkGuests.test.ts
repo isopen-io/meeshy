@@ -44,7 +44,7 @@ function makePrisma(guests: Guest[], remaining: unknown[] = []) {
     participant: {
       findMany: jest.fn<any>(async (args: any) => {
         // Le second `findMany` est celui de l'effectif restant.
-        if (args?.where?.isActive === true && args?.where?.shareLinkId) {
+        if (args?.where?.isActive === true && args?.where?.OR) {
           calls.push('find-guests');
           return guests;
         }
@@ -105,7 +105,12 @@ describe('revokeShareLinkGuests', () => {
     resetParticipantLookupCache();
   });
 
-  it("ne cherche que les invités ANONYMES et ACTIFS du lien retiré", async () => {
+  // #10440 — le lien d'un invité se lit sur la colonne de sa participation
+  // ET, en repli, sur sa session embarquée (`guestShareLinkId`) : les deux sont
+  // posées à l'entrée par lien, et une ligne qui ne porte que la seconde
+  // échappait à la révocation (le balayage journalier, qui la lisait, passe
+  // désormais par cette unité).
+  it("ne cherche que les invités ANONYMES et ACTIFS du lien retiré, par la colonne comme par la session embarquée", async () => {
     const prisma = makePrisma([]);
     const order: string[] = [];
     const { io } = makeIo(order);
@@ -114,7 +119,11 @@ describe('revokeShareLinkGuests', () => {
 
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { shareLinkId: LINK_ID, type: 'anonymous', isActive: true },
+        where: {
+          type: 'anonymous',
+          isActive: true,
+          OR: [{ shareLinkId: LINK_ID }, { anonymousSession: { is: { shareLinkId: LINK_ID } } }],
+        },
       })
     );
   });

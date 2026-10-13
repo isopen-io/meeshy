@@ -350,7 +350,8 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 //   MeeshyColors.brandPrimaryHex)` retiré de l'icône de palette du rail
 //   document : remplacé par `ComposerFloatingRailInk.floating(active:)`, la
 //   même loi de glyphe en relief que le rail gauche et le rail droit.
-// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5).
+// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5 ; confirmée
+// indépendamment par run 38320669253 sur `dev`).
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 457;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

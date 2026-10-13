@@ -25531,6 +25531,12 @@
             "value": "Slancio ×%lld"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -25576,6 +25582,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Legami tessuti"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laços tecidos"
           }
         },
         "pt-BR": {
@@ -147386,6 +147398,12 @@
             "value": "Commenti"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentários"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -147431,6 +147449,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contenuti creati"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conteúdo criado"
           }
         },
         "pt-BR": {
@@ -147480,6 +147504,12 @@
             "value": "Conversazioni"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversas"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -147525,6 +147555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Strumenti"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferramentas"
           }
         },
         "pt-BR": {
@@ -202640,6 +202676,12 @@
             "value": "Slancio ×%lld — %@ su %lld giorni"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld — %@ em %lld dias"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202685,6 +202727,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Le tue prossime azioni valgono %lld volte di più."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As suas próximas ações rendem %lld vezes mais."
           }
         },
         "pt-BR": {
@@ -202734,6 +202782,12 @@
             "value": "1 famiglia attiva"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 família ativa"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202781,6 +202835,12 @@
             "value": "%lld famiglie attive"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld famílias ativas"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202826,6 +202886,12 @@
           "stringUnit": {
             "state": "translated",
             "value": ", più la tua base"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", mais a sua base"
           }
         },
         "pt-BR": {
@@ -270980,7 +271046,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا اندفاع بعد"
+            "value": "لا زخم بعد"
           }
         },
         "de": {
@@ -270992,7 +271058,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No boost yet"
+            "value": "No momentum yet"
           }
         },
         "es": {
@@ -274646,7 +274712,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "فعّل اندفاعًا لتضاعف نقاطك."
+            "value": "ابنِ زخمًا لتضاعف نقاطك."
           }
         },
         "de": {
@@ -274658,7 +274724,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trigger a boost to multiply your points."
+            "value": "Build momentum to multiply your points."
           }
         },
         "es": {
@@ -276338,7 +276404,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاندفاعات"
+            "value": "الزخم"
           }
         },
         "de": {
@@ -276350,7 +276416,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Boosts"
+            "value": "Momentum"
           }
         },
         "es": {
@@ -276385,7 +276451,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاندفاع يضاعف نقاط إجراءاتك القادمة."
+            "value": "الزخم يضاعف نقاط إجراءاتك القادمة."
           }
         },
         "de": {
@@ -276397,7 +276463,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A boost multiplies the points of your next actions."
+            "value": "Momentum multiplies the points of your next actions."
           }
         },
         "es": {
@@ -280474,7 +280540,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل إجراء يمنح نقاطًا. عدة فئات نشطة تفعّل اندفاعًا."
+            "value": "كل إجراء يمنح نقاطًا. عدة فئات نشطة تبني زخمًا."
           }
         },
         "de": {
@@ -280486,7 +280552,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each action earns points. Several active families trigger a boost."
+            "value": "Each action earns points. Several active families build momentum."
           }
         },
         "es": {
@@ -288031,6 +288097,382 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prévia da câmera: toque duas vezes para tirar sem salvar em Fotos"
+          }
+        }
+      }
+    },
+    "guest.ended.expired.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت صلاحية هذا الرابط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link ist abgelaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link has expired"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace ha caducado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien a expiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link è scaduto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link expirou"
+          }
+        }
+      }
+    },
+    "guest.ended.expired.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يعد هذا الرابط يتيح الوصول إلى المحادثة. اطلب رابطًا جديدًا من الشخص الذي أرسله إليك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet die Unterhaltung nicht mehr. Bitte die Person, die ihn dir geschickt hat, um einen neuen Link."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link no longer opens the conversation. Ask the person who sent it for a new link."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace ya no da acceso a la conversación. Pide un enlace nuevo a la persona que te lo envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ne donne plus accès à la conversation. Demandez un nouveau lien à la personne qui vous l'a envoyé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link non dà più accesso alla conversazione. Chiedi un nuovo link alla persona che te l'ha inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link não dá mais acesso à conversa. Peça um novo link à pessoa que o enviou."
+          }
+        }
+      }
+    },
+    "guest.ended.revoked.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمت إزالة وصولك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Zugang wurde entfernt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your access has been removed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ha retirado tu acceso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre accès a été retiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo accesso è stato revocato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu acesso foi removido"
+          }
+        }
+      }
+    },
+    "guest.ended.revoked.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أزال مضيف المحادثة هذا الرابط. سيتيح لك رابط جديد العودة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Person, die die Unterhaltung leitet, hat diesen Link entfernt. Mit einem neuen Link kannst du zurückkehren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The host of the conversation removed this link. A new link will let you come back."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El anfitrión de la conversación ha retirado este enlace. Un enlace nuevo te permitirá volver."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'hôte de la conversation a retiré ce lien. Un nouveau lien vous permettra de revenir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'host della conversazione ha revocato questo link. Un nuovo link ti permetterà di tornare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O anfitrião da conversa removeu este link. Um novo link permitirá que você volte."
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق الرابط الجديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuen Link einfügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the new link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pega el enlace nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collez le nouveau lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incolla il nuovo link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cole o novo link"
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ليس رابط دعوة من Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein Meeshy-Einladungslink"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This isn't a Meeshy invitation link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No es un enlace de invitación de Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce n'est pas un lien d'invitation Meeshy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è un link di invito Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este não é um link de convite do Meeshy"
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.join": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام برابط جديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit einem neuen Link beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join with a new link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse con un enlace nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre par un nouveau lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partecipa con un nuovo link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar com um novo link"
+          }
+        }
+      }
+    },
+    "guest.ended.home": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العودة إلى الصفحة الرئيسية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück zur Startseite"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to home"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al inicio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour à l'accueil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Torna alla home"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar ao início"
           }
         }
       }

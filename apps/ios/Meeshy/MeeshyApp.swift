@@ -228,10 +228,15 @@ struct MeeshyApp: App {
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()
+                            },
+                            onNewLink: { identifier in
+                                activeGuestSession = GuestSession(identifier: identifier, context: AnonymousSessionStore.load(linkId: identifier), isDeliberate: guestSession.isDeliberate)
                             }
                         )
                     }
                 }
+                // Posté par le transport, hors du fil principal : la session se termine sur lui.
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
                 .visitorContentCover(
                     presenter: visitorPresenter,
                     isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
@@ -1057,6 +1062,18 @@ struct MeeshyApp: App {
             AnonymousSessionStore.delete(linkId: id)
         }
         activeGuestSession = nil
+    }
+
+    /// #10442 — la passerelle a terminé la session (lien échu, accès retiré) :
+    /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
+    /// le fil laisse place à l'écran qui le dit.
+    private func endGuestSession(_ notification: Notification) {
+        guard let session = activeGuestSession, let end = GuestSessionEnd(notification: notification),
+              session.isEnded(byRefusedToken: GuestSessionEnd.refusedSessionToken(in: notification)) else { return }
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+        APIClient.shared.anonymousSessionToken = nil
+        MessageSocketManager.shared.disconnect()
+        activeGuestSession = session.ended(by: end)
     }
 
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)

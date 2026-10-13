@@ -140,8 +140,16 @@ export async function revokeShareLinkGuests(
 ): Promise<ReadonlyArray<string>> {
   const { prisma, io, manager, shareLinkId, revokedAt = new Date() } = params;
 
+  // Le lien d'un invité se lit comme `guestShareLinkId` le lit : la colonne de
+  // la participation, et la session embarquée en repli (#10440) — les deux
+  // sont posées à l'entrée par lien, et une ligne qui ne porterait que la
+  // seconde échapperait sinon à la révocation.
   const guests = await prisma.participant.findMany({
-    where: { shareLinkId, type: 'anonymous', isActive: true },
+    where: {
+      type: 'anonymous',
+      isActive: true,
+      OR: [{ shareLinkId }, { anonymousSession: { is: { shareLinkId } } }],
+    },
     select: { id: true, conversationId: true, displayName: true },
   });
 

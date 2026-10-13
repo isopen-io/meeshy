@@ -121,3 +121,62 @@ export async function loadExpiredShareLinkConversationIds(
     return new Set(linked.map((participation) => participation.conversationId));
   }
 }
+
+/**
+ * Le lien par lequel un INVITÉ est entré : la colonne de la participation
+ * d'abord (`readerShareLinkHasExpired` lit la même), la session embarquée en
+ * repli — les deux sont posées à l'entrée par lien (`link-admission.ts`).
+ */
+export type GuestShareLinkRow = {
+  readonly shareLinkId?: string | null;
+  readonly anonymousSession?: { readonly shareLinkId?: string | null } | null;
+};
+
+export function guestShareLinkId(guest: GuestShareLinkRow): string | null {
+  return guest.shareLinkId || guest.anonymousSession?.shareLinkId || null;
+}
+
+/**
+ * L'échéance du lien d'un invité — `null` sans lien, sans échéance, ou lien
+ * introuvable (la règle du fil : un lien retiré révoque ses invités par
+ * `revokeShareLinkGuests`, pas par cette porte).
+ *
+ * Propage ses erreurs — fail-CLOSED : la résolution de session qui l'appelle
+ * refuse la session plutôt que de la servir sur la foi d'un lien illisible.
+ */
+export async function loadGuestShareLinkExpiry(
+  prisma: Pick<PrismaClient, 'conversationShareLink'>,
+  guest: GuestShareLinkRow,
+): Promise<Date | null> {
+  const shareLinkId = guestShareLinkId(guest);
+  if (!shareLinkId) return null;
+  const link = await prisma.conversationShareLink.findUnique({
+    where: { id: shareLinkId },
+    select: { expiresAt: true },
+  });
+  return link?.expiresAt ? new Date(link.expiresAt) : null;
+}
+
+/**
+ * LA GARDE COMMUNE d'un invité (#10437) : son lien a-t-il expiré ? Appelée par
+ * les deux résolutions de session anonyme — `middleware/auth.ts` (toute
+ * requête REST, lecture ou écriture) et `AuthHandler` (connexion socket, et
+ * minuteur d'échéance d'une session déjà connectée). Les quatre portes de
+ * lecture par route (#7388) restent : elles couvrent aussi l'inscrit entré par
+ * lien, que cette garde ne voit pas.
+ */
+export async function guestShareLinkHasExpired(
+  prisma: Pick<PrismaClient, 'conversationShareLink'>,
+  guest: GuestShareLinkRow,
+  now: Date = new Date(),
+): Promise<boolean> {
+  return shareLinkHasExpired({ expiresAt: await loadGuestShareLinkExpiry(prisma, guest) }, now);
+}
+
+/** La cause TYPÉE d'un refus de session invitée pour lien échu — traduite en 403 `SHARE_LINK_EXPIRED`. */
+export class ShareLinkExpiredError extends Error {
+  constructor() {
+    super('This share link has expired');
+    this.name = 'ShareLinkExpiredError';
+  }
+}

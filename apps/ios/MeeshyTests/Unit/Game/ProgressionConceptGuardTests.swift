@@ -192,4 +192,52 @@ final class ProgressionConceptGuardTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - #10444 — le concept de l'élan porte UN mot par langue
+
+    /// Les clés qui NOMMENT le concept : la fiche, la pastille sans élan, l'astuce des points, le détail et la carte.
+    private let elanNamingKeys = ["game.concept.elans.name", "game.concept.elans.why", "game.concept.points.tip.2",
+                                  "game.concept.value.no_elan", "game.detail.elan.how", "progression.elan.factor",
+                                  "progression.elan.base"]
+
+    /// Le web dit « Momentum » partout en anglais (#10439) ; iOS disait « Boosts » sur la fiche et « Momentum » sur la
+    /// carte. « boost » reste le verbe de la Flamme, jamais le nom de l'élan.
+    func test_theElanConcept_saysMomentum_inEnglish_everywhere() throws {
+        let table = try catalog(prefix: "")
+        for key in elanNamingKeys {
+            let text = try XCTUnwrap(table[key]?["en"], "\(key) [en] : absente du catalogue")
+            XCTAssertTrue(text.localizedCaseInsensitiveContains("momentum"), "\(key) [en] : le concept ne dit pas « Momentum » — « \(text) »")
+            XCTAssertFalse(text.localizedCaseInsensitiveContains("boost"), "\(key) [en] : « boost » nomme encore le concept — « \(text) »")
+        }
+        XCTAssertEqual(table["game.concept.elans.name"]?["en"], "Momentum")
+    }
+
+    /// L'arabe disait الاندفاع sur la fiche et الزخم sur la carte : un seul mot, الزخم — celui du titre et du facteur.
+    func test_theElanConcept_saysOneWord_inArabic() throws {
+        let table = try catalog(prefix: "")
+        let conceptKeys = table.keys.filter {
+            $0.hasPrefix("game.concept.elans.") || $0.hasPrefix("game.detail.elan.") || $0.hasPrefix("progression.elan")
+        } + elanNamingKeys
+        for key in Set(conceptKeys) {
+            let text = table[key]?["ar"] ?? ""
+            XCTAssertFalse(text.contains("اندفاع"), "\(key) [ar] : l'ancien mot du concept — « \(text) »")
+        }
+        for key in elanNamingKeys + ["progression.elans.title"] {
+            let text = try XCTUnwrap(table[key]?["ar"], "\(key) [ar] : absente du catalogue")
+            XCTAssertTrue(text.contains("زخم"), "\(key) [ar] : le concept ne dit pas الزخم — « \(text) »")
+        }
+    }
+
+    /// Le titre, l'invitation et l'invitation sans famille de la carte ont leur portugais (`pt`) : la phrase et les
+    /// pastilles juste en dessous l'ont aussi, sans quoi un lecteur portugais lit la carte à moitié en français.
+    func test_theElansCard_hasItsPortuguese() throws {
+        let table = try catalog(prefix: "progression.")
+        let keys = table.keys.filter { $0.hasPrefix("progression.elan") || $0.hasPrefix("progression.family.") }
+        XCTAssertGreaterThanOrEqual(keys.count, 10, "les clés de la carte des élans ont disparu du catalogue")
+        for key in keys {
+            for locale in ["pt", "pt-BR"] {
+                XCTAssertFalse((table[key]?[locale] ?? "").isEmpty, "\(key) : pas de \(locale)")
+            }
+        }
+    }
 }

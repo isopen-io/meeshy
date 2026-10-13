@@ -24,6 +24,8 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { loadGuestShareLinkExpiry, shareLinkHasExpired } from '../../services/shareLinkReadGate';
+import { GuestLinkWatch, refuseExpiredGuestLink } from './guestLinkWatch';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -104,8 +106,12 @@ export class AuthHandler {
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
   private readonly now: () => Date;
 
+  /** #10437, #10440, #10443 — la relecture du lien et de la participation de chaque socket invité. */
+  private readonly guestLinkWatch: GuestLinkWatch;
+
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
+    this.guestLinkWatch = new GuestLinkWatch(deps.prisma);
     this.statusService = deps.statusService;
     this.maintenanceService = deps.maintenanceService;
     this.callService = deps.callService;
@@ -367,6 +373,9 @@ export class AuthHandler {
 
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
     this._scheduleTokenExpiry(socket, decoded.exp);
+    // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
+    // d'une session invitée antérieure sur ce socket ne le coupera pas.
+    this.guestLinkWatch.dispose(socket);
 
     this.statusService.markConnected(user.id, false);
     // Le write DB + broadcast « en ligne » n'appartiennent qu'à la transition
@@ -479,22 +488,37 @@ export class AuthHandler {
     const tokenHash = hashSessionToken(sessionToken);
 
     const participant = await this.prisma.participant.findFirst({
+      // #10443 — `PARTICIPATION_VIVANTE` et non `isActive` seul : la même
+      // règle que la relecture du minuteur ci-dessous, un banni encore actif
+      // ne rejoint pas la room.
       where: {
         sessionTokenHash: tokenHash,
         type: 'anonymous',
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       },
       select: {
         id: true,
         displayName: true,
         language: true,
-        conversationId: true
+        conversationId: true,
+        shareLinkId: true,
+        anonymousSession: true
       }
     });
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
+      return;
+    }
+
+    // #10437 — la garde commune du lien échu, AVANT toute room : c'est cette
+    // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
+    // la connexion comme à chaque reconnexion. Un lien illisible lève, et
+    // `handleTokenAuthentication` coupe le socket (fail-closed).
+    const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
+    if (shareLinkHasExpired({ expiresAt: linkExpiresAt }, new Date())) {
+      refuseExpiredGuestLink(socket);
       return;
     }
 
@@ -551,6 +575,7 @@ export class AuthHandler {
     }
 
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
+    this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
     // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
     if (isFirstSocket) {
@@ -618,6 +643,7 @@ export class AuthHandler {
 
     arm();
   }
+
 
   /**
    * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le
@@ -923,9 +949,10 @@ export class AuthHandler {
           select: { conversationId: true }
         });
       } else {
-        // #7389 — un inscrit banni dont la ligne a été rallumée (restauration
-        // de compte) ne rejoint pas la room : il y recevrait chaque
-        // `message:new` que les portes REST lui refusent.
+        // #7389 — un inscrit banni dont la ligne a été rallumée (bannie
+        // pendant une suppression pour soi, puis restaurée par
+        // `restore-for-me` avant #10436) ne rejoint pas la room : il y
+        // recevrait chaque `message:new` que les portes REST lui refusent.
         conversations = await this.prisma.participant.findMany({
           where: { userId: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }

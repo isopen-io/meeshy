@@ -393,6 +393,14 @@ export class MeeshySocketIOManager {
       })
     );
 
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : départ annoncé, appel et position éteints,
+    // sockets coupés. Résolus à l'appel, comme ci-dessus.
+    this.maintenanceService.setShareLinkRevocationLive({
+      resolveIO: () => this.io,
+      resolveManager: () => this,
+    });
+
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
       path: "/socket.io/",

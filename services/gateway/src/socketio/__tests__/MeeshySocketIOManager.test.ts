@@ -82,6 +82,7 @@ jest.mock('../../services/MaintenanceService', () => ({
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
       setSessionRevoker: jest.fn(),
+      setShareLinkRevocationLive: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),
@@ -656,6 +657,14 @@ describe('MeeshySocketIOManager', () => {
     // producteur du révocateur est le manager (il tient `io`).
     it('registers a session revoker on MaintenanceService', () => {
       expect(mockMaintenanceServiceInstance.setSessionRevoker).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : il lui faut le vivant que seul le manager tient.
+    it('gives MaintenanceService the live io and manager for share-link revocation', () => {
+      const live = mockMaintenanceServiceInstance.setShareLinkRevocationLive.mock.calls[0][0];
+      expect(live.resolveIO()).toBe(manager.getIO());
+      expect(live.resolveManager()).toBe(manager);
     });
 
     it('wires CallEventsHandler message broadcaster', () => {
@@ -6348,6 +6357,7 @@ describe('MeeshySocketIOManager', () => {
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
         setSessionRevoker: jest.fn(),
+        setShareLinkRevocationLive: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
@@ -7645,6 +7655,7 @@ describe('MeeshySocketIOManager', () => {
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
         setSessionRevoker: jest.fn(),
+        setShareLinkRevocationLive: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);

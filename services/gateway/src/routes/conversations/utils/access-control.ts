@@ -9,12 +9,21 @@ import { unsetOrNull } from '../../../utils/prisma-unset';
  * l'invité et pour l'inscrit, sur toutes les portes de lecture (REST et
  * socket) (#7389).
  *
- * `isActive: true` seul ne suffit pas : un bannissement écrit bien
- * `isActive: false`, mais une restauration de compte rallume `isActive` sans
- * regarder `bannedAt` (`routes/me/delete-account.ts`). La garde de
- * bannissement ne vivait que sur la branche INVITÉ ; l'inscrit restauré
- * relisait le fil, la recherche et les épinglés, et rejoignait la room à la
- * connexion socket.
+ * `isActive: true` seul ne suffit pas. Un bannissement d'un membre ACTIF écrit
+ * bien `isActive: false`, mais celui d'un membre déjà INACTIF (parti, ou qui a
+ * supprimé la conversation pour lui) n'écrit que `bannedAt`
+ * (`resolveBanWrite`, `services/conversations/conversationBanState.ts`) ; et
+ * `POST /conversations/:id/restore-for-me` (`routes/user-deletions.ts`)
+ * rallumait ensuite `isActive` sans lire `bannedAt` — fermé par #10436, qui
+ * refuse la restauration d'un banni et porte la garde dans le `where` de
+ * l'écriture. (Ce n'est PAS la restauration de compte de
+ * `routes/me/delete-account.ts` : elle écrit `User.isActive`, jamais une
+ * participation.) Les réintégrations (lien, invitation, ajout) passent par
+ * `resolveConversationEntry`, qui refuse un banni ; le débannissement remet
+ * `bannedAt` à `null` dans la même écriture. La garde de lecture reste
+ * porteuse pour les lignes actives ET bannies déjà en base : elle ne vivait
+ * que sur la branche INVITÉ, et l'inscrit concerné relisait le fil, la
+ * recherche et les épinglés, et rejoignait la room à la connexion socket.
  *
  * `unsetOrNull` et non `bannedAt: null` : la colonne est ABSENTE du document de
  * tout participant jamais banni, et l'égalité à `null` fermerait la
@@ -217,10 +226,11 @@ export async function verdictAccesConversation(
   // dans leur contexte d'auth — se voyaient refuser l'accès à leur propre
   // conversation. Voir `utils/prisma-unset.ts`.
   //
-  // La garde reste porteuse malgré `isActive: true` : un bannissement écrit bien
-  // `isActive: false`, mais une restauration de compte rallume `isActive` sans
-  // regarder `bannedAt` (`routes/me/delete-account.ts`). Elle vaut pour les
-  // branches INSCRITES ci-dessous aussi (`PARTICIPATION_VIVANTE`, #7389).
+  // La garde reste porteuse malgré `isActive: true` : une ligne peut être
+  // active ET bannie en base — bannie pendant qu'elle était inactive (seul
+  // `bannedAt` est alors écrit), puis rallumée par `restore-for-me` avant
+  // #10436 (voir `PARTICIPATION_VIVANTE`). Elle vaut pour les branches
+  // INSCRITES ci-dessous aussi (#7389).
   if (authContext.participantId) {
     const participant = await prisma.participant.findFirst({
       where: {
