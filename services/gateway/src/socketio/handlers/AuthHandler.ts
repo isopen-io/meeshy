@@ -24,7 +24,8 @@ import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { loadGuestShareLinkExpiry, shareLinkHasExpired } from '../../services/shareLinkReadGate';
+import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
 import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
@@ -487,36 +488,25 @@ export class AuthHandler {
   ): Promise<void> {
     const tokenHash = hashSessionToken(sessionToken);
 
+    // #10457 — UNE lecture de la ligne du jeton, vivante ou non, puis l'ordre
+    // unique des causes (`guestAccessEnd`) : lien expiré d'abord, puis
+    // participation morte (désactivée, bannie). Un jeton sans ligne garde la
+    // réponse nue, rien n'est confirmé à qui ne détient rien (#10449).
     const participant = await this.prisma.participant.findFirst({
-      // #10443 — `PARTICIPATION_VIVANTE` et non `isActive` seul : la même
-      // règle que la relecture du minuteur ci-dessous, un banni encore actif
-      // ne rejoint pas la room.
-      where: {
-        sessionTokenHash: tokenHash,
-        type: 'anonymous',
-        ...PARTICIPATION_VIVANTE
-      },
+      where: { sessionTokenHash: tokenHash, type: 'anonymous' },
       select: {
         id: true,
         displayName: true,
         language: true,
         conversationId: true,
         shareLinkId: true,
-        anonymousSession: true
+        anonymousSession: true,
+        isActive: true,
+        bannedAt: true
       }
     });
 
     if (!participant) {
-      // #10449 — une ligne MORTE (désactivée, bannie) dit le code du 410 REST ;
-      // un jeton sans ligne garde la réponse nue, rien n'est confirmé.
-      const deadParticipation = await this.prisma.participant.findFirst({
-        where: { sessionTokenHash: tokenHash, type: 'anonymous' },
-        select: { id: true },
-      });
-      if (deadParticipation) {
-        refuseRevokedGuest(socket);
-        return;
-      }
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
       return;
@@ -525,10 +515,15 @@ export class AuthHandler {
     // #10437 — la garde commune du lien échu, AVANT toute room : c'est cette
     // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
     // la connexion comme à chaque reconnexion. Un lien illisible lève, et
-    // `handleTokenAuthentication` coupe le socket (fail-closed).
+    // `handleTokenAuthentication` coupe le socket SANS code (fail-closed).
     const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
-    if (shareLinkHasExpired({ expiresAt: linkExpiresAt }, new Date())) {
+    const end = guestAccessEnd({ linkExpiresAt, participation: participant, now: new Date() });
+    if (end === 'link-expired') {
       refuseExpiredGuestLink(socket);
+      return;
+    }
+    if (end === 'revoked') {
+      refuseRevokedGuest(socket);
       return;
     }
 

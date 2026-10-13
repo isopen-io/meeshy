@@ -32,7 +32,14 @@ const GUEST_ID = '507f1f77bcf86cd799439011';
 const NOW = new Date('2026-10-13T10:00:00Z');
 const HOUR = 60 * 60 * 1000;
 
-type World = { participants: MongoDocument[]; links: MongoDocument[]; linkReadFails: boolean; participantReadFails?: boolean };
+type World = {
+  participants: MongoDocument[];
+  links: MongoDocument[];
+  linkReadFails: boolean;
+  participantReadFails?: boolean;
+  /** #10457 — la base répond à ce nombre de lectures (toutes tables), puis lève. */
+  readsBeforeFailure?: number;
+};
 
 function guestRow(): MongoDocument {
   return {
@@ -64,9 +71,15 @@ function otherGuestRow(): MongoDocument {
 }
 
 function buildHandler(world: World) {
+  let reads = 0;
+  const failOnceExhausted = () => {
+    reads += 1;
+    if (world.readsBeforeFailure !== undefined && reads > world.readsBeforeFailure) throw new Error('mongo down');
+  };
   const prisma = {
     participant: {
       findFirst: jest.fn(async ({ where }: { where: MongoDocument }) => {
+        failOnceExhausted();
         if (world.participantReadFails) throw new Error('mongo down');
         return world.participants.find((row) => matchesMongoWhere(row, where)) ?? null;
       }),
@@ -74,6 +87,7 @@ function buildHandler(world: World) {
     },
     conversationShareLink: {
       findUnique: jest.fn(async ({ where }: { where: MongoDocument }) => {
+        failOnceExhausted();
         if (world.linkReadFails) throw new Error('mongo down');
         return world.links.find((row) => matchesMongoWhere(row, where)) ?? null;
       }),
@@ -475,5 +489,101 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
     expect(socket.disconnect).not.toHaveBeenCalled();
     await jest.advanceTimersByTimeAsync(31 * 1000);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
+  });
+});
+
+/**
+ * #10457 — la connexion socket suit l'ordre unique des causes (`guestAccessEnd`),
+ * celui de la relecture et du REST : le lien expiré d'abord, puis la
+ * participation morte. Et la SECONDE lecture de la connexion (quelle qu'elle
+ * soit) qui échoue coupe sans code de fin d'accès, comme la première.
+ */
+describe('AuthHandler — la connexion d’un invité donne la même cause que les autres portes (#10457)', () => {
+  const codes = (socket: ReturnType<typeof guestSocket>) =>
+    socket.emit.mock.calls
+      .filter(([event]) => event === 'error')
+      .map(([, data]) => (data as { code?: string })?.code)
+      .filter((code): code is string => typeof code === 'string');
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('lien échu ET participation désactivée à la connexion ⇒ SHARE_LINK_EXPIRED, la cause première', async () => {
+    const world: World = {
+      participants: [{ ...guestRow(), isActive: false }, otherGuestRow()],
+      links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() - HOUR) }],
+      linkReadFails: false,
+    };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(codes(socket)).toEqual(['SHARE_LINK_EXPIRED']);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
+    expect(connectedUsers.size).toBe(0);
+  });
+
+  it('lien échu ET participation bannie à la connexion ⇒ SHARE_LINK_EXPIRED', async () => {
+    const world: World = {
+      participants: [{ ...guestRow(), bannedAt: new Date(NOW.getTime() - HOUR) }, otherGuestRow()],
+      links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() - HOUR) }],
+      linkReadFails: false,
+    };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(codes(socket)).toEqual(['SHARE_LINK_EXPIRED']);
+  });
+
+  it('la SECONDE lecture de la connexion échoue (participation désactivée) ⇒ coupure SANS code, aucune room', async () => {
+    const world: World = {
+      participants: [{ ...guestRow(), isActive: false }, otherGuestRow()],
+      links: [{ id: LINK_ID }],
+      linkReadFails: false,
+      readsBeforeFailure: 1,
+    };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(codes(socket)).toEqual([]);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
+    expect(connectedUsers.size).toBe(0);
+  });
+
+  it('la SECONDE lecture de la connexion échoue (participation vivante) ⇒ coupure SANS code, aucune room', async () => {
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false, readsBeforeFailure: 1 };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(codes(socket)).toEqual([]);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
+    expect(connectedUsers.size).toBe(0);
+  });
+
+  it('la PREMIÈRE lecture de la connexion échoue ⇒ coupure SANS code', async () => {
+    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false, readsBeforeFailure: 0 };
+    const { handler } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(codes(socket)).toEqual([]);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
   });
 });

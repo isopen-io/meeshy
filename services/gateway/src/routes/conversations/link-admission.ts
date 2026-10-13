@@ -868,6 +868,9 @@ export function registerLinkAdmissionRoutes(
           case 'invalid':
             sendUnauthorized(reply, 'Session invalide ou expirée', { code: AUTH_ERROR_CODES.SESSION_INVALID });
             return;
+          case 'revoked':
+            sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
+            return;
           case 'link-gone':
             sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a été désactivé' });
             return;

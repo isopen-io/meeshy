@@ -498,6 +498,63 @@ describe('PATCH /guest-sessions/me', () => {
   });
 });
 
+// ─── PATCH /guest-sessions/me — participation morte (#10457) ──────────────────
+
+/**
+ * #10457 — `refreshGuestSession` juge la participation par la règle de
+ * `PARTICIPATION_VIVANTE` (`participationEstVivante`) : désactivée OU bannie ⇒
+ * 410 `GUEST_ACCESS_REVOKED`, sans servir la conversation ni relancer la
+ * présence. Le lien expiré reste la cause première (`guestAccessEnd`).
+ */
+describe('PATCH /guest-sessions/me — participation morte (#10457)', () => {
+  const patch = (app: FastifyInstance) =>
+    app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+  const guestRow = (extra: Record<string, unknown>) => ({
+    id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+    permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    ...extra,
+  });
+
+  it('banni encore actif ⇒ 410 GUEST_ACCESS_REVOKED, rien servi, présence non relancée', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ bannedAt: new Date('2026-10-13T09:00:00Z') }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect(res.json().data).toBeUndefined();
+    expect(res.body).not.toContain('Test Conv');
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ⇒ 410 GUEST_ACCESS_REVOKED, plus 401 SESSION_INVALID', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ isActive: false }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('banni ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ bannedAt: new Date('2026-10-13T09:00:00Z') }));
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({ ...mockShareLink, expiresAt: new Date('2020-01-01') });
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'LINK_EXPIRED' });
+  });
+});
+
 // ─── DELETE /guest-sessions/me — idempotence (critère 4 + critère 6) ─────────
 
 describe('DELETE /guest-sessions/me', () => {

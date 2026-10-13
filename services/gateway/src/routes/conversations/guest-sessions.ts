@@ -8,6 +8,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { hashSessionToken } from '../../utils/session-token';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
 import type { ParticipantRow, ShareLinkWithConversation } from './link-admission';
 
 export interface GuestSessionParams {
@@ -17,6 +18,7 @@ export interface GuestSessionParams {
 
 export type RefreshGuestSessionOutcome =
   | { readonly kind: 'invalid' }
+  | { readonly kind: 'revoked' }
   | { readonly kind: 'link-gone' }
   | { readonly kind: 'link-expired' }
   | { readonly kind: 'conversation-closed' }
@@ -26,6 +28,12 @@ export type RefreshGuestSessionOutcome =
  * Cœur de `PATCH /guest-sessions/me`, partagé avec l'adaptateur `POST
  * /anonymous/refresh`. Gagne la garde `isConversationClosed` que la porte
  * historique n'avait jamais eue — critère de fin #4 de #4167.
+ *
+ * #10457 — une participation MORTE (désactivée OU bannie) rend `revoked`, le
+ * 410 `GUEST_ACCESS_REVOKED` des autres portes, sans rien servir de la
+ * conversation ni relancer la présence. Un banni encore actif obtenait
+ * `refreshed` ; un désactivé, le 401 d'un jeton inventé. L'ordre est celui des
+ * autres portes (`guestAccessEnd`) : lien expiré d'abord.
  */
 export async function refreshGuestSession(params: GuestSessionParams): Promise<RefreshGuestSessionOutcome> {
   const { prisma, sessionToken } = params;
@@ -34,7 +42,7 @@ export async function refreshGuestSession(params: GuestSessionParams): Promise<R
   const participant = await prisma.participant.findFirst({
     where: { sessionTokenHash: tokenHash, type: 'anonymous' },
   });
-  if (!participant || !participant.isActive) return { kind: 'invalid' };
+  if (!participant) return { kind: 'invalid' };
 
   const shareLinkId = participant.anonymousSession?.shareLinkId;
   const shareLink = shareLinkId
@@ -46,8 +54,10 @@ export async function refreshGuestSession(params: GuestSessionParams): Promise<R
       })) as ShareLinkWithConversation | null)
     : null;
 
+  const end = guestAccessEnd({ linkExpiresAt: shareLink?.expiresAt ?? null, participation: participant, now: new Date() });
+  if (end === 'link-expired') return { kind: 'link-expired' };
+  if (end === 'revoked') return { kind: 'revoked' };
   if (!shareLink || !shareLink.isActive) return { kind: 'link-gone' };
-  if (shareLink.expiresAt && shareLink.expiresAt < new Date()) return { kind: 'link-expired' };
   if (isConversationClosed(shareLink.conversation)) return { kind: 'conversation-closed' };
 
   await prisma.participant.update({

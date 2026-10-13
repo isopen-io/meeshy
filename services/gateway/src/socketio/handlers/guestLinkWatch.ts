@@ -3,8 +3,8 @@ import type { MeeshySocket as Socket } from '../typed-socket';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
-import { loadGuestShareLinkExpiry, shareLinkHasExpired, SHARE_LINK_EXPIRED_CODE, type GuestShareLinkRow } from '../../services/shareLinkReadGate';
+import { loadGuestShareLinkExpiry, SHARE_LINK_EXPIRED_CODE, type GuestShareLinkRow } from '../../services/shareLinkReadGate';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
 
 const logger = enhancedLogger.child({ module: 'GuestLinkWatch' });
 
@@ -75,9 +75,10 @@ export class GuestLinkWatch {
    * sur la date lue à la connexion : il RELIT le lien quand il sonne — à
    * l'échéance connue, et au plus tard toutes les `GUEST_LINK_RECHECK_MS`
    * (#10440, à ±20 % près, #10443) —, coupe s'il est échu, et réarme sinon.
-   * Il relit AUSSI la participation (#10443) : désactivée ou bannie, elle
-   * coupe avec `GUEST_ACCESS_REVOKED`. Un lien INTROUVABLE n'est lu comme
-   * ouvert que tant que la participation vit : la route admin
+   * Il relit AUSSI la participation (#10443) : désactivée, bannie ou
+   * introuvable, elle coupe avec `GUEST_ACCESS_REVOKED` — après le lien,
+   * dans l'ordre unique des portes (`guestAccessEnd`, #10457). Un lien
+   * INTROUVABLE n'est lu comme ouvert que tant que la participation vit : la route admin
    * `/maintenance/cleanup` désactive les invités puis supprime le lien sans
    * couper leurs sockets, et `fetchSockets` peut manquer une instance. Un
    * lien ou une participation ILLISIBLE (base indisponible) coupe aussi, mais SANS le code `SHARE_LINK_EXPIRED` :
@@ -128,8 +129,8 @@ export class GuestLinkWatch {
       const state = await Promise.all([
         loadGuestShareLinkExpiry(this.prisma, guest),
         this.prisma.participant.findFirst({
-          where: { id: guest.id, ...PARTICIPATION_VIVANTE },
-          select: { id: true },
+          where: { id: guest.id },
+          select: { isActive: true, bannedAt: true },
         }),
       ]).catch((error: unknown) => {
         logger.warn('guest share link or participation unreadable at recheck — disconnecting (fail-closed)', { socketId: socket.id, error });
@@ -140,13 +141,14 @@ export class GuestLinkWatch {
         socket.disconnect(true);
         return;
       }
-      const [current, liveParticipation] = state;
-      if (shareLinkHasExpired({ expiresAt: current }, new Date())) {
+      const [current, participation] = state;
+      const end = guestAccessEnd({ linkExpiresAt: current, participation, now: new Date() });
+      if (end === 'link-expired') {
         logger.info('guest share link expired while connected — disconnecting', { socketId: socket.id });
         refuseExpiredGuestLink(socket);
         return;
       }
-      if (!liveParticipation) {
+      if (end === 'revoked') {
         logger.info('guest participation no longer live while connected — disconnecting', { socketId: socket.id });
         refuseRevokedGuest(socket);
         return;

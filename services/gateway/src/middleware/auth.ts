@@ -7,8 +7,8 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
-import { participationEstVivante } from '../routes/conversations/utils/access-control';
-import { guestShareLinkHasExpired, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
+import { loadGuestShareLinkExpiry, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
+import { guestAccessEnd } from '../services/guestAccessEnd';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -597,23 +597,18 @@ export class AuthMiddleware {
         throw new Error('Anonymous participant not found');
       }
 
-      // L'invité dont le lien a été révoqué (`revokeShareLinkGuests`) porte un
-      // jeton VALIDE sur un participant DÉSACTIVÉ. Lui rendre le même 401 nu
-      // qu'à un jeton inventé l'envoie retenter indéfiniment un geste qui ne
-      // peut pas aboutir — et prive l'opérateur qui reçoit son signalement du
-      // seul fait qui explique la panne. Banni encore actif : même réponse (#10449).
-      if (!participationEstVivante(participant)) {
-        throw new GuestAccessRevokedError();
-      }
-
-      // #10437 — la garde COMMUNE du lien échu : toute requête d'un invité
-      // traverse cette résolution, lecture comme écriture. La porte vivait
-      // route par route (fil, recherche, épinglés, fil de réponses) ; les
-      // réactions, le détail et l'envoi restaient ouverts. Lien illisible ⇒
-      // l'erreur propage, le `catch` ci-dessous refuse la session.
-      if (await guestShareLinkHasExpired(this.prisma, participant)) {
-        throw new ShareLinkExpiredError();
-      }
+      // #10437 — la garde COMMUNE du lien échu, puis (#4410, #10449) celle de
+      // la participation morte : un jeton VALIDE sur une ligne désactivée ou
+      // bannie ne reçoit pas le 401 nu d'un jeton inventé, qui l'enverrait
+      // retenter. Ordre unique des portes (#10457) : `guestAccessEnd`. Lien
+      // illisible ⇒ l'erreur propage, le `catch` ci-dessous refuse sans code.
+      const end = guestAccessEnd({
+        linkExpiresAt: await loadGuestShareLinkExpiry(this.prisma, participant),
+        participation: participant,
+        now: new Date(),
+      });
+      if (end === 'link-expired') throw new ShareLinkExpiredError();
+      if (end === 'revoked') throw new GuestAccessRevokedError();
 
       if (this.statusService) {
         this.statusService.updateAnonymousLastSeen(participant.id);

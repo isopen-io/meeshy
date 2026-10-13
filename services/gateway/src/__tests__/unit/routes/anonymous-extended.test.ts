@@ -370,3 +370,67 @@ describe('GET /anonymous/link/:identifier — les trois refus 410 servent linkId
     await app.close();
   });
 });
+
+// ─── REFRESH: participation morte (#10457) ───────────────────────────────────
+
+/**
+ * #10457 — l'alias `POST /anonymous/refresh` juge la participation par la règle
+ * de `PARTICIPATION_VIVANTE` : désactivée OU bannie ⇒ 410
+ * `GUEST_ACCESS_REVOKED`, le code du REST et du socket, sans rien servir de la
+ * conversation ni relancer la présence. Avant, un banni encore actif recevait
+ * id, titre, type et droits, et repassait `isOnline` ; un désactivé recevait
+ * un 401 `SESSION_INVALID` qui l'envoyait retenter.
+ */
+describe('POST /anonymous/refresh — participation morte (#10457)', () => {
+  const refresh = (app: FastifyInstance) =>
+    app.inject({ method: 'POST', url: '/anonymous/refresh', payload: { sessionToken: SESSION_TOKEN } });
+
+  it('banni encore actif ⇒ 410 GUEST_ACCESS_REVOKED, rien servi, présence non relancée', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, bannedAt: new Date('2026-10-13T09:00:00Z') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect(res.json().data).toBeUndefined();
+    expect(res.body).not.toContain('Test Conv');
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ⇒ 410 GUEST_ACCESS_REVOKED, plus 401 SESSION_INVALID', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValue({ ...mockParticipant, isActive: false });
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValue({ ...mockShareLink, expiresAt: new Date('2020-01-01') });
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'LINK_EXPIRED' });
+  });
+
+  it('un jeton sans ligne garde le 401 : rien n’est confirmé à qui ne détient rien', async () => {
+    const app = await buildApp();
+
+    const res = await refresh(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('GUEST_ACCESS_REVOKED');
+  });
+});
+

@@ -68,7 +68,7 @@ function makeUser(id = 'u-1') {
 }
 
 function makeParticipant(id = 'p-1', conversationId = 'conv-1') {
-  return { id, displayName: 'Anon', language: 'fr', conversationId };
+  return { id, displayName: 'Anon', language: 'fr', conversationId, isActive: true };
 }
 
 function makePrisma(opts: {
