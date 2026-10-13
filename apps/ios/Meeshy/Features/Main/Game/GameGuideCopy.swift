@@ -283,13 +283,13 @@ enum GameGuideCopy {
                  body: String(localized: "game.rules.1.body", defaultValue: "Écrire, parler, publier, réagir, inviter : chaque action utile donne des points. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes points : bonus, Flamme et événements augmentent ce que chaque geste rapporte.", bundle: .main)),
             Rule(index: 2,
                  title: String(localized: "game.rules.2.title", defaultValue: "Les points font le niveau", bundle: .main),
-                 body: String(localized: "game.rules.2.body", defaultValue: "Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
+                 body: String(localized: "game.rules.2.body", defaultValue: "Le niveau se lit sur tes points en poche. Un million de points pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent.", bundle: .main)),
             Rule(index: 3,
                  title: String(localized: "game.rules.3.title", defaultValue: "On frappe des Meeshes", bundle: .main),
-                 body: String(localized: "game.rules.3.body", defaultValue: "À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.", bundle: .main)),
+                 body: String(localized: "game.rules.3.body", defaultValue: "Une Meesh se frappe à la main, avec tes points à convertir : la part de tes points que la frappe peut reprendre. Les dix premières coûtent 1 221 points, puis le prix monte de 30 % toutes les dix frappes.", bundle: .main)),
             Rule(index: 4,
                  title: String(localized: "game.rules.4.title", defaultValue: "Frapper fait redescendre", bundle: .main),
-                 body: String(localized: "game.rules.4.body", defaultValue: "Les points dépensés quittent le niveau. Les badges qu’ils tenaient peuvent s’éteindre.", bundle: .main)),
+                 body: String(localized: "game.rules.4.body", defaultValue: "Le prix quitte tes points en poche et tes points à convertir. Ton niveau peut baisser, ton niveau record jamais : le Vent arrière t’aide à le retrouver. Les badges que ces points tenaient peuvent s’éteindre.", bundle: .main)),
             Rule(index: 5,
                  title: String(localized: "game.rules.5.title", defaultValue: "Le rang ne baisse jamais", bundle: .main),
                  body: String(localized: "game.rules.5.body", defaultValue: "Chaque frappe, chaque record, chaque succès ajoute de la Gloire. La Gloire donne le rang.", bundle: .main)),
@@ -303,5 +303,105 @@ enum GameGuideCopy {
                  title: String(localized: "game.rules.8.title", defaultValue: "On garde une trace", bundle: .main),
                  body: String(localized: "game.rules.8.body", defaultValue: "Chaque grand moment se photographie avec Mee et Meo dans le carnet de progression.", bundle: .main)),
         ]
+    }
+}
+
+// MARK: - « Chaque concept, en clair » (#10540)
+//
+// MIROIR de `rulesGlossary` (`apps/web/src/lib/view/game-rules-copy.ts`) : aucun concept que Progression affiche
+// n'est absent du carnet. Les quinze concepts de la liste partagée, et ce que Progression montre sans en faire une
+// fiche — le coffre, le trésor, les étapes des niveaux, le Vent arrière, la mission en duo —, chacun rangé à la suite
+// du concept qu'il complète. Chaque entrée dit ce que c'est, à quoi ça sert, comment ça se gagne et comment s'en servir.
+
+/// Une entrée du glossaire du carnet : un concept de Progression, ou un de ses compléments.
+enum GameRulesGlossaryKey: Hashable {
+    case concept(ProgressionConcept)
+    case chest
+    case treasury
+    case steps
+    case tailwind
+    case duo
+
+    /// Le segment de la clé du catalogue (`game.rules.concept.<segment>.body`) et de l'identifiant d'accessibilité.
+    var rawValue: String {
+        switch self {
+        case .concept(let concept): concept.rawValue
+        case .chest: "chest"
+        case .treasury: "treasury"
+        case .steps: "steps"
+        case .tailwind: "tailwind"
+        case .duo: "duo"
+        }
+    }
+}
+
+enum GameRulesGlossary {
+
+    struct Entry: Equatable, Identifiable {
+        let key: GameRulesGlossaryKey
+        let name: String
+        let body: String
+        var id: String { key.rawValue }
+    }
+
+    static var sectionTitle: String { String(localized: "game.rules.section_concepts", defaultValue: "Chaque concept, en clair", bundle: .main) }
+
+    static var intro: String { String(localized: "game.rules.concepts_intro", defaultValue: "Tout ce que le jeu affiche, un par un : ce que c’est, à quoi ça sert, comment ça se gagne et comment t’en servir.", bundle: .main) }
+
+    /// Ce qui suit chaque concept : un `switch` exhaustif — un concept ajouté à la liste partagée sans décision ici
+    /// ne compile pas.
+    static func extras(after concept: ProgressionConcept) -> [GameRulesGlossaryKey] {
+        switch concept {
+        case .level: [.steps]
+        case .meesh: [.treasury]
+        case .missions: [.chest]
+        case .season: [.duo]
+        case .elans: [.tailwind]
+        case .points, .glory, .flame, .league, .prestige, .badges, .defis, .succes, .showcase, .atlas: []
+        }
+    }
+
+    static var keys: [GameRulesGlossaryKey] {
+        ProgressionConcept.allCases.flatMap { [.concept($0)] + extras(after: $0) }
+    }
+
+    static var entries: [Entry] {
+        keys.map { Entry(key: $0, name: name($0), body: body($0)) }
+    }
+
+    static func name(_ key: GameRulesGlossaryKey) -> String {
+        switch key {
+        case .concept(let concept): ConceptText.name(concept)
+        case .chest: String(localized: "game.rules.concept.chest.name", defaultValue: "Coffre du jour", bundle: .main)
+        case .treasury: String(localized: "game.rules.concept.treasury.name", defaultValue: "Trésor", bundle: .main)
+        case .steps: String(localized: "game.rules.concept.steps.name", defaultValue: "Étapes des niveaux", bundle: .main)
+        case .tailwind: String(localized: "game.rules.concept.tailwind.name", defaultValue: "Vent arrière", bundle: .main)
+        case .duo: String(localized: "game.rules.concept.duo.name", defaultValue: "Mission en duo", bundle: .main)
+        }
+    }
+
+    static func body(_ key: GameRulesGlossaryKey) -> String {
+        switch key {
+        case .concept(.level): String(localized: "game.rules.concept.level.body", defaultValue: "Le chiffre de ton anneau, lu sur tes points en poche. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand tes points en poche atteignent le seuil suivant. Une frappe peut le faire baisser, jamais ton niveau record.", bundle: .main)
+        case .concept(.points): String(localized: "game.rules.concept.points.body", defaultValue: "Deux soldes. Tes points en poche sont ton total : ils font ton niveau. Tes points à convertir sont la part que la frappe peut reprendre : eux seuls paient une Meesh. Chaque geste utile en rapporte. Les deux soldes sont comptés à part : ils peuvent être différents.", bundle: .main)
+        case .concept(.meesh): String(localized: "game.rules.concept.meesh.body", defaultValue: "La pièce rare de Meeshy, numérotée, que tu frappes avec tes points à convertir. Garde-la pour remplir ton trésor, ou dépense-la : gel de Flamme, mission à changer, Sceau de saison. Le prix monte de 30 % toutes les dix frappes.", bundle: .main)
+        case .concept(.glory): String(localized: "game.rules.concept.glory.body", defaultValue: "Un compteur qui ne redescend jamais et qui donne ton rang. Elle se gagne en frappant, en atteignant un niveau pour la première fois, en décrochant un succès, en montant de ligue, en finissant une saison. Ton rang ouvre les niveaux au-delà de 499.", bundle: .main)
+        case .concept(.flame): String(localized: "game.rules.concept.flame.body", defaultValue: "Ta série de jours d’affilée avec au moins un geste. Chaque jour ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué ; éteinte, elle se rallume avec des Meeshes pendant 48 h.", bundle: .main)
+        case .concept(.missions): String(localized: "game.rules.concept.missions.body", defaultValue: "Trois buts par jour, ouverts au niveau 5. Chaque mission faite rapporte des points ; les trois faites ouvrent le coffre du jour. Tu peux changer une mission par jour avec une Meesh.", bundle: .main)
+        case .concept(.league): String(localized: "game.rules.concept.league.body", defaultValue: "Un classement de la semaine, ouvert au niveau 10, dans un groupe de 30 joueurs. Tes points de la semaine font ta place : les 7 premiers montent d’une ligue, les 5 derniers descendent, et tout repart de zéro le lundi. La ligue entre amis est toujours ouverte.", bundle: .main)
+        case .concept(.season): String(localized: "game.rules.concept.season.body", defaultValue: "Un parcours de huit semaines et de 40 étapes gratuites. Les missions du jour et le duo donnent des étoiles ; les étoiles ouvrent les étapes, que tu réclames une à une. Le parcours fini donne la coupe de saison.", bundle: .main)
+        case .concept(.prestige): String(localized: "game.rules.concept.prestige.body", defaultValue: "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes points en poche à 0. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent.", bundle: .main)
+        case .concept(.elans): String(localized: "game.rules.concept.elans.body", defaultValue: "Un multiplicateur de points. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste rapporte plus.", bundle: .main)
+        case .concept(.badges): String(localized: "game.rules.concept.badges.body", defaultValue: "Vingt badges, un par geste précis. Chacun monte sur sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe peut en éteindre un : il se rallume quand tu refais le geste.", bundle: .main)
+        case .concept(.defis): String(localized: "game.rules.concept.defis.body", defaultValue: "Des paliers chiffrés dans chaque famille de gestes. Atteins le nombre demandé : le palier est franchi et le suivant s’ouvre.", bundle: .main)
+        case .concept(.succes): String(localized: "game.rules.concept.succes.body", defaultValue: "Des distinctions rares, décrochées d’un coup quand tu réunis ce qu’elles demandent. Chaque succès ajoute de la Gloire : plus il est rare, plus il en ajoute.", bundle: .main)
+        case .concept(.showcase): String(localized: "game.rules.concept.showcase.body", defaultValue: "L’étagère de tes trophées : coupes de ligue, de saison, de Prestige et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui la voit.", bundle: .main)
+        case .concept(.atlas): String(localized: "game.rules.concept.atlas.body", defaultValue: "Ton passeport des langues. Un tampon se pose quand tu as envoyé un message et reçu un message dans une langue. Il est privé par défaut : tu choisis qui le voit.", bundle: .main)
+        case .chest: String(localized: "game.rules.concept.chest.body", defaultValue: "Il s’ouvre quand les missions du jour sont faites. Dedans : des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel.", bundle: .main)
+        case .treasury: String(localized: "game.rules.concept.treasury.body", defaultValue: "Les Meeshes que tu gardes. Il a six paliers, visibles sur ton profil. Il grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses.", bundle: .main)
+        case .steps: String(localized: "game.rules.concept.steps.body", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple : frapper une Meesh, finir des missions, tenir une Flamme, atteindre un rang. Sans elle, le niveau attend ; faite, il monte d’un coup.", bundle: .main)
+        case .tailwind: String(localized: "game.rules.concept.tailwind.body", defaultValue: "Après une frappe, tes points comptent 25 % de plus jusqu’à ce que tu retrouves ton niveau record.", bundle: .main)
+        case .duo: String(localized: "game.rules.concept.duo.body", defaultValue: "Une mission de la semaine à faire avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun finit sa part, la récompense est doublée. Elle donne aussi des étoiles de saison.", bundle: .main)
+        }
     }
 }
