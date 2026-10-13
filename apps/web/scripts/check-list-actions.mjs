@@ -763,7 +763,7 @@ await enTetePage.click('[data-rail="grande"] a[data-story-author]');
    chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
 await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
 const surLecteur = await enTetePage.evaluate(() => ({
-  pathname: window.location.pathname,
+  pathname: `${window.location.pathname}${window.location.search}`,
   scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
   auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
