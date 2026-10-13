@@ -13,6 +13,7 @@ import { MediaService } from '../../services/MediaService';
 import { PostType } from '@meeshy/shared/prisma/client';
 import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
 import { repostCreditIsDue, repostSnapshotStoryEffects } from '../../services/posts/repostCreditChips';
+import { postSignalText } from '../../services/posts/storyContentComposition';
 
 jest.mock('../../services/posts/PostAudioService', () => ({
   PostAudioService: {
@@ -120,5 +121,79 @@ describe('repostSnapshotStoryEffects', () => {
     const effects = { textObjects: [authorText] };
     expect(repostSnapshotStoryEffects(effects, 'FRIENDS')).toBe(effects);
     expect(repostSnapshotStoryEffects(undefined, 'FRIENDS')).toBeUndefined();
+  });
+});
+
+/**
+ * #10497 — la seconde porte. `POST /posts` avec `repostOfId` (composer de
+ * republication, « publier aussi en réel ») recevait le canvas tel que le
+ * client l'envoie : un client antérieur à la règle y posait la puce sans
+ * condition. Le serveur l'applique lui-même, sur la SOURCE désignée.
+ */
+describe('createPost avec repostOfId — la puce de crédit suit l’audience de la source', () => {
+  let prisma: ReturnType<typeof createMockPrisma>;
+  let service: PostService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = createMockPrisma();
+    service = new PostService(prisma, new MediaService(), undefined, createMockPostReactionService());
+  });
+
+  const publishRepost = async (params: {
+    sourceVisibility: string | null;
+    storyEffects: Record<string, unknown>;
+    type?: PostType;
+    visibility?: string;
+  }) => {
+    prisma.post.findFirst.mockResolvedValue(makePost({
+      id: 'story-src', repostOfId: null, originalRepostOfId: null,
+      visibility: params.sourceVisibility, visibilityUserIds: [],
+    }));
+    prisma.post.create.mockImplementation(async (args: { data: Record<string, unknown> }) => makePost({ id: 'story-repost', ...args.data }));
+    await service.createPost({
+      type: params.type ?? PostType.STORY,
+      visibility: (params.visibility ?? 'PRIVATE') as never,
+      repostOfId: 'story-src',
+      storyEffects: params.storyEffects,
+    }, '0a0a0a0a0a0a0a0a0a0a0a01');
+    const call = prisma.post.create.mock.calls[0]?.[0] as { data: { storyEffects?: unknown } } | undefined;
+    return call?.data.storyEffects;
+  };
+
+  it('garde la puce d’une source PUBLIC', async () => {
+    expect(await publishRepost({ sourceVisibility: 'PUBLIC', storyEffects: v1Effects() })).toEqual(v1Effects());
+  });
+
+  it('retire la puce v1 d’une source FRIENDS, et rien d’autre', async () => {
+    expect(await publishRepost({ sourceVisibility: 'FRIENDS', storyEffects: v1Effects(), visibility: 'FRIENDS' }))
+      .toEqual(v1WithoutCredit);
+  });
+
+  it('retire la puce v3 d’une source PRIVATE, jamais un objet non textuel', async () => {
+    expect(await publishRepost({ sourceVisibility: 'PRIVATE', storyEffects: v3Effects() })).toEqual(v3WithoutCredit);
+  });
+
+  it('retire la puce quand l’audience de la source est absente (fail-closed)', async () => {
+    expect(await publishRepost({ sourceVisibility: null, storyEffects: v1Effects() })).toEqual(v1WithoutCredit);
+  });
+
+  it('retire aussi la puce du réel publié par la même porte', async () => {
+    expect(await publishRepost({ sourceVisibility: 'FRIENDS', storyEffects: v1Effects(), type: PostType.REEL, visibility: 'FRIENDS' }))
+      .toEqual(v1WithoutCredit);
+  });
+});
+
+describe('postSignalText — la puce de crédit n’est jamais le texte de l’auteur', () => {
+  it('ignore un texte verrouillé v1 dans l’aperçu et les hashtags', () => {
+    expect(postSignalText({ storyEffects: v1Effects() })).toBe('Bonjour');
+  });
+
+  it('ignore un texte verrouillé v3', () => {
+    expect(postSignalText({ storyEffects: v3Effects() })).toBe('Bonjour');
+  });
+
+  it('n’a rien à porter quand la puce est le seul texte', () => {
+    expect(postSignalText({ storyEffects: { textObjects: [credit] } })).toBeUndefined();
   });
 });

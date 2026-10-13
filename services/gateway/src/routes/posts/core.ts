@@ -510,8 +510,9 @@ export function registerCoreRoutes(
         submittedContent: parsed.data.content,
         // Le texte d'une story ne vit pas dans sa légende : il vit dans les
         // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
-        // nommait personne.
-        storyEffects: parsed.data.storyEffects,
+        // nommait personne. Le canvas ENREGISTRÉ, jamais celui de la requête :
+        // `createPost` a pu y retirer une puce de crédit indue (#10497).
+        storyEffects: (post as { storyEffects?: unknown }).storyEffects,
         // Les nommés que le TEXTE ne porte pas : badge posé sur le canevas
         // d'une story, note sous le contenu, métadonnée silencieuse. Sans ce
         // canal, les nommer imposait d'écrire leur `@handle` dans la légende —

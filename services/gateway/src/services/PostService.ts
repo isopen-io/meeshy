@@ -279,6 +279,17 @@ export class PostService {
           visibilityUserIds: (sourcePost.visibilityUserIds ?? []) as string[],
         };
       }
+
+      // #10497 — même loi que la copie de `repostPost` : la puce « Reposté de
+      // @auteur » ne survit que d'une source PUBLIC. Appliquée AVANT toute
+      // lecture du canvas, donc aussi aux traductions, aux signaux et au réel.
+      data = {
+        ...data,
+        storyEffects: repostSnapshotStoryEffects(
+          data.storyEffects as Prisma.InputJsonValue | undefined,
+          sourceVisibility,
+        ) as Record<string, unknown> | undefined,
+      };
     }
 
     // Règle produit (directive user 2026-08-02, étendue par la directive durée
