@@ -419,7 +419,44 @@ nonisolated enum CallFrameLayoutGeometry {
             }
     }
 
+    /// Les cases d'un cadre, et sous chacune la place de ses noms quand ils s'y posent (#9780) :
+    /// sans elle, la banderole se replie DANS la case et couvre la moitié d'un visage.
     static func slots(for frame: CallFrameDesign, people: Int, size: CGSize) -> [CallFrameSlotBox] {
-        slots(layout: frame.look.layout, slot: frame.look.slot, people: people, size: size)
+        let boxes = slots(layout: frame.look.layout, slot: frame.look.slot, people: people, size: size)
+        let room = CallFrameRenderer.nameRoom(frame.look, unit: min(size.width, size.height))
+        let content = areas(frame.look.layout, size: size).content
+        return leavingRoomBelow(boxes, room: room, floor: content.maxY)
+    }
+
+    /// La marge gardée en plus de la place demandée : un texte de la réserve basse peut mordre d'un point sur le contenu.
+    static let nameRoomSlack: CGFloat = 2
+    /// Une case ne cède jamais plus de la moitié de sa hauteur à ses noms : au-delà, ils se replient dans la case.
+    static let nameRoomMaxShare: CGFloat = 0.5
+
+    /// Raccourcit par le bas — le haut de son encombrement ne bouge pas — chaque case qui n'a pas `room` de libre au-dessus de la case suivante (ou de `floor`).
+    /// Tout ou rien : si une case ne peut pas la céder (cases qui se chevauchent, case trop petite), aucune ne change.
+    static func leavingRoomBelow(_ boxes: [CallFrameSlotBox], room: CGFloat, floor: CGFloat) -> [CallFrameSlotBox] {
+        guard room > 0 else { return boxes }
+        let footprints = boxes.map { CallFrameRenderer.footprint(of: $0) }
+        let made = boxes.indices.map { index -> CallFrameSlotBox? in
+            let box = boxes[index]
+            let own = footprints[index]
+            let below = footprints.indices
+                .filter { $0 != index }
+                .map { footprints[$0] }
+                .filter { $0.minX < own.maxX && own.minX < $0.maxX && $0.maxY > own.maxY }
+            guard !below.contains(where: { $0.minY < own.maxY }) else { return nil }
+            let ground = (below.map(\.minY) + [floor]).min() ?? floor
+            let deficit = room + nameRoomSlack - (ground - own.maxY)
+            guard deficit > 0 else { return box }
+            let radians = CGFloat(abs(box.rotation)) * .pi / 180
+            let cut = deficit / cos(radians)
+            guard cut <= box.rect.height * nameRoomMaxShare else { return nil }
+            let lift = cut * (1 - cos(radians)) / 2
+            let rect = CGRect(x: box.rect.minX, y: box.rect.minY + lift, width: box.rect.width, height: box.rect.height - cut)
+            return CallFrameSlotBox(rect: rect, shape: box.shape, rotation: box.rotation, index: box.index)
+        }
+        let all = made.compactMap { $0 }
+        return all.count == boxes.count ? all : boxes
     }
 }
