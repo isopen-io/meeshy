@@ -335,7 +335,7 @@ describe('AdminConfirmSheet — le rang souverain n’écrit pas de motif (spec 
 
   test('MODERATOR : rien n’est proposé — le champ obligatoire reste, la confirmation bloquée sous le minimum', async () => {
     const { host } = await ouvrirEnTantQue(adminIdentityFixture({ role: 'MODERATOR' }), true);
-    expect(host.querySelector('[data-admin-motive]')?.value).toBe('');
+    expect(host.querySelector<HTMLTextAreaElement>('[data-admin-motive]')?.value).toBe('');
     expect(host.querySelector('[data-admin-motive]')?.hasAttribute('data-admin-motive-proposed')).toBe(false);
     expect(host.querySelector<HTMLButtonElement>('[data-admin-action="confirm"]')?.disabled).toBe(true);
   });
