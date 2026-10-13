@@ -16,8 +16,9 @@
  *  2. `count: { increment` ou `count: { decrement` dans la même écriture — la
  *     colonne des actions suit la même loi (`count: null` relu 0 éteindrait des
  *     badges) ;
- *  3. tout fichier qui nomme la collection `EngagementCounter` dans une chaîne —
- *     la marque d'une commande brute — hors des deux déclarés ci-dessous.
+ *  3. tout fichier qui nomme la collection `EngagementCounter` dans une chaîne
+ *     entre guillemets — la marque d'une commande brute — hors des deux
+ *     déclarés ci-dessous.
  *
  * Elle ne juge PAS une écriture en valeur (`data: { points: 0 }`, le Prestige) :
  * poser un nombre ne fabrique jamais `null`.
@@ -69,7 +70,8 @@ function callBody(source: string, openParen: number): string {
 
 const COUNTER_WRITE = /\bengagementCounter\s*\.\s*(?:update|updateMany|upsert|create|createMany)\s*\(/g;
 const NAKED_STEP = /\b(points|count)\s*:\s*\{\s*(increment|decrement)\b/;
-const RAW_COUNTER_COMMAND = /['"`]EngagementCounter['"`]/;
+/** Entre guillemets droits : une valeur. Entre accents graves, c'est la prose d'un doc-comment. */
+const RAW_COUNTER_COMMAND = /['"]EngagementCounter['"]/;
 
 type Offence = { readonly file: string; readonly what: string };
 

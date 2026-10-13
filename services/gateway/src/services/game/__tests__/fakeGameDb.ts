@@ -11,6 +11,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { evaluateExpression, findAndModifyLikeMongo, type FindAndModifyCommand } from '../../engagement/__tests__/mongoLikeCounters';
 
 type Row = Record<string, unknown> & { id: string };
 type Where = Record<string, unknown>;
@@ -366,35 +367,18 @@ export function fakeGameDb(): FakeGameDb {
   };
 
   /**
-   * Les deux commandes brutes que le service émet : `findAndModify` sur `User`
-   * avec un pipeline `$add` / `$ifNull` — l'incrément qui lit l'ABSENCE comme
-   * zéro — et, à la reprise d'un contenu, `$max` / `$subtract` qui retire sans
-   * descendre sous zéro.
+   * Les commandes brutes que les services émettent : le score (`User`) et le
+   * compteur (`EngagementCounter`, #10541), évaluées comme MongoDB les évalue —
+   * `$add` sur un champ absent ou `null` rend `null` (`mongoLikeCounters.ts`).
    */
-  const evaluate = (expression: unknown, row: Row): number => {
-    if (typeof expression === 'number') return expression;
-    if (typeof expression === 'string') return row[expression.slice(1)] as number;
-    const [operator, operands] = Object.entries(expression as Record<string, unknown[]>)[0]!;
-    if (operator === '$ifNull') {
-      const value = evaluate(operands[0], row);
-      return typeof value === 'number' ? value : evaluate(operands[1], row);
+  const $runCommandRaw = async (command: FindAndModifyCommand) => {
+    if (command.findAndModify === 'EngagementCounter') {
+      return findAndModifyLikeMongo(engagementCounter.rows, command, (fields) => ({ id: nextId(), ...fields }));
     }
-    const values = operands.map((operand) => evaluate(operand, row));
-    if (operator === '$add') return values.reduce((sum, value) => sum + value, 0);
-    if (operator === '$subtract') return values[0]! - values[1]!;
-    if (operator === '$max') return Math.max(...values);
-    throw new Error(`opérateur de pipeline non reproduit par le faux : ${operator}`);
-  };
-  const $runCommandRaw = async (command: {
-    findAndModify: string;
-    query: { _id: { $oid: string } };
-    update: { $set: Record<string, unknown> }[];
-    fields?: Record<string, number>;
-  }) => {
-    const row = user.rows.find((r) => r.id === command.query._id.$oid);
+    const row = user.rows.find((r) => r.id === (command.query._id as { $oid: string }).$oid);
     if (!row) return { ok: 1, value: null };
     for (const [key, expression] of Object.entries(command.update[0]!.$set)) {
-      row[key] = evaluate(expression, row);
+      row[key] = evaluateExpression(expression, row);
     }
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(command.fields ?? {})) out[key] = row[key] ?? null;

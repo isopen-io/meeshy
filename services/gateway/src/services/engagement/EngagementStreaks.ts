@@ -37,6 +37,7 @@ import type { EngagementGameHooks } from '../game/EngagementGameHooks';
 import { writeStreak } from '../game/FlameService';
 import { ActStreakRecorder } from './ActStreakRecorder';
 import { dueLoyaltyTiers, loyaltyBucket } from './LoyaltyBonus';
+import { creditEngagementCounter } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import { ENGAGEMENT_ROUTE } from './engagementRoute';
 
@@ -163,11 +164,7 @@ export class EngagementStreaks {
   private async payBonus(userId: string, bucket: string, points: number): Promise<void> {
     if (points <= 0) return;
     if (!(await this.quotas.claim(userId, STREAK_BONUS, bucket, 1))) return;
-    await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey: STREAK_BONUS } },
-      create: { userId, axisKey: STREAK_BONUS, count: 1, points },
-      update: { count: { increment: 1 }, points: { increment: points } },
-    });
+    await creditEngagementCounter(this.prisma, { userId, axisKey: STREAK_BONUS, points, count: 1 });
     await this.addScore(userId, points);
   }
 

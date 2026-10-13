@@ -57,6 +57,7 @@ import { EngagementGameHooks, applyTailwind, quarterPoints } from '../game/Engag
 import type { MessageSignalInput } from '../game/MessageGameSignals';
 import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
 import { withRetry } from '../MessageMediaConsumptionService';
+import { creditEngagementCounter } from './EngagementCounterWrites';
 
 import type { EngagementActivityOptions, EngagementLinkVisit } from './engagementActivityTypes';
 import { EngagementStreaks } from './EngagementStreaks';
@@ -395,6 +396,11 @@ export class EngagementService {
    * (#6428), et un écrivain concurrent fait annuler la tentative au lieu d'être
    * écrasé. Les paliers et la Gloire qui suivent ne font jamais échouer un
    * crédit déjà écrit — ce qui ferait rendre, puis repayer, la mission.
+   *
+   * Le compteur passe par `creditEngagementCounter` (#10541) : la commande
+   * s'exécute dans la session de la transaction — annulée et rejouée avec elle,
+   * mesuré — et crédite une colonne `points` absente ou `null` comme un zéro, là
+   * où `{ increment }` la laissait à `null` pendant que le score montait.
    */
   async creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> {
     if (!Number.isInteger(points) || points <= 0) return;
@@ -405,11 +411,7 @@ export class EngagementService {
           select: { engagementScore: true, levelRecord: true },
         });
         if (!account) return null;
-        await tx.engagementCounter.upsert({
-          where: { userId_axisKey: { userId, axisKey } },
-          create: { userId, axisKey, count: 0, points },
-          update: { points: { increment: points } },
-        });
+        await creditEngagementCounter(tx, { userId, axisKey, points, count: 0 });
         const score = (account.engagementScore ?? 0) + points;
         await tx.user.update({ where: { id: userId }, data: { engagementScore: score } });
         return { score, levelRecord: account.levelRecord ?? null };
@@ -442,6 +444,11 @@ export class EngagementService {
   /**
    * Écrit un crédit DÉJÀ admis : compteur de l'opération, badges et succès si
    * l'opération est un axe de « Progression », série, score.
+   *
+   * Le compteur et le score reçoivent le MÊME montant par le même idiome
+   * (`$ifNull`) : `creditEngagementCounter` ici, `updateEngagementScore` plus
+   * bas. Tant que le compteur s'écrivait par `{ increment }`, une ligne à
+   * `points: null` laissait le score monter seul (#10541).
    */
   private async credit(
     scale: EngagementScale,
@@ -451,12 +458,7 @@ export class EngagementService {
     day: CreditDay,
     actorId?: string,
   ): Promise<void> {
-    const counter = await this.prisma.engagementCounter.upsert({
-      where: { userId_axisKey: { userId, axisKey: operationKey } },
-      create: { userId, axisKey: operationKey, count: 1, points },
-      update: { count: { increment: 1 }, points: { increment: points } },
-      select: { count: true },
-    });
+    const counter = await creditEngagementCounter(this.prisma, { userId, axisKey: operationKey, points, count: 1 });
 
     const newCount = counter.count;
     const previousCount = newCount - 1;

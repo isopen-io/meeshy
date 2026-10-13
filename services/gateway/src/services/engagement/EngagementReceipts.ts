@@ -25,6 +25,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { takeBackFromEngagementCounter } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
@@ -39,25 +40,34 @@ const postIdOfReceipt = (bucket: string): string | undefined => {
   return postId === NO_POST ? undefined : postId;
 };
 
-type ReceiptPrisma = Pick<PrismaClient, 'engagementQuota' | 'engagementCounter' | '$runCommandRaw'>;
+type ReceiptPrisma = Pick<PrismaClient, 'engagementQuota' | '$runCommandRaw'>;
 
 /**
  * Retire `points` d'un crédit déjà écrit : le compteur de l'opération perd une
- * action et ses points, le score ses points sans descendre sous zéro. Les
- * paliers déjà franchis restent acquis.
+ * action et rend ce qu'il tient encore de ces points, et le score perd
+ * EXACTEMENT ce que le compteur a rendu, sans descendre sous zéro. Les paliers
+ * déjà franchis restent acquis.
+ *
+ * **Symétrique (#10541).** La version précédente débitait le compteur sous
+ * condition (`points >= p`) et le score sans condition : sur une ligne qu'une
+ * frappe avait déjà entamée, ou dont la colonne valait `null`, seul le score
+ * payait, et `engagementScore` passait sous `Σ(EngagementCounter.points)`. Le
+ * score ne rend plus un point que le compteur n'a pas rendu — des points déjà
+ * convertis en Meesh ont déjà quitté le score, à la frappe.
+ *
+ * Rend les points réellement repris au compteur et au score.
  */
-export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, operationKey: string, points: number): Promise<void> {
-  await prisma.engagementCounter.updateMany({
-    where: { userId, axisKey: operationKey, points: { gte: points }, count: { gte: 1 } },
-    data: { count: { decrement: 1 }, points: { decrement: points } },
-  });
+export async function takeBackPoints(prisma: ReceiptPrisma, userId: string, operationKey: string, points: number): Promise<number> {
+  const taken = await takeBackFromEngagementCounter(prisma, { userId, axisKey: operationKey, points });
+  if (taken <= 0) return 0;
   await prisma.$runCommandRaw({
     findAndModify: 'User',
     query: { _id: { $oid: userId } },
-    update: [{ $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, points] }] } } }],
+    update: [{ $set: { engagementScore: { $max: [0, { $subtract: [{ $ifNull: ['$engagementScore', 0] }, taken] }] } } }],
     new: true,
     fields: { engagementScore: 1 },
   } as never);
+  return taken;
 }
 
 export class EngagementReceipts {
