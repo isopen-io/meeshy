@@ -17,7 +17,7 @@
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import axios from 'axios';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
@@ -503,7 +503,7 @@ export class PasswordResetService {
       };
 
     } catch (error) {
-      if (error instanceof ResetTokenAlreadyConsumed) {
+      if (error instanceof ResetTokenAlreadyConsumed || isWriteConflict(error)) {
         return { success: false, error: 'Invalid or expired reset token' };
       }
       logger.error('[PasswordResetService] Error in completePasswordReset', error);
@@ -827,3 +827,12 @@ export class PasswordResetService {
 
 /** Le jeton a été consommé par une AUTRE réinitialisation entre la lecture et l'écriture (#10475). */
 class ResetTokenAlreadyConsumed extends Error {}
+
+/**
+ * #10475 — sur MongoDB, la réinitialisation qui PERD la course ne voit pas
+ * toujours `count: 0` : sa transaction peut lever un conflit d'écriture
+ * (P2034) sur la ligne du jeton que la gagnante vient de consommer. Rien n'a
+ * été écrit, et la réponse est celle d'un jeton déjà consommé.
+ */
+const isWriteConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';

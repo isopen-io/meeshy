@@ -23,6 +23,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import crypto from 'crypto';
+import { Prisma } from '@meeshy/shared/prisma/client';
 
 jest.mock('../../../utils/password-hash', () => ({
   ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
@@ -326,5 +327,21 @@ describe('un jeton de réinitialisation ne sert qu’une fois, même présenté 
       expect.objectContaining({ success: false, error: 'token_expired' })
     ]);
     expect(harness.prisma.passwordResetToken.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('sur MongoDB, le perdant reçoit un CONFLIT D’ÉCRITURE (P2034) : il est refusé comme un jeton déjà consommé', async () => {
+    const harness = makeHarness(makeAccount({ password: HASH_EN_BASE, emailVerifiedAt: verifieeLe }));
+    await demander(harness);
+    harness.prisma.$transaction.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Transaction failed due to a write conflict or a deadlock', {
+        code: 'P2034',
+        clientVersion: 'test'
+      })
+    );
+
+    const resultat = await definir(harness, jetonDuLien(harness));
+
+    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token' });
+    expect(harness.email.sendPasswordChangedEmail).not.toHaveBeenCalled();
   });
 });
