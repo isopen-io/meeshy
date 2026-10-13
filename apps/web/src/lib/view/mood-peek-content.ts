@@ -14,6 +14,9 @@ export type MoodPeekContent = {
   readonly emoji: string;
   readonly text: string;
   readonly language?: string;
+  /** Le post montré — celui dont la feuille compte la VUE (#10530). Absent
+   * quand le corpus ne porte pas l'humeur touchée : rien à compter. */
+  readonly postId?: string;
 };
 
 export function moodPeekContent(params: {
@@ -24,12 +27,13 @@ export function moodPeekContent(params: {
 }): MoodPeekContent {
   const post = currentMoodPosts(params.posts).get(params.authorId);
   const content = post?.content ?? '';
-  if (post === undefined || content.trim() === '') return { emoji: post?.moodEmoji ?? params.emoji, text: '' };
+  if (post === undefined) return { emoji: params.emoji, text: '' };
+  if (content.trim() === '') return { emoji: post.moodEmoji ?? params.emoji, text: '', postId: post.id };
   const served = resolveFeedText({
     preferredLanguages: params.languages,
     originalLanguage: post.originalLanguage,
     translations: post.translations,
     content,
   });
-  return { emoji: post.moodEmoji ?? params.emoji, text: served.text, language: served.language };
+  return { emoji: post.moodEmoji ?? params.emoji, text: served.text, language: served.language, postId: post.id };
 }

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
-import { Avatar } from '@/components/avatar';
+import { Avatar, MoodPeekTarget } from '@/components/avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
@@ -268,6 +268,8 @@ export function ProfileHero({
   onPick,
   onCancelUpload,
   game,
+  mood,
+  moodAuthorId,
 }: {
   readonly language: InterfaceLanguage;
   readonly profile: Pick<MyProfile, 'username' | 'displayName' | 'avatar' | 'banner'>;
@@ -277,6 +279,10 @@ export function ProfileHero({
   readonly onCancelUpload: (kind: ProfileImageKind) => void;
   /** Le niveau et le rang, posés sur la bannière (#10092). */
   readonly game?: ReactNode;
+  /** Mon humeur du moment, telle que le corpus servi la porte (#10530) — et
+   * QUI je suis, pour que la pastille se touche. Absente : aucune pastille. */
+  readonly mood?: string | undefined;
+  readonly moodAuthorId?: string | undefined;
 }) {
   const name = profile.displayName ?? profile.username;
   const banner = pending.banner ?? profile.banner;
@@ -286,7 +292,19 @@ export function ProfileHero({
   const images = useMemo(() => ({ avatar: profile.avatar, banner: profile.banner }), [profile.avatar, profile.banner]);
   const { open, viewer } = useProfileImageViewer({ ownerId: profile.username, images });
   const viewable = (kind: ProfileImageKind): boolean => !editing && pending[kind] === undefined && profile[kind] !== null;
-  const avatarImage = <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={90} name={name} {...(avatar === null ? {} : { src: avatar })} />;
+  /* MON HUMEUR (#10530) — en édition ou pendant un envoi, le coin de la photo
+     porte le contrôle qui la REMPLACE : la pastille s'efface. */
+  const shownMood = editing || pending.avatar !== undefined || mood === '' ? undefined : mood;
+  const avatarImage = (
+    <Avatar
+      initials={initialsOf(name)}
+      color="var(--color-ios-brand)"
+      size={90}
+      name={name}
+      {...(avatar === null ? {} : { src: avatar })}
+      {...(shownMood === undefined ? {} : { mood: shownMood })}
+    />
+  );
   return (
     <section data-profile-hero aria-label={name} className="grid justify-items-center">
       <div
@@ -337,6 +355,11 @@ export function ProfileHero({
             avatarImage
           )}
         </span>
+        {/* Sa cible est posée ICI, à côté du bouton de la photo : un bouton dans
+            un bouton n'est pas du HTML valide. `inset` = le liseré de 4 px. */}
+        {shownMood === undefined || moodAuthorId === undefined ? null : (
+          <MoodPeekTarget authorId={moodAuthorId} emoji={shownMood} name={name} size={90} inset={4} />
+        )}
         {editing && pending.avatar === undefined ? (
           <PickButton
             kind="avatar"

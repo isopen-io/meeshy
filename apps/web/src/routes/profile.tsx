@@ -24,12 +24,14 @@ import {
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type SessionUser } from '@/lib/api/session';
+import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { MY_PROFILE_TABS } from '@/lib/profile/tabs';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
+import { moodsByAuthor } from '@/lib/view/story-tray';
 import {
   ContactSection,
   IdentitySection,
@@ -145,6 +147,11 @@ export default function ProfileScreen() {
   const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled, refetchOnMount: 'always' }, appQueryClient);
   const receivedRequests = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
   const profile = profileQuery.data;
+  /* MON HUMEUR (#10530) — lue dans le corpus que le rail a déjà demandé (même
+     clé, même fraîcheur que `useStatusMoods`) : rien n'est demandé à part. */
+  const moodsQuery = useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled }, appQueryClient);
+  const myId = profile?.id ?? sessionUser?.id;
+  const mood = useMemo(() => (myId === undefined ? undefined : moodsByAuthor(moodsQuery.data ?? []).get(myId)), [moodsQuery.data, myId]);
   const [tab, selectTab, tabBase] = useProfileTab({ offered: MY_PROFILE_TABS, fallback: 'details' });
   const { announcement: gestureAnnouncement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
   const gestures = useMemo(() => ({ onGesture, onShare, onComment, onRepost, menu }), [onGesture, onShare, onComment, onRepost, menu]);
@@ -260,6 +267,8 @@ export default function ProfileScreen() {
               onPick={(kind) => inputs.current[kind]?.click()}
               onCancelUpload={(kind) => controllers.current[kind]?.abort()}
               game={<GameBannerOwnSlot enabled={enabled} />}
+              mood={mood}
+              moodAuthorId={myId}
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
