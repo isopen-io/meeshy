@@ -2,12 +2,16 @@ package me.meeshy.app;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import androidx.browser.customtabs.CustomTabsIntent;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 /**
  * L'entree systeme d'un lien profond (#5819). Les filtres de
@@ -24,7 +28,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * En sens inverse, un lien EXTERNE touche dans la page (#9858) : Capacitor
  * lancerait un `ACTION_VIEW` nu, qui ouvre l'application du navigateur et fait
  * quitter Meeshy. Le pont essaie d'abord l'app native qui gere le lien
- * (Android 11+), puis un Custom Tab pose au-dessus de l'app, comme
+ * (avant Android 11 aussi, #10456), puis un Custom Tab pose au-dessus de l'app, comme
  * `SFSafariViewController` sur iPhone.
  */
 @CapacitorPlugin(name = "MeeshyLinks")
@@ -58,12 +62,22 @@ public class MeeshyLinksPlugin extends Plugin {
     }
 
     private boolean openInNativeApp(Uri url) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            return false;
-        }
         Intent intent = new Intent(Intent.ACTION_VIEW, url)
             .addCategory(Intent.CATEGORY_BROWSABLE)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_REQUIRE_NON_BROWSER);
+        } else {
+            // #10456 — avant Android 11, l'app qui gere le lien sans etre un
+            // navigateur se deduit des deux listes, comme Chrome le fait.
+            Intent anyWebLink = new Intent(Intent.ACTION_VIEW, Uri.parse("https://example.com"))
+                .addCategory(Intent.CATEGORY_BROWSABLE);
+            String app = ExternalLinkRules.specializedHandler(packagesFor(intent), new HashSet<>(packagesFor(anyWebLink)));
+            if (app == null) {
+                return false;
+            }
+            intent.setPackage(app);
+        }
         try {
             getContext().startActivity(intent);
             return true;
@@ -79,5 +93,13 @@ public class MeeshyLinksPlugin extends Plugin {
         } catch (ActivityNotFoundException e) {
             return false;
         }
+    }
+
+    private List<String> packagesFor(Intent intent) {
+        List<String> packages = new ArrayList<>();
+        for (ResolveInfo info : getContext().getPackageManager().queryIntentActivities(intent, 0)) {
+            packages.add(info.activityInfo.packageName);
+        }
+        return packages;
     }
 }
