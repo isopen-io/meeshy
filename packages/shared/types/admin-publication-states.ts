@@ -71,3 +71,46 @@ export function adminGesturesFor(state: AdminPostState): readonly AdminPostGestu
       return ['take-offline', 'set-visibility'];
   }
 }
+
+/**
+ * **L'AUDIENCE DE L'AUTEUR** (#10471) — une seule loi, lue par la passerelle
+ * (`services/admin/publication-moderation.ts`) et par l'espace web.
+ *
+ * `moderationPriorVisibility` porte l'audience que l'AUTEUR a choisie dès qu'un geste
+ * d'administration en sert une autre — vers `PRIVATE` comme vers une audience plus
+ * étroite —, et `null` quand l'audience servie est la sienne. L'auteur l'efface
+ * lui-même en rechoisissant (`moderationHold.ts`). Sans elle, un resserrement oubliait
+ * l'audience d'origine : revenir en arrière passait pour un élargissement, et
+ * « Remettre en ligne » rendait le resserrement.
+ */
+export type AdminAudienceFacts<V extends string = string> = {
+  readonly visibility: V;
+  readonly moderationPriorVisibility: V | null;
+};
+
+export function authorAudienceOf<V extends string>(facts: AdminAudienceFacts<V>): V {
+  return facts.moderationPriorVisibility ?? facts.visibility;
+}
+
+/** L'audience à retenir quand l'administration sert `served` : celle de l'auteur si elle en diffère. */
+export function heldAuthorAudience<V extends string>(facts: AdminAudienceFacts<V>, served: V): V | null {
+  const author = authorAudienceOf(facts);
+  return author === served ? null : author;
+}
+
+/**
+ * **L'ADMINISTRATION NE PUBLIE JAMAIS AU-DELÀ DE CE QUE L'AUTEUR A CHOISI** (#10453).
+ * Seul `PUBLIC` contient toutes les autres audiences ; `FRIENDS`, `COMMUNITY`, `EXCEPT`
+ * et `ONLY` ne se comparent pas entre elles, donc passer de l'une à l'autre élargit
+ * pour quelqu'un. Resserrer et rendre l'audience de l'auteur restent permis.
+ */
+export function widensAuthorAudience(facts: AdminAudienceFacts, target: AdminSettableVisibility): boolean {
+  const author = authorAudienceOf(facts);
+  if (target === 'PRIVATE' || target === author) return false;
+  return author !== 'PUBLIC';
+}
+
+/** Les audiences qu'un écran d'administration propose : celles que la passerelle accepte. */
+export function adminAudiencesOffered(facts: AdminAudienceFacts): readonly AdminSettableVisibility[] {
+  return ADMIN_SETTABLE_VISIBILITIES.filter((visibility) => !widensAuthorAudience(facts, visibility));
+}

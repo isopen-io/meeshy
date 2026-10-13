@@ -158,7 +158,7 @@ export function AdminPostsPanel({
           </AdminButton>
           <AdminPostGestureBar
             language={language}
-            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility }}
+            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility, moderationPriorVisibility: row.moderationPriorVisibility }}
             onAnnounce={announcer.announce}
             deps={deps}
             compact

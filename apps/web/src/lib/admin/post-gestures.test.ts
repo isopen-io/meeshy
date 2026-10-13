@@ -46,12 +46,23 @@ describe('gestureEffect — la loi de la passerelle, vue d’avance', () => {
     });
   });
   test('audience choisie : lève le retrait ; vers PRIVATE, retient l’audience d’avant', () => {
-    expect(gestureEffect(facts({ visibility: 'PRIVATE', moderationHiddenAt: '2026-10-11T00:00:00Z' }), { gesture: 'set-visibility', visibility: 'PUBLIC' }, NOW)).toMatchObject({
+    expect(gestureEffect(facts({ visibility: 'PRIVATE', moderationHiddenAt: '2026-10-11T00:00:00Z', moderationPriorVisibility: 'PUBLIC' }), { gesture: 'set-visibility', visibility: 'PUBLIC' }, NOW)).toMatchObject({
       visibility: 'PUBLIC',
       moderationHiddenAt: null,
       moderationPriorVisibility: null,
     });
     expect(gestureEffect(facts({ visibility: 'FRIENDS' }), { gesture: 'set-visibility', visibility: 'PRIVATE' }, NOW)).toMatchObject({ visibility: 'PRIVATE', moderationPriorVisibility: 'FRIENDS' });
+  });
+  test('Publique → Amis → Publique : le resserrement retient l’audience de l’auteur, le retour l’oublie (#10471)', () => {
+    const narrowed = gestureEffect(facts(), { gesture: 'set-visibility', visibility: 'FRIENDS' }, NOW);
+    expect(narrowed).toMatchObject({ visibility: 'FRIENDS', moderationPriorVisibility: 'PUBLIC' });
+    expect(gestureEffect(narrowed, { gesture: 'set-visibility', visibility: 'PUBLIC' }, NOW)).toMatchObject({ visibility: 'PUBLIC', moderationPriorVisibility: null });
+  });
+  test('resserrée puis mise hors ligne, la remise en ligne rend l’audience de l’auteur (#10471)', () => {
+    const narrowed = gestureEffect(facts(), { gesture: 'set-visibility', visibility: 'FRIENDS' }, NOW);
+    const offline = gestureEffect(narrowed, { gesture: 'take-offline' }, NOW);
+    expect(offline).toMatchObject({ visibility: 'PRIVATE', moderationPriorVisibility: 'PUBLIC' });
+    expect(gestureEffect(offline, { gesture: 'restore' }, NOW)).toMatchObject({ visibility: 'PUBLIC', moderationHiddenAt: null, moderationPriorVisibility: null });
   });
   test('une publication supprimée ne change jamais', () => {
     const gone = facts({ deletedAt: '2026-10-11T00:00:00Z' });

@@ -142,13 +142,22 @@ describe('POST /admin/posts/:postId/gestures', () => {
     await app.close();
   });
 
-  it("resserre l'audience d'une publication publique à ses amis", async () => {
+  it("resserre l'audience d'une publication publique à ses amis, et retient celle de l'auteur (#10471)", async () => {
     reads([row({ visibility: 'PUBLIC' })], [viewRow({ visibility: 'FRIENDS' })]);
     const app = await buildApp('ADMIN');
     const res = await one(app, P1, { gesture: 'set-visibility', visibility: 'FRIENDS', reason: 'Audience trop large' });
     expect(res.statusCode).toBe(200);
-    expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
+    expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: 'PUBLIC' });
     expect(JSON.parse((auditCreateMany.mock.calls[0]?.[0] as any).data[0].metadata)).toMatchObject({ gesture: 'set-visibility', from: 'published', to: 'published', visibility: 'FRIENDS' });
+    await app.close();
+  });
+
+  it("rend à une publication resserrée l'audience publique de son auteur : Publique → Amis → Publique (#10471)", async () => {
+    reads([row({ visibility: 'FRIENDS', moderationPriorVisibility: 'PUBLIC' })], [viewRow({ visibility: 'PUBLIC' })]);
+    const app = await buildApp('ADMIN');
+    const res = await one(app, P1, { gesture: 'set-visibility', visibility: 'PUBLIC', reason: 'Resserrement par erreur' });
+    expect(res.statusCode).toBe(200);
+    expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toEqual({ visibility: 'PUBLIC', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
     await app.close();
   });
 
