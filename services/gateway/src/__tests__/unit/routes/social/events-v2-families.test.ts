@@ -402,3 +402,14 @@ describe('rangement — une écriture par requête, rejeux, interrupteur', () =>
     await h.app.close();
   });
 });
+
+describe('consentement — l’analyse sans son parent ne vaut rien', () => {
+  it('analyticsConsentAt posé mais traitement des données retiré ⇒ rangé sans acteur', async () => {
+    const h = await harness({ consentedUserIds: [READER] });
+    (h.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({ analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: null });
+    await sendReachV2(h.app, [share(POST)], account, CONTEXT);
+
+    expect(h.contentEvents[0].actorKind).toBe('none');
+    await h.app.close();
+  });
+});

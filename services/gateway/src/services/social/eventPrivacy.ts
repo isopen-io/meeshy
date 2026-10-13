@@ -30,13 +30,14 @@ type ConsentPrisma = {
   readonly user?: {
     readonly findUnique: (args: {
       where: { id: string };
-      select: { analyticsConsentAt: true };
-    }) => Promise<{ analyticsConsentAt: Date | null } | null>;
+      select: { analyticsConsentAt: true; dataProcessingConsentAt: true };
+    }) => Promise<{ analyticsConsentAt: Date | null; dataProcessingConsentAt: Date | null } | null>;
   };
 };
 
 /**
- * Lit le consentement d'analyse d'un compte — UNE requête par lot. Une lecture
+ * Lit le consentement d'analyse d'un compte (et celui de son parent, le
+ * traitement des données) — UNE requête par lot. Une lecture
  * en échec vaut « non consenti » : l'absence de preuve n'accorde rien.
  */
 export async function readAnalyticsStanding(
@@ -46,8 +47,12 @@ export async function readAnalyticsStanding(
 ): Promise<Exclude<AnalyticsStanding, 'anonymous'>> {
   if (clientConsent === 'denied') return 'denied';
   try {
-    const row = await prisma.user?.findUnique({ where: { id: userId }, select: { analyticsConsentAt: true } });
-    return row?.analyticsConsentAt ? 'granted' : 'not_granted';
+    const row = await prisma.user?.findUnique({
+      where: { id: userId },
+      select: { analyticsConsentAt: true, dataProcessingConsentAt: true },
+    });
+    // L'analyse est l'ENFANT du traitement des données (`CONSENT_PARENT`) : sans son parent, elle ne vaut rien.
+    return row?.analyticsConsentAt && row.dataProcessingConsentAt ? 'granted' : 'not_granted';
   } catch {
     return 'not_granted';
   }

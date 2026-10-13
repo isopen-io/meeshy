@@ -1137,7 +1137,7 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     // qu'avec le consentement d'analyse (revue de conformité O5, #10499).
     const defaultUser = mockUserFindUnique.getMockImplementation();
     mockUserFindUnique.mockImplementation((args: any) =>
-      args?.select?.analyticsConsentAt ? Promise.resolve({ analyticsConsentAt: new Date('2026-01-01') }) : defaultUser?.(args));
+      args?.select?.analyticsConsentAt ? Promise.resolve({ analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01') }) : defaultUser?.(args));
 
     const service = new PostFeedService(mockPrisma);
     const result = await service.getFeed('user-1');

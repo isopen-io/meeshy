@@ -16,7 +16,7 @@ const prismaWith = (consentedAt: Date | null) => {
   return {
     groupBy,
     prisma: {
-      user: { findUnique: jest.fn(async () => ({ analyticsConsentAt: consentedAt })) },
+      user: { findUnique: jest.fn(async () => ({ analyticsConsentAt: consentedAt, dataProcessingConsentAt: consentedAt })) },
       postImpression: { groupBy },
     },
   };

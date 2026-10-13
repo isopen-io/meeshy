@@ -201,7 +201,9 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
     postMention: { findFirst: jest.fn(async () => null) },
     user: {
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
-        ({ analyticsConsentAt: (world.consentedUserIds ?? []).includes(where.id) ? new Date('2026-01-01') : null })),
+        (world.consentedUserIds ?? []).includes(where.id)
+          ? { analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01') }
+          : { analyticsConsentAt: null, dataProcessingConsentAt: null }),
     },
     postComment: {
       findMany: jest.fn(async ({ where }: { where: Row }) =>

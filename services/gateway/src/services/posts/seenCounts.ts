@@ -14,8 +14,8 @@
  */
 type SeenCountsPrisma = {
   readonly user: {
-    readonly findUnique: (args: { where: { id: string }; select: { analyticsConsentAt: true } }) =>
-      Promise<{ analyticsConsentAt: Date | null } | null>;
+    readonly findUnique: (args: { where: { id: string }; select: { analyticsConsentAt: true; dataProcessingConsentAt: true } }) =>
+      Promise<{ analyticsConsentAt: Date | null; dataProcessingConsentAt: Date | null } | null>;
   };
   readonly postImpression: {
     readonly groupBy: (args: never) => Promise<unknown>;
@@ -29,8 +29,11 @@ export async function readSeenCounts(
 ): Promise<Map<string, number>> {
   if (postIds.length === 0) return new Map();
   try {
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { analyticsConsentAt: true } });
-    if (!user?.analyticsConsentAt) return new Map();
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { analyticsConsentAt: true, dataProcessingConsentAt: true },
+    });
+    if (!user?.analyticsConsentAt || !user.dataProcessingConsentAt) return new Map();
     const grouped = await prisma.postImpression.groupBy({
       by: ['postId'],
       where: { userId, postId: { in: [...postIds] } },

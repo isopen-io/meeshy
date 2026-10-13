@@ -79,6 +79,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { WITHDRAWALS_THAT_DETACH, detachBehaviourOf } from '../../services/social/consentWithdrawal';
 import { z } from 'zod';
 import {
   CONSENT_PURPOSES,
@@ -595,6 +596,11 @@ export async function meConsentsRoutes(fastify: FastifyInstance) {
           data: updateData,
           select: CONSENT_SELECT,
         });
+
+        // Retirer l'analyse (ou son parent) détache le comportement déjà rangé (#10499, O4).
+        if (!body.granted && WITHDRAWALS_THAT_DETACH.has(purpose)) {
+          await detachBehaviourOf(fastify.prisma, userId);
+        }
 
         const entry = buildConsentEntry(purpose, (updated as ConsentColumns)[targetColumn]);
         return sendSuccess(reply, entry);
