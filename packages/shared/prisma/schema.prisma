@@ -3838,6 +3838,12 @@ model Post {
   postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
+  /// Part ANONYME de `viewCount` / `impressionCount` (#10483) : lecteurs sans
+  /// compte, comptés par clé de lecteur HMAC. Les totaux affichés les incluent
+  /// déjà ; ces deux champs ne servent qu'à distinguer. Optionnels : un post
+  /// antérieur à la colonne vaut `null`, que `incrementPostCounters` traite en 0.
+  anonymousViewCount       Int? @default(0)
+  anonymousImpressionCount Int? @default(0)
   /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
   /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
   /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
@@ -3906,20 +3912,28 @@ model Post {
   @@index([repostOfId, authorId])
 }
 
-/// Déduplication des ouvertures ANONYMES d'un post (v1 "comptage bête").
-/// `sessionKey` = chaîne opaque issue du header X-Session-Token (token de
-/// session iOS anonyme OU token persisté par le navigateur). Identifiant
-/// FAIBLE — voir la section Sécurité de la spec 2026-06-17. INSERT-only :
-/// le 1ᵉʳ insert d'un (postId, sessionKey) incrémente Post.postOpenCount.
+/// Déduplication des VUES ANONYMES d'un post (#10483, ex « comptage bête »).
+/// `sessionKey` = clé de lecteur HMAC dérivée de X-Session-Token par la
+/// passerelle (`readerKeyOf`) — la valeur brute n'est jamais écrite. Le 1ᵉʳ
+/// insert d'un (postId, sessionKey) incrémente viewCount, anonymousViewCount
+/// et postOpenCount ; une vue répétée ne monte que `durationMs`.
 model AnonymousPostOpen {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  postId     String   @db.ObjectId
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String    @db.ObjectId
+  /// Depuis #10483 : la CLÉ DE LECTEUR (HMAC-SHA256 hex 64 de `participant:<id>`
+  /// ou `token:<valeur>`), jamais la valeur brute de X-Session-Token.
   sessionKey String
-  createdAt  DateTime @default(now())
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  /// Durée de lecture la plus longue déclarée par ce lecteur (ms, plafond 5 min).
+  durationMs Int?
+  /// Fin de vie de la ligne (création + 90 jours) — index TTL Mongo posé par la
+  /// migration d'index idempotente, jamais par `prisma db push`.
+  expiresAt  DateTime?
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, sessionKey])
   @@index([postId])
+  @@index([expiresAt])
 }
 
 /// Bibliothèque de sons — entité de première classe, réutilisable et créditée.
@@ -4216,6 +4230,9 @@ model PostImpression {
   postId    String   @db.ObjectId
   userId    String   @db.ObjectId
   source    String   @default("feed")
+  /// Écran d'affichage déclaré par le client (`CONTENT_SURFACES`, #10483) —
+  /// facultatif : un ancien client ne l'envoie pas.
+  surface   String?
   createdAt DateTime @default(now())
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)

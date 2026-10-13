@@ -77,6 +77,18 @@ describe('incrementPostCounters — un compteur null ou absent repart de zéro',
     expect(store.read(POST_B)).toMatchObject({ impressionCount: 2, postOpenCount: 1 });
   });
 
+  it('les parts anonymes (#10483) s\'incrémentent sur un post antérieur aux colonnes', async () => {
+    const store = makeMongoPostCounterStore([absentCountersPost(POST_A)]);
+
+    await incrementPostCounters(
+      { $runCommandRaw: store.runCommandRaw },
+      [POST_A],
+      { viewCount: { increment: 1 }, anonymousViewCount: { increment: 1 }, anonymousImpressionCount: { increment: 2 } },
+    );
+
+    expect(store.read(POST_A)).toMatchObject({ viewCount: 1, anonymousViewCount: 1, anonymousImpressionCount: 2 });
+  });
+
   it('`liveOnly` ne crédite pas un post supprimé', async () => {
     const store = makeMongoPostCounterStore([legacyPost(POST_A, { deletedAt: new Date() }), legacyPost(POST_B)]);
 

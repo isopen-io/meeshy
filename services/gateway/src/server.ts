@@ -25,6 +25,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 // voir le commentaire en tête de `route-registration.ts`).
 import { logger } from './gateway-logger';
 import { getJwtSecret } from './utils/secrets';
+import { readerKeySecret } from './services/posts/readerKey';
 import { schemaValidationErrorResponse } from './utils/schema-validation-error';
 import { contentTypeParserErrorResponse } from './utils/content-type-parser-error';
 import * as fs from 'fs';
@@ -95,6 +96,9 @@ interface Config {
 function loadConfiguration(): Config {
   const nodeEnv = process.env.NODE_ENV || 'development';
   const isDev = nodeEnv === 'development';
+  // #10483 — la clé de lecteur anonyme : sans secret en production, refuser de
+  // démarrer plutôt que de recompter tous les lecteurs à chaque redémarrage.
+  readerKeySecret();
   return {
     nodeEnv,
     isDev,

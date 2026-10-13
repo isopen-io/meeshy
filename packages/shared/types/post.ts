@@ -229,6 +229,13 @@ export interface Post {
   readonly commentCount: number;
   readonly repostCount: number;
   readonly viewCount: number;
+  /**
+   * Part ANONYME de `viewCount` / `impressionCount` (#10483) — lecteurs sans
+   * compte. Les totaux l'incluent déjà. Absent d'un ancien serveur, `null` sur
+   * un post antérieur à la colonne : à lire comme 0.
+   */
+  readonly anonymousViewCount?: number | null;
+  readonly anonymousImpressionCount?: number | null;
   readonly bookmarkCount: number;
   readonly shareCount: number;
   readonly isPinned: boolean;

@@ -374,6 +374,8 @@ export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
   bookmarkCount: true,
   shareCount: true,
   postOpenCount: true,
+  anonymousViewCount: true,
+  anonymousImpressionCount: true,
   qualifiedViewCount: true,
   playCount: true,
   downloadCount: true,
