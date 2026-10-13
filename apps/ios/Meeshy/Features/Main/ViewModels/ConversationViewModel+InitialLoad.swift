@@ -177,10 +177,11 @@ extension ConversationViewModel {
             // unconditional as the authoritative backstop for the foreground race
             // (the sink's write still in flight) and offline-delivered deltas.
             isRevalidating = !messageStore.messages.isEmpty
+            let heldUpTo = openingWatermark()
             Task { [weak self] in
                 guard let self else { return }
-                await self.refreshMessagesFromAPI()
-                await self.syncMissedMessagesOnOpen()
+                let refreshReachedBackTo = await self.refreshMessagesFromAPI()
+                await self.syncMissedMessagesOnOpen(heldUpTo: heldUpTo, refreshReachedBackTo: refreshReachedBackTo)
                 self.isRevalidating = false
             }
 
@@ -191,10 +192,11 @@ extension ConversationViewModel {
                 await hydrateTranslationsFromCache()
             } else {
                 isRevalidating = true
+                let heldUpTo = openingWatermark()
                 Task { [weak self] in
                     guard let self else { return }
-                    await self.refreshMessagesFromAPI()
-                    await self.syncMissedMessagesOnOpen()
+                    let refreshReachedBackTo = await self.refreshMessagesFromAPI()
+                    await self.syncMissedMessagesOnOpen(heldUpTo: heldUpTo, refreshReachedBackTo: refreshReachedBackTo)
                     self.isRevalidating = false
                 }
             }
@@ -299,7 +301,10 @@ extension ConversationViewModel {
         isLoadingInitial = false
     }
 
-    func refreshMessagesFromAPI() async {
+    /// Rend l'instant du PLUS ANCIEN message de la page servie — jusqu'où le
+    /// rafraîchissement a remonté —, `nil` quand il n'a rien servi.
+    @discardableResult
+    func refreshMessagesFromAPI() async -> Date? {
         do {
             // Warm cache means: we already have at least one message hydrated
             // from GRDB AND a previous fetch has succeeded. In that case we
@@ -359,13 +364,14 @@ extension ConversationViewModel {
                 let fromCacheOnly = cached.filter { !snapshotIds.contains($0.id) }
                 return (snapshot + fromCacheOnly).sorted { $0.createdAt < $1.createdAt }
             }
+            return response.data.map(\.createdAt).min()
         } catch let error as MeeshyError {
             switch error {
             case .forbidden(let reason, _):
                 // 403: still authenticated, but no longer authorised on
                 // THIS resource (kicked, group dissolved, blocked, etc.).
                 await handleAccessRevoked(reason: reason)
-                return
+                return nil
             case .server(404, let message), .server(410, let message):
                 // 404/410: the conversation no longer exists (deleted by
                 // owner, expired share-link target, hard-purged on the
@@ -380,14 +386,15 @@ extension ConversationViewModel {
                         ? String(localized: "conversation.error.gone", defaultValue: "Cette conversation n'existe plus")
                         : message
                 )
-                return
+                return nil
             default:
                 // Other server / network / unknown errors are transient —
                 // keep cached data on screen, user retries on reload.
-                break
+                return nil
             }
         } catch {
             // Cancellation / unknown — keep cached data displayed.
+            return nil
         }
     }
 
@@ -538,9 +545,32 @@ extension ConversationViewModel {
     ///
     /// Sur un GRDB FROID on ne l'appelle pas : le refresh vient d'apporter les
     /// trente plus récents, il n'y a rien devant eux à rattraper.
-    private func syncMissedMessagesOnOpen() async {
-        guard !messageStore.messages.isEmpty else { return }
-        await syncMissedMessages()
+    ///
+    /// #10572 — le curseur est le plus récent message détenu AVANT le refresh
+    /// (`heldUpTo`, lu dans la fenêtre GRDB peinte), jamais après : relu après,
+    /// il tombait sur le plus récent des trente que le refresh venait de
+    /// poser, et un trou de plus de trente messages ne se comblait jamais.
+    private func syncMissedMessagesOnOpen(heldUpTo: Date?, refreshReachedBackTo: Date?) async {
+        guard !accessRevoked,
+              let cursor = Self.openingGapCursor(heldUpTo: heldUpTo, refreshReachedBackTo: refreshReachedBackTo)
+        else { return }
+        await syncMissedMessages(after: cursor)
+    }
+
+    /// Le plus récent message SERVEUR détenu par la fenêtre peinte — lu dans
+    /// `messageStore`, synchrone, et non dans `messages`, que la souscription
+    /// au store ne pose qu'un tour de boucle plus tard.
+    private func openingWatermark() -> Date? {
+        SyncWatermark.newest(among: messageStore.domainMessages(currentUserId: currentUserId))
+    }
+
+    /// D'où le rattrapage d'ouverture repart — `nil` quand il n'y a rien à
+    /// rattraper : rien n'était détenu (GRDB froid), ou la page du refresh
+    /// remonte jusqu'au bloc détenu, donc le recouvre sans trou.
+    nonisolated static func openingGapCursor(heldUpTo: Date?, refreshReachedBackTo: Date?) -> Date? {
+        guard let heldUpTo else { return nil }
+        guard let reachedBack = refreshReachedBackTo, reachedBack <= heldUpTo else { return heldUpTo }
+        return nil
     }
 
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
@@ -555,7 +585,13 @@ extension ConversationViewModel {
         // to backfill *from* — a full load happens on conversation open instead,
         // so no-op rather than refetch from the top.
         guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
+        await syncMissedMessages(after: newestLocal)
+    }
 
+    /// Le rattrapage `after` à partir d'un curseur donné : la reconnexion part
+    /// de ce qui est détenu maintenant, l'ouverture de ce qui l'était AVANT
+    /// son refresh.
+    func syncMissedMessages(after newestLocal: Date) async {
         // Page size and total cap mirror the contiguous-backfill contract: a
         // missed-message gap of any size is filled by paging forward, not just
         // the most recent `limit` messages (the bug in the old offset:0 fetch,
