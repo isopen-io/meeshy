@@ -73,6 +73,8 @@ export const matchesWhere = (row: Row, where: Row): boolean =>
  */
 export type ReachWorld = {
   readonly consentedUserIds?: readonly string[];
+  /** Comptes qui ont RETIRÉ l'analyse côté serveur (`analyticsConsentWithdrawnAt` posé). */
+  readonly withdrawnUserIds?: readonly string[];
   readonly comments?: readonly { readonly id: string; readonly postId: string }[];
   readonly notifications?: readonly { readonly id: string; readonly userId: string }[];
 };
@@ -203,7 +205,9 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
         (world.consentedUserIds ?? []).includes(where.id)
           ? { analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01') }
-          : { analyticsConsentAt: null, dataProcessingConsentAt: null }),
+          : (world.withdrawnUserIds ?? []).includes(where.id)
+            ? { analyticsConsentAt: null, dataProcessingConsentAt: new Date('2026-01-01'), analyticsConsentWithdrawnAt: new Date('2026-02-01') }
+            : { analyticsConsentAt: null, dataProcessingConsentAt: null }),
     },
     postComment: {
       findMany: jest.fn(async ({ where }: { where: Row }) =>

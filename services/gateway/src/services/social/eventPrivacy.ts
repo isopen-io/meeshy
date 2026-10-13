@@ -16,7 +16,7 @@ export const DIGITAL_CONSENT_AGE = 15;
  * |---|---|---|---|
  * | compte, analyse CONSENTIE (`User.analyticsConsentAt` posé, client non `denied`) | `user` | complet (session d'app comprise) | complet |
  * | compte, analyse NON consentie | `none` | réduit : plateforme, version, OS en MAJEURE, type de réseau, langue d'interface | position et source de classement |
- * | compte, analyse REFUSÉE (client `denied`, retrait hors ligne compris) | `none` | aucun | aucun |
+ * | compte, analyse REFUSÉE (client `denied`, ou retrait serveur `analyticsConsentWithdrawnAt`) | AUCUNE ligne de comportement v2 | — | — |
  * | lecteur ANONYME | `none` | plateforme et langue d'interface | position et source de classement |
  *
  * Un identifiant qui relie des événements entre eux (`appSessionId`,
@@ -25,7 +25,9 @@ export const DIGITAL_CONSENT_AGE = 15;
  * reconstituerait par jointure ce que l'absence d'acteur promet d'effacer.
  *
  * C'est la passerelle qui fait foi pour ACCORDER ; le client fait foi pour
- * REFUSER — la règle la plus restrictive s'applique toujours.
+ * REFUSER — la règle la plus restrictive s'applique toujours. Un refus ne
+ * laisse que la MESURE d'audience du comptage (#10483 : compteurs de vues et
+ * d'impressions, ligne `PostImpression` dépouillée de ses colonnes de mesure).
  */
 
 export type AnalyticsStanding = 'granted' | 'not_granted' | 'denied' | 'anonymous';
@@ -34,8 +36,13 @@ type ConsentPrisma = {
   readonly user?: {
     readonly findUnique: (args: {
       where: { id: string };
-      select: { analyticsConsentAt: true; dataProcessingConsentAt: true; birthDate: true };
-    }) => Promise<{ analyticsConsentAt: Date | null; dataProcessingConsentAt: Date | null; birthDate?: Date | null } | null>;
+      select: { analyticsConsentAt: true; dataProcessingConsentAt: true; analyticsConsentWithdrawnAt: true; birthDate: true };
+    }) => Promise<{
+      analyticsConsentAt: Date | null;
+      dataProcessingConsentAt: Date | null;
+      analyticsConsentWithdrawnAt?: Date | null;
+      birthDate?: Date | null;
+    } | null>;
   };
 };
 
@@ -43,6 +50,13 @@ type ConsentPrisma = {
  * Lit le consentement d'analyse d'un compte (et celui de son parent, le
  * traitement des données) — UNE requête par lot. Une lecture
  * en échec vaut « non consenti » : l'absence de preuve n'accorde rien.
+ *
+ * Trois issues pour un compte :
+ *  - `denied` : le client refuse, OU le compte a RETIRÉ l'analyse côté
+ *    serveur (`analyticsConsentWithdrawnAt`) — aucune ligne de comportement ;
+ *  - `granted` : SEULE la passerelle accorde (analyse et traitement posés,
+ *    15 ans ou plus) ; un client qui dit `granted` n'accorde rien ;
+ *  - `not_granted` : rien n'a été tranché — ligne sans acteur, contexte réduit.
  */
 export async function readAnalyticsStanding(
   prisma: ConsentPrisma,
@@ -53,8 +67,9 @@ export async function readAnalyticsStanding(
   try {
     const row = await prisma.user?.findUnique({
       where: { id: userId },
-      select: { analyticsConsentAt: true, dataProcessingConsentAt: true, birthDate: true },
+      select: { analyticsConsentAt: true, dataProcessingConsentAt: true, analyticsConsentWithdrawnAt: true, birthDate: true },
     });
+    if (row?.analyticsConsentWithdrawnAt) return 'denied';
     // L'analyse est l'ENFANT du traitement des données (`CONSENT_PARENT`) : sans son parent, elle ne vaut rien.
     if (!row?.analyticsConsentAt || !row.dataProcessingConsentAt) return 'not_granted';
     // R8 : sous l'âge du consentement numérique (15 ans en France), aucun profilage, même consenti.

@@ -390,6 +390,14 @@ model User {
   /// substitut. `PUT /me/consents/analytics` pose cette colonne.
   analyticsConsentAt DateTime?
 
+  /// Le REFUS d'analyse (#10499) : posé quand l'analyse ou son parent (le
+  /// traitement des données) est RETIRÉ par `PUT /me/consents`, effacé quand
+  /// l'analyse est de nouveau accordée. `analyticsConsentAt` absent ne dit pas
+  /// « refusé » (un compte neuf n'a rien tranché) ; cette date le dit. Un
+  /// compte qui a refusé ne laisse aucune ligne `ContentEvent`
+  /// (`services/gateway/src/services/social/eventPrivacy.ts`).
+  analyticsConsentWithdrawnAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.

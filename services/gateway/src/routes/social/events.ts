@@ -703,7 +703,7 @@ export function registerSocialEventRoutes(
       return sendSuccess(reply, {
         recorded: comptes.recorded + v2Comptes.recorded,
         rejected: comptes.rejected + v2Comptes.rejected + total - admis,
-        ignored,
+        ignored: ignored + v2Comptes.withheld,
         accepts: acceptedEventTypes(settings),
         sampling: settings.sampling,
       });

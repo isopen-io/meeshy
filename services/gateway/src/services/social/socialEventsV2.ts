@@ -50,7 +50,8 @@ export type V2Actor =
   | { readonly kind: 'user'; readonly userId: string }
   | { readonly kind: 'anonymous' };
 
-export type V2Outcome = { readonly recorded: number; readonly rejected: number };
+/** `withheld` : acquittés SANS écriture parce que le compte a refusé l'analyse (comptés `ignored`). */
+export type V2Outcome = { readonly recorded: number; readonly rejected: number; readonly withheld: number };
 
 type V2Prisma = Pick<PrismaClient, '$runCommandRaw'> & {
   readonly postComment?: { readonly findMany: (args: unknown) => Promise<readonly { id: string; postId: string }[]> };
@@ -218,7 +219,10 @@ export async function ingestSocialEventsV2(
     readonly receivedAt: Date;
   },
 ): Promise<V2Outcome> {
-  if (reads.length === 0) return { recorded: 0, rejected: 0 };
+  if (reads.length === 0) return { recorded: 0, rejected: 0, withheld: 0 };
+  // Un compte qui a REFUSÉ l'analyse ne laisse AUCUNE ligne de comportement :
+  // ni acteur, ni ligne sans acteur. Seuls les compteurs du comptage bougent.
+  if (params.standing === 'denied') return { recorded: 0, rejected: 0, withheld: reads.length };
 
   const typed = params.actor.kind === 'anonymous'
     ? reads.filter((read) => ANONYMOUS_TYPES.has(read.event.type))
@@ -226,9 +230,9 @@ export async function ingestSocialEventsV2(
   const audience = await readAudience(prisma, typed.map((read) => read.event), params.actor);
   const admitted = typed.filter((read) => isAdmissible(read.event, audience));
   const rejected = reads.length - admitted.length;
-  if (admitted.length === 0) return { recorded: 0, rejected };
+  if (admitted.length === 0) return { recorded: 0, rejected, withheld: 0 };
 
   const documents = admitted.map((read) => documentOf({ ...params, read, audience }));
   const outcome = await insertDocuments(prisma, CONTENT_EVENT_COLLECTION, documents);
-  return { recorded: outcome.inserted.size + outcome.duplicates.size, rejected };
+  return { recorded: outcome.inserted.size + outcome.duplicates.size, rejected, withheld: 0 };
 }

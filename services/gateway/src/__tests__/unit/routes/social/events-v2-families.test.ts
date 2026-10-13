@@ -185,14 +185,45 @@ describe('consentement — un comportement sans consentement n’est rattaché �
     await h.app.close();
   });
 
-  it('un client qui déclare `denied` l’emporte sur le consentement serveur : aucun acteur, aucun contexte', async () => {
+  it('un client qui déclare `denied` l’emporte sur le consentement serveur : AUCUNE ligne v2, seuls les compteurs d’audience bougent', async () => {
     const h = await harness({ consentedUserIds: [READER] });
-    await sendReachV2(h.app, [share(POST)], account, { ...CONTEXT, consent: 'denied' });
+    const res = await sendReachV2(h.app, [share(POST), scrollListing(), { type: 'impression', postId: POST }], account, { ...CONTEXT, consent: 'denied' });
+
+    expect(h.contentEvents).toHaveLength(0);
+    expect(dataOf(res)).toMatchObject({ recorded: 1, rejected: 0, ignored: 2 });
+    expect(h.store.read(POST)?.impressionCount).toBe(1);
+    await h.app.close();
+  });
+
+  it('un retrait SERVEUR (analyse retirée) vaut refus, même si le client dit `granted` : aucune ligne v2', async () => {
+    const h = await harness({ withdrawnUserIds: [READER] });
+    const res = await sendReachV2(h.app, [share(POST), scrollListing()], account, { ...CONTEXT, consent: 'granted' });
+
+    expect(h.contentEvents).toHaveLength(0);
+    expect(dataOf(res)).toMatchObject({ recorded: 0, ignored: 2 });
+    await h.app.close();
+  });
+
+  it('`unknown` sans consentement serveur : ligne sans acteur, sans session ni contexte fin', async () => {
+    const h = await harness();
+    await sendReachV2(h.app, [share(POST)], account, { ...CONTEXT, consent: 'unknown' });
 
     const row = h.contentEvents[0];
-    expect(row.actorKind).toBe('none');
-    expect(row.platform).toBeUndefined();
-    expect(row.listing).toBeUndefined();
+    expect(row).toMatchObject({ actorKind: 'none', osVersion: '18', network: 'cellular' });
+    expect(row.userId).toBeUndefined();
+    expect(row.appSessionId).toBeUndefined();
+    expect(row.deviceClass).toBeUndefined();
+    expect(JSON.stringify(h.writes)).not.toContain(READER);
+    await h.app.close();
+  });
+
+  it('le client ne fait jamais ACCORDER : `granted` sans consentement serveur ⇒ ligne sans acteur', async () => {
+    const h = await harness();
+    await sendReachV2(h.app, [share(POST)], account, { ...CONTEXT, consent: 'granted' });
+
+    expect(h.contentEvents[0].actorKind).toBe('none');
+    expect(h.contentEvents[0].userId).toBeUndefined();
+    expect(JSON.stringify(h.writes)).not.toContain(APP_SESSION);
     await h.app.close();
   });
 

@@ -88,3 +88,37 @@ describe('PUT /me/consents/analytics — le retrait détache le comportement dé
     await app.close();
   });
 });
+
+describe('PUT /me/consents — un retrait se SOUVIENT qu’il est un refus', () => {
+  it.each(['analytics', 'data-processing'])('retirer %s date le refus d’analyse (analyticsConsentWithdrawnAt)', async (purpose) => {
+    const { prisma } = fakePrisma();
+    const app = await buildApp(prisma);
+    await put(app, purpose, false);
+
+    const writes = prisma.user.update.mock.calls.map(([args]) => (args as { data: Record<string, unknown> }).data);
+    expect(writes.some((data) => data.analyticsConsentWithdrawnAt instanceof Date)).toBe(true);
+    await app.close();
+  });
+
+  it('accorder de nouveau l’analyse efface le refus', async () => {
+    const { prisma } = fakePrisma();
+    const app = await buildApp(prisma);
+    await put(app, 'analytics', false);
+    await put(app, 'analytics', true);
+
+    const last = prisma.user.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
+    expect(last.data.analyticsConsentWithdrawnAt).toBeNull();
+    await app.close();
+  });
+
+  it('accorder un AUTRE consentement n’efface pas le refus d’analyse', async () => {
+    const { prisma } = fakePrisma();
+    const app = await buildApp(prisma);
+    await put(app, 'analytics', false);
+    await put(app, 'voice-data', true);
+
+    const last = prisma.user.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> };
+    expect('analyticsConsentWithdrawnAt' in last.data).toBe(false);
+    await app.close();
+  });
+});
