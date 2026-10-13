@@ -620,10 +620,4 @@ enum GameCopy {
         let moment = calendar.date(byAdding: .minute, value: minuteOfDay, to: midnight) ?? midnight
         return moment.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale, calendar: calendar, timeZone: calendar.timeZone))
     }
-
-    /// « 1 chance sur 6 ».
-    static func chance(_ fraction: Double) -> String {
-        let denominator = fraction > 0 ? Int((1 / fraction).rounded()) : 0
-        return String(localized: "game.chest.chance", defaultValue: "1 chance sur \(formatCount(denominator))", bundle: .main)
-    }
 }

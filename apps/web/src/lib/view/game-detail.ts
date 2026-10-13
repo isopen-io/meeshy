@@ -379,26 +379,15 @@ export function missionDetail(mission: GameMission): ElementDetail {
   });
 }
 
-const chance = (odds: number): string => gameText('game.chest.chance', { odds: formatCount(Math.round(1 / odds)) });
-
-/** LE COFFRE du jour : fermé, prêt ou ouvert ; son contenu possible est dit avant l'ouverture, son contenu réel après. */
+/** LE COFFRE du jour : fermé, prêt ou ouvert ; son contenu reste secret avant l'ouverture (#10567), son contenu réel se dit après. */
 export function chestDetail(chest: GameChest): ElementDetail {
   const reward = chest.reward;
-  const contents =
-    reward === null
-      ? gameText('game.chest.odds', {
-          min: formatCount(chest.odds.minPoints),
-          max: pointsLabel(chest.odds.maxPoints),
-          fragment: chest.odds.fragment > 0 ? chance(chest.odds.fragment) : formatCount(0),
-          freeze: chest.odds.freeze > 0 ? chance(chest.odds.freeze) : formatCount(0),
-        })
-      : chestRewardLines(reward).join(' · ');
   const line = gameText(`game.concept.chip.chest.${chest.status}`);
   return ofFamily('chest', 'day', 'missions', {
     emblem: { kind: 'chest', open: chest.status === 'claimed' },
     name: gameText('game.chest.title'),
     state: chest.status === 'claimed' ? { kind: 'earned', line } : chest.status === 'ready' ? value(line) : { kind: 'locked', line, missing: gameText('game.chest.locked'), gauge: null },
-    facts: [row(gameText('game.chest.contents'), contents)],
+    facts: reward === null ? [] : [row(gameText('game.chest.contents'), chestRewardLines(reward).join(' · '))],
   });
 }
 

@@ -206,6 +206,9 @@ struct AudioFullscreenView: View {
     @State private var replyTarget: AudioFullscreenSource?
     @State private var replyLanguage: String = DefaultComposerLanguage.resolve()
     @State private var replyKeyboard: KeyboardTransition?
+    /// La piste que l'écran a lui-même demandée — tenue hors du rendu : la
+    /// noter ne doit refaire aucune page.
+    @State private var turnMemory = AudioFullscreenTurnMemory()
 
     private var coordinator: ConversationAudioCoordinator { .sharedForTesting }
     private var ids: [String] { allAudioItems.map(\.id) }
@@ -226,7 +229,7 @@ struct AudioFullscreenView: View {
                     page(index: index, item: item)
                 }
                 .offset(y: dragOffset)
-                .gesture(verticalDismissGesture)
+                .modifier(AudioFullscreenDismissDrag(offset: $dragOffset, onDismiss: dismissDownward))
                 .opacity(isDismissing ? 0 : 1)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .adaptiveOnChange(of: currentPageID) { _, newID in
@@ -237,9 +240,12 @@ struct AudioFullscreenView: View {
                         currentIndex = newIdx
                         HapticFeedback.light()
                         // La rangée d'émojis et la barre visaient la pièce
-                        // qu'on regardait ; l'immersion, elle, reste.
+                        // qu'on regardait ; l'immersion, elle, reste. Rien
+                        // d'ouvert ⇒ rien à animer pendant que la page glisse.
+                        let turned = chrome.turningPage()
+                        guard turned != chrome || replyTarget != nil else { return }
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            chrome = chrome.turningPage()
+                            chrome = turned
                             replyTarget = nil
                         }
                     }
@@ -300,8 +306,24 @@ struct AudioFullscreenView: View {
 
     // MARK: - Une page
 
+    /// **Une fenêtre de trois pages, chacune comparée avant d'être refaite**
+    /// (#10568, leçon 292) : au-delà des voisines, la page n'est qu'un vide —
+    /// ni onde, ni abonnement, ni transcription ne survivent au balayage ; et
+    /// une écriture d'état de la racine ne refait que les pages dont une entrée
+    /// VISIBLE a changé.
+    @ViewBuilder
     private func page(index: Int, item: AudioFullscreenSource) -> some View {
+        if AudioFullscreenPaging.renders(index: index, current: currentIndex) {
+            livePage(index: index, item: item)
+                .equatable()
+        } else {
+            Color.clear
+        }
+    }
+
+    private func livePage(index: Int, item: AudioFullscreenSource) -> AudioFullscreenPage {
         let offer = actions?.offer(item) ?? .none
+        let memory = turnMemory
         return AudioFullscreenPage(
             item: item,
             contactColor: contactColor,
@@ -328,7 +350,8 @@ struct AudioFullscreenView: View {
             onReply: { openReply(on: item) },
             onCompose: { actions?.compose(item) },
             onNext: AudioFullscreenSequence.next(after: item.id, in: ids).map { id in { turn(to: id) } },
-            onPrevious: AudioFullscreenSequence.previous(before: item.id, in: ids).map { id in { turn(to: id) } }
+            onPrevious: AudioFullscreenSequence.previous(before: item.id, in: ids).map { id in { turn(to: id) } },
+            onPlaybackRequested: { memory.requested = $0 }
         )
     }
 
@@ -348,7 +371,8 @@ struct AudioFullscreenView: View {
     private func followActiveTrack(_ activeId: String?) {
         guard let target = AudioFullscreenSequence.pageToFollow(activeAttachmentId: activeId,
                                                                 currentPageId: currentPageID,
-                                                                ids: ids) else { return }
+                                                                ids: ids,
+                                                                requestedByScreen: turnMemory.requested) else { return }
         turn(to: target)
     }
 
@@ -491,25 +515,6 @@ struct AudioFullscreenView: View {
 
     // MARK: - Vertical Dismiss Gesture
 
-    private var verticalDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 40)
-            .onChanged { value in
-                let vertical = value.translation.height
-                if vertical > 0, abs(vertical) > abs(value.translation.width) {
-                    dragOffset = vertical * 0.6
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > 120 || value.predictedEndTranslation.height > 300 {
-                    dismissDownward()
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
-
     private func dismissDownward() {
         let currentItem = currentSource
         withAnimation(.easeOut(duration: 0.25)) {
@@ -528,6 +533,13 @@ struct AudioFullscreenView: View {
     }
 }
 
+
+/// La dernière piste lancée par une page de l'écran. Une référence, pas un
+/// `@State` de valeur : l'écrire ne réévalue rien.
+@MainActor
+final class AudioFullscreenTurnMemory {
+    var requested: String?
+}
 
 // MARK: - Feed / Comment / Reel / Post wiring
 

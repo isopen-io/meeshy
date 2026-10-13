@@ -547,9 +547,7 @@ enum GameElementDetails {
             emblem: .chest(open: chest.status == .claimed),
             name: ConceptText.factChest,
             status: status,
-            facts: [
-                fact(ConceptText.name(.points), ConceptText.ratio(count(chest.odds.minPoints), count(chest.odds.maxPoints))),
-            ],
+            facts: [],
             concept: .missions
         )
     }

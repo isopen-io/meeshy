@@ -16,12 +16,21 @@ import MeeshyUI
 ///    on ajoute ensuite ». La règle du dépôt commandait donc l'ordre : cette
 ///    extraction n'est pas un détour vers le geste, elle en est la condition.
 ///
-/// Le glissement est PROGRESSIF au sens de la directive du 2026-08-30 :
+/// Le parcours est PROGRESSIF au sens de la directive du 2026-08-30 :
 /// `AVAudioPlayer.currentTime` est un déplacement à coût nul, donc l'écoute
-/// suit le doigt image par image, et relâcher ne fait que conclure. Un
-/// `DragGesture(minimumDistance: 0)` couvre le tap ET le parcours : un tap est
-/// un glissement de longueur nulle, et le distinguer aurait demandé deux
-/// gestes concurrents pour un seul geste utilisateur.
+/// suit le doigt image par image, et relâcher ne fait que conclure.
+///
+/// **Depuis #10568, la bande n'a plus de défilement à elle.** Elle vivait dans
+/// son propre `ScrollView` horizontal (120 barres de 3 pt dépassent toujours la
+/// largeur d'un téléphone), imbriqué dans le pager, avec un `scrollTo` animé
+/// par barre franchie. Trois choses changent :
+///
+/// 1. l'onde TIENT dans sa largeur — les amplitudes sont ramenées au nombre de
+///    barres que la bande peut peindre (`resample`, le pic de chaque paquet),
+///    donc plus de défilement imbriqué ni de `scrollTo` animé par barre ;
+/// 2. elle se peint en UN `Canvas`, pas en cent vingt vues ;
+/// 3. sur la bande, le doigt déplace le curseur — toucher saute à un point,
+///    glisser parcourt ; le balayage des pages vit partout ailleurs.
 struct AudioFullscreenWaveform: View {
 
     /// Les amplitudes analysées. Vide ⇒ la bande se peint depuis son motif de
@@ -40,33 +49,61 @@ struct AudioFullscreenWaveform: View {
     /// connaît aucun player.
     let onSeek: (Double) -> Void
 
-    private static let barWidth: CGFloat = 3
-    private static let spacing: CGFloat = 2
+    nonisolated static let barWidth: CGFloat = 3
+    nonisolated static let spacing: CGFloat = 2
     private static let height: CGFloat = 80
+
+    /// Le nombre de barres que `width` peut peindre sans déborder.
+    nonisolated static func barCount(forWidth width: CGFloat) -> Int {
+        max(1, Int((width + spacing) / (barWidth + spacing)))
+    }
+
+    /// Ramène `samples` à `count` barres : le PIC de chaque paquet, pour qu'une
+    /// attaque brève reste visible. Moins d'échantillons que de barres ⇒ chaque
+    /// barre lit l'échantillon qui la couvre.
+    nonisolated static func resample(_ samples: [Float], to count: Int) -> [Float] {
+        guard !samples.isEmpty, count > 0 else { return [] }
+        guard samples.count != count else { return samples }
+        return (0..<count).map { bar in
+            let start = bar * samples.count / count
+            let end = max(start + 1, (bar + 1) * samples.count / count)
+            return samples[start..<min(end, samples.count)].max() ?? 0
+        }
+    }
 
     var body: some View {
         GeometryReader { geo in
-            let barCount = samples.isEmpty ? 80 : samples.count
-            let totalWidth = CGFloat(barCount) * (Self.barWidth + Self.spacing) - Self.spacing
-            let needsScroll = totalWidth > geo.size.width
-            let playheadBarIndex = max(0, min(barCount - 1, Int(progress * Double(barCount))))
-
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    bars(geo: geo, barCount: barCount, needsScroll: needsScroll,
-                         playheadBarIndex: playheadBarIndex)
-                        .contentShape(Rectangle())
-                        .gesture(seekGesture(contentWidth: needsScroll ? totalWidth : geo.size.width))
+            let width = geo.size.width
+            Canvas { context, size in
+                let count = Self.barCount(forWidth: size.width)
+                let heights = Self.resample(samples, to: count)
+                let step = Self.barWidth + Self.spacing
+                let inset = (size.width - (CGFloat(count) * step - Self.spacing)) / 2
+                for bar in 0..<count {
+                    let sample = heights.isEmpty ? Self.fallbackHeight(index: bar) : CGFloat(heights[bar])
+                    let barHeight = max(3, sample * size.height * 0.9)
+                    let rect = CGRect(x: inset + CGFloat(bar) * step,
+                                      y: (size.height - barHeight) / 2,
+                                      width: Self.barWidth, height: barHeight)
+                    let isPlayed = progress > 0 && Double(bar) / Double(count) <= progress
+                    context.fill(Path(roundedRect: rect, cornerRadius: 1.5),
+                                 with: .color(isPlayed ? accent : trackColor))
                 }
-                .adaptiveOnChange(of: playheadBarIndex) { _, newIdx in
-                    guard needsScroll else { return }
-                    withAnimation(.linear(duration: 0.2)) {
-                        proxy.scrollTo("bar-\(newIdx)", anchor: .center)
-                    }
+                if progress > 0 {
+                    let x = min(size.width - 1, max(1, size.width * progress))
+                    let head = CGRect(x: x - 1, y: size.height * 0.025, width: 2, height: size.height * 0.95)
+                    context.fill(Path(roundedRect: head, cornerRadius: 1), with: .color(playheadColor))
                 }
             }
+            .contentShape(Rectangle())
+            .gesture(scrubGesture(width: width))
         }
         .frame(height: Self.height)
+    }
+
+    private func seek(to x: CGFloat, in width: CGFloat) {
+        guard width > 0 else { return }
+        onSeek(max(0, min(1, x / width)))
     }
 
     /// **Le doigt emmène l'écoute avec lui.**
@@ -74,51 +111,22 @@ struct AudioFullscreenWaveform: View {
     /// `onChanged` déplace RÉELLEMENT la lecture, il ne se contente pas de
     /// bouger un curseur : c'est ce que « on voit le recul sur la waveform »
     /// demande, et ce que la directive « gestes progressifs et annulables »
-    /// impose — un `onEnded` seul y est nommément interdit.
+    /// impose. `minimumDistance: 0` couvre le toucher ET le parcours : sur la
+    /// bande, le doigt déplace le curseur (directive porteur du 2026-10-13) ;
+    /// partout ailleurs, il tourne la page.
     ///
     /// Une seule haptique, à la levée : en émettre une par image de geste
     /// ferait vibrer l'appareil en continu.
-    private func seekGesture(contentWidth: CGFloat) -> some Gesture {
+    private func scrubGesture(width: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard contentWidth > 0 else { return }
-                onSeek(max(0, min(1, value.location.x / contentWidth)))
-            }
+            .onChanged { value in seek(to: value.location.x, in: width) }
             .onEnded { _ in HapticFeedback.light() }
-    }
-
-    @ViewBuilder
-    private func bars(geo: GeometryProxy, barCount: Int,
-                      needsScroll: Bool, playheadBarIndex: Int) -> some View {
-        HStack(spacing: Self.spacing) {
-            ForEach(0..<barCount, id: \.self) { i in
-                let isPlayed = Double(i) / Double(barCount) <= progress
-                let sample = samples.isEmpty ? Self.fallbackHeight(index: i) : CGFloat(samples[i])
-                let barHeight = max(3, sample * geo.size.height * 0.9)
-                let computedWidth = needsScroll
-                    ? Self.barWidth
-                    : max(2, (geo.size.width - Self.spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
-
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isPlayed ? accent : trackColor)
-                    .frame(width: computedWidth, height: barHeight)
-                    .overlay(
-                        needsScroll && i == playheadBarIndex
-                            ? RoundedRectangle(cornerRadius: 1.5)
-                                .fill(playheadColor)
-                                .frame(width: 2, height: geo.size.height * 0.95)
-                            : nil
-                    )
-                    .id("bar-\(i)")
-            }
-        }
-        .frame(height: geo.size.height, alignment: .center)
     }
 
     /// Motif de repli quand l'analyse n'a rien rendu — déterministe par index,
     /// pour qu'une même piste peigne toujours la même silhouette.
     /// `static` : la loi ne dépend d'aucune instance, et un test peut la lire.
-    static func fallbackHeight(index: Int) -> CGFloat {
+    nonisolated static func fallbackHeight(index: Int) -> CGFloat {
         let seed = Double(index * 7 + 3)
         let value = 0.2 + abs(sin(seed) * 0.4 + cos(seed * 0.5) * 0.3)
         return CGFloat(min(1.0, value))

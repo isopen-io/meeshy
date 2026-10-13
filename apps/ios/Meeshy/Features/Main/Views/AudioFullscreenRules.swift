@@ -61,11 +61,52 @@ nonisolated enum AudioFullscreenSequence {
     /// `nil` quand la piste est déjà celle de la page, ou quand elle n'est pas
     /// une page de ce plein écran : un vocal d'une autre conversation ne fait
     /// pas tourner les pages de celle-ci.
-    static func pageToFollow(activeAttachmentId: String?, currentPageId: String?, ids: [String]) -> String? {
+    ///
+    /// `nil` aussi quand la piste est celle que l'ÉCRAN vient de demander
+    /// (`requestedByScreen`) : une page qu'on a déjà quittée a lancé sa piste,
+    /// et l'annonce arrive après le doigt. La suivre ramènerait l'écran en
+    /// arrière (#10568) — seule une piste que le LECTEUR a choisie fait tourner
+    /// les pages.
+    static func pageToFollow(activeAttachmentId: String?,
+                             currentPageId: String?,
+                             ids: [String],
+                             requestedByScreen: String? = nil) -> String? {
         guard let active = activeAttachmentId,
               active != currentPageId,
+              active != requestedByScreen,
               ids.contains(active) else { return nil }
         return active
+    }
+}
+
+/// **Ce qu'un balayage coûte** (#10568) — la fenêtre de rendu et le moment où
+/// la piste change.
+///
+/// Un pager paresseux réalise à la demande et ne libère jamais (leçon 292) :
+/// sans fenêtre, chaque vocal traversé garde son onde, ses abonnements et sa
+/// transcription vivants, et le balayage ralentit avec le chemin parcouru.
+nonisolated enum AudioFullscreenPaging {
+
+    /// La page visible et ses deux voisines : exactement ce qu'un glissement en
+    /// cours peut montrer.
+    static let renderRadius = 1
+
+    static func renders(index: Int, current: Int) -> Bool {
+        abs(index - current) <= renderRadius
+    }
+
+    /// Le temps qu'une page doit rester POSÉE avant que sa piste parte.
+    static let settleDelay: TimeInterval = 0.16
+
+    /// **La piste change une fois la page posée, jamais au milieu du geste.**
+    ///
+    /// Le pager annonce la nouvelle page au franchissement de la mi-course, le
+    /// doigt encore sur l'écran : y lancer la lecture arrêtait le moteur et en
+    /// chargeait un autre pendant le glissement, et un aller-retour relançait
+    /// deux fois. La page d'ENTRÉE, elle, part sans attendre — on l'a touchée
+    /// pour l'écouter.
+    static func playbackDelay(turnedTo: Bool) -> TimeInterval {
+        turnedTo ? settleDelay : 0
     }
 }
 
@@ -111,10 +152,35 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     static let minTranscript: CGFloat = 72
     static let maxTranscript: CGFloat = 240
     static let readableWidth: CGFloat = 600
+    /// L'écart entre deux blocs de la page empilée.
+    static let stackSpacing: CGFloat = 12
+    /// L'anneau de progression qui cercle le portrait, de part et d'autre.
+    static let heroRing: CGFloat = 20
 
+    /// **Ce que la page empilée occupe SANS le portrait**, à la taille de texte
+    /// par défaut : barre du haut, identité, onde et temps, transport, et le
+    /// plancher du bas — le rail d'actions (trois disques) ou la transcription
+    /// à son minimum, le plus haut des deux, puisqu'ils se partagent la même
+    /// rangée — plus les écarts.
+    static let stackedChrome: CGFloat = 52 + 44 + 102 + 64 + 156 + stackSpacing * 5
+
+    /// La hauteur minimale d'une page empilée pour ce portrait.
+    static func stackedMinimumHeight(heroDiameter: CGFloat) -> CGFloat {
+        stackedChrome + heroDiameter + heroRing
+    }
+
+    /// **Le portrait prend ce qui reste, jamais ce qui manque** (#10568).
+    ///
+    /// Il était un pourcentage de la hauteur, additionné à une transcription en
+    /// pourcentage elle aussi et à des blocs fixes : la somme dépassait la
+    /// hauteur utile, et la barre du haut comme le rail sortaient de l'écran.
+    /// Le portrait se mesure désormais sur ce que les blocs fixes laissent, et
+    /// la transcription remplit le reste.
     static func resolve(for size: CGSize) -> AudioFullscreenLayout {
         let sideBySide = size.width > size.height && size.height < 560
-        let hero = clamp(size.height * (sideBySide ? 0.30 : 0.17), minHero, maxHero)
+        let hero = sideBySide
+            ? clamp(size.height * 0.30, minHero, maxHero)
+            : clamp((size.height - stackedChrome - heroRing) * 0.45, minHero, maxHero)
         let transcript = clamp(size.height * (sideBySide ? 0.42 : 0.20), minTranscript, maxTranscript)
         return AudioFullscreenLayout(
             arrangement: sideBySide ? .sideBySide : .stacked,

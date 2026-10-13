@@ -88,22 +88,27 @@ extension AudioFullscreenPage {
 
     @ViewBuilder
     func transcriptBlock(maxHeight: CGFloat) -> some View {
-        if !displaySegments.isEmpty {
-            MediaTranscriptionView(
-                segments: displaySegments,
-                currentTime: player.attachmentId == attachment.id ? player.currentTime : 0,
-                accentColor: currentLangColorHex,
-                maxHeight: maxHeight,
-                isPlaying: player.isPlaying && player.attachmentId == attachment.id,
-                progress: player.attachmentId == attachment.id ? player.progress : 0,
-                onSeek: { time in
-                    onChromeInteraction()
-                    player.seekToTime(time)
-                }
-            )
+        // Les segments se bâtissent une fois par rendu de la PAGE, pas à chaque
+        // tick de lecture (#10568) : seule la portée relit le moteur.
+        let segments = displaySegments
+        let languageColor = currentLangColorHex
+        if !segments.isEmpty {
+            playback { snapshot, _ in
+                AudioFullscreenTranscript(
+                    segments: segments,
+                    playback: snapshot,
+                    accentColor: languageColor,
+                    maxHeight: maxHeight,
+                    onSeek: { time in
+                        onChromeInteraction()
+                        player.seekToTime(time)
+                    }
+                )
+                .equatable()
+            }
         } else {
             transcriptionEmptyState
-                .frame(maxHeight: maxHeight)
+                .frame(maxHeight: maxHeight, alignment: .top)
         }
     }
 
@@ -318,18 +323,12 @@ extension AudioFullscreenPage {
                 showTranslationSheet = true
                 HapticFeedback.light()
             } label: {
-                // Cercle figé à 26×26 (il déborderait s'il scalait, doctrine
-                // 86i), glyphe dimensionné par son cadre ; le libellé porte le
-                // sens. Second cadre = cible tapable au plancher HIG.
-                Image(systemName: "translate")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 12, height: 12)
-                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(MeeshyColors.controlFill(isDark: isDark)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
+                // Le disque partagé du chrome (36 pt visibles, cible de 44) :
+                // le cercle de 26 pt et son glyphe de 12 se perdaient au pied
+                // de l'écran (porteur, 2026-10-13).
+                FullscreenChromeDisc(systemImage: "translate", tone: .adaptive)
+                    .background(Circle().fill(MeeshyColors.controlFill(isDark: isDark))
+                        .frame(width: FullscreenChromeMetrics.discDiameter, height: FullscreenChromeMetrics.discDiameter))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Traduire l'audio", bundle: .main))
@@ -343,17 +342,21 @@ extension AudioFullscreenPage {
         return Button {
             selectLanguage(code)
         } label: {
-            HStack(spacing: MeeshySpacing.xxs) {
-                Text(flag).font(MeeshyFont.relative(MeeshyFont.smallSize))
+            HStack(spacing: MeeshySpacing.xs) {
+                Text(flag).font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 Text(label)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .semibold))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .foregroundStyle(isSelected ? Color.white : MeeshyColors.textSecondary(isDark: isDark))
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
+            .foregroundStyle(isSelected ? Color.white : MeeshyColors.textPrimary(isDark: isDark))
+            .padding(.horizontal, MeeshySpacing.md)
+            .frame(minHeight: FullscreenChromeMetrics.discDiameter)
             .background(Capsule().fill(isSelected ? langColor : MeeshyColors.controlFill(isDark: isDark)))
+            .overlay(Capsule().stroke(isSelected ? Color.clear : MeeshyColors.hairline(isDark: isDark),
+                                      lineWidth: MeeshyBorder.hairline))
+            .frame(minHeight: FullscreenChromeMetrics.tapTarget)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // La langue écoutée n'est dite que par le remplissage — VoiceOver
@@ -367,15 +370,21 @@ extension AudioFullscreenPage {
     /// Traduire / retraduire), réutilisée pour l'audio (Prisme).
     var translationSheet: some View {
         NavigationStack {
-            MessageLanguageDetailView(
-                message: translationMessage,
-                transcription: transcription,
-                translatedAudios: translatedAudios,
-                onSelectAudioLanguage: { lang in
-                    selectLanguage(lang ?? SocialAudioTrack.originalSentinel)
-                    showTranslationSheet = false
-                }
-            )
+            // La vue des langues est un contenu, pas un écran : sans défilement
+            // ni marge, elle se collait aux bords de la feuille et sa liste ne
+            // se parcourait pas (porteur, 2026-10-13) — même hôte que la galerie.
+            ScrollView(showsIndicators: false) {
+                MessageLanguageDetailView(
+                    message: translationMessage,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios,
+                    onSelectAudioLanguage: { lang in
+                        selectLanguage(lang ?? SocialAudioTrack.originalSentinel)
+                        showTranslationSheet = false
+                    }
+                )
+                .padding(MeeshySpacing.lg)
+            }
             .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

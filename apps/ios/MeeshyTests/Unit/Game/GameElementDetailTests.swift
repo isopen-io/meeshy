@@ -190,6 +190,14 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(status(.locked), .locked(missing: ConceptText.ratio("0", "3"), progress: 0))
     }
 
+    /// Le coffre garde son contenu secret (#10567) : ni borne, ni chance, ni montant dans ses précisions.
+    func test_theChest_keepsItsContentsSecret() {
+        for status in [GameBlock.Chest.Status.locked, .ready, .claimed] {
+            let block = GameFixture.game(chestStatus: status)
+            XCTAssertTrue(GameElementDetails.chest(block.chest, missions: block.missions).facts.isEmpty)
+        }
+    }
+
     func test_theLeagueGem_saysNothingWithoutAGroup_andNeverMoreThanThePage() throws {
         XCTAssertNil(GameElementDetails.leagueGem(GameWave2Fixture.league(access: .locked, current: nil)))
 
