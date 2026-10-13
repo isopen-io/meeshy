@@ -316,7 +316,7 @@ final class MediaSaveCoordinator: ObservableObject {
         do {
             return try await PhotoLibraryMediaSignature.of(fileAt: file)
         } catch {
-            mediaSaveLog.error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
+            Logger(subsystem: "me.meeshy.app", category: "media-save").error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
