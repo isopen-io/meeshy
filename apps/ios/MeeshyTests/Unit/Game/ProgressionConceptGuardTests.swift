@@ -248,4 +248,146 @@ final class ProgressionConceptGuardTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - #10540 — quatre questions, une phrase d'état, un carnet complet, aucun manque sans cible
+
+    private let glossaryExtras = ["chest", "treasury", "steps", "tailwind", "duo"]
+
+    func test_everyConcept_saysWhatItIs_andHowToUseIt_inTheSevenLanguages() throws {
+        let table = try catalog(prefix: "game.")
+        for concept in concepts {
+            for field in ["what", "use"] {
+                let key = "game.concept.\(concept).\(field)"
+                let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
+                for locale in locales {
+                    XCTAssertFalse((entry[locale] ?? "").isEmpty, "\(key) : pas de \(locale)")
+                }
+            }
+        }
+        for key in ["game.fiche.use", "game.concept.fact.held", "game.concept.fact.convertible", "game.fact.to_convert"] {
+            let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
+            for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
+        }
+    }
+
+    /// Les phrases d'état, les manques nommés et les pastilles à cible : sept langues, et chaque langue garde les
+    /// substitutions du français — une phrase qui en perd une affiche un trou, une qui en gagne une plante le formatage.
+    func test_theStateAndMissingSentences_keepTheirSubstitutions_inTheSevenLanguages() throws {
+        let table = try catalog(prefix: "game.")
+        let watched = table.keys.filter {
+            $0.hasPrefix("game.state.") || $0.hasPrefix("game.spend.missing.") || $0.hasPrefix("game.fact.missing_for.")
+                || $0.hasPrefix("game.concept.chip.to_") || $0 == "game.detail.badge.missing" || $0 == "game.detail.levelstep.progress"
+        }
+        XCTAssertGreaterThanOrEqual(watched.filter { $0.hasPrefix("game.state.") }.count, 35, "les phrases d'état ont quitté le catalogue")
+        let pattern = try NSRegularExpression(pattern: "%(?:\\d+\\$)?@")
+        func holes(_ text: String) -> [String] {
+            pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { Range($0.range, in: text).map { String(text[$0]) } }
+        }
+        for key in watched.sorted() {
+            let expected = Set(holes(table[key]?["fr"] ?? ""))
+            for locale in locales {
+                let text = table[key]?[locale] ?? ""
+                XCTAssertFalse(text.isEmpty, "\(key) : pas de \(locale)")
+                XCTAssertEqual(Set(holes(text)), expected, "\(key) [\(locale)] : les substitutions ne sont pas celles du français — « \(text) »")
+            }
+        }
+    }
+
+    /// Le carnet des règles dit CHAQUE concept : les quinze de Progression, et ce qu'elle montre sans en faire une fiche
+    /// (coffre, trésor, étapes des niveaux, Vent arrière, duo), chacun à la suite du concept qu'il complète.
+    @MainActor
+    func test_theRulesNotebook_explainsEveryConcept_inTheSevenLanguages() throws {
+        let table = try catalog(prefix: "game.rules.")
+        for key in concepts + glossaryExtras {
+            let entry = try XCTUnwrap(table["game.rules.concept.\(key).body"], "\(key) : le carnet ne l'explique pas")
+            for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "game.rules.concept.\(key).body : pas de \(locale)") }
+        }
+        for key in glossaryExtras.map({ "game.rules.concept.\($0).name" }) + ["game.rules.section_concepts", "game.rules.concepts_intro"] {
+            let entry = try XCTUnwrap(table[key], "\(key) : absente du catalogue")
+            for locale in locales { XCTAssertFalse((entry[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
+        }
+
+        XCTAssertEqual(GameRulesGlossary.keys.map { $0.rawValue }, [
+            "level", "steps", "points", "meesh", "treasury", "glory", "flame", "missions", "chest", "league", "season", "duo",
+            "prestige", "elans", "tailwind", "badges", "defis", "succes", "showcase", "atlas",
+        ])
+        let entries = GameRulesGlossary.entries
+        XCTAssertEqual(Set(entries.map { $0.body }).count, entries.count, "deux entrées du carnet partagent leur explication")
+        XCTAssertFalse(entries.contains { $0.name.isEmpty || $0.body.isEmpty })
+
+        let page = try source("Meeshy/Features/Main/Game/GameRulesView.swift")
+        XCTAssertTrue(page.contains("GameRulesGlossarySection()"), "la section est écrite et montée par personne")
+        XCTAssertTrue(page.contains("ForEach(GameRulesGlossary.entries)"), "la section PARCOURT le glossaire, elle ne le recopie pas")
+    }
+
+    /// Aucun « Il manque » sans cible : les libellés nus ont quitté le catalogue ET l'app, et la rangée de dépense ne
+    /// peut plus se bâtir sans la phrase qui dit pour quoi.
+    func test_noBareMissingLabel_survivesInTheCatalogOrTheApp() throws {
+        let table = try catalog(prefix: "game")
+        let retired = ["game.detail.missing", "game.concept.fact.missing", "game.concept.chip.missing", "game.concept.chip.convertible",
+                       "game.concept.chip.glory_missing", "game.concept.fact.to_promotion", "game.concept.fact.next_step"]
+        let enumerator = FileManager.default.enumerator(at: iosRoot.appendingPathComponent("Meeshy"), includingPropertiesForKeys: nil)
+        var corpus = ""
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            corpus += (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        }
+        XCTAssertFalse(corpus.isEmpty, "les sources de l'app sont introuvables")
+        for key in retired {
+            XCTAssertNil(table[key], "\(key) : un manque sans cible est resté au catalogue")
+            XCTAssertFalse(corpus.contains("\"\(key)\""), "\(key) : un manque sans cible est resté dans l'app")
+        }
+        let surface = try source("Meeshy/Features/Main/Game/GameSurface.swift")
+        XCTAssertTrue(surface.contains("missing: @MainActor (String) -> String\n"), "la phrase de manque n'est plus obligatoire sur la rangée de dépense")
+        // Ce qu'il reste sur la bannière nomme le niveau visé : deux substitutions, dans les sept langues.
+        let banner = try XCTUnwrap(table["game2.banner.missing"])
+        for locale in locales {
+            XCTAssertTrue((banner[locale] ?? "").contains("%1$@") && (banner[locale] ?? "").contains("%2$@"),
+                          "game2.banner.missing [\(locale)] : le niveau visé manque — « \(banner[locale] ?? "") »")
+        }
+    }
+
+    /// Les deux soldes ont deux noms stables : « à convertir » ne se dit plus « convertible », nulle part.
+    func test_theConvertibleBalance_hasOneName() throws {
+        let table = try catalog(prefix: "game.")
+        for key in ["game.points.convertible.one", "game.points.convertible.other", "game.error.insufficient_points",
+                    "game.concept.fact.convertible", "game.fact.to_convert"] {
+            let french = try XCTUnwrap(table[key]?["fr"], "\(key) : absente du catalogue")
+            XCTAssertTrue(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : le solde ne dit pas « à convertir » — « \(french) »")
+            XCTAssertFalse(french.contains("convertible"), "\(key) : l'ancien nom du solde — « \(french) »")
+        }
+        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Points en poche")
+        XCTAssertEqual(table["game.concept.fact.convertible"]?["fr"], "Points à convertir")
+    }
+
+    /// Le « + » des gains par famille est retiré (« Contenu jusqu’à 16 », plus « jusqu’à +16 ») — dans le code et
+    /// dans les sept langues. Les « + » de mission, de Gloire, de pourcentage et de coffre restent.
+    func test_theEarnChip_hasNoPlusSign() throws {
+        let entry = try XCTUnwrap(try catalog(prefix: "game.hero.")["game.hero.earn.chip"], "game.hero.earn.chip : absente du catalogue")
+        for locale in locales {
+            let text = entry[locale] ?? ""
+            XCTAssertTrue(text.contains("%@"), "game.hero.earn.chip [\(locale)] : le nombre de points manque — « \(text) »")
+            XCTAssertFalse(text.contains("+"), "game.hero.earn.chip [\(locale)] : le « + » est resté — « \(text) »")
+        }
+        let chip = try body(of: "private func chip(_ item: GameHero.EarnItem) -> some View {",
+                            in: try source("Meeshy/Features/Main/Game/GameHeroParts.swift"))
+        XCTAssertFalse(chip.contains("+\\("), "le « + » est resté dans la valeur par défaut de la pastille")
+        XCTAssertEqual(try catalog(prefix: "game.mint.")["game.mint.chip.glory"]?["fr"]?.hasPrefix("+"), true, "le « + » de la Gloire reste")
+    }
+
+    /// La fiche pose les quatre réponses et la phrase d'état ; la carte porte la phrase d'état.
+    func test_theSheetAndTheCard_showTheStateAndTheFourAnswers() throws {
+        let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
+        for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
+                      "ProgressionConceptModel.state(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
+            XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
+        }
+        let where_ = try XCTUnwrap(fiche.range(of: "section(ConceptText.ficheWhere)"))
+        let stateLine = try XCTUnwrap(fiche.range(of: "sentence(state, strong: true)"))
+        let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: facts, concept: concept)"))
+        XCTAssertTrue(where_.lowerBound < stateLine.lowerBound && stateLine.lowerBound < facts.lowerBound,
+                      "la phrase d'état ouvre « Où j'en suis », avant les lignes")
+        let card = try body(of: "struct ProgressionConceptCardView: View {", in: try source("Meeshy/Features/Main/Game/ProgressionConceptViews.swift"))
+        XCTAssertTrue(card.contains("if let state = card.state"), "la carte ne porte plus la phrase d'état")
+    }
 }
