@@ -41,8 +41,8 @@ import {
 export interface AnonymousUploadIdentityPrisma {
   participant: {
     findFirst(args: {
-      where: { sessionTokenHash: string; type: 'anonymous'; isActive: true };
-      select: { id: true; shareLinkId: true; anonymousSession: true; joinedAt: true; bannedAt: true };
+      where: { sessionTokenHash: string; type: 'anonymous'; isActive?: true };
+      select: { id: true; shareLinkId?: true; anonymousSession?: true; joinedAt?: true; bannedAt?: true };
     }): Promise<{
       id: string;
       shareLinkId: string | null;
@@ -111,12 +111,22 @@ export async function resolveAnonymousUploadIdentity(
     select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
   });
 
-  if (!participant) return null;
+  // #10492 — un jeton que personne ne porte n'a pas d'identité (401) ; celui
+  // d'une participation TERMINÉE porte une cause, la même qu'aux autres portes
+  // (410 `GUEST_ACCESS_REVOKED`) : rejouer la session ne servira à rien.
+  if (!participant) {
+    const ended = await prisma.participant.findFirst({
+      where: { sessionTokenHash: hashSessionToken(sessionToken), type: 'anonymous' },
+      select: { id: true },
+    });
+    if (ended) throw new GuestUploadAccessRevokedError();
+    return null;
+  }
 
   // #10440 — la garde du lien échu que `middleware/auth.ts` pose sur toute
   // requête REST d'un invité (#10437) : ce chemin ne la traverse pas. Même
-  // lecture du lien (colonne, puis session embarquée), même règle (seule
-  // l'échéance ferme, un lien introuvable ne ferme rien), même cause typée.
+  // lecture du lien (colonne, puis session embarquée), même règle, même cause
+  // typée. #10492 — un lien introuvable refuse l'invité qui lui survit.
   // Une lecture qui échoue PROPAGE — fail-closed, jamais une identité servie.
   const shareLinkId = guestShareLinkId(participant) ?? '';
   if (shareLinkId) {
@@ -131,13 +141,39 @@ export async function resolveAnonymousUploadIdentity(
       linkExpiresAt: null,
       linkIsActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
       linkRevocationPendingAt: link?.guestRevocationPendingAt ?? null,
+      linkMissing: link === null || link === undefined,
       participation: { isActive: true, bannedAt: participant.bannedAt ?? null, joinedAt: participant.joinedAt ?? null },
       now: new Date(),
     });
-    if (end) return null;
+    if (end) throw new GuestUploadAccessRevokedError();
   }
 
   return { participantId: participant.id, shareLinkId };
+}
+
+/**
+ * La cause TYPÉE d'un téléversement refusé à un invité dont l'accès est fini
+ * (participation désactivée ou bannie, lien fermé ou disparu, révocation
+ * différée) — traduite en 410 `GUEST_ACCESS_REVOKED`.
+ */
+export class GuestUploadAccessRevokedError extends Error {
+  constructor() {
+    super('Guest access revoked');
+    this.name = 'GuestUploadAccessRevokedError';
+  }
+}
+
+const GUEST_ACCESS_REVOKED_CODE = 'GUEST_ACCESS_REVOKED';
+
+/** Le même refus que la résolution de session REST (`middleware/auth.ts`), tel que `@tus/server` le renvoie. */
+export function guestAccessRevokedTusRefusal(): { readonly status_code: number; readonly body: string } {
+  const envelope = {
+    success: false,
+    error: GUEST_ACCESS_REVOKED_CODE,
+    message: "L'accès de cet invité a été retiré",
+    code: GUEST_ACCESS_REVOKED_CODE,
+  };
+  return { status_code: 410, body: `${JSON.stringify(envelope)}\n` };
 }
 
 /**

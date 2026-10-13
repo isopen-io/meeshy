@@ -2,8 +2,8 @@ import type { GameCoreCatalog } from '@/lib/i18n-game-catalog';
 
 /** Le catalogue du jeu, en (#9379) — mêmes clés et mêmes paramètres que le français ; textes de l'app iOS quand elle les porte. */
 const en = {
-  'game.points.convertible.one': '{count} convertible point',
-  'game.points.convertible.other': '{count} convertible points',
+  'game.points.convertible.one': '{count} point to convert',
+  'game.points.convertible.other': '{count} points to convert',
   'game.actions.one': '{count} action',
   'game.actions.other': '{count} actions',
   'game.levels.one': '{count} level',
@@ -84,7 +84,7 @@ const en = {
   'game.mission.invite_joined.one': 'Get an invited person to join Meeshy',
   'game.mission.invite_joined.other': 'Get {count} invited people to join Meeshy',
   'game.mission.generic': 'Mission of the day',
-  'game.error.insufficient_points': 'Not enough convertible points to mint a Meesh.',
+  'game.error.insufficient_points': 'Not enough points to convert to mint a Meesh.',
   'game.error.insufficient_meeshes': 'You need one more Meesh for that.',
   'game.error.freeze_at_maximum': 'You already have two freezes in reserve: that is the maximum.',
   'game.error.relight_not_allowed': 'The Flame cannot be relit right now.',
@@ -391,7 +391,7 @@ const en = {
   'game.family.tool': 'Tools',
   'game.family.social': 'Social ties',
   'game.hero.earn_title': 'How to earn points',
-  'game.hero.earn_chip': '{family} up to +{points}',
+  'game.hero.earn_chip': '{family} up to {points}',
   'game.hero.earn_chip_a11y': '{family}: up to {points} per action. See the rules.',
   'game.hero.mint_title': 'How to mint',
   'game.hero.mint_price': '{price} → one Meesh',

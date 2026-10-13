@@ -154,15 +154,17 @@ export async function loadGuestShareLinkExpiry(
 /**
  * Ce que la garde commune d'un invité lit de son lien, en UNE lecture :
  * l'échéance, et la révocation DIFFÉRÉE en attente (#10470) — un gros lien
- * fermé sans attendre l'éviction de ses invités. Mêmes règles que
- * `loadGuestShareLinkExpiry` : `null` sans lien ou lien introuvable, erreurs
- * propagées (fail-CLOSED).
+ * fermé sans attendre l'éviction de ses invités. Erreurs propagées
+ * (fail-CLOSED). Un lien INTROUVABLE n'a pas d'échéance, mais il est déclaré
+ * (`missing`, #10492) : la garde commune refuse l'invité qui lui survit.
  */
 export type GuestShareLinkGate = {
   readonly expiresAt: Date | null;
   readonly revocationPendingAt: Date | null;
-  /** `null` : lien introuvable (ou sans lien) — rien n'est décidé par cette lecture. */
+  /** `null` : lien introuvable (ou sans lien) — `missing` dit lequel des deux. */
   readonly isActive: boolean | null;
+  /** #10492 — l'invité porte un lien dont la ligne n'existe plus : la garde commune le refuse. */
+  readonly missing: boolean;
 };
 
 export async function loadGuestShareLinkGate(
@@ -170,7 +172,7 @@ export async function loadGuestShareLinkGate(
   guest: GuestShareLinkRow,
 ): Promise<GuestShareLinkGate> {
   const shareLinkId = guestShareLinkId(guest);
-  if (!shareLinkId) return { expiresAt: null, revocationPendingAt: null, isActive: null };
+  if (!shareLinkId) return { expiresAt: null, revocationPendingAt: null, isActive: null, missing: false };
   const link = await prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
     select: { expiresAt: true, guestRevocationPendingAt: true, isActive: true },
@@ -179,6 +181,7 @@ export async function loadGuestShareLinkGate(
     expiresAt: link?.expiresAt ? new Date(link.expiresAt) : null,
     revocationPendingAt: link?.guestRevocationPendingAt ? new Date(link.guestRevocationPendingAt) : null,
     isActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
+    missing: link === null || link === undefined,
   };
 }
 

@@ -300,10 +300,12 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
     readsHistory: wire.allowViewHistory === true,
     guest: {
       allowed: wire.requireAccount === false,
-      // Une EXIGENCE absente est supposée (le défaut serveur de
-      // `requireNickname` est vrai, `links/types.ts:548-564`) ; une PERMISSION
-      // absente est refusée. Voir le doc-comment de `GuestTerms`.
-      nicknameRequired: wire.requireNickname !== false,
+      // Une PERMISSION absente est refusée (voir le doc-comment de
+      // `GuestTerms`). LE PSEUDO N'EST PLUS JAMAIS EXIGÉ D'UN INVITÉ
+      // (directive porteur 2026-10-13) : le champ vide passait inaperçu et
+      // « Continuer en anonyme » se refusait ; la passerelle en génère un
+      // (`generateGuestNickname`), quel que soit `requireNickname`.
+      nicknameRequired: false,
       emailRequired: wire.requireEmail === true,
       birthdayRequired: wire.requireBirthday === true,
       languages: (wire.allowedLanguages ?? []).map((code) => code.trim()).filter((code) => code !== ''),

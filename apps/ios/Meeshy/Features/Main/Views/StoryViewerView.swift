@@ -871,7 +871,7 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 StoryExportShareSheet(
                     story: story,
-                    viewModel: exportShareViewModel, authorUsername: currentGroup?.username
+                    viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))
                 )
                 .presentationDetents([.medium, .large] as Set<PresentationDetent>)
                 .presentationDragIndicator(.visible)

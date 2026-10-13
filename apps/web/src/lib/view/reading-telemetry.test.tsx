@@ -10,6 +10,7 @@ import { REEL_STUDIO } from '@/lib/api/fixtures-reels';
 import type { SocialEvent } from '@/lib/api/social-events';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { countingProjection, createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
@@ -36,28 +37,14 @@ import { useStoryRailProps } from './use-story-rail';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
-type Entry = { readonly isIntersecting: boolean; readonly intersectionRatio: number };
-let observers: Array<{ readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean }> = [];
+type Entry = { readonly target: Element; readonly isIntersecting: boolean; readonly intersectionRatio: number };
 let native: unknown;
 
-class FakeIntersectionObserver {
-  private readonly slot: { readonly callback: (entries: readonly Entry[]) => void; disconnected: boolean };
-  constructor(callback: (entries: readonly Entry[]) => void) {
-    this.slot = { callback, disconnected: false };
-    observers.push(this.slot);
-  }
-  observe() {}
-  unobserve() {}
-  disconnect() {
-    this.slot.disconnected = true;
-  }
-  takeRecords() {
-    return [];
-  }
-}
+const fakeObservers = createFakeIntersectionObservers();
+const FakeIntersectionObserver = fakeObservers.FakeIntersectionObserver;
 
-const live = () => observers.filter((o) => !o.disconnected);
-const show = (ratio = 1) => act(() => live().forEach((o) => o.callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }])));
+const live = () => fakeObservers.live();
+const show = (ratio = 1) => act(() => fakeObservers.emitAll(ratio));
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let recorded: SocialEvent[] = [];
@@ -83,12 +70,12 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  observers = [];
+  fakeObservers.reset();
   native = (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver;
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = FakeIntersectionObserver;
   recorded = [];
   readingTelemetry.record = (event: SocialEvent) => {
-    recorded.push(event);
+    recorded.push(countingProjection(event));
   };
   persisted = [];
   forgotten = 0;
@@ -156,10 +143,12 @@ describe('observeImpression — une impression par APPARITION', () => {
         callback = cb;
       }
       observe() {}
+      unobserve() {}
       disconnect() {}
     };
     let count = 0;
-    const stop = observeImpression(document.createElement('div'), () => { count += 1; }, {
+    const node = document.createElement('div');
+    const stop = observeImpression(node, () => { count += 1; }, {
       Observer,
       setTimer: (run, ms) => {
         expect(ms).toBe(IMPRESSION_DWELL_MS);
@@ -172,7 +161,7 @@ describe('observeImpression — une impression par APPARITION', () => {
       },
     });
     const elapse = () => timers.filter((t) => !t.cleared).forEach((t) => { t.cleared = true; t.run(); });
-    return { emit: (ratio: number) => callback([{ isIntersecting: ratio > 0, intersectionRatio: ratio }]), elapse, count: () => count, stop };
+    return { emit: (ratio: number) => callback([{ target: node, isIntersecting: ratio > 0, intersectionRatio: ratio }]), elapse, count: () => count, stop };
   }
 
   test('moins de la moitié visible ne compte pas', () => {
@@ -207,7 +196,7 @@ describe('observeImpression — une impression par APPARITION', () => {
   });
 
   test('sans IntersectionObserver (vieux navigateur), rien n’est observé ni ne lève', () => {
-    expect(() => observeImpression(document.createElement('div'), () => undefined, { Observer: undefined })).not.toThrow();
+    expect(() => observeImpression(document.createElement('div'), () => undefined, { Observer: undefined })()).not.toThrow();
   });
 });
 
@@ -216,21 +205,41 @@ describe('FeedPostCard — la carte compte son impression, quel que soit l’éc
     mount(<FeedPostCard model={cardModel()} />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'feed' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'feed', surface: 'feed' }]);
   });
 
   test('la source suit l’écran : un hashtag compte en `search`', async () => {
-    mount(<FeedPostCard model={cardModel()} impressionSource="search" />);
+    mount(<FeedPostCard model={cardModel()} impressionSource="search" impressionSurface="hashtag" />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'search' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'search', surface: 'hashtag' }]);
   });
 
   test('un réel dans le fil compte aussi son impression', async () => {
-    mount(<FeedPostCard model={cardModel(REEL_STUDIO)} impressionSource="profile" />);
+    mount(<FeedPostCard model={cardModel(REEL_STUDIO)} impressionSource="profile" impressionSurface="profile" />);
     show();
     await wait(IMPRESSION_DWELL_MS + 50);
-    expect(calls()).toEqual([{ type: 'impression', postId: REEL_STUDIO.id, source: 'profile' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: REEL_STUDIO.id, source: 'profile', surface: 'profile' }]);
+  });
+
+  test('le même post qui réapparaît trois fois au défilement ⇒ trois impressions (règle du porteur, #10483)', async () => {
+    mount(<FeedPostCard model={cardModel()} />);
+    for (let pass = 0; pass < 3; pass += 1) {
+      show();
+      await wait(IMPRESSION_DWELL_MS + 50);
+      show(0);
+    }
+    expect(calls().filter((e) => e.type === 'impression')).toHaveLength(3);
+  });
+
+  test('un re-rendu de la carte restée à l’écran ne compte rien de plus', async () => {
+    mount(<FeedPostCard model={cardModel()} />);
+    show();
+    await wait(IMPRESSION_DWELL_MS + 50);
+    act(() => root?.render(<FeedPostCard model={cardModel()} />));
+    act(() => root?.render(<FeedPostCard model={cardModel()} />));
+    await wait(IMPRESSION_DWELL_MS + 50);
+    expect(calls().filter((e) => e.type === 'impression')).toHaveLength(1);
   });
 
   test('la carte du DÉTAIL n’observe rien : le détail compte la sienne à l’ouverture', () => {
@@ -258,21 +267,31 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     const clock = () => t;
     mount(<SessionProbe postId={POST.id} active clock={clock} openView />);
     expect(calls()).toEqual([
-      { type: 'impression', postId: POST.id, source: 'detail' },
-      { type: 'view', postId: POST.id },
+      { type: 'impression', postId: POST.id, source: 'detail', surface: 'detail' },
+      { type: 'view', postId: POST.id, surface: 'detail' },
     ]);
     t = 8_500;
     act(() => root?.unmount());
     root = null;
     const closing = calls().slice(2);
-    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 7_500 });
+    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 7_500, surface: 'detail' });
     expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, contentType: 'POST', surface: 'detail', dwellMs: 7_500, completed: false });
     expect((closing[1] as { sessionId: string }).sessionId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  test('le même post ouvert deux fois ⇒ deux vues d’ouverture ; un re-rendu pendant la lecture n’en ajoute aucune', () => {
+    mount(<SessionProbe postId={POST.id} active clock={() => 0} openView />);
+    act(() => root?.render(<SessionProbe postId={POST.id} active clock={() => 1} openView />));
+    act(() => root?.unmount());
+    root = null;
+    mount(<SessionProbe postId={POST.id} active clock={() => 0} openView />);
+    const opens = calls().filter((e) => e.type === 'view' && e.durationMs === undefined);
+    expect(opens).toHaveLength(2);
+  });
+
   test('openView faux (la story d’un compte, déjà vue par son propre chemin) : pas de seconde vue d’ouverture', () => {
     mount(<SessionProbe postId={POST.id} active clock={() => 0} openView={false} />);
-    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'detail' }]);
+    expect(calls()).toEqual([{ type: 'impression', postId: POST.id, source: 'detail', surface: 'detail' }]);
   });
 
   test('rien ne s’ouvre tant que le contenu n’est pas servi', () => {
@@ -298,8 +317,8 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     );
     mount(page('active'));
     expect(calls().slice(0, 2)).toEqual([
-      { type: 'impression', postId: REEL_STUDIO.id, source: 'feed' },
-      { type: 'view', postId: REEL_STUDIO.id },
+      { type: 'impression', postId: REEL_STUDIO.id, source: 'feed', surface: 'reels' },
+      { type: 'view', postId: REEL_STUDIO.id, surface: 'reels' },
     ]);
     act(() => root?.render(page('near')));
     const types = calls().slice(2).map((e) => e.type);
@@ -313,7 +332,7 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     t = 21_000;
     leavePage();
     const closing = calls().slice(2);
-    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 20_000 });
+    expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 20_000, surface: 'detail' });
     expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, dwellMs: 20_000 });
     expect(closing).toHaveLength(2);
     expect(persisted).toEqual([4]);
@@ -336,7 +355,7 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     root = null;
     const after = calls().slice(2);
     expect(after.map((e) => e.type)).toEqual(['view', 'dwell', 'view', 'dwell']);
-    expect(after[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 5_000 });
+    expect(after[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 5_000, surface: 'detail' });
     expect(after[1]).toMatchObject({ dwellMs: 5_000, startedAt: new Date(0).toISOString() });
     expect(after[3]).toMatchObject({ dwellMs: 3_000, startedAt: new Date(65_000).toISOString() });
     expect((after[1] as { sessionId: string }).sessionId).not.toBe((after[3] as { sessionId: string }).sessionId);
@@ -387,7 +406,7 @@ describe('le plateau compte les humeurs qu’il montre', () => {
     expect([...moodsByAuthor(moods)]).toEqual([['u-a', '🎉'], ['u-c', '☕']]);
   });
 
-  test('le plateau monté émet une impression `status` par humeur d’autrui affichée', async () => {
+  test('le plateau ne compte plus les humeurs à la réception du corpus — la tuile les compte à l’écran (#10483)', async () => {
     function RailProbe() {
       useStoryRailProps('u-moi');
       return null;
@@ -398,14 +417,12 @@ describe('le plateau compte les humeurs qu’il montre', () => {
         <RailProbe />
       </QueryClientProvider>,
     );
-    for (let i = 0; i < 20 && !calls().some((e) => e.type === 'impression'); i += 1) {
+    for (let i = 0; i < 10; i += 1) {
       await act(async () => {
         await wait(10);
       });
     }
-    const statuses = calls().filter((e) => e.type === 'impression' && e.source === 'status');
-    expect(statuses.length).toBeGreaterThan(0);
-    expect(statuses).toContainEqual({ type: 'impression', postId: 'st-humeur-ines', source: 'status' });
+    expect(calls().filter((e) => e.type === 'impression')).toEqual([]);
     client.clear();
   });
 });
@@ -472,5 +489,11 @@ describe('la file d’une page qui s’en va attend le prochain chargement du M�
     storage.setItem(KEY, JSON.stringify([{ page: 'p', events: [{ type: 'view' }, { type: 'impression', postId: POST.id, source: 'feed' }, 3] }, 'x']));
     expect(takePendingReading(storage, KEY)).toEqual([{ type: 'impression', postId: POST.id, source: 'feed' }]);
     expect(storage.map.has(KEY)).toBe(false);
+  });
+  test('l’engagement d’ouverture `open` gardé repart avec la file (#10483)', () => {
+    const storage = memory();
+    const kept: readonly SocialEvent[] = [{ type: 'open', postId: POST.id, origin: 'feed' }, { type: 'view', postId: POST.id, surface: 'detail' }];
+    savePendingReading(storage, KEY, 'page-a', kept);
+    expect(takePendingReading(storage, KEY)).toEqual(kept);
   });
 });

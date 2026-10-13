@@ -30,9 +30,10 @@ import { GameSpendLine, GameTouch } from './game-touch';
  * « aucun ».
  *
  * AVANT le geste, la ligne de dépense (#9705) dit les points en poche, le prix
- * et ce qui restera — ou, frappe impossible, les points CONVERTIBLES qui
- * manquent : la frappe se retranche du score, mais seuls les convertibles la
- * paient, et le verdict reste celui du serveur (`mint.canMint`).
+ * et ce qui restera — ou, frappe impossible, les points À CONVERTIR qui
+ * manquent, dits avec leur cible (« pour la Meesh n° 79 », #10540) : la frappe
+ * se retranche du score, mais seuls les points à convertir la paient, et le
+ * verdict reste celui du serveur (`mint.canMint`).
  */
 
 export type MintCelebration = {
@@ -46,6 +47,11 @@ export type GameMintPreviewProps = {
   readonly mint: MintPreview;
   /** Les points en poche (le score) : la frappe s'en retranche. */
   readonly held: number;
+  /**
+   * Les points À CONVERTIR, seuls à payer la frappe (#10540). Absents : une frappe impossible les dit
+   * (le prix moins le manque) ; possible, ils restent tus plutôt que devinés depuis le score.
+   */
+  readonly convertible?: number | undefined;
   readonly badgesLost?: number | undefined;
   readonly online: boolean;
   readonly minting: boolean;
@@ -72,7 +78,8 @@ function Chips({ lines }: { readonly lines: readonly string[] }) {
 }
 
 export function GameMintPreview(props: GameMintPreviewProps) {
-  const { mint, held, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const { mint, held, convertible, badgesLost, online, minting, error, celebration, strikeKey = 0, onMint } = props;
+  const toConvert = convertible ?? (mint.canMint ? null : mint.price - mint.missingPoints);
   const impact = [
     mintLevels(mint).levelsLost > 0 ? gameText('game.hero.mint_cost', { levels: levelsLabel(mintLevels(mint).levelsLost) }) : null,
     gameText('game.hero.mint_glory', { glory: formatCount(mint.gloryGained) }),
@@ -104,7 +111,17 @@ export function GameMintPreview(props: GameMintPreviewProps) {
         </p>
       )}
 
-      <GameSpendLine concept="meesh" held={held} cost={mint.price} spendable={mint.canMint ? mint.price : mint.price - mint.missingPoints} format={pointsLabel} formatMissing={convertiblePointsLabel} heldFact="score" missingFact="mint_missing" />
+      <GameSpendLine
+        concept="meesh"
+        held={held}
+        cost={mint.price}
+        spendable={mint.canMint ? mint.price : mint.price - mint.missingPoints}
+        format={pointsLabel}
+        formatMissing={convertiblePointsLabel}
+        heldFact="score"
+        {...(toConvert === null ? {} : { between: { fact: 'convertible', label: gameText('game.fact.to_convert'), value: pointsLabel(toConvert) } })}
+        missing={{ fact: 'mint_missing', line: (missing) => gameText('game.spend.missing.mint', { missing, number: formatCount(mint.number) }) }}
+      />
 
       {mint.canMint ? (
         <>

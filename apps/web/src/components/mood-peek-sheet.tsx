@@ -5,7 +5,9 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MoodPeek } from '@/lib/view/mood-peek';
 import { moodPeekContent, type MoodPeekContent } from '@/lib/view/mood-peek-content';
+import { useReadingSession } from '@/lib/view/reading-telemetry';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useViewer } from '@/lib/view/use-viewer';
 
 import { Sheet } from './sheet';
 
@@ -18,6 +20,13 @@ import { Sheet } from './sheet';
  * elle est en cache, la feuille s'ouvre sans attente) et descend le Prisme du
  * lecteur. Rien n'est demandé de plus, rien n'est inventé : sans texte, la
  * feuille montre l'humeur seule, sous le nom de son auteur.
+ *
+ * **L'OUVRIR EST UNE VUE** (#10530, règle de comptage #10483) — comme
+ * `StatusBubbleController.show` : pour l'humeur d'un AUTRE, la vue tout de
+ * suite, puis sa durée et la séance `STATUS` à la fermeture, dites depuis
+ * `mood_avatar`. L'impression, elle, est déjà comptée par la pastille à son
+ * apparition ; ma propre humeur ne compte rien. Par la porte existante
+ * (`useReadingSession`), jamais une requête écrite ici.
  */
 export function MoodPeekSheet({ peek, onClose }: { readonly peek: MoodPeek; readonly onClose: () => void }) {
   const moods = useStatusMoods();
@@ -26,6 +35,15 @@ export function MoodPeekSheet({ peek, onClose }: { readonly peek: MoodPeek; read
     () => moodPeekContent({ posts: moods.data ?? [], authorId: peek.authorId, emoji: peek.emoji, languages }),
     [moods.data, peek.authorId, peek.emoji, languages],
   );
+  const mine = useViewer().id === peek.authorId;
+  useReadingSession({
+    postId: content.postId,
+    active: !mine,
+    contentType: 'STATUS',
+    surface: 'mood_avatar',
+    impressionSource: null,
+    openView: true,
+  });
   return <MoodPeekBody content={content} name={peek.name} authorId={peek.authorId} onClose={onClose} />;
 }
 

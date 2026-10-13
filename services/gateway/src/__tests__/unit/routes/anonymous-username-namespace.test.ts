@@ -207,10 +207,10 @@ describe('POST /anonymous/join/:linkId — pseudo exigé par le lien', () => {
 
   beforeEach(() => { resetPrisma(prisma, { ...shareLink, requireNickname: true }); });
 
-  it('refuse toujours un pseudo VIDE quand le lien en exige un', async () => {
+  it('admet un pseudo VIDE même quand le lien en exige un : la passerelle le nomme (directive 2026-10-13)', async () => {
     const res = await join(app, { firstName: 'Bob', lastName: 'Smith', language: 'fr' });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(201);
   });
 
   it('accepte le pseudo exigé, replacé dans l’espace réservé', async () => {

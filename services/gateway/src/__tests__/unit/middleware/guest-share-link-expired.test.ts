@@ -135,10 +135,14 @@ describe('Invité au lien expiré — la session se ferme à la résolution (#10
     expect(res.statusCode).toBe(200);
   });
 
-  it('un lien INTROUVABLE ne ferme rien — la règle du fil (un lien retiré révoque ses invités ailleurs)', async () => {
+  // #10492 — la règle du fil (« un lien introuvable ne ferme rien ») tenait
+  // tant que chaque suppression de lien révoquait ses invités ; une purge qui
+  // en laissait derrière elle leur gardait l'accès. L'invité qui survit à son
+  // lien est désormais refusé ici, par la garde commune.
+  it('un lien INTROUVABLE refuse l’invité qui lui survit — 410 GUEST_ACCESS_REVOKED', async () => {
     const res = await call(await sonde({ participants: [guest()], links: [] }));
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(410);
   });
 
   it('ne sert rien quand le lien est illisible — fail-closed', async () => {

@@ -13,7 +13,7 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
-import { openingExpiry } from './auth/session-adoption';
+import { adoptionDeadlineOf, openingExpiry } from './auth/session-adoption';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'SessionService' });
@@ -86,6 +86,11 @@ export interface SessionData {
   lastActivityAt: Date;
   isCurrentSession: boolean;
   isTrusted: boolean;
+  /**
+   * L'échéance d'adoption d'une session prouvée par un lien (#10518) — posée
+   * par `createSession` seul, absente quand rien n'attend.
+   */
+  adoptBy?: Date;
 }
 
 export interface CreateSessionInput {
@@ -203,7 +208,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
   // Enforce session limit - remove oldest sessions if over limit
   await enforceSessionLimit(userId);
 
-  return mapSessionToData(session, true);
+  return { ...mapSessionToData(session, true), ...adoptionDeadlineOf(session) };
 }
 
 /**

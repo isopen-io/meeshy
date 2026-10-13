@@ -21,6 +21,7 @@ public final class SoundDetailModel: ObservableObject {
     @Published public private(set) var didFail = false
 
     private let service: SoundLibraryServiceProviding
+    private let impressions: ReachImpressionRecording
     private let soundId: String
     private var nextCursor: Date?
     private var loadedOnce = false
@@ -32,9 +33,24 @@ public final class SoundDetailModel: ObservableObject {
     private var emptyStreak = 0
     private static let emptyStreakLimit = 3
 
-    public init(soundId: String, service: SoundLibraryServiceProviding = SoundLibraryService.shared) {
+    public init(
+        soundId: String,
+        service: SoundLibraryServiceProviding = SoundLibraryService.shared,
+        impressions: ReachImpressionRecording = ReachImpressionCollector(source: "search", surface: .sound)
+    ) {
         self.soundId = soundId
         self.service = service
+        self.impressions = impressions
+    }
+
+    /// #10483 — une publication montrée sur la page du son est un affichage.
+    public func postAppeared(_ postId: String) {
+        impressions.record(postId)
+    }
+
+    /// La page se ferme : ses affichages partent.
+    public func flushImpressions() async {
+        await impressions.flushNow()
     }
 
     public var canLoadMore: Bool { nextCursor != nil && !isLoading }

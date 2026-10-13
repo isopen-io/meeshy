@@ -49,7 +49,7 @@ final class StoryViewedMarkingTests: XCTestCase {
     private func makeSUT(storyIds: [String]? = nil) -> (sut: StoryViewerView, enqueued: () -> [String]) {
         let recorder = Recorder()
         let vm = StoryViewModel(postService: MockPostService())
-        vm.markViewedOutboxEnqueuer = { id in
+        vm.markViewedOutboxEnqueuer = { id, _ in
             await MainActor.run { recorder.ids.append(id) }
         }
         let ids = storyIds ?? [serverStoryId(0), serverStoryId(1)]
@@ -163,7 +163,7 @@ final class StoryViewedMarkingTests: XCTestCase {
     func test_pendingStoryId_isStillMarkedViewedLocally() async {
         let pending = "pending_\(UUID().uuidString)"
         let vm = StoryViewModel(postService: MockPostService())
-        vm.markViewedOutboxEnqueuer = { _ in }
+        vm.markViewedOutboxEnqueuer = { _, _ in }
         vm.storyGroups = [StoryGroup(id: "author-1", username: "alice",
                                      avatarColor: "#6366F1", avatarURL: nil,
                                      stories: [makeStory(id: pending)])]
@@ -191,12 +191,12 @@ final class StoryViewedMarkingTests: XCTestCase {
         vm.recordStoryImpression(storyId: "pending_\(UUID().uuidString)")
         await vm.storyImpressions.flushNow()
 
-        XCTAssertEqual(postService.recordImpressionCallCount + postService.recordImpressionsCallCount, 0,
-                       "Un identifiant local ne doit atteindre AUCUNE route /posts/*")
+        XCTAssertEqual(postService.recordSocialEventsCallCount, 0,
+                       "Un identifiant local ne doit atteindre AUCUNE route /posts/:id/*")
     }
 
-    /// Contrôle positif du garde ci-dessus — sans lui, un compteur resté à
-    /// zéro pour une tout autre raison passerait pour une preuve.
+    /// Contrôle positif du garde ci-dessus — sans lui, un compteur
+    /// resté à zéro pour une tout autre raison passerait pour une preuve.
     func test_serverStoryId_stillSendsItsImpression() async {
         let postService = MockPostService()
         let vm = StoryViewModel(postService: postService)
@@ -205,9 +205,9 @@ final class StoryViewedMarkingTests: XCTestCase {
         vm.recordStoryImpression(storyId: serverStoryId(0))
         await vm.storyImpressions.flushNow()
 
-        XCTAssertEqual(postService.recordedImpressionBatches, [[serverStoryId(0)]],
-                       "Une story servie par le serveur doit toujours compter son impression")
-        XCTAssertEqual(postService.lastRecordImpressionsSource, "story")
+        XCTAssertEqual(postService.recordedImpressions,
+                       [.impression(postId: serverStoryId(0), source: "story", surface: .story)],
+                       "Une story servie par le serveur compte son impression, par POST /social/events, surface story")
     }
 
     /// #10399 — l'impression partait dans un `Task` qui ne faisait que
@@ -217,15 +217,15 @@ final class StoryViewedMarkingTests: XCTestCase {
         let postService = MockPostService()
         let vm = StoryViewModel(postService: postService)
         vm.storyImpressions = makeIsolatedImpressions(postService)
-        postService.recordImpressionsResult = .failure(
+        postService.recordSocialEventsResult = .failure(
             NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet))
 
         vm.recordStoryImpression(storyId: serverStoryId(0))
         await vm.storyImpressions.flushNow()
-        postService.recordImpressionsResult = .success(())
+        postService.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
         await vm.storyImpressions.flushNow()
 
-        XCTAssertEqual(postService.recordedImpressionBatches, [[serverStoryId(0)], [serverStoryId(0)]],
+        XCTAssertEqual(postService.recordedImpressionPostIds, [serverStoryId(0), serverStoryId(0)],
                        "l'impression perdue par le réseau repart, comme la vue")
     }
 
@@ -233,7 +233,7 @@ final class StoryViewedMarkingTests: XCTestCase {
     /// n'écrit la file partagée de production.
     private func makeIsolatedImpressions(_ postService: MockPostService) -> ImpressionBatcher {
         let defaults = UserDefaults(suiteName: "StoryImpressions-\(UUID().uuidString)")!
-        return ImpressionBatcher(source: "story", postService: postService, flushDelay: 60, defaults: defaults)
+        return ImpressionBatcher(source: "story", surface: .story, postService: postService, flushDelay: 60, defaults: defaults)
     }
 
     // MARK: - #9804 — une story vue reste vue après la relance
@@ -275,7 +275,7 @@ final class StoryViewedMarkingTests: XCTestCase {
                             recorder: Recorder = Recorder()) -> StoryViewModel {
         let vm = StoryViewModel(storyService: service, postService: MockPostService())
         vm.viewedLedger = StoryViewedLedger(userDefaults: ledgerDefaults)
-        vm.markViewedOutboxEnqueuer = { id in
+        vm.markViewedOutboxEnqueuer = { id, _ in
             await MainActor.run { recorder.ids.append(id) }
         }
         return vm

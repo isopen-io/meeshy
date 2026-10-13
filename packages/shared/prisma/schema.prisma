@@ -390,6 +390,14 @@ model User {
   /// substitut. `PUT /me/consents/analytics` pose cette colonne.
   analyticsConsentAt DateTime?
 
+  /// Le REFUS d'analyse (#10499) : posé quand l'analyse ou son parent (le
+  /// traitement des données) est RETIRÉ par `PUT /me/consents`, effacé quand
+  /// l'analyse est de nouveau accordée. `analyticsConsentAt` absent ne dit pas
+  /// « refusé » (un compte neuf n'a rien tranché) ; cette date le dit. Un
+  /// compte qui a refusé ne laisse aucune ligne `ContentEvent`
+  /// (`services/gateway/src/services/social/eventPrivacy.ts`).
+  analyticsConsentWithdrawnAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.
@@ -3847,6 +3855,30 @@ model Post {
   postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
+  /// Part ANONYME de `viewCount` / `impressionCount` (#10483) : lecteurs sans
+  /// compte, comptés par clé de lecteur HMAC. Les totaux affichés les incluent
+  /// déjà ; ces deux champs ne servent qu'à distinguer. Optionnels : un post
+  /// antérieur à la colonne vaut `null`, que `incrementPostCounters` traite en 0.
+  anonymousViewCount       Int? @default(0)
+  anonymousImpressionCount Int? @default(0)
+  /// Vues UNIQUES par jeton (#10483, règle du porteur 2026-10-13) : `viewCount`
+  /// compte CHAQUE ouverture ; `uniqueViewCount` ne monte qu'à la PREMIÈRE vue
+  /// d'un lecteur (ligne `PostView` d'un compte, ligne `AnonymousPostOpen` d'un
+  /// anonyme), `anonymousUniqueViewCount` en est la part anonyme. Enregistrés,
+  /// servis, pas encore affichés. `null` sur un post antérieur ⇒ lire 0.
+  uniqueViewCount          Int? @default(0)
+  anonymousUniqueViewCount Int? @default(0)
+  /// Ventilations de la portée (#10483, demande du porteur 2026-10-13) — des
+  /// sous-documents `{ clé: n }` incrémentés par `incrementPostCounters`
+  /// (`breakdowns`), absents d'un post qui n'en a jamais reçu (lire vide) :
+  /// `openCountByOrigin` — engagements d'ouverture (tap d'un listing) par
+  /// origine (`OPEN_ORIGINS`, `other` pour une origine inconnue) ;
+  /// `viewCountByProvenance` — vues COMPTÉES par provenance (`VIEW_PROVENANCES`,
+  /// une vue sans provenance n'y entre pas) ; `listingViewCountByOrigin` —
+  /// parmi les vues `listing`, le listing d'où l'écran a été ouvert.
+  openCountByOrigin        Json?
+  viewCountByProvenance    Json?
+  listingViewCountByOrigin Json?
   /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
   /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
   /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
@@ -3915,20 +3947,39 @@ model Post {
   @@index([repostOfId, authorId])
 }
 
-/// Déduplication des ouvertures ANONYMES d'un post (v1 "comptage bête").
-/// `sessionKey` = chaîne opaque issue du header X-Session-Token (token de
-/// session iOS anonyme OU token persisté par le navigateur). Identifiant
-/// FAIBLE — voir la section Sécurité de la spec 2026-06-17. INSERT-only :
-/// le 1ᵉʳ insert d'un (postId, sessionKey) incrémente Post.postOpenCount.
+/// Déduplication des VUES ANONYMES d'un post (#10483, ex « comptage bête »).
+/// `sessionKey` = clé de lecteur HMAC dérivée de X-Session-Token par la
+/// passerelle (`readerKeyOf`) — la valeur brute n'est jamais écrite. CHAQUE vue
+/// incrémente viewCount, anonymousViewCount et postOpenCount ; le 1ᵉʳ insert
+/// d'un (postId, sessionKey) incrémente en plus uniqueViewCount et
+/// anonymousUniqueViewCount ; une vue répétée monte `durationMs` au maximum.
 model AnonymousPostOpen {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  postId     String   @db.ObjectId
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String    @db.ObjectId
+  /// Depuis #10483 : la CLÉ DE LECTEUR (HMAC-SHA256 hex 64 de `participant:<id>`
+  /// ou `token:<valeur>`), jamais la valeur brute de X-Session-Token.
   sessionKey String
-  createdAt  DateTime @default(now())
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  /// Durée de lecture la plus longue déclarée par ce lecteur (ms, plafond 5 min).
+  durationMs Int?
+  /// Fin de vie de la ligne (création + 90 jours). L'index ci-dessous PORTE LE
+  /// NOM que Prisma lui donne (`AnonymousPostOpen_expiresAt_idx`) et la
+  /// migration #10483 le rend TTL (`expireAfterSeconds: 0`, création ou
+  /// `collMod`) sous CE nom : le moteur Prisma MongoDB compare un index par nom
+  /// et par clés, jamais par ses options, donc il le reconnaît et ne le recrée
+  /// pas. Ne jamais le renommer ni le retirer d'ici (un `db push` le
+  /// supprimerait avec son TTL) ; en staging et production, les index se
+  /// posent par migration, jamais par `prisma db push`.
+  expiresAt  DateTime?
+  /// Provenance et origine de la PREMIÈRE vue de ce lecteur (#10483), comme
+  /// `PostView.provenance` / `PostView.origin`. Facultatives.
+  provenance String?
+  origin     String?
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, sessionKey])
   @@index([postId])
+  @@index([expiresAt], map: "AnonymousPostOpen_expiresAt_idx")
 }
 
 /// Bibliothèque de sons — entité de première classe, réutilisable et créditée.
@@ -4209,6 +4260,16 @@ model PostView {
   viewedAt DateTime @default(now())
   /// Durée de vue en ms (temps passé sur le post)
   duration Int?
+  /// Écran de la PREMIÈRE vue déclaré par le client (`CONTENT_SURFACES`,
+  /// #10483) — facultatif : un ancien client ne l'envoie pas, une valeur
+  /// inconnue n'est pas rangée.
+  surface  String?
+  /// Provenance de la PREMIÈRE vue (`VIEW_PROVENANCES`, #10483) : listing,
+  /// notification, lien partagé, lien de suivi, externe, direct. Facultatif.
+  provenance String?
+  /// Le listing d'où l'écran a été ouvert quand `provenance = listing`
+  /// (`OPEN_ORIGINS`). Facultatif.
+  origin     String?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostViews", fields: [userId], references: [id])
@@ -4225,15 +4286,90 @@ model PostImpression {
   postId    String   @db.ObjectId
   userId    String   @db.ObjectId
   source    String   @default("feed")
+  /// Écran d'affichage déclaré par le client (`CONTENT_SURFACES`, #10483) —
+  /// facultatif : un ancien client ne l'envoie pas.
+  surface   String?
   createdAt DateTime @default(now())
 
+  /// Événements sociaux v2 (#10500, #10501) — tous FACULTATIFS : une ligne
+  /// d'un ancien client n'en porte aucun.
+  /// Clé HMAC de l'`eventId` du client (jamais l'identifiant brut) : un rejeu
+  /// ne crée pas de seconde ligne. Index unique PARTIEL (chaîne seulement),
+  /// posé par `ensureSocialEventIndexes` — jamais par `prisma db push`.
+  eventKey        String?
+  /// Rang rendu dans le listing (0-indexé) et source de classement servie.
+  position        Int?
+  rankingSource   String?
+  /// Identifiant opaque de la page de fil — rangé seulement si l'analyse est consentie.
+  feedRequestId   String?
+  /// Visibilité MRC : ≥ 50 % pendant ≥ 1 s (2 s pour une vidéo en lecture).
+  viewable        Boolean?
+  visibleFraction Float?
+  visibleMs       Int?
+  /// Session d'application — rangée seulement si l'analyse est consentie.
+  appSessionId    String?
+  platform        String?
+  /// Fin de conservation (90 j, index TTL `PostImpression_expiresAt_ttl`).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
+
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostImpressions", fields: [userId], references: [id])
+  user User @relation("UserPostImpressions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([userId])
   @@index([postId, userId])
   @@index([createdAt])
+}
+
+/// Un événement de télémétrie v2 (#10499, #10510) — append-only, borné par TTL.
+///
+/// Écrit en UN `insert` non ordonné par requête (`services/social/contentEvents.ts`),
+/// jamais par Prisma : les index (unique partiel de `eventKey`, TTL de
+/// `expiresAt`) sont posés par `ensureSocialEventIndexes`, à chaque démarrage
+/// et par la migration nommée — jamais par `prisma db push`.
+///
+/// `actorKind = none` : rangé SANS compte (analyse non consentie, refusée,
+/// lecteur anonyme, ou action qui ne s'attribue jamais) — aucun identifiant
+/// de session ni de requête n'y est alors rangé (revue de conformité O1).
+model ContentEvent {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  eventKey     String?
+  type         String
+  action       String
+  /// AAAAMMJJ UTC de `derivedAt` — la partition des agrégats quotidiens.
+  day          Int
+  derivedAt    DateTime
+  occurredAt   DateTime?
+  receivedAt   DateTime
+  clockSkewed  Boolean?
+  actorKind    String
+  userId       String?   @db.ObjectId
+  appSessionId String?
+  platform     String?
+  appVersion   String?
+  osName       String?
+  osVersion    String?
+  deviceClass  String?
+  network      String?
+  uiLanguage   String?
+  targetKind   String?
+  targetId     String?
+  parentKind   String?
+  parentId     String?
+  surface      String?
+  listing      Json?
+  prism        Json?
+  props        Json?
+  sampleRate   Float     @default(1)
+  expiresAt    DateTime
+
+  /// `ContentEvent_user_day` (partiel sur `userId`), l'unique partiel de
+  /// `eventKey` et le TTL de `expiresAt` ne se déclarent pas en Prisma :
+  /// `services/gateway/src/services/social/socialEventIndexes.ts` les pose.
+  @@index([targetKind, targetId, day], map: "ContentEvent_target_day")
+  @@index([type, action, day], map: "ContentEvent_type_action_day")
 }
 
 /// Session d'engagement append-only (temps + actions). N'altère NI PostView NI viewCount.
@@ -4255,6 +4391,10 @@ model PostEngagement {
   actions         Json     @default("[]")
   watchSamples    Json     @default("[]")
   createdAt       DateTime @default(now())
+  /// Fin de conservation (90 j, index TTL `PostEngagement_expiresAt_ttl`, #10510).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostEngagements", fields: [userId], references: [id])

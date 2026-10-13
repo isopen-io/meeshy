@@ -50,7 +50,10 @@ final class EngagementRevealWiringTests: XCTestCase {
     func test_everyTapSource_carriesTheMilestone() throws {
         let iphone = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
-        XCTAssertEqual(iphone.components(separatedBy: "reveal = ").count - 1, 3,
+        // Les constructeurs vivent à côté de la racine depuis #10483.
+        let iphoneContext = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView+NotificationNavContext.swift"))
+        XCTAssertEqual(iphoneContext.components(separatedBy: "reveal = ").count - 1, 3,
                        "Les trois constructeurs de `NotificationNavContext` renseignent le "
                            + "palier — API, socket, push (ce dernier à `nil`, faute de "
                            + "métadonnée typée : on n'en invente pas).")

@@ -65,10 +65,12 @@ protocol SignInLinkAuthorizing: AnyObject {
     /// `true` si la session est posée (#10450).
     @discardableResult
     func openSession(_ proven: EmailProvenSession) -> Bool
-    /// `true` si la session prouvée est posée (#10450) ; sinon rien n'a changé
-    /// sur l'appareil et la session prouvée est refermée côté passerelle.
+    /// `.switched` si la session prouvée est posée (#10450) ; sinon la RAISON
+    /// (#10518) : rien du compte du lien n'est posé, et la session prouvée est
+    /// refermée côté passerelle par l'implémentation. Seul `.expired` garantit
+    /// que le compte ouvert l'est resté (`ProvenAccountSwitchRefusal`).
     @discardableResult
-    func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool
+    func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome
     func discardProvenSession(_ proven: EmailProvenSession) async
 }
 
@@ -134,18 +136,15 @@ enum SignInLinkOpener {
     ) async {
         switch await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user) {
         case .accepted:
-            // #10513 — répondre après la fenêtre d'adoption ne range pas le
-            // compte ouvert pour une session que la passerelle n'adopterait plus.
-            guard !proven.hasLapsedAdoptionWindow() else {
-                toasts.showError(EmailProofErrorText.linkExpired())
-                await auth.discardProvenSession(proven)
-                return
+            // #10518 — la fenêtre d'adoption (#10513) se juge à UN endroit,
+            // le SDK, qui referme lui-même la session qu'il ne pose pas ;
+            // l'écran dit la raison qu'il rend.
+            switch await auth.switchToProvenAccount(proven) {
+            case .switched:
+                toasts.showSuccess(signedInMessage)
+            case .refused(let refusal):
+                toasts.showError(EmailProofErrorText.accountSwitchMessage(for: refusal))
             }
-            guard await auth.switchToProvenAccount(proven) else {
-                toasts.showError(EmailProofErrorText.sessionNotOpened())
-                return
-            }
-            toasts.showSuccess(signedInMessage)
         case .declined:
             await auth.discardProvenSession(proven)
         case .unavailable:

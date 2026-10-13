@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
+import { PROVEN_ADOPTION_CLIENT_FALLBACK_MS } from '@meeshy/shared/utils/proven-session-adoption';
+
 import type { ApiResult, HttpRequest } from './http';
 import {
   accountReplacementOf,
   createProvenSessionGestures,
-  PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS,
-  PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS,
   provenEmailOf,
   provenSessionOf,
   type AccountReplacement,
@@ -22,6 +22,12 @@ import { createSessionStore, type SessionStoreApi } from './session';
  */
 
 const NOW = Date.UTC(2026, 9, 13, 12, 0, 0);
+const MINUTE = 60 * 1000;
+/* Le repli d'un client que la passerelle ne renseigne pas (#10518) : il vit
+   dans @meeshy/shared, où un témoin de la passerelle le compare à ses vraies
+   fenêtres. */
+const PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS = PROVEN_ADOPTION_CLIENT_FALLBACK_MS.session;
+const PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS = PROVEN_ADOPTION_CLIENT_FALLBACK_MS['second-factor'];
 
 function memoryStore(): SessionStoreApi {
   const raw = new Map<string, string>();
@@ -253,7 +259,7 @@ describe('accepter APRÈS la fenêtre d’adoption (#10513) — le compte ouvert
     return replacement;
   }
 
-  test('la fenêtre du client est plus courte que celle de la passerelle', () => {
+  test('sans délai servi (passerelle antérieure à #10518), la fenêtre du client est son repli de neuf minutes', () => {
     expect(PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS).toBe(9 * 60 * 1000);
   });
 
@@ -323,5 +329,79 @@ describe('accepter APRÈS la fenêtre d’adoption (#10513) — le compte ouvert
     expect(suspended).toEqual([]);
     expect(store.getState().session).toBe(before);
     expect(calls).toEqual([]);
+  });
+});
+
+describe('la fenêtre d’adoption se LIT chez la passerelle (#10518)', () => {
+  const pending = { id: 'u-2fa', username: 'deux', email: 'deux@x.io', firstName: 'D', lastName: 'F', displayName: 'Deux' };
+
+  function adoptAfter(data: object, elapsed: number) {
+    const store = memoryStore();
+    signedInAsAda(store);
+    const before = store.getState().session;
+    const { transport } = recordingTransport();
+    const suspended: string[] = [];
+    const gestures = createProvenSessionGestures({
+      store,
+      transport,
+      suspend: () => {
+        suspended.push('suspend');
+        store.getState().clearSession();
+      },
+      noteActive: () => undefined,
+      now: () => NOW + elapsed,
+    });
+    const replacement = accountReplacementOf(store.getState().session, provenSessionOf(data, NOW));
+    if (replacement === null) throw new Error('aucune question');
+    return gestures.adopt(replacement).then((outcome) => ({ outcome, suspended, untouched: store.getState().session === before }));
+  }
+
+  test('la preuve garde le délai servi, pour une session comme pour un défi', () => {
+    expect(provenSessionOf({ ...BOB_LOGIN, adoptWithinSeconds: 600 }, NOW)).toEqual({ kind: 'session', ...BOB_LOGIN, adoptWithinSeconds: 600, receivedAt: NOW });
+    expect(provenSessionOf({ requires2FA: true, twoFactorToken: 'tf', user: pending, adoptWithinSeconds: 300 }, NOW)).toEqual({
+      kind: 'second-factor',
+      user: pending,
+      twoFactorToken: 'tf',
+      adoptWithinSeconds: 300,
+      receivedAt: NOW,
+    });
+  });
+
+  test('une passerelle qui RACCOURCIT sa fenêtre à trois minutes est suivie : passé deux minutes, « expiré » et rien n’est suspendu', async () => {
+    const late = await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 180 }, 2 * MINUTE + 1);
+    expect(late).toEqual({ outcome: 'expired', suspended: [], untouched: true });
+
+    const inTime = await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 180 }, 2 * MINUTE - 1);
+    expect(inTime.outcome).toBe(true);
+  });
+
+  test('une passerelle qui l’ALLONGE est suivie jusqu’à la borne : à vingt minutes d’une fenêtre de vingt-cinq, le compte s’ouvre', async () => {
+    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1500 }, 20 * MINUTE)).outcome).toBe(true);
+    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 1500 }, 24 * MINUTE + 1)).outcome).toBe('expired');
+  });
+
+  test('un délai servi démesuré est PLAFONNÉ à trente minutes : la preuve finit toujours par expirer', async () => {
+    const data = { ...BOB_LOGIN, adoptWithinSeconds: 1e9 };
+    expect((await adoptAfter(data, 30 * MINUTE - 1)).outcome).toBe(true);
+    expect((await adoptAfter(data, 30 * MINUTE + 1)).outcome).toBe('expired');
+    expect((await adoptAfter(data, 24 * 60 * MINUTE)).outcome).toBe('expired');
+  });
+
+  test('le défi de second facteur suit le délai servi pour LUI', async () => {
+    const challenge = { requires2FA: true, twoFactorToken: 'tf', user: pending, adoptWithinSeconds: 120 };
+    expect((await adoptAfter(challenge, MINUTE + 1)).outcome).toBe('expired');
+    expect((await adoptAfter(challenge, MINUTE - 1)).outcome).toBe(true);
+  });
+
+  ['600', null, Number.NaN, -5, Number.POSITIVE_INFINITY, 1.7e308, 599.5].forEach((adoptWithinSeconds) => {
+    test(`un délai illisible (${String(adoptWithinSeconds)}) vaut un délai absent : le repli de neuf minutes, jamais plus`, async () => {
+      const data = { ...BOB_LOGIN, adoptWithinSeconds };
+      expect((await adoptAfter(data, PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS + 1)).outcome).toBe('expired');
+      expect((await adoptAfter(data, PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS - 1)).outcome).toBe(true);
+    });
+  });
+
+  test('un délai servi à zéro ferme la fenêtre tout de suite', async () => {
+    expect((await adoptAfter({ ...BOB_LOGIN, adoptWithinSeconds: 0 }, 1)).outcome).toBe('expired');
   });
 });

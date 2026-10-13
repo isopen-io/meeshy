@@ -13,6 +13,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MeeshService } from '../MeeshService';
+import { findAndModifyLikeMongo, type FindAndModifyCommand } from '../../engagement/__tests__/mongoLikeCounters';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -64,7 +65,7 @@ function fausseBase(params: {
   const registre: LigneRegistre[] = [...(params.registre ?? [])];
   const paliers: Palier[] = [...(params.paliers ?? [])];
   const gloire: LigneRegistre[] = [];
-  const compteur = { axisKey: 'content.text_message', count: 400, points: params.points };
+  const compteur = { userId: USER_ID, axisKey: 'content.text_message', count: 400, points: params.points };
   let conflitsRestants = params.conflits ?? 0;
 
   const correspond = (cle: string, filtre: FiltreCle) =>
@@ -74,13 +75,11 @@ function fausseBase(params: {
   const client = {
     engagementCounter: {
       findMany: async () => [{ ...compteur }],
-      update: async (args: { data: { points: Increment; count: Increment } }) => {
-        compteur.points -= args.data.points.decrement ?? 0;
-        compteur.count -= args.data.count.decrement ?? 0;
-        return { ...compteur };
-      },
       findUnique: async () => ({ count: compteur.count }),
     },
+    // Le débit du compteur passe par `EngagementCounterWrites` (#10541) : la
+    // commande s'applique à la ligne comme MongoDB l'appliquerait.
+    $runCommandRaw: async (command: FindAndModifyCommand) => findAndModifyLikeMongo([compteur], command),
     engagementMilestone: {
       deleteMany: async (args: { where: { milestoneType: string; milestoneKey: FiltreCle } }) => {
         const avant = paliers.length;

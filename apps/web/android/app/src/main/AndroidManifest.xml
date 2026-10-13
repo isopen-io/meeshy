@@ -212,6 +212,15 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- #10515 — Play déduit le matériel REQUIS des permissions : CAMERA exige
+         aussi l'autofocus, RECORD_AUDIO le micro, et toute application l'écran
+         tactile. Chrome sert Meeshy sur une tablette sans tactile, un
+         Chromebook au clavier ou une caméra à mise au point fixe : la coque
+         aussi, vocaux et appels échouant proprement sans le matériel. -->
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
     <!-- #8049 — l'appel natif de la coque (C10, C11, D6, D15, D16, D19, J1, J2).
          FOREGROUND_SERVICE + ses deux types : l'appel en cours tient micro et
          caméra écran éteint (CallForegroundService). USE_FULL_SCREEN_INTENT :

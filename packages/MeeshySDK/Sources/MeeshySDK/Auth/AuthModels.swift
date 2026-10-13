@@ -43,6 +43,36 @@ public struct LoginResponseData: Decodable, Sendable {
     /// appareil, pour `POST /auth/verification/status`.
     public let pendingSessionToken: String?
 
+    /// #10518 — servi par `POST /auth/verify-email` et
+    /// `POST /auth/magic-link/validate`, avec la session comme avec le défi de
+    /// second facteur : les secondes qui restent, à l'instant de la réponse,
+    /// pour adopter ce que la preuve a rendu. Lu par `ProvenAdoptionWindow`.
+    /// Une valeur qui n'est pas un entier se lit ABSENTE : elle ne fait jamais
+    /// échouer le décodage d'une réponse dont la preuve est déjà consommée.
+    public let adoptWithinSeconds: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case user, token, sessionToken, expiresIn, requires2FA, twoFactorToken
+        case phoneOwnershipConflict, status, accountCreated, email, pendingSessionToken
+        case adoptWithinSeconds
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decodeIfPresent(MeeshyUser.self, forKey: .user)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
+        sessionToken = try container.decodeIfPresent(String.self, forKey: .sessionToken)
+        expiresIn = try container.decodeIfPresent(Int.self, forKey: .expiresIn)
+        requires2FA = try container.decodeIfPresent(Bool.self, forKey: .requires2FA)
+        twoFactorToken = try container.decodeIfPresent(String.self, forKey: .twoFactorToken)
+        phoneOwnershipConflict = try container.decodeIfPresent(Bool.self, forKey: .phoneOwnershipConflict)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        accountCreated = try container.decodeIfPresent(Bool.self, forKey: .accountCreated)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        pendingSessionToken = try container.decodeIfPresent(String.self, forKey: .pendingSessionToken)
+        adoptWithinSeconds = try? container.decodeIfPresent(Int.self, forKey: .adoptWithinSeconds)
+    }
+
     public init(
         user: MeeshyUser?,
         token: String?,
@@ -54,7 +84,8 @@ public struct LoginResponseData: Decodable, Sendable {
         status: String? = nil,
         accountCreated: Bool? = nil,
         email: String? = nil,
-        pendingSessionToken: String? = nil
+        pendingSessionToken: String? = nil,
+        adoptWithinSeconds: Int? = nil
     ) {
         self.user = user
         self.token = token
@@ -67,6 +98,7 @@ public struct LoginResponseData: Decodable, Sendable {
         self.accountCreated = accountCreated
         self.email = email
         self.pendingSessionToken = pendingSessionToken
+        self.adoptWithinSeconds = adoptWithinSeconds
     }
 }
 

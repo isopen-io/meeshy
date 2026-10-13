@@ -988,12 +988,53 @@ final class StatusViewModelTests: XCTestCase {
 
     // MARK: - Portée du mood (impressions & vues)
 
-    func test_markStatusViewed_recordsAUniqueView() async {
-        sut.markStatusViewed("s1")
+    /// Un mood EST un post (`PostType.STATUS`) et porte `impressionCount` /
+    /// `viewCount`, mais AUCUNE surface ne les alimentait : la barre de moods
+    /// était le seul contenu du produit dont la portée restait à zéro.
+    private func makeMoodReachSUT() -> (sut: StatusViewModel, service: MockPostService, cleanup: () -> Void) {
+        let service = MockPostService()
+        let suite = "mood-reach-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        let batcher = ImpressionBatcher(
+            source: "status", surface: .moodAvatar, postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "userA" }
+        )
+        let sut = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            postService: service,
+            moodImpressions: batcher
+        )
+        return (sut, service, { defaults.removePersistentDomain(forName: suite) })
+    }
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
+    func test_trackImpression_flushesTheBatchOnTheMoodAvatarSurface() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
 
-        XCTAssertEqual(mockPostService.viewPostCallCount, 1)
-        XCTAssertEqual(mockPostService.lastViewPostId, "s1")
+        sut.trackImpression("s1")
+        sut.trackImpression("s2")
+        await sut.flushImpressions()
+
+        XCTAssertEqual(service.recordedSocialEvents, [
+            .impression(postId: "s1", source: "status", surface: .moodAvatar),
+            .impression(postId: "s2", source: "status", surface: .moodAvatar),
+        ])
+    }
+
+    /// Une impression par APPARITION : revoir le même mood recompte, sinon le
+    /// compteur plafonnerait à 1 par lancement d'app.
+    func test_trackImpression_countsEveryAppearance_notOncePerStatus() async {
+        let (sut, service, cleanup) = makeMoodReachSUT()
+        defer { cleanup() }
+
+        sut.trackImpression("s1")
+        sut.trackImpression("s1")
+        sut.trackImpression("s1")
+        await sut.flushImpressions()
+
+        XCTAssertEqual(service.recordedSocialEvents.map(\.postId), ["s1", "s1", "s1"])
     }
 }

@@ -149,5 +149,24 @@ extension MeeshyComposerHost {
                 autosave.waitForPendingWrites()
             }
             .onDisappear { flushAutosave() }
+            .closesForConversationOpening(.composer, answer: { conversationOpeningYield }) {
+                flushAutosave()
+                onDismiss()
+            }
+    }
+
+    /// Une conversation qui s'ouvre ne referme le meuble que s'il sait rendre
+    /// ce qu'il tient (#10539) : la porte vierge, dont le brouillon s'écrit à la
+    /// fermeture et se relit à la réouverture. Toute autre porte — graine,
+    /// atelier, retouche d'une pièce du fil — RETIENT : rien ne se perd, et la
+    /// conversation s'ouvre quand l'auteur a fini.
+    var conversationOpeningYield: PresentedSurfaceYield {
+        ComposerConversationYield.decide(autosaveOpening)
+    }
+}
+
+nonisolated enum ComposerConversationYield {
+    static func decide(_ opening: ComposerAutosaveOpening) -> PresentedSurfaceYield {
+        opening == .restores ? .closes : .retains
     }
 }

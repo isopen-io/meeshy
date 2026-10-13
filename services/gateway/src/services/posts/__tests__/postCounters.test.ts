@@ -15,6 +15,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters, postCounterIncrementCommand } from '../postCounters';
 import { creditPostView } from '../postViewCredit';
 import { makeMongoPostCounterStore, type StoredPost } from '../../../__tests__/helpers/mongo-post-counter-store';
+import { makeReachPrisma } from '../../../__tests__/helpers/reach-prisma';
 import { PostService } from '../../PostService';
 import { ingestSocialEvents, type SocialEventsDeps } from '../../../routes/social/events';
 
@@ -75,6 +76,18 @@ describe('incrementPostCounters — un compteur null ou absent repart de zéro',
 
     expect(store.read(POST_A)).toMatchObject({ impressionCount: 6, postOpenCount: 3 });
     expect(store.read(POST_B)).toMatchObject({ impressionCount: 2, postOpenCount: 1 });
+  });
+
+  it('les parts anonymes (#10483) s\'incrémentent sur un post antérieur aux colonnes', async () => {
+    const store = makeMongoPostCounterStore([absentCountersPost(POST_A)]);
+
+    await incrementPostCounters(
+      { $runCommandRaw: store.runCommandRaw },
+      [POST_A],
+      { viewCount: { increment: 1 }, anonymousViewCount: { increment: 1 }, anonymousImpressionCount: { increment: 2 } },
+    );
+
+    expect(store.read(POST_A)).toMatchObject({ viewCount: 1, anonymousViewCount: 1, anonymousImpressionCount: 2 });
   });
 
   it('`liveOnly` ne crédite pas un post supprimé', async () => {
@@ -167,17 +180,45 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
     expect(store.read(POST_A)?.viewCount).toBe(1);
   });
 
-  it('une ouverture anonyme compte sur un postOpenCount null', async () => {
-    const store = makeMongoPostCounterStore([legacyPost(POST_A)]);
-    const prisma = {
-      post: { findFirst: async () => ({ id: POST_A }), update: store.update },
-      anonymousPostOpen: { create: async () => ({}) },
-      $runCommandRaw: store.runCommandRaw,
-    } as unknown as PrismaClient;
+  it('une vue anonyme compte sur un viewCount et un postOpenCount null', async () => {
+    const fake = makeReachPrisma([legacyPost(POST_A)]);
 
-    const counted = await new PostService(prisma).recordAnonymousOpen(POST_A, 'session-key');
+    const counted = await new PostService(fake.prisma as never).recordAnonymousView(POST_A, 'a'.repeat(64));
 
     expect(counted).toBe(true);
-    expect(store.read(POST_A)?.postOpenCount).toBe(1);
+    expect(fake.store.read(POST_A)).toMatchObject({ viewCount: 1, postOpenCount: 1, anonymousViewCount: 1 });
+  });
+});
+
+describe('les ventilations (#10483) — sous-documents { clé: n }', () => {
+  it('une ventilation absente ou null repart de zéro, une clé existante s’additionne', async () => {
+    const store = makeMongoPostCounterStore([
+      absentCountersPost(POST_A),
+      legacyPost(POST_B, { openCountByOrigin: null, viewCountByProvenance: { listing: 4 } }),
+    ]);
+    const prisma = { $runCommandRaw: store.runCommandRaw };
+
+    await incrementPostCounters(prisma, [POST_A, POST_B], {
+      viewCount: { increment: 1 },
+      breakdowns: { openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 1, direct: 1 } },
+    });
+
+    expect(store.read(POST_A)).toMatchObject({
+      viewCount: 1, openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 1, direct: 1 },
+    });
+    expect(store.read(POST_B)).toMatchObject({
+      openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 5, direct: 1 },
+    });
+  });
+
+  it('une clé qui n’est pas un mot simple (`$`, `.`) ou un champ inconnu ne part jamais', () => {
+    const command = postCounterIncrementCommand([POST_A], {
+      breakdowns: {
+        openCountByOrigin: { '$where': 1, 'a.b': 1 },
+        ...({ hackedField: { feed: 1 } } as Record<string, Record<string, number>>),
+      },
+    });
+
+    expect(command).toBeNull();
   });
 });

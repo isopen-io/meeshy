@@ -24,6 +24,8 @@ import {
   guestRefusalResponse,
   guestUploadSizeRefusal,
   shareLinkExpiredTusRefusal,
+  guestAccessRevokedTusRefusal,
+  GuestUploadAccessRevokedError,
 } from '../../services/attachments/AnonymousUploadIdentity';
 import { ShareLinkExpiredError } from '../../services/shareLinkReadGate';
 import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../../services/auth/session-admission';
@@ -260,6 +262,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // la session ne servira à rien. Toute autre levée remonte (500).
       const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken)).catch((error: unknown) => {
         if (error instanceof ShareLinkExpiredError) throw shareLinkExpiredTusRefusal();
+        // #10492 — un accès FINI se refuse en 410, comme aux autres portes.
+        if (error instanceof GuestUploadAccessRevokedError) throw guestAccessRevokedTusRefusal();
         throw error;
       });
       if (!identity) return null;

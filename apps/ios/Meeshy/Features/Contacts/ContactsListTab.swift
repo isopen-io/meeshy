@@ -112,6 +112,9 @@ struct ContactsListTab: View {
                             onMoodTap: statusViewModel.moodTapHandler(for: friend.id)
                         )
                         .equatable()
+                        .countsImpression(of: statusViewModel.statusForUser(userId: friend.id)?.id) {
+                            statusViewModel.trackImpression($0)
+                        }
                     }
                 }
                 .padding(.top, MeeshySpacing.xs)

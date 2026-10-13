@@ -24,6 +24,29 @@ import { shareLinkHasExpired } from './shareLinkReadGate';
 
 export type GuestAccessEnd = 'link-expired' | 'revoked' | null;
 
+/**
+ * #10492 (R4) — la marque d'une révocation différée est datée par l'instance
+ * qui FERME le lien, `Participant.joinedAt` par celle qui ADMET l'invité
+ * (`@default(now())` : l'horloge du moteur Prisma, donc de la passerelle,
+ * jamais celle de la base — dater la seule marque par la base ne mettrait pas
+ * les deux dates sur la même horloge). Deux passerelles dont les horloges
+ * dérivent peuvent donc donner à un invité entré AVANT la fermeture une date
+ * d'entrée postérieure à la marque.
+ *
+ * La marge tient pour « entré avant » tout invité daté jusqu'à dix secondes
+ * après la marque : elle couvre une dérive de dix secondes entre instances.
+ * Son prix est fail-closed : un invité entré dans les dix secondes qui suivent
+ * la fermeture d'un lien ROUVERT aussitôt est retiré avec les autres, et
+ * rentre par le lien. Un lien resté fermé ne dépend pas d'elle
+ * (`linkIsActive`).
+ */
+export const GUEST_ADMISSION_CLOCK_MARGIN_MS = 10_000;
+
+/** Le dernier instant d'entrée qu'une révocation en attente depuis `pendingAt` retire. */
+export function pendingRevocationAdmissionCutoff(pendingAt: Date): Date {
+  return new Date(new Date(pendingAt).getTime() + GUEST_ADMISSION_CLOCK_MARGIN_MS);
+}
+
 export type GuestAccessState = {
   /** L'échéance du lien de l'invité — `null` sans lien, sans échéance, ou lien introuvable. */
   readonly linkExpiresAt: Date | null;
@@ -41,6 +64,13 @@ export type GuestAccessState = {
    * non lu, rien n'est décidé.
    */
   readonly linkIsActive?: boolean | null;
+  /**
+   * #10492 (R5) — l'invité porte un lien dont la LIGNE n'existe plus. Toute
+   * suppression de lien révoque ses invités ; celui qui lui survit (purge
+   * interrompue, admission en vol) n'a plus de lien qui l'autorise. Absent ou
+   * `false` : invité sans lien, ou lien trouvé.
+   */
+  readonly linkMissing?: boolean;
   /** La ligne de l'invité — `null` quand elle n'existe plus. */
   readonly participation: {
     readonly isActive?: boolean | null;
@@ -53,14 +83,17 @@ export type GuestAccessState = {
 export function guestAccessEnd(state: GuestAccessState): GuestAccessEnd {
   if (shareLinkHasExpired({ expiresAt: state.linkExpiresAt }, state.now)) return 'link-expired';
   if (!state.participation || !participationEstVivante(state.participation)) return 'revoked';
-  if (state.linkIsActive === false) return 'revoked';
+  if (state.linkIsActive === false || state.linkMissing === true) return 'revoked';
   if (admittedBeforePendingRevocation(state.participation.joinedAt, state.linkRevocationPendingAt)) return 'revoked';
   return null;
 }
 
-/** Une date d'entrée inconnue sous une marque posée vaut « entré avant » : fail-closed. */
+/**
+ * Une date d'entrée inconnue sous une marque posée vaut « entré avant », et
+ * une date dans la marge d'horloge aussi : fail-closed.
+ */
 function admittedBeforePendingRevocation(joinedAt: Date | null | undefined, pendingAt: Date | null | undefined): boolean {
   if (!pendingAt) return false;
   if (!joinedAt) return true;
-  return new Date(joinedAt).getTime() <= new Date(pendingAt).getTime();
+  return new Date(joinedAt).getTime() <= pendingRevocationAdmissionCutoff(pendingAt).getTime();
 }

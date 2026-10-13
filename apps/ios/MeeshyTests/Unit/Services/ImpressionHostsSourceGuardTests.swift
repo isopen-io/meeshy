@@ -31,44 +31,50 @@ final class ImpressionHostsSourceGuardTests: XCTestCase {
 
     private struct Host {
         let file: String
-        let source: String
-        let scope: String
+        let construction: String
+        let records: String
+        let flushes: String
     }
 
+    /// #10483 — chaque hôte porte sa SURFACE, qui donne à sa file sa propre
+    /// clé de persistance (`ImpressionBatcher.storageKey(source:surface:)`).
     private let hosts: [Host] = [
-        Host(file: "RootViewComponents.swift", source: "feed", scope: "feed.phone"),
-        Host(file: "HashtagResultsView.swift", source: "search", scope: "search.hashtag"),
-        Host(file: "BookmarksView.swift", source: "profile", scope: "profile.bookmarks"),
+        Host(file: "RootViewComponents.swift",
+             construction: "ImpressionBatcher(source: \"feed\", surface: .feed)",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)",
+             flushes: "await impressions.flushNow()"),
+        Host(file: "HashtagResultsView.swift",
+             construction: "HashtagResultsViewModel(tag: tag)",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: viewModel.impressions)",
+             flushes: "await viewModel.flushImpressions()"),
+        Host(file: "BookmarksView.swift",
+             construction: "ImpressionBatcher(source: \"profile\", surface: .bookmarks)",
+             records: ".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)",
+             flushes: "await impressions.flushNow()"),
     ]
 
-    func test_everyCardHost_ownsABatcherUnderItsOwnPersistenceKey() throws {
+    func test_everyCardHost_ownsABatcherUnderItsOwnSurface() throws {
         for host in hosts {
             let code = try source(host.file)
-            XCTAssertTrue(
-                code.contains("ImpressionBatcher(source: \"\(host.source)\", storageScope: \"\(host.scope)\")"),
-                "\(host.file) doit porter son batcher `\(host.source)` sous la clé `\(host.scope)`"
-            )
+            XCTAssertTrue(code.contains(host.construction),
+                          "\(host.file) doit porter son batcher sous sa surface : `\(host.construction)`")
         }
     }
 
     func test_everyCardHost_recordsTheAppearingPost_andFlushesOnDisappear() throws {
         for host in hosts {
             let code = try source(host.file)
-            XCTAssertTrue(
-                code.contains("impressions.record(post.id)") || code.contains("trackImpression(postId: post.id)"),
-                "\(host.file) : une carte qui apparaît doit enregistrer son impression"
-            )
-            XCTAssertTrue(
-                code.contains("await impressions.flushNow()"),
-                "\(host.file) : la file en cours de groupement doit partir à la sortie d'écran"
-            )
+            XCTAssertTrue(code.contains(host.records),
+                          "\(host.file) : une carte qui apparaît doit enregistrer son impression")
+            XCTAssertTrue(code.contains(host.flushes),
+                          "\(host.file) : la file en cours de groupement doit partir à la sortie d'écran")
         }
     }
 
     func test_theIPhoneFeed_recordsInsideItsPostLoop() throws {
         let code = try source("RootViewComponents.swift")
         let loop = try XCTUnwrap(section(of: code, from: "ForEach(viewModel.posts)", to: "viewModel.isLoadingMore"))
-        XCTAssertTrue(loop.contains("impressions.record(post.id)"),
+        XCTAssertTrue(loop.contains(".countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions)"),
                       "le fil de l'iPhone compte l'impression dans la boucle des cartes, réels compris")
     }
 }

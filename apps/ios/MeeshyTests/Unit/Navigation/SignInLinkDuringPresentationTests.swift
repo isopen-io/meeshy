@@ -22,7 +22,8 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
     private(set) var events: [String] = []
     /// Faux ⇒ la garde du SDK refuse la session (#10450).
     var opens = true
-    var switches = true
+    /// Ce que rend la bascule du SDK (#10518).
+    var switchOutcome: ProvenAccountSwitchOutcome = .switched
 
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         events.append("verify")
@@ -42,13 +43,13 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
         return true
     }
 
-    func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
+    func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome {
         events.append("switch")
         switchedSessions.append(proven.token)
-        guard switches else { return false }
+        guard switchOutcome == .switched else { return switchOutcome }
         currentUser = proven.user
         isAuthenticated = true
-        return true
+        return .switched
     }
 
     func discardProvenSession(_ proven: EmailProvenSession) async {
@@ -318,30 +319,49 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertEqual(toasts.successMessages.count, 1)
     }
 
-    /// #10513 — accepter après la fenêtre d'adoption : le compte ouvert reste
-    /// ouvert, rien n'est basculé, la session prouvée est refermée, et l'écran
-    /// dit que le lien a expiré.
-    func test_anotherAccount_acceptedPastTheAdoptionWindow_keepsTheAccount_andSaysTheLinkExpired() async {
+    /// #10513, #10518 — accepter après la fenêtre d'adoption : le SDK rend
+    /// « expiré » (et referme lui-même la session), le compte ouvert le reste,
+    /// et l'écran dit que le lien a expiré — pas qu'un autre compte est ouvert.
+    func test_open_anotherAccountAcceptedPastTheAdoptionWindow_saysTheLinkExpired() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
         signedInAs(auth)
-        let stale = MockSignInLinkAuthorizer.proven
-        auth.magicResult = .success(EmailProvenSession(
-            token: stale.token, sessionToken: stale.sessionToken, user: stale.user,
-            receivedAt: Date().addingTimeInterval(-(EmailProvenSession.adoptionWindow + 1))))
+        auth.switchOutcome = .refused(.expired)
         let confirmation = MockAccountReplacementConfirmation(answer: true)
 
         await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
 
-        XCTAssertEqual(auth.events, ["verify", "discard"])
+        XCTAssertEqual(auth.events, ["verify", "switch"], "la fenêtre se juge dans le SDK, à un seul endroit")
         XCTAssertEqual(auth.currentUser?.id, "me")
         XCTAssertEqual(toasts.successMessages, [])
         XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.linkExpired()])
     }
 
+    /// #10518 — l'écran ne lit plus la fenêtre lui-même : une preuve qu'il
+    /// croirait vieille part quand même au SDK, seul juge.
+    func test_open_anotherAccountAccepted_neverJudgesTheWindowItself() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let stale = MockSignInLinkAuthorizer.proven
+        auth.magicResult = .success(EmailProvenSession(
+            token: stale.token, sessionToken: stale.sessionToken, user: stale.user,
+            receivedAt: Date().addingTimeInterval(-(ProvenAdoptionWindow.clientMax + 1))))
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: MockAccountReplacementConfirmation(answer: true))
+
+        XCTAssertEqual(auth.events, ["verify", "switch"])
+    }
+
+    func test_accountSwitchMessage_eachRefusal_saysItsOwnReason() {
+        XCTAssertEqual(EmailProofErrorText.accountSwitchMessage(for: .expired), EmailProofErrorText.linkExpired())
+        XCTAssertEqual(EmailProofErrorText.accountSwitchMessage(for: .failed), EmailProofErrorText.sessionNotOpened())
+        XCTAssertNotEqual(EmailProofErrorText.accountSwitchMessage(for: .expired),
+                          EmailProofErrorText.accountSwitchMessage(for: .failed))
+    }
+
     func test_anotherAccount_accepted_butNotInstalled_announcesNoSuccess() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
         signedInAs(auth)
-        auth.switches = false
+        auth.switchOutcome = .refused(.failed)
         let confirmation = MockAccountReplacementConfirmation(answer: true)
 
         await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)

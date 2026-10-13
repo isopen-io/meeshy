@@ -50,6 +50,7 @@ describe('le contenu montré', () => {
       emoji: '🎉',
       text: 'On fête ça ce soir',
       language: 'fr',
+      postId: 'st-2',
     });
   });
 
@@ -60,11 +61,12 @@ describe('le contenu montré', () => {
       emoji: '🎉',
       text: 'Celebrating tonight',
       language: 'en',
+      postId: 'st-2',
     });
   });
 
   test('une humeur sans texte ne montre que l’humeur', () => {
-    expect(moodPeekContent({ posts, authorId: 'u-sam', emoji: '☕', languages: ['fr'] })).toEqual({ emoji: '☕', text: '' });
+    expect(moodPeekContent({ posts, authorId: 'u-sam', emoji: '☕', languages: ['fr'] })).toEqual({ emoji: '☕', text: '', postId: 'st-3' });
   });
 
   test('un auteur absent du corpus : l’humeur touchée, sans texte inventé', () => {

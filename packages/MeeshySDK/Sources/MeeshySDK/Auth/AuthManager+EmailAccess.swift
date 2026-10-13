@@ -172,55 +172,67 @@ extension AuthManager {
     /// prouvée ne se pose que sur une session DÉMONTÉE. Si la sortie n'a pas
     /// eu lieu (compte actif inconnu), si un autre changement de compte est en
     /// cours, ou si une session s'est rouverte pendant la pause, rien n'est
-    /// posé et la session prouvée est refermée côté passerelle. Rend `true`
-    /// si la session prouvée est posée.
+    /// posé et la session prouvée est refermée côté passerelle.
     ///
     /// #10463 — la session refusée se referme dans une tâche à part : sous
     /// `isSwitchingAccount`, ses réessais (jusqu'à quelques secondes hors
     /// ligne) tenaient toute autre bascule refusée.
     ///
     /// #10513 — une preuve plus vieille que sa fenêtre d'adoption
-    /// (`EmailProvenSession.adoptionWindow`) ne range rien et ne pose rien :
-    /// la passerelle ne l'adopterait plus, et le premier appel déconnecterait.
-    /// Elle est refermée côté passerelle.
+    /// (`EmailProvenSession.adoptableFor`, #10518) ne range rien et ne pose
+    /// rien : la passerelle ne l'adopterait plus, et le premier appel
+    /// déconnecterait. Elle est refermée côté passerelle.
+    ///
+    /// #10518 — rend la RAISON d'un refus : `.expired` (fenêtre passée, il
+    /// faut un nouveau lien) ou `.failed` (l'appareil n'a pas pu poser la
+    /// session). Dans les deux cas rien du compte du lien n'est posé et la
+    /// session prouvée est refermée côté passerelle. `.expired`, et un
+    /// `.failed` rendu AVANT la sortie (autre changement en cours), laissent
+    /// le compte ouvert tel quel. Un `.failed` rendu APRÈS la sortie trouve le
+    /// compte quitté déjà rangé : il se reprend au sélecteur sans mot de passe
+    /// s'il garde sa session (`keepsSession`), et sinon sa session est fermée
+    /// pour de bon — l'appareil reste alors sans compte ouvert. La fenêtre se
+    /// lit UNE fois, avant de ranger le compte ouvert ; rien ne la relit
+    /// ensuite, la bascule comptant sur la marge de l'appareil
+    /// (`ProvenAdoptionWindow.clientMargin`).
     @discardableResult
-    public func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
+    public func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome {
         guard !proven.hasLapsedAdoptionWindow() else {
             closeRefusedProvenSession(proven)
-            return false
+            return .refused(.expired)
         }
         guard !isSwitchingAccount else {
             closeRefusedProvenSession(proven)
-            return false
+            return .refused(.failed)
         }
         guard isAuthenticated, proven.user.id != activeUserId else {
-            return openSession(proven)
+            return openSession(proven) ? .switched : .refused(.failed)
         }
         isSwitchingAccount = true
         defer { isSwitchingAccount = false }
         await suspendActiveSession()
         guard !isAuthenticated else {
             closeRefusedProvenSession(proven)
-            return false
+            return .refused(.failed)
         }
         // Même image à l'état « sorti » que `switchAccount(to:)` : sans elle,
         // `false` puis `true` dans le même tour échappent aux observateurs.
         try? await Task.sleep(for: .milliseconds(150))
         guard !isAuthenticated else {
             closeRefusedProvenSession(proven)
-            return false
+            return .refused(.failed)
         }
         await CacheAccountBinder.shared.bind(accountKey(for: proven.user.id)).value
         do {
             try installSession(proven)
-            return true
+            return .switched
         } catch {
             errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             // Une session s'est posée pendant la liaison du cache : il revient
             // au compte qui est ouvert, jamais à celui qu'on a refusé.
             await CacheAccountBinder.shared.bind(accountKey(for: activeUserId)).value
             closeRefusedProvenSession(proven)
-            return false
+            return .refused(.failed)
         }
     }
 
@@ -281,13 +293,53 @@ public struct AccountSwitchUnderway: LocalizedError, Equatable, Sendable {
     }
 }
 
+/// Ce que rend `switchToProvenAccount` (#10518).
+public enum ProvenAccountSwitchOutcome: Equatable, Sendable {
+    case switched
+    case refused(ProvenAccountSwitchRefusal)
+}
+
+/// Pourquoi la session prouvée n'a pas été posée (#10518).
+public enum ProvenAccountSwitchRefusal: Equatable, Sendable {
+    /// La fenêtre d'adoption est passée : il faut un nouveau lien. Jugé avant
+    /// toute sortie — le compte ouvert l'est resté.
+    case expired
+    /// L'appareil n'a pas pu poser la session (autre changement en cours,
+    /// session rouverte entre-temps, garde de `applySession`). Rendu avant la
+    /// sortie, le compte ouvert l'est resté ; rendu après, il est déjà rangé,
+    /// et sa session fermée s'il ne la garde pas (`keepsSession`).
+    case failed
+}
+
 /// La passerelle a prouvé l'adresse, mais le compte attend son second facteur
 /// (`requires2FA`) : aucune session n'est rendue (#10445).
+///
+/// #10518 — le défi a lui aussi sa fenêtre : `adoptableFor` secondes à
+/// compter de `receivedAt`. C'est un plafond — un défi plus récent du même
+/// compte le remplace. Deux refus sont égaux par leur défi et sa fenêtre,
+/// jamais par l'instant où ils ont été reçus.
 public struct SecondFactorRequired: Error, Equatable, Sendable {
     public let twoFactorToken: String?
+    public let receivedAt: Date
+    public let adoptableFor: TimeInterval
 
-    public init(twoFactorToken: String?) {
+    public init(
+        twoFactorToken: String?,
+        receivedAt: Date = Date(),
+        adoptableFor: TimeInterval = ProvenAdoptionWindow.fallback(for: .secondFactor)
+    ) {
         self.twoFactorToken = twoFactorToken
+        self.receivedAt = receivedAt
+        self.adoptableFor = ProvenAdoptionWindow.bounded(adoptableFor)
+    }
+
+    /// Le défi a-t-il passé la fenêtre où le présenter vaut encore ?
+    public func hasLapsedAdoptionWindow(now: Date = Date()) -> Bool {
+        ProvenAdoptionWindow.hasLapsed(receivedAt: receivedAt, window: adoptableFor, now: now)
+    }
+
+    public static func == (lhs: SecondFactorRequired, rhs: SecondFactorRequired) -> Bool {
+        lhs.twoFactorToken == rhs.twoFactorToken && lhs.adoptableFor == rhs.adoptableFor
     }
 }
 
@@ -302,39 +354,60 @@ public struct EmailProvenSession: Sendable {
     public let origin: SessionOrigin
     /// L'instant où la preuve a été reçue (#10513) : l'âge de la session.
     public let receivedAt: Date
+    /// Les secondes, à compter de `receivedAt`, pendant lesquelles adopter
+    /// cette session vaut encore (#10518) : le délai SERVI par la passerelle
+    /// moins la marge, ou le repli. Toujours entre zéro et la borne dure.
+    public let adoptableFor: TimeInterval
 
-    /// La passerelle n'adopte une session prouvée par un lien que dans ses DIX
-    /// premières minutes (`PROVEN_SESSION_ADOPTION_WINDOW_MS`, #10477) ;
-    /// l'appareil s'arrête une minute avant (#10513).
-    public static let adoptionWindow: TimeInterval = 9 * 60
+    /// Le REPLI (#10518) : la fenêtre d'une session dont la passerelle n'a
+    /// servi aucun délai lisible. La fenêtre d'une preuve se lit sur
+    /// `adoptableFor`, jamais ici.
+    public static let adoptionWindow: TimeInterval = ProvenAdoptionWindow.fallback(for: .session)
 
-    public init(token: String, sessionToken: String?, user: MeeshyUser, origin: SessionOrigin = .login, receivedAt: Date = Date()) {
+    public init(
+        token: String,
+        sessionToken: String?,
+        user: MeeshyUser,
+        origin: SessionOrigin = .login,
+        receivedAt: Date = Date(),
+        adoptableFor: TimeInterval = EmailProvenSession.adoptionWindow
+    ) {
         self.token = token
         self.sessionToken = sessionToken
         self.user = user
         self.origin = origin
         self.receivedAt = receivedAt
+        self.adoptableFor = ProvenAdoptionWindow.bounded(adoptableFor)
     }
 
     /// La preuve a-t-elle passé la fenêtre où l'adopter vaut encore ?
     public func hasLapsedAdoptionWindow(now: Date = Date()) -> Bool {
-        now.timeIntervalSince(receivedAt) > Self.adoptionWindow
+        ProvenAdoptionWindow.hasLapsed(receivedAt: receivedAt, window: adoptableFor, now: now)
     }
 
     /// La session que sert une réponse de preuve d'adresse. `nil` ⇒ adresse
     /// prouvée sans session (passerelle antérieure à #8035) ; lève
     /// `SecondFactorRequired` quand le compte attend son second facteur.
-    static func served(by data: LoginResponseData) throws -> EmailProvenSession? {
+    /// `receivedAt` est l'instant où la réponse est lue (#10518) : le délai
+    /// servi s'y applique, sur les deux branches.
+    static func served(by data: LoginResponseData, receivedAt: Date = Date()) throws -> EmailProvenSession? {
         if data.requires2FA == true {
-            throw SecondFactorRequired(twoFactorToken: data.twoFactorToken)
+            throw SecondFactorRequired(
+                twoFactorToken: data.twoFactorToken,
+                receivedAt: receivedAt,
+                adoptableFor: ProvenAdoptionWindow.clientWindow(for: .secondFactor, adoptWithinSeconds: data.adoptWithinSeconds))
         }
         guard let token = data.token, let user = data.user else { return nil }
-        return EmailProvenSession(token: token, sessionToken: data.sessionToken, user: user)
+        return EmailProvenSession(
+            token: token, sessionToken: data.sessionToken, user: user,
+            receivedAt: receivedAt,
+            adoptableFor: ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: data.adoptWithinSeconds))
     }
 
     /// La même session, sous une autre origine.
     public func originating(from origin: SessionOrigin) -> EmailProvenSession {
-        EmailProvenSession(token: token, sessionToken: sessionToken, user: user, origin: origin, receivedAt: receivedAt)
+        EmailProvenSession(token: token, sessionToken: sessionToken, user: user, origin: origin,
+                           receivedAt: receivedAt, adoptableFor: adoptableFor)
     }
 }
 

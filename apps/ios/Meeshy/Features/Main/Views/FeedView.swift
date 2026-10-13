@@ -87,7 +87,7 @@ struct FeedView: View {
     // Impression tracking — une impression par APPARITION à l'écran. Le
     // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
     // relance) sont portés par `ImpressionBatcher`.
-    @StateObject private var impressions = ImpressionBatcher(source: "feed")
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -783,15 +783,13 @@ struct FeedView: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
                 // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                router.openPostDetail(post, from: .feed)
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
@@ -879,17 +877,15 @@ struct FeedView: View {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                         ReelsPresenter.shared.present(
                             posts: viewModel.posts,
-                            startId: post.id
+                            startId: post.id, from: .feed
                         )
                     }
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
                 } else {
-                    router.push(.postDetail(post.id, post))
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                    router.openPostDetail(post, from: .feed)
                 }
             },
             onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
+                router.openPostDetail(id: repostId, from: .feed)
             },
             onDelete: isOwnPost ? { postId in
                 Task { await viewModel.deletePost(postId) }
@@ -1039,8 +1035,8 @@ struct FeedView: View {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
                                 viewModel.prefetchComments(post.id)
-                                trackImpression(postId: post.id)
                             }
+                            .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) { posts.firstIndex { $0.id == post.id } }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
@@ -1305,11 +1301,6 @@ struct FeedView: View {
                     }
                 )
             }
-    }
-    // MARK: - Impression Tracking
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
     }
 }
 

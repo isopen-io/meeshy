@@ -20,7 +20,7 @@ import {
   isContentDerivedFromTextObjects,
 } from './storyContentComposition';
 import { isCanvasV3OrNewer, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
-import { servedTextIndex } from './repostCreditChips';
+import { servedTextIndex, textsWithoutCredits } from './repostCreditChips';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -226,10 +226,14 @@ export class StoryTextObjectTranslationService {
       translations: { ...((target.translations ?? {}) as Record<string, unknown>), ...translations },
     };
 
+    // #10523 — une story d'avant #4502 a pu ranger la puce de crédit dans son
+    // index : l'assemblage ne la reprend pas.
+    const assembled = textsWithoutCredits(storyEffects, textObjects);
+
     const fields: Record<string, Prisma.InputJsonValue> = {};
     const createdAt = new Date().toISOString();
     for (const lang of languages) {
-      const composed = composeStoryContentForLanguage(textObjects, lang);
+      const composed = composeStoryContentForLanguage(assembled, lang);
       if (!composed) continue;
       fields[`translations.${lang}`] = {
         text: composed,

@@ -102,10 +102,11 @@ extension StoryViewModel {
     /// Corps réel du seam ci-dessus — `nonisolated static` pour que la valeur
     /// PAR DÉFAUT de la propriété n'évalue rien d'actor-isolé (Swift 6 :
     /// « actor-isolated default value in a main actor-isolated context »).
-    nonisolated static func enqueueMarkStoryViewed(_ storyId: String) async throws {
+    nonisolated static func enqueueMarkStoryViewed(_ storyId: String, entry: ContentEntry) async throws {
         let payload = MarkStoryViewedPayload(
             clientMutationId: ClientMutationId.generate(),
-            storyId: storyId
+            storyId: storyId,
+            entry: entry
         )
         _ = try await OfflineQueue.shared.enqueue(
             .markStoryViewed, payload: payload, conversationId: storyId
@@ -138,6 +139,14 @@ extension StoryViewModel {
         storyImpressions.record(storyId)
     }
 
+    /// L'entrée de la vue d'une story (#10483) : la marque de la porte qui l'a
+    /// amenée (tap du rail, notification, lien), sinon le rail — le lecteur
+    /// de stories s'ouvre depuis un anneau, et une story atteinte en avançant
+    /// dans le lecteur vient du même listing.
+    func storyViewEntry(for storyId: String) -> ContentEntry {
+        storyViewEntries.consumeMarkedEntry(for: storyId) ?? .listing(.storyRail)
+    }
+
     func markViewed(storyId: String) {
         #if DEBUG
         VitrineRendu.shared.signaler(.story)
@@ -159,9 +168,10 @@ extension StoryViewModel {
         let viewedAt = Date()
         viewedLedger.record(storyId: storyId, ownerId: viewedLedgerOwnerId, at: viewedAt)
         if ObjectID.isValid(storyId) {
+            let entry = storyViewEntry(for: storyId)
             Task { [markViewedOutboxEnqueuer] in
                 do {
-                    try await markViewedOutboxEnqueuer(storyId)
+                    try await markViewedOutboxEnqueuer(storyId, entry)
                 } catch {
                     Logger.stories.error(
                         "markViewed enqueue failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")

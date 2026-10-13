@@ -117,7 +117,7 @@ struct ConversationRowItem: View {
                 // de la ligne (feedback user 2026-07-08). Le tap d'ouverture
                 // reste un `.onTapGesture` plein-ligne : les gestes internes
                 // de l'avatar (story/profil/mood) restent prioritaires.
-                rowCore
+                countedRowCore
                     .contentShape(Rectangle())
                     .onTapGesture {
                         HapticFeedback.light()
@@ -179,7 +179,7 @@ struct ConversationRowItem: View {
                         await onLoadPreview()
                     }
             } else {
-                rowCore
+                countedRowCore
                     .accessibilityElement(children: .combine)
                     .accessibilityAddTraits(.isButton)
                     .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
@@ -326,6 +326,15 @@ struct ConversationRowItem: View {
             )
             .equatable()
         }
+    }
+
+    /// #10483 — l'humeur peinte sur l'avatar de la rangée est un affichage de
+    /// cette humeur : une impression à chaque apparition de la rangée. Posée
+    /// AUTOUR du mux, qui reste isolé dans `rowCore`
+    /// (`LentilleRowMuxSourceGuardTests`).
+    private var countedRowCore: some View {
+        rowCore
+            .countsImpression(of: moodStatus?.id) { SharedImpressionBatchers.moodAvatar.record($0) }
     }
 }
 

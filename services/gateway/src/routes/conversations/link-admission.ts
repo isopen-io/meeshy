@@ -4,7 +4,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { toAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
-import { generateNickname } from '../../utils/anonymous-nickname';
+import { automaticNickname } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
@@ -255,12 +255,12 @@ async function joinAsGuest(
   const requestedUsername =
     profile.requestedUsername && profile.requestedUsername.trim() !== ''
       ? SecuritySanitizer.sanitizeUsername(profile.requestedUsername.trim())
-      : generateNickname(firstName, lastName);
+      : automaticNickname(firstName, lastName);
   const desiredUsername = toAnonymousUsername(requestedUsername);
   const username = await findFreeAnonymousUsername(prisma, desiredUsername, shareLink.conversationId);
 
   if (!username) {
-    return { kind: 'username-taken', suggestion: toAnonymousUsername(generateNickname(firstName, lastName)) };
+    return { kind: 'username-taken', suggestion: toAnonymousUsername(automaticNickname(firstName, lastName)) };
   }
 
   const claimed = await claimLinkUse(prisma, shareLink.id, shareLink.maxUses, {
@@ -511,13 +511,9 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   if (shareLink.requireBirthday && (!profile.birthday || profile.birthday.trim() === '')) {
     return { kind: 'validation', message: 'La date de naissance est obligatoire pour rejoindre cette conversation' };
   }
-  if (
-    identity.kind === 'guest' &&
-    shareLink.requireNickname &&
-    (!profile.requestedUsername || profile.requestedUsername.trim() === '')
-  ) {
-    return { kind: 'validation', message: "Le nom d'utilisateur est obligatoire pour rejoindre cette conversation" };
-  }
+  // `requireNickname` ne REFUSE plus un invité (directive porteur 2026-10-13) :
+  // le champ vide passait inaperçu et fermait la porte. Sans pseudo saisi,
+  // `joinAsGuest` en génère un (`automaticNickname`).
 
   const outcome = identity.kind === 'guest'
     ? await joinAsGuest(prisma, shareLink, profile, broadcast, params.requestUserAgent)

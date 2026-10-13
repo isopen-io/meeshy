@@ -12,7 +12,6 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRecordAnonymousOpen = jest.fn();
 const mockRecordEngagementBatch = jest.fn();
 const mockSharePost = jest.fn();
 const mockShareWithTrackingLink = jest.fn();
@@ -48,7 +47,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: (...a: any[]) => mockUnbookmarkPost(...a),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -132,6 +130,9 @@ const OTHER_POST_ID = '507f1f77bcf86cd799439033';
  */
 const publicAcl = (id: string) => ({
   id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
+  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+  author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -163,6 +164,10 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
     $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1 }),
+    anonymousPostOpen: {
+      create: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     postImpression: {
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
@@ -211,7 +216,6 @@ describe('POST /posts/:postId/anonymous-view', () => {
   });
 
   it('returns 200 with counted=true on valid session key', async () => {
-    mockRecordAnonymousOpen.mockResolvedValueOnce(true);
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/anonymous-view`,
       headers: { 'x-session-token': 'valid-session-key' },

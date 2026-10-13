@@ -5,6 +5,8 @@ import path from 'path';
 import {
   resolveAnonymousUploadIdentity,
   fetchShareLinkAnonymousFlags,
+  GuestUploadAccessRevokedError,
+  guestAccessRevokedTusRefusal,
   shareLinkExpiredTusRefusal,
   readFilePrefix,
   type AnonymousUploadIdentityPrisma,
@@ -18,7 +20,9 @@ function buildPrisma(overrides: Partial<AnonymousUploadIdentityPrisma> = {}): An
       findFirst: jest.fn<any>().mockResolvedValue(null),
     },
     conversationShareLink: {
-      findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Un lien VIVANT par défaut : un invité dont le lien n'existe plus est
+      // refusé (#10492), ce que ses propres témoins couvrent.
+      findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true, guestRevocationPendingAt: null }),
     },
     ...overrides,
   } as unknown as AnonymousUploadIdentityPrisma;
@@ -155,7 +159,7 @@ describe('fetchShareLinkAnonymousFlags', () => {
   });
 
   it('rend null quand le lien n\'existe plus', async () => {
-    const prisma = buildPrisma();
+    const prisma = buildPrisma({ conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue(null) } as any });
     const flags = await fetchShareLinkAnonymousFlags(prisma, 'deleted-link');
     expect(flags).toBeNull();
   });
@@ -209,7 +213,7 @@ describe('resolveAnonymousUploadIdentity — la garde commune d’un invité fer
     const findUnique = jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true, guestRevocationPendingAt: CLOSED_AT });
     const prisma = buildPrisma({ participant: { findFirst } as any, conversationShareLink: { findUnique } as any });
 
-    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).resolves.toBeNull();
+    await expect(resolveAnonymousUploadIdentity(prisma, 'token')).rejects.toBeInstanceOf(GuestUploadAccessRevokedError);
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ joinedAt: true, bannedAt: true }) }));
     expect(findUnique).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.objectContaining({ isActive: true, guestRevocationPendingAt: true }),
@@ -226,8 +230,16 @@ describe('resolveAnonymousUploadIdentity — la garde commune d’un invité fer
       conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null, isActive: true }) } as any,
     });
 
-    await expect(resolveAnonymousUploadIdentity(closed, 'token')).resolves.toBeNull();
-    await expect(resolveAnonymousUploadIdentity(banned, 'token')).resolves.toBeNull();
+    await expect(resolveAnonymousUploadIdentity(closed, 'token')).rejects.toBeInstanceOf(GuestUploadAccessRevokedError);
+    await expect(resolveAnonymousUploadIdentity(banned, 'token')).rejects.toBeInstanceOf(GuestUploadAccessRevokedError);
+  });
+
+  // #10492 — le refus tel que `@tus/server` le renvoie : le 410 des autres portes, jamais un 401 qui se rejoue.
+  it('le refus d’un accès fini est un 410 GUEST_ACCESS_REVOKED dans l’enveloppe de l’API', () => {
+    const refusal = guestAccessRevokedTusRefusal();
+
+    expect(refusal.status_code).toBe(410);
+    expect(JSON.parse(refusal.body)).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED', code: 'GUEST_ACCESS_REVOKED' });
   });
 
   it('admet un invité entré après la réouverture', async () => {

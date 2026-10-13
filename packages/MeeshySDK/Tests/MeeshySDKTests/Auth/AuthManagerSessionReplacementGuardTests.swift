@@ -185,7 +185,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let switched = await auth.switchToProvenAccount(proven)
         await auth.awaitRefusedSessionClosuresForTesting()
 
-        XCTAssertFalse(switched)
+        XCTAssertEqual(switched, .refused(.failed))
         XCTAssertTrue(auth.isAuthenticated)
         XCTAssertNil(auth.activeAccountId, "rien n'est devenu le compte actif")
         XCTAssertEqual(auth.currentUser?.id, "ghost")
@@ -206,7 +206,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let switched = await auth.switchToProvenAccount(proven)
         await auth.awaitRefusedSessionClosuresForTesting()
 
-        XCTAssertFalse(switched)
+        XCTAssertEqual(switched, .refused(.failed))
         XCTAssertEqual(auth.activeAccountId, "user-a")
         XCTAssertEqual(APIClient.shared.authToken, "tok-a")
         XCTAssertFalse(auth.hasPreservedSession(for: "user-c"))
@@ -393,7 +393,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let switched = await auth.switchToProvenAccount(
             EmailProvenSession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b")))
 
-        XCTAssertFalse(switched)
+        XCTAssertEqual(switched, .refused(.failed))
         XCTAssertFalse(auth.isSwitchingAccount, "la bascule est rendue avant la fin de la fermeture")
         authService.releaseLogout()
         await auth.awaitRefusedSessionClosuresForTesting()
@@ -417,7 +417,7 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         let switched = await auth.switchToProvenAccount(proven)
         await auth.awaitRefusedSessionClosuresForTesting()
 
-        XCTAssertFalse(switched)
+        XCTAssertEqual(switched, .refused(.expired), "la raison dit qu'il faut un nouveau lien")
         XCTAssertTrue(auth.isAuthenticated, "le compte ouvert n'a pas été rangé")
         XCTAssertEqual(auth.activeAccountId, "user-a")
         XCTAssertEqual(APIClient.shared.authToken, "tok-a")
@@ -426,14 +426,85 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         XCTAssertFalse(auth.isSwitchingAccount)
     }
 
+    /// #10518 — la fenêtre est celle que la passerelle a SERVIE : une preuve
+    /// reçue il y a deux minutes, servie pour une seule, ne range plus rien.
+    func test_switchToProvenAccount_pastAShortServedWindow_isExpired_andKeepsTheAccount() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        let proven = EmailProvenSession(
+            token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"),
+            receivedAt: Date().addingTimeInterval(-120),
+            adoptableFor: ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 120))
+
+        let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertEqual(switched, .refused(.expired))
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(APIClient.shared.authToken, "tok-a")
+        XCTAssertFalse(auth.hasPreservedSession(for: "user-b"))
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"])
+    }
+
+    /// Un délai servi à zéro ferme la fenêtre dès la réception.
+    func test_switchToProvenAccount_withAClosedWindow_isExpired_andKeepsTheAccount() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        let proven = EmailProvenSession(
+            token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"),
+            adoptableFor: ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 0))
+
+        let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertEqual(switched, .refused(.expired))
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"])
+    }
+
+    /// Quoi que la réponse prétende, une preuve gardée plus de trente minutes
+    /// est échue : un délai démesuré ne tient pas le compte ouvert en otage.
+    func test_switchToProvenAccount_pastTheHardBound_isExpired_whateverWasServed() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        let proven = EmailProvenSession(
+            token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"),
+            receivedAt: Date().addingTimeInterval(-(ProvenAdoptionWindow.clientMax + 1)),
+            adoptableFor: ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 31_536_000))
+
+        let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertEqual(switched, .refused(.expired))
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+        XCTAssertEqual(authService.loggedOutTokens, ["tok-b"])
+    }
+
+    /// L'expiration prime sur tout autre refus : elle se dit même pendant un
+    /// autre changement de compte.
+    func test_switchToProvenAccount_expiredWhileAnotherSwitchIsUnderway_saysExpired() async throws {
+        let auth = AuthManager.shared
+        try auth.applySession(token: "tok-a", sessionToken: "sess-a", user: makeUser("user-a"))
+        auth.isSwitchingAccount = true
+        let proven = EmailProvenSession(
+            token: "tok-c", sessionToken: "sess-c", user: makeUser("user-c"),
+            receivedAt: Date().addingTimeInterval(-(EmailProvenSession.adoptionWindow + 1)))
+
+        let switched = await auth.switchToProvenAccount(proven)
+        await auth.awaitRefusedSessionClosuresForTesting()
+
+        XCTAssertEqual(switched, .refused(.expired))
+        XCTAssertEqual(auth.activeAccountId, "user-a")
+    }
+
     func test_emailProvenSession_keepsTheInstantItWasReceived_acrossOrigins() {
         let receivedAt = Date(timeIntervalSince1970: 1_000)
         let proven = EmailProvenSession(token: "t", sessionToken: nil, user: makeUser("u"), receivedAt: receivedAt)
 
         XCTAssertEqual(proven.originating(from: .registration).receivedAt, receivedAt)
-        XCTAssertEqual(EmailProvenSession.adoptionWindow, 9 * 60, "une minute de marge sur les dix de la passerelle")
-        XCTAssertFalse(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(9 * 60)))
-        XCTAssertTrue(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(9 * 60 + 1)))
+        XCTAssertEqual(proven.adoptableFor, EmailProvenSession.adoptionWindow, "sans délai servi, le repli")
+        XCTAssertFalse(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(EmailProvenSession.adoptionWindow)))
+        XCTAssertTrue(proven.hasLapsedAdoptionWindow(now: receivedAt.addingTimeInterval(EmailProvenSession.adoptionWindow + 1)))
     }
 }
 

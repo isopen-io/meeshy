@@ -741,7 +741,7 @@ export class MaintenanceService {
    * action que l'utilisateur doit encore déclencher lui-même.
    */
   private purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
-    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId));
+    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId, { shareLinkLive: this.shareLinkRevocationLive }));
   }
 
   /**

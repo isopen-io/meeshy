@@ -21,6 +21,13 @@ const ar = {
   'emojiPicker.category.objects': 'الأشياء',
   'emojiPicker.category.symbols': 'الرموز',
   'emojiPicker.category.flags': 'الأعلام',
+  'emojiPicker.tones': 'درجات لون البشرة',
+  'emojiPicker.tone.default': 'الافتراضي',
+  'emojiPicker.tone.light': 'فاتح',
+  'emojiPicker.tone.medium-light': 'فاتح متوسط',
+  'emojiPicker.tone.medium': 'متوسط',
+  'emojiPicker.tone.medium-dark': 'داكن متوسط',
+  'emojiPicker.tone.dark': 'داكن',
 } as const satisfies EmojiPickerCatalog;
 
 export default ar;

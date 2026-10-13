@@ -110,7 +110,7 @@ describe('decodeLinkInvitation — une invitation, et rien de ce qui IDENTIFIE u
       readsHistory: true,
       guest: {
         allowed: true,
-        nicknameRequired: true,
+        nicknameRequired: false,
         emailRequired: false,
         birthdayRequired: false,
         languages: ['fr'],

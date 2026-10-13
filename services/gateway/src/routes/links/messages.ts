@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { guestShareLinkId } from '../../services/shareLinkReadGate';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
@@ -244,9 +245,12 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      const participantShareLink = anonymousParticipant?.anonymousSession?.shareLinkId
+      // #10492 — le lien de l'invité se lit comme aux autres portes : la
+      // colonne de la participation d'abord, la session embarquée en repli.
+      const participantShareLinkId = anonymousParticipant ? guestShareLinkId(anonymousParticipant) : null;
+      const participantShareLink = participantShareLinkId
         ? await fastify.prisma.conversationShareLink.findUnique({
-            where: { id: anonymousParticipant.anonymousSession.shareLinkId },
+            where: { id: participantShareLinkId },
             select: {
               id: true,
               conversationId: true,
@@ -271,6 +275,19 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
             }
           })
         : null;
+
+      // #10492 — un accès FINI ne se lit pas comme une session inconnue : la
+      // participation désactivée, ou celle dont le lien n'existe plus, reçoit
+      // le 410 `GUEST_ACCESS_REVOKED` des autres portes. Un 401 se rejoue.
+      const guestAccessEnded = anonymousParticipant
+        ? participantShareLinkId !== null && !participantShareLink
+        : (await fastify.prisma.participant.findFirst({
+            where: { sessionTokenHash: tokenHash, type: 'anonymous' },
+            select: { id: true },
+          })) !== null;
+      if (guestAccessEnded) {
+        return sendError(reply, 410, 'GUEST_ACCESS_REVOKED', { message: "L'accès de cet invité a été retiré" });
+      }
 
       if (!anonymousParticipant || !participantShareLink) {
         return sendUnauthorized(reply, 'Session invalide ou non autorisée pour ce lien', { code: AUTH_ERROR_CODES.SESSION_INVALID });

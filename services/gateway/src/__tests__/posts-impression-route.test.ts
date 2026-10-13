@@ -152,8 +152,9 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
+    // La ligne porte désormais sa fin de conservation (90 j, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
-      data: [{ postId: POST_ID, userId: 'u1', source: 'detail' }],
+      data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
     expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { postOpenCount: { increment: 1 } }));

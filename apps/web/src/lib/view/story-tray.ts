@@ -42,6 +42,9 @@ export type StoryTrayGroup = {
    * ici comme le fait `LentilleRailEntry.moodEmoji` côté iOS
    * (`StoriesVivantsRail.swift`) — une pastille porte les deux signaux. */
   readonly moodEmoji?: string | null;
+  /** Le post de cette humeur — ce que la tuile compte quand elle la montre
+   * (#10483). Posé avec `moodEmoji` par `withMoods`. */
+  readonly moodPostId?: string;
 };
 
 function instantOf(value: string | Date | undefined): number {
@@ -163,9 +166,12 @@ export function withMoods(
 ): readonly StoryTrayGroup[] {
   const moodByAuthor = moodsByAuthor(moods);
   if (moodByAuthor.size === 0) return groups;
+  const postByAuthor = currentMoodPosts(moods);
   return groups.map((g) => {
     const mood = moodByAuthor.get(g.authorId);
-    return mood === undefined ? g : { ...g, moodEmoji: mood };
+    if (mood === undefined) return g;
+    const postId = postByAuthor.get(g.authorId)?.id;
+    return postId === undefined ? { ...g, moodEmoji: mood } : { ...g, moodEmoji: mood, moodPostId: postId };
   });
 }
 

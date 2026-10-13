@@ -663,3 +663,43 @@ describe('POST /conversations/join/:linkId — panne interne', () => {
     expect(res.statusCode).toBe(500);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Un invité qui n'a saisi AUCUN pseudo entre quand même (directive porteur
+// 2026-10-13) : le champ vide passait inaperçu et « Continuer sans compte »
+// se refusait. La passerelle le nomme elle-même.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /links/:key/members — invité sans pseudo saisi', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  const joinWithout = (payload: Record<string, unknown>) => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, requireNickname: true });
+    (app as any).prisma.participant.create.mockClear();
+    return app.inject({ method: 'POST', url: `/links/${LINK_ID}/members`, payload });
+  };
+  const writtenName = (): string => (app as any).prisma.participant.create.mock.calls[0][0].data.displayName;
+
+  it('sans champ nickname, sur un lien qui exige un pseudo : il entre sous un pseudo généré', async () => {
+    const res = await joinWithout({});
+
+    expect(res.statusCode).toBeLessThan(300);
+    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+\d{3,5}$/);
+  });
+
+  it('un pseudo fait de blancs vaut un pseudo absent', async () => {
+    const res = await joinWithout({ nickname: '   ' });
+
+    expect(res.statusCode).toBeLessThan(300);
+    expect(writtenName()).toMatch(/^ano_[A-Z][a-z]+[A-Z][a-z]+\d{3,5}$/);
+  });
+
+  it('un pseudo saisi reste celui de l\'invité', async () => {
+    const res = await joinWithout({ nickname: 'Awa' });
+
+    expect(res.statusCode).toBeLessThan(300);
+    expect(writtenName()).toBe('ano_Awa');
+  });
+});

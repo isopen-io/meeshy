@@ -9,6 +9,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
+import { useImpressionRef } from '@/lib/view/reading-telemetry';
 import { peekMood, useMoodPeekHosted } from '@/lib/view/mood-peek';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
 import { railRingBox, railStroke } from '@/components/rail-tile';
@@ -53,6 +54,7 @@ export function Avatar({
   profileUsername,
   storyRing,
   mood,
+  moodPostId,
   moodStill = false,
   moodAuthorId,
   redundant,
@@ -180,6 +182,12 @@ export function Avatar({
    * d'iOS (`MeeshyAvatar.swift:361-365`), portée par `identityTarget`.
    */
   storyRing?: AuthorStoryRing;
+  /**
+   * LE POST DE L'HUMEUR AFFICHÉE (#10483) — l'humeur visible compte une
+   * impression `status` depuis `mood_avatar`, une fois par montage. Absent ⇒
+   * l'humeur se peint sans rien compter.
+   */
+  moodPostId?: string;
   /**
    * UN AUTRE CHEMIN ANNONCÉ MÈNE DÉJÀ AU MÊME ENDROIT (#7528) — même contrat
    * que `PersonName.redundant` : le lien reste au DOIGT et sort du parcours
@@ -311,7 +319,7 @@ export function Avatar({
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
            `data-story-ring` portent les leurs — un gate qui compterait les
            enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
-        <MoodBadge mood={humeur} here={here} motion={motion} outline={moodOutline} size={size} still={moodStill} />
+        <MoodBadge mood={humeur} postId={moodPostId} here={here} motion={motion} outline={moodOutline} size={size} still={moodStill} />
       )}
       {storyRing === undefined ? null : (
         /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
@@ -566,6 +574,7 @@ const moodOutlineStyle = (outline: MoodOutline | undefined, size: number): CSSPr
  */
 function MoodBadge({
   mood,
+  postId,
   here,
   motion,
   outline,
@@ -573,12 +582,14 @@ function MoodBadge({
   still,
 }: {
   readonly mood: string;
+  readonly postId: string | undefined;
   readonly here: boolean;
   readonly motion: HereMotion;
   readonly outline: MoodOutline | undefined;
   readonly size: number;
   readonly still: boolean;
 }) {
+  const impressionRef = useImpressionRef(postId, 'status', 'mood_avatar');
   const wasHere = useRef(here);
   const settled = useRef(false);
   const rendered = useRef(here);
@@ -628,6 +639,7 @@ function MoodBadge({
       ) : null}
       <span
         key={here ? 'here' : 'there'}
+        ref={impressionRef}
         data-mood={mood}
         data-mood-focused={motion === 'focused' ? 'true' : undefined}
         className={`pointer-events-none absolute rounded-chip${enters}`}

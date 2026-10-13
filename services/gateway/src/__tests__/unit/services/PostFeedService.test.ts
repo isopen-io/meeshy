@@ -1127,19 +1127,6 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     expect(rankById(result.items)[0]).toBe('reel-1');
   });
 
-  it('demotes a post the viewer has already seen (impression fatigue)', async () => {
-    const seen = makePost('seen-1', { authorId: 'a-seen', createdAt: recent() });
-    const fresh = makePost('fresh-1', { authorId: 'a-fresh', createdAt: recent() });
-    mockPostFindMany.mockResolvedValue([seen, fresh]);
-    mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
-    mockPostImpressionGroupBy.mockResolvedValue([{ postId: 'seen-1', _count: { postId: 3 } }]);
-
-    const service = new PostFeedService(mockPrisma);
-    const result = await service.getFeed('user-1');
-
-    expect(rankById(result.items)[0]).toBe('fresh-1');
-  });
-
   it('boosts posts from a creator the viewer actively engages with (interest affinity)', async () => {
     const fromLoved = makePost('loved-1', { authorId: 'creator-loved', createdAt: recent() });
     const fromOther = makePost('other-1', { authorId: 'creator-other', createdAt: recent() });

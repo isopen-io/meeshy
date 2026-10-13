@@ -31,14 +31,14 @@ import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { verifyEmailResponseSchema } from '@meeshy/shared/types';
 import { getRequestContext } from '../../services/GeoIPService';
-import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-factor';
+import { mintPendingTwoFactorChallenge, provenChallengeAdoption } from '../../services/auth/pending-two-factor';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
 import { openSession } from './open-session';
 import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
 import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { currentSessionOf } from '../../services/auth/current-session';
-import { adoptProvenSession } from '../../services/auth/session-adoption';
+import { adoptProvenSession, provenSessionAdoption } from '../../services/auth/session-adoption';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -453,6 +453,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           ...verification,
           requires2FA: true,
           twoFactorToken,
+          ...provenChallengeAdoption(),
           user: {
             id: user.id,
             username: user.username,
@@ -478,7 +479,8 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         token: opened.token,
         sessionToken: opened.sessionToken,
         session: formatSessionResponse(opened.session, false),
-        expiresIn: 24 * 60 * 60
+        expiresIn: 24 * 60 * 60,
+        ...provenSessionAdoption(opened.session, new Date())
       });
 
     } catch (error) {
