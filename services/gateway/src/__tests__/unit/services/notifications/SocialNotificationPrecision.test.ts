@@ -133,7 +133,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_comment');
       expect(payload).toBeDefined();
       expect(payload.title).toBe('Bob Commentateur');
-      expect(payload.subtitle).toBe('a commenté votre statut');
+      expect(payload.subtitle).toBe('a commenté votre humeur');
       expect(payload.content).toBe('Trop drôle !');
       // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
       expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
@@ -535,15 +535,15 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'friend_story_comment').content).toBe('a commenté une publication');
     });
 
-    it('STATUS : article masculin (« a répondu dans un statut »)', async () => {
+    it('STATUS : se dit « humeur » (« a répondu dans une humeur »), le fil garde STATUS (#10526)', async () => {
       await service.createStoryCommentNotificationsBatch({
         ...baseParams,
         commentExcerpt: undefined,
         postType: 'STATUS',
       });
 
-      expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans un statut');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans une humeur');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans une humeur de Alice Autrice');
     });
   });
 

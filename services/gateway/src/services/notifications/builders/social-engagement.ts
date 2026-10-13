@@ -26,7 +26,7 @@
  * un nom qui ne le déclenche pas coûte moins qu'une ligne de plus dessus.
  */
 import type { Notification } from '@meeshy/shared/types/notification';
-import { notificationString, repostProseKind } from '@meeshy/shared/utils/notification-strings';
+import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { buildOwnerSubtitleWithDetail, targetPreviewBody } from '../notification-preview';
 import { resolvePostMedia } from '../post-media-thumbnail';
 import { loadServedPostExcerpt } from '../served-post-excerpt';
@@ -240,18 +240,15 @@ export async function createPostRepostNotification(
   const lang = prism.lang;
   const trimmedPostPreview = await servedExcerpt(deps, params.originalPostId, prism.ordered);
   const media = await resolvePostMedia(deps.prisma, params.originalPostId);
-  // Le mot que l'auteur lit pour SON contenu — un STATUS est son « humeur »,
-  // comme dans le titre (`buildNotificationDisplay`). Le fil garde STATUS.
-  const reposted = repostProseKind(params.postType) ?? 'POST';
   // Cf. `targetPreviewBody` : une republication n'apporte aucun contenu neuf,
   // le détail du contenu republié descend donc dans le corps.
-  const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: reposted });
+  const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: params.postType ?? 'POST' });
 
   return deps.createNotification({
     userId: params.postAuthorId,
     type: 'post_repost',
     priority: 'normal',
-    content: targetPreviewBody(lang, reposted, {
+    content: targetPreviewBody(lang, params.postType ?? 'POST', {
       textPreview: trimmedPostPreview,
       mediaType: media?.mediaType,
     }),
@@ -590,7 +587,7 @@ export async function createCommentReactionNotification(
     metadata: {
       action: 'view_post',
       reactionEmoji: params.reactionEmoji,
-      // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+      // Entité portant le commentaire → le client affiche « Réel »/« Humeur »/« Story »/
       // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
       // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
       postType: params.postType ?? 'POST',
