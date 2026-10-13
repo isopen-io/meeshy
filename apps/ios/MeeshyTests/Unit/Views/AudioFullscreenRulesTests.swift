@@ -196,6 +196,11 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertEqual(AudioFullscreenLayout.lyricAnchor(header: 0, footer: 0, height: 0), 0.5)
     }
 
+    func test_bottomRow_clearsTheHomeIndicator_evenWhenTheContainerAnnouncesNoInset() {
+        XCTAssertGreaterThanOrEqual(AudioFullscreenLayout.bottomInset(safeArea: 0), 34)
+        XCTAssertGreaterThan(AudioFullscreenLayout.bottomInset(safeArea: 34), 34)
+    }
+
     // MARK: - Le chrome s'efface pendant l'écoute, jamais sous VoiceOver
 
     func test_autoHideDelay_whilePlaying_withChromeVisible_isTheSharedDelay() {

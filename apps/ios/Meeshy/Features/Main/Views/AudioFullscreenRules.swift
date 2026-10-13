@@ -182,6 +182,14 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
         clamp((width * 0.078).rounded(), baseTranscriptSize * 1.6, (baseTranscriptSize * lyricScale).rounded())
     }
 
+    /// **La rangée du bas se pose au-dessus de la barre d'accueil.** La page du
+    /// pager descend jusqu'au bord de l'écran : mesurée sur l'iPhone du porteur
+    /// (2026-10-13), la rangée des langues passait sous la barre d'accueil. Un
+    /// conteneur qui n'annonce aucune marge garde un plancher.
+    static func bottomInset(safeArea: CGFloat) -> CGFloat {
+        max(safeArea, 28) + 8
+    }
+
     /// **Où se pose le mot en cours**, en fraction de la hauteur de la page : au
     /// premier tiers de la bande restée libre entre l'en-tête et le pied — les
     /// paroles défilent SOUS eux, le centre de l'écran serait sous le flou.
