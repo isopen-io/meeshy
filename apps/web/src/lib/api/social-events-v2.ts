@@ -139,7 +139,9 @@ export function createSocialEventsV2Recorder(deps: SocialEventsV2Deps): SocialEv
     const target = laneFor(input.type);
     if (target === null) return;
     const lane = lanes.get(target.key) ?? { identity: target.identity, queue: [] };
-    const next = [...lane.queue, { ...input, ...deps.stamp() } as SocialEventV2];
+    /* Un événement DÉJÀ estampillé (la file du service worker, #10507) garde
+       son eventId et son heure : le rejeu reste reconnaissable. */
+    const next = [...lane.queue, { ...deps.stamp(), ...input } as SocialEventV2];
     lane.queue = next.length > PENDING_CAP ? next.slice(next.length - PENDING_CAP) : next;
     lanes.set(target.key, lane);
     if (pending() >= SOCIAL_EVENTS_V2_COUNT_TRIGGER) {

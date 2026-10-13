@@ -226,4 +226,11 @@ describe('la file v2 — séparée, idempotente, en sommeil sur refus', () => {
     await h.recorder.flush({ keepalive: true });
     expect(h.requests[0]?.keepalive).toBe(true);
   });
+
+  test('un événement déjà estampillé (file du service worker) garde son eventId et son heure', async () => {
+    const h = harness();
+    h.recorder.record({ ...react(1), eventId: 'sw-1', occurredAt: '2026-10-12T08:00:00.000Z' } as unknown as SocialEventV2Input);
+    await h.recorder.flush();
+    expect(h.sent()[0]).toMatchObject({ eventId: 'sw-1', occurredAt: '2026-10-12T08:00:00.000Z' });
+  });
 });

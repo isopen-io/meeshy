@@ -379,3 +379,18 @@ if (__SHELL__) {
   if (document.readyState === 'complete') ecouterLiens();
   else window.addEventListener('load', ecouterLiens, { once: true });
 }
+
+/**
+ * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
+ * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement.
+ */
+{
+  const viderNotifications = (): void => {
+    void Promise.all([import('@/lib/notifications/notification-telemetry'), import('@/lib/view/reading-telemetry')]).then(
+      ([{ drainNotificationTelemetry }, { readingTelemetry }]) =>
+        drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, (event) => readingTelemetry.recordV2(event)),
+    );
+  };
+  if (document.readyState === 'complete') viderNotifications();
+  else window.addEventListener('load', viderNotifications, { once: true });
+}
