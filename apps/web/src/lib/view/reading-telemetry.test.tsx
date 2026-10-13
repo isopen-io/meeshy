@@ -14,7 +14,11 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import {
   IMPRESSION_DWELL_MS,
+  READING_PENDING_PREFIX,
   dwellContentTypeOf,
+  pendingReadingKey,
+  savePendingReading,
+  takePendingReading,
   observeImpression,
   readingTelemetry,
   useReadingSession,
@@ -57,9 +61,13 @@ const show = (ratio = 1) => act(() => live().forEach((o) => o.callback([{ isInte
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let recorded: SocialEvent[] = [];
-let exitFlushes = 0;
+let persisted: number[] = [];
+let forgotten = 0;
+let flushed: number[] = [];
 const originalRecord = readingTelemetry.record;
-const originalFlushOnExit = readingTelemetry.flushOnExit;
+const originalPersistOnExit = readingTelemetry.persistOnExit;
+const originalForgetPersisted = readingTelemetry.forgetPersisted;
+const originalFlushNow = readingTelemetry.flushNow;
 let container: HTMLDivElement;
 let root: Root | null = null;
 
@@ -82,9 +90,17 @@ beforeEach(() => {
   readingTelemetry.record = (event: SocialEvent) => {
     recorded.push(event);
   };
-  exitFlushes = 0;
-  readingTelemetry.flushOnExit = () => {
-    exitFlushes += 1;
+  persisted = [];
+  forgotten = 0;
+  readingTelemetry.persistOnExit = () => {
+    persisted.push(recorded.length);
+  };
+  readingTelemetry.forgetPersisted = () => {
+    forgotten += 1;
+  };
+  flushed = [];
+  readingTelemetry.flushNow = () => {
+    flushed.push(recorded.length);
   };
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -95,7 +111,9 @@ afterEach(() => {
   root = null;
   container.remove();
   readingTelemetry.record = originalRecord;
-  readingTelemetry.flushOnExit = originalFlushOnExit;
+  readingTelemetry.persistOnExit = originalPersistOnExit;
+  readingTelemetry.forgetPersisted = originalForgetPersisted;
+  readingTelemetry.flushNow = originalFlushNow;
   setVisibility('visible');
   (globalThis as { IntersectionObserver?: unknown }).IntersectionObserver = native;
 });
@@ -118,6 +136,11 @@ const showTab = () => act(() => {
 });
 const leavePage = () => act(() => {
   window.dispatchEvent(new Event('pagehide'));
+});
+const restoreFromCache = () => act(() => {
+  const event = new Event('pageshow');
+  Object.defineProperty(event, 'persisted', { value: true });
+  window.dispatchEvent(event);
 });
 
 const POST: FeedPost = { id: '6512bd43d9caa6e02c990b0a', type: 'POST', createdAt: '2026-09-13T11:55:00.000Z', content: 'Bonjour', originalLanguage: 'fr' };
@@ -284,7 +307,7 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     expect(calls()[3]).toMatchObject({ type: 'dwell', contentType: 'REEL', surface: 'reels' });
   });
 
-  test('fermer l’onglet ou recharger (`pagehide`) ferme la séance AVANT le vidage de sortie — le démontage ne la rejoue pas (#10519)', () => {
+  test('fermer l’onglet ou recharger (`pagehide`) ferme la séance PUIS garde la file — le démontage ne la rejoue pas (#10519)', () => {
     let t = 1_000;
     mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
     t = 21_000;
@@ -293,7 +316,7 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 20_000 });
     expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, dwellMs: 20_000 });
     expect(closing).toHaveLength(2);
-    expect(exitFlushes).toBeGreaterThan(0);
+    expect(persisted).toEqual([4]);
     act(() => root?.unmount());
     root = null;
     expect(calls()).toHaveLength(4);
@@ -304,7 +327,8 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
     t = 5_000;
     hideTab();
-    expect(exitFlushes).toBeGreaterThan(0);
+    expect(flushed).toEqual([4]);
+    expect(persisted).toEqual([]);
     t = 65_000;
     showTab();
     t = 68_000;
@@ -316,6 +340,20 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     expect(after[1]).toMatchObject({ dwellMs: 5_000, startedAt: new Date(0).toISOString() });
     expect(after[3]).toMatchObject({ dwellMs: 3_000, startedAt: new Date(65_000).toISOString() });
     expect((after[1] as { sessionId: string }).sessionId).not.toBe((after[3] as { sessionId: string }).sessionId);
+  });
+
+  test('une page rendue par le cache (`pageshow` persisted) oublie la file gardée et rouvre la séance', () => {
+    let t = 0;
+    mount(<SessionProbe postId={POST.id} active clock={() => t} openView />);
+    t = 1_000;
+    leavePage();
+    t = 9_000;
+    restoreFromCache();
+    expect(forgotten).toBe(1);
+    t = 10_000;
+    act(() => root?.unmount());
+    root = null;
+    expect(calls()[5]).toMatchObject({ type: 'dwell', dwellMs: 1_000, startedAt: new Date(9_000).toISOString() });
   });
 
   test('masqué deux fois de suite (onglet masqué puis fermé) : une seule fermeture', () => {
@@ -369,5 +407,70 @@ describe('le plateau compte les humeurs qu’il montre', () => {
     expect(statuses.length).toBeGreaterThan(0);
     expect(statuses).toContainEqual({ type: 'impression', postId: 'st-humeur-ines', source: 'status' });
     client.clear();
+  });
+});
+
+describe('la file d’une page qui s’en va attend le prochain chargement du MÊME compte (#10519)', () => {
+  const memory = () => {
+    const map = new Map<string, string>();
+    return {
+      map,
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value); },
+      removeItem: (key: string) => { map.delete(key); },
+    };
+  };
+  const KEY = `${READING_PENDING_PREFIX}u:42`;
+  const events: readonly SocialEvent[] = [
+    { type: 'impression', postId: POST.id, source: 'feed' },
+    { type: 'view', postId: POST.id, durationMs: 4000 },
+  ];
+  const later: readonly SocialEvent[] = [{ type: 'view', postId: REEL_STUDIO.id, durationMs: 9000 }];
+
+  test('seul un compte a une file gardée — ni invité, ni visiteur', () => {
+    expect(pendingReadingKey('u:42')).toBe(KEY);
+    expect(pendingReadingKey('g:tok')).toBeNull();
+    expect(pendingReadingKey(null)).toBeNull();
+  });
+
+  test('garder puis reprendre rend la file une fois, puis plus rien', () => {
+    const storage = memory();
+    savePendingReading(storage, KEY, 'page-a', events);
+    expect(takePendingReading(storage, KEY)).toEqual(events);
+    expect(takePendingReading(storage, KEY)).toEqual([]);
+  });
+
+  test('deux onglets du même compte fermés l’un après l’autre : aucune file n’écrase l’autre', () => {
+    const storage = memory();
+    savePendingReading(storage, KEY, 'page-a', events);
+    savePendingReading(storage, KEY, 'page-b', later);
+    expect(takePendingReading(storage, KEY)).toEqual([...events, ...later]);
+  });
+
+  test('une page qui regarde de nouveau remplace SA part ; vide, elle la retire', () => {
+    const storage = memory();
+    savePendingReading(storage, KEY, 'page-a', events);
+    savePendingReading(storage, KEY, 'page-b', later);
+    savePendingReading(storage, KEY, 'page-a', []);
+    expect(takePendingReading(storage, KEY)).toEqual(later);
+    savePendingReading(storage, KEY, 'page-b', []);
+    expect(storage.map.has(KEY)).toBe(false);
+  });
+
+  test('la file d’un autre compte n’est pas touchée', () => {
+    const storage = memory();
+    const other = `${READING_PENDING_PREFIX}u:7`;
+    savePendingReading(storage, other, 'page-a', events);
+    expect(takePendingReading(storage, KEY)).toEqual([]);
+    expect(takePendingReading(storage, other)).toEqual(events);
+  });
+
+  test('une valeur illisible ou d’une autre forme est jetée, jamais rejouée', () => {
+    const storage = memory();
+    storage.setItem(KEY, '{oops');
+    expect(takePendingReading(storage, KEY)).toEqual([]);
+    storage.setItem(KEY, JSON.stringify([{ page: 'p', events: [{ type: 'view' }, { type: 'impression', postId: POST.id, source: 'feed' }, 3] }, 'x']));
+    expect(takePendingReading(storage, KEY)).toEqual([{ type: 'impression', postId: POST.id, source: 'feed' }]);
+    expect(storage.map.has(KEY)).toBe(false);
   });
 });

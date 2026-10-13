@@ -3,7 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import {
   SOCIAL_EVENTS_BATCH_CAP,
-  SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP,
   SOCIAL_EVENTS_PENDING_CAP,
   createSocialEventsEmitter,
   createSocialEventsRecorder,
@@ -192,39 +191,45 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
   });
 });
 
-describe('le vidage de SORTIE survit au déchargement de la page (#10519)', () => {
-  test('`flush({ keepalive })` part en keepalive, coupé sous le plafond qu’un navigateur accepte au déchargement', async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    for (let n = 0; n < SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP + 5; n += 1) recorder.record(impression(n));
-    await recorder.flush({ keepalive: true });
-    expect(requests.map((r) => r.keepalive)).toEqual([true, true]);
-    expect(requests.map((r) => (r.body as { events: unknown[] }).events.length)).toEqual([SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP, 5]);
-  });
-
-  test('le vidage ordinaire ne demande pas keepalive', async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    recorder.record(impression(1));
-    await recorder.flush();
-    expect(requests[0]?.keepalive).toBeUndefined();
-  });
-
-  test('une sortie demandée PENDANT un lot en vol : ce qui reste part en keepalive dans la même boucle', async () => {
-    const options: Array<{ readonly keepalive: boolean }> = [];
+describe('ce qui reste en file quand la page s’en va se reprend au prochain chargement (#10519)', () => {
+  test('`snapshot()` rend la file dans l’ordre, lot en vol compris', async () => {
     let release: (verdict: SendVerdict) => void = () => undefined;
+    let calls = 0;
     const emitter = createSocialEventsEmitter({
-      send: (_events, opts) => {
-        options.push(opts);
-        return options.length === 1 ? new Promise<SendVerdict>((resolve) => { release = resolve; }) : Promise.resolve('sent');
+      send: () => {
+        calls += 1;
+        return calls === 1 ? new Promise<SendVerdict>((resolve) => { release = resolve; }) : Promise.resolve('sent');
       },
       schedule: () => undefined,
     });
     emitter.record(impression(1));
-    const first = emitter.flush();
+    const inFlight = emitter.flush();
     emitter.record({ type: 'view', postId: OID(1), durationMs: 4000 });
-    void emitter.flush({ keepalive: true });
+    expect(emitter.snapshot()).toEqual([impression(1), { type: 'view', postId: OID(1), durationMs: 4000 }]);
     release('sent');
-    await first;
-    expect(options).toEqual([{ keepalive: false }, { keepalive: true }]);
-    expect(emitter.pending()).toBe(0);
+    await inFlight;
+    expect(emitter.snapshot()).toEqual([]);
+  });
+
+  test('`restore()` remet les événements repris AVANT les nouveaux et arme un envoi', async () => {
+    const sent: (readonly SocialEvent[])[] = [];
+    const clock = manualScheduler();
+    const emitter = createSocialEventsEmitter({ send: async (events) => { sent.push(events); return 'sent'; }, schedule: clock.schedule });
+    emitter.record(impression(2));
+    clock.fire();
+    await settle();
+    emitter.record(impression(3));
+    emitter.restore([impression(1)]);
+    expect(emitter.snapshot()).toEqual([impression(1), impression(3)]);
+    expect(clock.armed()).toBe(1);
+    clock.fire();
+    await settle();
+    expect(sent[1]).toEqual([impression(1), impression(3)]);
+  });
+
+  test('`restore()` garde la borne de la file', () => {
+    const emitter = createSocialEventsEmitter({ send: async () => 'sent', schedule: () => undefined });
+    emitter.restore(Array.from({ length: SOCIAL_EVENTS_PENDING_CAP + 10 }, (_, n) => impression(n)));
+    expect(emitter.pending()).toBe(SOCIAL_EVENTS_PENDING_CAP);
   });
 });

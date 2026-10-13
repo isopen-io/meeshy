@@ -26,13 +26,6 @@ import type { ApiResult, Credential, HttpTransport } from './http';
  */
 export const SOCIAL_EVENTS_BATCH_CAP = 200;
 
-/**
- * Un vidage de SORTIE (`pagehide`, onglet masqué, coque en arrière-plan) part
- * en `keepalive` pour survivre au déchargement ; le navigateur plafonne alors
- * le corps en vol à 64 Kio — 100 événements y tiennent largement.
- */
-export const SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP = 100;
-
 /** La file ne grossit pas sans borne quand le réseau manque longtemps. */
 export const SOCIAL_EVENTS_PENDING_CAP = 1000;
 
@@ -67,15 +60,16 @@ export type SocialEvent =
 /** `sent` : écrit · `retry` : panne transitoire, garder · `drop` : refus définitif. */
 export type SendVerdict = 'sent' | 'retry' | 'drop';
 
-/** `keepalive` : un vidage de sortie, qui doit survivre au déchargement de la page. */
-export type FlushOptions = { readonly keepalive?: boolean };
-
-export type SendOptions = { readonly keepalive: boolean };
-
+/**
+ * `snapshot` rend la file (lot en vol compris) pour qu'une page qui s'en va
+ * la garde ; `restore` la reprend au chargement suivant, devant les nouveaux.
+ */
 export type SocialEventsEmitter = {
   readonly record: (event: SocialEvent) => void;
-  readonly flush: (options?: FlushOptions) => Promise<void>;
+  readonly flush: () => Promise<void>;
   readonly pending: () => number;
+  readonly snapshot: () => readonly SocialEvent[];
+  readonly restore: (events: readonly SocialEvent[]) => void;
 };
 
 const DURATION_CAP_MS = 300_000;
@@ -99,7 +93,7 @@ export function normalizeSocialEvent(event: SocialEvent): SocialEvent {
 }
 
 export function createSocialEventsEmitter(deps: {
-  readonly send: (events: readonly SocialEvent[], options: SendOptions) => Promise<SendVerdict>;
+  readonly send: (events: readonly SocialEvent[]) => Promise<SendVerdict>;
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
 }): SocialEventsEmitter {
@@ -107,7 +101,6 @@ export function createSocialEventsEmitter(deps: {
   let queue: readonly SocialEvent[] = [];
   let scheduled = false;
   let flushing = false;
-  let leaving = false;
 
   function arm(): void {
     if (scheduled || queue.length === 0) return;
@@ -118,33 +111,35 @@ export function createSocialEventsEmitter(deps: {
     }, flushDelayMs);
   }
 
+  const bounded = (events: readonly SocialEvent[]): readonly SocialEvent[] =>
+    events.length > SOCIAL_EVENTS_PENDING_CAP ? events.slice(events.length - SOCIAL_EVENTS_PENDING_CAP) : events;
+
   function record(event: SocialEvent): void {
-    const next = [...queue, normalizeSocialEvent(event)];
-    queue = next.length > SOCIAL_EVENTS_PENDING_CAP ? next.slice(next.length - SOCIAL_EVENTS_PENDING_CAP) : next;
+    queue = bounded([...queue, normalizeSocialEvent(event)]);
     arm();
   }
 
-  /* Une sortie demandée pendant un lot en vol n'attend pas : la boucle en
-     cours la lit au lot suivant, et ce qui reste part en keepalive. */
-  async function flush(options: FlushOptions = {}): Promise<void> {
-    if (options.keepalive === true) leaving = true;
+  function restore(events: readonly SocialEvent[]): void {
+    queue = bounded([...events.map(normalizeSocialEvent), ...queue]);
+    arm();
+  }
+
+  async function flush(): Promise<void> {
     if (flushing) return;
     flushing = true;
     try {
       while (queue.length > 0) {
-        const keepalive = leaving;
-        const batch = queue.slice(0, keepalive ? SOCIAL_EVENTS_KEEPALIVE_BATCH_CAP : SOCIAL_EVENTS_BATCH_CAP);
-        const verdict = await deps.send(batch, { keepalive }).catch((): SendVerdict => 'retry');
+        const batch = queue.slice(0, SOCIAL_EVENTS_BATCH_CAP);
+        const verdict = await deps.send(batch).catch((): SendVerdict => 'retry');
         if (verdict === 'retry') break;
         queue = queue.slice(batch.length);
       }
     } finally {
       flushing = false;
-      leaving = false;
     }
   }
 
-  return { record, flush, pending: () => queue.length };
+  return { record, flush, pending: () => queue.length, snapshot: () => queue, restore };
 }
 
 /** Le verdict d'un appel — ce qui mérite d'être rejoué, ce qui ne le mérite pas. */
@@ -176,14 +171,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 /** Un lot d'un COMPTE — le transport y pose son crédential. */
 export function sendAccountBatch(deps: SocialEventsTransportDeps) {
-  return (events: readonly SocialEvent[], options: SendOptions = { keepalive: false }): Promise<SendVerdict> =>
+  return (events: readonly SocialEvent[]): Promise<SendVerdict> =>
     withTimeout(
       deps.transport
         .request<{ readonly recorded: number; readonly rejected: number }>({
           method: 'POST',
           path: socialEndpoints.events,
           body: { events },
-          ...(options.keepalive ? { keepalive: true } : {}),
         })
         .then(verdictOf),
       deps.timeoutMs ?? 20_000,
@@ -242,7 +236,7 @@ export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
     void sendVisitorView(deps, event).catch(() => undefined);
   }
 
-  return { record, flush: emitter.flush, pending: emitter.pending };
+  return { record, flush: emitter.flush, pending: emitter.pending, snapshot: emitter.snapshot, restore: emitter.restore };
 }
 
 export function newEngagementSessionId(): string {
