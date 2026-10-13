@@ -25,7 +25,9 @@ import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
 import type { ViewAttribution } from '@/lib/view/content-open';
-import { useReadingSession } from '@/lib/view/reading-telemetry';
+import { readingTelemetry, useReadingSession } from '@/lib/view/reading-telemetry';
+import { interactionOf } from '@/lib/telemetry/card-context';
+import { contentTapOf } from '@/lib/telemetry/content-taps';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -438,10 +440,20 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
     [noteMutes, soundOn, onToggleSound],
   );
   const chromeHidden = props.chromeHidden === true;
+  /* LES TAPS D'IDENTITÉ (#10502) — le même écouteur que la carte du fil. */
+  const postId = model.id;
+  const onTapCapture = useCallback(
+    (event: { readonly target: EventTarget | null }) => {
+      const tap = contentTapOf(event.target);
+      if (tap !== null) readingTelemetry.recordV2(interactionOf(postId, tap));
+    },
+    [postId],
+  );
 
   return (
     <article
       data-reel={model.id}
+      onClickCapture={onTapCapture}
       data-reel-index={index}
       data-reel-mode={mode}
       tabIndex={-1}
