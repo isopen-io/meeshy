@@ -371,11 +371,6 @@ struct ProfileUserPostsList: View {
             },
             onTapPost: { tapped in openPost(tapped) },
             onTapRepost: { _ in openPost(post) },
-            onSeeMore: {
-                // "Voir plus" expands the text inline AND counts a post view —
-                // throttled to once per hour per user+post (shared with open).
-                recordView(post.id)
-            },
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onReport: !isOwnPost ? { id in
                 Task { await viewModel.report(id) }
@@ -386,20 +381,23 @@ struct ProfileUserPostsList: View {
         .equatable()
     }
 
-    // MARK: - Open / view tracking
+    // MARK: - Open
+
+    /// L'ouverture se compte à DESTINATION (#10483) : le détail
+    /// (`PostDetailViewModel.registerDetailOpen`) et le lecteur de réels
+    /// (`ReelsViewModel.recordView`) envoient chacun la vue de leur ouverture.
+    /// La liste du profil n'en envoie aucune — elle doublait la vue de la
+    /// destination, et sa fenêtre d'une heure taisait les réouvertures.
+    private var opening: ProfilePostOpening {
+        ProfilePostOpening(onOpenPost: onOpenPost, onOpenReel: onOpenReel)
+    }
 
     private func openPost(_ post: FeedPost) {
-        recordView(post.id)
-        onOpenPost?(post)
+        opening.openPost(post)
     }
 
     private func openReel(_ post: FeedPost) {
-        recordView(post.id)
-        if let onOpenReel {
-            onOpenReel(post, viewModel.reels)
-        } else {
-            onOpenPost?(post)
-        }
+        opening.openReel(post, in: viewModel.reels)
     }
 
     /// Tap sur la tuile « Stories » : sur SON PROPRE profil, ouvre la page des
@@ -420,15 +418,6 @@ struct ProfileUserPostsList: View {
 
     private func dismissHost() {
         dismiss()
-    }
-
-    /// Counts ONE post view (open or "voir plus") through the persistent 1-hour
-    /// per-(user, post) throttle: the local guard is checked and written BEFORE
-    /// anything reaches the backend, so reopening or tapping "voir plus" again
-    /// within the hour sends nothing — even across app launches.
-    private func recordView(_ postId: String) {
-        guard PostViewThrottle.shared.shouldRecordView(postId: postId) else { return }
-        Task { try? await PostService.shared.viewPost(postId: postId, duration: nil) }
     }
 
     // MARK: - Share
@@ -537,61 +526,23 @@ enum ProfilePostsOpener {
     }
 }
 
-// MARK: - Post View Throttle (persistent, per user+post, 1 hour)
-//
-// Product rule (app-side, not an SDK atom): a post "view" — opening the post OR
-// tapping "voir plus" — is counted at most ONCE per hour per signed-in user per
-// post, even across reopens and app launches. The local guard is persisted to
-// UserDefaults and checked/written BEFORE anything is sent to the backend, so
-// the network increment only happens when the throttle actually allows it.
-@MainActor
-final class PostViewThrottle {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    static let shared = PostViewThrottle()
+/// Ce que fait un tap d'ouverture dans la liste d'un profil : amener le
+/// contenu à sa destination, rien d'autre. Chaque tap ouvre — aucune fenêtre ne
+/// tait une réouverture — et la vue est comptée par la destination (#10483).
+struct ProfilePostOpening {
+    let onOpenPost: ((FeedPost) -> Void)?
+    let onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)?
 
-    private let defaults: UserDefaults
-    private let storageKey = "meeshy.postViewThrottle.v1"
-    private let ttl: TimeInterval = 3600
-    /// key = "<userId>:<postId>" → last recorded view (epoch seconds).
-    private var timestamps: [String: Date]
+    func openPost(_ post: FeedPost) {
+        onOpenPost?(post)
+    }
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        if let raw = defaults.dictionary(forKey: storageKey) as? [String: TimeInterval] {
-            timestamps = raw.mapValues { Date(timeIntervalSince1970: $0) }
-        } else {
-            timestamps = [:]
+    func openReel(_ post: FeedPost, in reels: [FeedPost]) {
+        guard let onOpenReel else {
+            onOpenPost?(post)
+            return
         }
-    }
-
-    private func key(for postId: String) -> String {
-        let uid = AuthManager.shared.currentUser?.id ?? "anon"
-        return "\(uid):\(postId)"
-    }
-
-    /// Returns `true` (and records "now", persisted) when no view has been
-    /// counted for this user+post within the last hour; returns `false` (skip
-    /// the increment + network call) otherwise.
-    func shouldRecordView(postId: String) -> Bool {
-        let k = key(for: postId)
-        let now = Date()
-        if let last = timestamps[k], now.timeIntervalSince(last) < ttl {
-            return false
-        }
-        timestamps[k] = now
-        persist()
-        return true
-    }
-
-    private func persist() {
-        // Prune expired entries opportunistically so the store stays bounded.
-        let cutoff = Date().addingTimeInterval(-ttl)
-        timestamps = timestamps.filter { $0.value >= cutoff }
-        defaults.set(timestamps.mapValues { $0.timeIntervalSince1970 }, forKey: storageKey)
+        onOpenReel(post, reels)
     }
 }
 

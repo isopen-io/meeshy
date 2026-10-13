@@ -785,13 +785,11 @@ struct FeedView: View {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                     ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
                 }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
                 // distinct du tap média qui présente le viewer immersif.
                 router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
@@ -882,10 +880,8 @@ struct FeedView: View {
                             startId: post.id
                         )
                     }
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
                 } else {
                     router.push(.postDetail(post.id, post))
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
                 }
             },
             onTapRepost: { repostId in

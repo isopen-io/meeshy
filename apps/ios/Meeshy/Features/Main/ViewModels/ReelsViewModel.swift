@@ -614,8 +614,9 @@ final class ReelsViewModel: ObservableObject {
     }
 
     func recordView(_ id: String) {
-        // Vue UNIQUE (`viewCount`) — dédupliquée côté serveur par `PostView`
-        // (`@@unique(postId, userId)`) : rejouer l'appel ne la gonfle pas.
+        // La vue de l'OUVERTURE du réel (#10483) — `viewCount` est le total :
+        // chaque réel qui s'installe à l'écran en compte une, ici seulement
+        // (le tap du fil qui présente le lecteur n'en envoie plus).
         Task { try? await service.viewPost(postId: id, duration: nil) }
         // Impression (portée) — le réel est apparu à l'écran. Comptée à CHAQUE
         // apparition : revenir sur un réel déjà vu est une nouvelle impression.

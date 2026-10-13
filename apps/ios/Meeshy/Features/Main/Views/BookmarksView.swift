@@ -205,7 +205,6 @@ struct BookmarksView: View {
         } else {
             router.push(.postDetail(post.id, post))
         }
-        Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
     }
 
     private var bookmarksEmptyTitle: String {

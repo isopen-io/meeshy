@@ -102,6 +102,43 @@ final class ContentOpenReachTests: XCTestCase {
                        "Un tap de notification qui n'a pas abouti sur le détail ne déteint pas sur une ouverture ultérieure.")
     }
 
+    // MARK: - Depuis un profil
+
+    private func feedPost(_ id: String) -> FeedPost {
+        FeedPost(id: id, author: "author", content: "texte")
+    }
+
+    /// Rouvrir un post depuis un profil dans l'heure compte à chaque fois : la
+    /// liste du profil n'a plus de fenêtre, et c'est la destination (le
+    /// détail) qui compte la vue de chaque ouverture — une seule.
+    func test_profileOpen_sameTwiceWithinTheHour_eachOpeningCountsOneView() async {
+        let service = MockPostService()
+        var opened: [String] = []
+        let opening = ProfilePostOpening(onOpenPost: { opened.append($0.id) }, onOpenReel: nil)
+
+        opening.openPost(feedPost("p1"))
+        opening.openPost(feedPost("p1"))
+        for id in opened {
+            await makeDetail(postService: service).registerDetailOpen(id)
+        }
+
+        XCTAssertEqual(opened, ["p1", "p1"], "Aucune fenêtre ne tait une réouverture.")
+        XCTAssertEqual(service.viewPostCallCount, 2, "Une vue par ouverture, comptée par le détail seul.")
+    }
+
+    func test_profileOpenReel_withoutAReelHost_fallsBackToTheDetail() {
+        var opened: [String] = []
+        var reels: [String] = []
+        let fallback = ProfilePostOpening(onOpenPost: { opened.append($0.id) }, onOpenReel: nil)
+        let hosted = ProfilePostOpening(onOpenPost: { opened.append($0.id) }, onOpenReel: { reel, _ in reels.append(reel.id) })
+
+        fallback.openReel(feedPost("r1"), in: [])
+        hosted.openReel(feedPost("r2"), in: [feedPost("r2")])
+
+        XCTAssertEqual(opened, ["r1"])
+        XCTAssertEqual(reels, ["r2"])
+    }
+
     // MARK: - Les réels
 
     func test_reelView_queuesAFeedImpression_onTheReelsSurface() async {
