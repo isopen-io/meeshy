@@ -12,6 +12,8 @@ import {
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
+import { createSocialEventsV2Recorder, type SocialEventsV2Recorder } from '@/lib/api/social-events-v2';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage } from '@/lib/storage';
@@ -19,6 +21,7 @@ import { safeLocalStorage } from '@/lib/storage';
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 
 import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
+import { liveSocialEventsContext } from './telemetry-context';
 
 /**
  * **CE QUE LE LECTEUR A VU, DIT À LA PASSERELLE** (#10401) — le site unique
@@ -70,7 +73,19 @@ function visitorKey(): string {
   return fresh;
 }
 
+/** L'enveloppe d'un événement, posée à la MISE EN FILE (#10500). */
+const stamp = () => ({ eventId: newEngagementSessionId(), occurredAt: new Date().toISOString() });
+
+const schedule = (run: () => void, delayMs: number) => {
+  setTimeout(run, delayMs);
+};
+
 let live: ReturnType<typeof createSocialEventsRecorder> | null = null;
+let liveV2: SocialEventsV2Recorder | null = null;
+
+function bindExit(flush: (options?: FlushOptions) => Promise<void>): void {
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') bindPageExitFlush(flush, { window, document });
+}
 
 function liveRecorder(): ReturnType<typeof createSocialEventsRecorder> {
   if (live !== null) return live;
@@ -78,14 +93,30 @@ function liveRecorder(): ReturnType<typeof createSocialEventsRecorder> {
     transport: httpTransport,
     credential: currentCredential,
     visitorKey,
-    schedule: (run, delayMs) => {
-      setTimeout(run, delayMs);
-    },
+    schedule,
+    stamp,
+    context: liveSocialEventsContext,
   });
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    bindPageExitFlush(recorder.flush, { window, document });
-  }
+  bindExit(recorder.flush);
   live = recorder;
+  return recorder;
+}
+
+/** La file v2 (#10500) — ses requêtes ne portent jamais un type de comptage. */
+function liveRecorderV2(): SocialEventsV2Recorder {
+  if (liveV2 !== null) return liveV2;
+  const recorder = createSocialEventsV2Recorder({
+    transport: httpTransport,
+    credential: currentCredential,
+    visitorKey,
+    context: liveSocialEventsContext,
+    stamp,
+    schedule,
+    now: () => Date.now(),
+    random: () => Math.random(),
+  });
+  bindExit(recorder.flush);
+  liveV2 = recorder;
   return recorder;
 }
 
@@ -94,6 +125,12 @@ export const readingTelemetry = {
     if (__FIXTURES__ && apiDeps.source === 'fixtures') return;
     forgetVisitorKeyOnAccount(currentCredential(), safeLocalStorage());
     liveRecorder().record(event);
+  },
+  /** Un événement du catalogue v2 (#10499) — interaction, négatif, lecture, défilement, capture… */
+  recordV2(event: SocialEventV2Input): void {
+    if (__FIXTURES__ && apiDeps.source === 'fixtures') return;
+    forgetVisitorKeyOnAccount(currentCredential(), safeLocalStorage());
+    liveRecorderV2().record(event);
   },
 };
 
