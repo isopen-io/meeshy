@@ -22,6 +22,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { PAGE_SIZE } from '@/lib/api/conversations';
 import { setCategoryExpanded, useConversationCategories } from '@/lib/api/conversation-categories';
 import { refreshListAction, rowAction, useConversations } from '@/lib/api/query';
+import { requestDeparture } from '@/lib/conversation-departure';
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
@@ -886,6 +887,7 @@ export default function ConversationsScreen() {
           deps={apiDeps}
           origin={publicWebOrigin(window.location.origin)}
           onClose={() => setDetailsId(null)}
+          onRequestDeparture={(kind) => requestDeparture({ conversationId: detailsConversation.id, kind, returnToList: false })}
         />
       )}
     </div>

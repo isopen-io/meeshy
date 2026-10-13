@@ -9,6 +9,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Conversation, Participant } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { DepartureKind } from '@/lib/conversation-departure';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -114,6 +115,7 @@ const monteFeuille = async (options: {
   readonly conversation?: Conversation;
   readonly replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>;
   readonly portail?: PortailPartage;
+  readonly onRequestDeparture?: (kind: DepartureKind) => void;
 }) => {
   const { deps, calls } = transportOf(options.replies);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -132,6 +134,7 @@ const monteFeuille = async (options: {
           deps={deps}
           origin="https://meeshy.me"
           {...(options.portail === undefined ? {} : { portail: options.portail })}
+          {...(options.onRequestDeparture === undefined ? {} : { onRequestDeparture: options.onRequestDeparture })}
           onClose={() => {}}
         />
       </QueryClientProvider>,
@@ -241,6 +244,42 @@ describe('ConversationDetailsSheet — ce que la feuille montre (#7829)', () => 
     await monteFeuille({ conversation: conversation({ type: 'direct', title: 'Nour Haddad' }), replies: { [MEMBERS]: 'pending' } });
     expect(document.querySelector('[data-conversation-details-share]')).toBeNull();
     expect(document.querySelector('[data-conversation-details-meta]')?.textContent).toContain('Discussion privée');
+  });
+});
+
+describe('ConversationDetailsSheet — quitter et supprimer (#7837, #7285)', () => {
+  const departures = () => [...document.querySelectorAll<HTMLButtonElement>('[data-conversation-departure]')];
+
+  test('en groupe : « Quitter » à côté du partage, « Supprimer pour moi » en bas, chacun à 44 px au moins', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: () => {} });
+    expect(departures().map((b) => [b.dataset.conversationDeparture, b.textContent])).toEqual([
+      ['leave', 'Quitter'],
+      ['delete', 'Supprimer pour moi'],
+    ]);
+    for (const button of departures()) expect(Number.parseFloat(button.style.minHeight)).toBeGreaterThanOrEqual(44);
+    expect(document.querySelector('[data-conversation-details-share]')?.parentElement).toBe(departures()[0]?.parentElement ?? null);
+  });
+
+  test('toucher l’un ou l’autre DEMANDE le geste, qui sera confirmé — il ne part jamais d’un seul toucher', async () => {
+    const asked: DepartureKind[] = [];
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' }, onRequestDeparture: (kind) => asked.push(kind) });
+    act(() => departures()[0]?.click());
+    act(() => departures()[1]?.click());
+    expect(asked).toEqual(['leave', 'delete']);
+  });
+
+  test('une conversation DIRECTE ne se quitte pas : seule la suppression est offerte', async () => {
+    await monteFeuille({
+      conversation: conversation({ type: 'direct', title: 'Nour' }),
+      replies: { [MEMBERS]: 'pending' },
+      onRequestDeparture: () => {},
+    });
+    expect(departures().map((b) => b.dataset.conversationDeparture)).toEqual(['delete']);
+  });
+
+  test('sans hôte qui sache partir (visiteur sans compte), aucun geste n’est rendu', async () => {
+    await monteFeuille({ replies: { [MEMBERS]: 'pending' } });
+    expect(departures()).toEqual([]);
   });
 });
 
