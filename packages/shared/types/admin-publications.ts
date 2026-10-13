@@ -18,7 +18,8 @@ export * from './admin-publication-states.js';
  *
  * Un geste porte sur une publication (ou un lot de 50 au plus) et dit ce que
  * l'administration veut VOIR : la publication hors ligne, remise en ligne, ou servie à
- * une autre audience. Publier un brouillon, c'est `set-visibility` `PUBLIC`. Les
+ * une audience plus étroite ou égale à celle de l'auteur — jamais plus large
+ * (`AUDIENCE_WIDENING`) : un brouillon ne se publie que par son auteur. Les
  * audiences `EXCEPT` et `ONLY` ne se posent pas d'ici : elles exigent une liste de
  * personnes que seul l'auteur choisit.
  *

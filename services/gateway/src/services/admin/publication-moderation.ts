@@ -77,9 +77,9 @@ export function nextModerationState(
 }
 
 /**
- * **CHANGER L'AUDIENCE D'UN GESTE** (#10392) — publier un brouillon (`PUBLIC`),
- * resserrer une publication à ses amis, ou la remettre en ligne avec une autre
- * audience que celle de l'auteur. Le geste vaut décision de l'administration :
+ * **CHANGER L'AUDIENCE D'UN GESTE** (#10392) — resserrer une publication à ses
+ * amis, ou la remettre en ligne avec une audience au plus égale à celle de
+ * l'auteur (`widensAuthorAudience` refuse le reste). Le geste vaut décision de l'administration :
  * il lève un retrait en cours (la hiérarchie du signataire s'applique, comme à
  * la remise en ligne). Vers `PRIVATE`, l'audience d'avant est retenue, comme
  * « mettre en privé », pour que « remettre en ligne » la rende.
@@ -93,6 +93,27 @@ export function nextVisibilityState(current: PostModerationState, visibility: Ad
     current.moderationHiddenAt === null &&
     after.moderationPriorVisibility === current.moderationPriorVisibility;
   return same ? null : after;
+}
+
+/**
+ * **L'ADMINISTRATION NE PUBLIE JAMAIS AU-DELÀ DE CE QUE L'AUTEUR A CHOISI.**
+ *
+ * Changer l'audience d'un geste sert à RESSERRER (une publication publique vers
+ * ses amis, vers sa communauté, vers l'auteur seul) ou à rendre l'audience de
+ * l'auteur. Ouvrir plus large — publier le brouillon `PRIVATE` d'un membre,
+ * passer des amis au public, une liste `ONLY` à tous ses amis — expose un
+ * contenu que son auteur a réservé : aucun rang ne le fait à sa place.
+ *
+ * L'audience de l'auteur est celle que la modération a mise de côté
+ * (`moderationPriorVisibility`, que l'auteur efface lui-même dès qu'il rechoisit,
+ * `moderationHold.ts`), sinon la visibilité courante. Seul `PUBLIC` contient
+ * toutes les autres ; `FRIENDS`, `COMMUNITY`, `EXCEPT` et `ONLY` ne se comparent
+ * pas entre elles, donc passer de l'une à l'autre élargit pour quelqu'un.
+ */
+export function widensAuthorAudience(current: PostModerationState, target: AdminSettableVisibility): boolean {
+  const authorAudience = current.moderationPriorVisibility ?? current.visibility;
+  if (target === PRIVATE || target === authorAudience) return false;
+  return authorAudience !== 'PUBLIC';
 }
 
 /**

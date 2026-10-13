@@ -11,6 +11,7 @@ import {
   publicationStateOf,
   liftsSomeoneElsesHold,
   nextVisibilityState,
+  widensAuthorAudience,
   adminStateOf,
   type PostModerationState,
 } from '../publication-moderation';
@@ -191,5 +192,38 @@ describe('publicationStateOf / adminPostStateOf — une seule définition', () =
   it('publié se dit « published » pour la liste de la plateforme', () => {
     expect(adminStateOf({ visibility: 'PUBLIC', deletedAt: null, expiresAt: null, moderationHiddenAt: null }, NOW)).toBe('published');
     expect(adminStateOf({ visibility: 'PRIVATE', deletedAt: null, expiresAt: null, moderationHiddenAt: EARLIER }, NOW)).toBe('offline');
+  });
+});
+
+describe("widensAuthorAudience — l'administration ne publie jamais au-delà de l'audience de l'auteur", () => {
+  it.each([
+    ['PRIVATE', null, 'PUBLIC'],
+    ['PRIVATE', null, 'FRIENDS'],
+    ['FRIENDS', null, 'PUBLIC'],
+    ['FRIENDS', null, 'COMMUNITY'],
+    ['COMMUNITY', null, 'FRIENDS'],
+    ['ONLY', null, 'FRIENDS'],
+    ['EXCEPT', null, 'FRIENDS'],
+    ['EXCEPT', null, 'PUBLIC'],
+  ] as const)('%s (avant retrait : %s) vers %s : élargit', (visibility, prior, target) => {
+    expect(widensAuthorAudience(state({ visibility, moderationPriorVisibility: prior }), target)).toBe(true);
+  });
+
+  it.each([
+    ['PUBLIC', null, 'FRIENDS'],
+    ['PUBLIC', null, 'COMMUNITY'],
+    ['PUBLIC', null, 'PRIVATE'],
+    ['FRIENDS', null, 'FRIENDS'],
+    ['ONLY', null, 'PRIVATE'],
+    ['PRIVATE', 'PUBLIC', 'PUBLIC'],
+    ['PRIVATE', 'FRIENDS', 'FRIENDS'],
+  ] as const)('%s (avant retrait : %s) vers %s : n’élargit pas', (visibility, prior, target) => {
+    expect(widensAuthorAudience(state({ visibility, moderationPriorVisibility: prior }), target)).toBe(false);
+  });
+
+  it("une publication hors ligne se juge sur l'audience que l'auteur avait choisie, pas sur PRIVATE", () => {
+    const offline = state({ visibility: 'PRIVATE', moderationHiddenAt: EARLIER, moderationHiddenById: 'x', moderationPriorVisibility: 'FRIENDS' });
+    expect(widensAuthorAudience(offline, 'FRIENDS')).toBe(false);
+    expect(widensAuthorAudience(offline, 'PUBLIC')).toBe(true);
   });
 });
