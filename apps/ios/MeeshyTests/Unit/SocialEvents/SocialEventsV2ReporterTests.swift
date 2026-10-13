@@ -16,7 +16,9 @@ final class SocialEventsV2ReporterTests: XCTestCase {
         }
     }
 
-    private static let epoch = Date(timeIntervalSince1970: 1_760_000_000)
+    /// Hors isolation : l'horloge de la file (`SocialEventsV2Outbox.clock`) est
+    /// une fermeture `@Sendable`, qui ne peut pas lire un membre du MainActor.
+    nonisolated private static let epoch = Date(timeIntervalSince1970: 1_760_000_000)
 
     private func makeReporter(
         service: MockPostService,
