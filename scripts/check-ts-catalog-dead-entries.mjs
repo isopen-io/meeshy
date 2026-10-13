@@ -462,7 +462,10 @@ export const callersIn = (contents, nsNames) => {
 // web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
 // `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
 // `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
-const BASELINE_DEAD_ENTRIES = 276;
+// 276 -> 275 (#10502, #10499, 2026-10-13) : `me.consents` (`GET /api/v1/me/consents`) a son appelant web —
+// `apps/web/src/lib/api/consents.ts`, qui confirme l'accord d'analyse du contexte de lot `/social/events`
+// (a44deebecf). Valeur MESURÉE le 2026-10-13 en CI (run 38380030207 rouge sur 275) et en local.
+const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
