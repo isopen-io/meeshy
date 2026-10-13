@@ -1,6 +1,6 @@
 ## Événements sociaux v2 : chaque interaction avec un contenu est capturée, exploitable plus tard — enveloppe, cible générique, contexte de listing, catalogue typé, capture d'écran, défilement (2026-10-13)
 
-> Suite de #10483 (`2026-10-13-chaque-affichage-est-compte-avec-ou-sans-compte-10483.md`), qui a fait de `POST /api/v1/social/events` la porte UNIQUE de la télémétrie de lecture. Demande du porteur (2026-10-13) : « ajouter ce qui manque. Il faut capturer l'événement screenshot aussi ! défilement sur le contenu aussi ! Essaye d'avoir un événement complet avec la SOTA qu'on pourra exploiter le moment venu ! » Pilotage : milestone « Chaque interaction avec un contenu est capturée, exploitable plus tard » (échéance 2026-10-27), issue chapeau et une issue par famille (numéros dans la section Pilotage, en fin de fichier).
+> Suite de #10483 (`2026-10-13-chaque-affichage-est-compte-avec-ou-sans-compte-10483.md`), qui a fait de `POST /api/v1/social/events` la porte UNIQUE de la télémétrie de lecture. Demande du porteur (2026-10-13) : « ajouter ce qui manque. Il faut capturer l'événement screenshot aussi ! défilement sur le contenu aussi ! Essaye d'avoir un événement complet avec la SOTA qu'on pourra exploiter le moment venu ! » Pilotage : milestone « Chaque interaction avec un contenu est capturée, exploitable plus tard » (échéance 2026-10-27), issue chapeau et une issue par famille (#10499 et ses filles, section Pilotage en fin de fichier).
 
 ### Contexte — ce que la porte sait dire aujourd'hui, et ce qui lui manque
 
@@ -205,4 +205,20 @@ Le web n'émet donc AUCUN `screen_capture` et déclare `capabilities` sans `scre
 
 ### Pilotage
 
-Milestone, issue chapeau et issues par famille : voir le commentaire de l'issue chapeau et la ligne de `services/gateway/decisions.md`.
+Milestone #175 « Chaque interaction avec un contenu est capturée, exploitable plus tard » (échéance 2026-10-27). Chapeau #10499.
+
+| issue | famille | § |
+|---|---|---|
+| #10500 | enveloppe, contexte, idempotence, compatibilité | 1, 8 |
+| #10501 | contexte de listing, impression visible MRC | 3 |
+| #10502 | cible générique, `interaction` | 2, 4 |
+| #10503 | `negative` | 4 |
+| #10504 | `playback` (QoE) | 4, 7 |
+| #10505 | `link`, `discovery` | 4, 6 |
+| #10506 | `story` | 4 |
+| #10507 | `notification` | 4 |
+| #10508 | `screen_capture` | 4, 6, 11 |
+| #10509 | `scroll` | 5 |
+| #10510 | stockage `ContentEvent`, TTL `PostImpression` | 9 |
+| #10511 | qualification juridique (`décision-produit`) | 6 |
+| #10512 | agrégats quotidiens | 10 |
