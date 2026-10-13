@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CryptoKit
 import MeeshySDK
 import os
 #if canImport(UIKit)
@@ -17,9 +18,18 @@ protocol VisitorReachReporting: AnyObject {
 
 /// Une occurrence en attente et l'identité sous laquelle elle a été VUE : un
 /// compte qui se connecte entre-temps ne la reprend pas à son compte.
+///
+/// L'identité est une EMPREINTE du jeton, jamais le jeton : la file vit dans
+/// `UserDefaults`, en clair sur le disque et dans les sauvegardes, alors que
+/// le jeton d'un invité de lien est un credential. Le jeton se relit au moment
+/// d'envoyer ; s'il n'est plus là, l'événement part avec lui.
 nonisolated struct PendingVisitorEvent: Codable, Equatable {
     let event: SocialEvent
-    let token: String
+    let identity: String
+
+    static func identity(of token: String) -> String {
+        SHA256.hash(data: Data(token.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 /// Sur le modèle d'`ImpressionBatcher` : groupement court, vidage au passage en
@@ -47,6 +57,7 @@ final class VisitorReachReporter: VisitorReachReporting {
     private let postService: PostServiceProviding
     private let defaults: UserDefaults
     private let token: @MainActor () -> String
+    private let knownTokens: @MainActor () -> [String]
     private let flushDelay: TimeInterval
 
     private var pending: [PendingVisitorEvent]
@@ -57,15 +68,16 @@ final class VisitorReachReporter: VisitorReachReporting {
         postService: PostServiceProviding = PostService.shared,
         defaults: UserDefaults = .standard,
         token: @escaping @MainActor () -> String = VisitorReachReporter.liveToken,
+        knownTokens: @escaping @MainActor () -> [String] = VisitorReachReporter.liveKnownTokens,
         flushDelay: TimeInterval = 2,
         reconnects: AnyPublisher<Void, Never> = VisitorReachReporter.liveReconnects
     ) {
         self.postService = postService
         self.defaults = defaults
         self.token = token
+        self.knownTokens = knownTokens
         self.flushDelay = flushDelay
-        self.pending = defaults.data(forKey: Self.storageKey)
-            .flatMap { try? JSONDecoder().decode([PendingVisitorEvent].self, from: $0) } ?? []
+        self.pending = Self.restore(from: defaults)
         reconnects
             .sink { [weak self] _ in Task { @MainActor in await self?.flushNow() } }
             .store(in: &cancellables)
@@ -79,6 +91,24 @@ final class VisitorReachReporter: VisitorReachReporting {
         APIClient.shared.anonymousSessionToken ?? VisitorReaderKey.shared.readerKey()
     }
 
+    /// Les jetons que l'appareil détient ENCORE, sans en tirer de neuf : une
+    /// clé visiteur effacée par la connexion d'un compte ne renaît pas pour
+    /// envoyer ce qu'elle avait vu.
+    static func liveKnownTokens() -> [String] {
+        [APIClient.shared.anonymousSessionToken, VisitorReaderKey.shared.storedReaderKey()].compactMap { $0 }
+    }
+
+    /// Une file illisible (format antérieur, qui gardait le jeton en clair)
+    /// est effacée du disque, pas seulement ignorée.
+    private static func restore(from defaults: UserDefaults) -> [PendingVisitorEvent] {
+        guard let data = defaults.data(forKey: storageKey) else { return [] }
+        guard let events = try? JSONDecoder().decode([PendingVisitorEvent].self, from: data) else {
+            defaults.removeObject(forKey: storageKey)
+            return []
+        }
+        return events
+    }
+
     static var liveReconnects: AnyPublisher<Void, Never> {
         NetworkMonitor.shared.isOfflinePublisher
             .filter { !$0 }
@@ -90,8 +120,8 @@ final class VisitorReachReporter: VisitorReachReporting {
 
     func record(_ events: [SocialEvent]) {
         guard !events.isEmpty else { return }
-        let identity = token()
-        pending.append(contentsOf: events.map { PendingVisitorEvent(event: $0, token: identity) })
+        let identity = PendingVisitorEvent.identity(of: token())
+        pending.append(contentsOf: events.map { PendingVisitorEvent(event: $0, identity: identity) })
         persist()
         scheduleFlush()
     }
@@ -103,10 +133,18 @@ final class VisitorReachReporter: VisitorReachReporting {
         guard !batch.isEmpty else { return }
         pending.removeAll()
         persist()
+        let tokensByIdentity = Dictionary(
+            knownTokens().map { (PendingVisitorEvent.identity(of: $0), $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         var kept: [PendingVisitorEvent] = []
         for group in Self.requests(for: batch) {
+            guard let groupToken = tokensByIdentity[group[0].identity] else {
+                Self.logger.debug("visitor reach identity gone, \(group.count, privacy: .public) events dropped")
+                continue
+            }
             do {
-                _ = try await postService.recordSocialEvents(group.map(\.event), credential: .visitor(group[0].token))
+                _ = try await postService.recordSocialEvents(group.map(\.event), credential: .visitor(groupToken))
             } catch where Self.isPermanentRefusal(error) {
                 Self.logger.debug("visitor reach refused, dropped without replay: \(error.localizedDescription, privacy: .public)")
             } catch {
@@ -120,11 +158,11 @@ final class VisitorReachReporter: VisitorReachReporting {
 
     /// Une requête par identité et par nature, dans l'ordre d'arrivée.
     static func requests(for batch: [PendingVisitorEvent]) -> [[PendingVisitorEvent]] {
-        let tokens = batch.map(\.token).reduce(into: [String]()) { order, token in
-            if !order.contains(token) { order.append(token) }
+        let identities = batch.map(\.identity).reduce(into: [String]()) { order, identity in
+            if !order.contains(identity) { order.append(identity) }
         }
-        return tokens.flatMap { token -> [[PendingVisitorEvent]] in
-            let mine = batch.filter { $0.token == token }
+        return identities.flatMap { identity -> [[PendingVisitorEvent]] in
+            let mine = batch.filter { $0.identity == identity }
             let views = mine.filter { if case .view = $0.event { return true } else { return false } }
             let impressions = mine.filter { if case .impression = $0.event { return true } else { return false } }
             return [views, impressions].filter { !$0.isEmpty }

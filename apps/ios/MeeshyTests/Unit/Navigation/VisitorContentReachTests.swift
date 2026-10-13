@@ -97,6 +97,7 @@ final class VisitorContentReachTests: XCTestCase {
             postService: service,
             defaults: defaults,
             token: { "visitor_test" },
+            knownTokens: { ["visitor_test"] },
             flushDelay: 60,
             reconnects: reconnects
         )
@@ -168,7 +169,8 @@ final class VisitorContentReachTests: XCTestCase {
         let service = MockPostService()
         let identity = IdentityBox(value: "visitor_a")
         let sut = VisitorReachReporter(
-            postService: service, defaults: defaults, token: { identity.value }, flushDelay: 60,
+            postService: service, defaults: defaults, token: { identity.value },
+            knownTokens: { ["anon_guest", "visitor_a"] }, flushDelay: 60,
             reconnects: Empty().eraseToAnyPublisher()
         )
         sut.record([.view(postId: "p1", durationMs: nil, surface: .visitor)])
@@ -178,6 +180,81 @@ final class VisitorContentReachTests: XCTestCase {
         await sut.flushNow()
 
         XCTAssertEqual(service.recordedSocialEventsCredentials, [.visitor("visitor_a"), .visitor("anon_guest")])
+    }
+
+    // MARK: - Le jeton ne touche jamais le disque
+
+    /// Le jeton d'un invité de lien est un credential : la file persistée
+    /// (`UserDefaults`, en clair, sauvegardée) n'en garde qu'une empreinte.
+    func test_persistedQueue_neverContainsTheToken() throws {
+        let secret = "anon_8f3c2a91d7e64b0f9a1c5e7d3b2a6f4e"
+        let sut = VisitorReachReporter(
+            postService: MockPostService(), defaults: defaults, token: { secret },
+            knownTokens: { [secret] }, flushDelay: 60,
+            reconnects: Empty().eraseToAnyPublisher()
+        )
+
+        sut.record([
+            .impression(postId: "p1", source: "detail", surface: .visitor),
+            .view(postId: "p1", durationMs: nil, surface: .visitor),
+        ])
+
+        let domain = try XCTUnwrap(defaults.persistentDomain(forName: suiteName))
+        XCTAssertFalse(domain.isEmpty, "La file doit bien être persistée.")
+        let written = try PropertyListSerialization.data(fromPropertyList: domain, format: .xml, options: 0)
+        let decodedPayloads = domain.values.compactMap { $0 as? Data }.compactMap { String(data: $0, encoding: .utf8) }
+        let everything = (String(data: written, encoding: .utf8) ?? "") + decodedPayloads.joined()
+        XCTAssertFalse(everything.contains(secret), "Le jeton a été écrit en clair dans UserDefaults.")
+        XCTAssertFalse(everything.contains("8f3c2a91d7e64b0f"), "Une partie du jeton a été écrite dans UserDefaults.")
+    }
+
+    /// Le jeton est relu au moment d'envoyer : c'est bien lui qui part.
+    func test_flush_sendsTheTokenReadBackAtSendTime() async {
+        let service = MockPostService()
+        let secret = "anon_guest_secret"
+        let sut = VisitorReachReporter(
+            postService: service, defaults: defaults, token: { secret },
+            knownTokens: { [secret] }, flushDelay: 60,
+            reconnects: Empty().eraseToAnyPublisher()
+        )
+        sut.record([.view(postId: "p1", durationMs: nil, surface: .visitor)])
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventsCredentials, [.visitor(secret)])
+    }
+
+    /// L'identité sous laquelle le contenu a été vu n'existe plus (clé
+    /// visiteur effacée par la connexion d'un compte, invité parti) :
+    /// l'événement est abandonné, jamais envoyé sous une autre identité.
+    func test_flush_identityGone_dropsTheEventsWithoutSending() async {
+        let service = MockPostService()
+        let known = IdentityList(values: ["visitor_a"])
+        let sut = VisitorReachReporter(
+            postService: service, defaults: defaults, token: { "visitor_a" },
+            knownTokens: { known.values }, flushDelay: 60,
+            reconnects: Empty().eraseToAnyPublisher()
+        )
+        sut.record([.view(postId: "p1", durationMs: nil, surface: .visitor)])
+        known.values = ["visitor_b"]
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0)
+        XCTAssertTrue(sut.pendingEvents.isEmpty)
+        XCTAssertNil(defaults.data(forKey: VisitorReachReporter.storageKey))
+    }
+
+    /// Une file écrite par la version qui gardait le jeton en clair est
+    /// effacée du disque au premier lancement.
+    func test_legacyQueueWithRawToken_isErasedFromDisk() {
+        let legacy = #"[{"event":{"type":"view","postId":"p1"},"token":"anon_legacy_secret"}]"#
+        defaults.set(Data(legacy.utf8), forKey: VisitorReachReporter.storageKey)
+
+        let sut = makeReporter(service: MockPostService())
+
+        XCTAssertTrue(sut.pendingEvents.isEmpty)
+        XCTAssertNil(defaults.data(forKey: VisitorReachReporter.storageKey))
     }
 
     private func waitUntil(timeout: TimeInterval = 3, _ condition: @escaping @MainActor () -> Bool) async -> Bool {
@@ -195,6 +272,13 @@ private final class IdentityBox {
     nonisolated deinit {}
     var value: String
     init(value: String) { self.value = value }
+}
+
+@MainActor
+private final class IdentityList {
+    nonisolated deinit {}
+    var values: [String]
+    init(values: [String]) { self.values = values }
 }
 
 @MainActor
