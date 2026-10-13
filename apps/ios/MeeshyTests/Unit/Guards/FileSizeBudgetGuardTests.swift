@@ -61,7 +61,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MessageListViewController.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
-        "ProfileUserPostsList.swift",
         "RootView.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
@@ -598,7 +597,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // (`NotificationNavContext`, ses trois constructeurs) quitte `RootView.swift`
     // pour `RootView+NotificationNavContext.swift` (−172) avant que la racine ne
     // gagne le marquage de la source d'ouverture (+1). L'hôte RESTE en dette.
-    private static let legacyLineCeiling = 35_550
+    //
+    // #10483 — 35 550 → 34 373 (−1 177). `ProfileUserPostsList.swift` repasse SOUS
+    // le budget (1 177 lignes comptées) : le tap du profil ne compte plus sa propre
+    // vue derrière `PostViewThrottle` (retiré), la destination ouverte la compte. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    private static let legacyLineCeiling = 34_373
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
