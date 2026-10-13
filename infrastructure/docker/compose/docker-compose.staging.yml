@@ -143,7 +143,8 @@ services:
     networks:
       - meeshy-staging-network
     healthcheck:
-      test: ["CMD-SHELL", "netstat -an | grep :7843 || exit 1"]
+      # `netstat` n'est pas dans l'image (#10425) : `node` y est, il ouvre le port.
+      test: ["CMD", "node", "-e", "require('net').connect(7843, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -199,16 +200,19 @@ services:
     # interne. Sonde : `docker exec meeshy-translator-staging … /health`.
     labels:
       - "traefik.enable=false"
-      # unhealthy déclenche un restart (#5610) — voir le service `autoheal`.
-      - "autoheal=true"
+      # unhealthy déclenche un restart (#5610) — voir le service `autoheal-staging`.
+      # Étiquette PROPRE au staging (#10425) : l'autoheal de production lit `autoheal`.
+      - "autoheal-staging=true"
 
-  # Autoheal — restaure un conteneur `unhealthy` (#5610).
+  # Autoheal — restaure un conteneur `unhealthy` (#5610). Le démon Docker est
+  # PARTAGÉ avec la production (#9232) : il ne lit que l'étiquette du staging,
+  # jamais `autoheal`, celle de la production (#10425).
   autoheal-staging:
     image: willfarrell/autoheal:latest
     container_name: meeshy-autoheal-staging
     restart: unless-stopped
     environment:
-      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_CONTAINER_LABEL=autoheal-staging
       - AUTOHEAL_INTERVAL=30
       - AUTOHEAL_START_PERIOD=60
       - AUTOHEAL_DEFAULT_STOP_TIMEOUT=10
