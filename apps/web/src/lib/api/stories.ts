@@ -157,6 +157,11 @@ export type StatusMoodPost = {
   readonly authorId?: string;
   readonly moodEmoji?: string | null;
   readonly author?: StoryTrayAuthor;
+  /** Le texte qui accompagne l'humeur (`Post.content`) et ce qui le traduit —
+   * lus par la feuille qu'ouvre un toucher sur la pastille (#10528). */
+  readonly content?: string | null;
+  readonly originalLanguage?: string | null;
+  readonly translations?: unknown;
 };
 
 export async function loadStatusMoods(

@@ -255,8 +255,13 @@ function LensRowImpl({
         here: peerHere,
         hereActive: peerActive,
         hereFocused: peerFocused,
-        ...(peerMood === undefined ? {} : { mood: peerMood }),
+        /* DANS LA LISTE, L'HUMEUR NE BOUGE PAS (#10528). */
+        ...(peerMood === undefined ? {} : { mood: peerMood, moodStill: true }),
       };
+  /* … ET ELLE SE TOUCHE, sur l'avatar qui porte déjà le profil du pair : la
+     cible est le frère de ce lien-là (`Avatar.moodAuthorId`). */
+  const moodPeer = group || peerMood === undefined ? undefined : peerOf(conversation, viewerId);
+  const peerMoodAuthor = moodPeer?.userId ?? moodPeer?.user?.id ?? undefined;
 
   return (
     <li
@@ -400,6 +405,7 @@ function LensRowImpl({
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
+            {...(peerMoodAuthor === undefined ? {} : { moodAuthorId: peerMoodAuthor })}
           />
         )}
 
