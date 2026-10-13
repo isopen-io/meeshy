@@ -21,14 +21,43 @@ nonisolated struct AudioFullscreenPlaybackSnapshot: Equatable, Sendable {
 
 extension AudioFullscreenPlaybackSnapshot {
 
-    /// L'état du moteur partagé, vu depuis la page de `attachmentId`.
+    /// **Une page qu'on ne joue pas garde son curseur là où on l'a laissé.**
+    ///
+    /// Le moteur reprend une piste à sa position mémorisée ; la page, elle, se
+    /// peignait à zéro tant qu'il ne la jouait pas — au retour d'un balayage le
+    /// curseur repartait du début puis sautait. Une position hors de la piste,
+    /// ou une durée inconnue, rend le repos nu.
+    static func resting(savedPosition: TimeInterval?, duration: TimeInterval,
+                        isLoading: Bool = false) -> AudioFullscreenPlaybackSnapshot {
+        guard let saved = savedPosition, duration > 0, saved > 0, saved < duration else {
+            return AudioFullscreenPlaybackSnapshot(progress: 0, currentTime: 0, duration: 0,
+                                                   isPlaying: false, isLoading: isLoading)
+        }
+        return AudioFullscreenPlaybackSnapshot(progress: saved / duration, currentTime: saved, duration: duration,
+                                               isPlaying: false, isLoading: isLoading)
+    }
+
+    /// La page de `attachmentId` au repos, sa position lue dans la mémoire d'écoute.
     @MainActor
-    init(player: AudioPlaybackManager, attachmentId: String) {
+    static func resting(attachmentId: String, duration: TimeInterval,
+                        isLoading: Bool = false) -> AudioFullscreenPlaybackSnapshot {
+        resting(savedPosition: AudioPlaybackPositionStore.shared.position(for: attachmentId),
+                duration: duration, isLoading: isLoading)
+    }
+
+    /// L'état du moteur partagé, vu depuis la page de `attachmentId`. Tant que
+    /// le moteur ne joue pas la piste, ou la charge encore, la page est au repos.
+    @MainActor
+    init(player: AudioPlaybackManager, attachmentId: String, restingDuration: TimeInterval) {
         guard player.attachmentId == attachmentId else {
-            self = .idle
+            self = .resting(attachmentId: attachmentId, duration: restingDuration)
             return
         }
-        self.init(progress: player.duration > 0 ? player.progress : 0,
+        guard player.duration > 0 else {
+            self = .resting(attachmentId: attachmentId, duration: restingDuration, isLoading: player.isLoading)
+            return
+        }
+        self.init(progress: player.progress,
                   currentTime: player.currentTime,
                   duration: player.duration,
                   isPlaying: player.isPlaying,
@@ -50,24 +79,28 @@ extension AudioFullscreenPlaybackSnapshot {
 struct AudioFullscreenPlaybackScope<Content: View>: View {
     let player: AudioPlaybackManager
     let attachmentId: String
+    /// La durée connue de la pièce jointe : elle situe le curseur au repos.
+    let restingDuration: TimeInterval
     let isLive: Bool
     @ViewBuilder let content: (AudioFullscreenPlaybackSnapshot, PlaybackSpeed) -> Content
 
     var body: some View {
         if isLive {
-            Live(player: player, attachmentId: attachmentId, content: content)
+            Live(player: player, attachmentId: attachmentId, restingDuration: restingDuration, content: content)
         } else {
-            content(.idle, player.speed)
+            content(.resting(attachmentId: attachmentId, duration: restingDuration), player.speed)
         }
     }
 
     private struct Live: View {
         @ObservedObject var player: AudioPlaybackManager
         let attachmentId: String
+        let restingDuration: TimeInterval
         let content: (AudioFullscreenPlaybackSnapshot, PlaybackSpeed) -> Content
 
         var body: some View {
-            content(AudioFullscreenPlaybackSnapshot(player: player, attachmentId: attachmentId), player.speed)
+            content(AudioFullscreenPlaybackSnapshot(player: player, attachmentId: attachmentId,
+                                                    restingDuration: restingDuration), player.speed)
         }
     }
 }

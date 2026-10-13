@@ -165,7 +165,8 @@ struct AudioFullscreenPage: View, Equatable {
     func playback<Content: View>(
         @ViewBuilder _ content: @escaping (AudioFullscreenPlaybackSnapshot, PlaybackSpeed) -> Content
     ) -> some View {
-        AudioFullscreenPlaybackScope(player: player, attachmentId: attachment.id, isLive: isActive, content: content)
+        AudioFullscreenPlaybackScope(player: player, attachmentId: attachment.id, restingDuration: metadataDuration,
+                                     isLive: isActive, content: content)
     }
 
     private var metadataDuration: TimeInterval { Double(attachment.duration ?? 0) / 1000.0 }
@@ -280,7 +281,6 @@ struct AudioFullscreenPage: View, Equatable {
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.xl)
                     .padding(.bottom, bottomInset)
-                    .background { frost(fadingToward: .top) }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
             }
             if !offer.isEmpty {

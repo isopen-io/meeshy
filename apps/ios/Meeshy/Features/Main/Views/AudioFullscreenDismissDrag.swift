@@ -32,9 +32,10 @@ struct AudioFullscreenDismissDrag: ViewModifier {
         }
     }
 
-    private func conclude(translation: CGFloat, predicted: CGFloat) {
+    private func conclude(translation: CGFloat, velocity: CGFloat) {
         guard offset > 0 else { return }
-        if AudioFullscreenDismissRule.dismisses(translation: translation, predicted: predicted) {
+        if AudioFullscreenDismissRule.dismisses(translation: translation, velocity: velocity,
+                                                height: DeviceLayout.windowSize.height) {
             onDismiss()
         } else {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { offset = 0 }
@@ -50,7 +51,8 @@ struct AudioFullscreenDismissDrag: ViewModifier {
                 }
             }
             .onEnded { value in
-                conclude(translation: value.translation.height, predicted: value.predictedEndTranslation.height)
+                conclude(translation: value.translation.height,
+                         velocity: (value.predictedEndTranslation.height - value.translation.height) * 4)
             }
     }
 }
@@ -59,11 +61,17 @@ struct AudioFullscreenDismissDrag: ViewModifier {
 nonisolated enum AudioFullscreenDismissRule {
     /// L'écran suit le doigt à 60 % : la résistance dit qu'on peut revenir.
     static let follow: CGFloat = 0.6
-    static let distance: CGFloat = 120
-    static let predictedDistance: CGFloat = 300
+    /// Un geste DOUX ne ferme qu'après la moitié de l'écran : avant, relâcher
+    /// ou remonter le doigt annule (directive porteur 2026-10-14).
+    static let slowFraction: CGFloat = 0.5
+    /// Un geste BREF et très rapide ferme tout de suite : un coup sec vers le
+    /// bas, qui a tout de même quitté le point de départ.
+    static let flickVelocity: CGFloat = 1_500
+    static let flickDistance: CGFloat = 40
 
-    static func dismisses(translation: CGFloat, predicted: CGFloat) -> Bool {
-        translation > distance || predicted > predictedDistance
+    static func dismisses(translation: CGFloat, velocity: CGFloat, height: CGFloat) -> Bool {
+        if translation >= flickDistance && velocity >= flickVelocity { return true }
+        return height > 0 && translation >= height * slowFraction
     }
 
     /// Un glissement arme la fermeture s'il descend, et nettement plus qu'il ne
@@ -76,7 +84,7 @@ nonisolated enum AudioFullscreenDismissRule {
 @available(iOS 18.0, *)
 private struct AudioFullscreenDismissPan: UIGestureRecognizerRepresentable {
     let onChanged: (CGFloat) -> Void
-    let onEnded: (_ translation: CGFloat, _ predicted: CGFloat) -> Void
+    let onEnded: (_ translation: CGFloat, _ velocity: CGFloat) -> Void
 
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
 
@@ -92,8 +100,7 @@ private struct AudioFullscreenDismissPan: UIGestureRecognizerRepresentable {
         case .changed:
             onChanged(max(0, translation))
         case .ended:
-            // La course que le doigt aurait finie : sa vitesse sur un quart de seconde.
-            onEnded(translation, translation + recognizer.velocity(in: recognizer.view).y * 0.25)
+            onEnded(translation, recognizer.velocity(in: recognizer.view).y)
         case .cancelled, .failed:
             onEnded(0, 0)
         default:
