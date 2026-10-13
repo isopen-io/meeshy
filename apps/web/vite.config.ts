@@ -988,6 +988,19 @@ export default defineConfig({
          */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            /**
+             * LES OBSERVATEURS ET LES HOOKS DE TANSTACK (#10485) — le socle
+             * ne lit que `QueryClient`, `QueryClientProvider`, `hydrate` et
+             * `dehydrate` (`main.tsx`, `lib/api/query-client.ts`) ; `useQuery`,
+             * `useMutation`, `useQueries`, `useInfiniteQuery` et les
+             * `*Observer` de query-core ne servent qu'aux écrans, tous chargés
+             * par `import()`. La règle « node_modules ⇒ core » les payait à la
+             * première peinture de tous : mesuré, 89,95 → 85,85 Ko.
+             */
+            if (/@tanstack\/query-core\/build\/modern\/\w*Observer\.js$/.test(id)) return 'query-screens';
+            if (/@tanstack\/react-query\/build\/modern\//.test(id) && !/\/(index|QueryClientProvider)\.js$/.test(id)) {
+              return 'query-screens';
+            }
             if (id.includes('@tanstack/react-query')) return 'data';
             // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
             // par la route qui l'importe et par personne d'autre.
