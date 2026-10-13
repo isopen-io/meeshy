@@ -236,8 +236,13 @@ final class Router: ObservableObject {
     /// portes, qu'une porte ajoutée demain aurait oublié de garder.
     let refusesProfiles: Bool
 
-    init(refusesProfiles: Bool = false) {
+    /// Ce qui est présenté par-dessus la navigation (#10539).
+    private let surfaces: PresentedSurfaceRegistryProviding
+
+    init(refusesProfiles: Bool = false,
+         surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared) {
         self.refusesProfiles = refusesProfiles
+        self.surfaces = surfaces
     }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
@@ -436,7 +441,35 @@ final class Router: ObservableObject {
         return pendingHighlightConversationId.map { $0 == conversationId } ?? true
     }
 
+    /// **LE site qui libère l'écran devant une conversation** (#10539).
+    ///
+    /// Story, réel, galerie, plein écran d'une conversation, fiche de profil :
+    /// tout ce qui s'est déclaré se referme, puis `open` pose la conversation.
+    /// Aucun appelant ne referme lui-même — toast, push, lien profond et
+    /// réponse passent tous ici. `beneathClosingSurface` : une surface part, la
+    /// conversation se pose dessous SANS animation et c'est la fermeture qui la
+    /// révèle — une seule transition à l'écran, jamais deux qui se croisent.
+    ///
+    /// L'appel, lui, vit dans sa propre fenêtre et ne se déclare pas : il reste.
+    func clearPresentedSurfaces(thenOpen open: @escaping @MainActor (_ beneathClosingSurface: Bool) -> Void) {
+        surfaces.clearForConversation { [weak self] closedSurfaces in
+            guard let self else { return }
+            let closesProfile = deepLinkProfileUser != nil || participantProfileTarget != nil
+            if deepLinkProfileUser != nil { deepLinkProfileUser = nil }
+            if participantProfileTarget != nil { participantProfileTarget = nil }
+            open(closedSurfaces || closesProfile)
+        }
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
+        clearPresentedSurfaces { [weak self] beneathClosingSurface in
+            self?.showConversation(conversation, highlightMessageId: highlightMessageId,
+                                   beneathClosingSurface: beneathClosingSurface)
+        }
+    }
+
+    private func showConversation(_ conversation: Conversation, highlightMessageId: String?,
+                                  beneathClosingSurface: Bool) {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
@@ -455,7 +488,13 @@ final class Router: ObservableObject {
         // mutations rapprochees → "NavigationRequestObserver tried to update
         // multiple times per frame". `NavigationStack(path:)` recoit
         // desormais une transition atomique.
-        path = [.conversation(conversation)]
+        guard beneathClosingSurface else {
+            path = [.conversation(conversation)]
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { path = [.conversation(conversation)] }
     }
 
     /// Replaces the whole nav stack with a single route. On iPhone this is ONE
