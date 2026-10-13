@@ -760,7 +760,9 @@ struct ThemedFeedOverlay: View {
                             viewModel.prefetchMediaForPost(post.id)
                             viewModel.prefetchComments(post.id)
                         }
-                        .countsImpression(of: post.id) { impressions.record($0) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            viewModel.posts.firstIndex { $0.id == post.id }
+                        }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)

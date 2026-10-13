@@ -79,4 +79,15 @@ public struct ViewabilityMeter: Sendable, Equatable {
         guard !overlap.isNull else { return 0 }
         return Double(overlap.width * overlap.height / area)
     }
+
+    /// Le pas de la part relayée par une cellule : 5 %.
+    public static let fractionStepPercent = 5
+
+    /// La même part, ramenée au pas : pendant un défilement, une cellule ne
+    /// relaie que ses changements de palier, pas chaque image. Les seuils du
+    /// MRC (0 et 50 %) tombent sur un palier.
+    public static func steppedFraction(of frame: CGRect, in viewport: CGRect) -> Double {
+        let percent = Int((visibleFraction(of: frame, in: viewport) * 100 + 1e-9).rounded(.down))
+        return Double(percent / fractionStepPercent * fractionStepPercent) / 100
+    }
 }

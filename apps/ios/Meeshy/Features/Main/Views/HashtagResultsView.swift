@@ -29,7 +29,9 @@ struct HashtagResultsView: View {
                                 Task { await viewModel.loadMore() }
                             }
                         }
-                        .countsImpression(of: post.id) { viewModel.recordImpression($0) }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: viewModel.impressions) {
+                            viewModel.position(of: post.id)
+                        }
                 }
                 if viewModel.isLoading {
                     ProgressView()

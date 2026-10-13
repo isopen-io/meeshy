@@ -30,6 +30,10 @@ public enum ReachSurface: String, Codable, Sendable, CaseIterable {
 /// Un événement de lecture. `surface` (et `durationMs`) ne s'écrivent que s'ils
 /// sont présents : une clé `null` serait refusée par le schéma de la porte.
 ///
+/// - `impression` porte, depuis #10501, son contexte de LISTING (rang rendu,
+///   page servie, source de classement) et sa VISIBILITÉ au sens MRC quand
+///   elle est connue au départ du lot — deux clés facultatives, qu'un serveur
+///   antérieur supprime sans erreur ;
 /// - `view` porte, depuis la demande du porteur du 2026-10-13, l'ENTRÉE qui a
 ///   amené l'écran détail (`provenance`, et `origin` pour un listing) ;
 /// - `open` est l'engagement d'ouverture envoyé AU TAP sur un contenu d'un
@@ -42,13 +46,13 @@ public enum ReachSurface: String, Codable, Sendable, CaseIterable {
 ///   seulement — un visiteur ne produit que des vues.
 public enum SocialEvent: Codable, Sendable, Equatable {
     case view(postId: String, durationMs: Int?, surface: ReachSurface?, entry: ContentEntry? = nil)
-    case impression(postId: String, source: String, surface: ReachSurface?)
+    case impression(postId: String, source: String, surface: ReachSurface?, listing: SocialListing? = nil, visibility: SocialVisibility? = nil)
     case open(postId: String, origin: OpenOrigin?)
     case dwell(EngagementSession)
 
     public var postId: String {
         switch self {
-        case .view(let postId, _, _, _), .impression(let postId, _, _), .open(let postId, _):
+        case .view(let postId, _, _, _), .impression(let postId, _, _, _, _), .open(let postId, _):
             return postId
         case .dwell(let session):
             return session.postId
@@ -63,7 +67,7 @@ public enum SocialEvent: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case type, postId, durationMs, source, surface, provenance, origin
+        case type, postId, durationMs, source, surface, provenance, origin, listing, visibility
     }
 
     private enum Kind: String, Codable {
@@ -80,11 +84,13 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             try container.encodeIfPresent(surface, forKey: .surface)
             try container.encodeIfPresent(entry?.provenance, forKey: .provenance)
             try container.encodeIfPresent(entry?.origin, forKey: .origin)
-        case .impression(let postId, let source, let surface):
+        case .impression(let postId, let source, let surface, let listing, let visibility):
             try container.encode(Kind.impression, forKey: .type)
             try container.encode(postId, forKey: .postId)
             try container.encode(source, forKey: .source)
             try container.encodeIfPresent(surface, forKey: .surface)
+            try container.encodeIfPresent(listing, forKey: .listing)
+            try container.encodeIfPresent(visibility, forKey: .visibility)
         case .open(let postId, let origin):
             try container.encode(Kind.open, forKey: .type)
             try container.encode(postId, forKey: .postId)
@@ -115,7 +121,9 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             self = .impression(
                 postId: postId,
                 source: try container.decodeIfPresent(String.self, forKey: .source) ?? "feed",
-                surface: surface
+                surface: surface,
+                listing: (try? container.decodeIfPresent(SocialListing.self, forKey: .listing)) ?? nil,
+                visibility: (try? container.decodeIfPresent(SocialVisibility.self, forKey: .visibility)) ?? nil
             )
         case .open:
             self = .open(postId: postId, origin: origin)

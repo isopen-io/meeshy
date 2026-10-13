@@ -257,7 +257,7 @@ public struct SocialScreenCapture: Encodable, Sendable, Equatable {
 // MARK: visibility (#10501)
 
 /// La visibilité MRC d'une impression, quand elle n'était pas connue au lot.
-public struct SocialVisibility: Encodable, Sendable, Equatable {
+public struct SocialVisibility: Codable, Sendable, Equatable {
     public let maxVisibleFraction: Double
     public let visibleMs: Int
     public let viewable: Bool

@@ -1,6 +1,20 @@
 import Foundation
 
 extension PostService {
+    // MARK: - Listing Context
+
+    /// #10501 — une page de listing vient d'être servie : le registre retient
+    /// son identifiant et la source de classement de chaque élément, que
+    /// l'impression d'une carte recopiera. La page est rendue telle quelle.
+    func listed(_ page: PaginatedAPIResponse<[APIPost]>, on surface: ReachSurface) -> PaginatedAPIResponse<[APIPost]> {
+        listings.note(
+            surface: surface,
+            feedRequestId: page.meta?.feedRequestId,
+            items: page.data.map { ListedItem(id: $0.id, rankingSource: $0.rankingSource) }
+        )
+        return page
+    }
+
     // MARK: - Reach Tracking
 
     /// `POST /social/events` est la SEULE porte par laquelle iOS compte ce qu'il

@@ -403,15 +403,19 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     private let socialEvents: SocialEventsV2Hub
     /// L'heure de l'appareil au départ d'un lot de comptage (`context.sentAt`).
     let clock: @Sendable () -> Date
+    /// #10501 — de quelle page vient chaque élément d'un listing.
+    let listings: ListingContextProviding
 
     init(
         api: APIClientProviding = APIClient.shared,
         socialEvents: SocialEventsV2Hub = .shared,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        listings: ListingContextProviding = ListingContextLedger.shared
     ) {
         self.api = api
         self.socialEvents = socialEvents
         self.clock = clock
+        self.listings = listings
     }
 
     private func emitInteraction(_ action: SocialInteraction.Action, postId: String, destination: SocialInteraction.ShareDestination? = nil) {
@@ -419,11 +423,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func getFeed(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.feed, cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.feed, cursor: cursor, limit: limit), on: .feed)
     }
 
     public func getPostsByHashtag(tag: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.hashtagByTag(tag: tag), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.hashtagByTag(tag: tag), cursor: cursor, limit: limit), on: .hashtag)
     }
 
     public func getTrendingHashtags(limit: Int = 20) async throws -> [APIHashtag] {
@@ -437,7 +441,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         var queryItems = [URLQueryItem(name: "limit", value: "\(limit)")]
         if let cursor { queryItems.append(URLQueryItem(name: "cursor", value: cursor)) }
         if let seedReelId { queryItems.append(URLQueryItem(name: "seed", value: seedReelId)) }
-        return try await api.request(PostsEndpoint.feedReels, queryItems: queryItems)
+        return listed(try await api.request(PostsEndpoint.feedReels, queryItems: queryItems), on: .reels)
     }
 
     public func create(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil) async throws -> APIPost {
@@ -748,7 +752,7 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func getBookmarks(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.bookmarks, cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.bookmarks, cursor: cursor, limit: limit), on: .bookmarks)
     }
 
     public func removeBookmark(postId: String) async throws {
@@ -963,11 +967,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     // MARK: - Feed Variants
 
     public func getUserPosts(userId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.userByUserId(userId: userId), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.userByUserId(userId: userId), cursor: cursor, limit: limit), on: .profile)
     }
 
     public func getCommunityPosts(communityId: String, cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(PostsEndpoint.communityByCommunityId(communityId: communityId), cursor: cursor, limit: limit)
+        listed(try await api.paginatedRequest(PostsEndpoint.communityByCommunityId(communityId: communityId), cursor: cursor, limit: limit), on: .community)
     }
 
     // MARK: - Comment Replies

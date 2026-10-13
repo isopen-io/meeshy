@@ -96,6 +96,8 @@ final class ReelsViewModel: ObservableObject {
     /// #10483 — l'impression d'un réel porte sa surface (`reels`) ; la source
     /// `feed` reste celle du compteur historique. Groupée et persistée.
     private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
+    /// #10501 — l'impression du réel actuellement à l'écran.
+    private var listedImpression: String?
     /// #10483 — l'entrée du lecteur : le PREMIER réel compté porte la marque
     /// de la porte qui l'a ouvert (tap du fil ou du profil, notification,
     /// lien) ; les suivants, atteints par balayage, sont un listing `reels`.
@@ -635,7 +637,17 @@ final class ReelsViewModel: ObservableObject {
         // apparition : revenir sur un réel déjà vu est une nouvelle impression.
         // La déduplication de session qui vivait ici plafonnait le compteur à 1
         // par réel et par lancement d'app.
-        impressions.record(id)
+        closeListedImpression()
+        listedImpression = impressions.recordListed(id, position: reels.firstIndex { $0.id == id }, isVideo: true)
+        // Un réel installé occupe tout l'écran jusqu'au suivant.
+        if let listedImpression { impressions.noteVisible(fraction: 1, of: listedImpression) }
+    }
+
+    /// Le réel à l'écran cède la place : sa mesure de visibilité se clôt.
+    private func closeListedImpression() {
+        guard let previous = listedImpression else { return }
+        listedImpression = nil
+        impressions.noteGone(previous)
     }
 
     private func readerEntry(for id: String) -> ContentEntry {
@@ -648,6 +660,7 @@ final class ReelsViewModel: ObservableObject {
 
     /// Le lecteur se ferme : les impressions en attente partent.
     func flushImpressions() async {
+        closeListedImpression()
         await impressions.flushNow()
     }
 }

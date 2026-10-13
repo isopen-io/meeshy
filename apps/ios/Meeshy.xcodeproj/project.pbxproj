@@ -2130,6 +2130,7 @@
 		AD195D2D64E661FB0D5E663A /* VoiceRecordingActivityLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B1919DD29D2AD9EBFEF874C /* VoiceRecordingActivityLawTests.swift */; };
 		AD322B37C40727C44A4602CB /* ComposerSceneObjectCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FF2C35CB7BDB8C1ECBAD15 /* ComposerSceneObjectCount.swift */; };
 		AD40B028B5AFC134F620AB68 /* SocialEventsV2SurfacesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1EFCC41A43069A39E27C9CE /* SocialEventsV2SurfacesTests.swift */; };
+		B2FA5122B4D50D184C710D96 /* ListingViewabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85AE8E49334F0A731D4AC64E /* ListingViewabilityTests.swift */; };
 		AD441D6906AD47DEB63CC106 /* MentionContactsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 854E56D8439BA499872B3875 /* MentionContactsStoreTests.swift */; };
 		AD4571072266CA500166B52E /* LentilleListFlagPin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A5CF50F8C26CCD944287724 /* LentilleListFlagPin.swift */; };
 		AD72C5C493D44626E964B871 /* StoryCommentsOverlayHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C9D9CB445D5E5D8B616425 /* StoryCommentsOverlayHost.swift */; };
@@ -2191,6 +2192,7 @@
 		B10B6E9B5735BCF723A788AD /* MediaGalleryPageFitsItsContainerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 679FAAAC09083E5C9439E09B /* MediaGalleryPageFitsItsContainerTests.swift */; };
 		B115B4BAA71D71555AD57FD6 /* CallMontageFrameRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D559572EFA44DE97711B0B /* CallMontageFrameRuleTests.swift */; };
 		B11D0C5B92417B9BD3D7C7C4 /* ListingScrollTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92D977675174D94CC90325C6 /* ListingScrollTracker.swift */; };
+		2AD417BE4968DA716390993A /* ListingViewability.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF96096BD093781255780BC0 /* ListingViewability.swift */; };
 		B12C9165635435CFD6A78F10 /* GameWave2OptimisticTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56D93F216510BF22F2568DF6 /* GameWave2OptimisticTests.swift */; };
 		B13059947AB727CD7E90461C /* GamePhotoFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 289301F25475CC410A6D85F8 /* GamePhotoFlow.swift */; };
 		B1442A35AFE10A42ED5C5FE9 /* GameGuideCardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9CB78C57DE501831CE2793A /* GameGuideCardTests.swift */; };
@@ -5157,6 +5159,7 @@
 		92BA9EF6FB24C55AB24B6A2D /* ViewOnceSealedRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewOnceSealedRenderingTests.swift; sourceTree = "<group>"; };
 		92CD64F97AFE603FB2FC5CDA /* ReadingModesFlagIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingModesFlagIntegrationTests.swift; sourceTree = "<group>"; };
 		92D977675174D94CC90325C6 /* ListingScrollTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingScrollTracker.swift; sourceTree = "<group>"; };
+		AF96096BD093781255780BC0 /* ListingViewability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingViewability.swift; sourceTree = "<group>"; };
 		92EA486F7BEB0500C7ACC8D7 /* VideoPosterResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPosterResolver.swift; sourceTree = "<group>"; };
 		92FB6DC677255DAA27ADA08A /* MeeshyAppOutboxHygieneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAppOutboxHygieneTests.swift; sourceTree = "<group>"; };
 		931379A2E3534EFCEF8ED961 /* ReplyCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyCell.swift; sourceTree = "<group>"; };
@@ -5691,6 +5694,7 @@
 		C1C89092F821E3E2E4FD1541 /* ConversationView+Keyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+Keyboard.swift"; sourceTree = "<group>"; };
 		C1EBBF8874883A465DB873A2 /* MeeshySDK */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MeeshySDK; path = ../../packages/MeeshySDK; sourceTree = SOURCE_ROOT; };
 		C1EFCC41A43069A39E27C9CE /* SocialEventsV2SurfacesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialEventsV2SurfacesTests.swift; sourceTree = "<group>"; };
+		85AE8E49334F0A731D4AC64E /* ListingViewabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListingViewabilityTests.swift; sourceTree = "<group>"; };
 		C20D23507955CFF9872C7900 /* RouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterTests.swift; sourceTree = "<group>"; };
 		C23EE5399ADBBB74848DEB78 /* ConversationVideoInlineMinimalGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationVideoInlineMinimalGuardTests.swift; sourceTree = "<group>"; };
 		C24503025218676515DACAED /* BackgroundTransitionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTransitionCoordinator.swift; sourceTree = "<group>"; };
@@ -7279,6 +7283,7 @@
 				5E41F6A9486998A9D8201CFF /* SocialCaptureReporterTests.swift */,
 				9A84CBA5F46A8BF6D2D57EC5 /* SocialEventsV2ReporterTests.swift */,
 				C1EFCC41A43069A39E27C9CE /* SocialEventsV2SurfacesTests.swift */,
+				85AE8E49334F0A731D4AC64E /* ListingViewabilityTests.swift */,
 			);
 			path = SocialEvents;
 			sourceTree = "<group>";
@@ -9897,6 +9902,7 @@
 				9A0503AA0A6FC49158F984D3 /* LanguageProviding.swift */,
 				027ADE32E61B664A5FD1F8C6 /* LinkPreviewStore.swift */,
 				92D977675174D94CC90325C6 /* ListingScrollTracker.swift */,
+				AF96096BD093781255780BC0 /* ListingViewability.swift */,
 				F0558B3F18B9AB432CBD0CBF /* LiveCallJoiner.swift */,
 				90D46E931BC529CDB77411E0 /* LocallyHiddenMessagesStore.swift */,
 				6800F8750E4B164B6D7B5EBE /* Logger+Categories.swift */,
@@ -11982,6 +11988,7 @@
 				82436C66E2623D026591CC15 /* LinkPreviewStore.swift in Sources */,
 				F6329735EF947B088C336A5F /* LinksHubView.swift in Sources */,
 				B11D0C5B92417B9BD3D7C7C4 /* ListingScrollTracker.swift in Sources */,
+				2AD417BE4968DA716390993A /* ListingViewability.swift in Sources */,
 				61DACA9AA6A0F48C3AB5BFCF /* LiveActivityCommandBinding.swift in Sources */,
 				7C1B717E90646E5152C315A7 /* LiveActivityCommandIntent.swift in Sources */,
 				1E4B17688687E043E74E25AB /* LiveActivityHost.swift in Sources */,
@@ -13948,6 +13955,7 @@
 				B94236ED4D47F3C48A7665FD /* SocialComposerSeedTests.swift in Sources */,
 				271D78AE0EFED8F54CE41645 /* SocialEventsV2ReporterTests.swift in Sources */,
 				AD40B028B5AFC134F620AB68 /* SocialEventsV2SurfacesTests.swift in Sources */,
+				B2FA5122B4D50D184C710D96 /* ListingViewabilityTests.swift in Sources */,
 				C09CA67789AF263452972D1F /* SocialFullscreenRouteCacheRoundTripTests.swift in Sources */,
 				7348297A8DFF1C29EF6FCA3C /* SocialFullscreenRouteTests.swift in Sources */,
 				754774534C0CD444E99A2E40 /* SocialMediaCaptionServingTests.swift in Sources */,

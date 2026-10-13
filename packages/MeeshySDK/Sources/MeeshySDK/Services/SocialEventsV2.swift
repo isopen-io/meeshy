@@ -63,7 +63,7 @@ public struct SocialTarget: Encodable, Sendable, Equatable, Hashable {
 }
 
 /// D'où vient le classement d'un listing — servi par la passerelle.
-public enum SocialRankingSource: String, Encodable, Sendable, CaseIterable {
+public enum SocialRankingSource: String, Codable, Sendable, CaseIterable {
     case following
     case forYou = "for_you"
     case trending, nearby, search, hashtag, sound, profile, bookmarks, other
@@ -72,10 +72,15 @@ public enum SocialRankingSource: String, Encodable, Sendable, CaseIterable {
     public init(served: String?) {
         self = served.flatMap(SocialRankingSource.init(rawValue:)) ?? .other
     }
+
+    /// Relue d'une file persistée : même repli que pour une valeur servie.
+    public init(from decoder: Decoder) throws {
+        self.init(served: try decoder.singleValueContainer().decode(String.self))
+    }
 }
 
 /// Le contexte de listing d'un événement émis DEPUIS un listing.
-public struct SocialListing: Encodable, Sendable, Equatable {
+public struct SocialListing: Codable, Sendable, Equatable {
     public let feedRequestId: String?
     public let position: Int?
     public let rankingSource: SocialRankingSource?

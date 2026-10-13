@@ -160,7 +160,7 @@ final class ContentOpenReachTests: XCTestCase {
         sut.recordView("r1")
         await sut.flushImpressions()
 
-        XCTAssertEqual(service.recordedImpressions, [.impression(postId: "r1", source: "feed", surface: .reels)])
+        XCTAssertEqual(service.recordedCountedImpressions, [.impression(postId: "r1", source: "feed", surface: .reels)])
     }
 
     // MARK: - Le tap d'un listing : un engagement d'ouverture, aucune vue
@@ -363,7 +363,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertTrue(viewed)
         XCTAssertTrue(service.recordedSocialEventBatches.contains([.open(postId: "r1", origin: .feed)]))
         XCTAssertEqual(views(in: service), [.view(postId: "r1", durationMs: nil, surface: .reels, entry: .listing(.feed))])
-        XCTAssertEqual(service.recordedSocialEvents.filter { $0 == .impression(postId: "r1", source: "feed", surface: .reels) }.count, 1)
+        XCTAssertEqual(service.recordedCountedImpressions.filter { $0 == .impression(postId: "r1", source: "feed", surface: .reels) }.count, 1)
     }
 
     /// Un réel atteint par BALAYAGE : une impression et une vue de plus,
@@ -383,7 +383,7 @@ final class ContentOpenReachTests: XCTestCase {
         XCTAssertEqual(Set(views(in: service).map(\.postId)), ["r1", "r2"])
         XCTAssertTrue(views(in: service).contains(.view(postId: "r1", durationMs: nil, surface: .reels, entry: .listing(.profile))))
         XCTAssertTrue(views(in: service).contains(.view(postId: "r2", durationMs: nil, surface: .reels, entry: .listing(.reels))))
-        XCTAssertTrue(service.recordedSocialEvents.contains(.impression(postId: "r2", source: "feed", surface: .reels)))
+        XCTAssertTrue(service.recordedCountedImpressions.contains(.impression(postId: "r2", source: "feed", surface: .reels)))
     }
 
     /// Un réel seulement LISTÉ au profil, sans tap : une impression, rien d'autre.

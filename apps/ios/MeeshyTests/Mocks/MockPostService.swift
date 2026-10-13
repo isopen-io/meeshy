@@ -247,7 +247,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordedImpressionPostIds: [String] { recordedImpressions.map(\.postId) }
     /// Les sources des impressions reçues, dans l'ordre.
     var recordedImpressionSources: [String] {
-        recordedImpressions.compactMap { if case .impression(_, let source, _) = $0 { return source } else { return nil } }
+        recordedImpressions.compactMap { if case .impression(_, let source, _, _, _) = $0 { return source } else { return nil } }
+    }
+    /// #10501 — les impressions reçues, sans leur contexte de listing ni leur
+    /// visibilité : ce qui est COMPTÉ, quel que soit ce qui le qualifie.
+    var recordedCountedImpressions: [SocialEvent] {
+        recordedImpressions.compactMap {
+            guard case .impression(let postId, let source, let surface, _, _) = $0 else { return nil }
+            return .impression(postId: postId, source: source, surface: surface)
+        }
     }
 
     // MARK: - Protocol Conformance

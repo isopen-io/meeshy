@@ -6,6 +6,25 @@ import Foundation
 public protocol ReachImpressionRecording: AnyObject {
     @MainActor func record(_ postId: String)
     @MainActor func flushNow() async
+    /// #10501 — l'affichage d'une carte DANS un listing, à son rang rendu.
+    /// Rend l'`eventId` de l'impression, que la mesure de visibilité de la
+    /// carte rappelle ; `nil` quand la surface ne mesure pas.
+    @MainActor func recordListed(_ postId: String, position: Int?, isVideo: Bool) -> String?
+    /// La part visible de la carte a changé (0 = hors écran).
+    @MainActor func noteVisible(fraction: Double, of eventId: String)
+    /// La carte a quitté l'écran : sa mesure se clôt.
+    @MainActor func noteGone(_ eventId: String)
+}
+
+public extension ReachImpressionRecording {
+    /// Défaut : une surface qui ne mesure pas la visibilité compte
+    /// l'impression, et rien d'autre.
+    @MainActor func recordListed(_ postId: String, position: Int?, isVideo: Bool) -> String? {
+        record(postId)
+        return nil
+    }
+    @MainActor func noteVisible(fraction: Double, of eventId: String) {}
+    @MainActor func noteGone(_ eventId: String) {}
 }
 
 /// Le collecteur minimal d'une surface du SDK : les affichages s'accumulent

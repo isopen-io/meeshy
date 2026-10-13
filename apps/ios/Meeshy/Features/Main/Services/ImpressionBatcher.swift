@@ -60,6 +60,9 @@ final class ImpressionBatcher: ObservableObject {
     /// (`SharedImpressionBatchers`) qui survivent à la déconnexion.
     private let accountId: @MainActor () -> String?
     private let clock: @MainActor () -> Date
+    /// #10501 — de quelle page vient une carte, et combien elle a été vue.
+    private let listings: ListingContextProviding
+    private let viewability: ListingViewabilityTracking
 
     private var pending: [PendingImpression] = []
     private var pendingAccount: String?
@@ -77,7 +80,9 @@ final class ImpressionBatcher: ObservableObject {
         flushDelay: TimeInterval = 3,
         defaults: UserDefaults = .standard,
         accountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
-        clock: @escaping @MainActor () -> Date = { Date() }
+        clock: @escaping @MainActor () -> Date = { Date() },
+        listings: ListingContextProviding = ListingContextLedger.shared,
+        viewability: ListingViewabilityTracking? = nil
     ) {
         self.source = source
         self.surface = surface
@@ -86,6 +91,8 @@ final class ImpressionBatcher: ObservableObject {
         self.defaults = defaults
         self.accountId = accountId
         self.clock = clock
+        self.listings = listings
+        self.viewability = viewability ?? ListingViewabilityTracker(surface: surface.map(SocialSurface.init))
         let account = accountId()
         self.pendingAccount = account
         self.pending = Self.restore(
@@ -101,12 +108,48 @@ final class ImpressionBatcher: ObservableObject {
 
     /// Le post `postId` vient d'apparaître à l'écran.
     func record(_ postId: String) {
-        guard !postId.isEmpty else { return }
+        _ = enqueue(postId, listing: nil)
+    }
+
+    /// #10501 — la carte de `postId` vient d'apparaître au rang `position` de
+    /// CE listing. L'impression part comme toute autre (chaque listing
+    /// compte) ; elle porte en plus son rang, la page qui a servi l'élément et
+    /// sa source de classement, et la mesure de visibilité de la carte s'ouvre
+    /// sous son `eventId`.
+    func recordListed(_ postId: String, position: Int?, isVideo: Bool) -> String? {
+        let listing = listings.listing(on: surface, postId: postId, position: position)
+        guard let eventId = enqueue(postId, listing: listing) else { return nil }
+        viewability.begin(ListedCell(
+            eventId: eventId,
+            target: SocialTarget(kind: surface == .reels ? .reel : .post, id: postId),
+            listing: listing,
+            isVideo: isVideo
+        ))
+        return eventId
+    }
+
+    func noteVisible(fraction: Double, of eventId: String) {
+        viewability.note(fraction: fraction, of: eventId)
+    }
+
+    /// La carte quitte l'écran : sa mesure se clôt (`visibility/measured`,
+    /// reliée par `impressionEventId`), et l'impression encore en file la garde.
+    func noteGone(_ eventId: String) {
+        guard let measured = viewability.end(eventId) else { return }
+        guard let index = pending.firstIndex(where: { $0.stamp.eventId == eventId }) else { return }
+        pending[index] = pending[index].measured(measured)
+        persist()
+    }
+
+    private func enqueue(_ postId: String, listing: SocialListing?) -> String? {
+        guard !postId.isEmpty else { return nil }
         RecentDisplayCaptureSource.shared.noteDisplayed(postId: postId, source: source, surface: surface)
         adoptCurrentAccount()
-        pending.append(PendingImpression(postId: postId, stamp: .minted(at: clock())))
+        let impression = PendingImpression(postId: postId, stamp: .minted(at: clock()), listing: listing)
+        pending.append(impression)
         persist()
         scheduleFlush()
+        return impression.stamp.eventId
     }
 
     /// Envoie immédiatement ce qui est en attente. À appeler quand la surface
@@ -194,7 +237,11 @@ final class ImpressionBatcher: ObservableObject {
             let chunk = batch[start..<min(start + Self.socialEventsCap, batch.count)]
             do {
                 _ = try await postService.recordSocialEvents(
-                    chunk.map { StampedSocialEvent(event: .impression(postId: $0.postId, source: source, surface: surface), stamp: $0.stamp) },
+                    chunk.map { StampedSocialEvent(event: .impression(
+                        postId: $0.postId, source: source, surface: surface,
+                        listing: $0.listing,
+                        visibility: $0.visibility ?? viewability.visibility(of: $0.stamp.eventId)
+                    ), stamp: $0.stamp) },
                     credential: .account
                 )
             } catch {
@@ -269,31 +316,46 @@ final class ImpressionBatcher: ObservableObject {
     }
 }
 
-/// Une apparition en attente : le post, et l'enveloppe posée quand il est
-/// apparu (#10500).
+/// Une apparition en attente : le post, l'enveloppe posée quand il est
+/// apparu (#10500), et — pour une carte de listing (#10501) — son contexte
+/// de listing et sa visibilité une fois mesurée.
 nonisolated struct PendingImpression: Codable, Equatable {
     let postId: String
     let stamp: SocialEventStamp
+    let listing: SocialListing?
+    let visibility: SocialVisibility?
 
     private enum CodingKeys: String, CodingKey {
-        case postId
+        case postId, listing, visibility
     }
 
-    init(postId: String, stamp: SocialEventStamp) {
+    init(postId: String, stamp: SocialEventStamp, listing: SocialListing? = nil, visibility: SocialVisibility? = nil) {
         self.postId = postId
         self.stamp = stamp
+        self.listing = listing
+        self.visibility = visibility
     }
 
-    /// À plat : `{ postId, eventId, occurredAt }`.
+    /// La même apparition, sa mesure close.
+    func measured(_ visibility: SocialVisibility) -> PendingImpression {
+        PendingImpression(postId: postId, stamp: stamp, listing: listing, visibility: visibility)
+    }
+
+    /// À plat : `{ postId, eventId, occurredAt, listing?, visibility? }`.
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(postId, forKey: .postId)
+        try container.encodeIfPresent(listing, forKey: .listing)
+        try container.encodeIfPresent(visibility, forKey: .visibility)
         try stamp.encode(to: encoder)
     }
 
+    /// Une file écrite avant #10501 se relit sans contexte ni mesure.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.postId = try container.decode(String.self, forKey: .postId)
         self.stamp = (try? SocialEventStamp(from: decoder)) ?? .minted(at: nil)
+        self.listing = (try? container.decodeIfPresent(SocialListing.self, forKey: .listing)) ?? nil
+        self.visibility = (try? container.decodeIfPresent(SocialVisibility.self, forKey: .visibility)) ?? nil
     }
 }
