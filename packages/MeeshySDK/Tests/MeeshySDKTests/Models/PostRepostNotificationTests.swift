@@ -67,9 +67,9 @@ final class PostRepostNotificationTests: XCTestCase {
         XCTAssertEqual(notification.rowPresentation(copy: { _ in nil }).footer, .content(symbol: "play.rectangle.fill", text: "Réel", isExpired: false))
     }
 
-    func test_rowFooter_statusReaction_keepsItsStatusLabel() throws {
-        let notification = try decode(repostJSON(type: "status_reaction", title: "Awa a réagi à votre statut", postType: "STATUS"))
-        XCTAssertEqual(notification.rowPresentation(copy: { _ in nil }).footer, .content(symbol: "face.smiling.fill", text: "Statut", isExpired: false))
+    func test_rowFooter_statusReaction_isCalledAMoodToo() throws {
+        let notification = try decode(repostJSON(type: "status_reaction", title: "Awa a réagi à votre humeur", postType: "STATUS"))
+        XCTAssertEqual(notification.rowPresentation(copy: { _ in nil }).footer, .content(symbol: "face.smiling.fill", text: "Humeur", isExpired: false))
     }
 
     // MARK: - Préférence de réception
