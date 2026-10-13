@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { NOT_DELETED } from './postIncludes';
 import { creditPostView } from './postViewCredit';
+import type { ViewContext } from './viewProvenance';
 import { incrementPostCounters } from './postCounters';
 import { engagementAggregateIncrements } from './engagementIncrements';
 import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess';
@@ -73,7 +74,7 @@ export async function recordView(
   postId: string,
   userId: string,
   duration?: number,
-  surface?: string,
+  context: ViewContext = {},
 ): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
@@ -136,7 +137,7 @@ export async function recordView(
     // legitimate viewer of the ORIGINAL (see root credit below).
     const isNewView = target.authorId === userId
       ? false
-      : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, surface });
+      : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
 
     const rootId = target.originalRepostOfId ?? target.repostOfId;
@@ -148,7 +149,7 @@ export async function recordView(
         select: { id: true, authorId: true },
       });
       if (root && root.authorId !== userId) {
-        await creditPostView(deps.prisma, { postId: rootId, userId, durationMs: safeDuration });
+        await creditPostView(deps.prisma, { postId: rootId, userId, durationMs: safeDuration, ...context, surface: undefined });
       }
     }
 

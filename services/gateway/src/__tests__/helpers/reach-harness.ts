@@ -7,6 +7,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { makeReachPrisma, type ReachGuest, type ReachPost } from './reach-prisma';
 import { registerSocialEventRoutes, type SocialEventsDeps } from '../../routes/social/events';
 import { creditPostView } from '../../services/posts/postViewCredit';
+import type { ViewContext } from '../../services/posts/viewProvenance';
 import { resetCacheStore } from '../../services/CacheStore';
 
 export const REACH_GUEST: ReachGuest = {
@@ -42,8 +43,8 @@ export async function reachHarness(
   };
 
   const postService = {
-    recordView: async (postId: string, userId: string, durationMs?: number, surface?: string) =>
-      creditPostView(fake.prisma as never, { postId, userId, durationMs, surface }),
+    recordView: async (postId: string, userId: string, durationMs?: number, context: ViewContext = {}) =>
+      creditPostView(fake.prisma as never, { postId, userId, durationMs, ...context }),
     getPostById: async () => null,
     recordMediaDownloads: async () => null,
     recordEngagementBatch: async () => 0,

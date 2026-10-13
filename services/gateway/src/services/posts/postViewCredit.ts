@@ -3,6 +3,7 @@ import { incrementPostCounters } from './postCounters';
 import { NOT_DELETED } from './postIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
+import { viewBreakdowns, viewProvenanceRow, type ViewContext } from './viewProvenance';
 
 const log = enhancedLogger.child({ module: 'postViewCredit' });
 
@@ -28,16 +29,16 @@ type PostViewCreditPrisma = Pick<PrismaClient, 'postView' | '$runCommandRaw'>;
  */
 export async function creditPostView(
   prisma: PostViewCreditPrisma,
-  { postId, userId, durationMs, surface, repeat = true, ledger = sharedViewOpenLedger }: {
+  { postId, userId, durationMs, surface, provenance, origin, repeat = true, ledger = sharedViewOpenLedger }: {
     readonly postId: string;
     readonly userId: string;
     readonly durationMs?: number;
-    readonly surface?: string;
     readonly repeat?: boolean;
     readonly ledger?: ViewOpenLedger;
-  },
+  } & ViewContext,
 ): Promise<boolean> {
-  const view = { postId, readerId: userId, durationMs };
+  const context: ViewContext = { surface, provenance, origin };
+  const view = { postId, readerId: userId, durationMs, context };
   const existing = await prisma.postView.findUnique({
     where: { postId_userId: { postId, userId } },
   });
@@ -50,7 +51,7 @@ export async function creditPostView(
 
   try {
     await prisma.postView.create({
-      data: { postId, userId, duration: durationMs, ...(surface ? { surface } : {}) },
+      data: { postId, userId, duration: durationMs, ...(surface ? { surface } : {}), ...viewProvenanceRow(context) },
     });
   } catch (error) {
     if (!isUniqueRace(error)) throw error;
@@ -58,7 +59,11 @@ export async function creditPostView(
     return false;
   }
 
-  await incrementPostCounters(prisma, [postId], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } });
+  await incrementPostCounters(prisma, [postId], {
+    viewCount: { increment: 1 },
+    uniqueViewCount: { increment: 1 },
+    breakdowns: viewBreakdowns(context),
+  });
   if (repeat) await noteCountedOpen(ledger, view);
 
   return true;
@@ -68,10 +73,13 @@ export async function creditPostView(
 async function creditRepeatView(
   prisma: PostViewCreditPrisma,
   ledger: ViewOpenLedger,
-  view: { readonly postId: string; readonly readerId: string; readonly durationMs?: number },
+  view: { readonly postId: string; readonly readerId: string; readonly durationMs?: number; readonly context: ViewContext },
 ): Promise<void> {
   if (await isExitOfCountedOpen(ledger, view)) return;
-  await incrementPostCounters(prisma, [view.postId], { viewCount: { increment: 1 } });
+  await incrementPostCounters(prisma, [view.postId], {
+    viewCount: { increment: 1 },
+    breakdowns: viewBreakdowns(view.context),
+  });
   await noteCountedOpen(ledger, view);
 }
 

@@ -33,6 +33,28 @@ Les vues uniques sont ENREGISTRÉES et SERVIES (`postInclude`, `GET /posts/:id/v
 
 **Pas de plafond bas par adresse** : une famille de 10, une entreprise de 30, un incubateur partagent une IP. **La triche par rotation de jetons est ACCEPTÉE pour l'instant** ; le bannissement d'adresse est manuel. Pour le permettre sans IP en clair, chaque événement anonyme admis incrémente un agrégat quotidien par empreinte d'adresse (`routes/social/addressActivity.ts`) : Redis `ZINCRBY reach:anon:address-activity:<AAAA-MM-JJ> <n> <empreinte>`, TTL 7 jours. Un administrateur lit le classement (`ZREVRANGE reach:anon:address-activity:<jour> 0 20 WITHSCORES`, ou `readAddressActivity`) et rapproche une empreinte d'une adresse relevée au proxy en calculant `addressFingerprintOf({ ip })` pour ce jour-là. Une route d'administration qui expose cette lecture reste à faire (issue de suivi).
 
+### Engagement d'ouverture, provenance des vues (demandes du porteur 2026-10-13)
+
+> « le tap doit plutôt envoyer un engagement d'ouverture et l'origine, pour différencier et identifier les vues à partir d'un listing du feed, profil, des vues de liens extérieurs, provenance d'un lien de tracking ou en direct ! […] le listing par le profil ou par le feed comptabilise les impressions et la vue détail comptabilise une impression (probablement pas forcément une impression unique si l'utilisateur a déjà vu) ! » — puis : « La vue Feed de réel agit comme la vue détails de post/story/reel ! »
+
+Contrat : `packages/shared/types/content-reach.ts` (`OPEN_ORIGINS`, `VIEW_PROVENANCES`).
+
+| geste | ce que le client envoie | ce qui compte |
+|---|---|---|
+| un contenu APPARAÎT dans un listing (fil, profil, favoris, hashtag, rail, citation, recherche…) | `impression` (inchangé) | `impressionCount` +1 par apparition |
+| TAP sur ce contenu | `open { postId, origin }` — NOUVEAU type, compte ET anonyme | `openCountByOrigin.<origine>` +1 ; AUCUNE vue. L'auteur ne compte pas |
+| l'écran DÉTAIL s'affiche (détail de post, lecteur de réels, lecteur de story) | `impression` (source detail/notification/shared_link, écran detail/reels/story) + `view { provenance, origin? }` | `impressionCount` +1 et `viewCount` +1 à CHAQUE affichage (non unique) ; la vue de sortie avec durée ne porte que la durée (`viewOpenLedger`) |
+| BALAYAGE vers le réel suivant dans le lecteur | idem, provenance `listing`, origine `reels` | +1 impression, +1 vue |
+
+**Provenance** d'une vue : `listing` (ouverte depuis un listing de l'app, avec l'`origin` tapée), `notification`, `shared_link` (lien de contenu Meeshy portant `?via=`, sans passer par `/l/`), `tracking_link` (arrivée par `/l/<jeton>`, `TrackingLink`), `external` (lien venu d'ailleurs sans marque Meeshy), `direct` (aucun référent). Choix pour le lecteur de réels : le PREMIER réel porte la provenance d'entrée, les réels atteints par balayage portent `listing`/`reels` — le pager est lui-même un listing.
+
+**Stockage retenu — des agrégats sur le `Post`, plus la première provenance sur la ligne du lecteur**, sans aucune nouvelle collection :
+- `Post.openCountByOrigin`, `Post.viewCountByProvenance`, `Post.listingViewCountByOrigin` : sous-documents `Json?` `{ clé: n }`, incrémentés en UNE écriture atomique avec les compteurs (`incrementPostCounters`, option `breakdowns` : pipeline `$mergeObjects` + `$ifNull`, qui traite un champ absent ou `null` comme vide). Les clés viennent des énumérations fermées et sont revérifiées (`^[a-z][a-z_]{0,31}$`) : jamais de `$` ni de `.` dans un chemin. Un `open` d'origine inconnue ou absente est compté sous `other` ; une vue sans provenance (ancien client) ou de provenance inconnue compte dans `viewCount` sans entrer dans la ventilation (la somme peut rester sous `viewCount`). Servis par `postInclude` en champs additifs.
+- `PostView.provenance` / `PostView.origin` (compte) et `AnonymousPostOpen.provenance` / `.origin` (anonyme) : la provenance de la PREMIÈRE vue du lecteur, comme `surface`. Aucun jeton, aucune adresse : l'anonyme reste désigné par sa clé de lecteur HMAC.
+- Pourquoi pas une collection d'ouvertures avec TTL : les agrégats répondent à la question posée (« d'où viennent les vues de ce contenu ? ») en une lecture du post, sans ligne par tap ni purge ; une série temporelle par origine reste possible plus tard sans casser ces champs.
+
+**Rétrocompatibilité.** `open` est un membre de l'union discriminée : un ANCIEN serveur refuse en 400 un lot qui le porte. Les clients l'envoient donc dans une requête SÉPARÉE, et un 400/403 sur elle retire les `open` sans rejeu — jamais une vue ou une impression n'est emportée. `provenance` et `origin` sur `view` sont facultatifs (un ancien serveur les retire, objet non strict). Un ancien client (ni `open`, ni provenance) est compté exactement comme avant. Aucune migration : champs facultatifs, aucun index.
+
 ### Rétrocompatibilité
 
 Ancien client ⇒ nouveau serveur : mêmes routes, même corps, mêmes réponses ; un ancien lot anonyme `view` compte désormais aussi dans `viewCount`, et une surface inconnue ne fait plus refuser un lot. Les nouveaux champs (`uniqueViewCount`, `anonymousUniqueViewCount`, `PostView.surface`) sont facultatifs et `null` sur l'existant, lus comme 0. Le saut de `viewCount` (chaque vue compte désormais) n'est pas une migration : l'historique garde ses valeurs, seules les vues à venir comptent au total. Nouveau client ⇒ ancien serveur : `surface` est ignoré ; une impression anonyme reçoit 403 et le client web la retire de sa file (comportement déjà en place pour un 403), sans rejeu.

@@ -40,7 +40,22 @@ export const POST_COUNTERS = [
 
 export type PostCounter = (typeof POST_COUNTERS)[number];
 
-export type PostCounterIncrements = Readonly<Partial<Record<PostCounter, { readonly increment: number }>>>;
+/**
+ * Les VENTILATIONS d'un post (#10483) : des sous-documents `{ clé: n }` dont
+ * chaque clé s'incrémente — engagements d'ouverture par origine, vues par
+ * provenance, vues de listing par origine. Une clé absente, un sous-document
+ * absent ou `null` repartent de zéro. Les clés viennent d'énumérations fermées
+ * (`@meeshy/shared/types/content-reach`) : jamais une saisie libre.
+ */
+export const POST_BREAKDOWNS = ['openCountByOrigin', 'viewCountByProvenance', 'listingViewCountByOrigin'] as const;
+
+export type PostBreakdown = (typeof POST_BREAKDOWNS)[number];
+
+export type PostBreakdownIncrements = Readonly<Partial<Record<PostBreakdown, Readonly<Record<string, number>>>>>;
+
+export type PostCounterIncrements =
+  & Readonly<Partial<Record<PostCounter, { readonly increment: number }>>>
+  & { readonly breakdowns?: PostBreakdownIncrements };
 
 type RawCommandRunner = {
   $runCommandRaw(command: Record<string, unknown>): Promise<unknown>;
@@ -50,6 +65,23 @@ type RawCommandRunner = {
 const POST_COLLECTION = 'Post';
 
 const COUNTER_NAMES: ReadonlySet<string> = new Set(POST_COUNTERS);
+const BREAKDOWN_NAMES: ReadonlySet<string> = new Set(POST_BREAKDOWNS);
+
+/** Une clé de ventilation sûre pour un chemin MongoDB : ni `$`, ni `.`. */
+const SAFE_KEY = /^[a-z][a-z_]{0,31}$/;
+
+const breakdownStages = (breakdowns: PostBreakdownIncrements | undefined): readonly [string, unknown][] =>
+  Object.entries(breakdowns ?? {})
+    .filter(([champ]) => BREAKDOWN_NAMES.has(champ))
+    .map(([champ, keys]) => [champ, Object.entries(keys ?? {})
+      .filter(([key, n]) => SAFE_KEY.test(key) && Number.isFinite(n) && n !== 0)] as const)
+    .filter(([, keys]) => keys.length > 0)
+    .map(([champ, keys]) => [champ, {
+      $mergeObjects: [
+        { $ifNull: [`$${champ}`, {}] },
+        Object.fromEntries(keys.map(([key, n]) => [key, { $add: [{ $ifNull: [`$${champ}.${key}`, 0] }, n] }])),
+      ],
+    }]);
 
 export type PostCounterScope = {
   /** N'incrémente que les posts non supprimés (crédit d'une racine de repost). */
@@ -66,14 +98,18 @@ export function postCounterIncrementCommand(
   increments: PostCounterIncrements,
   scope: PostCounterScope = {},
 ): Record<string, unknown> | null {
-  const champs = Object.entries(increments)
+  const { breakdowns, ...compteurs } = increments;
+  const champs = Object.entries(compteurs)
     .filter((entree): entree is [PostCounter, { readonly increment: number }] =>
       COUNTER_NAMES.has(entree[0]) && Number.isFinite(entree[1]?.increment) && entree[1]?.increment !== 0);
+  const ventilations = breakdownStages(breakdowns);
   const ids = [...new Set(postIds)];
-  if (ids.length === 0 || champs.length === 0) return null;
+  if (ids.length === 0 || champs.length + ventilations.length === 0) return null;
 
-  const set = Object.fromEntries(champs.map(([champ, { increment }]) =>
-    [champ, { $add: [{ $ifNull: [`$${champ}`, 0] }, increment] }]));
+  const set = Object.fromEntries([
+    ...champs.map(([champ, { increment }]) => [champ, { $add: [{ $ifNull: [`$${champ}`, 0] }, increment] }] as const),
+    ...ventilations,
+  ]);
 
   return {
     update: POST_COLLECTION,

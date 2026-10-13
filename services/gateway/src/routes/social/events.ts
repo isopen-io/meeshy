@@ -9,10 +9,13 @@ import { filterConsumablePostIds } from '../posts/postConsumptionGate';
 import { readServableToAnonymous } from '../posts/anonymousPostGate';
 import {
   creditAnonymousImpressions,
+  creditAnonymousOpens,
   creditAnonymousViews,
   type ServableMap,
 } from '../../services/posts/anonymousReach';
 import { CONTENT_SURFACES } from '@meeshy/shared/types/content-surfaces';
+import { OPEN_ORIGINS, VIEW_PROVENANCES } from '@meeshy/shared/types/content-reach';
+import { creditOpens } from '../../services/posts/contentOpens';
 import {
   admitAnonymousEvents,
   anonymousReaderKeyOf,
@@ -183,6 +186,15 @@ const postId = z.string().regex(OBJECT_ID_REGEX);
  */
 const surface = z.enum(CONTENT_SURFACES).optional().catch(undefined);
 
+/**
+ * L'ORIGINE d'une ouverture (le listing tapé) et la PROVENANCE d'une vue
+ * (#10483, `@meeshy/shared/types/content-reach`) — facultatives, et une valeur
+ * INCONNUE est ignorée, jamais un refus du lot, pour la même raison que
+ * `surface`.
+ */
+const origin = z.enum(OPEN_ORIGINS).optional().catch(undefined);
+const provenance = z.enum(VIEW_PROVENANCES).optional().catch(undefined);
+
 const ViewEventSchema = z.object({
   type: z.literal('view'),
   postId,
@@ -193,6 +205,20 @@ const ViewEventSchema = z.object({
    */
   durationMs: z.number().int().min(0).max(DUREE_MAX_MS).optional(),
   surface,
+  provenance,
+  origin,
+});
+
+/**
+ * L'ENGAGEMENT D'OUVERTURE (#10483) — le tap sur un contenu d'un listing, avec
+ * son origine. Il ne compte AUCUNE vue : la vue est comptée par l'écran ouvert.
+ * Type ADDITIF : un ancien serveur refuse un lot qui le porte (union
+ * discriminée), c'est pourquoi les clients l'envoient dans une requête à part.
+ */
+const OpenEventSchema = z.object({
+  type: z.literal('open'),
+  postId,
+  origin,
 });
 
 const ImpressionEventSchema = z.object({
@@ -223,6 +249,7 @@ const DwellEventSchema = EngagementSessionSchema.extend({ type: z.literal('dwell
 
 export const SocialEventSchema = z.discriminatedUnion('type', [
   ViewEventSchema,
+  OpenEventSchema,
   ImpressionEventSchema,
   DownloadEventSchema,
   DwellEventSchema,
@@ -293,7 +320,11 @@ async function applyViews(
 
   let recorded = 0;
   for (const event of events) {
-    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, event.surface);
+    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, {
+      surface: event.surface,
+      provenance: event.provenance,
+      origin: event.origin,
+    });
     recorded += 1;
 
     // Contenu consommé (première vue réelle) → les notifications liées à ce
@@ -401,6 +432,29 @@ async function applyImpressions(
 }
 
 /**
+ * Les ENGAGEMENTS D'OUVERTURE admis (#10483) — `openCountByOrigin` par origine,
+ * aucune vue. L'auteur qui tape son propre contenu n'est pas compté : la même
+ * règle que la vue.
+ */
+async function applyOpens(
+  deps: SocialEventsDeps,
+  events: readonly Extract<SocialEvent, { type: 'open' }>[],
+  userId: string,
+): Promise<number> {
+  if (events.length === 0) return 0;
+  const auteurs = await deps.prisma.post.findMany({
+    where: { id: { in: [...new Set(events.map((event) => event.postId))] } },
+    select: { id: true, authorId: true },
+    take: SOCIAL_EVENTS_BATCH_CAP,
+  });
+  const siens = new Set(auteurs.filter((post: { authorId: string }) => post.authorId === userId)
+    .map((post: { id: string }) => post.id));
+  const comptees = events.filter((event) => !siens.has(event.postId));
+  await creditOpens(deps.prisma, comptees.map((event) => ({ postId: event.postId, origin: event.origin })));
+  return comptees.length;
+}
+
+/**
  * Les sources qui OUVRENT le détail d'un post : l'ouvrir depuis le fil
  * (`detail`), depuis une notification ou depuis un lien partagé est la même
  * ouverture — le client dit seulement d'où il venait (#10483).
@@ -485,14 +539,15 @@ export async function ingestSocialEvents(
 
   const vues = await applyViews(deps, parType('view'), actor);
 
-  const [impressions, telechargements, sessions] = await Promise.all([
+  const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
+    applyOpens(deps, parType('open'), actor.userId),
     applyImpressions(deps, parType('impression'), actor.userId),
     applyDownloads(deps, parType('download'), actor.userId),
     applyDwell(deps, parType('dwell'), actor.userId),
   ]);
 
   return {
-    recorded: vues + impressions + telechargements.events + sessions,
+    recorded: vues + ouvertures + impressions + telechargements.events + sessions,
     rejected,
     legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
   };
@@ -526,7 +581,19 @@ async function ingestAnonymous(
 
   const vues = await creditAnonymousViews(deps.prisma, {
     readerKey: actor.readerKey,
-    views: admis.flatMap((event) => event.type === 'view' ? [{ postId: event.postId, durationMs: event.durationMs }] : []),
+    views: admis.flatMap((event) => event.type === 'view'
+      ? [{
+        postId: event.postId,
+        durationMs: event.durationMs,
+        surface: event.surface,
+        provenance: event.provenance,
+        origin: event.origin,
+      }]
+      : []),
+    servable,
+  });
+  const ouvertures = await creditAnonymousOpens(deps.prisma, {
+    opens: admis.flatMap((event) => event.type === 'open' ? [{ postId: event.postId, origin: event.origin }] : []),
     servable,
   });
   const impressions = await creditAnonymousImpressions(deps.prisma, {
@@ -535,7 +602,7 @@ async function ingestAnonymous(
   });
 
   return {
-    recorded: vues + impressions,
+    recorded: vues + ouvertures + impressions,
     rejected,
     legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 },
   };
@@ -645,7 +712,7 @@ export const socialEventsRateLimit = {
  * `rejected` muet le lui cacherait derrière un mot qui signifie « hors
  * audience ».
  */
-export const TYPES_ANONYMES: ReadonlySet<SocialEvent['type']> = new Set(['view', 'impression']);
+export const TYPES_ANONYMES: ReadonlySet<SocialEvent['type']> = new Set(['view', 'open', 'impression']);
 
 /** La réponse d'un lecteur anonyme qui a épuisé son débit. */
 export const refuseAnonymousBudget = (reply: FastifyReply) =>

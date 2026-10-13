@@ -19,9 +19,26 @@ export type StoredPost = Record<string, unknown> & { readonly id: string };
 type Expression = unknown;
 
 const evaluate = (expr: Expression, doc: Record<string, unknown>): unknown => {
-  if (typeof expr === 'string' && expr.startsWith('$')) return doc[expr.slice(1)] ?? null;
+  if (typeof expr === 'string' && expr.startsWith('$')) {
+    return expr.slice(1).split('.').reduce<unknown>(
+      (value, key) => (value !== null && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined),
+      doc,
+    ) ?? null;
+  }
   if (expr === null || typeof expr !== 'object' || Array.isArray(expr)) return expr;
   const operator = expr as Record<string, unknown>;
+  if ('$mergeObjects' in operator) {
+    // Loi MongoDB : `null` est ignoré ; un opérande non document lève.
+    return (operator.$mergeObjects as Expression[]).reduce<Record<string, unknown>>((merged, operand) => {
+      const value = evaluate(operand, doc);
+      if (value === null || value === undefined) return merged;
+      if (typeof value !== 'object' || Array.isArray(value)) throw new Error('$mergeObjects requires object inputs');
+      return { ...merged, ...value };
+    }, {});
+  }
+  if (!Object.keys(operator).some((key) => key.startsWith('$'))) {
+    return Object.fromEntries(Object.entries(operator).map(([key, value]) => [key, evaluate(value, doc)]));
+  }
   if ('$ifNull' in operator) {
     const [value, fallback] = operator.$ifNull as [Expression, Expression];
     const resolved = evaluate(value, doc);

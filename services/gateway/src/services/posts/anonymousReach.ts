@@ -3,6 +3,8 @@ import { incrementPostCounters } from './postCounters';
 import { readServableToAnonymous, type AnonymousPostBatchPrisma } from '../../routes/posts/anonymousPostGate';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
+import { viewBreakdowns, viewProvenanceRow, type ViewContext } from './viewProvenance';
+import { creditOpens } from './contentOpens';
 
 /**
  * La PORTÉE ANONYME d'un post (#10483) — ce qu'un lecteur sans compte (invité
@@ -40,7 +42,7 @@ type ReachPrisma = PrismaClient;
 /** Les ids servables d'un lot → la racine de leur repost (`null` pour un original). */
 export type ServableMap = ReadonlyMap<string, string | null>;
 
-export type AnonymousViewInput = { readonly postId: string; readonly durationMs?: number };
+export type AnonymousViewInput = { readonly postId: string; readonly durationMs?: number } & ViewContext;
 
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === 'object' && error !== null && 'code' in error && (error as { code: unknown }).code === 'P2002';
@@ -56,7 +58,7 @@ async function creditView(
   prisma: ReachPrisma,
   params: {
     readonly postId: string; readonly readerKey: string; readonly durationMs?: number; readonly now: Date;
-    readonly ledger: ViewOpenLedger;
+    readonly ledger: ViewOpenLedger; readonly context: ViewContext;
   },
 ): Promise<boolean> {
   const view = { postId: params.postId, readerId: params.readerKey, durationMs: params.durationMs };
@@ -67,6 +69,7 @@ async function creditView(
     anonymousViewCount: { increment: 1 },
     postOpenCount: { increment: 1 },
     ...(first ? { uniqueViewCount: { increment: 1 }, anonymousUniqueViewCount: { increment: 1 } } : {}),
+    breakdowns: viewBreakdowns(params.context),
   });
   await noteCountedOpen(params.ledger, view);
   return first;
@@ -75,7 +78,10 @@ async function creditView(
 /** Ouvre la ligne d'un lecteur sur un post, ou y promeut la durée. `true` au premier insert. */
 async function openOnce(
   prisma: ReachPrisma,
-  params: { readonly postId: string; readonly readerKey: string; readonly durationMs?: number; readonly now: Date },
+  params: {
+    readonly postId: string; readonly readerKey: string; readonly durationMs?: number; readonly now: Date;
+    readonly context: ViewContext;
+  },
 ): Promise<boolean> {
   const { postId, readerKey, durationMs, now } = params;
   try {
@@ -84,6 +90,7 @@ async function openOnce(
         postId,
         sessionKey: readerKey,
         ...(durationMs !== undefined ? { durationMs } : {}),
+        ...viewProvenanceRow(params.context),
         expiresAt: new Date(now.getTime() + ANONYMOUS_VIEW_TTL_MS),
       },
     });
@@ -138,12 +145,13 @@ export async function creditAnonymousViews(
 
   for (const view of views) {
     const durationMs = boundedDuration(view.durationMs);
+    const context: ViewContext = { surface: view.surface, provenance: view.provenance, origin: view.origin };
     try {
-      await creditView(prisma, { postId: view.postId, readerKey: params.readerKey, durationMs, now, ledger });
+      await creditView(prisma, { postId: view.postId, readerKey: params.readerKey, durationMs, now, ledger, context });
       counted += 1;
       const root = params.servable.get(view.postId) ?? null;
       if (root !== null && roots.has(root)) {
-        await creditView(prisma, { postId: root, readerKey: params.readerKey, durationMs, now, ledger });
+        await creditView(prisma, { postId: root, readerKey: params.readerKey, durationMs, now, ledger, context });
       }
     } catch (error) {
       log.warn('anonymous view not recorded', {
@@ -221,4 +229,18 @@ export async function creditAnonymousImpressions(
       incrementPostCounters(prisma, ids, anonymousImpression(increment), { liveOnly: true })),
   ]);
   return listed.length;
+}
+
+/**
+ * Les ENGAGEMENTS D'OUVERTURE d'un lecteur sans compte (#10483) — le tap sur un
+ * contenu d'un listing, sur des posts DÉJÀ gardés. Aucune vue, aucune ligne :
+ * `openCountByOrigin.<origine>` +1 par occurrence. Rend le nombre compté.
+ */
+export async function creditAnonymousOpens(
+  prisma: ReachPrisma,
+  params: { readonly opens: readonly { readonly postId: string; readonly origin?: string }[]; readonly servable: ServableMap },
+): Promise<number> {
+  const opens = params.opens.filter((open) => params.servable.has(open.postId));
+  await creditOpens(prisma, opens);
+  return opens.length;
 }

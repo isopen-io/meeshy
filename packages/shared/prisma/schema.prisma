@@ -3851,6 +3851,17 @@ model Post {
   /// servis, pas encore affichés. `null` sur un post antérieur ⇒ lire 0.
   uniqueViewCount          Int? @default(0)
   anonymousUniqueViewCount Int? @default(0)
+  /// Ventilations de la portée (#10483, demande du porteur 2026-10-13) — des
+  /// sous-documents `{ clé: n }` incrémentés par `incrementPostCounters`
+  /// (`breakdowns`), absents d'un post qui n'en a jamais reçu (lire vide) :
+  /// `openCountByOrigin` — engagements d'ouverture (tap d'un listing) par
+  /// origine (`OPEN_ORIGINS`, `other` pour une origine inconnue) ;
+  /// `viewCountByProvenance` — vues COMPTÉES par provenance (`VIEW_PROVENANCES`,
+  /// une vue sans provenance n'y entre pas) ; `listingViewCountByOrigin` —
+  /// parmi les vues `listing`, le listing d'où l'écran a été ouvert.
+  openCountByOrigin        Json?
+  viewCountByProvenance    Json?
+  listingViewCountByOrigin Json?
   /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
   /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
   /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
@@ -3943,6 +3954,10 @@ model AnonymousPostOpen {
   /// supprimerait avec son TTL) ; en staging et production, les index se
   /// posent par migration, jamais par `prisma db push`.
   expiresAt  DateTime?
+  /// Provenance et origine de la PREMIÈRE vue de ce lecteur (#10483), comme
+  /// `PostView.provenance` / `PostView.origin`. Facultatives.
+  provenance String?
+  origin     String?
   post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, sessionKey])
@@ -4232,6 +4247,12 @@ model PostView {
   /// #10483) — facultatif : un ancien client ne l'envoie pas, une valeur
   /// inconnue n'est pas rangée.
   surface  String?
+  /// Provenance de la PREMIÈRE vue (`VIEW_PROVENANCES`, #10483) : listing,
+  /// notification, lien partagé, lien de suivi, externe, direct. Facultatif.
+  provenance String?
+  /// Le listing d'où l'écran a été ouvert quand `provenance = listing`
+  /// (`OPEN_ORIGINS`). Facultatif.
+  origin     String?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostViews", fields: [userId], references: [id])

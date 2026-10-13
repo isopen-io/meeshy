@@ -189,3 +189,36 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
     expect(fake.store.read(POST_A)).toMatchObject({ viewCount: 1, postOpenCount: 1, anonymousViewCount: 1 });
   });
 });
+
+describe('les ventilations (#10483) — sous-documents { clé: n }', () => {
+  it('une ventilation absente ou null repart de zéro, une clé existante s’additionne', async () => {
+    const store = makeMongoPostCounterStore([
+      absentCountersPost(POST_A),
+      legacyPost(POST_B, { openCountByOrigin: null, viewCountByProvenance: { listing: 4 } }),
+    ]);
+    const prisma = { $runCommandRaw: store.runCommandRaw };
+
+    await incrementPostCounters(prisma, [POST_A, POST_B], {
+      viewCount: { increment: 1 },
+      breakdowns: { openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 1, direct: 1 } },
+    });
+
+    expect(store.read(POST_A)).toMatchObject({
+      viewCount: 1, openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 1, direct: 1 },
+    });
+    expect(store.read(POST_B)).toMatchObject({
+      openCountByOrigin: { feed: 2 }, viewCountByProvenance: { listing: 5, direct: 1 },
+    });
+  });
+
+  it('une clé qui n’est pas un mot simple (`$`, `.`) ou un champ inconnu ne part jamais', () => {
+    const command = postCounterIncrementCommand([POST_A], {
+      breakdowns: {
+        openCountByOrigin: { '$where': 1, 'a.b': 1 },
+        ...({ hackedField: { feed: 1 } } as Record<string, Record<string, number>>),
+      },
+    });
+
+    expect(command).toBeNull();
+  });
+});
