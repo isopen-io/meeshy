@@ -263,6 +263,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
         startCurrentHead()
     }
 
+    /// **Remplace ce qui suivra la tête, sans toucher à la tête** (#10383).
+    ///
+    /// Le plein écran audio enchaîne dans l'ordre de RÉCEPTION, écoutés
+    /// compris ; la file de la conversation, elle, ne garde que les vocaux non
+    /// écoutés. Tant que le plein écran est ouvert, il pose ici sa propre
+    /// suite ; il rend celle de la conversation en se refermant. La tête joue
+    /// sans interruption : ni relance, ni changement de carte système.
+    public func replaceUpcoming(_ tail: [QueuedAudio]) {
+    }
+
     public func togglePlayPause() {
         guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
