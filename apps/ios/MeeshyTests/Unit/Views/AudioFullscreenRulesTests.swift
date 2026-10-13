@@ -139,10 +139,20 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertFalse(AudioFullscreenDismissRule.arms(velocity: CGVector(dx: 0, dy: -300)), "vers le haut")
     }
 
-    func test_dismiss_concludesOnDistanceOrOnMomentum() {
-        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 130, predicted: 130))
-        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 60, predicted: 320))
-        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 60, predicted: 100))
+    func test_dismiss_aGentleDrag_closesOnlyPastHalfTheScreen() {
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 130, velocity: 200, height: 900), "l'ancien seuil ne suffit plus")
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 440, velocity: 0, height: 900))
+        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 450, velocity: 0, height: 900))
+    }
+
+    func test_dismiss_aBriefFastFlick_closesAtOnce() {
+        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 60, velocity: 1_800, height: 900))
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 60, velocity: 900, height: 900), "rapide mais pas un coup sec")
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 10, velocity: 3_000, height: 900), "un sursaut sans course")
+    }
+
+    func test_dismiss_draggingBackUp_cancels() {
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 80, velocity: -1_200, height: 900))
     }
 
     // MARK: - Le cadran : le spectre en cercle et son curseur (#10568)

@@ -280,7 +280,6 @@ struct AudioFullscreenPage: View, Equatable {
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.xl)
                     .padding(.bottom, bottomInset)
-                    .background { frost(fadingToward: .top) }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
             }
             if !offer.isEmpty {
