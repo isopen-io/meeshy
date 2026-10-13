@@ -134,6 +134,13 @@ enum SignInLinkOpener {
     ) async {
         switch await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user) {
         case .accepted:
+            // #10513 — répondre après la fenêtre d'adoption ne range pas le
+            // compte ouvert pour une session que la passerelle n'adopterait plus.
+            guard !proven.hasLapsedAdoptionWindow() else {
+                toasts.showError(EmailProofErrorText.linkExpired())
+                await auth.discardProvenSession(proven)
+                return
+            }
             guard await auth.switchToProvenAccount(proven) else {
                 toasts.showError(EmailProofErrorText.sessionNotOpened())
                 return
