@@ -34,11 +34,19 @@ public enum ProvenAdoptionWindow {
         }
     }
 
+    /// Le plus grand entier que le contrat partagé tient pour lisible
+    /// (`Number.isSafeInteger`, 2^53 − 1) : au-delà, le délai vaut un délai
+    /// absent, des deux côtés.
+    public static let maxReadableSeconds = 9_007_199_254_740_991
+
     /// La fenêtre que l'appareil applique à l'instant de réception. Un délai
-    /// absent ou négatif vaut le repli ; un délai lisible est suivi, moins la
-    /// marge, jusqu'à la borne dure. Zéro ferme la fenêtre.
+    /// absent, négatif ou au-delà de `maxReadableSeconds` vaut le repli ; un
+    /// délai lisible est suivi, moins la marge, jusqu'à la borne dure. Zéro
+    /// ferme la fenêtre.
     public static func clientWindow(for kind: ProvenAdoptionKind, adoptWithinSeconds: Int?) -> TimeInterval {
-        guard let served = adoptWithinSeconds, served >= 0 else { return fallback(for: kind) }
+        guard let served = adoptWithinSeconds, (0...maxReadableSeconds).contains(served) else {
+            return fallback(for: kind)
+        }
         return bounded(TimeInterval(served) - clientMargin)
     }
 

@@ -185,10 +185,16 @@ extension AuthManager {
     ///
     /// #10518 — rend la RAISON d'un refus : `.expired` (fenêtre passée, il
     /// faut un nouveau lien) ou `.failed` (l'appareil n'a pas pu poser la
-    /// session). Dans les deux cas rien n'a changé sur l'appareil et la
-    /// session prouvée est refermée côté passerelle. La fenêtre se lit UNE
-    /// fois, avant de ranger le compte ouvert : la marge de l'appareil
-    /// (`ProvenAdoptionWindow.clientMargin`) couvre la durée de la bascule.
+    /// session). Dans les deux cas rien du compte du lien n'est posé et la
+    /// session prouvée est refermée côté passerelle. `.expired`, et un
+    /// `.failed` rendu AVANT la sortie (autre changement en cours), laissent
+    /// le compte ouvert tel quel. Un `.failed` rendu APRÈS la sortie trouve le
+    /// compte quitté déjà rangé : il se reprend au sélecteur sans mot de passe
+    /// s'il garde sa session (`keepsSession`), et sinon sa session est fermée
+    /// pour de bon — l'appareil reste alors sans compte ouvert. La fenêtre se
+    /// lit UNE fois, avant de ranger le compte ouvert ; rien ne la relit
+    /// ensuite, la bascule comptant sur la marge de l'appareil
+    /// (`ProvenAdoptionWindow.clientMargin`).
     @discardableResult
     public func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome {
         guard !proven.hasLapsedAdoptionWindow() else {
@@ -293,13 +299,15 @@ public enum ProvenAccountSwitchOutcome: Equatable, Sendable {
     case refused(ProvenAccountSwitchRefusal)
 }
 
-/// Pourquoi la session prouvée n'a pas été posée (#10518). Dans les deux cas
-/// le compte ouvert l'est resté.
+/// Pourquoi la session prouvée n'a pas été posée (#10518).
 public enum ProvenAccountSwitchRefusal: Equatable, Sendable {
-    /// La fenêtre d'adoption est passée : il faut un nouveau lien.
+    /// La fenêtre d'adoption est passée : il faut un nouveau lien. Jugé avant
+    /// toute sortie — le compte ouvert l'est resté.
     case expired
     /// L'appareil n'a pas pu poser la session (autre changement en cours,
-    /// session rouverte entre-temps, garde de `applySession`).
+    /// session rouverte entre-temps, garde de `applySession`). Rendu avant la
+    /// sortie, le compte ouvert l'est resté ; rendu après, il est déjà rangé,
+    /// et sa session fermée s'il ne la garde pas (`keepsSession`).
     case failed
 }
 

@@ -66,8 +66,9 @@ protocol SignInLinkAuthorizing: AnyObject {
     @discardableResult
     func openSession(_ proven: EmailProvenSession) -> Bool
     /// `.switched` si la session prouvée est posée (#10450) ; sinon la RAISON
-    /// (#10518), rien n'a changé sur l'appareil et la session prouvée est
-    /// refermée côté passerelle par l'implémentation.
+    /// (#10518) : rien du compte du lien n'est posé, et la session prouvée est
+    /// refermée côté passerelle par l'implémentation. Seul `.expired` garantit
+    /// que le compte ouvert l'est resté (`ProvenAccountSwitchRefusal`).
     @discardableResult
     func switchToProvenAccount(_ proven: EmailProvenSession) async -> ProvenAccountSwitchOutcome
     func discardProvenSession(_ proven: EmailProvenSession) async

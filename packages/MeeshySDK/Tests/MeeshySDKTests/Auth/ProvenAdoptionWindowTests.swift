@@ -35,7 +35,15 @@ final class ProvenAdoptionWindowTests: XCTestCase {
     func test_clientWindow_delayBeyondTheHardBound_isCapped() {
         XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 1_860), 1_800)
         XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 86_400), 1_800)
-        XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .secondFactor, adoptWithinSeconds: Int.max), 1_800)
+        XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .secondFactor, adoptWithinSeconds: 9_007_199_254_740_991), 1_800)
+    }
+
+    /// Au-delà de 2^53 − 1, le contrat partagé (`Number.isSafeInteger`) lit un
+    /// délai absent : le repli, jamais le plafond.
+    func test_clientWindow_delayBeyondTheSafeIntegers_isTheFallback() {
+        XCTAssertEqual(ProvenAdoptionWindow.maxReadableSeconds, (1 << 53) - 1)
+        XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .session, adoptWithinSeconds: 9_007_199_254_740_992), 540)
+        XCTAssertEqual(ProvenAdoptionWindow.clientWindow(for: .secondFactor, adoptWithinSeconds: Int.max), 240)
     }
 
     func test_bounded_anythingOutOfRange_fallsBackInside() {
@@ -261,9 +269,10 @@ final class ProvenAdoptionWindowTests: XCTestCase {
         }
     }
 
-    /// La FORME de la règle : repli sur un délai illisible ou négatif, marge
-    /// retranchée, plancher à zéro, plafond à la borne dure, et une preuve
-    /// échue dès que l'âge DÉPASSE la fenêtre.
+    /// La FORME de `provenAdoptionClientWindowMs`, que `clientWindow`
+    /// reproduit : repli sur un délai illisible ou négatif, marge retranchée,
+    /// plancher à zéro, plafond à la borne dure. Le contrat partagé s'arrête
+    /// là : `hasLapsed` n'y a aucun pendant, cette garde ne le couvre pas.
     func test_mirror_rule_hasTheShapeThisFileReproduces() throws {
         let contract = try sharedContract()
 
