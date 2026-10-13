@@ -1,5 +1,14 @@
 import type { PostVisibility } from '@meeshy/shared/prisma/client';
-import { adminPostStateOf, type AdminPostState, type AdminPostStateFacts, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publications';
+import {
+  adminPostStateOf,
+  authorAudienceOf,
+  heldAuthorAudience,
+  type AdminPostState,
+  type AdminPostStateFacts,
+  type AdminSettableVisibility,
+} from '@meeshy/shared/types/admin-publications';
+
+export { widensAuthorAudience } from '@meeshy/shared/types/admin-publications';
 
 /**
  * **LA LOI DES TROIS GESTES DE MODÉRATION D'UNE PUBLICATION** (#10315).
@@ -16,6 +25,9 @@ import { adminPostStateOf, type AdminPostState, type AdminPostStateFacts, type A
  *   l'audience tant que le retrait tient (`services/posts/moderationHold.ts`).
  * - « Remettre en ligne » : lève le retrait et rend l'audience que l'auteur avait
  *   choisie (`moderationPriorVisibility`).
+ *
+ * Chaque geste retient l'audience de l'AUTEUR (`heldAuthorAudience`, #10471), jamais
+ * celle qu'un geste précédent de l'administration servait.
  *
  * **Retirer passe par `visibility = PRIVATE`, à dessein.** Les portes de lecture
  * du dépôt (fil, profil, détail, lien public `/post/<id>`, commentaires,
@@ -45,19 +57,17 @@ const PRIVATE: PostVisibility = 'PRIVATE';
 
 function makePrivate(current: PostModerationState): PostModerationState | null {
   if (current.visibility === PRIVATE) return null;
-  return { ...current, visibility: PRIVATE, moderationPriorVisibility: current.visibility };
+  return { ...current, visibility: PRIVATE, moderationPriorVisibility: heldAuthorAudience(current, PRIVATE) };
 }
 
 function takeOffline(current: PostModerationState, now: Date, actorId: string): PostModerationState | null {
   if (current.moderationHiddenAt !== null) return null;
-  const prior = current.visibility === PRIVATE ? current.moderationPriorVisibility : current.visibility;
-  return { visibility: PRIVATE, moderationHiddenAt: now, moderationHiddenById: actorId, moderationPriorVisibility: prior };
+  return { visibility: PRIVATE, moderationHiddenAt: now, moderationHiddenById: actorId, moderationPriorVisibility: heldAuthorAudience(current, PRIVATE) };
 }
 
 function restore(current: PostModerationState): PostModerationState | null {
   if (current.moderationHiddenAt === null && current.moderationPriorVisibility === null) return null;
-  const rendue = current.visibility === PRIVATE && current.moderationPriorVisibility !== null ? current.moderationPriorVisibility : current.visibility;
-  return { visibility: rendue, moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null };
+  return { visibility: authorAudienceOf(current), moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null };
 }
 
 /** L'état d'après le geste, ou `null` quand le geste ne change rien (déjà fait). */
@@ -77,17 +87,15 @@ export function nextModerationState(
 }
 
 /**
- * **CHANGER L'AUDIENCE D'UN GESTE** (#10392) — publier un brouillon (`PUBLIC`),
- * resserrer une publication à ses amis, ou la remettre en ligne avec une autre
- * audience que celle de l'auteur. Le geste vaut décision de l'administration :
+ * **CHANGER L'AUDIENCE D'UN GESTE** (#10392) — resserrer une publication à ses
+ * amis, ou la remettre en ligne avec une audience au plus égale à celle de
+ * l'auteur (`widensAuthorAudience` refuse le reste). Le geste vaut décision de l'administration :
  * il lève un retrait en cours (la hiérarchie du signataire s'applique, comme à
- * la remise en ligne). Vers `PRIVATE`, l'audience d'avant est retenue, comme
- * « mettre en privé », pour que « remettre en ligne » la rende.
+ * la remise en ligne). Toute audience autre que celle de l'auteur la retient
+ * (#10471) : revenir à SON audience passe, et « remettre en ligne » la rend.
  */
 export function nextVisibilityState(current: PostModerationState, visibility: AdminSettableVisibility): PostModerationState | null {
-  const toPrivate = visibility === PRIVATE;
-  const prior = toPrivate ? (current.visibility !== PRIVATE ? current.visibility : current.moderationPriorVisibility) : null;
-  const after: PostModerationState = { visibility, moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: prior };
+  const after: PostModerationState = { visibility, moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: heldAuthorAudience(current, visibility) };
   const same =
     after.visibility === current.visibility &&
     current.moderationHiddenAt === null &&

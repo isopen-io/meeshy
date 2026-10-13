@@ -9,7 +9,7 @@ const f = {
   'admin.group.moderation': 'Moderación',
   'admin.group.growth': 'Crecimiento',
   'admin.group.scales': 'Baremos',
-  'admin.group.operations': 'Operaciones',
+  'admin.group.operations': 'Sistema',
 
   'admin.kit.breadcrumb': 'Ruta de navegación',
   'admin.kit.retry': 'Reintentar',

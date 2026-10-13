@@ -50,7 +50,7 @@ extension AuthManager {
             guard let token = data.token, let user = data.user else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+            try applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
             return .authenticated
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription

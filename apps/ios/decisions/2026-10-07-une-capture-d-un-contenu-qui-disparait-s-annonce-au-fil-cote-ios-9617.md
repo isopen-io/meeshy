@@ -46,7 +46,7 @@
 - Fichiers d'application créés (projet régénéré par XcodeGen) : `Services/ContentCaptureReporter.swift`, `Views/MessageListViewController+ContentCapture.swift`, `MeeshyTests/Unit/Services/ContentCaptureReporterTests.swift`.
 - Miroir Kotlin natif : rien reçu (gel du 2026-09-16). Dette consignée, non soldée.
 
-## #9632 — les surfaces qui restent NOIRES, une à une (2026-10-13)
+### #9632 — les surfaces qui restent NOIRES, une à une (2026-10-13)
 
 **La règle qui les départage** : une surface n'annonce que si l'AFFICHER, c'est le LIRE — l'accusé de lecture qu'elle pose à l'instant d'une capture est celui qu'elle aurait posé de toute façon (le fil par ses cellules visibles, le plein écran par sa page ouverte). Partout ailleurs, poser un accusé pour pouvoir annoncer ferait de la CAPTURE le déclencheur de la LECTURE : une flamme après lecture commencerait son décompte parce qu'on a pris l'écran d'une liste, et l'auteur serait prévenu d'une lecture que personne n'a faite. Ces surfaces gardent donc la règle fermée par défaut (`shieldsCapture()`, aucune valeur d'annonce) : la flamme y est NOIRE, aucune capture n'y est silencieuse. La décision porteur (« capture non noircie » pour un éphémère) est tenue là où le contenu se LIT — fil et plein écran — et le noir n'est que le repli des surfaces de passage.
 

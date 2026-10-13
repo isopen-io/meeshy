@@ -147,3 +147,41 @@ describe('Invité au lien expiré — la session se ferme à la résolution (#10
     expect(res.statusCode).toBe(401);
   });
 });
+
+/**
+ * #10457 — l'ordre unique des causes (`guestAccessEnd`) : le REST jugeait la
+ * participation avant le lien, la relecture du minuteur le lien avant la
+ * participation. Le même invité lisait « accès retiré » ou « lien expiré »
+ * selon le chemin. Le lien expiré est la cause première : c'est lui qui fait
+ * désactiver l'invité par le balayage.
+ */
+describe('Invité au lien expiré ET à la participation morte — une seule cause, sur le REST comme ailleurs (#10457)', () => {
+  it('lien échu et participation désactivée ⇒ 403 SHARE_LINK_EXPIRED, pas 410 GUEST_ACCESS_REVOKED', async () => {
+    const res = await call(await sonde({ participants: [guest({ isActive: false })], links: [{ id: LINK_ID, expiresAt: PAST }] }));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'SHARE_LINK_EXPIRED' });
+  });
+
+  it('lien échu et participation bannie ⇒ 403 SHARE_LINK_EXPIRED', async () => {
+    const res = await call(await sonde({ participants: [guest({ bannedAt: PAST })], links: [{ id: LINK_ID, expiresAt: PAST }] }));
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'SHARE_LINK_EXPIRED' });
+  });
+
+  it('lien vivant et participation désactivée ⇒ 410 GUEST_ACCESS_REVOKED', async () => {
+    const res = await call(await sonde({ participants: [guest({ isActive: false })], links: [{ id: LINK_ID, expiresAt: FUTURE }] }));
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'GUEST_ACCESS_REVOKED' });
+  });
+
+  it('lien illisible et participation désactivée ⇒ refus SANS code de fin d’accès : un accroc de la base ne coûte pas la session', async () => {
+    const res = await call(await sonde({ participants: [guest({ isActive: false })], links: [], linkReadFails: true }));
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toContain('GUEST_ACCESS_REVOKED');
+    expect(res.body).not.toContain('SHARE_LINK_EXPIRED');
+  });
+});

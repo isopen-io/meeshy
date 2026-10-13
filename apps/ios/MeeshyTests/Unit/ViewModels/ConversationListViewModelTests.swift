@@ -274,6 +274,24 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.count, 1)
     }
 
+    /// #7631 — un cache de moins de 5 min peint sans attendre, mais ne dispense
+    /// pas de la revalidation : une réaction ou un appel terminé app fermée
+    /// n'y figurent pas.
+    func test_loadConversations_freshCache_revalidatesByDeltaInBackground() async {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        let revalidated = expectation(description: "le delta part au démarrage sur un cache frais")
+        syncEngine.onSyncSinceLastCheckpoint = { revalidated.fulfill() }
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.count, 1, "le cache peint avant tout réseau")
+        await fulfillment(of: [revalidated], timeout: 2)
+        XCTAssertEqual(syncEngine.fullSyncCallCount, 0, "une revalidation, pas un plein")
+    }
+
     func test_loadConversations_refetchesAfterCacheInvalidation() async {
         // Pre-populate cache
         let conversation = makeConversation(id: "000000000000000000000001")

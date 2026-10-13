@@ -1,14 +1,14 @@
 import type { QueryKey } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
-import { ADMIN_SETTABLE_VISIBILITIES, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publication-states';
+import type { AdminPostState, AdminSettableVisibility } from '@meeshy/shared/types/admin-publication-states';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { BRAND, EDGE, INK, SURFACE } from '@/components/admin/tone';
 import { interpretPostVisibility } from '@/lib/admin/interpret/enums';
-import { gesturesOffered, type PostGestureIntent } from '@/lib/admin/post-gestures';
-import { useAdminAction } from '@/lib/admin/use-admin-action';
+import { audiencesOffered, gesturesOffered, type PostGestureIntent } from '@/lib/admin/post-gestures';
+import { translatedRefusal, useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import { sendAdminPostGesture, type AdminPostView } from '@/lib/api/admin-post-gestures';
 import { apiDeps } from '@/lib/api/deps';
@@ -19,8 +19,9 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 /**
  * **LES GESTES D'UNE PUBLICATION, EN UN GESTE** (#10392) — posés sur la ligne de la
  * liste de la plateforme et dans la fiche : « Mettre hors ligne », « Remettre en
- * ligne », et l'audience (`PUBLIC`, `FRIENDS`, `COMMUNITY`, `PRIVATE` — publier un
- * brouillon, c'est « Public »).
+ * ligne », et l'audience — seulement celles que la passerelle accepte, jamais plus
+ * large que l'audience choisie par l'auteur (`audiencesOffered`, #10471) ; un refus
+ * `AUDIENCE_WIDENING` se dit en mots.
  *
  * Un geste = un appui, puis la feuille de confirmation qui dit l'effet et demande le
  * motif (sauf au rang souverain, que la feuille sait reconnaître) : deux gestes au
@@ -40,6 +41,7 @@ export type PostGestureTarget = {
   readonly id: string;
   readonly state: AdminPostState;
   readonly visibility: string | null;
+  readonly moderationPriorVisibility: string | null;
 };
 
 export function AdminPostGestureBar({
@@ -77,7 +79,10 @@ export function AdminPostGestureBar({
   const run = async (intent: PostGestureIntent, motive: string | null) => {
     const at = now();
     const done = await action.run({
-      call: () => sendAdminPostGesture({ ...deps, postId: post.id, intent, reason: motive }),
+      call: async () => {
+        const outcome = await sendAdminPostGesture({ ...deps, postId: post.id, intent, reason: motive });
+        return !outcome.ok && outcome.code === 'AUDIENCE_WIDENING' ? translatedRefusal(translateAdmin(language, 'admin.gesture.refused.widening')) : outcome;
+      },
       success: intent.gesture === 'set-visibility' ? 'admin.gesture.done.audience' : KEYS[intent.gesture].done,
       ...(optimistic === undefined ? {} : { optimistic: { key: optimistic.key, apply: (before: unknown) => optimistic.apply(before, intent, at) } }),
       invalidate,
@@ -86,7 +91,8 @@ export function AdminPostGestureBar({
   };
 
   const audienceLabel = (visibility: string): string => interpretPostVisibility(visibility, language).label;
-  const settable = ADMIN_SETTABLE_VISIBILITIES.find((candidate) => candidate === post.visibility && post.state !== 'offline');
+  const audiences = audiencesOffered(post);
+  const settable = audiences.find((candidate) => candidate === post.visibility && post.state !== 'offline');
 
   return (
     <div
@@ -116,14 +122,14 @@ export function AdminPostGestureBar({
             disabled={!online}
             value={settable ?? ''}
             onChange={(event) => {
-              const visibility = ADMIN_SETTABLE_VISIBILITIES.find((candidate) => candidate === event.currentTarget.value);
+              const visibility = audiences.find((candidate) => candidate === event.currentTarget.value);
               if (visibility !== undefined && visibility !== settable) setPending({ gesture: 'set-visibility', visibility });
             }}
             className="rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, backgroundColor: SURFACE, color: INK, border: `1px solid ${EDGE}`, outlineColor: BRAND }}
           >
             {settable === undefined ? <option value="">{translateAdmin(language, 'admin.gesture.audience.placeholder')}</option> : null}
-            {ADMIN_SETTABLE_VISIBILITIES.map((visibility: AdminSettableVisibility) => (
+            {audiences.map((visibility: AdminSettableVisibility) => (
               <option key={visibility} value={visibility}>
                 {audienceLabel(visibility)}
               </option>

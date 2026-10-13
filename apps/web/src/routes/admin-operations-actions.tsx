@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-import type { ServerOperation } from '@meeshy/shared/types/admin-ops';
+import type { ServerOperation, ServerOperationRun } from '@meeshy/shared/types/admin-ops';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminButton } from '@/components/admin/button';
@@ -113,6 +113,7 @@ function OperationCard({
   canTrigger,
   online,
   onAsk,
+  awaited = null,
 }: {
   readonly language: AdminLanguage;
   readonly operation: ServerOperation;
@@ -121,8 +122,10 @@ function OperationCard({
   readonly canTrigger: boolean;
   readonly online: boolean;
   readonly onAsk: () => void;
+  /** La demande acceptée que le relais n'a pas encore publiée (#10467) : elle se dit « en file ». */
+  readonly awaited?: ServerOperationRun | null;
 }) {
-  const run = status.runs[operation];
+  const run = awaited ?? status.runs[operation];
   const wait = cooldownOf(status.availableAt[operation], now);
   const available = adminMomentOf(status.availableAt[operation], now, language);
   const finished = adminMomentOf(run?.finishedAt ?? run?.requestedAt ?? null, now, language);
@@ -167,18 +170,30 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [announcement, setAnnouncement] = useState('');
+  /* La demande acceptée reste « en file » jusqu'à ce que le statut servi porte SON identifiant :
+     entre le dépôt et la première écriture du relais, le statut relu montre encore le passage
+     d'avant (#10467). Au plus deux minutes, puis le statut servi fait foi. */
+  const [awaited, setAwaited] = useState<ServerOperationRun | null>(null);
+  const awaitedRef = useRef<ServerOperationRun | null>(null);
+  awaitedRef.current = awaited;
   const status = useQuery({
     queryKey: ADMIN_OPS_STATUS_KEY,
     queryFn: async ({ signal }) => unwrap(await loadOpsStatus({ ...deps, signal })),
-    refetchInterval: (query) => (SERVER_OPERATIONS_SHOWN.some((op) => operationRunning(query.state.data?.runs[op] ?? null)) ? 5000 : 30_000),
+    refetchInterval: (query) =>
+      awaitedRef.current !== null || SERVER_OPERATIONS_SHOWN.some((op) => operationRunning(query.state.data?.runs[op] ?? null)) ? 5000 : 30_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
-  const [clock, setClock] = useState(now);
+  /* L'heure se lit AU RENDU (#10467) : un état figé à l'ouverture, réarmé à chaque rendu du
+     parent (dont `now` change d'identité toutes les 5 s avec les métriques), ne battait jamais
+     et disait « dans 34 secondes » d'une sauvegarde déjà finie. Le battement ne fait que
+     redessiner quand rien d'autre ne le fait. */
+  const [, setBeat] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setClock(now()), 15_000);
+    const timer = setInterval(() => setBeat((beat) => beat + 1), 15_000);
     return () => clearInterval(timer);
-  }, [now]);
+  }, []);
+  const clock = now();
 
   const trigger = async (operation: ServerOperation, reason: string) => {
     setBusy(true);
@@ -191,11 +206,23 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
       return;
     }
     setPending(null);
+    const queuedAt = result.data.queuedAt ?? now().toISOString();
+    setAwaited({ requestId: result.data.requestId, operation, status: 'queued', requestedBy: '', requestedAt: queuedAt, startedAt: null, finishedAt: null, reclaimedBytes: null, code: null });
     setAnnouncement(translateAdmin(language, 'admin.ops.action.queued'));
     void queryClient.invalidateQueries({ queryKey: ADMIN_OPS_STATUS_KEY });
   };
 
   const data = status.data;
+  const servedAwaited = awaited !== null && data?.runs[awaited.operation]?.requestId === awaited.requestId;
+  useEffect(() => {
+    if (awaited === null) return undefined;
+    if (servedAwaited) {
+      setAwaited(null);
+      return undefined;
+    }
+    const timer = setTimeout(() => setAwaited(null), 120_000);
+    return () => clearTimeout(timer);
+  }, [awaited, servedAwaited]);
   return (
     <section className="grid gap-3" data-admin-ops-actions aria-labelledby="admin-ops-actions-title">
       <h2 id="admin-ops-actions-title" className="text-body font-semibold" style={{ color: INK }}>
@@ -225,6 +252,7 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
                 now={clock}
                 canTrigger={reach.isSovereign}
                 online={online}
+                awaited={awaited !== null && awaited.operation === operation && !servedAwaited ? awaited : null}
                 onAsk={() => {
                   setError('');
                   setPending(operation);

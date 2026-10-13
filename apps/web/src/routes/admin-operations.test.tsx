@@ -66,9 +66,12 @@ function depsOf(trigger: () => ApiResult<unknown> = () => ({ ok: true, data: { r
   return { deps: { source: 'gateway', transport } satisfies AdminDeps, calls };
 }
 
-async function open(identity = adminIdentityFixture({ role: 'BIGBOSS' }), options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown> } = {}) {
+async function open(
+  identity = adminIdentityFixture({ role: 'BIGBOSS' }),
+  options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown>; readonly now?: () => Date } = {},
+) {
   const { deps, calls } = depsOf(options.trigger);
-  const host = await mount(<AdminOperationsPanel language="fr" deps={deps} liveSource={options.liveSource ?? null} now={() => NOW} />, identity);
+  const host = await mount(<AdminOperationsPanel language="fr" deps={deps} liveSource={options.liveSource ?? null} now={options.now ?? (() => NOW)} />, identity);
   for (let attempt = 0; attempt < 20 && host.querySelector('[data-admin-ops-operation]') === null; attempt += 1) await mounter.settle();
   return { host, calls };
 }
@@ -142,6 +145,31 @@ describe('la sauvegarde et la purge', () => {
     mounter.type(document, '[data-admin-ops-typed]', 'backup');
     await click(document.querySelector('[data-admin-ops-go="backup"]'));
     expect(document.querySelector('[data-admin-ops-error]')?.textContent).toContain('Trop tôt');
+  });
+
+  test('une demande acceptée se dit « en file » tout de suite, même avant que le relais ne la publie (#10467)', async () => {
+    const { host } = await open(undefined, { trigger: () => ({ ok: true, data: { requestId: 'r9', operation: 'image-prune', status: 'queued', queuedAt: NOW.toISOString() } }) });
+    expect(host.querySelector('[data-admin-ops-operation="image-prune"]')?.getAttribute('data-admin-ops-run')).toBe('none');
+    await click(host.querySelector('[data-admin-ops-trigger="image-prune"]'));
+    mounter.type(document, '[data-admin-ops-typed]', 'image-prune');
+    await click(document.querySelector('[data-admin-ops-go="image-prune"]'));
+    for (let attempt = 0; attempt < 10; attempt += 1) await mounter.settle();
+    const card = host.querySelector('[data-admin-ops-operation="image-prune"]');
+    expect(card?.getAttribute('data-admin-ops-run')).toBe('queued');
+    expect(card?.textContent).toContain('en file');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-ops-trigger="image-prune"]')?.disabled).toBe(true);
+  });
+
+  test('le « dernier passage » se lit contre l’heure du RENDU, pas celle de l’ouverture de l’écran (#10467)', async () => {
+    let clock = NOW;
+    const { host } = await open(undefined, { now: () => clock });
+    expect(host.querySelector('[data-admin-ops-operation="backup"]')?.textContent).toContain('il y a 6 heures');
+    clock = new Date(NOW.getTime() + 2 * 60 * 60 * 1000);
+    await click(host.querySelector('[data-admin-ops-trigger="image-prune"]'));
+    mounter.type(document, '[data-admin-ops-typed]', 'image-prune');
+    await click(document.querySelector('[data-admin-ops-go="image-prune"]'));
+    for (let attempt = 0; attempt < 10; attempt += 1) await mounter.settle();
+    expect(host.querySelector('[data-admin-ops-operation="backup"]')?.textContent).toContain('il y a 8 heures');
   });
 
   test('hors du rang souverain : les graphes, aucun bouton, et la raison dite', async () => {

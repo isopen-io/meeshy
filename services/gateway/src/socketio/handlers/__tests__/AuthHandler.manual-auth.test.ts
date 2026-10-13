@@ -171,6 +171,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
     const mockSocket = createMockSocket();
     jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
       id: 'anon-participant-1',
+      isActive: true,
       displayName: 'Guest',
       language: 'es',
       conversationId: 'conv-anon-1'

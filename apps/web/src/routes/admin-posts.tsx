@@ -140,12 +140,6 @@ export function AdminPostsPanel({
     { id: 'excerpt', header: translateAdmin(language, 'admin.posts.col.excerpt'), cell: (row) => <ExcerptCell row={row} language={language} /> },
     { id: 'type', header: translateAdmin(language, 'admin.posts.col.type'), cell: (row) => <AdminInterpretedBadge value={interpretPostType(row.type, language)} /> },
     { id: 'visibility', header: translateAdmin(language, 'admin.posts.col.visibility'), cell: (row) => <AdminInterpretedBadge value={interpretPostVisibility(row.visibility, language)} /> },
-    { id: 'likes', header: translateAdmin(language, 'admin.posts.col.likes'), align: 'end', cell: (row) => formatCount(row.likeCount, language) },
-    { id: 'comments', header: translateAdmin(language, 'admin.posts.col.comments'), align: 'end', priority: 3, cell: (row) => formatCount(row.commentCount, language) },
-    { id: 'views', header: translateAdmin(language, 'admin.posts.col.views'), align: 'end', priority: 3, cell: (row) => formatCount(row.viewCount, language) },
-    { id: 'reposts', header: translateAdmin(language, 'admin.posts.stat.reposts'), align: 'end', priority: 3, cell: (row) => formatCount(row.repostCount, language) },
-    { id: 'shares', header: translateAdmin(language, 'admin.posts.stat.shares'), align: 'end', priority: 3, cell: (row) => formatCount(row.shareCount, language) },
-    { id: 'bookmarks', header: translateAdmin(language, 'admin.posts.stat.bookmarks'), align: 'end', priority: 3, cell: (row) => formatCount(row.bookmarkCount, language) },
     {
       id: 'state',
       header: translateAdmin(language, 'admin.posts.col.state'),
@@ -153,7 +147,8 @@ export function AdminPostsPanel({
     },
     {
       /* LES GESTES DE LA LIGNE (#10392) : hors ligne, remise en ligne, audience — en un appui et
-         une confirmation, sans ouvrir la fiche. L'effet est immédiat sur cette page de liste. */
+         une confirmation, sans ouvrir la fiche. L'effet est immédiat sur cette page de liste.
+         Placés AVANT les compteurs (#10461) : à 1440 px ils tiennent dans la largeur visible. */
       id: 'gestures',
       header: translateAdmin(language, 'admin.gesture.col'),
       cell: (row) => (
@@ -163,7 +158,7 @@ export function AdminPostsPanel({
           </AdminButton>
           <AdminPostGestureBar
             language={language}
-            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility }}
+            post={{ id: row.id, state: postStateOf(row, now), visibility: row.visibility, moderationPriorVisibility: row.moderationPriorVisibility }}
             onAnnounce={announcer.announce}
             deps={deps}
             compact
@@ -172,6 +167,12 @@ export function AdminPostsPanel({
         </span>
       ),
     },
+    { id: 'likes', header: translateAdmin(language, 'admin.posts.col.likes'), align: 'end', cell: (row) => formatCount(row.likeCount, language) },
+    { id: 'comments', header: translateAdmin(language, 'admin.posts.col.comments'), align: 'end', priority: 3, cell: (row) => formatCount(row.commentCount, language) },
+    { id: 'views', header: translateAdmin(language, 'admin.posts.col.views'), align: 'end', priority: 3, cell: (row) => formatCount(row.viewCount, language) },
+    { id: 'reposts', header: translateAdmin(language, 'admin.posts.stat.reposts'), align: 'end', priority: 3, cell: (row) => formatCount(row.repostCount, language) },
+    { id: 'shares', header: translateAdmin(language, 'admin.posts.stat.shares'), align: 'end', priority: 3, cell: (row) => formatCount(row.shareCount, language) },
+    { id: 'bookmarks', header: translateAdmin(language, 'admin.posts.stat.bookmarks'), align: 'end', priority: 3, cell: (row) => formatCount(row.bookmarkCount, language) },
     {
       id: 'published',
       header: translateAdmin(language, 'admin.posts.col.published'),

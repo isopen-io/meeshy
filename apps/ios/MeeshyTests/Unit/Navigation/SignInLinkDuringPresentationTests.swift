@@ -16,12 +16,12 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
     var emailResult: Result<EmailProvenSession?, Error> = .success(MockSignInLinkAuthorizer.proven)
     var magicResult: Result<EmailProvenSession, Error> = .success(MockSignInLinkAuthorizer.proven)
     private(set) var openedSessions: [String] = []
+    private(set) var switchedSessions: [String] = []
+    private(set) var discardedSessions: [String] = []
     private(set) var events: [String] = []
-
-    func logout() async {
-        events.append("logout")
-        isAuthenticated = false
-    }
+    /// Faux ⇒ la garde du SDK refuse la session (#10450).
+    var opens = true
+    var switches = true
 
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         events.append("verify")
@@ -33,10 +33,42 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
         return try magicResult.get()
     }
 
-    func openSession(_ proven: EmailProvenSession) {
+    func openSession(_ proven: EmailProvenSession) -> Bool {
         events.append("open")
         openedSessions.append(proven.token)
+        guard opens else { return false }
         isAuthenticated = true
+        return true
+    }
+
+    func switchToProvenAccount(_ proven: EmailProvenSession) async -> Bool {
+        events.append("switch")
+        switchedSessions.append(proven.token)
+        guard switches else { return false }
+        currentUser = proven.user
+        isAuthenticated = true
+        return true
+    }
+
+    func discardProvenSession(_ proven: EmailProvenSession) async {
+        events.append("discard")
+        discardedSessions.append(proven.token)
+    }
+}
+
+@MainActor
+private final class MockAccountReplacementConfirmation: AccountReplacementConfirming {
+    nonisolated deinit {}
+    let answer: Bool
+    private(set) var questions: [[String]] = []
+    private(set) var askedUsers: [(current: MeeshyUser?, incoming: MeeshyUser)] = []
+
+    init(answer: Bool) { self.answer = answer }
+
+    func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> Bool {
+        questions.append([current?.username ?? "", incoming.username])
+        askedUsers.append((current, incoming))
+        return answer
     }
 }
 
@@ -114,53 +146,251 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertEqual(toasts.successMessages.count, 1)
     }
 
-    /// Le compte courant est ENTIÈREMENT déconnecté (caches, sockets, clés
-    /// E2EE) AVANT que le lien ne soit validé — jamais une session posée sur
-    /// une autre encore vivante.
-    func test_magicLink_whileAnotherAccountIsSignedIn_signsOutBeforeValidating() async {
-        let (gate, auth, toasts) = makeSUT(presenting: false)
+    // MARK: - #10445 — aucun lien ne déconnecte ; un AUTRE compte se demande
+
+    private func signedInAs(_ auth: MockSignInLinkAuthorizer, id: String = "me", email: String? = "a@b.co") {
         auth.isAuthenticated = true
-
-        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
-
-        XCTAssertEqual(auth.events, ["logout", "verify", "open"])
+        auth.currentUser = MeeshyUser(id: id, username: id, email: email)
     }
 
-    func test_verificationLink_ofTheSignedInAccount_keepsItsSession() async {
+    /// Fixation de session : un lien magique transmis par un autre compte ne
+    /// déconnecte rien AVANT la preuve, et n'ouvre rien sans question.
+    func test_magicLink_ofAnotherAccount_provesThenAsks_neverSignsOut() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
-        auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "link-user", username: "me", email: "A@b.co")
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
 
-        XCTAssertEqual(auth.events, ["verify", "open"])
+        XCTAssertEqual(confirmation.questions, [["me", "link"]], "« Ce lien ouvre le compte @link. Quitter @me ? »")
+        XCTAssertFalse(auth.events.contains("logout"))
+        XCTAssertEqual(auth.events.first, "verify", "rien ne se décide avant la preuve")
     }
 
-    // MARK: - #8042 — la session posée est celle que la passerelle a PROUVÉE
+    func test_anotherAccount_refused_changesNothing_andClosesTheServedSession() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "discard"])
+        XCTAssertEqual(auth.openedSessions, [])
+        XCTAssertEqual(auth.switchedSessions, [])
+        XCTAssertEqual(auth.discardedSessions, ["jwt-link"])
+        XCTAssertTrue(auth.isAuthenticated)
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(toasts.successMessages, [])
+    }
+
+    /// Accepter passe au compte du lien par le changement de compte, qui GARDE
+    /// le compte quitté au sélecteur — jamais par une déconnexion.
+    func test_anotherAccount_accepted_switchesKeepingTheCurrentAccount() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(answer: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "switch"])
+        XCTAssertEqual(auth.switchedSessions, ["jwt-link"])
+        XCTAssertEqual(auth.openedSessions, [], "la session rendue ne se pose pas par-dessus l'autre")
+        XCTAssertEqual(auth.currentUser?.id, "link-user")
+        XCTAssertEqual(toasts.successMessages.count, 1)
+    }
 
     /// Le lien nomme l'adresse du compte connecté, mais la passerelle rend la
-    /// session d'un AUTRE compte : le compte courant est déconnecté AVANT que
-    /// la session rendue ne soit posée — jamais l'une par-dessus l'autre.
-    func test_verificationLink_servedForAnotherAccount_signsOutBeforeOpening() async {
+    /// session d'un AUTRE compte (#8042) : la question se pose sur l'id PROUVÉ.
+    func test_verificationLink_servedForAnotherAccount_asksBeforeAnything() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
-        auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+        signedInAs(auth)
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
 
-        XCTAssertEqual(auth.events, ["verify", "logout", "open"])
-        XCTAssertEqual(auth.openedSessions, ["jwt-link"])
+        XCTAssertEqual(confirmation.questions.count, 1)
+        XCTAssertEqual(auth.events, ["verify", "discard"])
+    }
+
+    func test_verificationLink_ofTheSignedInAccount_rotatesWithoutAsking() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth, id: "link-user", email: "A@b.co")
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "open"])
+        XCTAssertEqual(confirmation.questions, [])
+    }
+
+    /// L'adresse écrite dans le lien ne décide plus rien : un lien de
+    /// vérification à une AUTRE adresse, qui prouve le compte connecté, est
+    /// une rotation — l'ancienne garde déconnectait avant même la preuve.
+    func test_verificationLink_atAnotherAddress_ofTheSignedInAccount_rotatesWithoutAsking() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth, id: "link-user", email: nil)
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "autre@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "open"])
+        XCTAssertEqual(confirmation.questions, [])
+    }
+
+    /// Un lien bidon sur un appareil connecté : une erreur, et la session reste.
+    func test_invalidMagicLink_whileSignedIn_keepsTheSession() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        auth.magicResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
+        let confirmation = MockAccountReplacementConfirmation(answer: true)
+
+        await SignInLinkOpener.open(.magic(token: "bidon"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify"])
+        XCTAssertTrue(auth.isAuthenticated)
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(confirmation.questions, [])
+        XCTAssertEqual(toasts.errorMessages.count, 1)
     }
 
     func test_refusedLink_ofTheSignedInAddress_keepsTheSession() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
-        auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+        signedInAs(auth)
         auth.emailResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
 
-        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: MockAccountReplacementConfirmation(answer: true))
 
         XCTAssertEqual(auth.events, ["verify"])
+        XCTAssertTrue(auth.isAuthenticated)
+    }
+
+    /// Un compte à second facteur : l'adresse est prouvée, aucune session n'est
+    /// rendue — jamais « Email vérifié ! », jamais « Lien invalide ».
+    func test_secondFactorAccount_saysSo_neverEmailVerified() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.emailResult = .failure(SecondFactorRequired(twoFactorToken: "2fa"))
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: MockAccountReplacementConfirmation(answer: true))
+
+        XCTAssertEqual(toasts.successMessages, [])
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.linkMessage(for: SecondFactorRequired(twoFactorToken: nil))])
+        XCTAssertNotEqual(toasts.errorMessages.first, EmailProofErrorText.linkMessage(for: MeeshyError.server(statusCode: 400, message: "x")))
+        XCTAssertEqual(auth.openedSessions, [])
+    }
+
+    func test_secondFactorMagicLink_whileSignedIn_keepsTheSession() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        auth.magicResult = .failure(SecondFactorRequired(twoFactorToken: "2fa"))
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: MockAccountReplacementConfirmation(answer: true))
+
+        XCTAssertEqual(auth.events, ["verify"])
+        XCTAssertTrue(auth.isAuthenticated)
+        XCTAssertEqual(toasts.successMessages, [])
+    }
+
+    // MARK: - #10450 — un succès ne s'annonce que sur une session POSÉE
+
+    func test_link_refusedByTheDevice_announcesNoSuccess() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.opens = false
+        let celebration = MockArrivalCelebration()
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)
+
+        XCTAssertEqual(auth.openedSessions, ["jwt-link"])
+        XCTAssertEqual(toasts.successMessages, [], "jamais « Connexion réussie ! » sur une session refusée")
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.sessionNotOpened()])
+        XCTAssertEqual(celebration.celebratedUserIds, [])
+    }
+
+    /// Sous une feuille, le succès attend que la session soit vraiment posée.
+    func test_link_whilePresented_announcesItsSuccessOnlyOnceTheSessionIsPosted() async {
+        let (gate, auth, toasts) = makeSUT(presenting: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+
+        XCTAssertEqual(toasts.successMessages, [])
+        gate.presentationEnded()
+        XCTAssertEqual(toasts.successMessages.count, 1)
+    }
+
+    func test_anotherAccount_accepted_butNotInstalled_announcesNoSuccess() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        signedInAs(auth)
+        auth.switches = false
+        let confirmation = MockAccountReplacementConfirmation(answer: true)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(auth.events, ["verify", "switch"], "le SDK referme lui-même la session qu'il n'a pas posée")
+        XCTAssertEqual(auth.currentUser?.id, "me")
+        XCTAssertEqual(toasts.successMessages, [])
+        XCTAssertEqual(toasts.errorMessages, [EmailProofErrorText.sessionNotOpened()])
+    }
+
+    // MARK: - #10450 — la question dit « un AUTRE compte » et nomme les deux
+
+    func test_question_receivesBothAccounts_withTheirNamesAndHandles() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.isAuthenticated = true
+        auth.currentUser = MeeshyUser(id: "me", username: "moi", displayName: "Moi Même")
+        let confirmation = MockAccountReplacementConfirmation(answer: false)
+
+        await SignInLinkOpener.open(.magic(token: "m"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration(), confirmation: confirmation)
+
+        XCTAssertEqual(confirmation.askedUsers.first?.current?.displayName, "Moi Même")
+        XCTAssertEqual(confirmation.askedUsers.first?.incoming.displayName, "Link")
+        XCTAssertEqual(confirmation.askedUsers.first?.incoming.username, "link")
+    }
+
+    func test_accountLabel_showsTheDisplayNameAndTheHandle() {
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "Awa Diallo", username: "awa"), "Awa Diallo (@awa)")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "  ", username: "awa"), "@awa")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: nil, username: "awa"), "@awa")
+        XCTAssertEqual(AccountReplacementAlert.label(displayName: "awa", username: "awa"), "@awa")
+    }
+
+    func test_alert_saysAnotherAccount_inEveryLanguage() throws {
+        let catalog = try AppSourceGuard.unit("Meeshy/Localizable.xcstrings")
+        let data = try XCTUnwrap(catalog.data(using: .utf8))
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(root["strings"] as? [String: Any])
+        let languages = ["fr", "en", "es", "de", "it", "pt-BR", "ar"]
+        for key in ["signInLink.switchAccount.title", "signInLink.switchAccount.message",
+                    "signInLink.switchAccount.messageUnknownCurrent", "emailProof.sessionNotOpened"] {
+            let entry = try XCTUnwrap(strings[key] as? [String: Any], key)
+            let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any], key)
+            XCTAssertEqual(Set(localizations.keys), Set(languages), key)
+        }
+    }
+
+    /// « Annuler » est l'action mise en avant ; une question qui ne s'est pas
+    /// présentée, ou qui a été retirée sans bouton, répond « non ».
+    func test_alert_prefersCancel_andAlwaysAnswers() throws {
+        let opener = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Auth/SignInLinkOpener.swift"))
+
+        XCTAssertTrue(opener.contains("alert.preferredAction = cancel"))
+        XCTAssertTrue(opener.contains("override func viewDidDisappear"))
+        XCTAssertGreaterThanOrEqual(opener.components(separatedBy: "presentingViewController == nil").count - 1, 3,
+                                    "présentation refusée, complétion sans parent, sortie sans bouton")
+    }
+
+    /// La réponse est UNIQUE : la première l'emporte, et une question libérée
+    /// sans réponse dit « non » au lieu de laisser la reprise en suspens.
+    func test_answer_isGivenOnce_andAReleasedQuestionSaysNo() async {
+        let first = await withCheckedContinuation { continuation in
+            let answer = AccountReplacementAnswer(continuation)
+            answer.give(true)
+            answer.give(false)
+        }
+        let released = await withCheckedContinuation { continuation in
+            _ = AccountReplacementAnswer(continuation)
+        }
+
+        XCTAssertTrue(first)
+        XCTAssertFalse(released)
     }
 
     func test_replacesSignedInAccount_judgesOnTheProvenId() {
@@ -168,6 +398,14 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
         XCTAssertTrue(SignInLink.replacesSignedInAccount(provenUserId: "b", isAuthenticated: true, currentUserId: nil))
         XCTAssertFalse(SignInLink.replacesSignedInAccount(provenUserId: "a", isAuthenticated: true, currentUserId: "a"))
         XCTAssertFalse(SignInLink.replacesSignedInAccount(provenUserId: "b", isAuthenticated: false, currentUserId: "a"))
+    }
+
+    /// La décision avant preuve a disparu de la source : seule l'id prouvée tranche.
+    func test_noLinkDecidesBeforeTheProof() throws {
+        let opener = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Auth/SignInLinkOpener.swift"))
+
+        XCTAssertFalse(opener.contains("requiresSignOut"))
+        XCTAssertFalse(opener.contains(".logout("), "un lien ne déconnecte jamais")
     }
 
     // MARK: - #8089 — la session ouverte par la preuve de l'adresse est célébrée
@@ -197,8 +435,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
 
     func test_verificationLink_ofTheSignedInAccount_rotatesWithoutCelebrating() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
-        auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "link-user", username: "me", email: "a@b.co")
+        signedInAs(auth, id: "link-user")
         let celebration = MockArrivalCelebration()
 
         await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)

@@ -89,6 +89,19 @@ describe('`error { code: SHARE_LINK_EXPIRED }` — la session d’invité finit,
     destroy();
   });
 
+  test('`error { code: GUEST_ACCESS_REVOKED }` (#10448) — l’invité retiré est déconnecté, l’accès finit « revoked », plus de reconnexion', () => {
+    const { socket, ended, online, destroy } = connect();
+
+    socket.fire(SERVER_EVENTS.ERROR, { message: 'Guest access has been revoked', code: 'GUEST_ACCESS_REVOKED' });
+
+    expect(socket.connected).toBe(false);
+    expect(ended).toEqual(['revoked']);
+    const before = socket.connects();
+    for (const listener of online) listener();
+    expect(socket.connects()).toBe(before);
+    destroy();
+  });
+
   test('une autre erreur de socket ne ferme rien', () => {
     const { socket, ended, destroy } = connect();
     socket.fire(SERVER_EVENTS.ERROR, { message: 'Too many authentication attempts.', code: 'RATE_LIMIT_EXPIRED' });

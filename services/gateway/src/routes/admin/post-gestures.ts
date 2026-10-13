@@ -14,7 +14,7 @@ import {
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { requirePermission } from '../../middleware/authorize';
 import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
-import { nextModerationState, nextVisibilityState, POST_MODERATION_BATCH_MAX, type PostModerationState } from '../../services/admin/publication-moderation';
+import { nextModerationState, nextVisibilityState, POST_MODERATION_BATCH_MAX, widensAuthorAudience, type PostModerationState } from '../../services/admin/publication-moderation';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendConflict, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
@@ -40,7 +40,8 @@ import {
  *
  * Trois gestes (`@meeshy/shared/types/admin-publications`) : mettre hors ligne,
  * remettre en ligne (l'audience de l'auteur), changer l'audience (`PUBLIC`,
- * `FRIENDS`, `COMMUNITY`, `PRIVATE` — publier un brouillon, c'est `PUBLIC`).
+ * `FRIENDS`, `COMMUNITY`, `PRIVATE` — jamais plus large que l'audience de l'auteur,
+ * `AUDIENCE_WIDENING`).
  *
  * Mêmes lois que la fiche d'un membre, par le même écrivain
  * (`publication-moderation-writer.ts`) : `canModerateContent`, motif exigé sauf
@@ -53,7 +54,7 @@ import {
 const MOTIF_MINIMAL = 3;
 const requireModeration = requirePermission('canModerateContent');
 
-export type GestureRefusal = 'NOT_FOUND' | 'SELF_MODERATION' | 'FORBIDDEN' | 'MODERATION_OUTRANKED' | 'CONFLICT';
+export type GestureRefusal = 'NOT_FOUND' | 'SELF_MODERATION' | 'FORBIDDEN' | 'MODERATION_OUTRANKED' | 'AUDIENCE_WIDENING' | 'CONFLICT';
 
 export type GestureOutcome =
   | { readonly postId: string; readonly outcome: 'applied' | 'unchanged'; readonly view: AdminPostModerationView | null }
@@ -135,19 +136,22 @@ export async function applyPostGesture(
   const now = new Date();
   const expiresOf = new Map(rows.map((row) => [row.id, row.expiresAt]));
   const others = rows.filter((row) => row.authorId !== actor.id);
+  const widening = new Set(
+    gesture.gesture === 'set-visibility' ? others.filter((row) => widensAuthorAudience(stateOf(row), gesture.visibility)).map((row) => row.id) : [],
+  );
   const plans: ModerationPlan[] = others.map((row) => ({ row, before: stateOf(row), after: afterOf(gesture, stateOf(row), { now, actorId: actor.id }) }));
   const manageable = await withinHierarchy(fastify, plans, actor);
   const manageableIds = new Set(manageable.plans.map((plan) => plan.row.id));
   const inReach = plans.filter((plan) => manageableIds.has(plan.row.id));
   const outranked = await outrankedPlans(fastify, inReach, actor);
-  const candidates = inReach.filter((plan) => plan.after !== null && !outranked.has(plan.row.id));
+  const candidates = inReach.filter((plan) => plan.after !== null && !outranked.has(plan.row.id) && !widening.has(plan.row.id));
   const copies = gesture.gesture === 'set-visibility' ? { plans: [], outranked: 0 } : await copyPlans(fastify, gesture.gesture, candidates, { now, actor });
 
   // Ce que le geste engage À CÔTÉ (le statut d'un signalement) ne s'écrit que si le geste
   // s'applique à au moins une publication — jamais sur un refus — et s'annule avec lui :
   // une écriture attendue qui n'a pas eu lieu (publication changée entre-temps) avorte la
   // transaction entière, le signalement compris.
-  const acceptable = inReach.filter((plan) => !outranked.has(plan.row.id));
+  const acceptable = inReach.filter((plan) => !outranked.has(plan.row.id) && !widening.has(plan.row.id));
   const extra = input.extra;
   const guardedExtra =
     extra === undefined || acceptable.length === 0
@@ -188,6 +192,7 @@ export async function applyPostGesture(
     if (ownIds.has(postId)) return refuse('SELF_MODERATION');
     if (!manageableIds.has(postId)) return refuse('FORBIDDEN');
     if (outranked.has(postId)) return refuse('MODERATION_OUTRANKED');
+    if (widening.has(postId)) return refuse('AUDIENCE_WIDENING');
     if (appliedIds.has(postId)) return { postId, outcome: 'applied', view };
     if (planById.get(postId)?.after === null) return { postId, outcome: 'unchanged', view };
     return refuse('CONFLICT');
@@ -222,6 +227,7 @@ const REFUSAL_STATUS: Readonly<Record<GestureRefusal, { readonly status: 403 | 4
   SELF_MODERATION: { status: 403, message: 'Self moderation is not allowed' },
   FORBIDDEN: { status: 403, message: "Rang insuffisant sur l'auteur de cette publication" },
   MODERATION_OUTRANKED: { status: 403, message: 'Ce retrait a été posé par un rang supérieur' },
+  AUDIENCE_WIDENING: { status: 403, message: "L'administration n'ouvre jamais une publication au-delà de l'audience choisie par son auteur" },
   CONFLICT: { status: 409, message: 'La publication a changé pendant le geste' },
 };
 

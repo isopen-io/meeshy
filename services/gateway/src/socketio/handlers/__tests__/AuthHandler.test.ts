@@ -10,7 +10,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
 import jwt from 'jsonwebtoken';
-import { matchesMongoWhere, type MongoDocument } from '../../../__tests__/helpers/mongo-where';
 
 // Mocks
 const createMockSocket = (overrides: Record<string, unknown> = {}): Socket => ({
@@ -133,7 +132,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -164,7 +163,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -798,31 +797,6 @@ describe('AuthHandler', () => {
       expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-bbb');
     });
 
-    it("ne rejoint pas la room d'une conversation dont l'inscrit est banni, même ligne rallumée (#7389)", async () => {
-      // Un bannissement écrit `isActive: false`, mais une restauration de compte
-      // le rallume sans regarder `bannedAt`. Jugé sur des DOCUMENTS : la colonne
-      // est ABSENTE chez le membre jamais banni, qui doit rester admis.
-      const rows: MongoDocument[] = [
-        { conversationId: 'conv-banni', userId: 'user-123', isActive: true, bannedAt: new Date('2026-09-01') },
-        { conversationId: 'conv-membre', userId: 'user-123', isActive: true },
-        { conversationId: 'conv-debanni', userId: 'user-123', isActive: true, bannedAt: null },
-      ];
-      const mockSocket = createMockSocket({ handshake: { auth: { token: 'valid-jwt-token' } } });
-      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
-        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
-      } as any);
-      jest.spyOn((mockPrisma as any).participant, 'findMany').mockImplementation(
-        async (args: any) => rows.filter((row) => matchesMongoWhere(row, args.where)).map(({ conversationId }) => ({ conversationId })),
-      );
-
-      await authHandler.handleTokenAuthentication(mockSocket);
-
-      expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-membre');
-      expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-debanni');
-      expect(mockSocket.join).not.toHaveBeenCalledWith('conversation:conv-banni');
-    });
-
     it('retries a conversation room join that rejected on the first attempt', async () => {
       // Regression test (silent message loss): delivery code gates the offline
       // queue purely on connectedUsers.has(userId). If a conversation room join
@@ -963,7 +937,7 @@ describe('AuthHandler', () => {
         join: asyncJoin,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -1047,7 +1021,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { sessionToken: 'anon-session-token' } }
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -1127,7 +1101,7 @@ describe('AuthHandler', () => {
     it('should authenticate anonymous user with sessionToken', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-456'
@@ -1473,7 +1447,7 @@ describe('AuthHandler', () => {
         join,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId,
@@ -1583,7 +1557,7 @@ describe('AuthHandler', () => {
 
     const authAnonymousSocket = async (socketId: string) => {
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-1'

@@ -99,6 +99,7 @@ describe('les codes, lus une fois', () => {
     expect(guestAccessEndOf({ status: 410, error: 'GUEST_ACCESS_REVOKED' })).toBe('revoked');
     expect(guestAccessEndOf({ status: 401, code: 'SHARE_LINK_EXPIRED' })).toBeNull();
     expect(guestAccessEndOfSocketError({ message: 'This share link has expired', code: 'SHARE_LINK_EXPIRED' })).toBe('expired');
+    expect(guestAccessEndOfSocketError({ message: 'Guest access has been revoked', code: 'GUEST_ACCESS_REVOKED' })).toBe('revoked');
     expect(guestAccessEndOfSocketError({ message: 'Authentication failed' })).toBeNull();
     expect(guestAccessEndOfSocketError('SHARE_LINK_EXPIRED')).toBeNull();
     expect(guestAccessEndedOf('expired')).toBe('expired');

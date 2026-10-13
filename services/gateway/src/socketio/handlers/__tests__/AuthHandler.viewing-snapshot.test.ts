@@ -37,6 +37,7 @@ const createPrisma = (): PrismaClient => ({
   participant: {
     findFirst: jest.fn().mockResolvedValue({
       id: 'anon-123',
+      isActive: true,
       displayName: 'Anonymous',
       language: 'en',
       conversationId: 'conv-123',

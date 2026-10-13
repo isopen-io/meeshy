@@ -8,8 +8,10 @@ import type { SessionStoreApi } from './session';
  * - le lien a expiré : 403 `code: SHARE_LINK_EXPIRED` sur toute requête REST
  *   (`middleware/auth.ts`, #10437), et `error { code: SHARE_LINK_EXPIRED }` puis
  *   coupure sur la socket (`AuthHandler._refuseExpiredGuestLink`) ;
- * - l'invité a été retiré : 410 `error: GUEST_ACCESS_REVOKED` (le motif est
- *   dans `error`, la passerelle ne pose pas de `code`).
+ * - l'invité a été retiré : 410 `error: GUEST_ACCESS_REVOKED` sur toute requête
+ *   REST (le motif est dans `error`, la passerelle ne pose pas de `code`), et
+ *   `error { code: GUEST_ACCESS_REVOKED }` puis coupure sur la socket
+ *   (`guestLinkWatch.refuseRevokedGuest`, #10443, #10448).
  *
  * L'appareil oublie alors la session de l'invité, et le ramène à la page de
  * son lien, qui dit pourquoi (`?ended=`) et offre les sorties.
@@ -29,7 +31,10 @@ export function guestAccessEndOf(failure: { readonly status: number; readonly co
 
 export function guestAccessEndOfSocketError(payload: unknown): GuestAccessEnd | null {
   if (payload === null || typeof payload !== 'object') return null;
-  return (payload as { readonly code?: unknown }).code === SHARE_LINK_EXPIRED ? 'expired' : null;
+  const code = (payload as { readonly code?: unknown }).code;
+  if (code === SHARE_LINK_EXPIRED) return 'expired';
+  if (code === GUEST_ACCESS_REVOKED) return 'revoked';
+  return null;
 }
 
 export function guestAccessEndedOf(raw: string | null): GuestAccessEnd | null {

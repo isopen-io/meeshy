@@ -288476,6 +288476,288 @@
           }
         }
       }
+    },
+    "emailProof.secondFactorRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الحساب محمي بالمصادقة الثنائية: سجّل الدخول بكلمة المرور والرمز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto ist durch Zwei-Faktor-Authentifizierung geschützt: Melde dich mit deinem Passwort und deinem Code an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account is protected by two-factor authentication: sign in with your password and your code."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta está protegida con verificación en dos pasos: inicia sesión con tu contraseña y tu código."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce compte est protégé par la double authentification : connectez-vous avec votre mot de passe et votre code."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account è protetto dall'autenticazione a due fattori: accedi con la password e il codice."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conta é protegida pela autenticação em dois fatores: entre com sua senha e seu código."
+          }
+        }
+      }
+    },
+    "emailProof.sessionNotOpened": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حساب آخر مفتوح بالفعل على هذا الجهاز: تعذّر فتح هذا الحساب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät ist bereits ein anderes Konto geöffnet: Dieses Konto konnte nicht geöffnet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another account is already open on this device: this account could not be opened."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya hay otra cuenta abierta en este dispositivo: no se ha podido abrir esta cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su questo dispositivo è già aperto un altro account: non è stato possibile aprire questo account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outra conta já está aberta neste dispositivo: não foi possível abrir esta conta."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح هذا الحساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open this account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir esta cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir ce compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri questo account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir esta conta"
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح هذا الرابط حسابًا آخر غير حسابك: %1$@.\n\nأنت مسجّل الدخول باسم %2$@. لا تفتح هذا الحساب إلا إذا كان ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet ein ANDERES Konto als deins: %1$@.\n\nDu bist als %2$@ angemeldet. Öffne dieses Konto nur, wenn es dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link opens ANOTHER account than yours: %1$@.\n\nYou are signed in as %2$@. Only open this account if it belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace abre OTRA cuenta distinta de la tuya: %1$@.\n\nHas iniciado sesión como %2$@. Abre esta cuenta solo si te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ouvre un AUTRE compte que le vôtre : %1$@.\n\nVous êtes connecté en tant que %2$@. N'ouvrez ce compte que s'il vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link apre un ALTRO account diverso dal tuo: %1$@.\n\nHai effettuato l'accesso come %2$@. Apri questo account solo se è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link abre OUTRA conta, diferente da sua: %1$@.\n\nVocê está conectado como %2$@. Só abra esta conta se ela for sua."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.messageUnknownCurrent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح هذا الرابط حسابًا آخر غير الحساب المفتوح: %@.\n\nلا تفتح هذا الحساب إلا إذا كان ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet ein ANDERES Konto als das geöffnete: %@.\n\nÖffne dieses Konto nur, wenn es dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link opens ANOTHER account than the one that is open: %@.\n\nOnly open this account if it belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace abre OTRA cuenta distinta de la que está abierta: %@.\n\nAbre esta cuenta solo si te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ouvre un AUTRE compte que celui qui est ouvert : %@.\n\nN'ouvrez ce compte que s'il vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link apre un ALTRO account diverso da quello aperto: %@.\n\nApri questo account solo se è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link abre OUTRA conta, diferente da que está aberta: %@.\n\nSó abra esta conta se ela for sua."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح حساب آخر؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein anderes Konto öffnen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open another account?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Abrir otra cuenta?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir un autre compte ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprire un altro account?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir outra conta?"
+          }
+        }
+      }
     }
   },
   "version": "1.1"

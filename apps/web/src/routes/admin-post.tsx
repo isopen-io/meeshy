@@ -334,7 +334,7 @@ export function AdminPostPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <AdminPostGestureBar
                     language={language}
-                    post={{ id: fiche.id, state: postStateOf(fiche, now), visibility: fiche.visibility }}
+                    post={{ id: fiche.id, state: postStateOf(fiche, now), visibility: fiche.visibility, moderationPriorVisibility: fiche.moderationPriorVisibility }}
                     onAnnounce={announcer.announce}
                     deps={deps}
                     optimistic={{ key: adminPostQueryKey(postId), apply: (before, intent, at) => (before === null || before === undefined ? before : gestureEffect(before as AdminPostFiche, intent, at)) }}

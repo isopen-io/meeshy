@@ -116,17 +116,63 @@ describe('POST /admin/posts/:postId/gestures', () => {
     await app.close();
   });
 
-  it("publie un brouillon privé en PUBLIC : l'audience choisie est écrite et journalisée", async () => {
-    reads([row({ visibility: 'PRIVATE' })], [viewRow()]);
+  it("ne publie JAMAIS le brouillon privé d'un membre, même au rang souverain (AUDIENCE_WIDENING)", async () => {
+    reads([row({ visibility: 'PRIVATE' })], [viewRow({ visibility: 'PRIVATE' })]);
     const app = await buildApp('BIGBOSS');
 
     const res = await one(app, P1, { gesture: 'set-visibility', visibility: 'PUBLIC' });
 
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('AUDIENCE_WIDENING');
+    expect(postUpdateMany).not.toHaveBeenCalled();
+    expect(auditCreateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("n'élargit pas l'audience que l'auteur a choisie : FRIENDS vers PUBLIC, ONLY vers FRIENDS", async () => {
+    const app = await buildApp('ADMIN');
+    reads([row({ visibility: 'FRIENDS' })], [viewRow({ visibility: 'FRIENDS' })]);
+    const toPublic = await one(app, P1, { gesture: 'set-visibility', visibility: 'PUBLIC', reason: 'Mise en avant' });
+    reads([row({ visibility: 'ONLY', visibilityUserIds: ['507f1f77bcf86cd799439099'] })], [viewRow({ visibility: 'ONLY' })]);
+    const toFriends = await one(app, P1, { gesture: 'set-visibility', visibility: 'FRIENDS', reason: 'Mise en avant' });
+
+    expect([toPublic.statusCode, toPublic.json().code]).toEqual([403, 'AUDIENCE_WIDENING']);
+    expect([toFriends.statusCode, toFriends.json().code]).toEqual([403, 'AUDIENCE_WIDENING']);
+    expect(postUpdateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("resserre l'audience d'une publication publique à ses amis, et retient celle de l'auteur (#10471)", async () => {
+    reads([row({ visibility: 'PUBLIC' })], [viewRow({ visibility: 'FRIENDS' })]);
+    const app = await buildApp('ADMIN');
+    const res = await one(app, P1, { gesture: 'set-visibility', visibility: 'FRIENDS', reason: 'Audience trop large' });
+    expect(res.statusCode).toBe(200);
+    expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toEqual({ visibility: 'FRIENDS', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: 'PUBLIC' });
+    expect(JSON.parse((auditCreateMany.mock.calls[0]?.[0] as any).data[0].metadata)).toMatchObject({ gesture: 'set-visibility', from: 'published', to: 'published', visibility: 'FRIENDS' });
+    await app.close();
+  });
+
+  it("rend à une publication resserrée l'audience publique de son auteur : Publique → Amis → Publique (#10471)", async () => {
+    reads([row({ visibility: 'FRIENDS', moderationPriorVisibility: 'PUBLIC' })], [viewRow({ visibility: 'PUBLIC' })]);
+    const app = await buildApp('ADMIN');
+    const res = await one(app, P1, { gesture: 'set-visibility', visibility: 'PUBLIC', reason: 'Resserrement par erreur' });
     expect(res.statusCode).toBe(200);
     expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toEqual({ visibility: 'PUBLIC', moderationHiddenAt: null, moderationHiddenById: null, moderationPriorVisibility: null });
-    expect(JSON.parse((auditCreateMany.mock.calls[0]?.[0] as any).data[0].metadata)).toMatchObject({ gesture: 'set-visibility', from: 'private', to: 'published', visibility: 'PUBLIC' });
-    expect(socialEvents.broadcastPostDeleted).not.toHaveBeenCalled();
-    expect(res.json().data.state).toBe('published');
+    await app.close();
+  });
+
+  it("remet en ligne une publication hors ligne avec l'audience de l'auteur, jamais plus large", async () => {
+    const offline = row({ visibility: 'PRIVATE', moderationHiddenAt: UPDATED, moderationHiddenById: ACTOR, moderationPriorVisibility: 'FRIENDS' });
+    const app = await buildApp('ADMIN');
+    reads([offline], [viewRow({ visibility: 'PRIVATE', moderationHiddenAt: UPDATED })]);
+    const wider = await one(app, P1, { gesture: 'set-visibility', visibility: 'PUBLIC', reason: 'Erreur de modération' });
+    expect([wider.statusCode, wider.json().code]).toEqual([403, 'AUDIENCE_WIDENING']);
+    expect(postUpdateMany).not.toHaveBeenCalled();
+
+    reads([offline], [viewRow({ visibility: 'FRIENDS' })]);
+    const same = await one(app, P1, { gesture: 'set-visibility', visibility: 'FRIENDS', reason: 'Erreur de modération' });
+    expect(same.statusCode).toBe(200);
+    expect((postUpdateMany.mock.calls[0]?.[0] as any).data).toMatchObject({ visibility: 'FRIENDS', moderationHiddenAt: null });
     await app.close();
   });
 
@@ -249,6 +295,22 @@ describe('POST /admin/posts/gestures — le lot', () => {
       [GONE, 'refused', 'NOT_FOUND'],
     ]);
     expect(results[0].view).toMatchObject({ id: P1, state: 'offline' });
+    expect(postUpdateMany.mock.calls.map((call) => (call[0] as any).where.id)).toEqual([P1]);
+    await app.close();
+  });
+
+  it("refuse dans le lot, publication par publication, ce qui élargirait l'audience de l'auteur", async () => {
+    reads(
+      [row({ id: P1, visibility: 'PUBLIC' }), row({ id: P2, visibility: 'FRIENDS' })],
+      [viewRow({ id: P1, visibility: 'FRIENDS' }), viewRow({ id: P2, visibility: 'FRIENDS' })],
+    );
+    const app = await buildApp('ADMIN');
+    const res = await app.inject({ method: 'POST', url: '/admin/posts/gestures', payload: { gesture: 'set-visibility', visibility: 'COMMUNITY', postIds: [P1, P2], reason: 'Communauté' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.results.map((r: any) => [r.postId, r.outcome, r.code ?? null])).toEqual([
+      [P1, 'applied', null],
+      [P2, 'refused', 'AUDIENCE_WIDENING'],
+    ]);
     expect(postUpdateMany.mock.calls.map((call) => (call[0] as any).where.id)).toEqual([P1]);
     await app.close();
   });

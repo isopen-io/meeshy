@@ -36,6 +36,15 @@ const esVerifyEmail = {
   'verifyEmail.arrival.lead': 'Preparando tus conversaciones…',
   'verifyEmail.arrival.status': 'Dirección confirmada — iniciando sesión…',
   'emailSent.codeOrLink': 'Introduce el código de 6 dígitos recibido en {email} o abre el enlace del mismo correo.',
+  'signInLink.switchAccount.title': '¿Abrir OTRA cuenta?',
+  'signInLink.switchAccount.lead': 'Has iniciado sesión como @{current}, pero lo que acabas de abrir lleva a otra cuenta:',
+  'signInLink.switchAccount.warning': 'Si no pediste este enlace o código tú mismo, cancela: tu sesión sigue abierta y nada cambia.',
+  'signInLink.switchAccount.cancel': 'Cancelar y quedarme en @{current}',
+  'signInLink.switchAccount.confirm': 'Abrir esta otra cuenta',
+  'signInLink.switchAccount.kept': '@{current} seguirá en tus cuentas en este dispositivo.',
+  'signInLink.switchAccount.busy': 'Un momento…',
+  'signInLink.switchAccount.failed': 'No se puede abrir esta otra cuenta en este momento. Tu sesión sigue abierta y el enlace se ha cerrado.',
+  'signInLink.switchAccount.leave': 'Volver al inicio',
 };
 
 export default esVerifyEmail;

@@ -1,4 +1,13 @@
-import { adminGesturesFor, type AdminPostGestureName, type AdminPostState, type AdminSettableVisibility } from '@meeshy/shared/types/admin-publication-states';
+import {
+  adminAudiencesOffered,
+  adminGesturesFor,
+  authorAudienceOf,
+  heldAuthorAudience,
+  type AdminAudienceFacts,
+  type AdminPostGestureName,
+  type AdminPostState,
+  type AdminSettableVisibility,
+} from '@meeshy/shared/types/admin-publication-states';
 
 import type { AdminPostView } from '@/lib/api/admin-post-gestures';
 
@@ -8,8 +17,10 @@ import type { AdminPostView } from '@/lib/api/admin-post-gestures';
  *
  * - « Mettre hors ligne » : audience réduite à l'auteur, retrait daté, audience retenue ;
  * - « Remettre en ligne » : retrait levé, audience de l'auteur rendue ;
- * - « Audience » : l'audience choisie, retrait levé ; vers `PRIVATE`, l'audience d'avant
- *   est retenue pour que « Remettre en ligne » la rende.
+ * - « Audience » : l'audience choisie, retrait levé.
+ *
+ * Chaque geste retient l'audience de l'AUTEUR quand il en sert une autre (#10471), par la
+ * loi partagée (`heldAuthorAudience`, `@meeshy/shared/types/admin-publication-states`).
  *
  * Une publication supprimée n'est jamais touchée. La vue servie (`withPostView`) fait foi.
  */
@@ -28,22 +39,29 @@ export type PostModerationFacts = {
 
 const PRIVATE = 'PRIVATE';
 
+/** Une audience inconnue se lit `PRIVATE` : l'écran ne propose alors rien de plus large. */
+export const audienceFactsOf = (row: Pick<PostModerationFacts, 'visibility' | 'moderationPriorVisibility'>): AdminAudienceFacts => ({
+  visibility: row.visibility ?? PRIVATE,
+  moderationPriorVisibility: row.moderationPriorVisibility,
+});
+
+/** Les audiences que l'écran propose pour cette publication : celles que la passerelle accepte. */
+export const audiencesOffered = (row: Pick<PostModerationFacts, 'visibility' | 'moderationPriorVisibility'>): readonly AdminSettableVisibility[] =>
+  adminAudiencesOffered(audienceFactsOf(row));
+
 export function gestureEffect<Row extends PostModerationFacts>(row: Row, intent: PostGestureIntent, now: Date): Row {
   if (row.deletedAt !== null) return row;
   switch (intent.gesture) {
     case 'take-offline': {
       if (row.moderationHiddenAt !== null) return row;
-      const prior = row.visibility !== PRIVATE ? row.visibility : row.moderationPriorVisibility;
-      return { ...row, visibility: PRIVATE, moderationHiddenAt: now.toISOString(), moderationPriorVisibility: prior };
+      return { ...row, visibility: PRIVATE, moderationHiddenAt: now.toISOString(), moderationPriorVisibility: heldAuthorAudience(audienceFactsOf(row), PRIVATE) };
     }
     case 'restore': {
       if (row.moderationHiddenAt === null && row.moderationPriorVisibility === null) return row;
-      const visibility = row.visibility === PRIVATE && row.moderationPriorVisibility !== null ? row.moderationPriorVisibility : row.visibility;
-      return { ...row, visibility, moderationHiddenAt: null, moderationPriorVisibility: null };
+      return { ...row, visibility: authorAudienceOf(audienceFactsOf(row)), moderationHiddenAt: null, moderationPriorVisibility: null };
     }
     case 'set-visibility': {
-      const prior = intent.visibility === PRIVATE ? (row.visibility !== PRIVATE ? row.visibility : row.moderationPriorVisibility) : null;
-      return { ...row, visibility: intent.visibility, moderationHiddenAt: null, moderationPriorVisibility: prior };
+      return { ...row, visibility: intent.visibility, moderationHiddenAt: null, moderationPriorVisibility: heldAuthorAudience(audienceFactsOf(row), intent.visibility) };
     }
   }
 }

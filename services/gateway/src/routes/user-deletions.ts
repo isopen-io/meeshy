@@ -15,7 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
 import { depreciee, dateDeRetrait } from '../utils/deprecation';
-import { restoreConversationForMeSchema, deletedConversationsSchema } from './user-deletions-schemas';
+import { deletedConversationsSchema } from './user-deletions-schemas';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { retractNotificationsForClearedHistory } from '../services/messaging/retractHiddenMessageNotifications';
 import {
@@ -335,6 +335,39 @@ export default async function userDeletionsRoutes(
       }
     }
   );
+
+  // Déclaré AVANT son handler, comme les schémas voisins : le balayage
+  // response-payload-mismatch rattache un handler au bloc `response:` qui le précède.
+  const restoreConversationForMeSchema = {
+    description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
+    tags: ['users', 'conversations'],
+    summary: 'Restore deleted conversation',
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', description: 'Conversation ID to restore' }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: 'Conversation restored' }
+            }
+          }
+        }
+      },
+      400: errorResponseSchema,
+      403: errorResponseSchema,
+      404: errorResponseSchema,
+      500: errorResponseSchema
+    }
+  } as const;
 
   /**
    * POST /api/conversations/:conversationId/restore-for-me

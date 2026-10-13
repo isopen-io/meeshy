@@ -181,7 +181,7 @@ function PreviewBody({
       </header>
       <AdminPostGestureBar
         language={language}
-        post={{ id: fiche.id, state, visibility: fiche.visibility }}
+        post={{ id: fiche.id, state, visibility: fiche.visibility, moderationPriorVisibility: fiche.moderationPriorVisibility }}
         onAnnounce={onAnnounce}
         deps={deps}
         {...(listOptimistic === undefined ? {} : { optimistic: { key: listOptimistic.key, apply: (before, intent, at) => listOptimistic.apply(before, fiche.id, intent, at) } })}

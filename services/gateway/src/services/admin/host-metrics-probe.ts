@@ -25,6 +25,8 @@ import {
   type HostMetricsSnapshot,
 } from '@meeshy/shared/types/admin-ops';
 import { readDockerUsage, readOpsSettings, type OpsEnv } from './ops-relay';
+import { logger } from '../../utils/logger';
+import { guardedInterval } from '../../utils/guarded-timer';
 
 export type HostStatfs = { readonly blocks: number; readonly bsize: number; readonly bfree: number; readonly bavail: number };
 
@@ -218,9 +220,7 @@ export function createHostMetricsProbe(options: HostMetricsProbeOptions): HostMe
   const start = (): void => {
     if (timer) return;
     prime().catch(() => undefined);
-    timer = setInterval(() => {
-      tick().catch(() => undefined);
-    }, intervalMs);
+    timer = guardedInterval({ name: 'host-metrics-probe', everyMs: intervalMs, logger, run: () => tick().catch(() => undefined) });
     timer.unref?.();
   };
 

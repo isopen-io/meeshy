@@ -78,6 +78,7 @@ async function buildApp(): Promise<FastifyInstance> {
       findMany: jest.fn().mockResolvedValue([]), // `resolveConversationEntry` (identité inscrite)
       create: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'participant-1', avatar: null, ...data })),
       update: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'participant-1', avatar: null, ...data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     message: { create: jest.fn().mockResolvedValue({ id: 'msg-1' }) },
   } as never);
@@ -498,6 +499,134 @@ describe('PATCH /guest-sessions/me', () => {
   });
 });
 
+// ─── PATCH /guest-sessions/me — participation morte (#10457) ──────────────────
+
+/**
+ * #10457 — `refreshGuestSession` juge la participation par la règle de
+ * `PARTICIPATION_VIVANTE` (`participationEstVivante`) : désactivée OU bannie ⇒
+ * 410 `GUEST_ACCESS_REVOKED`, sans servir la conversation ni relancer la
+ * présence. Le lien expiré reste la cause première (`guestAccessEnd`).
+ */
+describe('PATCH /guest-sessions/me — participation morte (#10457)', () => {
+  const patch = (app: FastifyInstance) =>
+    app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+  const guestRow = (extra: Record<string, unknown>) => ({
+    id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+    permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    ...extra,
+  });
+
+  it('banni encore actif ⇒ 410 GUEST_ACCESS_REVOKED, rien servi, présence non relancée', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ bannedAt: new Date('2026-10-13T09:00:00Z') }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect(res.json().data).toBeUndefined();
+    expect(res.body).not.toContain('Test Conv');
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('désactivé ⇒ 410 GUEST_ACCESS_REVOKED, plus 401 SESSION_INVALID', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ isActive: false }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ success: false, error: 'GUEST_ACCESS_REVOKED' });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('banni ET lien échu ⇒ 410 LINK_EXPIRED, la cause première', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({ bannedAt: new Date('2026-10-13T09:00:00Z') }));
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({ ...mockShareLink, expiresAt: new Date('2020-01-01') });
+
+    const res = await patch(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(410);
+    expect(res.json()).toMatchObject({ error: 'LINK_EXPIRED' });
+  });
+});
+
+// ─── PATCH /guest-sessions/me — le lien se lit comme aux autres portes (#10464) ─
+
+/**
+ * #10464 — le rafraîchissement lisait le lien de l'invité sur la seule session
+ * embarquée (`anonymousSession.shareLinkId`), quand les trois autres portes le
+ * lisent par `guestShareLinkId` : la colonne de la participation d'abord, la
+ * session en repli. Un invité dont seule la colonne porte le lien était traité
+ * comme sans lien (410 LINK_DEACTIVATED) ; un invité dont les deux divergent
+ * était jugé sur un autre lien que partout ailleurs.
+ */
+describe('PATCH /guest-sessions/me — le lien de l\'invité se lit par la colonne d\'abord (#10464)', () => {
+  const OTHER_LINK_DB_ID = '507f1f77bcf86cd799439033';
+  const patch = (app: FastifyInstance) =>
+    app.inject({ method: 'PATCH', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+  const guestRow = (extra: Record<string, unknown>) => ({
+    id: 'p1', isActive: true, displayName: 'ano_ana', language: 'fr', avatar: null,
+    permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    ...extra,
+  });
+
+  it('lien porté par la seule COLONNE ⇒ lu et rafraîchi, plus traité comme un lien disparu', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('colonne et session divergent ⇒ la COLONNE fait foi, comme aux autres portes', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { shareLinkId: OTHER_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect((app as any).prisma.conversationShareLink.findUnique).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: OTHER_LINK_DB_ID } })
+    );
+  });
+
+  it('colonne vide ⇒ la session embarquée en repli', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(guestRow({
+      shareLinkId: null,
+      anonymousSession: { shareLinkId: SHARE_LINK_DB_ID, profile: { username: 'ano_ana' }, session: {} },
+    }));
+
+    const res = await patch(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+    expect(res.statusCode).toBe(200);
+  });
+});
+
 // ─── DELETE /guest-sessions/me — idempotence (critère 4 + critère 6) ─────────
 
 describe('DELETE /guest-sessions/me', () => {
@@ -524,17 +653,131 @@ describe('DELETE /guest-sessions/me', () => {
     (app as any).prisma.participant.findFirst
       .mockResolvedValueOnce(activeParticipant) // 1er appel : encore actif
       .mockResolvedValueOnce({ ...activeParticipant, isActive: false }); // 2e appel : déjà parti
-    (app as any).prisma.conversationShareLink.update.mockClear();
+    (app as any).prisma.conversationShareLink.updateMany.mockClear();
 
     const first = await app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
     const second = await app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
 
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
-    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledTimes(1);
-    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { currentConcurrentUsers: { decrement: 1 } } })
-    );
+    expect(decrements(app)).toHaveLength(1);
+  });
+});
+
+const decrements = (app: FastifyInstance) =>
+  ((app as any).prisma.conversationShareLink.updateMany.mock.calls as any[][])
+    .map(([args]) => args)
+    .filter(args => args?.data?.currentConcurrentUsers?.decrement === 1);
+
+/**
+ * #10472 — la sortie désactivait SANS condition : une révocation concurrente
+ * voyait son `leftAt` réécrit et `currentConcurrentUsers` décrémenté deux fois
+ * (deux sorties lues actives en même temps), et un lien SUPPRIMÉ entre la
+ * lecture et l'écriture faisait lever P2025 — un 500 pour une sortie réussie.
+ */
+describe('DELETE /guest-sessions/me — écriture conditionnelle, décrément borné, lien supprimé toléré (#10472)', () => {
+  const leave = (app: FastifyInstance) =>
+    app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+  const activeGuest = {
+    id: 'p1', conversationId: CONV_ID, isActive: true, shareLinkId: SHARE_LINK_DB_ID,
+    anonymousSession: { profile: {}, session: {} },
+  };
+
+  it('désactive par une écriture CONDITIONNELLE sur `isActive: true`', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(activeGuest);
+
+    const res = await leave(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.participant.updateMany).toHaveBeenCalledWith({
+      where: { id: 'p1', isActive: true },
+      data: { isActive: false, isOnline: false, leftAt: expect.any(Date) },
+    });
+    expect((app as any).prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('perd la course contre une révocation (compte 0) : ni décrément, ni annonce, et la sortie réussit', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(activeGuest);
+    (app as any).prisma.participant.updateMany.mockResolvedValueOnce({ count: 0 });
+    const annonces: ConversationLanguageChange[] = [];
+    const desabonner = subscribeConversationLanguageChanges(change => { annonces.push(change); });
+
+    const res = await leave(app);
+    desabonner();
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(decrements(app)).toHaveLength(0);
+    expect(annonces).toEqual([]);
+  });
+
+  it('le décrément est BORNÉ : il ne s\'applique qu\'à un compteur positif', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(activeGuest);
+
+    await leave(app);
+    await app.close();
+
+    expect(decrements(app)).toEqual([{
+      where: { id: SHARE_LINK_DB_ID, currentConcurrentUsers: { gt: 0 } },
+      data: { currentConcurrentUsers: { decrement: 1 } },
+    }]);
+  });
+
+  it('un lien SUPPRIMÉ entre-temps ne fait pas échouer la sortie (jamais de 500 P2025)', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(activeGuest);
+    const p2025 = Object.assign(new Error('Record to update not found.'), { code: 'P2025' });
+    (app as any).prisma.conversationShareLink.update.mockRejectedValue(p2025);
+    (app as any).prisma.conversationShareLink.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await leave(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+/**
+ * #10468 — la sortie d'un invité décrémentait `currentConcurrentUsers` sur la
+ * seule session embarquée : un invité dont seule la COLONNE porte le lien ne
+ * libérait jamais sa place, et un invité dont les deux divergent la libérait
+ * sur un autre lien que celui qui l'avait compté. Même lecture que les autres
+ * portes : `guestShareLinkId`.
+ */
+describe('DELETE /guest-sessions/me — la place se libère sur le lien lu par la colonne d\'abord (#10468)', () => {
+  const OTHER_LINK_DB_ID = '507f1f77bcf86cd799439033';
+  const leave = (app: FastifyInstance) =>
+    app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+
+  it('lien porté par la seule COLONNE ⇒ la place se libère sur ce lien', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', conversationId: CONV_ID, isActive: true, shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { profile: {}, session: {} },
+    });
+
+    const res = await leave(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(decrements(app)).toEqual([expect.objectContaining({ where: expect.objectContaining({ id: SHARE_LINK_DB_ID }) })]);
+  });
+
+  it('colonne et session divergent ⇒ la COLONNE fait foi', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', conversationId: CONV_ID, isActive: true, shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { shareLinkId: OTHER_LINK_DB_ID, profile: {}, session: {} },
+    });
+
+    await leave(app);
+    await app.close();
+
+    expect(decrements(app)).toEqual([expect.objectContaining({ where: expect.objectContaining({ id: SHARE_LINK_DB_ID }) })]);
   });
 });
 

@@ -36,6 +36,15 @@ const deVerifyEmail = {
   'verifyEmail.arrival.lead': 'Deine Unterhaltungen werden vorbereitet…',
   'verifyEmail.arrival.status': 'Adresse bestätigt — Anmeldung…',
   'emailSent.codeOrLink': 'Gib den 6-stelligen Code ein, der an {email} gesendet wurde, oder öffne den Link in derselben E-Mail.',
+  'signInLink.switchAccount.title': 'Ein ANDERES Konto öffnen?',
+  'signInLink.switchAccount.lead': 'Du bist als @{current} angemeldet, aber was du gerade geöffnet hast, führt zu einem anderen Konto:',
+  'signInLink.switchAccount.warning': 'Wenn du diesen Link oder Code nicht selbst angefordert hast, brich ab: Du bleibst angemeldet und nichts ändert sich.',
+  'signInLink.switchAccount.cancel': 'Abbrechen und bei @{current} bleiben',
+  'signInLink.switchAccount.confirm': 'Dieses andere Konto öffnen',
+  'signInLink.switchAccount.kept': '@{current} bleibt in deinen Konten auf diesem Gerät.',
+  'signInLink.switchAccount.busy': 'Einen Moment…',
+  'signInLink.switchAccount.failed': 'Dieses andere Konto lässt sich gerade nicht öffnen. Du bleibst angemeldet, und der Link wurde geschlossen.',
+  'signInLink.switchAccount.leave': 'Zurück zur Startseite',
 };
 
 export default deVerifyEmail;

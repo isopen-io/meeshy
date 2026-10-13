@@ -147,17 +147,39 @@ describe('les gestes d’une publication, depuis la liste', () => {
     expect(stateText(host, 2)).toContain('Publiée');
   });
 
-  test('changer l’audience : choisir « Public » sur une hors ligne, confirmer, la remet en ligne en Public', async () => {
-    const { host, calls } = await ouvrir(() => ({ ok: true, data: view(2, { state: 'published', visibility: 'PUBLIC', moderationHiddenAt: null, moderationPriorVisibility: null }) }));
+  test('changer l’audience : choisir « Amis » sur une hors ligne réservée aux amis, confirmer, la remet en ligne pour ses amis', async () => {
+    const { host, calls } = await ouvrir(() => ({ ok: true, data: view(2, { state: 'published', visibility: 'FRIENDS', moderationHiddenAt: null, moderationPriorVisibility: null }) }));
     const select = gestures(host, 2)?.querySelector('select') as HTMLSelectElement;
     act(() => {
-      select.value = 'PUBLIC';
+      select.value = 'FRIENDS';
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await mounter.settle();
     await click(confirmer());
-    expect(posts(calls)[0]?.body).toEqual({ gesture: 'set-visibility', visibility: 'PUBLIC' });
+    expect(posts(calls)[0]?.body).toEqual({ gesture: 'set-visibility', visibility: 'FRIENDS' });
     expect(stateText(host, 2)).toContain('Publiée');
+  });
+
+  test('le sélecteur ne propose que les audiences que la passerelle accepte : jamais plus large que l’auteur (#10471)', async () => {
+    const { host } = await ouvrir(() => ({ ok: true, data: view(1) }));
+    const values = (n: number) => [...((gestures(host, n)?.querySelector('select') as HTMLSelectElement | null)?.options ?? [])].map((option) => option.value).filter((value) => value !== '');
+    expect(values(1)).toEqual(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE']);
+    expect(values(2)).toEqual(['FRIENDS', 'PRIVATE']);
+  });
+
+  test('un refus AUDIENCE_WIDENING se dit en mots : l’audience de l’auteur, pas « pas le droit » (#10471)', async () => {
+    const { host } = await ouvrir(() => ({ ok: false, status: 403, error: 'refusé', code: 'AUDIENCE_WIDENING' }));
+    const select = gestures(host, 1)?.querySelector('select') as HTMLSelectElement;
+    act(() => {
+      select.value = 'FRIENDS';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await mounter.settle();
+    await click(confirmer());
+    await mounter.settle();
+    const error = document.querySelector('[data-admin-confirm-error]')?.textContent ?? '';
+    expect(error).toContain('auteur');
+    expect(error).not.toContain('pas le droit');
   });
 
   test('le filtre d’état part à la passerelle', async () => {
