@@ -4374,6 +4374,10 @@ model PostEngagement {
   actions         Json     @default("[]")
   watchSamples    Json     @default("[]")
   createdAt       DateTime @default(now())
+  /// Fin de conservation (90 j, index TTL `PostEngagement_expiresAt_ttl`, #10510).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostEngagements", fields: [userId], references: [id])

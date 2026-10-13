@@ -45,6 +45,7 @@ export const CONTENT_EVENT_EVENT_KEY_INDEX = 'ContentEvent_eventKey_unique';
 export const CONTENT_EVENT_TTL_INDEX = 'ContentEvent_expiresAt_ttl';
 export const POST_IMPRESSION_EVENT_KEY_INDEX = 'PostImpression_eventKey_unique';
 export const POST_IMPRESSION_TTL_INDEX = 'PostImpression_expiresAt_ttl';
+export const POST_ENGAGEMENT_TTL_INDEX = 'PostEngagement_expiresAt_ttl';
 
 export const SOCIAL_EVENT_INDEXES: readonly IndexSpec[] = [
   { collection: 'ContentEvent', name: CONTENT_EVENT_EVENT_KEY_INDEX, key: { eventKey: 1 }, unique: true, partialFilterExpression: KEYED },
@@ -54,6 +55,7 @@ export const SOCIAL_EVENT_INDEXES: readonly IndexSpec[] = [
   { collection: 'ContentEvent', name: 'ContentEvent_type_action_day', key: { type: 1, action: 1, day: 1 } },
   { collection: 'PostImpression', name: POST_IMPRESSION_EVENT_KEY_INDEX, key: { eventKey: 1 }, unique: true, partialFilterExpression: KEYED },
   { collection: 'PostImpression', name: POST_IMPRESSION_TTL_INDEX, key: { expiresAt: 1 }, expireAfterSeconds: 0 },
+  { collection: 'PostEngagement', name: POST_ENGAGEMENT_TTL_INDEX, key: { expiresAt: 1 }, expireAfterSeconds: 0 },
 ];
 
 const canonical = (value: unknown): string => JSON.stringify(value ?? null);
