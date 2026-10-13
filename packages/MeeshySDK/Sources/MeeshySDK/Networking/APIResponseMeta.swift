@@ -60,17 +60,25 @@ public struct APIResponseMeta: Decodable, Sendable {
     /// route ou un serveur qui ne le sert pas : l'impression part sans lui.
     public let feedRequestId: String?
 
+    /// L'identifiant OPAQUE et scellé d'une recherche servie (#10505), que les
+    /// événements `discovery` recopient tel quel : la passerelle n'ouvre que
+    /// le sien. Absent sur une route ou un serveur qui ne le sert pas :
+    /// l'événement part sans lui, le client n'en fabrique jamais.
+    public let searchId: String?
+
     public init(
         deletedStoryIds: [String]? = nil,
         deletedStoryIdsTruncated: Bool? = nil,
         deletedConversationIds: [String]? = nil,
         deletedConversationIdsTruncated: Bool? = nil,
-        feedRequestId: String? = nil
+        feedRequestId: String? = nil,
+        searchId: String? = nil
     ) {
         self.deletedStoryIds = deletedStoryIds
         self.deletedStoryIdsTruncated = deletedStoryIdsTruncated
         self.deletedConversationIds = deletedConversationIds
         self.deletedConversationIdsTruncated = deletedConversationIdsTruncated
         self.feedRequestId = feedRequestId
+        self.searchId = searchId
     }
 }

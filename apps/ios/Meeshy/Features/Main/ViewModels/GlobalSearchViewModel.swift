@@ -94,6 +94,13 @@ nonisolated struct GlobalSearchLeg<Item: Sendable>: Sendable {
     }
 }
 
+/// La jambe « personnes » et l'identifiant que la passerelle a servi pour
+/// cette recherche (#10505) — `nil` quand elle n'en a pas servi.
+nonisolated struct GlobalSearchPeopleLeg: Sendable {
+    let leg: GlobalSearchLeg<GlobalSearchUserResult>
+    let searchId: String?
+}
+
 // MARK: - ViewModel
 
 @MainActor
@@ -164,6 +171,7 @@ final class GlobalSearchViewModel: ObservableObject {
     private let searchService: MessageSearchService
     private let messageSocket: MessageSocketProviding
     private let socialSocket: SocialSocketProviding
+    private let socialEvents: SocialEventsV2Reporting
 
     // MARK: - Private
 
@@ -214,7 +222,8 @@ final class GlobalSearchViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         searchService: MessageSearchService? = nil,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        socialSocket: SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        socialEvents: SocialEventsV2Reporting? = nil
     ) {
         self.api = api
         self.userService = userService
@@ -224,6 +233,7 @@ final class GlobalSearchViewModel: ObservableObject {
         )
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
+        self.socialEvents = socialEvents ?? SocialEventsV2Reporter.shared
         loadRecentSearches()
         setupDebounce()
         setupSocketInvalidation()
@@ -329,12 +339,12 @@ final class GlobalSearchViewModel: ObservableObject {
         guard !Task.isCancelled else { return }
 
         conversationResults = convs.items
-        userResults = users.items
+        userResults = users.leg.items
         messageResults = msgs.items
         resultsQuery = query
-        noteSearchSubmitted(query: query, peopleCount: users.items.count)
+        noteSearchSubmitted(query: query, peopleCount: users.leg.items.count, servedSearchId: users.searchId)
 
-        let failure = convs.failure ?? users.failure ?? msgs.failure
+        let failure = convs.failure ?? users.leg.failure ?? msgs.failure
         remoteFailure = failure
 
         if NetworkMonitor.shared.isOffline {
@@ -353,19 +363,21 @@ final class GlobalSearchViewModel: ObservableObject {
     /// Rejoue la dernière requête lancée. C'est ce que fait le bouton
     /// « Réessayer » des états hors-ligne et d'erreur — un contrôle qui
     /// n'aurait pas d'effet ne serait pas un contrôle.
-    /// #10505 — une recherche de personnes : UN identifiant par requête
-    /// servie, qui relie la soumission au résultat touché. Le texte ne part pas.
+    /// #10505 — une recherche de personnes : l'identifiant que la passerelle a
+    /// SERVI avec la page (`meta.searchId`) relie la soumission au résultat
+    /// touché. Elle n'ouvre que son propre scellé : sans identifiant servi
+    /// (ancien serveur, recherche distante en panne), les événements partent
+    /// sans — on n'en fabrique pas. Le texte ne part pas.
     private(set) var searchId: String?
 
-    private func noteSearchSubmitted(query: String, peopleCount: Int) {
-        let id = UUID().uuidString.lowercased()
-        searchId = id
-        guard let event = DiscoveryTelemetry.searchSubmitted(searchId: id, query: query, peopleCount: peopleCount) else { return }
-        SocialEventsV2Reporter.shared.emit(event)
+    private func noteSearchSubmitted(query: String, peopleCount: Int, servedSearchId: String?) {
+        searchId = servedSearchId
+        guard let event = DiscoveryTelemetry.searchSubmitted(searchId: servedSearchId, query: query, peopleCount: peopleCount) else { return }
+        socialEvents.emit(event)
     }
 
     func noteUserResultTapped(_ userId: String, position: Int) {
-        SocialEventsV2Reporter.shared.emit(DiscoveryTelemetry.profileResultTapped(searchId: searchId, userId: userId, position: position))
+        socialEvents.emit(DiscoveryTelemetry.profileResultTapped(searchId: searchId, userId: userId, position: position))
     }
 
     func retryLastSearch() async {
@@ -492,12 +504,15 @@ final class GlobalSearchViewModel: ObservableObject {
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
-    private func searchUsers(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
+    private func searchUsers(query: String) async -> GlobalSearchPeopleLeg {
         let localResults = await searchLocalUsers(query: query)
         let remote = await fetchRemoteUserResults(query: query)
-        return GlobalSearchLeg(
-            items: mergeUniqueUserResults(local: localResults, remote: remote.items),
-            failure: remote.failure
+        return GlobalSearchPeopleLeg(
+            leg: GlobalSearchLeg(
+                items: mergeUniqueUserResults(local: localResults, remote: remote.leg.items),
+                failure: remote.leg.failure
+            ),
+            searchId: remote.searchId
         )
     }
 
@@ -533,10 +548,10 @@ final class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    private func fetchRemoteUserResults(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
+    private func fetchRemoteUserResults(query: String) async -> GlobalSearchPeopleLeg {
         do {
-            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
-            return .served(results.map { user in
+            let page = try await userService.searchPeople(query: query, limit: 20, offset: 0)
+            let items = page.users.map { user in
                 GlobalSearchUserResult(
                     id: user.id,
                     username: user.username,
@@ -544,9 +559,10 @@ final class GlobalSearchViewModel: ObservableObject {
                     avatar: user.avatar,
                     isOnline: user.isOnline ?? false
                 )
-            })
+            }
+            return GlobalSearchPeopleLeg(leg: .served(items), searchId: page.searchId)
         } catch {
-            return .failed(Self.remoteFailureMessage)
+            return GlobalSearchPeopleLeg(leg: .failed(Self.remoteFailureMessage), searchId: nil)
         }
     }
 

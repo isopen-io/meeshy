@@ -8,9 +8,13 @@ import MeeshySDK
 /// éventuelle est l'affaire de la passerelle, sur la requête de recherche
 /// elle-même). Seule la recherche de PERSONNES est une découverte : chercher
 /// dans ses messages n'en est pas une, et rien n'en part.
+///
+/// `searchId` est celui que la passerelle a SERVI avec les résultats
+/// (`meta.searchId`) : elle n'ouvre que son propre scellé. Sans identifiant
+/// servi, l'événement part sans — le client n'en fabrique pas.
 nonisolated enum DiscoveryTelemetry {
 
-    static func searchSubmitted(searchId: String, query: String, peopleCount: Int, at date: Date = Date()) -> SocialEventV2? {
+    static func searchSubmitted(searchId: String?, query: String, peopleCount: Int, at date: Date = Date()) -> SocialEventV2? {
         let length = query.trimmingCharacters(in: .whitespacesAndNewlines).count
         guard length > 0 else { return nil }
         return SocialEventV2(

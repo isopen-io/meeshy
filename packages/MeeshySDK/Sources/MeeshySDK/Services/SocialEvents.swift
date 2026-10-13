@@ -173,17 +173,44 @@ public struct SocialEventsReceipt: Codable, Sendable, Equatable {
 /// passerelle en retranche l'âge `sentAt − occurredAt` de sa propre heure de
 /// réception, ce qui corrige un appareil décalé. Un serveur antérieur supprime
 /// la clé sans erreur.
+///
+/// `context.consent` (#10552) est le consentement d'analyse tel que l'app le
+/// connaît, le MÊME que celui des lots v2 : la passerelle ne retire d'une
+/// impression ses colonnes de mesure que si le lot dit `denied`. Absent quand
+/// aucune source n'est installée ; un serveur antérieur supprime la clé.
 struct SocialEventsBody: Encodable {
     struct Context: Encodable {
         let sentAt: String
+        let consent: SocialEventContext.Consent?
     }
 
     let events: [StampedSocialEvent]
     let context: Context
 
-    static func encoded(_ events: [StampedSocialEvent], sentAt: Date) throws -> Data {
+    static func encoded(_ events: [StampedSocialEvent], sentAt: Date, consent: SocialEventContext.Consent? = nil) throws -> Data {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: WireDate.string(from: sentAt))))
+        return try encoder.encode(SocialEventsBody(events: events, context: Context(sentAt: WireDate.string(from: sentAt), consent: consent)))
+    }
+}
+
+/// D'où un lot de COMPTAGE tient le consentement d'analyse (#10552). Le SDK ne
+/// lit aucun réglage : l'app installe sa règle une fois au lancement. Sans
+/// source installée (extension, test), le lot part sans `context.consent`.
+public final class SocialEventsConsentSource: @unchecked Sendable {
+    public static let shared = SocialEventsConsentSource()
+
+    private let lock = NSLock()
+    private var standing: (@MainActor @Sendable () -> SocialEventContext.Consent?)?
+
+    public init() {}
+
+    public func install(_ standing: @escaping @MainActor @Sendable () -> SocialEventContext.Consent?) {
+        lock.withLock { self.standing = standing }
+    }
+
+    public func current() async -> SocialEventContext.Consent? {
+        guard let standing = lock.withLock({ self.standing }) else { return nil }
+        return await standing()
     }
 }
