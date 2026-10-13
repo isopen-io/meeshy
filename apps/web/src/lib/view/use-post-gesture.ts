@@ -215,6 +215,7 @@ export function usePostGesture(options?: {
           if (outcome === 'done') onDeletedRef.current?.(postId);
         });
       },
+      onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
       onReport: (postId, reason) => {
         void reportPostAction(postId, reason).then((outcome) => {
           say(outcome === 'done' ? 'report.done' : outcome === 'throttled' ? 'report.throttled' : 'report.failed');

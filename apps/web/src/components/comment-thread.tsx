@@ -18,6 +18,8 @@ import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
 import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
+import { interactionOf } from '@/lib/telemetry/card-context';
+import { readingTelemetry } from '@/lib/view/reading-telemetry';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -258,6 +260,8 @@ export function CommentThread({
          réseau) : la racine s'ouvre sur une caisse qui porte déjà la réponse. */
       if (target !== null) setExpanded((current) => (current.has(target.rootId) ? current : new Set([...current, target.rootId])));
       const result = await sending;
+      /* CONFIRMÉ seulement (#10502) : un avis (hors ligne, non confirmé) n'a pas encore abouti. */
+      if (result.ok && result.notice === undefined) readingTelemetry.recordV2(interactionOf(postId, 'comment_submit'));
       if (result.ok && target !== null) setReplyTarget((current) => (current === target ? null : current));
       return result.ok
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }

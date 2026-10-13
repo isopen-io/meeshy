@@ -93,4 +93,12 @@ describe('usePostGesture — la télémétrie des gestes', () => {
     act(() => hooks?.onComment(POST));
     expect(v2[0]).toMatchObject({ type: 'interaction', action: 'comment_open', surface: 'feed' });
   });
+
+  test('ouvrir la feuille de signalement émet negative/report_open, sans durée de lecture', () => {
+    mount();
+    act(() => hooks?.menu.onReportOpen?.(POST));
+    expect(v2).toHaveLength(1);
+    expect(v2[0]).toMatchObject({ type: 'negative', action: 'report_open', target: { kind: 'post', id: POST }, surface: 'feed' });
+    expect('dwellBeforeMs' in (v2[0] ?? {})).toBe(false);
+  });
 });
