@@ -205,6 +205,7 @@ struct StoryTrayView: View {
             moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
             onMoodTap: statusViewModel.moodTapHandler(for: group.id)
         )
+        .equatable()
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
@@ -238,7 +239,7 @@ struct StoryTrayView: View {
 /// exact same `MeeshyAvatar` atom across the full-size trail and the compact
 /// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
 /// `.storyTrayCompact` 36pt); all proportional metrics derive from it.
-struct StoryRingCell: View {
+struct StoryRingCell: View, Equatable {
     let group: StoryGroup
     var context: AvatarContext = .storyTray
     var showsUsername: Bool = true
@@ -258,6 +259,44 @@ struct StoryRingCell: View {
     /// tray à chaque mise à jour de statut globale (P1-3a).
     var moodEmoji: String? = nil
     var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// Ce que la cellule AFFICHE, relevé une fois par passe du parent : la
+    /// comparaison (`==`) ne lit que lui, jamais les fermetures (#10574).
+    private let renderInputs: StoryRingCellRenderInputs
+
+    init(
+        group: StoryGroup,
+        context: AvatarContext = .storyTray,
+        showsUsername: Bool = true,
+        onViewStory: @escaping () -> Void,
+        onShowProfile: @escaping () -> Void,
+        contextMenuExtras: [AvatarContextMenuItem] = [],
+        moodEmoji: String? = nil,
+        onMoodTap: ((CGPoint) -> Void)? = nil
+    ) {
+        self.group = group
+        self.context = context
+        self.showsUsername = showsUsername
+        self.onViewStory = onViewStory
+        self.onShowProfile = onShowProfile
+        self.contextMenuExtras = contextMenuExtras
+        self.moodEmoji = moodEmoji
+        self.onMoodTap = onMoodTap
+        self.renderInputs = StoryRingCellRenderInputs(
+            group: group,
+            coverURL: latestStoryThumbnailURL(group),
+            avatarSize: context.size,
+            showsUsername: showsUsername,
+            moodEmoji: moodEmoji,
+            hasMoodTap: onMoodTap != nil,
+            presence: PresenceManager.shared.presenceState(for: group.id),
+            menuLabels: contextMenuExtras.map(\.label),
+            theme: ThemeManager.shared.mode
+        )
+    }
+
+    nonisolated static func == (lhs: StoryRingCell, rhs: StoryRingCell) -> Bool {
+        lhs.renderInputs == rhs.renderInputs
+    }
 
     private var isCompact: Bool { context.size <= 44 }
 
@@ -309,6 +348,56 @@ struct StoryRingCell: View {
             Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
             onViewStory()
         }
+    }
+}
+
+// MARK: - Ce qu'une cellule d'anneau affiche (#10574)
+
+/// Mesuré sur l'iPhone le 2026-10-13 : 7 409 recalculs de `StoryRingCell` en
+/// 4 min 30, une cinquantaine à chaque passe de la liste — ses fermetures
+/// changent d'identité à chaque passe, SwiftUI ne pouvait rien prouver.
+nonisolated struct StoryRingCellRenderInputs: Equatable {
+    let id: String
+    let username: String
+    let avatarColor: String
+    let storyIds: [String]
+    let hasUnviewed: Bool
+    let liveCount: Int
+    let coverURL: String?
+    let avatarSize: CGFloat
+    let showsUsername: Bool
+    let moodEmoji: String?
+    let hasMoodTap: Bool
+    let presence: PresenceState
+    let menuLabels: [String]
+    let theme: ThemeMode
+
+    init(
+        group: StoryGroup,
+        coverURL: String?,
+        avatarSize: CGFloat,
+        showsUsername: Bool,
+        moodEmoji: String?,
+        hasMoodTap: Bool,
+        presence: PresenceState,
+        menuLabels: [String],
+        theme: ThemeMode,
+        now: Date = Date()
+    ) {
+        id = group.id
+        username = group.username
+        avatarColor = group.avatarColor
+        storyIds = group.stories.map(\.id)
+        hasUnviewed = group.hasUnviewed
+        liveCount = group.stories.filter { !$0.isExpired(at: now) }.count
+        self.coverURL = coverURL
+        self.avatarSize = avatarSize
+        self.showsUsername = showsUsername
+        self.moodEmoji = moodEmoji
+        self.hasMoodTap = hasMoodTap
+        self.presence = presence
+        self.menuLabels = menuLabels
+        self.theme = theme
     }
 }
 
@@ -856,6 +945,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: ownGroup.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: ownGroup.id)
                     )
+                    .equatable()
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
                 } else {
                     selfAvatarCell
@@ -873,6 +963,7 @@ struct PinnedStoryTrailBand: View {
                         moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: group.id)
                     )
+                    .equatable()
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
                     .countsImpression(of: StoryRailReach.displayedStoryId(of: group), recountsOnChange: false) {

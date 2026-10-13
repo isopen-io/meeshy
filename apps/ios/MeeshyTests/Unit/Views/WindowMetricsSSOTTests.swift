@@ -328,4 +328,32 @@ final class WindowMetricsSSOTTests: XCTestCase {
             "The shared URL must be the minted trackable link, not a hardcoded story path."
         )
     }
+
+    // MARK: - Story viewer bottom inset (#10566)
+
+    /// Reading the window's `safeAreaInsets` during a `body` pass re-enters the
+    /// graph update in progress: the story viewer crashed there on 2026-10-10
+    /// (« Thread stack size exceeded »). The whole unit — the type and its
+    /// extensions — measures the inset by layout instead.
+    func test_storyViewer_neverReadsWindowSafeAreaDuringBody() throws {
+        let code = codeLines(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+
+        XCTAssertFalse(
+            code.contains("DeviceLayout.safeArea"),
+            "The story viewer measures its bottom inset by layout (measuringBottomSafeArea), " +
+            "never off the window while SwiftUI is evaluating a body."
+        )
+        XCTAssertTrue(
+            code.contains(".measuringBottomSafeArea(into: $windowBottomInset)"),
+            "The measured inset must feed the composer and the comments zone."
+        )
+    }
+
+    func test_bottomSafeAreaInsetKey_keepsTheLargestMeasuredInset() {
+        var value = BottomSafeAreaInsetKey.defaultValue
+        BottomSafeAreaInsetKey.reduce(value: &value) { 34 }
+        BottomSafeAreaInsetKey.reduce(value: &value) { 0 }
+
+        XCTAssertEqual(value, 34)
+    }
 }
