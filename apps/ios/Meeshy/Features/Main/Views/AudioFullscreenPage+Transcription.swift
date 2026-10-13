@@ -87,7 +87,8 @@ extension AudioFullscreenPage {
     // MARK: - La transcription
 
     @ViewBuilder
-    func transcriptBlock(maxHeight: CGFloat, fontSize: CGFloat, asLyrics: Bool) -> some View {
+    func transcriptBlock(maxHeight: CGFloat, fontSize: CGFloat, asLyrics: Bool,
+                         insets: EdgeInsets = EdgeInsets(), anchor: UnitPoint = .center) -> some View {
         // Les segments se bâtissent une fois par rendu de la PAGE, pas à chaque
         // tick de lecture (#10568) : seule la portée relit le moteur.
         let segments = displaySegments
@@ -101,6 +102,8 @@ extension AudioFullscreenPage {
                     maxHeight: maxHeight,
                     fontSize: fontSize,
                     asLyrics: asLyrics,
+                    insets: insets,
+                    anchor: anchor,
                     onSeek: { time in
                         onChromeInteraction()
                         player.seekToTime(time)
@@ -110,6 +113,7 @@ extension AudioFullscreenPage {
             }
         } else {
             transcriptionEmptyState
+                .padding(insets)
                 .frame(maxHeight: maxHeight, alignment: .top)
         }
     }

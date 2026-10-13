@@ -178,11 +178,22 @@ final class AudioFullscreenRulesTests: XCTestCase {
 
     // MARK: - Les paroles se lisent de loin (directive porteur 2026-10-13)
 
-    func test_lyrics_areFourTimesTheFormerBody_onALargePhone_andFitASmallOne() {
-        XCTAssertEqual(AudioFullscreenLayout.lyricSize(forWidth: 440), AudioFullscreenLayout.baseTranscriptSize * 4)
+    func test_lyrics_areScaledFromTheFormerBody_onALargePhone_andFitASmallOne() {
+        let large = (AudioFullscreenLayout.baseTranscriptSize * AudioFullscreenLayout.lyricScale).rounded()
+        XCTAssertEqual(AudioFullscreenLayout.lyricScale, 2.4, accuracy: 0.001, "quatre fois, puis « diminue de 0,4 »")
+        XCTAssertEqual(AudioFullscreenLayout.lyricSize(forWidth: 440), large)
         let small = AudioFullscreenLayout.lyricSize(forWidth: 320)
-        XCTAssertLessThan(small, AudioFullscreenLayout.baseTranscriptSize * 4)
-        XCTAssertGreaterThanOrEqual(small, AudioFullscreenLayout.baseTranscriptSize * 2)
+        XCTAssertLessThan(small, large)
+        XCTAssertGreaterThan(small, AudioFullscreenLayout.baseTranscriptSize)
+    }
+
+    /// Les paroles défilent SOUS l'en-tête et le pied : le mot en cours se pose
+    /// dans la bande restée libre, jamais sous le flou.
+    func test_lyrics_theCurrentWordLandsInTheFreeBand_neverUnderTheFrost() {
+        let anchor = AudioFullscreenLayout.lyricAnchor(header: 440, footer: 70, height: 860)
+        XCTAssertGreaterThan(anchor * 860, 440)
+        XCTAssertLessThan(anchor * 860, 860 - 70)
+        XCTAssertEqual(AudioFullscreenLayout.lyricAnchor(header: 0, footer: 0, height: 0), 0.5)
     }
 
     // MARK: - Le chrome s'efface pendant l'écoute, jamais sous VoiceOver

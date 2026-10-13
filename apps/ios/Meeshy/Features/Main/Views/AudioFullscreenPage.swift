@@ -133,6 +133,9 @@ struct AudioFullscreenPage: View, Equatable {
     @State var extraTranslatedAudios: [MessageTranslatedAudio] = []
     /// La page a déjà été une voisine : elle a été REJOINTE, pas ouverte.
     @State private var wasNeighbour = false
+    /// Ce que l'en-tête et le pied recouvrent des paroles, mesuré.
+    @State private var headerHeight: CGFloat = 0
+    @State private var footerHeight: CGFloat = 0
 
     /// **Les entrées qui se voient, et rien d'autre.** Les fermetures sont
     /// recréées à chaque évaluation du conteneur ; les comparer ferait refaire
@@ -183,12 +186,16 @@ struct AudioFullscreenPage: View, Equatable {
                     .onTapGesture(perform: onToggleChrome)
                     .accessibilityHidden(true)
 
-                VStack(spacing: 0) {
-                    topBar
-                        .fullscreenChromeVisibility(chromeVisible)
+                Group {
                     switch layout.arrangement {
-                    case .stacked: stackedContent(layout)
-                    case .sideBySide: sideBySideContent(layout)
+                    case .stacked:
+                        stackedContent(layout, height: proxy.size.height)
+                    case .sideBySide:
+                        VStack(spacing: 0) {
+                            topBar
+                                .fullscreenChromeVisibility(chromeVisible)
+                            sideBySideContent(layout)
+                        }
                     }
                 }
                 .frame(maxWidth: layout.contentMaxWidth)
@@ -237,41 +244,65 @@ struct AudioFullscreenPage: View, Equatable {
 
     // MARK: - Dispositions
 
-    /// **Le cadran en haut, les paroles sur tout le bas** (directive porteur du
-    /// 2026-10-13). L'onde horizontale a quitté l'écran : le spectre fait le
-    /// tour du portrait, et les paroles commencent juste sous la date, en grand,
-    /// jusqu'à la rangée des langues. Le transport et le rail d'actions FLOTTENT
-    /// sur elles — aucun ne leur prend de hauteur ; le rail et les langues
-    /// restent à l'écran pendant l'écoute, seuls la barre du haut et le
-    /// transport s'effacent.
-    private func stackedContent(_ layout: AudioFullscreenLayout) -> some View {
-        VStack(spacing: AudioFullscreenLayout.stackSpacing) {
-            hero(diameter: layout.heroDiameter)
-            identity
-            transcriptBlock(maxHeight: .infinity, fontSize: layout.lyricSize, asLyrics: true)
+    /// **Les paroles défilent SOUS le reste, en flou, jusqu'à sortir de l'écran**
+    /// (directives porteur du 2026-10-13). Elles occupent toute la page ; le
+    /// cadran, l'identité et le transport sont posés par-dessus en haut, les
+    /// langues en bas, chacun sur un verre qui floute ce qui passe dessous et
+    /// se fond dans le texte. Le texte COMMENCE sous le transport (marge du
+    /// contenu = hauteur mesurée de l'en-tête), puis remonte derrière lui.
+    private func stackedContent(_ layout: AudioFullscreenLayout, height: CGFloat) -> some View {
+        let anchor = AudioFullscreenLayout.lyricAnchor(header: headerHeight, footer: footerHeight, height: height)
+        return ZStack {
+            transcriptBlock(maxHeight: .infinity, fontSize: layout.lyricSize, asLyrics: true,
+                            insets: EdgeInsets(top: headerHeight, leading: 0, bottom: footerHeight, trailing: 0),
+                            anchor: UnitPoint(x: 0.5, y: anchor))
                 // Les paroles s'arrêtent au bord du rail : aucun mot ne passe dessous.
                 .padding(.trailing, offer.isEmpty ? 0 : FullscreenChromeMetrics.tapTarget)
-                .frame(minHeight: AudioFullscreenLayout.minLyrics, maxHeight: .infinity, alignment: .top)
-                .layoutPriority(-1)
-                .overlay(alignment: .bottom) { floatingControls }
-            captionAndLanguages
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            VStack(spacing: 0) {
+                VStack(spacing: AudioFullscreenLayout.stackSpacing) {
+                    topBar
+                        .fullscreenChromeVisibility(chromeVisible)
+                    hero(diameter: layout.heroDiameter)
+                    identity
+                    transport
+                        .fullscreenChromeVisibility(chromeVisible)
+                }
+                .padding(.bottom, MeeshySpacing.xl)
+                .frame(maxWidth: .infinity)
+                .background { frost(fadingToward: .bottom) }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
+                Spacer(minLength: 0)
+                captionAndLanguages
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.xl)
+                    .padding(.bottom, MeeshySpacing.sm)
+                    .background { frost(fadingToward: .top) }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
+            }
+            if !offer.isEmpty {
+                actionRail
+                    .padding(.trailing, MeeshySpacing.lg)
+                    .padding(.bottom, footerHeight)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            }
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
     }
 
-    /// Le transport sur son verre, le rail à droite : posés au pied des
-    /// paroles, qui défilent dessous.
-    private var floatingControls: some View {
-        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
-            transport
-                .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, MeeshySpacing.xs)
-                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.controlFill(isDark: isDark))
-                .fullscreenChromeVisibility(chromeVisible)
-                .frame(maxWidth: .infinity)
-            if !offer.isEmpty { actionRail }
-        }
+    /// Le verre qui floute les paroles passant dessous, fondu vers elles ; il
+    /// ne capte aucun toucher — on fait défiler le texte à travers lui.
+    private func frost(fadingToward edge: VerticalEdge) -> some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .mask(LinearGradient(
+                stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.78), .init(color: .clear, location: 1)],
+                startPoint: edge == .bottom ? .top : .bottom,
+                endPoint: edge == .bottom ? .bottom : .top
+            ))
+            .ignoresSafeArea(edges: edge == .bottom ? .top : .bottom)
+            .allowsHitTesting(false)
     }
 
     private func sideBySideContent(_ layout: AudioFullscreenLayout) -> some View {
@@ -344,6 +375,22 @@ struct AudioFullscreenPage: View, Equatable {
                 onPrevious?()
             }
             playback { snapshot, _ in
+                // Là où part le curseur : la durée totale à gauche de midi, le
+                // temps écoulé à droite (directive porteur du 2026-10-13).
+                let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
+                HStack {
+                    Text(formatMediaDuration(total))
+                    Spacer(minLength: MeeshySpacing.xxl)
+                    Text(formatMediaDuration(snapshot.progress * total))
+                }
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+                .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
+                .frame(width: diameter + AudioFullscreenDialRule.band * 2,
+                       height: diameter + AudioFullscreenDialRule.band * 2, alignment: .top)
+                .accessibilityElement(children: .combine)
+                .allowsHitTesting(false)
+            }
+            playback { snapshot, _ in
                 AudioFullscreenDial(
                     samples: waveformAnalyzer.samples,
                     progress: snapshot.progress,
@@ -361,7 +408,7 @@ struct AudioFullscreenPage: View, Equatable {
         }
     }
 
-    /// Le nom, la date, et — sous la date — où l'on en est dans le vocal.
+    /// Le nom et la date ; les durées vivent en haut du cadran.
     private var identity: some View {
         VStack(spacing: MeeshySpacing.xxs) {
             Button {
@@ -380,12 +427,6 @@ struct AudioFullscreenPage: View, Equatable {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            playback { snapshot, _ in
-                let total = metadataDuration > 0 ? metadataDuration : snapshot.duration
-                Text("\(formatMediaDuration(snapshot.progress * total)) / \(formatMediaDuration(total))")
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
-            }
         }
     }
 

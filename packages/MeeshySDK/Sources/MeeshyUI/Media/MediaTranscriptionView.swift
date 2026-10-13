@@ -95,6 +95,12 @@ public struct MediaTranscriptionView: View {
     /// La carte derrière le texte. `false` pour des paroles posées à même le
     /// fond de l'écran.
     public var showsBackground: Bool = true
+    /// Marges du CONTENU défilant : le texte commence sous un en-tête posé
+    /// par-dessus et peut défiler dessous, au lieu d'être coupé à son bord.
+    public var contentInsets: EdgeInsets = EdgeInsets()
+    /// Où le segment actif se pose quand le texte le suit. Le centre par
+    /// défaut ; l'hôte qui recouvre le haut du défilement vise plus bas.
+    public var activeAnchor: UnitPoint = .center
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
@@ -146,13 +152,14 @@ public struct MediaTranscriptionView: View {
                 flowTranscription
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)
+                    .padding(contentInsets)
             }
             .frame(maxHeight: maxHeight)
             .background(showsBackground ? transcriptionBackground : nil)
             .adaptiveOnChange(of: activeIndex) { _, idx in
                 if let idx = idx {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("segment-\(idx)", anchor: .center)
+                        proxy.scrollTo("segment-\(idx)", anchor: activeAnchor)
                     }
                 }
             }

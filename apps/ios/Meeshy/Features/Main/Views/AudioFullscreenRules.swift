@@ -156,28 +156,39 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
     static let readableWidth: CGFloat = 600
     /// L'écart entre deux blocs de la page empilée.
     static let stackSpacing: CGFloat = 12
-    /// Le plancher des paroles : deux lignes en grand corps.
-    static let minLyrics: CGFloat = 140
+    /// Le plancher des paroles : trois lignes en grand corps.
+    static let minLyrics: CGFloat = 120
     /// Le corps de la transcription avant le 2026-10-13.
     static let baseTranscriptSize: CGFloat = 14
+    /// Les paroles, par rapport à ce corps : quatre fois (première directive du
+    /// 2026-10-13), puis « diminue de 0,4 » le même soir — 4 × 0,6.
+    static let lyricScale: CGFloat = 2.4
 
     /// **Ce que la page empilée occupe SANS le cadran**, à la taille de texte
-    /// par défaut : barre du haut, identité et temps, les paroles à leur
-    /// plancher, la rangée des langues, plus les écarts. Le transport et le
-    /// rail d'actions flottent sur les paroles : ils ne prennent aucune hauteur.
-    static let stackedChrome: CGFloat = 52 + 60 + minLyrics + 44 + stackSpacing * 4
+    /// par défaut : barre du haut, identité, transport, les paroles à leur
+    /// plancher, la rangée des langues, plus les écarts. Le rail d'actions
+    /// flotte sur les paroles : il ne prend aucune hauteur.
+    static let stackedChrome: CGFloat = 52 + 44 + 64 + minLyrics + 60 + stackSpacing * 4
 
     /// La hauteur minimale d'une page empilée pour ce portrait, cadran compris.
     static func stackedMinimumHeight(heroDiameter: CGFloat) -> CGFloat {
         stackedChrome + heroDiameter + AudioFullscreenDialRule.band * 2
     }
 
-    /// **Les paroles se lisent de loin** (directive porteur du 2026-10-13 :
-    /// « quatre fois plus grand ») : quatre fois le corps d'avant sur un grand
-    /// téléphone, ramené à la largeur sur un petit pour qu'un mot long tienne
-    /// sur sa ligne.
+    /// **Les paroles se lisent de loin** : `lyricScale` fois le corps d'avant
+    /// sur un grand téléphone, ramené à la largeur sur un petit pour qu'un mot
+    /// long tienne sur sa ligne.
     static func lyricSize(forWidth width: CGFloat) -> CGFloat {
-        clamp((width * 0.13).rounded(), baseTranscriptSize * 2, baseTranscriptSize * 4)
+        clamp((width * 0.078).rounded(), baseTranscriptSize * 1.6, (baseTranscriptSize * lyricScale).rounded())
+    }
+
+    /// **Où se pose le mot en cours**, en fraction de la hauteur de la page : au
+    /// premier tiers de la bande restée libre entre l'en-tête et le pied — les
+    /// paroles défilent SOUS eux, le centre de l'écran serait sous le flou.
+    static func lyricAnchor(header: CGFloat, footer: CGFloat, height: CGFloat) -> CGFloat {
+        guard height > 0 else { return 0.5 }
+        let free = max(0, height - header - footer)
+        return min(1, max(0, (header + free / 3) / height))
     }
 
     /// **Le portrait prend ce qui reste, jamais ce qui manque** (#10568).
@@ -192,7 +203,7 @@ nonisolated struct AudioFullscreenLayout: Equatable, Sendable {
         let room = size.height - stackedChrome - AudioFullscreenDialRule.band * 2
         let hero = sideBySide
             ? clamp(size.height * 0.30, minHero, maxHero)
-            : clamp(room * 0.42, minHero, maxHero)
+            : clamp(room * 0.36, minHero, maxHero)
         let transcript = clamp(size.height * (sideBySide ? 0.42 : 0.20), minTranscript, maxTranscript)
         return AudioFullscreenLayout(
             arrangement: sideBySide ? .sideBySide : .stacked,

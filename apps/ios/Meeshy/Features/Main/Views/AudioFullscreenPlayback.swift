@@ -93,6 +93,10 @@ struct AudioFullscreenTranscript: View, Equatable {
     /// Des paroles posées à même le fond, sur toute la hauteur offerte — ou la
     /// carte qui épouse son texte (paysage).
     let asLyrics: Bool
+    /// Ce que l'en-tête et le pied recouvrent du défilement, et où se pose le
+    /// mot en cours (paroles seulement).
+    let insets: EdgeInsets
+    let anchor: UnitPoint
     let onSeek: (Double) -> Void
 
     init(segments: [TranscriptionDisplaySegment],
@@ -101,6 +105,8 @@ struct AudioFullscreenTranscript: View, Equatable {
          maxHeight: CGFloat,
          fontSize: CGFloat,
          asLyrics: Bool,
+         insets: EdgeInsets = EdgeInsets(),
+         anchor: UnitPoint = .center,
          onSeek: @escaping (Double) -> Void) {
         self.segments = segments
         self.activeIndex = AudioPlayerView.activeSegmentIndex(segments: segments,
@@ -111,6 +117,8 @@ struct AudioFullscreenTranscript: View, Equatable {
         self.maxHeight = maxHeight
         self.fontSize = fontSize
         self.asLyrics = asLyrics
+        self.insets = insets
+        self.anchor = anchor
         self.onSeek = onSeek
     }
 
@@ -120,6 +128,8 @@ struct AudioFullscreenTranscript: View, Equatable {
             && lhs.maxHeight == rhs.maxHeight
             && lhs.fontSize == rhs.fontSize
             && lhs.asLyrics == rhs.asLyrics
+            && lhs.insets == rhs.insets
+            && lhs.anchor == rhs.anchor
             && lhs.segments.count == rhs.segments.count
             && lhs.segments.first?.id == rhs.segments.first?.id
     }
@@ -135,6 +145,8 @@ struct AudioFullscreenTranscript: View, Equatable {
                                           onSeek: onSeek)
         view.resolvedActiveIndex = .some(activeIndex)
         view.showsBackground = !asLyrics
+        view.contentInsets = insets
+        view.activeAnchor = anchor
         return view
     }
 }
