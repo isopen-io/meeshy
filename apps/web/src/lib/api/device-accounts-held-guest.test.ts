@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -25,10 +25,19 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-afterEach(() => {
+/* Le coffre et le magasin sont ceux du module, et le coffre garde le
+   `localStorage` qu'il a trouvé à son chargement : un fichier lancé avant
+   celui-ci dans la même suite peut y avoir laissé un compte. On le vide par
+   le coffre lui-même. */
+const resetDevice = async () => {
+  const { accountVault } = await import('./device-accounts');
+  accountVault.list().forEach((account) => accountVault.forget(account.user.id));
   sessionStore.getState().clearSession();
   globalThis.localStorage.clear();
-});
+};
+
+beforeEach(resetDevice);
+afterEach(resetDevice);
 
 const ADA: SessionUser = { id: 'u-ada', username: 'ada', displayName: 'Ada' };
 const BOB = { user: { id: 'u-bob', username: 'bob', displayName: 'Bob' }, token: 'jwt-bob', sessionToken: 'sess-bob', expiresIn: 86_400 };
