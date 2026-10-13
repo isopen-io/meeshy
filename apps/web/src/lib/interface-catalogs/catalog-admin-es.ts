@@ -14,6 +14,7 @@ import engagementScaleEs from './admin/engagement-scale-es';
 import gestesEs from './admin/gestes-es';
 import operationsEs from './admin/operations-es';
 import gameSeasonsEs from './admin/game-seasons-es';
+import ergonomieEs from './admin/ergonomie-es';
 
 const es = {
   'admin.role': 'Tu rol: {role}',
@@ -385,6 +386,7 @@ const es = {
   ...gestesEs,
   ...operationsEs,
   ...gameSeasonsEs,
+  ...ergonomieEs,
 } satisfies AdminInterfaceCatalog;
 
 export default es;

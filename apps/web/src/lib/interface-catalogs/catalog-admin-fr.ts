@@ -13,6 +13,7 @@ import engagementScaleFr from './admin/engagement-scale-fr';
 import gestesFr from './admin/gestes-fr';
 import operationsFr from './admin/operations-fr';
 import gameSeasonsFr from './admin/game-seasons-fr';
+import ergonomieFr from './admin/ergonomie-fr';
 
 /**
  * LE CATALOGUE D'INTERFACE D'ADMINISTRATION FRANÇAIS (#6871, #6834) — la
@@ -413,6 +414,7 @@ const fr = {
   ...gestesFr,
   ...operationsFr,
   ...gameSeasonsFr,
+  ...ergonomieFr,
 } as const;
 
 export default fr;

@@ -366,7 +366,8 @@ describe('AdminCommunityPanel — les gestes', () => {
     expect(host.querySelector('dialog h2')?.textContent).toBe('Désactiver cette communauté ?');
     expect(sheet?.textContent).toContain('plus personne ne peut la rejoindre');
     expect(sheet?.textContent).toContain('conversations');
-    expect(confirmer(host)?.disabled).toBe(true);
+    /* L’ADMIN trouve le motif proposé déjà écrit (#10562) : la confirmation est offerte d’emblée. */
+    expect(confirmer(host)?.disabled).toBe(false);
     mounter.type(host, '[data-admin-motive]', 'trop bref');
     expect(confirmer(host)?.disabled).toBe(true);
     expect(gestures(gateway)).toHaveLength(0);
