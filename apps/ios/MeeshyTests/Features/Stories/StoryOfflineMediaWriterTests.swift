@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import CoreImage
 @testable import Meeshy
 @testable import MeeshySDK
 
@@ -207,5 +208,74 @@ final class StoryOfflineMediaWriterTests: XCTestCase {
 
         let path = try XCTUnwrap(outcome.references.first?.localFilePath)
         XCTAssertTrue(path.hasSuffix("slide-bg-1.jpg"), path)
+    }
+
+    // MARK: - #10495 — une CLÉ n'est jamais un CHEMIN
+
+    /// L'adoption d'une pré-montée (#8540) range l'image AUSSI sous l'adresse
+    /// distante (`relayLoadedImage` → `registerLoadedImage(image, for: remoteURL)`).
+    /// Le writer nommait le fichier par la clé : `<dossier>/https:/gate…/x.jpg.jpg`,
+    /// des dossiers qui n'existent pas, donc `write` levait, et la publication EN
+    /// LIGNE affichait « Impossible d'enregistrer les médias » dès qu'une
+    /// pré-montée avait fini — c'est-à-dire presque toujours, en Wi-Fi.
+    func test_persist_writesAnImageKeyedByItsRemoteAddress() throws {
+        let key = "https://gate.meeshy.me/api/v1/attachments/file/2026/10/abc123.jpg"
+
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: [key: image()], videos: [:], audios: [:], into: directory)
+
+        XCTAssertTrue(outcome.isComplete, "échecs : \(outcome.failedElementIds)")
+        let reference = try XCTUnwrap(outcome.references.first)
+        XCTAssertEqual(reference.elementId, key, "le rejeu relit la CLÉ, jamais le nom du fichier")
+        let written = URL(fileURLWithPath: reference.localFilePath)
+        XCTAssertEqual(written.deletingLastPathComponent().standardizedFileURL.path,
+                       directory.standardizedFileURL.path,
+                       "le fichier vit DANS le dossier de la publication, jamais dans un sous-chemin tiré de la clé")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: reference.localFilePath))
+    }
+
+    func test_persist_copiesAVideoWhoseKeyIsNotAFileName() throws {
+        let video = try sourceFile(named: "clip.mov")
+        let key = "dossier/sous:dossier/clip"
+
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: [:], videos: [key: video], audios: [:], into: directory)
+
+        XCTAssertTrue(outcome.isComplete, "échecs : \(outcome.failedElementIds)")
+        XCTAssertEqual(outcome.references.map(\.elementId), [key])
+        let path = try XCTUnwrap(outcome.references.first?.localFilePath)
+        XCTAssertTrue(path.hasSuffix(".mov"), path)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+    }
+
+    /// Deux clés distinctes ne partagent jamais un fichier, même quand leur
+    /// forme « nettoyée » se ressemblerait.
+    func test_persist_neverMergesTwoUnsafeKeysIntoOneFile() throws {
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: ["a/b": image(.red), "a:b": image(.blue)], videos: [:], audios: [:],
+            into: directory)
+
+        XCTAssertTrue(outcome.isComplete)
+        XCTAssertEqual(Set(outcome.references.map(\.localFilePath)).count, 2)
+    }
+
+    /// Une image sans bitmap CG (adossée à une `CIImage`) : `jpegData` peut la
+    /// refuser. Elle est redessinée plutôt que de faire échouer la publication.
+    func test_persist_writesAnImageBackedByACIImage() {
+        let ciImage = CIImage(color: CIColor(red: 1, green: 0, blue: 0))
+            .cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: ["ci": UIImage(ciImage: ciImage)], videos: [:], audios: [:], into: directory)
+
+        XCTAssertTrue(outcome.isComplete, "échecs : \(outcome.failedElementIds)")
+    }
+
+    /// Une image VIDE n'a rien à redessiner : c'est un échec honnête, nommé.
+    func test_persist_reportsAnEmptyImage() {
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: ["vide": UIImage()], videos: [:], audios: [:], into: directory)
+
+        XCTAssertEqual(outcome.failedElementIds, ["vide"])
     }
 }
