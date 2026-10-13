@@ -116,6 +116,9 @@ extension AuthManager {
     @discardableResult
     public func switchAccount(to userId: String) async -> Bool {
         guard userId != activeUserId else { return true }
+        // #10482 — le compte touché pendant le retrait du compte actif est
+        // ouvert une fois le retrait fini, jamais démonté par lui.
+        guard await awaitActiveAccountRetirementEnd() else { return false }
         guard !isSwitchingAccount else { return false }
         guard hasPreservedSession(for: userId) else { return false }
         isSwitchingAccount = true
