@@ -10,6 +10,8 @@ import Foundation
 public protocol VisitorReaderKeyProviding: Sendable {
     /// La clé courante, tirée à la première lecture.
     func readerKey() -> String
+    /// La clé gardée, SANS en tirer une neuve — `nil` après une purge.
+    func storedReaderKey() -> String?
     /// Oublie la clé — la prochaine lecture en tire une neuve.
     func purge()
 }
@@ -36,6 +38,15 @@ public final class VisitorReaderKey: VisitorReaderKeyProviding, @unchecked Senda
         let fresh = Self.prefix + UUID().uuidString.lowercased()
         try? keychain.save(fresh, forKey: Self.storageKey, account: nil)
         return fresh
+    }
+
+    public func storedReaderKey() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let stored = keychain.load(forKey: Self.storageKey, account: nil), stored.hasPrefix(Self.prefix) else {
+            return nil
+        }
+        return stored
     }
 
     public func purge() {

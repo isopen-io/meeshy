@@ -652,6 +652,11 @@ public struct FeedPost: Identifiable, Sendable {
     public var impressionCount: Int = 0
     /// Part ANONYME de `viewCount` (#10483) — `nil` d'un serveur antérieur.
     public var anonymousViewCount: Int? = nil
+    /// Vues UNIQUES (#10483) — une par compte et une par lecteur anonyme ;
+    /// `viewCount` compte, lui, chaque ouverture. Servies, gardées, pas
+    /// encore affichées. `nil` d'un serveur antérieur.
+    public var uniqueViewCount: Int? = nil
+    public var anonymousUniqueViewCount: Int? = nil
     /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
     /// sessions reaching the 2.5s-OR-30% threshold. Persisted through the
     /// Codable round-trip below (see `viewCount` note).
@@ -813,6 +818,7 @@ extension FeedPost: Codable {
         case comments, commentCount, repostCount, bookmarkCount, shareCount
         case viewCount, postOpenCount, impressionCount, qualifiedViewCount, playCount
         case anonymousViewCount
+        case uniqueViewCount, anonymousUniqueViewCount
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
         case storyEffects, audioUrl, location, mentions
@@ -847,6 +853,8 @@ extension FeedPost: Codable {
         postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount) ?? 0
         impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount) ?? 0
         anonymousViewCount = try c.decodeIfPresent(Int.self, forKey: .anonymousViewCount)
+        uniqueViewCount = try c.decodeIfPresent(Int.self, forKey: .uniqueViewCount)
+        anonymousUniqueViewCount = try c.decodeIfPresent(Int.self, forKey: .anonymousUniqueViewCount)
         qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount) ?? 0
         playCount = try c.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
         repost = try c.decodeIfPresent(RepostContent.self, forKey: .repost)
@@ -899,6 +907,8 @@ extension FeedPost: Codable {
         try c.encode(postOpenCount, forKey: .postOpenCount)
         try c.encode(impressionCount, forKey: .impressionCount)
         try c.encodeIfPresent(anonymousViewCount, forKey: .anonymousViewCount)
+        try c.encodeIfPresent(uniqueViewCount, forKey: .uniqueViewCount)
+        try c.encodeIfPresent(anonymousUniqueViewCount, forKey: .anonymousUniqueViewCount)
         try c.encode(qualifiedViewCount, forKey: .qualifiedViewCount)
         try c.encode(playCount, forKey: .playCount)
         try c.encodeIfPresent(repost, forKey: .repost)

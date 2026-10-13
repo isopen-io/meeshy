@@ -170,6 +170,24 @@ struct VisitorReaderKeyTests {
 
         #expect(sut.readerKey() != first)
     }
+
+    @Test func storedKey_neverDrawsAKey() {
+        let sut = VisitorReaderKey(keychain: InMemoryVisitorKeychain())
+
+        #expect(sut.storedReaderKey() == nil)
+        #expect(sut.storedReaderKey() == nil)
+        let drawn = sut.readerKey()
+        #expect(sut.storedReaderKey() == drawn)
+    }
+
+    @Test func storedKey_isGoneAfterPurge() {
+        let sut = VisitorReaderKey(keychain: InMemoryVisitorKeychain())
+        _ = sut.readerKey()
+
+        sut.purge()
+
+        #expect(sut.storedReaderKey() == nil)
+    }
 }
 
 @Suite("APIPost — la part anonyme des compteurs")
@@ -200,6 +218,25 @@ struct APIPostAnonymousCountersTests {
 
         #expect(post.anonymousViewCount == nil)
         #expect(post.toFeedPost().anonymousViewCount == nil)
+        #expect(post.uniqueViewCount == nil)
+        #expect(post.anonymousUniqueViewCount == nil)
+    }
+
+    /// `viewCount` compte TOUTES les vues ; les vues UNIQUES (une par compte,
+    /// une par lecteur anonyme) sont servies à côté, décodées sans être
+    /// affichées pour l'instant.
+    @Test func uniqueViewCounts_areDecoded_andReachTheFeedPost() throws {
+        let post = try decode("""
+        {"id":"p1","type":"POST","content":"x","createdAt":"2026-10-13T10:00:00Z",
+         "author":{"id":"a1","username":"ada"},"viewCount":12,"uniqueViewCount":5,"anonymousUniqueViewCount":2}
+        """)
+
+        #expect(post.viewCount == 12)
+        #expect(post.uniqueViewCount == 5)
+        #expect(post.anonymousUniqueViewCount == 2)
+        #expect(post.toFeedPost().uniqueViewCount == 5)
+        #expect(post.toFeedPost().anonymousUniqueViewCount == 2)
+        #expect(post.toFeedPost().viewCount == 12)
     }
 }
 
