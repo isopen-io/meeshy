@@ -59,7 +59,8 @@ export function startContentCaptureReports(deps: {
   const emit = (action: 'screenshot' | 'recording_started' | 'recording_stopped', extra: { readonly recordingMs?: number } = {}) => {
     const { surface, visibleTargets } = deps.collect();
     if (surface === null) return;
-    deps.record({ type: 'screen_capture', action, surface, visibleTargets, ...extra });
+    const captureKind = action === 'screenshot' ? 'screenshot' : 'recording_or_mirroring';
+    deps.record({ type: 'screen_capture', action, surface, visibleTargets, captureKind, ...extra });
   };
 
   const recordingChanged = (now: boolean) => {

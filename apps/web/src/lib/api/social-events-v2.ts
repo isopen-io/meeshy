@@ -1,4 +1,10 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
+import {
+  SOCIAL_EVENTS_V2_BATCH_CAP,
+  SOCIAL_EVENTS_V2_FLUSH_INTERVAL_MS,
+  SOCIAL_EVENTS_V2_FLUSH_MAX_EVENTS,
+  SOCIAL_EVENTS_V2_SLEEP_AFTER_REFUSAL_MS,
+} from '@meeshy/shared/types/social-events-v2';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import { eventsBody, type EnvelopeStamp, type FlushOptions } from './social-events';
@@ -28,10 +34,10 @@ import {
  * - Cadence : au plus toutes les 10 s, ou dès 50 événements, plus un envoi à
  *   la sortie de page (keepalive, ≤ 100).
  */
-export const SOCIAL_EVENTS_V2_FLUSH_MS = 10_000;
-export const SOCIAL_EVENTS_V2_COUNT_TRIGGER = 50;
-export const SOCIAL_EVENTS_V2_SLEEP_MS = 60 * 60 * 1000;
-const BATCH_CAP = 200;
+export const SOCIAL_EVENTS_V2_FLUSH_MS = SOCIAL_EVENTS_V2_FLUSH_INTERVAL_MS;
+export const SOCIAL_EVENTS_V2_COUNT_TRIGGER = SOCIAL_EVENTS_V2_FLUSH_MAX_EVENTS;
+export const SOCIAL_EVENTS_V2_SLEEP_MS = SOCIAL_EVENTS_V2_SLEEP_AFTER_REFUSAL_MS;
+const BATCH_CAP = SOCIAL_EVENTS_V2_BATCH_CAP;
 const KEEPALIVE_CAP = 100;
 const PENDING_CAP = 500;
 

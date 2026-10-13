@@ -1,28 +1,27 @@
 import type { ContentSurface } from '@meeshy/shared/types/content-surfaces';
+import {
+  ANONYMOUS_V2_TYPES,
+  SAMPLEABLE_V2_TYPES,
+  type CaptureKind,
+  type NotificationChannel,
+  type PlaybackExitReason,
+  type RankingSource,
+  type ScrollContentKind,
+  type SearchResultKind,
+  type ShareDestination,
+  type SocialEventV2Action,
+  type TargetKind,
+} from '@meeshy/shared/types/social-events-v2';
 
 /**
- * **LE CATALOGUE TYPÉ DES ÉVÉNEMENTS SOCIAUX v2** (#10499, décision
- * `services/gateway/decisions/2026-10-13-social-events-v2-…` § 2–5) — la forme
- * que le web émet. Chaque champ est une énumération, un identifiant ou un
- * entier : aucune chaîne libre, aucun texte saisi, aucune URL complète,
- * aucune image.
+ * **LE CATALOGUE TYPÉ DES ÉVÉNEMENTS SOCIAUX v2, VU DU WEB** (#10499, décision
+ * `services/gateway/decisions/2026-10-13-social-events-v2-…` § 2–5) — chaque
+ * famille avec ses champs, sur les énumérations UNIQUES de
+ * `@meeshy/shared/types/social-events-v2` (aucune jumelle). Chaque champ est
+ * une énumération, un identifiant ou un entier : aucune chaîne libre, aucun
+ * texte saisi, aucune URL complète, aucune image.
  */
-
-export const TARGET_KINDS = [
-  'post',
-  'reel',
-  'story',
-  'status',
-  'comment',
-  'profile',
-  'hashtag',
-  'sound',
-  'community',
-  'link',
-  'notification',
-] as const;
-
-export type TargetKind = (typeof TARGET_KINDS)[number];
+export type { CaptureKind, NotificationChannel, PlaybackExitReason, RankingSource, ScrollContentKind, SearchResultKind, ShareDestination, TargetKind };
 
 export type EventTargetRef = {
   readonly kind: TargetKind;
@@ -31,20 +30,8 @@ export type EventTargetRef = {
   readonly parent?: { readonly kind: TargetKind; readonly id: string };
 };
 
-/** Les surfaces du contrat v2 qui n'existent pas encore dans `CONTENT_SURFACES` (extension additive, § 2). */
-export type EventSurface = ContentSurface | 'search' | 'notifications' | 'comments' | 'link_preview';
-
-export type RankingSource =
-  | 'following'
-  | 'for_you'
-  | 'trending'
-  | 'nearby'
-  | 'search'
-  | 'hashtag'
-  | 'sound'
-  | 'profile'
-  | 'bookmarks'
-  | 'other';
+/** L'écran — `CONTENT_SURFACES`, seul site de la liste (`packages/shared/types/content-surfaces.ts`). */
+export type EventSurface = ContentSurface;
 
 export type ListingContext = {
   readonly feedRequestId?: string;
@@ -74,42 +61,13 @@ type Located = {
   readonly prism?: PrismContext;
 };
 
-export type ShareDestination = 'copy_link' | 'conversation' | 'native_sheet' | 'story' | 'repost' | 'external_app' | 'other';
-
-export type InteractionAction =
-  | 'react'
-  | 'unreact'
-  | 'comment_open'
-  | 'comment_submit'
-  | 'share'
-  | 'save'
-  | 'unsave'
-  | 'follow'
-  | 'unfollow'
-  | 'profile_tap'
-  | 'hashtag_tap'
-  | 'sound_tap'
-  | 'mention_tap'
-  | 'caption_expand'
-  | 'translation_toggle'
-  | 'original_view'
-  | 'repost'
-  | 'quote'
-  | 'download_open';
-
-export type NegativeAction =
-  | 'quick_skip'
-  | 'not_interested'
-  | 'see_less'
-  | 'hide'
-  | 'hide_author'
-  | 'mute_author'
-  | 'report_open'
-  | 'report_submit'
-  | 'block'
-  | 'unfollow_from_content';
-
-export type PlaybackExitReason = 'completed' | 'swiped' | 'closed' | 'backgrounded' | 'error' | 'other';
+export type InteractionAction = SocialEventV2Action<'interaction'>;
+export type NegativeAction = SocialEventV2Action<'negative'>;
+export type LinkAction = SocialEventV2Action<'link'>;
+export type DiscoveryAction = SocialEventV2Action<'discovery'>;
+export type StoryAction = SocialEventV2Action<'story'>;
+export type NotificationAction = SocialEventV2Action<'notification'>;
+export type ScreenCaptureAction = SocialEventV2Action<'screen_capture'>;
 
 export type PlaybackSummary = {
   readonly playbackId: string;
@@ -135,35 +93,6 @@ export type PlaybackSummary = {
   readonly exitReason: PlaybackExitReason;
 };
 
-export type LinkAction = 'outbound_click' | 'tracking_link_followed' | 'preview_open';
-
-export type DiscoveryAction =
-  | 'search_submitted'
-  | 'search_result_click'
-  | 'search_abandoned'
-  | 'profile_visit'
-  | 'hashtag_visit'
-  | 'sound_visit'
-  | 'community_visit';
-
-export type StoryAction =
-  | 'reply_sent'
-  | 'quick_reaction'
-  | 'poll_vote'
-  | 'sticker_tap'
-  | 'link_sticker_tap'
-  | 'mention_sticker_tap'
-  | 'exit_before_end'
-  | 'tap_forward'
-  | 'tap_back'
-  | 'swipe_next_author'
-  | 'hold_pause';
-
-export type NotificationAction = 'received' | 'displayed' | 'opened' | 'dismissed';
-export type NotificationChannel = 'apns' | 'fcm' | 'webpush' | 'in_app';
-
-export type ScreenCaptureAction = 'screenshot' | 'recording_started' | 'recording_stopped';
-
 export type VisibleTarget = { readonly kind: TargetKind; readonly id: string; readonly visibleFraction: number };
 
 /** L'histogramme de vitesse, en ms passées dans [<500, 500–1500, 1500–4000, ≥4000] pt/s. */
@@ -188,8 +117,6 @@ export type ScrollListingSummary = {
   readonly reachedEnd: boolean;
 };
 
-export type ScrollContentKind = 'carousel' | 'long_text' | 'comments' | 'story_slides' | 'thread';
-
 export type ScrollContentSummary = {
   readonly contentKind: ScrollContentKind;
   readonly itemsTotal: number;
@@ -211,15 +138,15 @@ export type SocialEventV2Input =
     })
   | (Located & { readonly type: 'negative'; readonly action: NegativeAction; readonly reasonCode?: string; readonly visibleMs?: number })
   | (Located & { readonly type: 'playback'; readonly action: 'session' } & PlaybackSummary)
-  | (Located & { readonly type: 'link'; readonly action: LinkAction; readonly domain: string; readonly trackingLinkId?: string })
-  | (Located & {
+  | (Located & { readonly type: 'link'; readonly action: LinkAction; readonly domain?: string; readonly trackingLinkId?: string })
+  | (Partial<Located> & {
       readonly type: 'discovery';
       readonly action: DiscoveryAction;
       readonly searchId?: string;
       readonly queryLength?: number;
       readonly queryLanguage?: string;
       readonly resultCount?: number;
-      readonly resultKind?: TargetKind;
+      readonly resultKind?: SearchResultKind;
     })
   | (Located & {
       readonly type: 'story';
@@ -241,6 +168,8 @@ export type SocialEventV2Input =
       readonly surface?: EventSurface;
       readonly visibleTargets: readonly VisibleTarget[];
       readonly recordingMs?: number;
+      /** `isCaptured` voit l'enregistrement ET la recopie : jamais distingués. */
+      readonly captureKind?: CaptureKind;
     }
   | { readonly type: 'scroll'; readonly action: 'listing'; readonly surface?: EventSurface } & ScrollListingSummary
   | (Located & { readonly type: 'scroll'; readonly action: 'content' } & ScrollContentSummary)
@@ -251,7 +180,7 @@ export type SocialEventV2Type = SocialEventV2Input['type'];
 export type SocialEventV2 = SocialEventV2Input & { readonly eventId: string; readonly occurredAt: string };
 
 /** Ce qu'un VISITEUR peut émettre en v2 (§ 6) — le reste est réservé aux comptes. */
-export const VISITOR_V2_TYPES: ReadonlySet<SocialEventV2Type> = new Set(['visibility', 'playback', 'scroll', 'screen_capture', 'link', 'discovery']);
+export const VISITOR_V2_TYPES: ReadonlySet<SocialEventV2Type> = new Set(ANONYMOUS_V2_TYPES);
 
 /** Les types que la passerelle peut échantillonner (§ 7) ; tout le reste part toujours. */
-export const SAMPLED_V2_TYPES: ReadonlySet<SocialEventV2Type> = new Set(['scroll', 'playback', 'visibility']);
+export const SAMPLED_V2_TYPES: ReadonlySet<SocialEventV2Type> = new Set(SAMPLEABLE_V2_TYPES);

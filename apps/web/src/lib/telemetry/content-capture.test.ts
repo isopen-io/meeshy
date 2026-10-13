@@ -37,7 +37,7 @@ describe('startContentCaptureReports', () => {
     const s = shell();
     startContentCaptureReports({ coque: s.coque, record: (e) => events.push(e), collect: () => ({ surface: 'feed', visibleTargets: TARGETS }), now: () => 0, onDetection: () => undefined });
     s.fire('screenCaptured');
-    expect(events).toEqual([{ type: 'screen_capture', action: 'screenshot', surface: 'feed', visibleTargets: TARGETS }]);
+    expect(events).toEqual([{ type: 'screen_capture', action: 'screenshot', surface: 'feed', visibleTargets: TARGETS, captureKind: 'screenshot' }]);
   });
 
   test('un enregistrement : démarrage avec l’écran visible, arrêt avec sa durée', () => {
@@ -49,8 +49,8 @@ describe('startContentCaptureReports', () => {
     clock = 13_500;
     s.fire('recordingChanged', { recording: false });
     expect(events).toEqual([
-      { type: 'screen_capture', action: 'recording_started', surface: 'reels', visibleTargets: TARGETS },
-      { type: 'screen_capture', action: 'recording_stopped', surface: 'reels', visibleTargets: TARGETS, recordingMs: 12_500 },
+      { type: 'screen_capture', action: 'recording_started', surface: 'reels', visibleTargets: TARGETS, captureKind: 'recording_or_mirroring' },
+      { type: 'screen_capture', action: 'recording_stopped', surface: 'reels', visibleTargets: TARGETS, captureKind: 'recording_or_mirroring', recordingMs: 12_500 },
     ]);
   });
 

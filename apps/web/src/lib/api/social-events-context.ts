@@ -1,3 +1,13 @@
+import type {
+  ClientCapability,
+  ClientPlatform,
+  ConsentState,
+  DeviceClass,
+  NetworkSubtype,
+  NetworkType,
+  SAMPLEABLE_V2_TYPES,
+} from '@meeshy/shared/types/social-events-v2';
+
 /**
  * **L'ENVELOPPE DE LOT DES ÉVÉNEMENTS SOCIAUX v2** (#10500, décision
  * `2026-10-13-social-events-v2-…` § 1) — l'objet `context` qu'une requête de
@@ -14,13 +24,10 @@ export const APP_SESSION_IDLE_MS = 30 * 60 * 1000;
 
 const APP_SESSION_KEY = 'meeshy.telemetry.appSession';
 
-export type ContextPlatform = 'ios' | 'web' | 'android_shell' | 'pwa';
-export type DeviceClass = 'phone' | 'tablet' | 'desktop';
-export type NetworkType = 'wifi' | 'cellular' | 'ethernet' | 'offline' | 'unknown';
-export type NetworkSubtype = '2g' | '3g' | '4g' | '5g';
-export type ConsentState = 'granted' | 'denied' | 'unknown';
-export type Capability = 'screenshot' | 'screen_recording' | 'scroll' | 'playback_qoe';
-export type SampledType = 'scroll' | 'playback' | 'visibility';
+export type ContextPlatform = ClientPlatform;
+export type Capability = ClientCapability;
+export type { ConsentState, DeviceClass, NetworkSubtype, NetworkType };
+export type SampledType = (typeof SAMPLEABLE_V2_TYPES)[number];
 export type SamplingRates = Readonly<Record<SampledType, number>>;
 
 export type ContextOs = { readonly name: string; readonly version?: string };

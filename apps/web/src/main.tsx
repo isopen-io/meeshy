@@ -360,3 +360,22 @@ if (__SHELL__) {
   if (document.readyState === 'complete') ecouterCaptures();
   else window.addEventListener('load', ecouterCaptures, { once: true });
 }
+
+/**
+ * LE CLIC D'UN LIEN DANS UN CONTENU (#10505) — une écoute déléguée unique,
+ * posée après la première peinture : le domaine enregistrable seul, jamais
+ * l'adresse, et aucune adresse décorée.
+ */
+{
+  const ecouterLiens = (): void => {
+    void Promise.all([import('@/lib/telemetry/link-clicks'), import('@/lib/view/reading-telemetry'), import('@/lib/links/public-origin')]).then(
+      ([{ bindLinkClicks }, { readingTelemetry }, { publicWebOrigin }]) =>
+        bindLinkClicks(document, (event) => readingTelemetry.recordV2(event), () => ({
+          ownOrigins: [window.location.origin, publicWebOrigin(window.location.origin)],
+          pathname: window.location.pathname,
+        })),
+    );
+  };
+  if (document.readyState === 'complete') ecouterLiens();
+  else window.addEventListener('load', ecouterLiens, { once: true });
+}
