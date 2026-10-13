@@ -154,8 +154,8 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
-  // #10498 — la puce de crédit avant la négociation : elle se lit sur le blob
-  // tel qu'enregistré, et `repostOf.visibility` n'est retirée qu'après.
+  // #10524 — la puce de crédit se retire avant la négociation, sur le blob
+  // tel qu'enregistré.
   return withNestedRepostMentions(negotiateWireStoryEffects(withServedRepostCredits(flat), reader), reader);
 }
 

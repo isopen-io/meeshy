@@ -72,9 +72,6 @@ export class StoryTextObjectTranslationService {
           visibilityUserIds: true,
           content: true,
           storyEffects: true,
-          // #10498 — l'index diffusé est celui du canvas SERVI, qui dépend de
-          // l'audience ACTUELLE de la source d'une republication.
-          repostOf: { select: { visibility: true } },
         },
       });
 
@@ -156,10 +153,10 @@ export class StoryTextObjectTranslationService {
 
       log.info('StoryTextObject translations persisted — broadcasting', { postId, textObjectIndex });
 
+      // #10498, #10524 — l'index diffusé est celui du canvas SERVI, dont la
+      // puce de crédit est retirée.
       const servedIndex = servedTextIndex({
         storyEffects: post.storyEffects,
-        sourceVisibility: post.repostOf?.visibility,
-        isRepost: post.repostOf != null,
         textIndex: textObjectIndex,
       });
       const eventData: StoryTranslationUpdatedEventData | null = servedIndex === null
