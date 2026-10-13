@@ -49,7 +49,7 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p2")
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.recordSocialEventBatches, [[
+        XCTAssertEqual(service.recordedSocialEventBatches, [[
             .impression(postId: "p1", source: "feed", surface: nil),
             .impression(postId: "p2", source: "feed", surface: nil),
         ]], "Sans surface déclarée, le lot part quand même par la porte unique, clé surface absente.")
