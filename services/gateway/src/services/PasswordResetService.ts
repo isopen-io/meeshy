@@ -418,6 +418,17 @@ export class PasswordResetService {
       const provenAt = new Date();
       const mailboxProof = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) ? emailProofFields(user, provenAt) : {};
       await this.prisma.$transaction(async (tx) => {
+        // #10475 — le jeton se consomme D'ABORD, par une écriture
+        // CONDITIONNELLE : deux réinitialisations concurrentes passaient toutes
+        // deux la lecture de `usedAt` (étape 4) et écrivaient chacune un mot de
+        // passe. Celle qui perd annule sa transaction avant toute autre écriture.
+        // `usedAt` d'un jeton frais est ABSENT du document : `unsetOrNull`.
+        const consumed = await tx.passwordResetToken.updateMany({
+          where: { id: resetToken.id, isRevoked: false, ...unsetOrNull('usedAt') },
+          data: { usedAt: new Date() }
+        });
+        if (consumed.count !== 1) throw new ResetTokenAlreadyConsumed();
+
         // Update password
         await tx.user.update({
           where: { id: user.id },
@@ -445,12 +456,6 @@ export class PasswordResetService {
             ipAddress,
             userAgent
           }
-        });
-
-        // Mark token as used
-        await tx.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() }
         });
 
         // Invalidate all user sessions
@@ -498,6 +503,9 @@ export class PasswordResetService {
       };
 
     } catch (error) {
+      if (error instanceof ResetTokenAlreadyConsumed) {
+        return { success: false, error: 'Invalid or expired reset token' };
+      }
       logger.error('[PasswordResetService] Error in completePasswordReset', error);
       return {
         success: false,
@@ -816,3 +824,6 @@ export class PasswordResetService {
     }
   }
 }
+
+/** Le jeton a été consommé par une AUTRE réinitialisation entre la lecture et l'écriture (#10475). */
+class ResetTokenAlreadyConsumed extends Error {}
