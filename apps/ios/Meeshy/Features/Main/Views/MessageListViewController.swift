@@ -1734,7 +1734,7 @@ final class MessageListViewController: UIViewController {
                     focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil,
                     availableWidth: self.rowAvailableWidth
                 )
-                var focalActions = FocalRowActions()
+                var focalActions = FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
                 focalActions.onAddReaction = addReactionHandler
                 focalActions.onOpenReactPicker = openReactPickerHandler
