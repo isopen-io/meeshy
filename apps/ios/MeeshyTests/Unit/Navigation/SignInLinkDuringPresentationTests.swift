@@ -129,11 +129,45 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_verificationLink_ofTheSignedInAccount_keepsItsSession() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
         auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "A@b.co")
+        auth.currentUser = MeeshyUser(id: "link-user", username: "me", email: "A@b.co")
 
         await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
 
         XCTAssertEqual(auth.events, ["verify", "open"])
+    }
+
+    // MARK: - #8042 — la session posée est celle que la passerelle a PROUVÉE
+
+    /// Le lien nomme l'adresse du compte connecté, mais la passerelle rend la
+    /// session d'un AUTRE compte : le compte courant est déconnecté AVANT que
+    /// la session rendue ne soit posée — jamais l'une par-dessus l'autre.
+    func test_verificationLink_servedForAnotherAccount_signsOutBeforeOpening() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.isAuthenticated = true
+        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+
+        XCTAssertEqual(auth.events, ["verify", "logout", "open"])
+        XCTAssertEqual(auth.openedSessions, ["jwt-link"])
+    }
+
+    func test_refusedLink_ofTheSignedInAddress_keepsTheSession() async {
+        let (gate, auth, toasts) = makeSUT(presenting: false)
+        auth.isAuthenticated = true
+        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+        auth.emailResult = .failure(MeeshyError.server(statusCode: 400, message: "Lien expiré"))
+
+        await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: MockArrivalCelebration())
+
+        XCTAssertEqual(auth.events, ["verify"])
+    }
+
+    func test_replacesSignedInAccount_judgesOnTheProvenId() {
+        XCTAssertTrue(SignInLink.replacesSignedInAccount(provenUserId: "b", isAuthenticated: true, currentUserId: "a"))
+        XCTAssertTrue(SignInLink.replacesSignedInAccount(provenUserId: "b", isAuthenticated: true, currentUserId: nil))
+        XCTAssertFalse(SignInLink.replacesSignedInAccount(provenUserId: "a", isAuthenticated: true, currentUserId: "a"))
+        XCTAssertFalse(SignInLink.replacesSignedInAccount(provenUserId: "b", isAuthenticated: false, currentUserId: "a"))
     }
 
     // MARK: - #8089 — la session ouverte par la preuve de l'adresse est célébrée
@@ -164,7 +198,7 @@ final class SignInLinkDuringPresentationTests: XCTestCase {
     func test_verificationLink_ofTheSignedInAccount_rotatesWithoutCelebrating() async {
         let (gate, auth, toasts) = makeSUT(presenting: false)
         auth.isAuthenticated = true
-        auth.currentUser = MeeshyUser(id: "me", username: "me", email: "a@b.co")
+        auth.currentUser = MeeshyUser(id: "link-user", username: "me", email: "a@b.co")
         let celebration = MockArrivalCelebration()
 
         await SignInLinkOpener.open(.emailVerification(token: "t", email: "a@b.co"), auth: auth, toasts: toasts, sessionGate: gate, celebration: celebration)

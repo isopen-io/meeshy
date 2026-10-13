@@ -56,6 +56,15 @@ enum SignInLink: Equatable {
             return currentEmail?.caseInsensitiveCompare(email) != .orderedSame
         }
     }
+
+    /// La session PROUVÉE est-elle celle d'un autre compte que le compte
+    /// connecté (#8042) ? `requiresSignOut` juge sur l'adresse écrite dans le
+    /// lien, que quiconque peut forger ; seul l'id rendu par la passerelle dit
+    /// à qui appartient la session qu'on va poser.
+    static func replacesSignedInAccount(provenUserId: String, isAuthenticated: Bool, currentUserId: String?) -> Bool {
+        guard isAuthenticated else { return false }
+        return currentUserId != provenUserId
+    }
 }
 
 /// Ce dont l'ouverture d'un lien de connexion a besoin : déconnecter un autre
@@ -97,6 +106,9 @@ enum SignInLinkOpener {
             guard let proven = try await prove(link, auth: auth) else {
                 toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
                 return
+            }
+            if SignInLink.replacesSignedInAccount(provenUserId: proven.user.id, isAuthenticated: auth.isAuthenticated, currentUserId: auth.currentUser?.id) {
+                await auth.logout()
             }
             let celebrates = link.celebratesArrival(isAuthenticated: auth.isAuthenticated)
             sessionGate.open {
