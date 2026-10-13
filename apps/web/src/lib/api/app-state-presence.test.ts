@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { bindAppStatePresence, type VisibilitySource } from './app-state-presence';
+import { bindAppStatePresence, WAKE_AFTER_HIDDEN_MS, type VisibilitySource } from './app-state-presence';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
 
 type Emitted = { readonly event: string; readonly payload: unknown };
@@ -9,12 +9,15 @@ function fakeSocket(connected: boolean) {
   const handlers = new Map<string, Set<SocketHandler>>();
   const emitted: Emitted[] = [];
   let connects = 0;
+  let disconnects = 0;
   const socket: SocketClient = {
     connected,
     connect: () => {
       connects += 1;
     },
-    disconnect: () => undefined,
+    disconnect: () => {
+      disconnects += 1;
+    },
     on: (event, handler) => {
       const set = handlers.get(event) ?? new Set<SocketHandler>();
       set.add(handler as SocketHandler);
@@ -31,7 +34,12 @@ function fakeSocket(connected: boolean) {
     for (const handler of handlers.get(event) ?? []) handler(undefined);
   };
   const listeners = (event: string): number => handlers.get(event)?.size ?? 0;
-  return { socket, emitted, fire, listeners, connects: () => connects };
+  return { socket, emitted, fire, listeners, connects: () => connects, disconnects: () => disconnects };
+}
+
+function fakeClock(start = 1_000_000) {
+  let at = start;
+  return { now: () => at, advance: (ms: number) => void (at += ms) };
 }
 
 function fakeVisibility(initial: 'visible' | 'hidden') {
@@ -119,12 +127,89 @@ describe('le retour au premier plan rebranche le temps réel (#8839)', () => {
     expect(connects()).toBe(1);
   });
 
-  test('un socket resté connecté n’est pas touché', () => {
+  test('un socket resté connecté n’est pas touché après une absence brève', () => {
     const { socket, connects } = fakeSocket(true);
     const visibility = fakeVisibility('visible');
     bindAppStatePresence({ socket, visibility: visibility.source });
     visibility.set('hidden');
     visibility.set('visible');
     expect(connects()).toBe(0);
+  });
+});
+
+/**
+ * #10573 — l'onglet ENDORMI. Un navigateur gèle les minuteurs d'un onglet
+ * caché ; au réveil, `socket.connected` dit encore vrai pendant que la
+ * connexion est morte (jusqu'à ~45 s avant que le battement ne le découvre),
+ * et tout ce qui est parti pendant le sommeil était perdu. Une absence d'au
+ * moins `WAKE_AFTER_HIDDEN_MS` force une connexion neuve — son
+ * `authenticated` rejoue le rattrapage de `socket.ts` — et relit la liste.
+ */
+describe('le retour d’un onglet endormi rattrape ce qu’il a manqué (#10573)', () => {
+  const sleep = (hiddenMs: number, connected: boolean) => {
+    const fake = fakeSocket(connected);
+    const visibility = fakeVisibility('visible');
+    const clock = fakeClock();
+    let wakes = 0;
+    bindAppStatePresence({ socket: fake.socket, visibility: visibility.source, now: clock.now, onWake: () => void (wakes += 1) });
+    visibility.set('hidden');
+    clock.advance(hiddenMs);
+    visibility.set('visible');
+    return { ...fake, wakes: () => wakes };
+  };
+
+  test('un socket qui se dit connecté après un long sommeil est rouvert', () => {
+    const { connects, disconnects } = sleep(WAKE_AFTER_HIDDEN_MS, true);
+    expect([disconnects(), connects()]).toEqual([1, 1]);
+  });
+
+  test('un long sommeil relit la liste', () => {
+    expect(sleep(WAKE_AFTER_HIDDEN_MS, true).wakes()).toBe(1);
+  });
+
+  test('un socket coupé est seulement rouvert, jamais coupé une seconde fois', () => {
+    const { connects, disconnects, wakes } = sleep(60_000, false);
+    expect([disconnects(), connects(), wakes()]).toEqual([0, 1, 1]);
+  });
+
+  test('une absence brève ne coûte ni reconnexion ni relecture', () => {
+    const { connects, disconnects, wakes } = sleep(WAKE_AFTER_HIDDEN_MS - 1, true);
+    expect([disconnects(), connects(), wakes()]).toEqual([0, 0, 0]);
+  });
+
+  test('le sommeil se compte depuis le PREMIER passage en arrière-plan', () => {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility('visible');
+    const clock = fakeClock();
+    bindAppStatePresence({ socket: fake.socket, visibility: visibility.source, now: clock.now });
+    visibility.set('hidden');
+    clock.advance(WAKE_AFTER_HIDDEN_MS / 2);
+    visibility.set('hidden');
+    clock.advance(WAKE_AFTER_HIDDEN_MS / 2);
+    visibility.set('visible');
+    expect(fake.disconnects()).toBe(1);
+  });
+
+  test('un onglet branché caché, puis montré longtemps après, se réveille', () => {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility('hidden');
+    const clock = fakeClock();
+    bindAppStatePresence({ socket: fake.socket, visibility: visibility.source, now: clock.now });
+    clock.advance(WAKE_AFTER_HIDDEN_MS);
+    visibility.set('visible');
+    expect(fake.disconnects()).toBe(1);
+  });
+
+  test('un second retour au premier plan sans nouveau sommeil ne rouvre rien', () => {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility('visible');
+    const clock = fakeClock();
+    bindAppStatePresence({ socket: fake.socket, visibility: visibility.source, now: clock.now });
+    visibility.set('hidden');
+    clock.advance(WAKE_AFTER_HIDDEN_MS);
+    visibility.set('visible');
+    clock.advance(WAKE_AFTER_HIDDEN_MS);
+    visibility.set('visible');
+    expect(fake.disconnects()).toBe(1);
   });
 });

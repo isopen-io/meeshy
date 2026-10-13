@@ -80,7 +80,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
-import { catchUpThreadMessage } from './realtime-thread-catch-up';
+import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
@@ -253,6 +253,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const scheduleTimeout = deps.scheduleTimeout ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimeoutFn = deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const windowTarget = deps.windowTarget ?? defaultWindow();
+  /* Une conversation hors de la liste en cache la fait relire (#10573). */
+  const unknownRows = createUnknownRowCatchUp({ queryClient: deps.queryClient, scheduleTimeout, clearTimeoutFn });
 
   const socket = deps.socketFactory({
     base: deps.base,
@@ -329,6 +331,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+    unknownRows.note(payload.conversationId);
     /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
@@ -364,6 +367,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onUnreadUpdated = (payload: unknown): void => {
     if (!isConversationUnreadUpdated(payload)) return;
     applyConversationUnreadUpdated(deps.queryClient, deps.conversationStore, payload);
+    unknownRows.note(payload.conversationId);
   };
 
   /** `conversation:updated` (revue-correction #5793, défaut 1) — la
@@ -372,6 +376,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onConversationUpdated = (payload: unknown): void => {
     if (!isConversationUpdated(payload)) return;
     applyConversationUpdated(deps.queryClient, payload);
+    unknownRows.note(payload.conversationId);
     /* LE FIL OUVERT RATTRAPE UN `message:new` PERDU (#9291) — cet évènement
        voyage par la room PERSONNELLE ; `message:new`, par celle de la
        conversation. Mes propres envois sont exclus : leur écho voyage par ma
@@ -905,9 +910,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * point de contrôle (`ConversationSyncEngine+Socket.swift:12-25`) ; ici, le
    * rejeu est une INVALIDATION TanStack — `GET /sync` est un lot séparé.
    *
-   * La PREMIÈRE authentification ne rejoue rien : il n'y a pas de trou à
-   * combler au démarrage, et invalider y doublerait la requête que l'écran
-   * vient d'émettre.
+   * La PREMIÈRE authentification ne relit que la liste et le fil DÉJÀ servis
+   * (#10573) : le socket se branche après la première peinture, et ce qui est
+   * parti entre la lecture REST et l'entrée dans les rooms était perdu. Une
+   * requête encore en vol n'est jamais doublée (`catchUpFirstAuthentication`).
    *
    * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
    * authentification, la première comprise : un écran ouvert avant que la
@@ -920,6 +926,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
+      catchUpFirstAuthentication(deps.queryClient);
       return;
     }
     /* UNE invalidation couvre les TROIS familles : TanStack compare les clés
@@ -1041,6 +1048,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     },
     destroy: () => {
       publicationRooms.detach();
+      unknownRows.dispose();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
       windowTarget?.removeEventListener('online', onOnline);

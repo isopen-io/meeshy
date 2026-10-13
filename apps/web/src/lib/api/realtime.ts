@@ -24,6 +24,7 @@ import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
+import { relaunchConversationList } from './realtime-thread-catch-up';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
@@ -102,8 +103,12 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     return;
   }
   const unbridge = bridgeCallEvents(next.socket);
-  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
-  const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
+     Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
+  const unwatch =
+    typeof document === 'undefined'
+      ? () => undefined
+      : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document), onWake: () => relaunchConversationList(appQueryClient) });
   /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
   const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
   /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
