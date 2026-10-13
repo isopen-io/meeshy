@@ -45,6 +45,9 @@ function fakePrisma(overrides: Record<string, any> = {}) {
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(null), count: jest.fn<any>().mockResolvedValue(0) }]),
     ),
     user: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    // La télémétrie de lecture (#10499, O6) : un compte qui n'a rien lu.
+    ...Object.fromEntries(['postImpression', 'postEngagement', 'postView', 'contentEvent'].map((model) =>
+      [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
     ...packTables(fakePackDb({})),
     ...overrides,
@@ -71,6 +74,21 @@ describe('purgeAccountIsolatedData', () => {
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
     expect(prisma.userVoiceModel.deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     expect(summary.voiceProfileDeleted).toBe(1);
+  });
+
+  it('efface TOUTE la télémétrie de lecture du compte — impressions, sessions de lecture, vues, événements v2 (O6)', async () => {
+    const prisma = fakePrisma({
+      postImpression: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 40 }) },
+      postEngagement: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 7 }) },
+      postView: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 5 }) },
+      contentEvent: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 12 }) },
+    });
+    const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
+
+    for (const model of ['postImpression', 'postEngagement', 'postView', 'contentEvent']) {
+      expect(prisma[model].deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
+    }
+    expect(summary.readingTelemetry).toEqual({ impressions: 40, engagements: 7, views: 5, contentEvents: 12 });
   });
 
   it('deletes share links CREATED by the account, not links it merely used to join', async () => {
