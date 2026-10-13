@@ -37,7 +37,8 @@ final class GlobalSearchViewModelTests: XCTestCase {
     private func makeSUT(
         searchService: MessageSearchService? = nil,
         messageSocket: MockMessageSocket? = nil,
-        socialSocket: MockSocialSocket? = nil
+        socialSocket: MockSocialSocket? = nil,
+        socialEvents: MockSocialEventsV2Reporter? = nil
     ) throws -> (
         sut: GlobalSearchViewModel,
         mockAPI: MockAPIClientForApp,
@@ -54,9 +55,72 @@ final class GlobalSearchViewModelTests: XCTestCase {
             authManager: mockAuthManager,
             searchService: service,
             messageSocket: messageSocket ?? MockMessageSocket(),
-            socialSocket: socialSocket ?? MockSocialSocket()
+            socialSocket: socialSocket ?? MockSocialSocket(),
+            socialEvents: socialEvents ?? MockSocialEventsV2Reporter()
         )
         return (sut, mockAPI, mockUserService, mockAuthManager)
+    }
+
+    // MARK: - #10505 : l'identifiant de recherche est celui que la passerelle a servi
+
+    private func discoveries(_ reporter: MockSocialEventsV2Reporter, _ action: SocialDiscovery.Action) -> [SocialDiscovery] {
+        reporter.payloads { payload -> SocialDiscovery? in
+            guard case .discovery(let discovery) = payload, discovery.action == action else { return nil }
+            return discovery
+        }
+    }
+
+    func test_performSearch_serverServesSearchId_submittedEventCarriesIt() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.map(\.searchId), ["a1b2c3sealed"])
+        XCTAssertEqual(submitted.first?.resultCount, 1)
+        XCTAssertEqual(sut.searchId, "a1b2c3sealed")
+    }
+
+    func test_performSearch_serverServesNoSearchId_submittedEventHasNone() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+
+        await sut.performSearch(query: "aminata")
+
+        let submitted = discoveries(reporter, .searchSubmitted)
+        XCTAssertEqual(submitted.count, 1)
+        XCTAssertNil(submitted.first?.searchId, "sans identifiant servi, le client n'en fabrique pas")
+        XCTAssertNil(sut.searchId)
+    }
+
+    func test_noteUserResultTapped_afterAServedSearch_carriesTheServedSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), ["a1b2c3sealed"])
+    }
+
+    func test_noteUserResultTapped_remoteSearchFailed_carriesNoSearchId() async throws {
+        let reporter = MockSocialEventsV2Reporter()
+        let (sut, _, mockUserService, _) = try makeSUT(socialEvents: reporter)
+        mockUserService.searchUsersResult = .success([UserSearchResult(id: "u7", username: "aminata")])
+        mockUserService.servedSearchId = "a1b2c3sealed"
+        await sut.performSearch(query: "aminata")
+        mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
+        await sut.performSearch(query: "aminata d")
+
+        sut.noteUserResultTapped("u7", position: 0)
+
+        XCTAssertEqual(discoveries(reporter, .searchResultClick).map(\.searchId), [nil], "l'identifiant d'une recherche précédente ne se recopie pas sur la suivante")
     }
 
     /// Drains the main dispatch queue deterministically: enqueues a continuation

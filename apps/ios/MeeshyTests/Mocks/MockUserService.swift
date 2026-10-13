@@ -30,6 +30,9 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
     var searchResult: Result<OffsetPaginatedAPIResponse<[UserSearchResult]>, Error> = .success(emptySearchResponse)
     var searchUsersResult: Result<[UserSearchResult], Error> = .success([])
+    /// L'identifiant que la passerelle sert avec la page (`meta.searchId`) —
+    /// `nil` : serveur ou route qui ne le sert pas.
+    var servedSearchId: String?
     var updateProfileResult: Result<MeeshyUser, Error> = .success(stubUser)
     var updateAvatarResult: Result<MeeshyUser, Error> = .success(stubUser)
     var updateBannerResult: Result<MeeshyUser, Error> = .success(stubUser)
@@ -99,6 +102,12 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         searchUsersCallCount += 1
         lastSearchUsersQuery = query
         return try searchUsersResult.get()
+    }
+
+    func searchPeople(query: String, limit: Int, offset: Int) async throws -> UserSearchPage {
+        searchUsersCallCount += 1
+        lastSearchUsersQuery = query
+        return UserSearchPage(users: try searchUsersResult.get(), searchId: servedSearchId)
     }
 
     func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser {
@@ -191,6 +200,7 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
         lastSearchQuery = nil
 
         searchUsersResult = .success([])
+        servedSearchId = nil
         searchUsersCallCount = 0
         lastSearchUsersQuery = nil
 
