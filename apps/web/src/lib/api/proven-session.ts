@@ -1,4 +1,5 @@
 import * as authEndpoints from '@meeshy/shared/api/endpoints/auth';
+import { provenAdoptionClientWindowMs, type ProvenSessionAdoption } from '@meeshy/shared/utils/proven-session-adoption';
 
 import type { ApiResult, HttpRequest } from './http';
 import { heldAccountOf, type PendingUser, type SessionState, type SessionStoreApi, type SessionUser } from './session';
@@ -26,19 +27,15 @@ import { heldAccountOf, type PendingUser, type SessionState, type SessionStoreAp
 const DEFAULT_SESSION_SECONDS = 24 * 60 * 60;
 
 /**
- * La passerelle n'adopte une session prouvée par un lien que dans ses DIX
- * premières minutes (`PROVEN_SESSION_ADOPTION_WINDOW_MS`, #10477). Le client
- * s'arrête une minute avant (#10513) : une réponse tardive à la question ne
- * range plus le compte ouvert pour poser une session déjà échue, que le
- * premier appel déconnecterait.
+ * La passerelle n'adopte une session prouvée par un lien, ni n'accepte le
+ * défi de second facteur qu'elle a rendu, que dans une fenêtre courte
+ * (#10477). Le client s'arrête avant (#10513) : une réponse tardive à la
+ * question ne range plus le compte ouvert pour poser une session déjà échue.
+ * Cette fenêtre se LIT dans la réponse (`adoptWithinSeconds`, #10518) et
+ * s'applique à l'instant de réception ; le repli d'une passerelle qui ne la
+ * sert pas vit dans `@meeshy/shared`, plus court que toute fenêtre connue.
  */
-export const PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS = 9 * 60 * 1000;
-
-/** Un défi de second facteur rendu par la preuve vit CINQ minutes à la
- * passerelle (`PENDING_TWO_FACTOR_TTL_MS`) ; même marge d'une minute. */
-export const PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS = 4 * 60 * 1000;
-
-export type ProvenSession =
+type ProvenOutcome =
   | {
       readonly kind: 'session';
       readonly user: SessionUser;
@@ -58,6 +55,9 @@ export type ProvenSession =
       readonly receivedAt: number;
     };
 
+/** Ce que la preuve a rendu, avec le délai que la passerelle laisse pour s'en servir. */
+export type ProvenSession = ProvenOutcome & ProvenSessionAdoption;
+
 export type AccountReplacement = {
   /** Le compte OUVERT sur l'appareil, que le lien quitterait. */
   readonly current: SessionUser;
@@ -72,6 +72,7 @@ type ProvenPayload = {
   readonly expiresIn?: unknown;
   readonly requires2FA?: unknown;
   readonly twoFactorToken?: unknown;
+  readonly adoptWithinSeconds?: unknown;
 };
 
 function hasIdentity(user: unknown): user is { readonly id: string; readonly username: string } {
@@ -85,8 +86,9 @@ function hasIdentity(user: unknown): user is { readonly id: string; readonly use
 export function provenSessionOf(data: object, receivedAt: number = Date.now()): ProvenSession | null {
   const payload = data as ProvenPayload;
   if (!hasIdentity(payload.user)) return null;
+  const adoption = typeof payload.adoptWithinSeconds === 'number' ? { adoptWithinSeconds: payload.adoptWithinSeconds } : {};
   if (payload.requires2FA === true && typeof payload.twoFactorToken === 'string') {
-    return { kind: 'second-factor', user: payload.user as PendingUser, twoFactorToken: payload.twoFactorToken, receivedAt };
+    return { kind: 'second-factor', user: payload.user as PendingUser, twoFactorToken: payload.twoFactorToken, ...adoption, receivedAt };
   }
   if (typeof payload.token !== 'string' || typeof payload.sessionToken !== 'string') return null;
   const email = (payload.user as { readonly email?: unknown }).email;
@@ -97,15 +99,15 @@ export function provenSessionOf(data: object, receivedAt: number = Date.now()): 
     token: payload.token,
     sessionToken: payload.sessionToken,
     expiresIn: typeof payload.expiresIn === 'number' ? payload.expiresIn : DEFAULT_SESSION_SECONDS,
+    ...adoption,
     receivedAt,
   };
 }
 
-/** La preuve a-t-elle passé la fenêtre où l'adopter vaut encore ? Une
- * session a celle de l'adoption, un défi de second facteur la sienne. */
+/** La preuve a-t-elle passé la fenêtre où l'adopter vaut encore ? Celle que
+ * la passerelle a servie avec elle, moins la marge du trajet. */
 export function provenSessionLapsed(proven: ProvenSession, now: number): boolean {
-  const window = proven.kind === 'session' ? PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS : PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS;
-  return now - proven.receivedAt > window;
+  return now - proven.receivedAt > provenAdoptionClientWindowMs(proven.kind, proven.adoptWithinSeconds);
 }
 
 /** L'adresse du compte prouvé, quand elle est connue. */
