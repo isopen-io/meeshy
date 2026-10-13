@@ -44,7 +44,7 @@ export function AccountReplacementPrompt({
   readonly onDiscarded: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [ending, setEnding] = useState<'failed' | 'expired' | null>(null);
   const answered = useRef(false);
   const leaving = useRef<ReturnType<typeof setTimeout> | null>(null);
   const current = replacement.current.username;
@@ -93,7 +93,7 @@ export function AccountReplacementPrompt({
   /* Les gestes de l'appareil qui ne se chargent pas (réseau coupé, version
      déployée entre-temps) : la session ouverte n'a pas été touchée, la session
      prouvée est refermée, et la question se ferme sur un message (#10474). */
-  async function adoptOrFail(): Promise<boolean | 'failed'> {
+  async function adoptOrFail(): Promise<boolean | 'expired' | 'failed'> {
     try {
       return await gestures.adopt(replacement);
     } catch {
@@ -112,19 +112,21 @@ export function AccountReplacementPrompt({
       return;
     }
     const opened = await adoptOrFail();
-    if (opened === 'failed') {
-      setFailed(true);
+    /* Trop tard (#10513) : la session prouvée a passé sa fenêtre d'adoption,
+       le compte ouvert n'a pas été touché — l'écran dit d'en demander un autre. */
+    if (opened === 'failed' || opened === 'expired') {
+      setEnding(opened);
       return;
     }
     if (opened) onAdopted();
     else onDiscarded();
   }
 
-  if (failed) {
+  if (ending !== null) {
     return (
       <section role="alert" className="grid gap-5 text-center">
         <Glyph name="warningCircle" size={44} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
-        <p style={{ color: 'var(--color-ios-ink)' }}>{translate(language, 'signInLink.switchAccount.failed')}</p>
+        <p style={{ color: 'var(--color-ios-ink)' }}>{translate(language, ending === 'expired' ? 'signInLink.switchAccount.expired' : 'signInLink.switchAccount.failed')}</p>
         <button
           type="button"
           data-action="leave"

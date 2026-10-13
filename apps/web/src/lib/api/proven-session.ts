@@ -25,6 +25,19 @@ import { heldAccountOf, type PendingUser, type SessionState, type SessionStoreAp
 
 const DEFAULT_SESSION_SECONDS = 24 * 60 * 60;
 
+/**
+ * La passerelle n'adopte une session prouvée par un lien que dans ses DIX
+ * premières minutes (`PROVEN_SESSION_ADOPTION_WINDOW_MS`, #10477). Le client
+ * s'arrête une minute avant (#10513) : une réponse tardive à la question ne
+ * range plus le compte ouvert pour poser une session déjà échue, que le
+ * premier appel déconnecterait.
+ */
+export const PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS = 9 * 60 * 1000;
+
+/** Un défi de second facteur rendu par la preuve vit CINQ minutes à la
+ * passerelle (`PENDING_TWO_FACTOR_TTL_MS`) ; même marge d'une minute. */
+export const PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS = 4 * 60 * 1000;
+
 export type ProvenSession =
   | {
       readonly kind: 'session';
@@ -34,8 +47,16 @@ export type ProvenSession =
       readonly token: string;
       readonly sessionToken: string;
       readonly expiresIn: number;
+      /** L'instant (ms) où la preuve a été reçue — l'âge de la session. */
+      readonly receivedAt: number;
     }
-  | { readonly kind: 'second-factor'; readonly user: PendingUser; readonly twoFactorToken: string };
+  | {
+      readonly kind: 'second-factor';
+      readonly user: PendingUser;
+      readonly twoFactorToken: string;
+      /** L'instant (ms) où le défi a été reçu — son âge. */
+      readonly receivedAt: number;
+    };
 
 export type AccountReplacement = {
   /** Le compte OUVERT sur l'appareil, que le lien quitterait. */
@@ -61,11 +82,11 @@ function hasIdentity(user: unknown): user is { readonly id: string; readonly use
 
 /** Ce que la preuve a rendu : une session, un défi de second facteur, ou rien
  * (adresse vérifiée sans session, compte qui attend son activation). */
-export function provenSessionOf(data: object): ProvenSession | null {
+export function provenSessionOf(data: object, receivedAt: number = Date.now()): ProvenSession | null {
   const payload = data as ProvenPayload;
   if (!hasIdentity(payload.user)) return null;
   if (payload.requires2FA === true && typeof payload.twoFactorToken === 'string') {
-    return { kind: 'second-factor', user: payload.user as PendingUser, twoFactorToken: payload.twoFactorToken };
+    return { kind: 'second-factor', user: payload.user as PendingUser, twoFactorToken: payload.twoFactorToken, receivedAt };
   }
   if (typeof payload.token !== 'string' || typeof payload.sessionToken !== 'string') return null;
   const email = (payload.user as { readonly email?: unknown }).email;
@@ -76,7 +97,15 @@ export function provenSessionOf(data: object): ProvenSession | null {
     token: payload.token,
     sessionToken: payload.sessionToken,
     expiresIn: typeof payload.expiresIn === 'number' ? payload.expiresIn : DEFAULT_SESSION_SECONDS,
+    receivedAt,
   };
+}
+
+/** La preuve a-t-elle passé la fenêtre où l'adopter vaut encore ? Une
+ * session a celle de l'adoption, un défi de second facteur la sienne. */
+export function provenSessionLapsed(proven: ProvenSession, now: number): boolean {
+  const window = proven.kind === 'session' ? PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS : PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS;
+  return now - proven.receivedAt > window;
 }
 
 /** L'adresse du compte prouvé, quand elle est connue. */
@@ -149,8 +178,11 @@ export function createProvenSessionCloser(transport: ProvenTransport): ProvenSes
 export type ProvenSessionGestures = ProvenSessionCloser & {
   /** « Ouvrir cet autre compte » — le compte quitté reste au sélecteur.
    * `false` : la session ouverte n'a pas pu être démontée, rien n'est posé et
-   * la session prouvée est refermée — l'écran n'annonce aucune connexion. */
-  adopt(replacement: AccountReplacement): Promise<boolean>;
+   * la session prouvée est refermée — l'écran n'annonce aucune connexion.
+   * `'expired'` (#10513) : la preuve a passé sa fenêtre d'adoption ; rien
+   * n'est suspendu ni posé, la session prouvée est refermée, et l'écran dit
+   * que le lien a expiré. */
+  adopt(replacement: AccountReplacement): Promise<boolean | 'expired'>;
 };
 
 export function createProvenSessionGestures({
@@ -158,6 +190,7 @@ export function createProvenSessionGestures({
   transport,
   suspend,
   noteActive,
+  now = Date.now,
 }: {
   readonly store: SessionStoreApi;
   readonly transport: ProvenTransport;
@@ -165,11 +198,16 @@ export function createProvenSessionGestures({
   readonly suspend: () => void;
   /** Le compte ouvert entre dans la liste de l'appareil (`accountVault.noteActive`). */
   readonly noteActive: (user: SessionUser) => void;
+  readonly now?: () => number;
 }): ProvenSessionGestures {
   const closer = createProvenSessionCloser(transport);
 
   return {
     adopt: async (replacement) => {
+      if (provenSessionLapsed(replacement.proven, now())) {
+        await closer.discard(replacement);
+        return 'expired';
+      }
       suspend();
       if (heldAccountOf(store.getState().session) !== null) {
         await closer.discard(replacement);

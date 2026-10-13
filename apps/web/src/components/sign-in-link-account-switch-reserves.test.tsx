@@ -231,6 +231,30 @@ describe('R3 — les gestes de l’appareil ne se chargent pas', () => {
   });
 });
 
+describe('#10513 — accepter après la fenêtre d’adoption', () => {
+  test('« Ouvrir » sur une preuve trop ancienne ⇒ la question se ferme sur « le lien a expiré », Ada reste ouverte', async () => {
+    const replacement = bobReplacement();
+    const before = sessionStore.getState().session;
+    const { gestures, discarded } = recordingGestures({ adopt: async () => 'expired' });
+    const leaves: string[] = [];
+    const el = prompt(replacement, gestures, () => leaves.push('discarded'));
+    await settle();
+
+    await click(button(el, 'confirm'));
+    await settle();
+
+    expect(discarded).toEqual([]);
+    expect(sessionStore.getState().session).toBe(before);
+    expect(el.querySelector('[data-answer]')).toBeNull();
+    expect(el.querySelector('[role="alert"]')).not.toBeNull();
+    expect(text(el)).toContain('Ce lien a expiré');
+    expect(text(el)).toContain('demandez-en un nouveau');
+
+    await click(el.querySelector('[data-action="leave"]') as HTMLButtonElement | null);
+    expect(leaves).toEqual(['discarded']);
+  });
+});
+
 describe('R4 — un compte à second facteur mène à la saisie du code', () => {
   test('code, appareil sans compte ⇒ la saisie du second facteur, jamais `onSignedIn`', async () => {
     const signedIn: string[] = [];
