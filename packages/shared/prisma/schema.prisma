@@ -4348,8 +4348,10 @@ model ContentEvent {
   sampleRate   Float     @default(1)
   expiresAt    DateTime
 
+  /// `ContentEvent_user_day` (partiel sur `userId`), l'unique partiel de
+  /// `eventKey` et le TTL de `expiresAt` ne se déclarent pas en Prisma :
+  /// `services/gateway/src/services/social/socialEventIndexes.ts` les pose.
   @@index([targetKind, targetId, day], map: "ContentEvent_target_day")
-  @@index([userId, day], map: "ContentEvent_user_day")
   @@index([type, action, day], map: "ContentEvent_type_action_day")
 }
 

@@ -1133,6 +1133,11 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     mockPostFindMany.mockResolvedValue([seen, fresh]);
     mockPostReactionFindMany.mockImplementation((args: any) => routeReactionQuery(args, [], []));
     mockPostImpressionGroupBy.mockResolvedValue([{ postId: 'seen-1', _count: { postId: 3 } }]);
+    // La fatigue d'impression est un classement personnalisé : elle n'a lieu
+    // qu'avec le consentement d'analyse (revue de conformité O5, #10499).
+    const defaultUser = mockUserFindUnique.getMockImplementation();
+    mockUserFindUnique.mockImplementation((args: any) =>
+      args?.select?.analyticsConsentAt ? Promise.resolve({ analyticsConsentAt: new Date('2026-01-01') }) : defaultUser?.(args));
 
     const service = new PostFeedService(mockPrisma);
     const result = await service.getFeed('user-1');
