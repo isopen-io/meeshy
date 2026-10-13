@@ -3,7 +3,7 @@ import type { StoreApi } from 'zustand/vanilla';
 
 import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-store';
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
-import type { RowActionId } from '@/lib/view/row-actions';
+import type { RowFlagActionId } from '@/lib/view/row-actions';
 
 import { findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import { toDate } from './decode';
@@ -52,7 +52,7 @@ type ActionPlan = {
 
 function planOf(params: {
   readonly conversationId: string;
-  readonly action: RowActionId;
+  readonly action: RowFlagActionId;
   readonly conversation: Conversation;
   readonly deps: ConversationActionDeps;
   readonly store: ConversationStoreState;
@@ -130,7 +130,7 @@ function readThroughLastMessage(row: Conversation): (conversation: Conversation)
  */
 export async function performRowAction(params: {
   readonly conversationId: string;
-  readonly action: RowActionId;
+  readonly action: RowFlagActionId;
   readonly deps: ConversationActionDeps;
 }): Promise<void> {
   const { conversationId, action, deps } = params;

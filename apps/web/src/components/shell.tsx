@@ -5,6 +5,7 @@ import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { apiDeps } from '@/lib/api/deps';
+import { departureStore } from '@/lib/conversation-departure';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
@@ -177,11 +178,24 @@ const ConversationPreviewHost = lazy(() =>
   })),
 );
 
+/**
+ * ...ET LE DÉPART D'UNE CONVERSATION (#7285, #7837) : la confirmation de
+ * « Quitter » / « Supprimer » et l'échec qui ramène la rangée valent pour la
+ * liste ET le fil, côte à côte sur grand écran — une seule couche, montée ici.
+ * `departureStore` seul est statique ; la demande va chercher l'hôte.
+ */
+const ConversationDepartureHost = lazy(() =>
+  Promise.all([import('./conversation-departure-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationDepartureHost,
+  })),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const connecte = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
   const [bandeau, setBandeau] = useState(0);
   const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
   const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
+  const departEnCours = useStore(departureStore, (state) => state.request !== null || state.failure !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
@@ -271,6 +285,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       {apercuOuvert ? (
         <Suspense fallback={null}>
           <ConversationPreviewHost />
+        </Suspense>
+      ) : null}
+      {departEnCours ? (
+        <Suspense fallback={null}>
+          <ConversationDepartureHost />
         </Suspense>
       ) : null}
       {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute

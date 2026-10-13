@@ -9,6 +9,7 @@ import {
 } from '@/lib/api/conversation-members';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { Conversation } from '@/lib/api/types';
+import { departureKindsOf, type DepartureKind } from '@/lib/conversation-departure';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
@@ -23,7 +24,9 @@ import { Link } from '@/routes/route-table';
 import { Avatar } from './avatar';
 import { ConversationMediaSection } from './conversation-media-section';
 import { AvatarMenuTrigger } from './avatar-menu';
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { CALLS_GLYPHS } from './glyphs-calls';
+import { SETTINGS_GLYPHS } from './glyphs-settings';
 import { Sheet } from './sheet';
 
 /**
@@ -32,7 +35,8 @@ import { Sheet } from './sheet';
  * nombre de membres), l'action « Partager un lien », la section « Médias »
  * (#7834, #8103 — l'aperçu et l'entrée vers l'écran « Médias, liens et
  * documents ») et l'onglet « Membres ». Statistiques (#7835), options (#7836)
- * et « Quitter » (#7837) ne sont pas encore portés.
+ * ne sont pas encore portés ; « Quitter » et « Supprimer pour moi » le sont
+ * (#7837, #7285).
  *
  * Une FEUILLE du fil, pas une adresse (D-118) : comme sur iOS, elle se pose
  * au-dessus du fil qui garde son défilement, le retour matériel la referme
@@ -91,6 +95,7 @@ export function ConversationDetailsSheet({
   onClose,
   onJumpToMessage,
   canJumpTo,
+  onRequestDeparture,
 }: {
   readonly conversation: Conversation;
   readonly title: string;
@@ -104,6 +109,12 @@ export function ConversationDetailsSheet({
   /** « Aller au message » depuis l'écran des médias — le fil referme la feuille et y saute. */
   readonly onJumpToMessage?: ((messageId: string) => void) | undefined;
   readonly canJumpTo?: ((messageId: string) => boolean) | undefined;
+  /**
+   * QUITTER, SUPPRIMER POUR MOI (#7837, #7285) — l'hôte qui sait partir : il
+   * DEMANDE le geste, que la coquille confirme (`requestDeparture`). Absent
+   * (visiteur sans compte), aucun des deux n'est rendu.
+   */
+  readonly onRequestDeparture?: ((kind: DepartureKind) => void) | undefined;
 }) {
   const language = currentInterfaceLanguage();
   const membersHeadingId = useId();
@@ -118,6 +129,9 @@ export function ConversationDetailsSheet({
   const photo = avatarOf(conversation, viewerId);
   const description = conversation.description?.trim() ?? '';
 
+  const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
+  const canLeave = departures.includes('leave');
+  const canShare = canCreateShareLink(conversation);
   const [share, setShare] = useState<ShareState>({ busy: false, feedback: null });
   const onShare = async () => {
     setShare({ busy: true, feedback: null });
@@ -148,20 +162,27 @@ export function ConversationDetailsSheet({
           </p>
         </header>
 
-        {canCreateShareLink(conversation) ? (
+        {canShare || canLeave ? (
           <div className="flex flex-col items-center gap-2 px-4 pb-6">
-            <button
-              type="button"
-              disabled={share.busy}
-              aria-busy={share.busy}
-              onClick={() => void onShare()}
-              data-conversation-details-share
-              className="flex items-center gap-2 rounded-chip px-4 font-semibold disabled:opacity-50"
-              style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--accent)' }}
-            >
-              <Glyph name="linkSimple" size={18} />
-              {share.busy ? translate(language, 'conversation.details.share.busy') : translate(language, 'conversation.details.share')}
-            </button>
+            <div className="flex flex-wrap justify-center gap-2">
+              {canShare ? (
+                <button
+                  type="button"
+                  disabled={share.busy}
+                  aria-busy={share.busy}
+                  onClick={() => void onShare()}
+                  data-conversation-details-share
+                  className="flex items-center gap-2 rounded-chip px-4 font-semibold disabled:opacity-50"
+                  style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--accent)' }}
+                >
+                  <Glyph name="linkSimple" size={18} />
+                  {share.busy ? translate(language, 'conversation.details.share.busy') : translate(language, 'conversation.details.share')}
+                </button>
+              ) : null}
+              {canLeave ? (
+                <DepartureButton kind="leave" language={language} onPress={() => onRequestDeparture?.('leave')} />
+              ) : null}
+            </div>
             <p role="status" aria-live="polite" className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
               {share.feedback ?? ''}
             </p>
@@ -205,8 +226,50 @@ export function ConversationDetailsSheet({
             </div>
           ) : null}
         </section>
+
+        {departures.includes('delete') ? (
+          <div className="flex justify-center px-4 pb-8">
+            <DepartureButton kind="delete" language={language} onPress={() => onRequestDeparture?.('delete')} />
+          </div>
+        ) : null}
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * UN GESTE DE DÉPART — à la place qu'iOS lui donne : « Quitter » à côté de
+ * « Partager » (`ConversationInfoSheet.swift`, rangée d'actions), « Supprimer
+ * pour moi » en bas (`ConversationPreferencesTab.swift`). Texte rouge, jamais du
+ * blanc sur du rouge (`ConfirmDialog`) ; 44 px au moins.
+ */
+function DepartureButton({
+  kind,
+  language,
+  onPress,
+}: {
+  readonly kind: DepartureKind;
+  readonly language: ReturnType<typeof currentInterfaceLanguage>;
+  readonly onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      data-conversation-departure={kind}
+      className="flex items-center gap-2 rounded-chip px-4 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{
+        minHeight: 44,
+        color: 'var(--color-error)',
+        border: '1.5px solid color-mix(in srgb, var(--color-error) 55%, transparent)',
+        outlineColor: 'var(--color-error)',
+      }}
+    >
+      <span aria-hidden className="grid place-items-center">
+        <GlyphSvg glyph={kind === 'leave' ? SETTINGS_GLYPHS.signOut : CALLS_GLYPHS.trash} size={18} />
+      </span>
+      {translate(language, kind === 'leave' ? 'conversation.departure.leave' : 'conversation.departure.delete')}
+    </button>
   );
 }
 

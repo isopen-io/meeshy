@@ -3,6 +3,10 @@
  * `catalog-fr.ts`, qu'il RÉPAND. Mots repris d'iOS (`swipe.*`,
  * `Localizable.xcstrings`).
  *
+ * Et QUITTER ou SUPPRIMER une conversation (#7285, #7837) — mots d'iOS
+ * (`common.delete`, `conversation.info.leave.*`, `conversation.delete.confirm.*`,
+ * `conversation.prefs.delete-for-me`, `conversation.options.error.*`).
+ *
  * Et l'en-tête REPLIABLE d'une section de la liste (#8694) : le nom que lit
  * le lecteur d'écran dit l'état et, replié, le compte de non-lus caché.
  */
@@ -16,6 +20,16 @@ const frRowActions = {
   'rowActions.unread': 'Non lu',
   'rowActions.archive': 'Archiver',
   'rowActions.unarchive': 'Désarchiver',
+  'rowActions.delete': 'Supprimer',
+  'conversation.departure.leave': 'Quitter',
+  'conversation.departure.delete': 'Supprimer pour moi',
+  'conversation.departure.leave.title': 'Quitter la conversation ?',
+  'conversation.departure.leave.message': 'Vous ne recevrez plus de messages. Votre historique restera lisible.',
+  'conversation.departure.delete.title': 'Supprimer la conversation ?',
+  'conversation.departure.delete.message': '« {title} » sera masquée pour vous. Les autres participants la conservent.',
+  'conversation.departure.leave.error': 'Impossible de quitter la conversation.',
+  'conversation.departure.delete.error': 'Impossible de supprimer la conversation.',
+  'conversation.departure.offline': 'Hors ligne — réessayez une fois connecté.',
   'lensSection.label.pinned': 'Épingles',
   'lensSection.label.live': 'En direct',
   'lensSection.label.today': "Aujourd'hui",
