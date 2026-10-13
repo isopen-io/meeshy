@@ -213,7 +213,13 @@ function ViewersBody({
     );
   }
   if (viewers.length === 0 && visitors > 0) {
-    return <VisitorsLine lang={lang} count={visitors} only />;
+    return labelsReady ? (
+      <VisitorsLine lang={lang} count={visitors} only />
+    ) : (
+      <li className="px-4 py-3 text-body" style={MUTED} data-viewers-loading>
+        {translate(lang, 'story.views.loading')}
+      </li>
+    );
   }
   if (viewers.length === 0) {
     return (
@@ -247,19 +253,23 @@ function ViewersBody({
           onOpen={onOpen}
         />
       ))}
-      {visitors > 0 ? <VisitorsLine lang={lang} count={visitors} only={false} /> : null}
+      {visitors > 0 && labelsReady ? <VisitorsLine lang={lang} count={visitors} only={false} /> : null}
     </>
   );
 }
 
-/** « et N visiteurs sans compte » — un agrégat, sans nom ni avatar (#10483). */
+/**
+ * « et N visiteurs sans compte » — un agrégat, sans nom ni avatar (#10483).
+ * Ses libellés vivent dans le catalogue chargé avec la feuille : l'appelant
+ * ne la rend qu'une fois ce catalogue prêt.
+ */
 function VisitorsLine({ lang, count, only }: { readonly lang: InterfaceLanguage; readonly count: number; readonly only: boolean }) {
   const key = only
-    ? count === 1 ? 'story.views.visitors.only.one' : 'story.views.visitors.only.other'
-    : count === 1 ? 'story.views.visitors.one' : 'story.views.visitors.other';
+    ? count === 1 ? 'viewerEngagement.visitors.only.one' : 'viewerEngagement.visitors.only.other'
+    : count === 1 ? 'viewerEngagement.visitors.one' : 'viewerEngagement.visitors.other';
   return (
     <li className="px-4 py-3 text-body" style={MUTED} data-viewers-visitors>
-      {translate(lang, key, { count: String(count) })}
+      {translateViewerEngagement(lang, key, { count: String(count) })}
     </li>
   );
 }
