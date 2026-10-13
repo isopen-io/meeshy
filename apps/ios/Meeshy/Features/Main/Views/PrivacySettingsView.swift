@@ -291,7 +291,12 @@ struct PrivacySettingsView: View {
             ) {
                 Toggle("", isOn: Binding(
                     get: { prefs.privacy[keyPath: spec.keyPath] },
-                    set: { val in prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val } }
+                    set: { val in
+                        prefs.updatePrivacy { $0[keyPath: spec.keyPath] = val }
+                        if spec.keyPath == \PrivacyPreferences.allowAnalytics {
+                            AnalyticsConsentStanding.recordDecision(userId: AuthManager.shared.currentUser?.id)
+                        }
+                    }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))

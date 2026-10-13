@@ -35,6 +35,32 @@ struct SocialEventsV2Identity: Equatable {
     }
 }
 
+/// Le consentement d'analyse tel que le CLIENT le connaît (#10499). Un réglage
+/// jamais touché n'est PAS un refus : `allowAnalytics` vaut `false` par défaut,
+/// et l'envoyer comme `denied` faisait taire tout compte neuf. `granted` quand
+/// l'utilisateur l'a accordé (ou que la passerelle l'a confirmé), `denied`
+/// seulement après un geste explicite sur la bascule, `unknown` sinon. La
+/// passerelle seule ACCORDE ; ce que le client dit ne sert qu'à REFUSER.
+enum AnalyticsConsentStanding {
+    private static let decisionKeyPrefix = "socialEvents.analyticsConsentDecided."
+
+    static func consent(allowAnalytics: Bool, serverGranted: Bool, decided: Bool) -> SocialEventContext.Consent {
+        if allowAnalytics || serverGranted { return .granted }
+        return decided ? .denied : .unknown
+    }
+
+    /// Le geste explicite de l'utilisateur sur la bascule « Analytique », par compte.
+    static func recordDecision(userId: String?, in defaults: UserDefaults = .standard) {
+        guard let userId, !userId.isEmpty else { return }
+        defaults.set(true, forKey: decisionKeyPrefix + userId)
+    }
+
+    static func hasDecided(userId: String?, in defaults: UserDefaults = .standard) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return defaults.bool(forKey: decisionKeyPrefix + userId)
+    }
+}
+
 /// Ce que l'app sait d'elle-même au moment d'un lot.
 @MainActor
 protocol SocialEventContextProviding: AnyObject {
@@ -73,7 +99,11 @@ final class LiveSocialEventContextProvider: SocialEventContextProviding {
             network: SocialEventContext.Network(snapshot: NetworkPathSource.shared.current),
             uiLanguage: AuthManager.shared.currentUser?.systemLanguage,
             deviceLocale: Locale.current.language.languageCode?.identifier,
-            consent: UserPreferencesManager.shared.privacy.allowAnalytics ? .granted : .denied,
+            consent: AnalyticsConsentStanding.consent(
+                allowAnalytics: UserPreferencesManager.shared.privacy.allowAnalytics,
+                serverGranted: UserPreferencesManager.shared.grantedConsents.contains(.analytics),
+                decided: AnalyticsConsentStanding.hasDecided(userId: AuthManager.shared.currentUser?.id)
+            ),
             capabilities: SocialEventContext.Capability.allCases,
             sampling: rates.isEmpty ? nil : rates
         )
