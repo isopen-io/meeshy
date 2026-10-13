@@ -131,7 +131,7 @@ struct StoryHeaderView: View {
                 generateLink: true
             )
             if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
-                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, authorUsername: currentGroup?.username))
+                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
                 HapticFeedback.light()
                 return
             }
@@ -139,7 +139,7 @@ struct StoryHeaderView: View {
             // intentional fall-through: try raw URL fallback
         }
         if let fallback {
-            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, authorUsername: currentGroup?.username))
+            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
             HapticFeedback.light()
         } else {
             FeedbackToastManager.shared.showError(
