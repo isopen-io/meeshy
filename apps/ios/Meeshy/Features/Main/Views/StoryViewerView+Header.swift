@@ -366,7 +366,6 @@ struct StoryHeaderView: View {
                     }
                 }
             }
-            .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
         }
         .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in

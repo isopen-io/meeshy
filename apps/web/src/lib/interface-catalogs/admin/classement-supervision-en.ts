@@ -224,7 +224,7 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Other limit reported',
 
   'admin.monitoring.backups.title': 'Backups',
-  'admin.monitoring.backups.hint': 'Production is backed up every night at midnight, Paris time. A check at 5 a.m. alerts the administrators when something is wrong.',
+  'admin.monitoring.backups.hint': 'A full backup — verified database, media, configuration — runs every night; “Next backup” says when. A check at 5 a.m., Paris time, alerts the administrators when something is wrong.',
   'admin.monitoring.backups.state.ok': 'Succeeded',
   'admin.monitoring.backups.state.failed': 'Failed',
   'admin.monitoring.backups.state.stale': 'Too old',

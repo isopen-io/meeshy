@@ -1,6 +1,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -95,6 +96,46 @@ describe('LensPaginationFooter', () => {
       const html = render({ state, showsAllLoadedHint: true, onRetry: () => {}, sentinelRef: null });
       expect(html).toContain(`data-pagination-footer="${state}"`);
     }
+  });
+});
+
+/**
+ * LE PIED GARDE UNE HAUTEUR (#8760, jumelle web de #8759) — le bloc « Et
+ * maintenant ? » est posé juste sous le pied de la liste des conversations :
+ * quand le pied passait de 1 px (sentinelle) aux points, au libellé ou à
+ * l'erreur, le bloc descendait puis remontait à chaque page chargée.
+ */
+describe('LensPaginationFooter — fixedSlot : une seule hauteur dans tous les états', () => {
+  const cases = [
+    { state: 'idle', showsAllLoadedHint: false },
+    { state: 'loading-more', showsAllLoadedHint: false },
+    { state: 'error', showsAllLoadedHint: false },
+    { state: 'exhausted', showsAllLoadedHint: true },
+    { state: 'exhausted', showsAllLoadedHint: false },
+  ] as const;
+
+  const outerStyle = (html: string): string | null => /^<li[^>]*style="([^"]*)"/.exec(html)?.[1] ?? null;
+
+  test('chaque état, « tout chargé » sous 30 compris, rend UN <li> de la même hauteur fixe', () => {
+    const styles = cases.map((props) => outerStyle(render({ ...props, onRetry: () => {}, sentinelRef: null, fixedSlot: true })));
+    const heights = styles.map((style) => /(?:^|;)height:([^;]+)/.exec(style ?? '')?.[1] ?? null);
+    expect(heights).toEqual(cases.map(() => '4.25rem'));
+  });
+
+  test('chaque état garde sa prise et son contenu dans la place réservée', () => {
+    const html = (index: number) => render({ ...cases[index]!, onRetry: () => {}, sentinelRef: null, fixedSlot: true });
+    expect(html(0)).toContain('data-load-more-sentinel');
+    expect(html(1)).toContain('role="status"');
+    expect(html(2)).toContain('Réessayer');
+    expect(html(3)).toContain('Toutes les conversations sont chargées');
+    expect(html(4)).toContain('aria-hidden="true"');
+    expect(html(4)).not.toContain('Toutes les conversations sont chargées');
+  });
+
+  test('la liste des conversations réserve cette place ; les autres listes gardent leur pied', () => {
+    const route = readFileSync(new URL('../routes/conversations.tsx', import.meta.url), 'utf8');
+    expect(route).toMatch(/<LensPaginationFooter(?:(?!\/>)[\s\S])*\bfixedSlot\b/);
+    expect(render({ state: 'idle', showsAllLoadedHint: false, onRetry: () => {}, sentinelRef: null })).toContain('height:1px');
   });
 });
 

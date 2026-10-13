@@ -141,11 +141,19 @@ describe('createPostRouteRateLimitConfig', () => {
   const cases: Array<[Parameters<typeof createPostRouteRateLimitConfig>[0], number]> = [
     ['create', 10],
     ['like', 30],
-    ['view', 60],
+    // #10403 — une vue par réel défilé : un défilement de réels en enchaîne
+    // bien plus de 60 par minute, et la passerelle dédoublonne déjà la vue par
+    // (post, compte). Un plafond bas ne protégeait rien et jetait les PREMIÈRES
+    // vues réelles des réels suivants (prod, 2026-10-12 : 1430 × 429 sur /view).
+    ['view', 240],
     ['comment', 20],
     // Une impression par APPARITION à l'écran (et non plus une par post et par
     // session) : un aller-retour de scroll produit légitimement plusieurs lots.
     ['impression', 30],
+    // #10403 — la route UNITAIRE émet une impression par apparition : son seau
+    // est celui du COMPTE, à la mesure d'un défilement de réels, et non plus le
+    // seau global de 300/min par ADRESSE partagé avec tout le trafic.
+    ['impressionUnit', 240],
     ['engagement', 20],
   ];
 

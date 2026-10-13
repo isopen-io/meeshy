@@ -1,6 +1,5 @@
 import { GlobalUserRole, globalRoleLevel } from '@meeshy/shared/types/role-types';
-
-import { WORLD_IDENTIFIER } from '../lens/world-pin';
+import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world-identity';
 
 /**
  * **QUI TOUCHE UN AUTEUR DE WORLD WIDE POUR LIRE SA FICHE** (#10102, décision
@@ -28,5 +27,5 @@ export function opensWorldParticipantCards(params: {
   readonly conversationIdentifier: string | null | undefined;
   readonly role: string | null | undefined;
 }): boolean {
-  return params.conversationIdentifier === WORLD_IDENTIFIER && mayOpenWorldParticipantCard(params.role);
+  return params.conversationIdentifier === WORLD_CONVERSATION_IDENTIFIER && mayOpenWorldParticipantCard(params.role);
 }

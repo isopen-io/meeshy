@@ -8,7 +8,8 @@ const f = {
   'admin.group.content': 'Content',
   'admin.group.moderation': 'Moderation',
   'admin.group.growth': 'Growth',
-  'admin.group.platform': 'Platform',
+  'admin.group.scales': 'Scales',
+  'admin.group.operations': 'System',
 
   'admin.kit.breadcrumb': 'Breadcrumb',
   'admin.kit.retry': 'Try again',
@@ -200,6 +201,10 @@ const f = {
   'admin.enum.postVisibility.ONLY.explain': 'Visible only to a chosen list of friends.',
 
   'admin.enum.postState.published': 'Published',
+  'admin.enum.postState.offline': 'Offline',
+  'admin.enum.postState.offline.explain': 'Taken offline by moderation: only its author sees it, and they cannot reopen it.',
+  'admin.enum.postState.private': 'Private',
+  'admin.enum.postState.private.explain': 'Only its author sees it.',
   'admin.enum.postState.deleted': 'Removed',
   'admin.enum.postState.deleted.explain': 'Removed by its author or by moderation.',
   'admin.enum.postState.expired': 'Expired',

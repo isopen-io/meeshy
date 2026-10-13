@@ -23,6 +23,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { reelStageOf } from '@/lib/reels/scene';
 import type { ReelPageMode } from '@/lib/reels/thread';
 import { useFrameProgress } from '@/lib/view/frame-progress';
+import { useReadingSession } from '@/lib/view/reading-telemetry';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
 
 /** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
@@ -400,6 +401,17 @@ export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
    */
   const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
   const participation = usePublicationParticipation(model.id);
+  /* LA LECTURE DU RÉEL ACTIF (#10401, #6486) — impression et vue à son
+     entrée à l'écran, durée et séance à sa sortie. Miroir
+     `ReelsViewModel.recordView` (iOS). */
+  useReadingSession({
+    postId: model.id,
+    active: mode === 'active',
+    contentType: 'REEL',
+    surface: 'reels',
+    impressionSource: 'feed',
+    openView: true,
+  });
   const sceneSound =
     stage.kind === 'scene' &&
     (soundUnavailable === null

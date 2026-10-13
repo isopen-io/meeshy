@@ -217,6 +217,89 @@ final class ConversationViewModelDeviceTranslationTests: XCTestCase {
         XCTAssertNil(data.confidenceScore)
     }
 
+    // MARK: - Langue d'origine au rang 1, résolue avant la fenêtre (#8896)
+
+    private func makeFrenchMessage() -> MeeshyMessage {
+        MeeshyMessage(id: Ids.messageA, conversationId: Ids.conversation, senderId: Ids.peer,
+                      content: "Bonjour de Dakar", originalLanguage: "fr")
+    }
+
+    private func makeEnglishTranslation(from sourceLanguage: String) -> MessageTranslation {
+        MessageTranslation(id: "srv:\(Ids.messageA):en", messageId: Ids.messageA,
+                           sourceLanguage: sourceLanguage, targetLanguage: "en",
+                           translatedContent: "Hello from Dakar", translationModel: nil, confidenceScore: nil)
+    }
+
+    func test_preferredTranslation_resolvedBeforeTheMessageEntersTheWindow_servesTheOriginalOnceItIsThere() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messageTranslations = [Ids.messageA: [makeEnglishTranslation(from: "auto")]]
+        _ = rig.sut.preferredTranslation(for: Ids.messageA)
+
+        rig.sut.messages = [makeFrenchMessage()]
+
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+    }
+
+    func test_preferredTranslation_messageOutsideTheWindow_readsItsOriginFromItsTranslations() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messageTranslations = [Ids.messageA: [makeEnglishTranslation(from: "fr")]]
+
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+    }
+
+    func test_preferredTranslation_originAtRankTwo_servesTheRankOneTranslation() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messages = [makeMessage()]
+        rig.sut.messageTranslations = [Ids.messageA: [makeTranslation(content: "Bonjour")]]
+
+        XCTAssertEqual(rig.sut.preferredTranslation(for: Ids.messageA)?.translatedContent, "Bonjour")
+    }
+
+    // MARK: - Connexion neuve : la bulle sert la traduction de l'aperçu (#9191)
+
+    private func makeKoreanMessage(originalLanguage: String) -> MeeshyMessage {
+        MeeshyMessage(id: Ids.messageA, conversationId: Ids.conversation, senderId: Ids.peer,
+                      content: "오늘 밤 한국어 연습할래?", originalLanguage: originalLanguage)
+    }
+
+    private func makeKoreanSourcedTranslations() -> [MessageTranslation] {
+        [("fr", "Tu veux faire des exercices de coréen avec moi ce soir ?"),
+         ("en", "Do you want to practice Korean with me tonight?")].map { pair in
+            MessageTranslation(id: "srv:\(Ids.messageA):\(pair.0)", messageId: Ids.messageA,
+                               sourceLanguage: "ko", targetLanguage: pair.0,
+                               translatedContent: pair.1, translationModel: nil, confidenceScore: nil)
+        }
+    }
+
+    func test_preferredTranslation_originCorrectedByTheStoreAfterAFirstResolution_servesTheReaderTranslation() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr"))
+        rig.sut.messages = [makeKoreanMessage(originalLanguage: "fr")]
+        rig.sut.messageTranslations = [Ids.messageA: makeKoreanSourcedTranslations()]
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+
+        rig.sut.messages = [makeKoreanMessage(originalLanguage: "ko")]
+
+        XCTAssertEqual(rig.sut.preferredTranslation(for: Ids.messageA)?.targetLanguage, "fr")
+    }
+
+    func test_preferredTranslation_profileArrivesAfterTheMessages_servesTheReaderTranslation() throws {
+        let rig = try makeRig(user: makeUser(systemLanguage: nil, regionalLanguage: nil, deviceLocale: "ko"))
+        rig.sut.messages = [makeKoreanMessage(originalLanguage: "ko")]
+        rig.sut.messageTranslations = [Ids.messageA: makeKoreanSourcedTranslations()]
+        XCTAssertNil(rig.sut.preferredTranslation(for: Ids.messageA))
+
+        rig.auth.currentUser = makeUser(systemLanguage: "fr", regionalLanguage: "en", deviceLocale: "fr")
+
+        XCTAssertEqual(rig.sut.preferredTranslation(for: Ids.messageA)?.targetLanguage, "fr")
+    }
+
+    func test_messageIdsWhoseOriginChanged_listsOnlyTheMessagesPresentOnBothSidesWithAnotherOrigin() {
+        let before = [makeKoreanMessage(originalLanguage: "fr"), makeMessage(id: Ids.messageB)]
+        let after = [makeKoreanMessage(originalLanguage: "KO"), makeMessage(id: Ids.messageB)]
+
+        XCTAssertEqual(ConversationViewModel.messageIdsWhoseOriginChanged(from: before, to: after), [Ids.messageA])
+    }
+
     func test_deviceTranslationConversationId_ofAConversation_isItsId() throws {
         let rig = try makeRig()
 

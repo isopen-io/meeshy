@@ -36,6 +36,15 @@ const frVerifyEmail = {
   'verifyEmail.arrival.lead': 'Nous préparons vos conversations…',
   'verifyEmail.arrival.status': 'Adresse confirmée — connexion…',
   'emailSent.codeOrLink': 'Entrez le code à 6 chiffres reçu à {email}, ou ouvrez le lien du même e-mail.',
+  'signInLink.switchAccount.title': 'Ouvrir un AUTRE compte ?',
+  'signInLink.switchAccount.lead': 'Vous êtes connecté avec @{current}, mais ce que vous venez d’ouvrir mène à un autre compte :',
+  'signInLink.switchAccount.warning': 'Si vous n’avez pas demandé ce lien ou ce code vous-même, annulez : votre session reste ouverte et rien ne change.',
+  'signInLink.switchAccount.cancel': 'Annuler et rester sur @{current}',
+  'signInLink.switchAccount.confirm': 'Ouvrir cet autre compte',
+  'signInLink.switchAccount.kept': '@{current} restera dans vos comptes sur cet appareil.',
+  'signInLink.switchAccount.busy': 'Un instant…',
+  'signInLink.switchAccount.failed': 'Impossible d’ouvrir cet autre compte pour le moment. Votre session reste ouverte, et le lien est refermé.',
+  'signInLink.switchAccount.leave': 'Revenir à l’accueil',
 } as const;
 
 export default frVerifyEmail;

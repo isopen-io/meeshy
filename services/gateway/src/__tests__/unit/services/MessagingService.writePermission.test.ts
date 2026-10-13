@@ -22,6 +22,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import type { MessageRequest } from '@meeshy/shared/types';
+import { matchesMongoWhere, type MongoDocument } from '../../helpers/mongo-where';
 
 const mockHandleNewMessage = jest.fn();
 const mockUpdateOnNewMessage = jest.fn();
@@ -96,6 +97,7 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 describe('MessagingService.handleMessage — droit d’écriture du PARTICIPANT — canSendMessages (#4855)', () => {
   let service: MessagingService;
@@ -272,5 +274,67 @@ describe('MessagingService.handleMessage — droit d’écriture du PARTICIPANT 
     const response = await service.handleMessage(validRequest, testParticipantId);
 
     expect(response.success).toBe(true);
+  });
+
+  // #10440 — défense en profondeur (audit de #10437, #10436) : une ligne
+  // active ET bannie — la forme que `restore-for-me` produisait avant #10436 —
+  // n'écrit pas. La vérification de l'expéditeur lisait `isActive` seul.
+  it('refuse une participation active mais BANNIE', async () => {
+    mockPrisma.participant.findUnique.mockResolvedValue({
+      ...participantWithRights({}),
+      bannedAt: new Date('2026-10-01T00:00:00Z'),
+    });
+
+    const response = await service.handleMessage(validRequest, testParticipantId);
+
+    expect(response.success).toBe(false);
+    expect(response.error).toContain('Permissions insuffisantes');
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('lit bannedAt sur la ligne chargée, et le repli par userId exige une participation vivante', async () => {
+    mockPrisma.participant.findUnique.mockResolvedValue(null);
+    mockPrisma.participant.findFirst.mockResolvedValue(null);
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    await service.handleMessage(validRequest, testParticipantId);
+
+    expect(mockPrisma.participant.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ bannedAt: true }) })
+    );
+    expect(mockPrisma.participant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining(PARTICIPATION_VIVANTE),
+      })
+    );
+  });
+
+  // #10443 — l'audit adversarial de #10440 : le pont legacy
+  // `ensureParticipantFromMember` ne lisait aucune ligne `Participant`
+  // existante. Le repli par userId exige une participation VIVANTE : un banni
+  // n'y est pas trouvé, et un `ConversationMember` hérité encore actif lui
+  // CRÉAIT une participation active neuve (seul l'index unique
+  // `[conversationId, userId, sessionTokenHash]` l'empêchait, s'il est posé).
+  it('ne crée jamais de participation depuis un ConversationMember hérité quand une ligne Participant existe déjà (banni)', async () => {
+    const LEGACY_USER_ID = '507f1f77bcf86cd799439077';
+    const rows: MongoDocument[] = [{
+      id: 'p-banned', conversationId: testConversationId, userId: LEGACY_USER_ID, type: 'user',
+      isActive: false, bannedAt: new Date('2026-10-01T00:00:00Z'),
+    }];
+    mockPrisma.participant.findUnique.mockResolvedValue(null);
+    mockPrisma.participant.findFirst.mockImplementation(async ({ where }: { where: MongoDocument }) =>
+      rows.find((row) => matchesMongoWhere(row, where)) ?? null
+    );
+    mockPrisma.user.findUnique.mockResolvedValue({
+      id: LEGACY_USER_ID, username: 'legacy', displayName: 'Legacy', firstName: null, lastName: null, avatar: null, systemLanguage: 'fr'
+    });
+    mockPrisma.$runCommandRaw = jest.fn().mockResolvedValue({ cursor: { firstBatch: [{ role: 'MEMBER', isActive: true }] } });
+    mockPrisma.participant.create = jest.fn();
+
+    const response = await service.handleMessage(validRequest, LEGACY_USER_ID);
+
+    expect(mockPrisma.participant.create).not.toHaveBeenCalled();
+    expect(response.success).toBe(false);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 });

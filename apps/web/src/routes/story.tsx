@@ -25,6 +25,7 @@ import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
+import { useReadingSession } from '@/lib/view/reading-telemetry';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { servedStoryIndicator } from '@/lib/stories/language-availability';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -56,6 +57,7 @@ import {
 import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
+import { useStoryMediaClaim } from '@/lib/view/story-media-claim';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
 import { useStoryActionRail } from '@/lib/view/use-story-action-rail';
 import { useStoryGestures } from '@/lib/view/use-story-gestures';
@@ -125,6 +127,8 @@ function authorLabel(group: StoryPlaybackGroup): string {
 
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
+  /* Ouvrir une story arrête ce qui jouait ailleurs (#9586, `StoryMediaCoordinator.activate` iOS). */
+  useStoryMediaClaim();
   const [currentId, setCurrentId] = useState(post);
   /**
    * **LA PORTÉE « UN SEUL GROUPE »** (revue de #6149, défaut majeur 3) —
@@ -387,6 +391,17 @@ export default function StoryScreen() {
     markedRef.current.add(currentStory.id);
     void markStoryViewedAction(currentStory.id);
   }, [currentStory, visitor]);
+  /* L'IMPRESSION, LA DURÉE ET LA SÉANCE DE LA STORY (#10401) — la vue
+     d'ouverture d'un compte part ci-dessus (l'anneau s'éteint tout de suite) ;
+     celle d'un visiteur part ici, sous son jeton. */
+  useReadingSession({
+    postId: currentStory?.id,
+    active: currentStory !== undefined,
+    contentType: 'STORY',
+    surface: 'story',
+    impressionSource: 'story',
+    openView: visitor,
+  });
 
   const pause = useCallback(() => {
     setPaused((was) => {

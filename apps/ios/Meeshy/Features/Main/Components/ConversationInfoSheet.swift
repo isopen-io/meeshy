@@ -97,6 +97,7 @@ struct ConversationInfoSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 headerBar
+                    .zIndex(1)
                 conversationHeader
                 if isDirect, otherUserId != nil {
                     blockUserButton
@@ -274,10 +275,11 @@ struct ConversationInfoSheet: View {
 
     private var heroConversationHeader: some View {
         VStack(spacing: 0) {
-            // Banner
-            heroBannerImage
+            Color.clear
                 .frame(height: 140)
+                .overlay { heroBannerImage.allowsHitTesting(false).accessibilityHidden(true) }
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
                 .padding(.horizontal, MeeshySpacing.lg)
 
             // Avatar overlapping banner

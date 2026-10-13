@@ -200,7 +200,7 @@ describe('CallEventsHandler — endCallParticipationForDepartedMember', () => {
     });
 
     const where = findMany.mock.calls[0][0].where;
-    expect(where.participant).toEqual({ userId: DEPARTED_USER_ID, conversationId: CONV_ID });
+    expect(where.participant).toEqual(expect.objectContaining({ conversationId: CONV_ID }));
     // Preuve de STRUCTURE : aucune clause `isActive` nulle part dans le filtre.
     expect(JSON.stringify(where)).not.toContain('isActive');
   });
@@ -403,5 +403,119 @@ describe('CallEventsHandler — endCallParticipationForDepartedMember', () => {
     });
 
     expect(mockClearRingingTimeoutDep).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * #10469 — la clé du partant n'a pas la même COLONNE selon qui il est : un
+ * membre inscrit est désigné par son `User.id` (colonne `userId`), un invité
+ * de lien par son `Participant.id` (colonne `id`, son `userId` est nul).
+ * Le double de Prisma ci-dessous ÉVALUE le filtre sur des lignes : un filtre
+ * posé sur la mauvaise colonne rend une liste vide, et l'invité restait dans
+ * l'appel sans recevoir `call:force-leave` — le symptôme est un silence.
+ */
+describe('CallEventsHandler — endCallParticipationForDepartedMember, la colonne de la clé', () => {
+  type Membership = { id: string; userId: string | null; conversationId: string; type: string };
+  type CallRow = ReturnType<typeof makeParticipation> & { participant: Membership };
+
+  const GUEST_ID = 'guest-participant-001';
+
+  function matches(filter: Record<string, unknown>, membership: Membership): boolean {
+    return Object.entries(filter).every(([key, value]) =>
+      key === 'OR'
+        ? (value as Record<string, unknown>[]).some(branch => matches(branch, membership))
+        : membership[key as keyof Membership] === value
+    );
+  }
+
+  function makeEvaluatingPrisma(rows: CallRow[]) {
+    const { prisma, findMany } = makePrisma([]);
+    findMany.mockImplementation(async ({ where }: { where: { participant: Record<string, unknown> } }) =>
+      rows.filter(row => row.leftAt === null && matches(where.participant, row.participant))
+    );
+    return prisma;
+  }
+
+  function rowFor(membership: Membership): CallRow {
+    return { ...makeParticipation(), participantId: membership.id, participant: membership };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCreateCallSummaryDep.mockResolvedValue(null);
+    mockLeaveCallDep.mockResolvedValue({
+      id: CALL_ID, conversationId: CONV_ID, status: 'active', duration: 0, endReason: null, mode: 'p2p',
+    });
+  });
+
+  it("sort un INVITÉ de lien de l'appel : `call:force-leave` vers sa room personnelle, et ses appareils quittent la room d'appel", async () => {
+    const guestSocket = makeSocketDouble('socket-guest');
+    const prisma = makeEvaluatingPrisma([
+      rowFor({ id: GUEST_ID, userId: null, conversationId: CONV_ID, type: 'anonymous' }),
+    ]);
+    const { io, emitsByRoom } = makeIo({ [ROOMS.user(GUEST_ID)]: [guestSocket] });
+
+    await new CallEventsHandler(prisma).endCallParticipationForDepartedMember({
+      io: io as any,
+      conversationId: CONV_ID,
+      userId: GUEST_ID,
+    });
+
+    expect(emitsByRoom).toContainEqual({
+      room: ROOMS.user(GUEST_ID),
+      event: 'call:force-leave',
+      payload: { callId: CALL_ID, reason: 'membership_ended' },
+    });
+    expect(mockLeaveCallDep).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: CALL_ID, userId: GUEST_ID, participantId: GUEST_ID })
+    );
+    expect(guestSocket.leave).toHaveBeenCalledWith(ROOMS.call(CALL_ID));
+  });
+
+  it("sort toujours un membre INSCRIT désigné par son `User.id`", async () => {
+    const prisma = makeEvaluatingPrisma([
+      rowFor({ id: MEMBERSHIP_ID, userId: DEPARTED_USER_ID, conversationId: CONV_ID, type: 'user' }),
+    ]);
+    const { io, emitsByRoom } = makeIo();
+
+    await new CallEventsHandler(prisma).endCallParticipationForDepartedMember({
+      io: io as any,
+      conversationId: CONV_ID,
+      userId: DEPARTED_USER_ID,
+    });
+
+    expect(mockLeaveCallDep).toHaveBeenCalledWith(expect.objectContaining({ participantId: MEMBERSHIP_ID }));
+    expect(emitsByRoom.map(e => e.event)).toContain('call:force-leave');
+  });
+
+  it("ne lit JAMAIS la colonne `id` d'un membre inscrit — seule la ligne d'un invité se désigne par son `Participant.id`", async () => {
+    const prisma = makeEvaluatingPrisma([
+      rowFor({ id: MEMBERSHIP_ID, userId: DEPARTED_USER_ID, conversationId: CONV_ID, type: 'user' }),
+    ]);
+    const { io, emitsByRoom } = makeIo();
+
+    await new CallEventsHandler(prisma).endCallParticipationForDepartedMember({
+      io: io as any,
+      conversationId: CONV_ID,
+      userId: MEMBERSHIP_ID,
+    });
+
+    expect(mockLeaveCallDep).not.toHaveBeenCalled();
+    expect(emitsByRoom).toEqual([]);
+  });
+
+  it("ne sort pas l'invité d'un appel d'un AUTRE fil", async () => {
+    const prisma = makeEvaluatingPrisma([
+      rowFor({ id: GUEST_ID, userId: null, conversationId: 'conversation-voisine', type: 'anonymous' }),
+    ]);
+    const { io } = makeIo();
+
+    await new CallEventsHandler(prisma).endCallParticipationForDepartedMember({
+      io: io as any,
+      conversationId: CONV_ID,
+      userId: GUEST_ID,
+    });
+
+    expect(mockLeaveCallDep).not.toHaveBeenCalled();
   });
 });

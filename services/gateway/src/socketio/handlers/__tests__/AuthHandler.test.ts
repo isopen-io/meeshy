@@ -132,7 +132,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -163,7 +163,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -937,7 +937,7 @@ describe('AuthHandler', () => {
         join: asyncJoin,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -1021,7 +1021,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { sessionToken: 'anon-session-token' } }
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -1101,7 +1101,7 @@ describe('AuthHandler', () => {
     it('should authenticate anonymous user with sessionToken', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-456'
@@ -1447,7 +1447,7 @@ describe('AuthHandler', () => {
         join,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId,
@@ -1557,7 +1557,7 @@ describe('AuthHandler', () => {
 
     const authAnonymousSocket = async (socketId: string) => {
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-1'

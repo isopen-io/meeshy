@@ -36,6 +36,15 @@ const arVerifyEmail = {
   'verifyEmail.arrival.lead': 'نُجهّز محادثاتك…',
   'verifyEmail.arrival.status': 'تم تأكيد العنوان — جارٍ تسجيل الدخول…',
   'emailSent.codeOrLink': 'أدخل الرمز المكوّن من 6 أرقام المرسل إلى {email}، أو افتح الرابط في البريد نفسه.',
+  'signInLink.switchAccount.title': 'فتح حساب آخر؟',
+  'signInLink.switchAccount.lead': 'أنت مسجّل الدخول باسم @{current}، لكن ما فتحته للتو يقود إلى حساب آخر:',
+  'signInLink.switchAccount.warning': 'إن لم تطلب هذا الرابط أو الرمز بنفسك، فألغِ: تبقى جلستك مفتوحة ولا يتغيّر شيء.',
+  'signInLink.switchAccount.cancel': 'إلغاء والبقاء على @{current}',
+  'signInLink.switchAccount.confirm': 'فتح هذا الحساب الآخر',
+  'signInLink.switchAccount.kept': 'سيبقى @{current} ضمن حساباتك على هذا الجهاز.',
+  'signInLink.switchAccount.busy': 'لحظة…',
+  'signInLink.switchAccount.failed': 'تعذّر فتح هذا الحساب الآخر حاليًا. تبقى جلستك مفتوحة، وقد أُغلق الرابط.',
+  'signInLink.switchAccount.leave': 'العودة إلى الصفحة الرئيسية',
 };
 
 export default arVerifyEmail;

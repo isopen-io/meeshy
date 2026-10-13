@@ -246,9 +246,13 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     // MARK: - Change Password
 
-    public func changePassword(currentPassword: String, newPassword: String) async throws {
+    /// `currentPassword` vaut `nil` pour POSER un premier mot de passe (#9186) :
+    /// la clé ne part pas, et la passerelle n'en exige pas d'un compte qui n'en
+    /// a aucun — la session est la preuve (#6424). Elle le lit en base, jamais
+    /// dans la requête : omettre la clé sur un compte qui en a un est refusé.
+    public func changePassword(currentPassword: String?, newPassword: String) async throws {
         struct Body: Encodable {
-            let currentPassword: String
+            let currentPassword: String?
             let newPassword: String
         }
         let body = Body(currentPassword: currentPassword, newPassword: newPassword)
@@ -259,6 +263,23 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         guard response.success else {
             throw MeeshyError.server(statusCode: 0, message: response.error ?? response.message ?? "Erreur inconnue")
         }
+    }
+
+    /// #9186 — le compte a-t-il déjà un mot de passe ? Un compte né d'une
+    /// inscription par e-mail seul n'en a pas, et Réglages › Sécurité doit
+    /// alors en POSER un sans réclamer d'« actuel ». Lu sur
+    /// `GET /auth/me?expand=security` (`security.hasPassword`, que la passerelle
+    /// dérive du hash sans jamais le servir). `nil` quand la passerelle ne sert
+    /// pas le résumé : l'écran garde alors le formulaire d'un CHANGEMENT.
+    public func hasPassword() async throws -> Bool? {
+        let response: APIResponse<MeSecurityResponseData> = try await api.request(
+            AuthEndpoint.me,
+            queryItems: [
+                URLQueryItem(name: "fields", value: "id"),
+                URLQueryItem(name: "expand", value: "security"),
+            ]
+        )
+        return response.data.user.security?.hasPassword
     }
 
     // MARK: - Email Verification
@@ -322,5 +343,19 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
             queryItems: nil,
             headers: ["Authorization": "Bearer \(token)"]
         )
+    }
+}
+
+/// `GET /auth/me?expand=security` — la seule chose que l'écran du mot de passe
+/// en lit (#9186).
+public struct MeSecurityResponseData: Decodable, Sendable {
+    public let user: User
+
+    public struct User: Decodable, Sendable {
+        public let security: Security?
+    }
+
+    public struct Security: Decodable, Sendable {
+        public let hasPassword: Bool?
     }
 }

@@ -539,7 +539,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
           type: 'anonymous',
           isActive: true,
         },
-        select: { id: true, anonymousSession: true },
+        select: { id: true, shareLinkId: true, anonymousSession: true },
       });
       const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
       expect(createCall.data.uploadedBy).toBe('participant-1');

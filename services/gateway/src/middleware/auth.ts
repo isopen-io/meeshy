@@ -7,11 +7,14 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
+import { loadGuestShareLinkExpiry, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
+import { guestAccessEnd } from '../services/guestAccessEnd';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { SESSION_CLAIM, legacyTokenRefusal } from '../services/auth/session-jwt';
 import { ActivationBlockedError, resolveAccountActivation } from '../services/auth/account-activation';
+import { AccountDeletedError, accountIsDeleted, sendAccountDeleted, type DeletedAccountReader } from '../services/auth/account-deleted';
 import type { AccountActivation } from '@meeshy/shared/types/account-activation';
 import { SessionActivitySampler, sharedSessionActivity } from '../services/auth/session-activity';
 
@@ -195,7 +198,7 @@ export type AuthMiddlewareOptions = {
   readonly sessionActivity?: SessionActivitySampler;
 };
 
-export { ActivationBlockedError };
+export { ActivationBlockedError, AccountDeletedError };
 
 // ===== SERVICE =====
 
@@ -260,6 +263,18 @@ export class AuthMiddleware {
       );
       return 'unknown';
     }
+  }
+
+  /**
+   * #10264 — atteint seulement APRÈS `jwt.verify` : la signature prouve que le
+   * porteur détenait un jeton de CE compte, seul destinataire légitime de
+   * « supprimé ». Tout autre compte inactif garde le refus générique.
+   */
+  private async inactiveAccountRefusal(userId: string): Promise<Error> {
+    if (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, userId)) {
+      return new AccountDeletedError(userId);
+    }
+    return new Error('User not found or inactive');
   }
 
   private async createRegisteredUserContext(
@@ -410,7 +425,7 @@ export class AuthMiddleware {
 
       if (cachedRow) {
         if (!cachedRow.isActive) {
-          throw new Error('User not found or inactive');
+          throw await this.inactiveAccountRefusal(jwtUserId);
         }
         user = deserializeCachedUser(cachedRow);
       }
@@ -482,7 +497,7 @@ export class AuthMiddleware {
       }
 
       if (!user || !user.isActive) {
-        throw new Error('User not found or inactive');
+        throw await this.inactiveAccountRefusal(jwtUserId);
       }
 
       // #8238 — lu sur la ligne, fraîche ou en cache : le délai dépend de
@@ -532,6 +547,7 @@ export class AuthMiddleware {
 
     } catch (error) {
       if (error instanceof ActivationBlockedError) throw error;
+      if (error instanceof AccountDeletedError) throw error;
       if (error instanceof jwt.TokenExpiredError) {
         const tokenPrefix = jwtToken.slice(-8);
         const now = Date.now();
@@ -582,9 +598,11 @@ export class AuthMiddleware {
           language: true,
           permissions: true,
           isActive: true,
+          bannedAt: true,
           isOnline: true,
           lastActiveAt: true,
           nickname: true,
+          shareLinkId: true,
           anonymousSession: true,
         }
       });
@@ -593,14 +611,18 @@ export class AuthMiddleware {
         throw new Error('Anonymous participant not found');
       }
 
-      // L'invité dont le lien a été révoqué (`revokeShareLinkGuests`) porte un
-      // jeton VALIDE sur un participant DÉSACTIVÉ. Lui rendre le même 401 nu
-      // qu'à un jeton inventé l'envoie retenter indéfiniment un geste qui ne
-      // peut pas aboutir — et prive l'opérateur qui reçoit son signalement du
-      // seul fait qui explique la panne.
-      if (participant.isActive === false) {
-        throw new GuestAccessRevokedError();
-      }
+      // #10437 — la garde COMMUNE du lien échu, puis (#4410, #10449) celle de
+      // la participation morte : un jeton VALIDE sur une ligne désactivée ou
+      // bannie ne reçoit pas le 401 nu d'un jeton inventé, qui l'enverrait
+      // retenter. Ordre unique des portes (#10457) : `guestAccessEnd`. Lien
+      // illisible ⇒ l'erreur propage, le `catch` ci-dessous refuse sans code.
+      const end = guestAccessEnd({
+        linkExpiresAt: await loadGuestShareLinkExpiry(this.prisma, participant),
+        participation: participant,
+        now: new Date(),
+      });
+      if (end === 'link-expired') throw new ShareLinkExpiredError();
+      if (end === 'revoked') throw new GuestAccessRevokedError();
 
       if (this.statusService) {
         this.statusService.updateAnonymousLastSeen(participant.id);
@@ -651,6 +673,7 @@ export class AuthMiddleware {
       // pas seulement le `catch` extérieur : une erreur qu'on vient de
       // qualifier ne survit pas à un gestionnaire qui réécrit sans regarder.
       if (error instanceof GuestAccessRevokedError) throw error;
+      if (error instanceof ShareLinkExpiredError) throw error;
       authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
@@ -814,8 +837,22 @@ export function createUnifiedAuthMiddleware(
         });
       }
 
+      // Même code que les portes de lecture par route (#7388). Le client y
+      // oublie la session d'invité et cesse de se reconnecter, comme pour la
+      // révocation ci-dessus (#10442). Sur une route à authentification
+      // facultative aussi : retomber en visiteur tairait la cause.
+      if (error instanceof ShareLinkExpiredError) {
+        return refuseExpiredShareLink(reply);
+      }
+
       if (options.requireAuth && error instanceof ActivationBlockedError) {
         return sendUnauthorized(reply, 'Confirmez votre adresse e-mail pour continuer', { code: 'ACCOUNT_ACTIVATION_REQUIRED' });
+      }
+
+      // #10264 — même statut que le 401 générique (un ancien client ne lit que
+      // lui) ; le code permet à l'appareil de purger les données de CE compte.
+      if (options.requireAuth && error instanceof AccountDeletedError) {
+        return sendAccountDeleted(reply, error.accountId);
       }
 
       if (options.requireAuth) {

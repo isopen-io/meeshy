@@ -988,6 +988,19 @@ export default defineConfig({
          */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            /**
+             * LES OBSERVATEURS ET LES HOOKS DE TANSTACK (#10485) — le socle
+             * ne lit que `QueryClient`, `QueryClientProvider`, `hydrate` et
+             * `dehydrate` (`main.tsx`, `lib/api/query-client.ts`) ; `useQuery`,
+             * `useMutation`, `useQueries`, `useInfiniteQuery` et les
+             * `*Observer` de query-core ne servent qu'aux écrans, tous chargés
+             * par `import()`. La règle « node_modules ⇒ core » les payait à la
+             * première peinture de tous : mesuré, 89,95 → 85,85 Ko.
+             */
+            if (/@tanstack\/query-core\/build\/modern\/\w*Observer\.js$/.test(id)) return 'query-screens';
+            if (/@tanstack\/react-query\/build\/modern\//.test(id) && !/\/(index|QueryClientProvider)\.js$/.test(id)) {
+              return 'query-screens';
+            }
             if (id.includes('@tanstack/react-query')) return 'data';
             // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
             // par la route qui l'importe et par personne d'autre.
@@ -1095,6 +1108,16 @@ export default defineConfig({
            * statiques — légitimes, ce sont des fonctions pures — faisaient
            * rougir `dynamic_only`. Un nom qui ne commence pas par ce préfixe.
            */
+          /**
+           * L'IDENTITÉ DE WORLD WIDE ET LES FAMILLES D'UN INVITÉ (#10038) —
+           * `world-identity` et `guest-attachment-kind-rules` (`@meeshy/shared`),
+           * des constantes et deux fonctions pures, sans Zod. Elles remplacent
+           * les jumelles que le web en tenait ; laissées à Rolldown, elles
+           * faisaient deux morceaux là où la jumelle n'en faisait qu'un, soit
+           * un nom de plus dans la table de préchargement de l'entrée. Un nom
+           * pour les deux : lues par les mêmes écrans (liste, fil, jonction).
+           */
+          if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
           if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;

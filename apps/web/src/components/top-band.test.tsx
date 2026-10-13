@@ -170,8 +170,14 @@ describe('quand la bannière n’a pas de place', () => {
       expect(whileShown.length).toBeGreaterThan(0);
       expect(whileShown.every((pixels) => pixels === 70)).toBe(true);
     } finally {
-      if (measured !== undefined) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', measured);
+      if (measured === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+      else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', measured);
     }
+  });
+
+  test('la mesure bouchonnée de la passe précédente ne survit pas au témoin : le prototype partagé par tout le process retrouve sa mesure d’origine', () => {
+    expect(Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect')).toBeUndefined();
+    expect(document.createElement('div').getBoundingClientRect().width).toBe(0);
   });
 
   test('hors des hubs (le fil), aucune bannière ni réserve', async () => {

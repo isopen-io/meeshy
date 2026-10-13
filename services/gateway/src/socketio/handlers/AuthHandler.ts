@@ -23,6 +23,12 @@ import { scheduleContactRecentlyActiveAnnouncement } from '../../services/notifi
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { loadGuestShareLinkExpiry } from '../../services/shareLinkReadGate';
+import { guestAccessEnd } from '../../services/guestAccessEnd';
+import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
+import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
+import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -103,8 +109,12 @@ export class AuthHandler {
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
   private readonly now: () => Date;
 
+  /** #10437, #10440, #10443 — la relecture du lien et de la participation de chaque socket invité. */
+  private readonly guestLinkWatch: GuestLinkWatch;
+
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
+    this.guestLinkWatch = new GuestLinkWatch(deps.prisma);
     this.statusService = deps.statusService;
     this.maintenanceService = deps.maintenanceService;
     this.callService = deps.callService;
@@ -247,8 +257,17 @@ export class AuthHandler {
     // moment de la désactivation (`UserManagementService.updateStatus` /
     // `.deleteUser`) — cette porte couvre le cas qu'il ne peut pas voir : une
     // reconnexion ultérieure avec le même JWT, encore valide.
+    //
+    // #10264 — un compte SUPPRIMÉ reçoit le même refus, plus le code qui permet
+    // à l'appareil de purger les données de CE compte. La signature vient
+    // d'être vérifiée : seul le porteur d'un jeton du compte l'apprend.
     if (user.isActive === false) {
-      socket.emit(SERVER_EVENTS.ERROR, { message: 'Account disabled' });
+      socket.emit(
+        SERVER_EVENTS.ERROR,
+        (await accountIsDeleted(this.prisma as unknown as DeletedAccountReader, user.id))
+          ? { message: 'Account disabled', code: AUTH_ERROR_CODES.ACCOUNT_DELETED, accountId: user.id }
+          : { message: 'Account disabled' },
+      );
       socket.disconnect(true);
       return;
     }
@@ -366,6 +385,9 @@ export class AuthHandler {
 
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
     this._scheduleTokenExpiry(socket, decoded.exp);
+    // #10440 — le socket n'est plus celui d'un invité : le minuteur de lien
+    // d'une session invitée antérieure sur ce socket ne le coupera pas.
+    this.guestLinkWatch.dispose(socket);
 
     this.statusService.markConnected(user.id, false);
     // Le write DB + broadcast « en ligne » n'appartiennent qu'à la transition
@@ -477,23 +499,42 @@ export class AuthHandler {
   ): Promise<void> {
     const tokenHash = hashSessionToken(sessionToken);
 
+    // #10457 — UNE lecture de la ligne du jeton, vivante ou non, puis l'ordre
+    // unique des causes (`guestAccessEnd`) : lien expiré d'abord, puis
+    // participation morte (désactivée, bannie). Un jeton sans ligne garde la
+    // réponse nue, rien n'est confirmé à qui ne détient rien (#10449).
     const participant = await this.prisma.participant.findFirst({
-      where: {
-        sessionTokenHash: tokenHash,
-        type: 'anonymous',
-        isActive: true
-      },
+      where: { sessionTokenHash: tokenHash, type: 'anonymous' },
       select: {
         id: true,
         displayName: true,
         language: true,
-        conversationId: true
+        conversationId: true,
+        shareLinkId: true,
+        anonymousSession: true,
+        isActive: true,
+        bannedAt: true
       }
     });
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
+      return;
+    }
+
+    // #10437 — la garde commune du lien échu, AVANT toute room : c'est cette
+    // porte (et non `_joinUserConversations`) qui joint la room d'un invité, à
+    // la connexion comme à chaque reconnexion. Un lien illisible lève, et
+    // `handleTokenAuthentication` coupe le socket SANS code (fail-closed).
+    const linkExpiresAt = await loadGuestShareLinkExpiry(this.prisma, participant);
+    const end = guestAccessEnd({ linkExpiresAt, participation: participant, now: new Date() });
+    if (end === 'link-expired') {
+      refuseExpiredGuestLink(socket);
+      return;
+    }
+    if (end === 'revoked') {
+      refuseRevokedGuest(socket);
       return;
     }
 
@@ -550,6 +591,7 @@ export class AuthHandler {
     }
 
     const isFirstSocket = this._registerUser(participant.id, socketUser, socket);
+    this.guestLinkWatch.schedule(socket, participant, linkExpiresAt);
 
     // Même garde 0→1 que la porte inscrite — voir `_authenticateJWTUser`.
     if (isFirstSocket) {
@@ -617,6 +659,7 @@ export class AuthHandler {
 
     arm();
   }
+
 
   /**
    * Rend `true` UNIQUEMENT sur la transition 0→1 du compteur de sockets — le
@@ -918,12 +961,16 @@ export class AuthHandler {
 
       if (isAnonymous) {
         conversations = await this.prisma.participant.findMany({
-          where: { id: userId, isActive: true },
+          where: { id: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }
         });
       } else {
+        // #7389 — un inscrit banni dont la ligne a été rallumée (bannie
+        // pendant une suppression pour soi, puis restaurée par
+        // `restore-for-me` avant #10436) ne rejoint pas la room : il y
+        // recevrait chaque `message:new` que les portes REST lui refusent.
         conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, isActive: true },
+          where: { userId: userId, ...PARTICIPATION_VIVANTE },
           select: { conversationId: true }
         });
       }

@@ -77,6 +77,7 @@ const monter = (ligne: Record<string, unknown>) => {
         user: ligne,
       })),
       update: jest.fn(async () => ({ id: 'mlt-1' })),
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     emailVerificationWatch: { updateMany: jest.fn(async () => ({ count: 0 })) },
     securityEvent: { create: jest.fn(async () => ({ id: 'ev-1' })) },

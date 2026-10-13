@@ -211,6 +211,15 @@ struct DownloadBadgeView: View {
     let accentColor: String
     let messageDeliveryStatus: Message.DeliveryStatus
     var onShareFile: ((URL) -> Void)? = nil
+    /// L'URL que la surface AFFICHE réellement — la variante élue par
+    /// `ImageVariantSelector`, souvent distincte de `attachment.fileUrl`.
+    /// Sur le disque, elle suffit à taire le badge (#10370).
+    var displayedURL: String? = nil
+    /// L'hôte a vu l'image affichée ARRIVER (`ProgressiveCachedImage`
+    /// `onFullImageLoaded`) : elle a été téléchargée par un autre chemin que
+    /// ce badge, qui ne l'observe pas — sans ce signal, il restait « ↓ » pour
+    /// toujours au-dessus d'une image nette (#10370).
+    var displayedImageLanded: Bool = false
 
     @StateObject private var downloader = AttachmentDownloader()
     private var accent: Color { Color(hex: accentColor) }
@@ -243,19 +252,14 @@ struct DownloadBadgeView: View {
             || messageDeliveryStatus == .invisible
     }
 
-    /// Synchronous probe of the in-memory UIImage cache. For an image whose
-    /// bytes are already resident (our own confirmed upload — pre-seeded by
-    /// RC3.3 — or a previously decoded remote image) this resolves "cached"
-    /// within the first render, so the download affordance never flashes over
-    /// media we already hold. The async `checkCache` still covers disk-only
-    /// hits and the audio / video stores.
-    private var isImageAlreadyResident: Bool {
-        guard attachment.type == .image else { return false }
-        let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-        // Toutes variantes confondues : la bulle décode sous une clé
-        // dimensionnée (targetSize → bucket), le slot nu peut donc être vide
-        // alors que l'image est bel et bien affichée.
-        return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
+    /// **Un média déjà sur l'appareil n'a pas de badge « télécharger »**
+    /// (#10370), dès le PREMIER rendu : la règle unique et synchrone
+    /// `AttachmentDownloadCenter.isOnDevice` lit le disque (et, pour l'image,
+    /// toute variante décodée en mémoire) pour l'original, la variante
+    /// affichée et les variantes déclarées. Le `checkCache` asynchrone ne fait
+    /// plus que confirmer.
+    private var isAlreadyOnDevice: Bool {
+        displayedImageLanded || AttachmentDownloadCenter.isOnDevice(attachment, displayedURL: displayedURL)
     }
 
     private var totalSizeText: String {
@@ -266,7 +270,7 @@ struct DownloadBadgeView: View {
 
     var body: some View {
         Group {
-            if yieldsToThePlayer || hidesForLocalOrOptimisticMedia || isImageAlreadyResident {
+            if yieldsToThePlayer || hidesForLocalOrOptimisticMedia || isAlreadyOnDevice {
                 EmptyView()
             } else if downloader.isCached {
                 EmptyView()
@@ -552,22 +556,21 @@ struct AudioMediaView: View, Equatable {
     /// simulateur sur « Meeshy Global »).
     ///
     /// Mêmes branches que `resolveAvailability`, en synchrone : un `stat`, sans
-    /// saut d'acteur. Le `.task` garde le dernier mot — il consulte aussi le
-    /// cache mémoire.
+    /// saut d'acteur — par la règle unique `AttachmentDownloadCenter.isOnDevice`
+    /// (#10370). Le `.task` garde le dernier mot — il consulte aussi le cache
+    /// mémoire.
     nonisolated static func availableOnDeviceAtFirstRender(
         urlString: String,
         fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
         isOnDisk: (String) -> Bool = { CacheCoordinator.audioLocalFileURL(for: $0) != nil }
     ) -> AudioAvailability {
-        if urlString.hasPrefix("file://") {
-            return AudioAvailability.resolve(
-                isLocalFile: true,
-                localFileExists: fileExists(URL(string: urlString)?.path ?? ""),
-                isServerCached: false
-            )
-        }
-        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        return AudioAvailability.resolve(isLocalFile: false, localFileExists: false, isServerCached: isOnDisk(resolved))
+        let onDevice = AttachmentDownloadCenter.isOnDevice(
+            urlString: urlString,
+            kind: .audio,
+            stat: { key, _ in isOnDisk(key) },
+            fileExists: fileExists
+        )
+        return onDevice ? .ready : .needsDownload
     }
 
     /// URL de la langue actuellement sélectionnée (orig ou traduite).

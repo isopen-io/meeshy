@@ -350,8 +350,12 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 //   MeeshyColors.brandPrimaryHex)` retiré de l'icône de palette du rail
 //   document : remplacé par `ComposerFloatingRailInk.floating(active:)`, la
 //   même loi de glyphe en relief que le rail gauche et le rail droit.
-// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 457;
+// Valeur MESURÉE le 2026-10-12 (CI 38302041896, run ebc05cc7d5 ; confirmée
+// indépendamment par run 38320669253 sur `dev`).
+// 457 -> 458 (2026-10-13) : UserProfileSheet pose la pastille « Réessayer » sur
+// resolvedAccent, l'accent du PROFIL (déjà lu ainsi l. 494 du même fichier) —
+// une fiche de profil n'a pas de conversation, donc pas d'accentColor à reprendre.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 458;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

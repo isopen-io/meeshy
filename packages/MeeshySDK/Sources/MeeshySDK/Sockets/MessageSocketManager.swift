@@ -2828,15 +2828,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
         }
 
-        socket.on(clientEvent: .error) { data, _ in
-            // Log but NEVER force a logout from a socket error. Loose string
+        socket.on(clientEvent: .error) { [weak self] data, _ in
+            // Never force a logout from a socket error (#10442: a guest's ended session stops the transport). Loose string
             // matching on error payloads produced false positives that kicked
             // the user out on transient failures. Socket.IO's built-in
             // reconnect loop will retry; the APIClient 401 path (which calls
             // `AuthManager.handleUnauthorized`) is the only place that can
             // trigger a silent token refresh, and even that preserves the
             // session on failure.
-            Logger.socket.error("MessageSocket error: \(data)")
+            self?.handleSocketError(data)
         }
 
         // --- Heartbeat ACK — measure RTT ---

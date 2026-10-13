@@ -16,7 +16,9 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
+import { deletedAccountOf, deletedAccountOfRevocation, ownDeletedAccount } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
+import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
 import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
@@ -195,6 +197,14 @@ export type RealtimeDeps = {
    * `auth:token-expired`/`auth:session-revoked` en sont l'équivalent socket
    * (§ 1.1/3.1 de la spécification : pas de rafraîchissement ce lot, D-26). */
   readonly onClearSession: (reason?: AuthSessionRevokedEventData['reason']) => void;
+  /** `error { code: SHARE_LINK_EXPIRED }` (#10442) — l'accès de l'invité est
+   * fini : la connexion se ferme d'elle-même et ne se rouvre plus. */
+  readonly onGuestAccessEnded?: (reason: GuestAccessEnd) => void;
+  /** Le compte NOMMÉ supprimé (#10237) : `error { code: ACCOUNT_DELETED, accountId }`
+   * ou `auth:session-revoked { deletedAccountId }` — jamais le compte actif. */
+  readonly onAccountDeleted?: (accountId: string) => void;
+  /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
+  readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
    * directement, pour que le témoin d'expiration soit déterministe. */
   readonly now?: () => number;
@@ -867,7 +877,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
   /* Le MOTIF voyage (#9613) : l'écran de connexion dit pourquoi la session s'est fermée. */
-  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => deps.onClearSession(payload?.reason);
+  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => {
+    deps.onClearSession(payload?.reason);
+    const deleted = ownDeletedAccount(deletedAccountOfRevocation(payload), deps.account);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
+  };
+  let guestAccessEnded = false;
+  const onServerError = (payload: unknown): void => {
+    const deleted = ownDeletedAccount(deletedAccountOf(payload), deps.account);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
+    const reason = guestAccessEndOfSocketError(payload);
+    if (reason === null) return;
+    guestAccessEnded = true;
+    socket.disconnect();
+    deps.onGuestAccessEnded?.(reason);
+  };
 
   /**
    * LE REJEU DE LA COUPURE (revue-correction #5793) — la passerelle émet
@@ -995,6 +1019,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
+  socket.on<unknown>(SERVER_EVENTS.ERROR, onServerError);
 
   /** `online` ⇒ `connect()` IMMÉDIAT si déconnecté (§ 1.1 de la
    * spécification) — `socket.io-client` gère déjà la gigue/le plafond de la
@@ -1002,7 +1027,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * d'un backoff qui pouvait culminer à 16 s pendant que le réseau vient de
    * revenir. */
   const onOnline = (): void => {
-    if (!socket.connected) socket.connect();
+    if (!socket.connected && !guestAccessEnded) socket.connect();
   };
   windowTarget?.addEventListener('online', onOnline);
 
@@ -1080,6 +1105,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
+      socket.off<unknown>(SERVER_EVENTS.ERROR, onServerError);
       socket.disconnect();
     },
   };

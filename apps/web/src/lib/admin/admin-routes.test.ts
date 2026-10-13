@@ -27,9 +27,9 @@ const patternOf = (key: string): string => {
   return route[1].pattern;
 };
 
-describe('la table des dix-neuf sections', () => {
-  test('dix-neuf sections, dix fiches', () => {
-    expect(ADMIN_SECTION_TABLE).toHaveLength(19);
+describe('la table des vingt sections', () => {
+  test('vingt sections (les opérations, #10391), dix fiches', () => {
+    expect(ADMIN_SECTION_TABLE).toHaveLength(20);
     expect(ADMIN_FICHES).toHaveLength(10);
   });
 
@@ -79,8 +79,10 @@ describe('les résolveurs', () => {
   test('adminGroupOf range chaque section dans son groupe', () => {
     expect(adminGroupOf('dashboard')).toBe('overview');
     expect(adminGroupOf('reports')).toBe('moderation');
-    expect(adminGroupOf('languages')).toBe('platform');
-    expect(adminGroupOf('engagementScale')).toBe('platform');
+    expect(adminGroupOf('languages')).toBe('operations');
+    expect(adminGroupOf('monitoring')).toBe('operations');
+    expect(adminGroupOf('operations')).toBe('operations');
+    expect(adminGroupOf('engagementScale')).toBe('scales');
   });
 
   test('adminSectionOfRouteKey : liste ou fiche, dans l’un ou l’autre espace — sinon null', () => {
@@ -88,6 +90,7 @@ describe('les résolveurs', () => {
     expect(adminSectionOfRouteKey('adminReports')).toBe('reports');
     expect(adminSectionOfRouteKey('adminEngagementScale')).toBe('engagementScale');
     expect(adminSectionOfRouteKey('admEngagementScale')).toBe('engagementScale');
+    expect(adminSectionOfRouteKey('admOperations')).toBe('operations');
     expect(adminSectionOfRouteKey('list')).toBeNull();
   });
 });

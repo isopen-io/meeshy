@@ -303,8 +303,8 @@ final class MessageListViewController: UIViewController {
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
-    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView).
-    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView), avec son message (#9621).
+    var onFocalTapLocation: ((SharedPlace, String) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
     var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically presents a fullscreen viewer.
@@ -1751,7 +1751,7 @@ final class MessageListViewController: UIViewController {
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
                 focalActions.onToggleExpanded = { [weak self] in self?.toggleLongMessageExpansion(localId) }
-                focalActions.onTapLocation = tapLocationHandler
+                focalActions.onTapLocation = { place in tapLocationHandler?(place, messageId) }
                 focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)

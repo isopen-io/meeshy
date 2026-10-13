@@ -11,7 +11,8 @@ const f = {
   'admin.group.content': 'Contenus',
   'admin.group.moderation': 'Modération',
   'admin.group.growth': 'Croissance',
-  'admin.group.platform': 'Plateforme',
+  'admin.group.scales': 'Barèmes',
+  'admin.group.operations': 'Système',
 
   'admin.kit.breadcrumb': 'Fil d’Ariane',
   'admin.kit.retry': 'Réessayer',
@@ -203,6 +204,10 @@ const f = {
   'admin.enum.postVisibility.ONLY.explain': 'Visible seulement par une liste choisie d’amis.',
 
   'admin.enum.postState.published': 'Publiée',
+  'admin.enum.postState.offline': 'Hors ligne',
+  'admin.enum.postState.offline.explain': 'Retirée par la modération : seul son auteur la voit, et il ne peut pas la rouvrir.',
+  'admin.enum.postState.private': 'Privée',
+  'admin.enum.postState.private.explain': 'Seul son auteur la voit.',
   'admin.enum.postState.deleted': 'Retirée',
   'admin.enum.postState.deleted.explain': 'Retirée par son auteur ou par la modération.',
   'admin.enum.postState.expired': 'Expirée',

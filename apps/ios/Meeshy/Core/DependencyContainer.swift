@@ -335,6 +335,8 @@ final class DependencyContainer {
                 // (`ConversationSocketHandler`) : contenu vidé, citations
                 // scellées — une vue unique n'y est pas épargnée (#7960).
                 try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt, expired: true)
+                // #10433 — les réponses d'un mort quittent la base avec lui.
+                try await persistence.purgeQuoteCascade(fromDead: [messageId])
             case let .citedPostWithdrawn(postId, conversationId, _):
                 try await persistence.markCitedPostWithdrawn(postId: postId, conversationId: conversationId)
             case let .reactionAdded(messageId, reactionId, emoji, participantId, maxCount, ownerUserId):

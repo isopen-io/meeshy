@@ -23,12 +23,18 @@ export function audioTrimUntouched(window: AudioWindow, duration: number): boole
   return window.start <= EDGE && window.end >= duration - EDGE;
 }
 
-export function trimmedWav(audio: DecodedAudio, window: AudioWindow): Blob {
+/** Les échantillons de la seule fenêtre gardée, canal par canal. */
+export function windowChannels(audio: DecodedAudio, window: AudioWindow): Float32Array[] {
   const first = Math.max(0, Math.floor(window.start * audio.sampleRate));
   const last = Math.min(audio.length, Math.ceil(window.end * audio.sampleRate));
   const frames = Math.max(0, last - first);
-  const channels = Array.from({ length: audio.numberOfChannels }, (_, channel) => audio.getChannelData(channel));
-  const blockAlign = audio.numberOfChannels * 2;
+  return Array.from({ length: audio.numberOfChannels }, (_, channel) => audio.getChannelData(channel).slice(first, first + frames));
+}
+
+/** WAV PCM 16 bits des canaux donnés — tout échantillon hors [-1, 1] s'écrête. */
+export function wavOf(channels: readonly Float32Array[], sampleRate: number): Blob {
+  const frames = channels[0]?.length ?? 0;
+  const blockAlign = channels.length * 2;
   const dataBytes = frames * blockAlign;
   const view = new DataView(new ArrayBuffer(44 + dataBytes));
   const ascii = (offset: number, text: string) => [...text].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)));
@@ -38,20 +44,24 @@ export function trimmedWav(audio: DecodedAudio, window: AudioWindow): Blob {
   ascii(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, audio.numberOfChannels, true);
-  view.setUint32(24, audio.sampleRate, true);
-  view.setUint32(28, audio.sampleRate * blockAlign, true);
+  view.setUint16(22, channels.length, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true);
   view.setUint16(32, blockAlign, true);
   view.setUint16(34, 16, true);
   ascii(36, 'data');
   view.setUint32(40, dataBytes, true);
   for (let frame = 0; frame < frames; frame += 1) {
     channels.forEach((samples, channel) => {
-      const value = Math.max(-1, Math.min(1, samples[first + frame] ?? 0));
+      const value = Math.max(-1, Math.min(1, samples[frame] ?? 0));
       view.setInt16(44 + frame * blockAlign + channel * 2, value < 0 ? value * 0x8000 : value * 0x7fff, true);
     });
   }
   return new Blob([view.buffer], { type: 'audio/wav' });
+}
+
+export function trimmedWav(audio: DecodedAudio, window: AudioWindow): Blob {
+  return wavOf(windowChannels(audio, window), audio.sampleRate);
 }
 
 export function trimmedAudioFileName(name: string): string {

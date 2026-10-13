@@ -48,6 +48,12 @@ export interface ErrorEventData {
   readonly code?: string;
   /** Seconds to wait before retrying — only on a temporary refusal (`NEWCOMER_SLOW_MODE`, #7740). */
   readonly retryAfter?: number;
+  /**
+   * #10264 — avec `code: 'ACCOUNT_DELETED'` seulement : l'identifiant du compte
+   * du jeton signé, dont la suppression est IRRÉVERSIBLE (purge confirmée).
+   * L'appareil purge les données locales de CE compte, jamais d'un autre.
+   */
+  readonly accountId?: string;
 }
 
 export interface AuthTokenExpiredEventData {
@@ -86,6 +92,15 @@ export interface AuthSessionRevokedEventData {
     | 'logout'
     | 'session_expired'
     | 'activation_required';
+  /**
+   * #10264 — présent SEULEMENT quand la fermeture vient de la purge CONFIRMÉE
+   * du compte (`AccountDeletionRequest` passée à `COMPLETED`, irréversible) :
+   * l'identifiant du compte supprimé. Jamais à la fin de grâce, encore
+   * annulable. Un appareil y purge les données locales de CE compte, jamais
+   * celles du compte actif au moment de la réception. `reason` reste
+   * `logout_all_devices` pour les clients qui ne lisent pas ce champ.
+   */
+  readonly deletedAccountId?: string;
 }
 
 /**

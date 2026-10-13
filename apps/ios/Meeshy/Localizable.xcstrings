@@ -19916,6 +19916,53 @@
         }
       }
     },
+    "conversation.send.slow_mode": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة واحدة كل 30 ث للحسابات الجديدة — أعد المحاولة بعد %lld ث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Konten: eine Nachricht alle 30 s — versuch es in %lld s erneut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One message every 30 s for new accounts — try again in %lld s"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un mensaje cada 30 s para las cuentas nuevas — vuelve a intentarlo en %lld s"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un message toutes les 30 s pour les nouveaux comptes — réessaie dans %lld s"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un messaggio ogni 30 s per i nuovi account — riprova tra %lld s"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uma mensagem a cada 30 s para contas novas — tente de novo em %lld s"
+          }
+        }
+      }
+    },
     "emailVerification.provenElsewhere.body": {
       "extractionState": "manual",
       "localizations": {
@@ -20006,6 +20053,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "Endereço confirmado ✓"
+          }
+        }
+      }
+    },
+    "exit.preview.ephemeral": {
+      "comment": "Aperçu d'une flamme à durée publié HORS de sa conversation (widget, résultat de recherche) : son texte n'en sort pas (#9622).",
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رسالة مؤقتة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flüchtige Nachricht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ephemeral message"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensaje efímero"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message éphémère"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Messaggio effimero"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mensagem efêmera"
           }
         }
       }
@@ -20664,6 +20759,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lista os locais nomeados ao seu redor"
+          }
+        }
+      }
+    },
+    "media.save.alreadyInPhotos": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موجود بالفعل في الصور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereits in Fotos"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already in your Photos"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya está en Fotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déjà dans la photothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Già in Foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Já está no Fotos"
           }
         }
       }
@@ -25350,6 +25492,59 @@
         }
       }
     },
+    "progression.elan.factor": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزخم ×%lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwung ×%lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Momentum ×%lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élan ×%lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Slancio ×%lld"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld"
+          }
+        }
+      }
+    },
     "progression.family.social": {
       "extractionState": "manual",
       "localizations": {
@@ -25387,6 +25582,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Legami tessuti"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Laços tecidos"
           }
         },
         "pt-BR": {
@@ -47204,6 +47405,100 @@
           "stringUnit": {
             "state": "translated",
             "value": "Senha"
+          }
+        }
+      }
+    },
+    "auth.password.set.submit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعيين كلمة المرور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort festlegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set password"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Establecer la contraseña"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir le mot de passe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imposta password"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Definir a senha"
+          }
+        }
+      }
+    },
+    "auth.password.set.success": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تعيين كلمة المرور"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwort festgelegt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password set"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contraseña establecida"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mot de passe défini"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password impostata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senha definida"
           }
         }
       }
@@ -92339,43 +92634,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تام بين الطرفين (Signal)"
+            "value": "تام بين الطرفين (على أجهزتك)"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ende-zu-Ende (Signal)"
+            "value": "Ende-zu-Ende (auf deinen Geräten)"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (on your devices)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Extremo a extremo (Signal)"
+            "value": "Extremo a extremo (en tus dispositivos)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bout en bout (Signal)"
+            "value": "Bout en bout (sur vos appareils)"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "End-to-end (Signal)"
+            "value": "End-to-end (sui tuoi dispositivi)"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ponta a ponta (Signal)"
+            "value": "Ponta a ponta (nos seus dispositivos)"
           }
         }
       }
@@ -121639,53 +121934,6 @@
         }
       }
     },
-    "gallery.menu.more": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إجراءات أخرى"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weitere Aktionen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More actions"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más acciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Autres actions"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Altre azioni"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais ações"
-          }
-        }
-      }
-    },
     "gallery.menu.share": {
       "extractionState": "manual",
       "localizations": {
@@ -147150,6 +147398,12 @@
             "value": "Commenti"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comentários"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -147195,6 +147449,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contenuti creati"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conteúdo criado"
           }
         },
         "pt-BR": {
@@ -147244,6 +147504,12 @@
             "value": "Conversazioni"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversas"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -147289,6 +147555,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Strumenti"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferramentas"
           }
         },
         "pt-BR": {
@@ -180843,53 +181115,6 @@
         }
       }
     },
-    "story.viewer.a11y.options": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "خيارات القصة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Story-Optionen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Story options"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opciones de la story"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Options de la story"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opzioni della storia"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opções da story"
-          }
-        }
-      }
-    },
     "story.viewer.a11y.percent": {
       "localizations": {
         "ar": {
@@ -202451,6 +202676,12 @@
             "value": "Slancio ×%lld — %@ su %lld giorni"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impulso ×%lld — %@ em %lld dias"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202496,6 +202727,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Le tue prossime azioni valgono %lld volte di più."
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As suas próximas ações rendem %lld vezes mais."
           }
         },
         "pt-BR": {
@@ -202545,6 +202782,12 @@
             "value": "1 famiglia attiva"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 família ativa"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202592,6 +202835,12 @@
             "value": "%lld famiglie attive"
           }
         },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld famílias ativas"
+          }
+        },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
@@ -202637,6 +202886,12 @@
           "stringUnit": {
             "state": "translated",
             "value": ", più la tua base"
+          }
+        },
+        "pt": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", mais a sua base"
           }
         },
         "pt-BR": {
@@ -257531,241 +257786,6 @@
         }
       }
     },
-    "game2.profile.no_trophy": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لا كؤوس بعد."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch keine Trophäe."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No trophy yet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aún no hay trofeos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pas encore de trophée."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ancora nessun trofeo."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ainda sem troféus."
-          }
-        }
-      }
-    },
-    "game2.profile.visitor_title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "واجهة %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vitrine von %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@’s showcase"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vitrina de %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vitrine de %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vetrina di %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vitrine de %@"
-          }
-        }
-      }
-    },
-    "game2.profile.see_showcase": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عرض الواجهة كاملة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ganze Vitrine ansehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See the whole showcase"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver toda la vitrina"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir toute la vitrine"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vedi tutta la vetrina"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver toda a vitrine"
-          }
-        }
-      }
-    },
-    "game2.profile.see_progress": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "عرض تقدّمي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meinen Fortschritt ansehen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "See my progress"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver mi progreso"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voir ma progression"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vedi i miei progressi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ver meu progresso"
-          }
-        }
-      }
-    },
-    "game2.profile.medals": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الميداليات"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medaillen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medals"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medallas"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Médailles"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medaglie"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Medalhas"
-          }
-        }
-      }
-    },
     "game2.profile.showcase": {
       "extractionState": "manual",
       "localizations": {
@@ -257813,147 +257833,6 @@
         }
       }
     },
-    "game2.profile.flame": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "الشعلة: %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flamme: %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flame: %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Llama: %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flamme : %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fiamma: %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chama: %@"
-          }
-        }
-      }
-    },
-    "game2.profile.treasury": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$@ · %2$@"
-          }
-        }
-      }
-    },
-    "game2.profile.glory": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ من المجد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Ruhm"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ Glory"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ de Gloria"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ de Gloire"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ di Gloria"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ de Glória"
-          }
-        }
-      }
-    },
     "game2.profile.level": {
       "extractionState": "manual",
       "localizations": {
@@ -257997,53 +257876,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nível %1$@ · %2$@"
-          }
-        }
-      }
-    },
-    "game2.profile.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لعبتي"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mein Spiel"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "My game"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mi juego"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mon jeu"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il mio gioco"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meu jogo"
           }
         }
       }
@@ -262932,100 +262764,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Quem vê sua vitrine"
-          }
-        }
-      }
-    },
-    "game2.showcase.awarded_month_count": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نُلت في %1$@ · ⁦×%2$@⁩"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erhalten im %1$@ · ×%2$@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Earned in %1$@ · ×%2$@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtenido en %1$@ · ×%2$@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtenu en %1$@ · ×%2$@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ottenuto a %1$@ · ×%2$@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtido em %1$@ · ×%2$@"
-          }
-        }
-      }
-    },
-    "game2.showcase.awarded_month": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "نُلت في %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erhalten im %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Earned in %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtenido en %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtenu en %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ottenuto a %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obtido em %@"
           }
         }
       }
@@ -270080,53 +269818,6 @@
         }
       }
     },
-    "game2.profile.visitor_game_title": {
-      "extractionState": "manual",
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le jeu de %@"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@’s game"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El juego de %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Spiel von %@"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Il gioco di %@"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "O jogo de %@"
-          }
-        },
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لعبة %@"
-          }
-        }
-      }
-    },
     "game2.profile.visitor_treasury": {
       "extractionState": "manual",
       "localizations": {
@@ -271355,7 +271046,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا اندفاع بعد"
+            "value": "لا زخم بعد"
           }
         },
         "de": {
@@ -271367,7 +271058,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No boost yet"
+            "value": "No momentum yet"
           }
         },
         "es": {
@@ -275021,7 +274712,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "فعّل اندفاعًا لتضاعف نقاطك."
+            "value": "ابنِ زخمًا لتضاعف نقاطك."
           }
         },
         "de": {
@@ -275033,7 +274724,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trigger a boost to multiply your points."
+            "value": "Build momentum to multiply your points."
           }
         },
         "es": {
@@ -276713,7 +276404,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاندفاعات"
+            "value": "الزخم"
           }
         },
         "de": {
@@ -276725,7 +276416,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Boosts"
+            "value": "Momentum"
           }
         },
         "es": {
@@ -276760,7 +276451,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الاندفاع يضاعف نقاط إجراءاتك القادمة."
+            "value": "الزخم يضاعف نقاط إجراءاتك القادمة."
           }
         },
         "de": {
@@ -276772,7 +276463,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A boost multiplies the points of your next actions."
+            "value": "Momentum multiplies the points of your next actions."
           }
         },
         "es": {
@@ -280849,7 +280540,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "كل إجراء يمنح نقاطًا. عدة فئات نشطة تفعّل اندفاعًا."
+            "value": "كل إجراء يمنح نقاطًا. عدة فئات نشطة تبني زخمًا."
           }
         },
         "de": {
@@ -280861,7 +280552,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Each action earns points. Several active families trigger a boost."
+            "value": "Each action earns points. Several active families build momentum."
           }
         },
         "es": {
@@ -288406,6 +288097,664 @@
           "stringUnit": {
             "state": "translated",
             "value": "Prévia da câmera: toque duas vezes para tirar sem salvar em Fotos"
+          }
+        }
+      }
+    },
+    "guest.ended.expired.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتهت صلاحية هذا الرابط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link ist abgelaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link has expired"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace ha caducado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien a expiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link è scaduto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link expirou"
+          }
+        }
+      }
+    },
+    "guest.ended.expired.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يعد هذا الرابط يتيح الوصول إلى المحادثة. اطلب رابطًا جديدًا من الشخص الذي أرسله إليك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet die Unterhaltung nicht mehr. Bitte die Person, die ihn dir geschickt hat, um einen neuen Link."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link no longer opens the conversation. Ask the person who sent it for a new link."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace ya no da acceso a la conversación. Pide un enlace nuevo a la persona que te lo envió."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ne donne plus accès à la conversation. Demandez un nouveau lien à la personne qui vous l'a envoyé."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link non dà più accesso alla conversazione. Chiedi un nuovo link alla persona che te l'ha inviato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link não dá mais acesso à conversa. Peça um novo link à pessoa que o enviou."
+          }
+        }
+      }
+    },
+    "guest.ended.revoked.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمت إزالة وصولك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Zugang wurde entfernt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your access has been removed"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ha retirado tu acceso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre accès a été retiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il tuo accesso è stato revocato"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seu acesso foi removido"
+          }
+        }
+      }
+    },
+    "guest.ended.revoked.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أزال مضيف المحادثة هذا الرابط. سيتيح لك رابط جديد العودة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Person, die die Unterhaltung leitet, hat diesen Link entfernt. Mit einem neuen Link kannst du zurückkehren."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The host of the conversation removed this link. A new link will let you come back."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El anfitrión de la conversación ha retirado este enlace. Un enlace nuevo te permitirá volver."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'hôte de la conversation a retiré ce lien. Un nouveau lien vous permettra de revenir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'host della conversazione ha revocato questo link. Un nuovo link ti permetterà di tornare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O anfitrião da conversa removeu este link. Um novo link permitirá que você volte."
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق الرابط الجديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuen Link einfügen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste the new link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pega el enlace nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collez le nouveau lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incolla il nuovo link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cole o novo link"
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا ليس رابط دعوة من Meeshy"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein Meeshy-Einladungslink"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This isn't a Meeshy invitation link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No es un enlace de invitación de Meeshy"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce n'est pas un lien d'invitation Meeshy"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non è un link di invito Meeshy"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este não é um link de convite do Meeshy"
+          }
+        }
+      }
+    },
+    "guest.ended.newLink.join": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانضمام برابط جديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit einem neuen Link beitreten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Join with a new link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unirse con un enlace nuevo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejoindre par un nouveau lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partecipa con un nuovo link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrar com um novo link"
+          }
+        }
+      }
+    },
+    "guest.ended.home": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العودة إلى الصفحة الرئيسية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück zur Startseite"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back to home"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver al inicio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour à l'accueil"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Torna alla home"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar ao início"
+          }
+        }
+      }
+    },
+    "emailProof.secondFactorRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الحساب محمي بالمصادقة الثنائية: سجّل الدخول بكلمة المرور والرمز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto ist durch Zwei-Faktor-Authentifizierung geschützt: Melde dich mit deinem Passwort und deinem Code an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account is protected by two-factor authentication: sign in with your password and your code."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta está protegida con verificación en dos pasos: inicia sesión con tu contraseña y tu código."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce compte est protégé par la double authentification : connectez-vous avec votre mot de passe et votre code."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account è protetto dall'autenticazione a due fattori: accedi con la password e il codice."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conta é protegida pela autenticação em dois fatores: entre com sua senha e seu código."
+          }
+        }
+      }
+    },
+    "emailProof.sessionNotOpened": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حساب آخر مفتوح بالفعل على هذا الجهاز: تعذّر فتح هذا الحساب."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Gerät ist bereits ein anderes Konto geöffnet: Dieses Konto konnte nicht geöffnet werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another account is already open on this device: this account could not be opened."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya hay otra cuenta abierta en este dispositivo: no se ha podido abrir esta cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Su questo dispositivo è già aperto un altro account: non è stato possibile aprire questo account."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outra conta já está aberta neste dispositivo: não foi possível abrir esta conta."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.confirm": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح هذا الحساب"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open this account"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir esta cuenta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir ce compte"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri questo account"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir esta conta"
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.message": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح هذا الرابط حسابًا آخر غير حسابك: %1$@.\n\nأنت مسجّل الدخول باسم %2$@. لا تفتح هذا الحساب إلا إذا كان ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet ein ANDERES Konto als deins: %1$@.\n\nDu bist als %2$@ angemeldet. Öffne dieses Konto nur, wenn es dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link opens ANOTHER account than yours: %1$@.\n\nYou are signed in as %2$@. Only open this account if it belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace abre OTRA cuenta distinta de la tuya: %1$@.\n\nHas iniciado sesión como %2$@. Abre esta cuenta solo si te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ouvre un AUTRE compte que le vôtre : %1$@.\n\nVous êtes connecté en tant que %2$@. N'ouvrez ce compte que s'il vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link apre un ALTRO account diverso dal tuo: %1$@.\n\nHai effettuato l'accesso come %2$@. Apri questo account solo se è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link abre OUTRA conta, diferente da sua: %1$@.\n\nVocê está conectado como %2$@. Só abra esta conta se ela for sua."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.messageUnknownCurrent": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يفتح هذا الرابط حسابًا آخر غير الحساب المفتوح: %@.\n\nلا تفتح هذا الحساب إلا إذا كان ملكك."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Link öffnet ein ANDERES Konto als das geöffnete: %@.\n\nÖffne dieses Konto nur, wenn es dir gehört."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This link opens ANOTHER account than the one that is open: %@.\n\nOnly open this account if it belongs to you."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este enlace abre OTRA cuenta distinta de la que está abierta: %@.\n\nAbre esta cuenta solo si te pertenece."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce lien ouvre un AUTRE compte que celui qui est ouvert : %@.\n\nN'ouvrez ce compte que s'il vous appartient."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo link apre un ALTRO account diverso da quello aperto: %@.\n\nApri questo account solo se è tuo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este link abre OUTRA conta, diferente da que está aberta: %@.\n\nSó abra esta conta se ela for sua."
+          }
+        }
+      }
+    },
+    "signInLink.switchAccount.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح حساب آخر؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein anderes Konto öffnen?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open another account?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Abrir otra cuenta?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir un autre compte ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprire un altro account?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir outra conta?"
           }
         }
       }

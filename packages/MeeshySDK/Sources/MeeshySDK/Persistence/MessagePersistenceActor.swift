@@ -1615,7 +1615,7 @@ public actor MessagePersistenceActor {
                     existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
-                        existing.editedAt = nil
+                        existing.editedAt = api.editedAt
                     }
                     if !pendingDelete {
                         existing.deletedAt = api.deletedAt
@@ -1715,7 +1715,7 @@ public actor MessagePersistenceActor {
                     existing.stickerJson = stickerJson ?? existing.stickerJson
                     existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
                     existing.senderIsAnonymous = api.sender.map(\.isAnonymous) ?? existing.senderIsAnonymous; existing.senderHasAccount = api.sender.map(\.hasAccount) ?? existing.senderHasAccount
-                    existing.effectFlags = effectFlags
+                    existing.effectFlags = effectFlags; existing.adoptServedOriginalLanguage(api.originalLanguage)
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
                     // ensemble : la DURÉE par `message:new` (sans échéance,
@@ -1794,7 +1794,7 @@ public actor MessagePersistenceActor {
                         maxViewOnceCount: nil,
                         viewOnceCount: 0,
                         isEdited: api.isEdited ?? false,
-                        editedAt: nil,
+                        editedAt: api.editedAt,
                         deletedAt: api.deletedAt,
                         pinnedAt: nil,
                         pinnedBy: nil,

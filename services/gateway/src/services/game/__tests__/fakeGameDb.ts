@@ -275,6 +275,7 @@ export type FakeGameDb = {
   readonly mythicEdition: Model;
   readonly gamePhotoMoment: Model;
   readonly userStickerPack: Model;
+  readonly engagementActStreak: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -322,6 +323,8 @@ export function fakeGameDb(): FakeGameDb {
   // `_id` dérivé de (userId, stepId) (`photoMomentId`), plus l'unique posé par la migration du registre.
   const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt'] }));
   const userStickerPack = flattenCompound(new Model({ uniques: [['userId', 'packSlug']], optional: ['installedAt'] }));
+  // La série de chaque acte (#10389).
+  const engagementActStreak = flattenCompound(new Model({ uniques: [['userId', 'act']] }));
   // Le calendrier des saisons servi (#10016) : vide, la loi rend la constante.
   const gameSeasonDefinition = flattenCompound(new Model({ uniques: [['number'], ['revision']] }));
   const models = {
@@ -359,6 +362,7 @@ export function fakeGameDb(): FakeGameDb {
     gamePhotoMoment,
     userStickerPack,
     gameSeasonDefinition,
+    engagementActStreak,
   };
 
   /**

@@ -616,6 +616,9 @@ enum MeeshyNotificationCategory: String {
     /// #8859 — un vocal dont la piste voyage : la notification DÉPLOYÉE le
     /// fait écouter (`MeeshyNotificationContentExtension`).
     case audio = "MEESHY_AUDIO"
+    /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
+    /// décompte vivant (`MeeshyNotificationContentExtension`).
+    case ephemeral = "MEESHY_EPHEMERAL"
 }
 
 enum MeeshyNotificationAction: String {

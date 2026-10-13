@@ -6,6 +6,7 @@ import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import { unwrap } from './client';
+import { CONTACT_MASK, maskEmail } from './email-mask';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 
@@ -74,15 +75,9 @@ export type MyStats = {
 };
 
 
-const MASK = '•';
+const MASK = CONTACT_MASK;
 
-export function maskEmail(email: string): string {
-  const at = email.lastIndexOf('@');
-  if (at < 1 || at === email.length - 1) return MASK.repeat(3);
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  return local.length === 1 ? `${MASK}@${domain}` : `${local.slice(0, 1)}${MASK.repeat(3)}@${domain}`;
-}
+export { maskEmail };
 
 /** L'indicatif et les deux derniers chiffres — un nombre FIXE de puces, pour
  * que le masque ne dise pas la longueur du numéro. */

@@ -108,7 +108,7 @@ const makeStore = (seed: UserRow) => {
         findUnique: jest.fn(async () => null),
         create: jest.fn(async () => ({ id: 'mlt-1' })),
         update: jest.fn(async () => ({ id: 'mlt-1' })),
-        updateMany: jest.fn(async () => ({ count: 0 }))
+        updateMany: jest.fn(async () => ({ count: 1 }))
       },
       securityEvent: { create: jest.fn(async () => ({ id: 'sec-1' })) }
     } as any
