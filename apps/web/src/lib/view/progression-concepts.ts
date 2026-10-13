@@ -42,9 +42,10 @@ import { conceptState, convertiblePointsOf } from '@/lib/view/progression-state'
  * LES TROIS RÈGLES DE DÉDOUBLONNAGE (amendement n° 4), posées ICI et nulle part
  * ailleurs — l'app iOS les reproduit dans `ProgressionConceptModel` :
  *
- *   1. UNE DONNÉE APPARTIENT À UN SEUL CONCEPT : le score à Points, tout
- *      multiplicateur (élan, vent arrière) à Élans, les étoiles à Prestige, le
- *      prix de la Meesh à Meeshes, ce qui manque pour frapper à Points. Devant un
+ *   1. UNE DONNÉE APPARTIENT À UN SEUL CONCEPT : le score (les points en poche)
+ *      et le solde à convertir à Points, tout multiplicateur (élan, vent arrière)
+ *      à Élans, les étoiles à Prestige, le prix de la Meesh à Meeshes, ce qui
+ *      manque pour frapper à Points. Devant un
  *      ancien serveur sans Points, le score reste au Niveau et le manque aux
  *      Meeshes : une donnée garde toujours UN hôte.
  *   2. UNE PASTILLE OU UNE LIGNE NE REDIT JAMAIS LA VALEUR DE TÊTE

@@ -411,6 +411,7 @@ describe('règle 1 — une donnée appartient à un seul concept', () => {
 
   test('le score est à Points, le multiplicateur à Élans, les étoiles à Prestige, le prix de la Meesh à Meeshes', () => {
     expect(owners(windy, 'score')).toEqual(['points']);
+    expect(owners(windy, 'convertible')).toEqual(['points']);
     expect(owners(windy, 'factor')).toEqual(['elans']);
     expect(owners(windy, 'tailwind')).toEqual(['elans']);
     expect(owners(windy, 'element:star')).toEqual(['prestige']);
