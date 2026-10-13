@@ -27,7 +27,7 @@ extension PostService {
     /// Un lot vide ne part pas : il n'y a rien à compter.
     public func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
-        let body = try SocialEventsBody.encoded(events, sentAt: clock())
+        let body = try SocialEventsBody.encoded(events, sentAt: clock(), consent: await consent.current())
         let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
             SocialEndpoint.events,
             method: "POST",

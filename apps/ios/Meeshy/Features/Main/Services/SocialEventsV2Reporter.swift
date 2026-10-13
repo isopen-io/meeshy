@@ -40,11 +40,30 @@ struct SocialEventsV2Identity: Equatable {
 /// bascule « Analytique » coupée (valeur par défaut comprise) ⇒ `denied`,
 /// toujours, même si la passerelle garde un accord plus ancien ; bascule active
 /// ⇒ `granted` seulement si la passerelle l'a confirmé, `unknown` sinon. La
-/// passerelle seule ACCORDE. Le comptage (#10483) ne lit pas ce champ.
+/// passerelle seule ACCORDE.
+///
+/// UNE règle pour les deux lots (#10552) : le lot v2 la lit par son contexte,
+/// le lot de COMPTAGE par la source installée au lancement — sans quoi une
+/// impression gardait rang, page et visibilité pour un compte qui a refusé.
 enum AnalyticsConsentStanding {
     static func consent(allowAnalytics: Bool, serverGranted: Bool) -> SocialEventContext.Consent {
         guard allowAnalytics else { return .denied }
         return serverGranted ? .granted : .unknown
+    }
+
+    static func live() -> SocialEventContext.Consent {
+        consent(
+            allowAnalytics: UserPreferencesManager.shared.privacy.allowAnalytics,
+            serverGranted: UserPreferencesManager.shared.grantedConsents.contains(.analytics)
+        )
+    }
+
+    /// Relu à CHAQUE lot : une bascule coupée vaut dès le lot suivant.
+    static func installOnCountingBatches(
+        _ source: SocialEventsConsentSource = .shared,
+        standing: @escaping @MainActor @Sendable () -> SocialEventContext.Consent = { AnalyticsConsentStanding.live() }
+    ) {
+        source.install { standing() }
     }
 }
 
@@ -86,10 +105,7 @@ final class LiveSocialEventContextProvider: SocialEventContextProviding {
             network: SocialEventContext.Network(snapshot: NetworkPathSource.shared.current),
             uiLanguage: AuthManager.shared.currentUser?.systemLanguage,
             deviceLocale: Locale.current.language.languageCode?.identifier,
-            consent: AnalyticsConsentStanding.consent(
-                allowAnalytics: UserPreferencesManager.shared.privacy.allowAnalytics,
-                serverGranted: UserPreferencesManager.shared.grantedConsents.contains(.analytics)
-            ),
+            consent: AnalyticsConsentStanding.live(),
             capabilities: SocialEventContext.Capability.allCases,
             sampling: rates.isEmpty ? nil : rates
         )

@@ -16,6 +16,12 @@ final class SocialEventsV2ReporterTests: XCTestCase {
         }
     }
 
+    @MainActor
+    private final class AnalyticsToggle {
+        nonisolated deinit {}
+        var isOn = true
+    }
+
     /// Hors isolation : l'horloge de la file (`SocialEventsV2Outbox.clock`) est
     /// une fermeture `@Sendable`, qui ne peut pas lire un membre du MainActor.
     nonisolated private static let epoch = Date(timeIntervalSince1970: 1_760_000_000)
@@ -136,5 +142,40 @@ final class SocialEventsV2ReporterTests: XCTestCase {
 
     func test_consent_toggleOn_withServerConfirmation_isGranted() {
         XCTAssertEqual(AnalyticsConsentStanding.consent(allowAnalytics: true, serverGranted: true), .granted)
+    }
+
+    // MARK: - Le lot de COMPTAGE déclare le même consentement (#10552)
+
+    func test_installOnCountingBatches_toggleOffWithAServerGrant_sourceDeclaresDenied() async {
+        let source = SocialEventsConsentSource()
+
+        AnalyticsConsentStanding.installOnCountingBatches(source) {
+            AnalyticsConsentStanding.consent(allowAnalytics: false, serverGranted: true)
+        }
+
+        let declared = await source.current()
+        XCTAssertEqual(declared, .denied)
+    }
+
+    func test_installOnCountingBatches_standingChanges_nextBatchReadsTheNewOne() async {
+        let source = SocialEventsConsentSource()
+        let toggle = AnalyticsToggle()
+        AnalyticsConsentStanding.installOnCountingBatches(source) {
+            AnalyticsConsentStanding.consent(allowAnalytics: toggle.isOn, serverGranted: true)
+        }
+        let before = await source.current()
+
+        toggle.isOn = false
+        let after = await source.current()
+
+        XCTAssertEqual(before, .granted)
+        XCTAssertEqual(after, .denied)
+    }
+
+    /// Le câblage : l'app hôte a installé la règle sur la source que
+    /// `PostService.shared` lit. Sans lui, la règle existerait sans s'appliquer.
+    func test_appLaunch_countingConsentSource_declaresTheLiveStanding() async {
+        let declared = await SocialEventsConsentSource.shared.current()
+        XCTAssertEqual(declared, AnalyticsConsentStanding.live())
     }
 }

@@ -405,17 +405,21 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     let clock: @Sendable () -> Date
     /// #10501 — de quelle page vient chaque élément d'un listing.
     let listings: ListingContextProviding
+    /// #10552 — le consentement d'analyse déclaré par un lot de comptage.
+    let consent: SocialEventsConsentSource
 
     init(
         api: APIClientProviding = APIClient.shared,
         socialEvents: SocialEventsV2Hub = .shared,
         clock: @escaping @Sendable () -> Date = { Date() },
-        listings: ListingContextProviding = ListingContextLedger.shared
+        listings: ListingContextProviding = ListingContextLedger.shared,
+        consent: SocialEventsConsentSource = .shared
     ) {
         self.api = api
         self.socialEvents = socialEvents
         self.clock = clock
         self.listings = listings
+        self.consent = consent
     }
 
     private func emitInteraction(_ action: SocialInteraction.Action, postId: String, destination: SocialInteraction.ShareDestination? = nil) {
