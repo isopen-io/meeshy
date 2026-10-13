@@ -35,6 +35,8 @@
  * a coupé la connexion sur `staging.meeshy.me` le 2026-09-09 (#5872).
  */
 
+import { PRODUCTION_ORIGIN } from './production-origin';
+
 /** Le CHOIX de source de données — jamais lu ailleurs qu'ici et par les
  * consommateurs de `apiConfig.source`. */
 export type DataSource = 'fixtures' | 'gateway';
@@ -104,15 +106,7 @@ export type ApiEnv = {
   readonly VITE_READING_MODES?: string;
 };
 
-/**
- * L'origine de la passerelle de PRODUCTION — celle qu'un build sans
- * `VITE_API_BASE` vise, donc l'image construite sur `main` que meeshy.me sert
- * depuis la décommission du legacy (#6702). `docker.yml` ne pose
- * `VITE_API_BASE` que sur `dev` (`gate.staging.meeshy.me`). Elle servait aussi
- * `legacy-link.ts` (#6354), supprimé avec les derniers renvois vers le legacy
- * (#6335).
- */
-export const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
+export { PRODUCTION_ORIGIN };
 const API_PREFIX_PATTERN = /\/api\/v1\/?$/;
 const ABSOLUTE_ORIGIN_PATTERN = /^https?:\/\//i;
 

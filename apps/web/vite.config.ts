@@ -17,6 +17,7 @@ import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
+import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect';
 import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
 import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
@@ -65,6 +66,16 @@ const inlineInterfaceLanguageBootstrap = (): Plugin => ({
     }
     return html.replace(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER, INLINE_INTERFACE_LANGUAGE_BOOTSTRAP);
   },
+});
+
+/**
+ * La coque préconnecte sa passerelle dès le HTML (#10534) — voir
+ * `src/lib/net/shell-preconnect.ts`. Le web n'en reçoit pas : son origine
+ * n'est connue qu'à l'exécution (`/config.js`).
+ */
+const shellApiPreconnect = (): Plugin => ({
+  name: 'meeshy-shell-api-preconnect',
+  transformIndexHtml: (html) => withApiPreconnect(html, shellApiOrigin(process.env.VITE_API_BASE)),
 });
 
 /**
@@ -560,7 +571,7 @@ export default defineConfig({
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [] : [prerenderLanding()]),
-    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets()] : []),
+    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets(), shellApiPreconnect()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux

@@ -14,7 +14,7 @@ const HTML = '<html><head><title>Meeshy</title></head><body></body></html>';
 describe('la coque préconnecte la passerelle dès le HTML (#10534)', () => {
   for (const declared of [undefined, '', '   ', '/api/v1', 'https://gate.staging.meeshy.me', 'https://gate.staging.meeshy.me/api/v1/', 'http://10.0.2.2:3000/']) {
     test(`l'origine préconnectée est celle que la coque appellera (VITE_API_BASE=${JSON.stringify(declared)})`, () => {
-      const base = resolveApiConfig({ VITE_API_BASE: declared }, { shell: true }).base;
+      const base = resolveApiConfig(declared === undefined ? {} : { VITE_API_BASE: declared }, { shell: true }).base;
       expect(shellApiOrigin(declared)).toBe(new URL(base).origin);
     });
   }
