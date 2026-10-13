@@ -153,12 +153,15 @@ describe('POST /anonymous/join/:linkId — requireNickname', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when nickname required but missing', async () => {
+  it('admet l\'invité sans pseudo saisi et lui en attribue un, au lieu de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: VALID_BODY,
     });
-    expect(res.statusCode).toBe(400);
+
+    expect(res.statusCode).toBe(201);
+    const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
+    expect(written.displayName).toMatch(/^ano_.+\d{3}$/);
   });
 });
 
