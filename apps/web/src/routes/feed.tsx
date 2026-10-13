@@ -1,3 +1,5 @@
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
 import { useCallback, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
@@ -295,6 +297,7 @@ export default function FeedScreen() {
   const paginationState = paginationStateOf(feed);
   const pull = usePullToRefresh({ root: frame, onRefresh: refreshFeedAction, threshold: PULL_THRESHOLD });
   const posts = feed.data ?? EMPTY_POSTS;
+  const listingSessionId = useListingSessionId();
   /**
    * CE QUI EST ARRIVÉ PENDANT QU'ON LISAIT (#7182) — le compte que
    * `applyPostCreated` tient sur l'écoute de `post:created`. Il vit dans le
@@ -378,7 +381,7 @@ export default function FeedScreen() {
           <FeedEmpty />
         ) : (
           <>
-            {models.map((model) => (
+            {models.map((model, index) => (
               /* LA COLONNE EST SUR LA CARTE (#7449) — pas sur le scrollport,
                  et c'est la directive porteur du 2026-09-22 : le CHROME prend
                  la fenêtre (l'en-tête, le plateau des stories, la barre de
@@ -387,6 +390,7 @@ export default function FeedScreen() {
               <li key={model.id} style={READING_COLUMN_STYLE}>
                 <FeedPostCard
                   model={model}
+                  listing={listingAt({ position: index, served: posts[index]?.servedListing, fallbackSource: 'other', listingSessionId })}
                   /* L'ANNEAU DE STORY VIENT DU CORPUS QUE CET ÉCRAN TIENT DÉJÀ
                      (#7185) : `railProps.groups` est chargé pour le plateau, et
                      l'anneau d'une carte s'y LIT — zéro requête ajoutée, là où

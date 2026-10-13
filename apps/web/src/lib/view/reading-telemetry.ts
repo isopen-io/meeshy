@@ -13,7 +13,7 @@ import {
   type SocialEvent,
 } from '@/lib/api/social-events';
 import { createSocialEventsV2Recorder, type SocialEventsV2Recorder } from '@/lib/api/social-events-v2';
-import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import type { ImpressionVisibility, ListingContext, SocialEventV2Input, TargetKind } from '@/lib/api/social-events-v2-types';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage } from '@/lib/storage';
@@ -22,6 +22,16 @@ import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 
 import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
 import { liveSocialEventsContext } from './telemetry-context';
+import {
+  MRC_DISPLAY_MS,
+  MRC_VISIBLE_FRACTION,
+  createViewabilityClock,
+  observeVisibility,
+  trackVisibleTarget,
+  type ViewabilityClock,
+  type ViewabilityKind,
+  type VisibilityDeps,
+} from './viewability';
 
 /**
  * **CE QUE LE LECTEUR A VU, DIT À LA PASSERELLE** (#10401) — le site unique
@@ -140,55 +150,79 @@ export function dwellContentTypeOf(type: string | undefined): DwellContentType {
 }
 
 /** Une impression : au moins la moitié de la carte, une seconde d'affilée. */
-export const IMPRESSION_VISIBLE_RATIO = 0.5;
-export const IMPRESSION_DWELL_MS = 1000;
-
-type ObserverCtor = new (
-  callback: (entries: readonly { readonly isIntersecting: boolean; readonly intersectionRatio: number }[]) => void,
-  options: { threshold: number[] },
-) => { observe(node: Element): void; disconnect(): void };
+export const IMPRESSION_VISIBLE_RATIO = MRC_VISIBLE_FRACTION;
+export const IMPRESSION_DWELL_MS = MRC_DISPLAY_MS;
 
 /**
  * Observe un nœud et appelle `onImpression` UNE fois par APPARITION : la
  * carte doit rester visible à 50 % pendant une seconde ; elle ne recompte
  * qu'après être sortie de l'écran (un aller-retour de défilement est une
  * nouvelle impression, comme sur iOS). Sans `IntersectionObserver`, rien.
+ *
+ * #10501 — l'observateur est PARTAGÉ par toute la page (`viewability.ts`),
+ * et chaque apparition tient son horloge MRC : l'impression porte la
+ * visibilité connue à son départ, `onExit` la visibilité finale de
+ * l'apparition (sortie de l'écran ou démontage).
  */
 export function observeImpression(
   node: Element,
-  onImpression: () => void,
-  deps: {
-    readonly Observer?: ObserverCtor | undefined;
+  onImpression: (visibility: ImpressionVisibility) => void,
+  deps: VisibilityDeps & {
     readonly setTimer?: (run: () => void, ms: number) => unknown;
     readonly clearTimer?: (handle: unknown) => void;
+    readonly now?: () => number;
+    readonly kind?: ViewabilityKind;
+    readonly onExit?: (visibility: ImpressionVisibility) => void;
   } = {},
 ): () => void {
-  const Observer = deps.Observer ?? (globalThis as { IntersectionObserver?: ObserverCtor }).IntersectionObserver;
-  if (typeof Observer !== 'function') return () => undefined;
   const setTimer = deps.setTimer ?? ((run: () => void, ms: number) => setTimeout(run, ms));
   const clearTimer = deps.clearTimer ?? ((handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>));
+  const now = deps.now ?? Date.now;
+  const kind = deps.kind ?? 'display';
 
+  let clock: ViewabilityClock | null = null;
   let armed: unknown = null;
-  const observer = new Observer((entries) => {
-    const last = entries[entries.length - 1];
-    if (last === undefined) return;
-    const visible = last.isIntersecting && last.intersectionRatio >= IMPRESSION_VISIBLE_RATIO;
-    if (visible && armed === null) {
-      armed = setTimer(onImpression, IMPRESSION_DWELL_MS);
-      return;
-    }
-    if (!visible && armed !== null) {
-      clearTimer(armed);
-      armed = null;
-    }
-  }, { threshold: [0, IMPRESSION_VISIBLE_RATIO] });
-  observer.observe(node);
-  return () => {
-    observer.disconnect();
+  let fired = false;
+
+  const endAppearance = () => {
     if (armed !== null) clearTimer(armed);
     armed = null;
+    if (fired && clock !== null) deps.onExit?.(clock.snapshot(now()));
+    fired = false;
+    clock = null;
+  };
+
+  const stop = observeVisibility(node, (fraction) => {
+    if (clock === null && fraction > 0) clock = createViewabilityClock(kind);
+    clock?.update(fraction, now());
+    if (fraction < IMPRESSION_VISIBLE_RATIO) {
+      endAppearance();
+      return;
+    }
+    if (armed !== null || fired) return;
+    armed = setTimer(() => {
+      armed = null;
+      fired = true;
+      const current = clock ?? createViewabilityClock(kind);
+      onImpression(current.snapshot(now()));
+    }, IMPRESSION_DWELL_MS);
+  }, deps);
+  return () => {
+    stop();
+    endAppearance();
   };
 }
+
+export type ImpressionOptions = {
+  /** La place de la carte dans son listing (#10501) — position, page servie, source de classement. */
+  readonly listing?: ListingContext;
+  /** Le genre de la cible (#10502) ; à défaut, déduit de la source. */
+  readonly targetKind?: TargetKind;
+  /** Une vidéo qui joue n'est visible au sens MRC qu'après 2 s. */
+  readonly kind?: ViewabilityKind;
+};
+
+const targetKindOf = (source: ImpressionSource): TargetKind => (source === 'story' ? 'story' : source === 'status' ? 'status' : 'post');
 
 /**
  * La référence à poser sur une carte : une impression `source` par
@@ -198,21 +232,66 @@ export function observeImpression(
  * re-rendu (la référence est stable tant que ses primitives le sont).
  * `source === null` ou `postId` absent ⇒ rien n'est observé. Aucun état
  * React : la carte ne se re-rend pas pour être observée.
+ *
+ * #10501 — l'impression porte sa visibilité et son listing ; la fin de
+ * l'apparition émet `visibility/measured`, reliée par `impressionEventId`.
+ * La carte entre aussi au registre de ce qui est à l'écran, que la
+ * détection de capture lit (#10508).
  */
 export function useImpressionRef(
   postId: string | undefined,
   source: ImpressionSource | null,
   surface?: ContentSurface,
+  options: ImpressionOptions = {},
 ): (node: Element | null) => void {
   const stop = useRef<(() => void) | null>(null);
+  const { listing, targetKind, kind } = options;
+  const feedRequestId = listing?.feedRequestId;
+  const position = listing?.position;
+  const rankingSource = listing?.rankingSource;
+  const listingSessionId = listing?.listingSessionId;
   return useCallback((node: Element | null) => {
     stop.current?.();
     stop.current = null;
     if (node === null || postId === undefined || postId === '' || source === null) return;
-    stop.current = observeImpression(node, () => {
-      readingTelemetry.record({ type: 'impression', postId, source, ...(surface === undefined ? {} : { surface }) });
-    });
-  }, [postId, source, surface]);
+    const listed: ListingContext | undefined =
+      feedRequestId === undefined && position === undefined && rankingSource === undefined && listingSessionId === undefined
+        ? undefined
+        : {
+            ...(feedRequestId === undefined ? {} : { feedRequestId }),
+            ...(position === undefined ? {} : { position }),
+            ...(rankingSource === undefined ? {} : { rankingSource }),
+            ...(listingSessionId === undefined ? {} : { listingSessionId }),
+          };
+    const target = { kind: targetKind ?? targetKindOf(source), id: postId };
+    const placed = { ...(surface === undefined ? {} : { surface }), ...(listed === undefined ? {} : { listing: listed }) };
+    let impressionEventId: string | null = null;
+    const stopImpression = observeImpression(
+      node,
+      (visibility) => {
+        impressionEventId = newEngagementSessionId();
+        readingTelemetry.record({ type: 'impression', postId, source, ...placed, eventId: impressionEventId, visibility });
+      },
+      {
+        ...(kind === undefined ? {} : { kind }),
+        onExit: (visibility) => {
+          readingTelemetry.recordV2({
+            type: 'visibility',
+            action: 'measured',
+            target,
+            ...placed,
+            ...(impressionEventId === null ? {} : { impressionEventId }),
+            ...visibility,
+          });
+        },
+      },
+    );
+    const stopTracking = trackVisibleTarget(node, target);
+    stop.current = () => {
+      stopImpression();
+      stopTracking();
+    };
+  }, [postId, source, surface, targetKind, kind, feedRequestId, position, rankingSource, listingSessionId]);
 }
 
 /** Deux références posées sur le MÊME nœud (la story d'une tuile ET son humeur). */

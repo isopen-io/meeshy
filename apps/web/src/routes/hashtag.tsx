@@ -1,3 +1,5 @@
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
 import { useMemo } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -54,6 +56,7 @@ export default function HashtagScreen() {
   const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   const page = useInfiniteQuery(hashtagInfiniteOptions({ ...apiDeps, tag: canonical }));
+  const listingSessionId = useListingSessionId();
 
   const models = useMemo(
     () =>
@@ -116,10 +119,11 @@ export default function HashtagScreen() {
           </div>
         ) : (
           <>
-            {models.map((model) => (
+            {models.map((model, index) => (
               <FeedPostCard
                 key={model.id}
                 model={model}
+                listing={listingAt({ position: index, fallbackSource: 'hashtag', listingSessionId })}
                 impressionSource="search"
                 impressionSurface="hashtag"
                 onGesture={onGesture}

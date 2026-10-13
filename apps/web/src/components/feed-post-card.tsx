@@ -1,3 +1,4 @@
+import type { ListingContext } from '@/lib/api/social-events-v2-types';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
 
@@ -622,7 +623,7 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', impressionSurface = 'feed', ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null; readonly impressionSurface?: ContentSurface } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, impressionSource = 'feed', impressionSurface = 'feed', listing, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean; readonly impressionSource?: ImpressionSource | null; readonly impressionSurface?: ContentSurface; readonly listing?: ListingContext } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -630,7 +631,10 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // L'IMPRESSION DE LA CARTE (#10401) — une par apparition, posée ICI pour
   // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
   // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
-  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface);
+  const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface, {
+    ...(listing === undefined ? {} : { listing }),
+    targetKind: model.isReel ? 'reel' : 'post',
+  });
   /* LE TAP OUVRE DEPUIS CE LISTING (#10483) — l'engagement `open` et
      `?from=<origine>` ; la fiche elle-même n'ouvre rien. */
   const openOrigin = isDetail ? null : openOriginOfSurface(impressionSurface);

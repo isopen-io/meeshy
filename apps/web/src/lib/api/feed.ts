@@ -1,3 +1,4 @@
+import { withServedListing } from '@/lib/telemetry/served-listing';
 import type { QueryClient } from '@tanstack/react-query';
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
@@ -75,7 +76,7 @@ export async function loadFeedPage(
   return {
     ok: true,
     data: {
-      posts: result.data,
+      posts: withServedListing(result.data, result.meta),
       pagination: { limit: FEED_PAGE_SIZE, hasMore: raw?.hasMore ?? false, nextCursor: raw?.nextCursor ?? null },
     },
   };

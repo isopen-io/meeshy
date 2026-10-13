@@ -1,3 +1,5 @@
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
 import { useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -229,6 +231,7 @@ export default function BookmarksScreen() {
   const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   const posts = corpus.data ?? [];
+  const listingSessionId = useListingSessionId();
   /** CACHE D'ABORD (§ Instant App Principles) : le squelette n'existe que pour
    * un cache VIDE. `corpus.data` servi, même périmé, se peint sur-le-champ et
    * la revalidation reste silencieuse. */
@@ -283,10 +286,11 @@ export default function BookmarksScreen() {
                 <BookmarksFilterPicker value={applied} onChange={setFilter} />
               </li>
             ) : null}
-            {models.map((model) => (
+            {models.map((model, index) => (
               <li key={model.id}>
                 <FeedPostCard
                   model={model}
+                  listing={listingAt({ position: index, fallbackSource: 'bookmarks', listingSessionId })}
                   impressionSource="profile"
                   impressionSurface="bookmarks"
                   onGesture={onGesture}
