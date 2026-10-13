@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import {
+  KEEPALIVE_BATCH_CAP,
   SOCIAL_EVENTS_BATCH_CAP,
   SOCIAL_EVENTS_PENDING_CAP,
   createSocialEventsEmitter,
@@ -150,43 +151,126 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
     expect(recorder.pending()).toBe(1);
   });
 
-  test('un VISITEUR sans jeton envoie sa vue d’ouverture SEULE, sous sa clé de visiteur, sans crédential', async () => {
+  test('un VISITEUR sans jeton groupe sa vue d’ouverture dans un lot, sous sa clé de visiteur, sans crédential', async () => {
     const { recorder, requests } = recorderWith(null);
     recorder.record({ type: 'view', postId: OID(7) });
-    await settle();
+    expect(requests).toHaveLength(0);
+    await recorder.flush();
     expect(requests).toHaveLength(1);
     expect(requests[0]?.body).toEqual({ events: [{ type: 'view', postId: OID(7) }] });
     expect(requests[0]?.headers).toEqual({ 'X-Session-Token': 'visitor_abc' });
     expect(requests[0]?.credential).toBeNull();
   });
 
-  test('un visiteur ne produit ni impression, ni séance, ni vue de sortie — la porte les refuserait en 403', async () => {
+  test('un visiteur sur /post/:id émet l’impression `detail` ET la vue — deux requêtes, pour qu’un ancien serveur ne refuse que l’impression', async () => {
     const { recorder, requests } = recorderWith(null);
+    recorder.record({ type: 'impression', postId: OID(7), source: 'detail', surface: 'detail' });
+    recorder.record({ type: 'view', postId: OID(7), surface: 'detail' });
+    await recorder.flush();
+    const bodies = requests.map((r) => r.body);
+    expect(bodies).toContainEqual({ events: [{ type: 'view', postId: OID(7), surface: 'detail' }] });
+    expect(bodies).toContainEqual({ events: [{ type: 'impression', postId: OID(7), source: 'detail', surface: 'detail' }] });
+    expect(requests.every((r) => r.headers?.['X-Session-Token'] === 'visitor_abc')).toBe(true);
+    expect(recorder.pending()).toBe(0);
+  });
+
+  test('un 403 d’un ancien serveur sur l’impression d’un visiteur la retire de la file, sans rejeu', async () => {
+    const { recorder, requests } = recorderWith(null, 403);
     recorder.record(impression(1));
+    await recorder.flush();
+    expect(recorder.pending()).toBe(0);
+    await recorder.flush();
+    expect(requests).toHaveLength(1);
+  });
+
+  test('un 5xx garde le lot d’un visiteur en file', async () => {
+    const { recorder } = recorderWith(null, 503);
+    recorder.record(impression(1));
+    await recorder.flush();
+    expect(recorder.pending()).toBe(1);
+  });
+
+  test('la sortie d’un visiteur envoie sa vue AVEC sa durée ; aucune séance `dwell` ne part', async () => {
+    const { recorder, requests } = recorderWith(null);
     recorder.record({ type: 'view', postId: OID(1), durationMs: 4000 });
     recorder.record({
       type: 'dwell', sessionId: 'a', postId: OID(1), contentType: 'POST', surface: 'detail',
       startedAt: new Date(0).toISOString(), dwellMs: 10, completed: false,
     });
-    await settle();
-    expect(requests).toHaveLength(0);
-    expect(recorder.pending()).toBe(0);
+    await recorder.flush();
+    const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+    expect(sent).toEqual([{ type: 'view', postId: OID(1), durationMs: 4000 }]);
   });
 
   test('un visiteur ne compte qu’une ouverture par contenu et par onglet', async () => {
     const { recorder, requests } = recorderWith(null);
     recorder.record({ type: 'view', postId: OID(7) });
     recorder.record({ type: 'view', postId: OID(7) });
-    await settle();
-    expect(requests).toHaveLength(1);
+    await recorder.flush();
+    expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(1);
   });
 
-  test('l’invité d’un lien garde SON jeton : aucune clé de visiteur n’est posée par-dessus', async () => {
-    const { recorder, requests } = recorderWith({ kind: 'anonymous', sessionToken: 'anon_1' });
+  test('un visiteur ne recompte pas l’impression d’un même contenu dans la fenêtre de 30 minutes', async () => {
+    let t = 0;
+    const { transport, requests } = recordingTransport();
+    const recorder = createSocialEventsRecorder({
+      transport, credential: () => null, visitorKey: () => 'visitor_abc', schedule: () => undefined, now: () => t,
+    });
+    recorder.record(impression(1));
+    t = 29 * 60_000;
+    recorder.record(impression(1));
+    await recorder.flush();
+    t = 31 * 60_000;
+    recorder.record(impression(1));
+    await recorder.flush();
+    const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+    expect(sent).toEqual([impression(1), impression(1)]);
+  });
+
+  test('l’invité d’un lien parle sous SON jeton : aucune clé de visiteur n’est posée par-dessus', async () => {
+    const guest: Credential = { kind: 'anonymous', sessionToken: 'anon_1' };
+    const { recorder, requests } = recorderWith(guest);
     recorder.record({ type: 'view', postId: OID(3) });
-    await settle();
+    recorder.record(impression(3));
+    await recorder.flush();
+    expect(requests).toHaveLength(2);
+    expect(requests.every((r) => r.headers === undefined)).toBe(true);
+    expect(requests.every((r) => r.credential === guest)).toBe(true);
+  });
+
+  test('un compte reste inchangé : impression et vue dans UN lot, sous son crédential', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    recorder.record({ type: 'impression', postId: OID(1), source: 'detail', surface: 'detail' });
+    recorder.record({ type: 'view', postId: OID(1), durationMs: 10 });
+    await recorder.flush();
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.headers).toBeUndefined();
     expect(requests[0]?.credential).toBeUndefined();
+    expect(requests[0]?.headers).toBeUndefined();
+  });
+});
+
+describe('la fermeture de la page ne perd plus rien (W3)', () => {
+  test('un flush de sortie part en keepalive, pour un compte comme pour un visiteur', async () => {
+    for (const credential of [{ kind: 'registered', token: 't' } as Credential, null]) {
+      const { recorder, requests } = recorderWith(credential);
+      recorder.record(impression(1));
+      await recorder.flush({ keepalive: true });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.keepalive).toBe(true);
+    }
+  });
+
+  test('un flush ordinaire ne demande pas keepalive', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    recorder.record(impression(1));
+    await recorder.flush();
+    expect(requests[0]?.keepalive).toBeUndefined();
+  });
+
+  test(`un lot keepalive est coupé à ${KEEPALIVE_BATCH_CAP} — le navigateur refuse un corps keepalive de plus de 64 Kio`, async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    for (let n = 0; n < KEEPALIVE_BATCH_CAP + 10; n += 1) recorder.record(impression(n));
+    await recorder.flush({ keepalive: true });
+    expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(KEEPALIVE_BATCH_CAP);
   });
 });

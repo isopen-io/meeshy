@@ -1,6 +1,6 @@
 import * as socialEndpoints from '@meeshy/shared/api/endpoints/social';
 
-import type { ApiResult, Credential, HttpTransport } from './http';
+import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 
 /**
  * **LA TÉLÉMÉTRIE DE LECTURE DU WEB** (#10401) — l'émetteur UNIQUE des
@@ -19,15 +19,26 @@ import type { ApiResult, Credential, HttpTransport } from './http';
  * - Un échec transitoire (hors ligne, 408, 429, 5xx) GARDE le lot en file :
  *   il repart au flush suivant. Un refus définitif (400, 403, 413) le jette —
  *   le rejouer bloquerait la file à jamais pour un défaut que rien ne répare.
- * - Un VISITEUR (sans compte, ou invité d'un lien) ne peut produire qu'une
- *   vue : la porte refuse en 403 un lot anonyme qui porte autre chose. Ses
- *   vues partent une à une — le seau anonyme est borné par le premier post
- *   du lot.
+ * - Un VISITEUR (sans compte, ou invité d'un lien) émet ses vues ET ses
+ *   impressions (#10483), groupées à la même cadence, sous son jeton d'invité
+ *   ou sa clé de visiteur. Vues et impressions partent en DEUX requêtes : un
+ *   serveur antérieur à #10483 refuse en 403 un lot anonyme qui porte une
+ *   impression — il ne doit refuser qu'elle, jamais la vue voisine. Le 403
+ *   retire l'impression de la file, sans rejeu. `dwell` et `download`
+ *   restent réservés aux comptes et ne partent pas.
  */
 export const SOCIAL_EVENTS_BATCH_CAP = 200;
 
 /** La file ne grossit pas sans borne quand le réseau manque longtemps. */
 export const SOCIAL_EVENTS_PENDING_CAP = 1000;
+
+/** Un corps `keepalive` au-delà de 64 Kio est refusé par le navigateur : le
+ * lot de sortie (`pagehide`) est coupé plus court que celui de la porte. */
+export const KEEPALIVE_BATCH_CAP = 100;
+
+/** La fenêtre pendant laquelle un visiteur ne recompte pas l'impression d'un
+ * même contenu — celle que la passerelle applique (#10483 § 5). */
+export const VISITOR_IMPRESSION_WINDOW_MS = 30 * 60_000;
 
 export type ImpressionSource =
   | 'feed'
@@ -39,11 +50,32 @@ export type ImpressionSource =
   | 'story'
   | 'status';
 
+/**
+ * L'ÉCRAN qui a montré le contenu (#10483 § 8) — champ FACULTATIF des
+ * impressions et des vues. Un serveur antérieur l'ignore (`z.object` n'est
+ * pas strict) : rien côté client n'en dépend.
+ */
+export type ContentSurface =
+  | 'feed'
+  | 'reels'
+  | 'profile'
+  | 'bookmarks'
+  | 'hashtag'
+  | 'community'
+  | 'nearby'
+  | 'sound'
+  | 'story_rail'
+  | 'mood_avatar'
+  | 'citation'
+  | 'detail'
+  | 'story'
+  | 'visitor';
+
 export type DwellContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 
 export type SocialEvent =
-  | { readonly type: 'view'; readonly postId: string; readonly durationMs?: number }
-  | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource }
+  | { readonly type: 'view'; readonly postId: string; readonly durationMs?: number; readonly surface?: ContentSurface }
+  | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource; readonly surface?: ContentSurface }
   | {
       readonly type: 'dwell';
       readonly sessionId: string;
@@ -60,9 +92,11 @@ export type SocialEvent =
 /** `sent` : écrit · `retry` : panne transitoire, garder · `drop` : refus définitif. */
 export type SendVerdict = 'sent' | 'retry' | 'drop';
 
+export type FlushOptions = { readonly keepalive?: boolean };
+
 export type SocialEventsEmitter = {
   readonly record: (event: SocialEvent) => void;
-  readonly flush: () => Promise<void>;
+  readonly flush: (options?: FlushOptions) => Promise<void>;
   readonly pending: () => number;
 };
 
@@ -87,7 +121,7 @@ export function normalizeSocialEvent(event: SocialEvent): SocialEvent {
 }
 
 export function createSocialEventsEmitter(deps: {
-  readonly send: (events: readonly SocialEvent[]) => Promise<SendVerdict>;
+  readonly send: (events: readonly SocialEvent[], options: FlushOptions) => Promise<SendVerdict>;
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
 }): SocialEventsEmitter {
@@ -111,13 +145,14 @@ export function createSocialEventsEmitter(deps: {
     arm();
   }
 
-  async function flush(): Promise<void> {
+  async function flush(options: FlushOptions = {}): Promise<void> {
     if (flushing) return;
     flushing = true;
+    const cap = options.keepalive === true ? KEEPALIVE_BATCH_CAP : SOCIAL_EVENTS_BATCH_CAP;
     try {
       while (queue.length > 0) {
-        const batch = queue.slice(0, SOCIAL_EVENTS_BATCH_CAP);
-        const verdict = await deps.send(batch).catch((): SendVerdict => 'retry');
+        const batch = queue.slice(0, cap);
+        const verdict = await deps.send(batch, options).catch((): SendVerdict => 'retry');
         if (verdict === 'retry') break;
         queue = queue.slice(batch.length);
       }
@@ -156,34 +191,23 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   });
 }
 
-/** Un lot d'un COMPTE — le transport y pose son crédential. */
-export function sendAccountBatch(deps: SocialEventsTransportDeps) {
-  return (events: readonly SocialEvent[]): Promise<SendVerdict> =>
-    withTimeout(
-      deps.transport
-        .request<{ readonly recorded: number; readonly rejected: number }>({
-          method: 'POST',
-          path: socialEndpoints.events,
-          body: { events },
-        })
-        .then(verdictOf),
-      deps.timeoutMs ?? 20_000,
-      'retry',
-    );
-}
+/** L'identité d'un appel : le crédential de la session (compte), ou celle
+ * d'un visiteur figée à l'enregistrement. */
+type CallIdentity = Pick<HttpRequest, 'credential' | 'headers'>;
 
-/** Une vue d'un VISITEUR — seule, sous son jeton d'invité ou sa clé de visiteur. */
-export function sendVisitorView(deps: SocialEventsTransportDeps, event: Extract<SocialEvent, { type: 'view' }>): Promise<SendVerdict> {
-  const credential = deps.credential();
-  const identity = credential === null
-    ? { credential: null, headers: { 'X-Session-Token': deps.visitorKey() } }
-    : {};
+function postEvents(
+  deps: SocialEventsTransportDeps,
+  events: readonly SocialEvent[],
+  options: FlushOptions,
+  identity: CallIdentity,
+): Promise<SendVerdict> {
   return withTimeout(
     deps.transport
       .request<{ readonly recorded: number; readonly rejected: number }>({
         method: 'POST',
         path: socialEndpoints.events,
-        body: { events: [normalizeSocialEvent(event)] },
+        body: { events },
+        ...(options.keepalive === true ? { keepalive: true } : {}),
         ...identity,
       })
       .then(verdictOf),
@@ -192,38 +216,124 @@ export function sendVisitorView(deps: SocialEventsTransportDeps, event: Extract<
   );
 }
 
+/** Un lot d'un COMPTE — le transport y pose son crédential. */
+export function sendAccountBatch(deps: SocialEventsTransportDeps) {
+  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendVerdict> =>
+    postEvents(deps, events, options, {});
+}
+
+function combine(verdicts: readonly SendVerdict[]): SendVerdict {
+  if (verdicts.includes('retry')) return 'retry';
+  return verdicts.includes('sent') ? 'sent' : 'drop';
+}
+
 /**
- * L'émetteur câblé : un compte passe par la file groupée, un visiteur
- * n'envoie que ses vues, une à une. Décidé à l'ENREGISTREMENT — c'est le
- * crédential de cet instant qui dit qui a vu.
+ * Un lot d'un VISITEUR, sous l'identité figée à l'enregistrement. Les vues et
+ * les impressions partent séparément : un serveur antérieur à #10483 refuse
+ * en 403 l'impression d'un anonyme, et ce refus ne doit pas emporter la vue.
+ * Rejouer après une panne est sans risque : la passerelle dédoublonne la vue
+ * par lecteur et l'impression sur 30 minutes.
+ */
+export function sendVisitorBatch(deps: SocialEventsTransportDeps, identity: CallIdentity) {
+  return async (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendVerdict> => {
+    const parts = [
+      events.filter((event) => event.type === 'view'),
+      events.filter((event) => event.type === 'impression'),
+    ].filter((part) => part.length > 0);
+    const verdicts = await Promise.all(parts.map((part) => postEvents(deps, part, options, identity)));
+    return combine(verdicts);
+  };
+}
+
+/** La mémoire de dédoublonnage d'un onglet reste bornée sur une longue séance. */
+const VISITOR_MEMORY_CAP = 2000;
+
+type VisitorLane = { readonly key: string; readonly identity: () => CallIdentity };
+
+function visitorLaneOf(credential: Credential | null, deps: SocialEventsTransportDeps): VisitorLane {
+  if (credential !== null && credential.kind === 'anonymous') {
+    return { key: `guest:${credential.sessionToken}`, identity: () => ({ credential }) };
+  }
+  return { key: 'visitor', identity: () => ({ credential: null, headers: { 'X-Session-Token': deps.visitorKey() } }) };
+}
+
+/**
+ * L'émetteur câblé : un compte et un visiteur passent chacun par une file
+ * groupée. L'identité est décidée à l'ENREGISTREMENT — c'est le crédential de
+ * cet instant qui dit qui a vu ; un visiteur qui se connecte ensuite n'envoie
+ * pas ses vues d'avant sous son compte.
  */
 export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
+  readonly now?: () => number;
 }) {
-  const emitter = createSocialEventsEmitter({
-    send: sendAccountBatch(deps),
+  const now = deps.now ?? Date.now;
+  const cadence = {
     schedule: deps.schedule,
     ...(deps.flushDelayMs === undefined ? {} : { flushDelayMs: deps.flushDelayMs }),
-  });
+  };
+  const account = createSocialEventsEmitter({ send: sendAccountBatch(deps), ...cadence });
+  const lanes = new Map<string, SocialEventsEmitter>();
+  const opened = new Set<string>();
+  const impressedAt = new Map<string, number>();
 
-  const visitorViewed = new Set<string>();
+  function laneEmitter(lane: VisitorLane): SocialEventsEmitter {
+    const known = lanes.get(lane.key);
+    if (known !== undefined) return known;
+    const emitter = createSocialEventsEmitter({ send: sendVisitorBatch(deps, lane.identity()), ...cadence });
+    lanes.set(lane.key, emitter);
+    return emitter;
+  }
+
+  function forgetStaleImpressions(at: number): void {
+    for (const [key, last] of impressedAt) {
+      if (at - last >= VISITOR_IMPRESSION_WINDOW_MS) impressedAt.delete(key);
+    }
+    if (impressedAt.size >= VISITOR_MEMORY_CAP) impressedAt.clear();
+  }
+
+  /* Ce qu'un visiteur envoie : l'ouverture une fois par contenu et par onglet,
+     la vue de sortie avec sa durée (la passerelle garde la plus longue),
+     l'impression une fois par fenêtre de 30 minutes. */
+  function admitsVisitor(laneKey: string, event: SocialEvent): boolean {
+    const key = `${laneKey}|${event.postId}`;
+    if (event.type === 'view') {
+      if (event.durationMs !== undefined) return true;
+      if (opened.has(key)) return false;
+      if (opened.size >= VISITOR_MEMORY_CAP) opened.clear();
+      opened.add(key);
+      return true;
+    }
+    if (event.type === 'impression') {
+      const at = now();
+      if (impressedAt.size >= VISITOR_MEMORY_CAP) forgetStaleImpressions(at);
+      const last = impressedAt.get(key);
+      if (last !== undefined && at - last < VISITOR_IMPRESSION_WINDOW_MS) return false;
+      impressedAt.set(key, at);
+      return true;
+    }
+    return false;
+  }
 
   function record(event: SocialEvent): void {
     const credential = deps.credential();
     if (credential?.kind === 'registered') {
-      emitter.record(event);
+      account.record(event);
       return;
     }
-    /* Un visiteur : l'OUVERTURE seule, une fois par contenu et par onglet. La
-       vue de sortie (avec durée) n'ajouterait rien — la passerelle compte une
-       ouverture anonyme par jeton — et userait son seau de 10 par minute. */
-    if (event.type !== 'view' || event.durationMs !== undefined || visitorViewed.has(event.postId)) return;
-    visitorViewed.add(event.postId);
-    void sendVisitorView(deps, event).catch(() => undefined);
+    const lane = visitorLaneOf(credential, deps);
+    if (!admitsVisitor(lane.key, event)) return;
+    laneEmitter(lane).record(event);
   }
 
-  return { record, flush: emitter.flush, pending: emitter.pending };
+  async function flush(options: FlushOptions = {}): Promise<void> {
+    await Promise.all([account, ...lanes.values()].map((emitter) => emitter.flush(options)));
+  }
+
+  const pending = (): number => [...lanes.values()].reduce((total, lane) => total + lane.pending(), account.pending());
+
+  return { record, flush, pending };
 }
 
 export function newEngagementSessionId(): string {
