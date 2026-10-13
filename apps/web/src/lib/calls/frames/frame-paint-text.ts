@@ -566,6 +566,41 @@ function paintList(context: Surface2D, scene: TextScene, plan: TextPlan): void {
 /** La taille de base d'un nom, bornée par la case : une grande tablée n'a pas de noms plus gros que ses visages. */
 const namePx = (scene: TextScene, box: FrameSlotBox): number => Math.min(scene.areas.unit * NAME_SHARE, Math.min(box.rect.width, box.rect.height) * 0.1);
 
+function nameItems(scene: TextScene): readonly NameBox[] {
+  return scene.slots.flatMap((box) => {
+    const person = scene.people[box.index];
+    if (person === undefined) return [];
+    const lines = personLines(person, scene.look.names.show);
+    return lines.length === 0 ? [] : [{ box, person, lines }];
+  });
+}
+
+const namesInFoot = (names: FrameNames, slot: FrameLook['slot']): boolean => names.style === 'caption' && slot.card !== undefined && slot.card.foot > 0.08;
+
+/** Les noms qui se posent SOUS leur case (légende, banderole, étiquette) — quand la place le permet. */
+export const namesSitBelow = (names: FrameNames, slot: FrameLook['slot']): boolean =>
+  names.show !== 'none' && !namesInFoot(names, slot) && (names.style === 'caption' || names.style === 'ribbon' || names.style === 'tag');
+
+/** La hauteur qu'un bloc de `lines` lignes demande sous sa case. */
+export const roomNeededBelow = (style: FrameNames['style'], lines: number, px: number): number => blockHeight(lines, px) * (style === 'caption' ? 1.35 : 1.9);
+
+/**
+ * La place que la géométrie doit laisser sous chaque case pour que ses noms
+ * n'y couvrent jamais un visage (#10478, miroir de `CallFrameRenderer.nameRoom`) :
+ * la plus grande qu'un nom puisse demander à cette toile, zéro s'ils se posent ailleurs.
+ */
+export function nameRoom(look: Pick<FrameLook, 'names' | 'slot'>, unit: number): number {
+  if (!namesSitBelow(look.names, look.slot)) return 0;
+  return roomNeededBelow(look.names.style, look.names.show === 'both' ? 2 : 1, unit * NAME_SHARE);
+}
+
+/** Chaque nom tient-il SOUS sa case ? Sinon tous se replient dans la case, sur un fond (`paintPlate`). */
+export function namesFitBelow(scene: TextScene, plan: TextPlan): boolean {
+  const { names, slot } = scene.look;
+  if (!namesSitBelow(names, slot)) return false;
+  return nameItems(scene).every((item) => roomBelow(scene, plan, item.box) >= roomNeededBelow(names.style, item.lines.length, namePx(scene, item.box)));
+}
+
 export function paintNames(context: Surface2D, scene: TextScene, plan: TextPlan): void {
   const { names, slot } = scene.look;
   if (names.show === 'none') return;
@@ -573,15 +608,10 @@ export function paintNames(context: Surface2D, scene: TextScene, plan: TextPlan)
     paintList(context, scene, plan);
     return;
   }
-  const items: readonly NameBox[] = scene.slots.flatMap((box) => {
-    const person = scene.people[box.index];
-    if (person === undefined) return [];
-    const lines = personLines(person, names.show);
-    return lines.length === 0 ? [] : [{ box, person, lines }];
-  });
-  const inFoot = names.style === 'caption' && slot.card !== undefined && slot.card.foot > 0.08;
-  const outside = !inFoot && (names.style === 'caption' || names.style === 'ribbon' || names.style === 'tag');
-  const roomy = outside && items.every((item) => roomBelow(scene, plan, item.box) >= blockHeight(item.lines.length, namePx(scene, item.box)) * (names.style === 'caption' ? 1.35 : 1.9));
+  const items = nameItems(scene);
+  const inFoot = namesInFoot(names, slot);
+  const outside = namesSitBelow(names, slot);
+  const roomy = namesFitBelow(scene, plan);
   items.forEach((item) => {
     const px = namePx(scene, item.box);
     if (inFoot && slot.card !== undefined) {

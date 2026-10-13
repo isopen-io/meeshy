@@ -1,4 +1,5 @@
 import { gridRects, scatter, type Rect, type Size } from '../call-montage-shapes';
+import { footprint } from './frame-paint-kit';
 import type { FrameLook, SlotShape } from './frame-spec';
 
 /**
@@ -354,4 +355,38 @@ export function frameSlots(frame: FrameLayoutInput, people: number, size: Size):
     const rotation = tiltDegrees(frame.slot.tilt, index);
     return { rect: keepInside(box, rotation, areas.content), shape, rotation, index };
   });
+}
+
+/** La marge gardée en plus de la place demandée : un texte de la réserve basse peut mordre d'un point sur le contenu. */
+export const NAME_ROOM_SLACK = 2;
+/** Une case ne cède jamais plus de la moitié de sa hauteur à ses noms : au-delà, ils se replient dans la case. */
+export const NAME_ROOM_MAX_SHARE = 0.5;
+
+/**
+ * **LA PLACE DES NOMS SOUS LES CASES** (#10478, miroir de
+ * `CallFrameLayoutGeometry.leavingRoomBelow`, #9780) — raccourcit par le bas,
+ * le haut de son encombrement fixe, chaque case qui n'a pas `room` de libre
+ * au-dessus de la case suivante (ou de `floor`). Tout ou rien : si une case
+ * ne peut pas la céder (cases qui se chevauchent, case trop petite), aucune
+ * ne change.
+ */
+export function leavingRoomBelow(boxes: readonly FrameSlotBox[], room: number, floor: number): readonly FrameSlotBox[] {
+  if (room <= 0) return boxes;
+  const footprints = boxes.map(footprint);
+  const made = boxes.map((box, index): FrameSlotBox | null => {
+    const own = footprints[index] as Rect;
+    const ownBottom = own.y + own.height;
+    const below = footprints.filter((other, at) => at !== index && other.x < own.x + own.width && own.x < other.x + other.width && other.y + other.height > ownBottom);
+    if (below.some((other) => other.y < ownBottom)) return null;
+    const ground = Math.min(floor, ...below.map((other) => other.y));
+    const deficit = room + NAME_ROOM_SLACK - (ground - ownBottom);
+    if (deficit <= 0) return box;
+    const cos = Math.cos((Math.abs(box.rotation) * Math.PI) / 180);
+    const cut = deficit / cos;
+    if (cut > box.rect.height * NAME_ROOM_MAX_SHARE) return null;
+    const lift = (cut * (1 - cos)) / 2;
+    return { ...box, rect: rect(box.rect.x, box.rect.y + lift, box.rect.width, box.rect.height - cut) };
+  });
+  const all = made.filter((box): box is FrameSlotBox => box !== null);
+  return all.length === boxes.length ? all : boxes;
 }
