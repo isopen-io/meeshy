@@ -29,9 +29,9 @@ import {
 import { readSocialEventsBody, type EventClock } from './eventsEnvelope';
 import type { ParsedSocialEventsContext } from './eventsV2Schemas';
 import { acceptedEventTypes, socialEventsV2Settings } from '../../services/social/contentEvents';
-import { claimCountingReceipts } from '../../services/social/countingReplays';
+import { claimCountingReceipts, releaseCountingReceipts, type CountingReceipts } from '../../services/social/countingReplays';
 import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/social/eventPrivacy';
-import { impressionRowOf, insertKeyedImpressions } from '../../services/social/impressionRows';
+import { impressionRowOf, insertKeyedImpressions, removeKeyedImpressions } from '../../services/social/impressionRows';
 import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
 export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation';
 import {
@@ -265,8 +265,10 @@ async function applyImpressions(
   const plain = all.filter((event) => !event.eventId);
   const keyed = all.filter((event) => event.eventId);
   if (plain.length > 0) await deps.prisma.postImpression.createMany({ data: plain.map(rowOf) });
-  const { inserted } = await insertKeyedImpressions(deps.prisma, keyed.map(rowOf));
+  const keyedRows = keyed.map(rowOf);
+  const { inserted } = await insertKeyedImpressions(deps.prisma, keyedRows);
   const events = [...plain, ...keyed.filter((_, index) => inserted.has(index))];
+  const written = keyedRows.filter((_, index) => inserted.has(index));
 
   const impressions = compterParId(events.map((event) => event.postId));
   const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
@@ -276,6 +278,8 @@ async function applyImpressions(
     events.map((event) => racines.get(event.postId)).filter((id): id is string => id !== undefined),
   );
 
+  // La ligne à clé est écrite AVANT ses compteurs : si eux échouent, elle est
+  // retirée, sinon le renvoi du client serait un doublon et rien ne compterait.
   await Promise.all([
     ...groupesParIncrement(impressions).map(([increment, ids]) =>
       incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } })),
@@ -283,7 +287,10 @@ async function applyImpressions(
       incrementPostCounters(deps.prisma, ids, { postOpenCount: { increment } })),
     ...groupesParIncrement(creditsRacine).map(([increment, ids]) =>
       incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } }, { liveOnly: true })),
-  ]);
+  ]).catch(async (error: unknown) => {
+    await removeKeyedImpressions(deps.prisma, written);
+    throw error;
+  });
 
   return all.length;
 }
@@ -392,26 +399,48 @@ export async function ingestSocialEvents(
   const rejected = events.length - audiences.length;
   if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
 
-  const rejoues = await rejeuxDe(deps, audiences, ['view', 'open'], options);
+  const recus = await rejeuxDe(deps, audiences, ['view', 'open'], options);
+  const rejoues = recus.replays;
   const admis = audiences.filter((event) => !rejoues.has(event));
 
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
-  const vues = await applyViews(deps, parType('view'), actor);
+  return orReleaseReceipts(deps, recus, async () => {
+    const vues = await applyViews(deps, parType('view'), actor);
 
-  const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
-    applyOpens(deps, parType('open'), actor.userId),
-    applyImpressions(deps, parType('impression'), actor.userId, options),
-    applyDownloads(deps, parType('download'), actor.userId),
-    applyDwell(deps, parType('dwell'), actor.userId),
-  ]);
+    const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
+      applyOpens(deps, parType('open'), actor.userId),
+      applyImpressions(deps, parType('impression'), actor.userId, options),
+      applyDownloads(deps, parType('download'), actor.userId),
+      applyDwell(deps, parType('dwell'), actor.userId),
+    ]);
 
-  return {
-    recorded: vues + ouvertures + impressions + telechargements.events + sessions + rejoues.size,
-    rejected,
-    legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
-  };
+    return {
+      recorded: vues + ouvertures + impressions + telechargements.events + sessions + rejoues.size,
+      rejected,
+      legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
+    };
+  });
+}
+
+/**
+ * Le comptage ne perd rien (#10553) : si un effet échoue après l'écriture des
+ * reçus, ils sont RENDUS avant que l'erreur ne remonte — le renvoi du client,
+ * au même `eventId`, comptera. Un effet déjà parti peut alors compter deux
+ * fois : c'est le sens voulu de l'erreur (règle du porteur, 2026-10-13).
+ */
+async function orReleaseReceipts<T>(
+  deps: SocialEventsDeps,
+  recus: CountingReceipts<SocialEvent>,
+  effects: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await effects();
+  } catch (error) {
+    await releaseCountingReceipts(deps.prisma, recus.claimed);
+    throw error;
+  }
 }
 
 /**
@@ -424,16 +453,10 @@ async function rejeuxDe(
   events: readonly SocialEvent[],
   types: readonly SocialEvent['type'][],
   options: SocialEventsIngestOptions,
-): Promise<ReadonlySet<SocialEvent>> {
+): Promise<CountingReceipts<SocialEvent>> {
   const receivedAt = options.receivedAt ?? new Date();
   const candidats = events.flatMap((event) => types.includes(event.type) && event.eventId
-    ? [{
-      item: event,
-      eventId: event.eventId,
-      type: event.type,
-      postId: event.postId,
-      derivedAt: options.clocks?.get(event)?.derivedAt ?? receivedAt,
-    }]
+    ? [{ item: event, eventId: event.eventId, type: event.type }]
     : []);
   return claimCountingReceipts(deps.prisma, candidats, receivedAt);
 }
@@ -465,9 +488,11 @@ async function ingestAnonymous(
   const vide: SocialEventsOutcome['legacy'] = { mediaRecorded: 0, anonymousCounted: false };
   if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
 
-  const rejoues = await rejeuxDe(deps, audiences, ['view', 'open', 'impression'], options);
+  const recus = await rejeuxDe(deps, audiences, ['view', 'open', 'impression'], options);
+  const rejoues = recus.replays;
   const admis = audiences.filter((event) => !rejoues.has(event));
 
+  return orReleaseReceipts(deps, recus, async () => {
   const vues = await creditAnonymousViews(deps.prisma, {
     readerKey: actor.readerKey,
     views: admis.flatMap((event) => event.type === 'view'
@@ -495,6 +520,7 @@ async function ingestAnonymous(
     rejected,
     legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 },
   };
+  });
 }
 
 /**

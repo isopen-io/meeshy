@@ -94,3 +94,16 @@ export async function insertKeyedImpressions(
 ): Promise<{ readonly inserted: ReadonlySet<number>; readonly duplicates: ReadonlySet<number> }> {
   return insertDocuments(prisma, 'PostImpression', rows.map(toExtendedJson));
 }
+
+/**
+ * Retire les lignes à clé qu'un comptage en échec vient d'écrire (#10553) :
+ * sans cela le renvoi du client serait un doublon, et l'impression perdue.
+ */
+export async function removeKeyedImpressions(prisma: RawCommandPrisma, rows: readonly ImpressionRow[]): Promise<void> {
+  const keys = rows.flatMap((row) => (row.eventKey ? [row.eventKey] : []));
+  if (keys.length === 0) return;
+  await prisma.$runCommandRaw({
+    delete: 'PostImpression',
+    deletes: [{ q: { eventKey: { $in: keys } }, limit: 0 }],
+  }).catch(() => undefined);
+}

@@ -244,3 +244,15 @@ Milestone #175 « Chaque interaction avec un contenu est capturée, exploitable 
 | #10510 | stockage `ContentEvent`, TTL `PostImpression` | 9 |
 | #10511 | qualification juridique (`décision-produit`) | 6 |
 | #10512 | agrégats quotidiens | 10 |
+
+## Le comptage ne perd rien (porteur, 2026-10-13 — #10553)
+
+Règle du porteur : « tant que l'information arrive, on compte ; on améliorera quand on constatera des cas de triche. »
+
+- **Pas d'âge limite pour le comptage.** La règle des 72 h ne vaut plus que pour les événements v2 (comportement). Une impression, une vue, une ouverture, une séance ou un téléchargement comptent quel que soit leur âge : une file hors ligne restée dix jours ne perd rien (`deriveEventClock`, `ageless`).
+- **Un reçu ne dit rien du contenu ni de la personne.** Le reçu de déduplication (`ContentEvent`, `action = receipt`, 4 jours) ne porte plus ni cible ni heure de l'événement : une clé HMAC, le type, le jour de réception, une échéance. Il s'écrit donc aussi pour un compte qui REFUSE l'analyse — sans lui, un renvoi après une coupure réseau compterait deux fois. La phrase « un compte qui refuse l'analyse ne laisse aucune ligne » se lit : aucune ligne de COMPORTEMENT ; le reçu n'en est pas une.
+- **Un comptage en échec rend son reçu.** Le reçu s'écrit avant l'effet ; si l'effet lève, le reçu est retiré avant que l'erreur ne remonte (`releaseCountingReceipts`), et la ligne d'impression à clé d'un compte aussi (`removeKeyedImpressions`). Le renvoi du client compte.
+- **Un reçu qui ne s'écrit pas n'empêche pas de compter.** Le lot est alors compté sans déduplication.
+- **Ce qu'on accepte en échange** : un effet déjà parti avant l'échec d'un autre peut compter deux fois au renvoi, et un événement rejoué après l'échéance de son reçu (4 jours) recompte. Le sens de l'erreur est choisi : compter une fois de trop plutôt que perdre.
+
+Témoins : `src/__tests__/unit/routes/social/events-counting-never-loses.test.ts`.

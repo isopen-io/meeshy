@@ -119,6 +119,18 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
   };
 
   const record = (model: string, op: string, args: unknown) => writes.push({ model, op, args });
+
+  /** `delete` par clé d'événement (`eventKey: { $in }`) et, s'il est donné, par `action`. */
+  const rawDelete = (collection: string, deletes: { q: Record<string, unknown> }[]) => {
+    const rows = collections[collection];
+    const before = rows.length;
+    deletes.forEach(({ q }) => {
+      const keys = new Set(((q.eventKey as { $in?: string[] } | undefined)?.$in) ?? []);
+      const kept = rows.filter((row) => !(keys.has(row.eventKey as string) && (q.action === undefined || row.action === q.action)));
+      rows.splice(0, rows.length, ...kept);
+    });
+    return { ok: 1, n: before - rows.length };
+  };
   const row = (id: string) => store.read(id) as (Record<string, unknown> & { id: string }) | undefined;
 
   const project = (post: Record<string, unknown> & { id: string }) => {
@@ -222,6 +234,10 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
       if (typeof command.insert === 'string' && KEYED_COLLECTIONS.has(command.insert)) {
         record(command.insert, 'insert', command);
         return rawInsert(command.insert, command.documents as Record<string, unknown>[]);
+      }
+      if (typeof command.delete === 'string' && KEYED_COLLECTIONS.has(command.delete)) {
+        record(command.delete, 'delete', command);
+        return rawDelete(command.delete, command.deletes as { q: Record<string, unknown> }[]);
       }
       record('post', 'runCommandRaw', command);
       return store.runCommandRaw(command);

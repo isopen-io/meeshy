@@ -136,7 +136,7 @@ describe('horloge — derivedAt = receivedAt − (sentAt − occurredAt)', () =>
     await h.app.close();
   });
 
-  it('un événement de plus de 72 h est ignoré, sans écriture', async () => {
+  it('un événement v2 de plus de 72 h est ignoré ; le COMPTAGE du même âge compte (#10553)', async () => {
     const h = await reachHarness([{ id: POST }]);
     const now = Date.now();
     const res = await sendReachV2(h.app, [
@@ -144,9 +144,9 @@ describe('horloge — derivedAt = receivedAt − (sentAt − occurredAt)', () =>
       impressionEvent(POST, { occurredAt: new Date(now - 73 * 60 * 60 * 1000).toISOString() }),
     ], visitorHeader(1), { sentAt: new Date(now).toISOString() });
 
-    expect(dataOf(res)).toMatchObject({ recorded: 0, ignored: 2 });
-    expect(h.contentEvents).toHaveLength(0);
-    expect(h.store.read(POST)?.impressionCount ?? 0).toBe(0);
+    expect(dataOf(res)).toMatchObject({ recorded: 1, ignored: 1 });
+    expect(h.contentEvents.filter((row) => row.type === 'scroll')).toHaveLength(0);
+    expect(h.store.read(POST)).toMatchObject({ impressionCount: 1 });
     await h.app.close();
   });
 

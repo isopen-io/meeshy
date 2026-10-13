@@ -59,7 +59,8 @@ const parseDate = (value: string | undefined): number | undefined => {
 };
 
 /**
- * L'heure CORRIGÉE d'un événement, ou `'too-old'` s'il a plus de 72 h.
+ * L'heure CORRIGÉE d'un événement, ou `'too-old'` s'il a plus de 72 h — sauf
+ * pour le COMPTAGE (`ageless`), qui n'a pas d'âge limite.
  *
  *  - sans `occurredAt` : l'heure de réception, sans correction ;
  *  - avec `sentAt` : l'âge vu par l'appareil (`sentAt − occurredAt`) est
@@ -73,6 +74,8 @@ export function deriveEventClock(params: {
   readonly occurredAt?: string;
   readonly sentAt?: string;
   readonly receivedAt: Date;
+  /** Le COMPTAGE n'a pas d'âge limite (#10553) : tant que l'information arrive, elle compte. */
+  readonly ageless?: boolean;
 }): EventClock | 'too-old' {
   const received = params.receivedAt.getTime();
   const occurred = parseDate(params.occurredAt);
@@ -80,7 +83,7 @@ export function deriveEventClock(params: {
 
   const sent = parseDate(params.sentAt) ?? received;
   const age = sent - occurred;
-  if (age > SOCIAL_EVENT_MAX_AGE_MS) return 'too-old';
+  if (age > SOCIAL_EVENT_MAX_AGE_MS && params.ageless !== true) return 'too-old';
   if (age < -SOCIAL_EVENT_MAX_FUTURE_MS) return { derivedAt: params.receivedAt, clockSkewed: true };
   return { derivedAt: new Date(received - Math.max(age, 0)), clockSkewed: false };
 }
@@ -129,7 +132,7 @@ export function readSocialEventsBody(body: unknown, receivedAt: Date): SocialEve
 function readCounting(raw: unknown, context: ParsedSocialEventsContext, receivedAt: Date) {
   const parsed = SocialEventSchema.safeParse(raw);
   if (!parsed.success) return undefined;
-  const clock = deriveEventClock({ occurredAt: parsed.data.occurredAt, sentAt: context.sentAt, receivedAt });
+  const clock = deriveEventClock({ occurredAt: parsed.data.occurredAt, sentAt: context.sentAt, receivedAt, ageless: true });
   if (clock === 'too-old') return undefined;
   return { kind: 'counting' as const, value: { event: parsed.data, clock } };
 }
