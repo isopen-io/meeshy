@@ -41,6 +41,11 @@ nonisolated enum ComposerPanelHeightLaw {
         return min(endFrame.height, windowHeight - endFrame.minY)
     }
 
+    /// Gabarit du témoin rouge (#10544) : la règle arrive au commit suivant.
+    static func liftHeight(endFrame: CGRect, windowHeight: CGFloat, current: CGFloat) -> CGFloat {
+        keyboardHeight(endFrame: endFrame, windowHeight: windowHeight) ?? 0
+    }
+
     /// Plafond du panneau pour une fenêtre donnée.
     static func ceiling(windowHeight: CGFloat, safeAreaTop: CGFloat, safeAreaBottom: CGFloat) -> CGFloat {
         let usable = windowHeight - safeAreaTop - safeAreaBottom - composerChromeReserve

@@ -251,6 +251,16 @@ class KeyboardObserver: ObservableObject {
     }
 }
 
+/// Gabarit du témoin rouge (#10544) : la règle arrive au commit suivant.
+final class ComposerKeyboardSource {
+    nonisolated deinit {}
+    private(set) var ownsObserver = false
+
+    func adopt(host: KeyboardObserver?) {
+        ownsObserver = true
+    }
+}
+
 // ============================================================================
 // MARK: - Waveform Bar Animation
 // ============================================================================

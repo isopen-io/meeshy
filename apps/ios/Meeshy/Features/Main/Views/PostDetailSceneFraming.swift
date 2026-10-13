@@ -65,6 +65,9 @@ nonisolated enum PostDetailSceneFraming {
             return relevees
         }
 
+        /// Gabarit du témoin rouge (#10544) : la règle arrive au commit suivant.
+        func recordingInputPanel(open: Bool) -> Measures { self }
+
         /// **Le clavier ne rétrécit pas la scène** (#8647). Pendant la saisie
         /// d'un commentaire, le clavier pousse le composer et raccourcit la zone
         /// de défilement : relevée telle quelle, la scène se recalculait plus

@@ -182,3 +182,17 @@ extension View {
         modifier(StoryCommentsReadingBlur(commentsOpen: commentsOpen))
     }
 }
+
+// MARK: - Ce qui SOULÈVE le composeur d'une story (#10544)
+
+/// Gabarit du témoin rouge : la loi arrive au commit suivant.
+nonisolated enum StoryKeyboardLift {
+
+    static func lift(keyboardHeight: CGFloat, emojiPanelHeight: CGFloat, restingPadding: CGFloat) -> CGFloat {
+        0
+    }
+
+    static func sceneReserve(lift: CGFloat, bottomPadding: CGFloat, blockHeight: CGFloat?) -> CGFloat? {
+        blockHeight.map { bottomPadding + $0 }
+    }
+}
