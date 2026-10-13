@@ -59,7 +59,7 @@ describe('le niveau et ses points au début de la bannière', () => {
     expect(words(start?.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
     expect(start?.querySelector('[data-game-level="12"]') !== null).toBe(true);
     expect(words(start?.querySelector('[data-profile-banner-points]'))).toBe('976 pts');
-    expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624');
+    expect(words(start?.querySelector('[data-profile-banner-missing]'))).toBe('encore 624 vers le 13');
   });
 
   test('il s’ancre au DÉBUT (gauche, droite en RTL), le rang à la FIN', async () => {
@@ -111,7 +111,7 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     }
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
     expect(level.startsWith('Niveau 12, palier Étincelle')).toBe(true);
-    expect(level.endsWith(', 976 pts, encore 624')).toBe(true);
+    expect(level.endsWith(', 976 pts, encore 624 vers le 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe('Murmure V');
   });
 
