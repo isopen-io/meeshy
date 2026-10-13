@@ -194,14 +194,15 @@ export class AuthMiddleware {
 
   async createAuthContext(
     authorizationHeader?: string,
-    sessionToken?: string
+    sessionToken?: string,
+    options: { readonly adoptsSession?: boolean } = {}
   ): Promise<UnifiedAuthContext> {
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
     if (jwtToken) {
-      return this.createRegisteredUserContext(jwtToken, sessionToken);
+      return this.createRegisteredUserContext(jwtToken, sessionToken, options.adoptsSession !== false);
     }
 
     if (sessionToken) {
@@ -213,7 +214,8 @@ export class AuthMiddleware {
 
   private async createRegisteredUserContext(
     jwtToken: string,
-    sessionToken?: string
+    sessionToken: string | undefined,
+    adoptsSession: boolean
   ): Promise<UnifiedAuthContext> {
     try {
       // task-1-fix-round-6 — AVANT : un `jwt.TokenExpiredError` accompagné
@@ -257,6 +259,7 @@ export class AuthMiddleware {
         claims: jwtPayload,
         userId: jwtUserId,
         now: this.now(),
+        adopt: adoptsSession,
       });
       // #10493 — la purge d'un compte SUPPRIME ses sessions : son jeton nomme
       // une session absente. La signature étant vérifiée, le refus garde le
@@ -686,9 +689,12 @@ export function createUnifiedAuthMiddleware(
 
   const unifiedAuth = async function unifiedAuth(request: FastifyRequest, reply: FastifyReply) {
     try {
+      // #10477 — franchir la porte adopte une session prouvée, sauf sur la
+      // route qui la refuse (`config.adoptsSession: false`, la déconnexion).
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
-        request.headers['x-session-token'] as string
+        request.headers['x-session-token'] as string,
+        { adoptsSession: request.routeOptions?.config?.adoptsSession !== false }
       );
 
       if (options.requireAuth && !authContext.isAuthenticated) {

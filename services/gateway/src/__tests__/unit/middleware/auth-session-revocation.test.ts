@@ -170,7 +170,7 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
     // qui permet de distinguer `gone` (prouvé) de `unknown` (rien trouvé).
     expect(sessionFindFirst).toHaveBeenCalledWith({
       where: { id: LIVE_SESSION_ID, userId: USER_ID },
-      select: { isValid: true, expiresAt: true },
+      select: { isValid: true, expiresAt: true, adoptedExpiresAt: true },
     });
   });
 

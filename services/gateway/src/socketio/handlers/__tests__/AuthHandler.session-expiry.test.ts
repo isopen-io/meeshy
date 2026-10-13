@@ -118,7 +118,7 @@ describe('AuthHandler — la session nommée par le JWT (`sid`) doit être valid
 
     expect((mockPrisma as any).userSession.findFirst).toHaveBeenCalledWith({
       where: { id: 'bbbbbbbbbbbbbbbbbbbbbabc', userId: 'aaaaaaaaaaaaaaaaaaaa0123' },
-      select: { isValid: true, expiresAt: true },
+      select: { isValid: true, expiresAt: true, adoptedExpiresAt: true },
     });
     expect(connectedUsers.size).toBe(1);
     expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({ success: true }));

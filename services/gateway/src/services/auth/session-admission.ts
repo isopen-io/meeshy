@@ -25,6 +25,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SESSION_CLAIM, legacyTokenRefusal, type LegacyTokenRefusal } from './session-jwt';
+import { adoptProvenSession } from './session-adoption';
 
 export type SessionAdmissionRefusal =
   | 'session-unknown'
@@ -58,10 +59,19 @@ type SessionClaims = {
  * #4264 (`legacyTokenRefusal`), fermé depuis le 2026-09-30 — aucune lecture.
  * Jeton AVEC `sid` : la ligne nommée, lue par identité ET par propriétaire,
  * doit être valide et non échue.
+ *
+ * Admise, une session prouvée par un lien et encore en attente est ADOPTÉE
+ * (#10477, `session-adoption.ts`) — sauf `adopt: false`, que pose la seule
+ * déconnexion : refuser une session prouvée ne doit pas la prolonger.
  */
 export async function sessionAdmissionRefusal(
   prisma: Pick<PrismaClient, 'userSession'>,
-  params: { readonly claims: SessionClaims; readonly userId: string; readonly now: Date }
+  params: {
+    readonly claims: SessionClaims;
+    readonly userId: string;
+    readonly now: Date;
+    readonly adopt?: boolean;
+  }
 ): Promise<SessionAdmissionRefusal | null> {
   if (params.claims.action !== undefined || params.claims.aud !== undefined) {
     return 'not-a-session-token';
@@ -81,7 +91,7 @@ export async function sessionAdmissionRefusal(
   const session = await prisma.userSession
     .findFirst({
       where: { id: sid, userId: params.userId },
-      select: { isValid: true, expiresAt: true },
+      select: { isValid: true, expiresAt: true, adoptedExpiresAt: true },
     })
     .catch((error: unknown) => {
       throw new SessionLookupUnavailableError(error);
@@ -90,5 +100,8 @@ export async function sessionAdmissionRefusal(
   if (!session) return 'session-unknown';
   if (!session.isValid) return 'session-revoked';
   if (session.expiresAt.getTime() <= params.now.getTime()) return 'session-expired';
+  if (session.adoptedExpiresAt && params.adopt !== false) {
+    await adoptProvenSession(prisma, { sessionId: sid, adoptedExpiresAt: session.adoptedExpiresAt, now: params.now });
+  }
   return null;
 }
