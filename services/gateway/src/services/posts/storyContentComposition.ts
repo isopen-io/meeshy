@@ -1,3 +1,4 @@
+import { withoutRepostCredits } from './repostCreditChips';
 import { storyTranslatableTexts } from './storyEffectsV3';
 
 /**
@@ -185,5 +186,7 @@ export function postSignalText(params: {
   // `storyTranslatableTexts` connaît les DEUX formes — v1 `textObjects` et v3
   // `scenes[].objects[kind=text]`. La recopier ici l'aurait fait diverger, et
   // le composer v3 est justement celui qui produit ces stories.
-  return nonEmpty(composeStoryContent(storyTranslatableTexts(params.storyEffects)));
+  // La puce « Reposté de @auteur » (texte verrouillé, #10497) n'est jamais le
+  // texte de l'auteur : ni aperçu, ni hashtag.
+  return nonEmpty(composeStoryContent(storyTranslatableTexts(withoutRepostCredits(params.storyEffects))));
 }

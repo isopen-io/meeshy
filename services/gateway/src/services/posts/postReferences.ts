@@ -12,6 +12,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostMentionDisplayValue } from './postMentions';
 import { readDisplay } from './postMentions';
 import { postMentionInclude } from './postIncludes';
+import { withServedRepostCredits } from './repostCreditChips';
 import { negotiateWireStoryEffects, type WireReader } from './storyEffectsV3';
 
 export type { WireReader } from './storyEffectsV3';
@@ -153,7 +154,9 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
-  return withNestedRepostMentions(negotiateWireStoryEffects(flat, reader), reader);
+  // #10498 — la puce de crédit avant la négociation : elle se lit sur le blob
+  // tel qu'enregistré, et `repostOf.visibility` n'est retirée qu'après.
+  return withNestedRepostMentions(negotiateWireStoryEffects(withServedRepostCredits(flat), reader), reader);
 }
 
 /**

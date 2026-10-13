@@ -44,6 +44,7 @@ const enVerifyEmail = {
   'signInLink.switchAccount.kept': '@{current} will stay in your accounts on this device.',
   'signInLink.switchAccount.busy': 'One moment…',
   'signInLink.switchAccount.failed': 'This other account can’t be opened right now. You stay signed in, and the link has been closed.',
+  'signInLink.switchAccount.expired': 'This link has expired: request a new one. You stay signed in.',
   'signInLink.switchAccount.leave': 'Back to home',
 };
 

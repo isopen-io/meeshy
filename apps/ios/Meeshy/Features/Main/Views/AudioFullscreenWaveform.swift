@@ -31,6 +31,11 @@ struct AudioFullscreenWaveform: View {
     /// Position de lecture, 0…1. Colore les barres franchies et pose la tête.
     let progress: Double
     let accent: Color
+    /// L'encre des barres pas encore jouées et de la tête de lecture — posées
+    /// par l'hôte, qui connaît son fond (#10383 : le blanc figé disparaissait
+    /// sur le fond clair du plein écran).
+    var trackColor: Color = Color.white.opacity(MeeshyOpacity.light)
+    var playheadColor: Color = .white
     /// Reçoit la fraction visée. L'hôte décide ce qu'il en fait — la bande ne
     /// connaît aucun player.
     let onSeek: (Double) -> Void
@@ -95,12 +100,12 @@ struct AudioFullscreenWaveform: View {
                     : max(2, (geo.size.width - Self.spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
 
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(isPlayed ? accent : Color.white.opacity(MeeshyOpacity.light))
+                    .fill(isPlayed ? accent : trackColor)
                     .frame(width: computedWidth, height: barHeight)
                     .overlay(
                         needsScroll && i == playheadBarIndex
                             ? RoundedRectangle(cornerRadius: 1.5)
-                                .fill(Color.white)
+                                .fill(playheadColor)
                                 .frame(width: 2, height: geo.size.height * 0.95)
                             : nil
                     )

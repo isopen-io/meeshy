@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest } from './http';
-import { accountReplacementOf, createProvenSessionGestures, provenEmailOf, provenSessionOf, type AccountReplacement } from './proven-session';
+import {
+  accountReplacementOf,
+  createProvenSessionGestures,
+  PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS,
+  PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS,
+  provenEmailOf,
+  provenSessionOf,
+  type AccountReplacement,
+} from './proven-session';
 import { createSessionStore, type SessionStoreApi } from './session';
 
 /**
@@ -44,19 +52,21 @@ const BOB_LOGIN = {
 
 describe('provenSessionOf — ce que la preuve a rendu', () => {
   test('une session de connexion, une session de vérification (24 h par défaut), un défi de second facteur', () => {
-    expect(provenSessionOf(BOB_LOGIN)).toEqual({ kind: 'session', ...BOB_LOGIN });
-    expect(provenSessionOf({ verified: true, token: 'jwt-v', sessionToken: 'sess-v', user: { id: 'u-v', username: 'v' } })).toEqual({
+    expect(provenSessionOf(BOB_LOGIN, NOW)).toEqual({ kind: 'session', ...BOB_LOGIN, receivedAt: NOW });
+    expect(provenSessionOf({ verified: true, token: 'jwt-v', sessionToken: 'sess-v', user: { id: 'u-v', username: 'v' } }, NOW)).toEqual({
       kind: 'session',
       user: { id: 'u-v', username: 'v' },
       token: 'jwt-v',
       sessionToken: 'sess-v',
       expiresIn: 24 * 60 * 60,
+      receivedAt: NOW,
     });
     const pending = { id: 'u-2fa', username: 'deux', email: 'deux@x.io', firstName: 'D', lastName: 'F', displayName: 'Deux' };
-    expect(provenSessionOf({ requires2FA: true, twoFactorToken: 'tf', user: pending, message: 'code' })).toEqual({
+    expect(provenSessionOf({ requires2FA: true, twoFactorToken: 'tf', user: pending, message: 'code' }, NOW)).toEqual({
       kind: 'second-factor',
       user: pending,
       twoFactorToken: 'tf',
+      receivedAt: NOW,
     });
   });
 
@@ -230,5 +240,88 @@ describe('createProvenSessionGestures — accepter ou refuser', () => {
     await gestures.adopt(replacement);
 
     expect(store.getState().session).toEqual({ status: 'pending2fa', user: pending, twoFactorToken: 'tf' });
+  });
+});
+
+describe('accepter APRÈS la fenêtre d’adoption (#10513) — le compte ouvert reste ouvert', () => {
+  /* La passerelle n'adopte une session prouvée que dans ses dix premières
+     minutes (#10477) ; le client s'arrête une minute avant, pour qu'une
+     session posée ne soit jamais déjà échue au premier appel. */
+  function provenAt(store: SessionStoreApi, receivedAt: number): AccountReplacement {
+    const replacement = accountReplacementOf(store.getState().session, provenSessionOf(BOB_LOGIN, receivedAt));
+    if (replacement === null) throw new Error('aucune question');
+    return replacement;
+  }
+
+  test('la fenêtre du client est plus courte que celle de la passerelle', () => {
+    expect(PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS).toBe(9 * 60 * 1000);
+  });
+
+  test('preuve reçue il y a plus de 9 minutes : rien n’est suspendu ni posé, la session prouvée est refermée, la réponse dit « expiré »', async () => {
+    const store = memoryStore();
+    signedInAsAda(store);
+    const before = store.getState().session;
+    const { calls, transport } = recordingTransport();
+    const order: string[] = [];
+    const gestures = createProvenSessionGestures({
+      store,
+      transport,
+      suspend: () => {
+        order.push('suspend');
+        store.getState().clearSession();
+      },
+      noteActive: (user) => order.push(`noteActive:${user.id}`),
+      now: () => NOW + PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS + 1,
+    });
+
+    const outcome = await gestures.adopt(provenAt(store, NOW));
+
+    expect(outcome).toBe('expired');
+    expect(order).toEqual([]);
+    expect(store.getState().session).toBe(before);
+    expect(calls.map((call) => [call.path, call.credential])).toEqual([['/api/v1/auth/logout', { kind: 'registered', token: 'jwt-bob' }]]);
+  });
+
+  test('preuve reçue il y a moins de 9 minutes : rien ne change, le compte quitté est rangé et le compte prouvé s’ouvre', async () => {
+    const store = memoryStore();
+    signedInAsAda(store);
+    const { transport } = recordingTransport();
+    const gestures = createProvenSessionGestures({
+      store,
+      transport,
+      suspend: () => store.getState().clearSession(),
+      noteActive: () => undefined,
+      now: () => NOW + PROVEN_SESSION_CLIENT_ADOPTION_WINDOW_MS - 1,
+    });
+
+    const outcome = await gestures.adopt(provenAt(store, NOW));
+
+    expect(outcome).toBe(true);
+    const session = store.getState().session;
+    expect(session.status === 'authenticated' ? session.user.id : null).toBe('u-bob');
+  });
+
+  test('un défi de second facteur reçu il y a plus de 4 minutes (5 à la passerelle) : rien n’est suspendu, la réponse dit « expiré »', async () => {
+    const store = memoryStore();
+    signedInAsAda(store);
+    const before = store.getState().session;
+    const { calls, transport } = recordingTransport();
+    const suspended: string[] = [];
+    const gestures = createProvenSessionGestures({
+      store,
+      transport,
+      suspend: () => suspended.push('suspend'),
+      noteActive: () => undefined,
+      now: () => NOW + PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS + 1,
+    });
+    const pending = { id: 'u-2fa', username: 'deux', email: 'deux@x.io', firstName: 'D', lastName: 'F', displayName: 'Deux' };
+    const replacement = accountReplacementOf(store.getState().session, provenSessionOf({ requires2FA: true, twoFactorToken: 'tf', user: pending, message: 'code' }, NOW));
+    if (replacement === null) throw new Error('aucune question');
+
+    expect(PROVEN_TWO_FACTOR_CLIENT_WINDOW_MS).toBe(4 * 60 * 1000);
+    expect(await gestures.adopt(replacement)).toBe('expired');
+    expect(suspended).toEqual([]);
+    expect(store.getState().session).toBe(before);
+    expect(calls).toEqual([]);
   });
 });

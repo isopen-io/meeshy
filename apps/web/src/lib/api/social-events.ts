@@ -44,10 +44,6 @@ export const SOCIAL_EVENTS_BATCH_CAP = 200;
 /** La file ne grossit pas sans borne quand le réseau manque longtemps. */
 export const SOCIAL_EVENTS_PENDING_CAP = 1000;
 
-/** Un corps `keepalive` au-delà de 64 Kio est refusé par le navigateur : le
- * lot de sortie (`pagehide`) est coupé plus court que celui de la porte. */
-export const KEEPALIVE_BATCH_CAP = 100;
-
 export type ImpressionSource =
   | 'feed'
   | 'profile'
@@ -103,12 +99,16 @@ export type SendVerdict = 'sent' | 'retry' | 'drop';
  */
 export type SendOutcome = SendVerdict | { readonly retain: readonly SocialEvent[] };
 
-export type FlushOptions = { readonly keepalive?: boolean };
-
+/**
+ * `snapshot` rend la file (lot en vol compris) pour qu'une page qui s'en va
+ * la garde ; `restore` la reprend au chargement suivant, devant les nouveaux.
+ */
 export type SocialEventsEmitter = {
   readonly record: (event: SocialEvent) => void;
-  readonly flush: (options?: FlushOptions) => Promise<void>;
+  readonly flush: () => Promise<void>;
   readonly pending: () => number;
+  readonly snapshot: () => readonly SocialEvent[];
+  readonly restore: (events: readonly SocialEvent[]) => void;
 };
 
 const DURATION_CAP_MS = 300_000;
@@ -132,7 +132,7 @@ export function normalizeSocialEvent(event: SocialEvent): SocialEvent {
 }
 
 export function createSocialEventsEmitter(deps: {
-  readonly send: (events: readonly SocialEvent[], options: FlushOptions) => Promise<SendOutcome>;
+  readonly send: (events: readonly SocialEvent[]) => Promise<SendOutcome>;
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
 }): SocialEventsEmitter {
@@ -150,20 +150,26 @@ export function createSocialEventsEmitter(deps: {
     }, flushDelayMs);
   }
 
+  const bounded = (events: readonly SocialEvent[]): readonly SocialEvent[] =>
+    events.length > SOCIAL_EVENTS_PENDING_CAP ? events.slice(events.length - SOCIAL_EVENTS_PENDING_CAP) : events;
+
   function record(event: SocialEvent): void {
-    const next = [...queue, normalizeSocialEvent(event)];
-    queue = next.length > SOCIAL_EVENTS_PENDING_CAP ? next.slice(next.length - SOCIAL_EVENTS_PENDING_CAP) : next;
+    queue = bounded([...queue, normalizeSocialEvent(event)]);
     arm();
   }
 
-  async function flush(options: FlushOptions = {}): Promise<void> {
+  function restore(events: readonly SocialEvent[]): void {
+    queue = bounded([...events.map(normalizeSocialEvent), ...queue]);
+    arm();
+  }
+
+  async function flush(): Promise<void> {
     if (flushing) return;
     flushing = true;
-    const cap = options.keepalive === true ? KEEPALIVE_BATCH_CAP : SOCIAL_EVENTS_BATCH_CAP;
     try {
       while (queue.length > 0) {
-        const batch = queue.slice(0, cap);
-        const outcome = await deps.send(batch, options).catch((): SendOutcome => 'retry');
+        const batch = queue.slice(0, SOCIAL_EVENTS_BATCH_CAP);
+        const outcome = await deps.send(batch).catch((): SendOutcome => 'retry');
         if (outcome === 'retry') break;
         if (typeof outcome === 'object') {
           queue = [...outcome.retain, ...queue.slice(batch.length)];
@@ -177,7 +183,7 @@ export function createSocialEventsEmitter(deps: {
     }
   }
 
-  return { record, flush, pending: () => queue.length };
+  return { record, flush, pending: () => queue.length, snapshot: () => queue, restore };
 }
 
 /** Le verdict d'un appel — ce qui mérite d'être rejoué, ce qui ne le mérite pas. */
@@ -214,7 +220,6 @@ type CallIdentity = Pick<HttpRequest, 'credential' | 'headers'>;
 function postEvents(
   deps: SocialEventsTransportDeps,
   events: readonly SocialEvent[],
-  options: FlushOptions,
   identity: CallIdentity,
 ): Promise<SendVerdict> {
   return withTimeout(
@@ -223,7 +228,6 @@ function postEvents(
         method: 'POST',
         path: socialEndpoints.events,
         body: { events },
-        ...(options.keepalive === true ? { keepalive: true } : {}),
         ...identity,
       })
       .then(verdictOf),
@@ -240,11 +244,10 @@ function postEvents(
 async function sendParts(
   deps: SocialEventsTransportDeps,
   parts: readonly (readonly SocialEvent[])[],
-  options: FlushOptions,
   identity: CallIdentity,
 ): Promise<SendOutcome> {
   const filled = parts.filter((part) => part.length > 0);
-  const verdicts = await Promise.all(filled.map((part) => postEvents(deps, part, options, identity)));
+  const verdicts = await Promise.all(filled.map((part) => postEvents(deps, part, identity)));
   return { retain: filled.filter((_, index) => verdicts[index] === 'retry').flat() };
 }
 
@@ -252,8 +255,8 @@ const isOpen = (event: SocialEvent): boolean => event.type === 'open';
 
 /** Un lot d'un COMPTE — le transport y pose son crédential ; ses `open` à part. */
 export function sendAccountBatch(deps: SocialEventsTransportDeps) {
-  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendOutcome> =>
-    sendParts(deps, [events.filter((event) => !isOpen(event)), events.filter(isOpen)], options, {});
+  return (events: readonly SocialEvent[]): Promise<SendOutcome> =>
+    sendParts(deps, [events.filter((event) => !isOpen(event)), events.filter(isOpen)], {});
 }
 
 /**
@@ -263,7 +266,7 @@ export function sendAccountBatch(deps: SocialEventsTransportDeps) {
  * la vue.
  */
 export function sendVisitorBatch(deps: SocialEventsTransportDeps, identity: CallIdentity) {
-  return (events: readonly SocialEvent[], options: FlushOptions = {}): Promise<SendOutcome> =>
+  return (events: readonly SocialEvent[]): Promise<SendOutcome> =>
     sendParts(
       deps,
       [
@@ -271,7 +274,6 @@ export function sendVisitorBatch(deps: SocialEventsTransportDeps, identity: Call
         events.filter((event) => event.type === 'impression'),
         events.filter(isOpen),
       ],
-      options,
       identity,
     );
 }
@@ -325,13 +327,15 @@ export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
     laneEmitter(visitorLaneOf(credential, deps)).record(event);
   }
 
-  async function flush(options: FlushOptions = {}): Promise<void> {
-    await Promise.all([account, ...lanes.values()].map((emitter) => emitter.flush(options)));
+  async function flush(): Promise<void> {
+    await Promise.all([account, ...lanes.values()].map((emitter) => emitter.flush()));
   }
 
   const pending = (): number => [...lanes.values()].reduce((total, lane) => total + lane.pending(), account.pending());
 
-  return { record, flush, pending };
+  /* Seule la file d'un COMPTE se garde d'une page à l'autre (#10519) : celle
+     d'un visiteur part sous une identité qu'une page suivante n'a plus. */
+  return { record, flush, pending, snapshot: account.snapshot, restore: account.restore };
 }
 
 export function newEngagementSessionId(): string {

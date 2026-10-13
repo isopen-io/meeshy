@@ -57,7 +57,12 @@ export async function refreshGuestSession(params: GuestSessionParams): Promise<R
       })) as ShareLinkWithConversation | null)
     : null;
 
-  const end = guestAccessEnd({ linkExpiresAt: shareLink?.expiresAt ?? null, participation: participant, now: new Date() });
+  const end = guestAccessEnd({
+    linkExpiresAt: shareLink?.expiresAt ?? null,
+    linkRevocationPendingAt: shareLink?.guestRevocationPendingAt ?? null,
+    participation: participant,
+    now: new Date(),
+  });
   if (end === 'link-expired') return { kind: 'link-expired' };
   if (end === 'revoked') return { kind: 'revoked' };
   if (!shareLink || !shareLink.isActive) return { kind: 'link-gone' };

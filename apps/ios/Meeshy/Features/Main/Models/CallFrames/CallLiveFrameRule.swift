@@ -29,6 +29,8 @@ nonisolated struct CallLiveFrameLayerInputs: Equatable, Sendable {
     let people: [CallFramePerson]
     let texts: CallFrameTexts
     let size: CGSize
+    /// Les bandes de l'écran que les contrôles de l'appel couvrent (#9777).
+    var reserve: CallFrameChromeReserve = .none
 }
 
 /// **LE CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, doc frames 06 § 4, étape 3.2) — les
@@ -121,6 +123,16 @@ nonisolated enum CallLiveFrameRule {
         let longest = max(pixels.width, pixels.height)
         let factor = longest > paintLongestSide ? paintLongestSide / longest : 1
         return CGSize(width: (pixels.width * factor).rounded(), height: (pixels.height * factor).rounded())
+    }
+
+    /// **Aucun texte du cadre sous un contrôle** (#9777) : en haut la rangée d'en-tête (réduire,
+    /// conversation, durée) sous la Dynamic Island, en bas la pilule des commandes. Le cadre se peint
+    /// à la taille de l'écran : ces bandes, en points, sont sa part de la toile.
+    static let headerRowHeight: CGFloat = 52
+    static let controlsPillHeight: CGFloat = 84
+
+    static func chromeReserve(viewHeight: CGFloat, topInset: CGFloat, bottomInset: CGFloat) -> CallFrameChromeReserve {
+        .covering(top: topInset + headerRowHeight, bottom: bottomInset + controlsPillHeight, height: viewHeight)
     }
 
     /// Faut-il repeindre ? Seulement si une entrée a changé.

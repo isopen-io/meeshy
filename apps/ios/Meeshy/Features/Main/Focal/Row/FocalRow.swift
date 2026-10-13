@@ -576,7 +576,8 @@ struct FocalRow: View {
                 onQuotedAuthorTap: actions.onQuotedAuthorTap,
                 onQuotedMediaTap: actions.onQuotedMediaTap,
                 audioQueueTailProvider: actions.audioQueueTailProvider,
-                onTapConsentNotice: actions.onTapConsentNotice
+                onTapConsentNotice: actions.onTapConsentNotice,
+                onMediaTap: actions.onMediaTap
             )
         }
     }

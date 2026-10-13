@@ -3,18 +3,18 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { currentCredential, httpTransport } from '@/lib/api/client';
 import type { Credential } from '@/lib/api/http';
 import { apiDeps } from '@/lib/api/deps';
+import { sessionIdentityKey, sessionStore } from '@/lib/api/session';
 import {
   createSocialEventsRecorder,
   newEngagementSessionId,
   type ContentSurface,
   type DwellContentType,
-  type FlushOptions,
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { hasNavigatedInApp, useSearch } from '@/lib/router';
-import { safeLocalStorage } from '@/lib/storage';
+import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 
@@ -44,23 +44,6 @@ export function forgetVisitorKeyOnAccount(credential: Credential | null, storage
   storage.removeItem(VISITOR_KEY);
 }
 
-/**
- * LA SORTIE DE PAGE NE PERD RIEN (#10483 W3) — `pagehide` et le passage en
- * arrière-plan vident la file en `keepalive` : la requête survit au
- * déchargement de l'onglet. Le retour en ligne rejoue la file normalement.
- */
-export function bindPageExitFlush(
-  flush: (options?: FlushOptions) => Promise<void>,
-  targets: { readonly window: Pick<Window, 'addEventListener'>; readonly document: Pick<Document, 'addEventListener' | 'visibilityState'> },
-): void {
-  const leaving = () => void flush({ keepalive: true });
-  targets.window.addEventListener('online', () => void flush());
-  targets.window.addEventListener('pagehide', leaving);
-  targets.document.addEventListener('visibilitychange', () => {
-    if (targets.document.visibilityState === 'hidden') leaving();
-  });
-}
-
 function visitorKey(): string {
   const storage = safeLocalStorage();
   const known = storage.getItem(VISITOR_KEY);
@@ -69,6 +52,69 @@ function visitorKey(): string {
   storage.setItem(VISITOR_KEY, fresh);
   return fresh;
 }
+
+/**
+ * **LA FILE D'UNE PAGE QUI S'EN VA** (#10519) — une requête émise pendant le
+ * déchargement n'arrive pas (mesuré sur staging : Chrome 155, page tenue par
+ * le service worker, `fetch` keepalive préflighté émis au `pagehide` ⇒ aucune
+ * ligne écrite). La file d'un COMPTE est donc GARDÉE en local au `pagehide`
+ * et reprise au chargement suivant du même compte ; l'invité et le visiteur
+ * n'ont pas de file (leur vue part seule, à l'ouverture). Chaque page garde
+ * SA part : deux onglets fermés l'un après l'autre ne s'écrasent pas.
+ */
+export const READING_PENDING_PREFIX = 'meeshy.reading.pending.';
+
+export function pendingReadingKey(identity: string | null): string | null {
+  return identity !== null && identity.startsWith('u:') ? `${READING_PENDING_PREFIX}${identity}` : null;
+}
+
+type ParkedReading = { readonly page: string; readonly events: readonly SocialEvent[] };
+
+function readParked(storage: SafeStorage, key: string): readonly ParkedReading[] {
+  const raw = storage.getItem(key);
+  if (raw === null) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry: unknown) => {
+      if (typeof entry !== 'object' || entry === null) return [];
+      const { page, events } = entry as { page?: unknown; events?: unknown };
+      if (typeof page !== 'string' || !Array.isArray(events)) return [];
+      return [{ page, events: events.filter(isSocialEvent) }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function savePendingReading(storage: SafeStorage, key: string, page: string, events: readonly SocialEvent[]): void {
+  const others = readParked(storage, key).filter((entry) => entry.page !== page);
+  const next = events.length === 0 ? others : [...others, { page, events }];
+  if (next.length === 0) {
+    storage.removeItem(key);
+    return;
+  }
+  storage.setItem(key, JSON.stringify(next));
+}
+
+function isSocialEvent(value: unknown): value is SocialEvent {
+  if (typeof value !== 'object' || value === null) return false;
+  const event = value as Record<string, unknown>;
+  if (typeof event.postId !== 'string') return false;
+  if (event.type === 'view') return true;
+  if (event.type === 'open') return true;
+  if (event.type === 'impression') return typeof event.source === 'string';
+  return event.type === 'dwell' && typeof event.sessionId === 'string';
+}
+
+export function takePendingReading(storage: SafeStorage, key: string): readonly SocialEvent[] {
+  const parked = readParked(storage, key);
+  storage.removeItem(key);
+  return parked.flatMap((entry) => entry.events);
+}
+
+const currentPendingKey = (): string | null => pendingReadingKey(sessionIdentityKey(sessionStore.getState().session));
+const THIS_PAGE = newEngagementSessionId();
 
 let live: ReturnType<typeof createSocialEventsRecorder> | null = null;
 
@@ -82,11 +128,61 @@ function liveRecorder(): ReturnType<typeof createSocialEventsRecorder> {
       setTimeout(run, delayMs);
     },
   });
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    bindPageExitFlush(recorder.flush, { window, document });
-  }
+  const key = currentPendingKey();
+  if (key !== null) recorder.restore(takePendingReading(safeLocalStorage(), key));
+  if (typeof window !== 'undefined') window.addEventListener('online', () => void recorder.flush());
+  watchPageLifecycle();
   live = recorder;
   return recorder;
+}
+
+/**
+ * **CE QUI EST EN COURS DE LECTURE QUAND LA PAGE S'EN VA** (#10519) — le
+ * nettoyage d'un effet ne tourne ni quand l'onglet se ferme ou se recharge,
+ * ni quand la coque passe en arrière-plan. Les séances ouvertes s'inscrivent
+ * ici, et un seul jeu d'écouteurs tient l'ordre : FERMER les séances, PUIS
+ * s'occuper de la file. Onglet masqué (la page vit encore) : la file part
+ * tout de suite. `pagehide` (la page se décharge, ou entre dans le cache de
+ * pages) : la file est gardée. Retour (onglet visible, page rendue par le
+ * cache) : les séances se rouvrent ; une page rendue par le cache oublie sa
+ * copie gardée, sa file en mémoire partant normalement.
+ */
+type OpenSession = { readonly pause: () => void; readonly resume: () => void };
+
+const openSessions = new Set<OpenSession>();
+let watchedDocument: Document | null = null;
+
+const pauseSessions = (): void => openSessions.forEach((session) => session.pause());
+const resumeSessions = (): void => openSessions.forEach((session) => session.resume());
+
+function watchPageLifecycle(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || watchedDocument === document) return;
+  watchedDocument = document;
+  window.addEventListener('pagehide', () => {
+    pauseSessions();
+    readingTelemetry.persistOnExit();
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!(event as PageTransitionEvent).persisted) return;
+    readingTelemetry.forgetPersisted();
+    resumeSessions();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') {
+      resumeSessions();
+      return;
+    }
+    pauseSessions();
+    readingTelemetry.flushNow();
+  });
+}
+
+function trackOpenSession(session: OpenSession): () => void {
+  watchPageLifecycle();
+  openSessions.add(session);
+  return () => {
+    openSessions.delete(session);
+  };
 }
 
 export const readingTelemetry = {
@@ -94,6 +190,17 @@ export const readingTelemetry = {
     if (__FIXTURES__ && apiDeps.source === 'fixtures') return;
     forgetVisitorKeyOnAccount(currentCredential(), safeLocalStorage());
     liveRecorder().record(event);
+  },
+  flushNow(): void {
+    if (live !== null) void live.flush();
+  },
+  persistOnExit(): void {
+    const key = currentPendingKey();
+    if (live !== null && key !== null) savePendingReading(safeLocalStorage(), key, THIS_PAGE, live.snapshot());
+  },
+  forgetPersisted(): void {
+    const key = currentPendingKey();
+    if (live !== null && key !== null) savePendingReading(safeLocalStorage(), key, THIS_PAGE, []);
   },
 };
 
@@ -191,7 +298,9 @@ export function useMergedRefs(...refs: readonly ((node: Element | null) => void)
  * reprise avec sa durée (la passerelle garde la plus longue) et la séance
  * `dwell`, temps passé compris. Pour un visiteur, la vue de sortie part
  * aussi (sa durée) ; la séance `dwell`, réservée aux comptes, est écartée
- * par l'émetteur.
+ * par l'émetteur. La page qui s'en va (onglet fermé, rechargé, masqué, coque
+ * en arrière-plan) ferme la séance comme une sortie ; le retour en ouvre une
+ * nouvelle, sans recompter l'impression ni l'ouverture (#10519).
  */
 export function useReadingSession(params: {
   readonly postId: string | undefined;
@@ -217,13 +326,16 @@ export function useReadingSession(params: {
 
   useEffect(() => {
     if (!active || postId === undefined) return;
-    const startedAt = nowRef.current();
+    let startedAt: number | null = nowRef.current();
     const attribution = attributionRef.current;
     const provenance = attribution === undefined ? {} : viewFieldsOf(attribution(postId));
     if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource, surface });
     if (openView) readingTelemetry.record({ type: 'view', postId, surface, ...provenance });
-    return () => {
+    const close = () => {
+      if (startedAt === null) return;
       const dwellMs = Math.max(0, nowRef.current() - startedAt);
+      const opened = startedAt;
+      startedAt = null;
       readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface, ...provenance });
       readingTelemetry.record({
         type: 'dwell',
@@ -231,10 +343,20 @@ export function useReadingSession(params: {
         postId,
         contentType,
         surface,
-        startedAt: new Date(startedAt).toISOString(),
+        startedAt: new Date(opened).toISOString(),
         dwellMs,
         completed: false,
       });
+    };
+    const untrack = trackOpenSession({
+      pause: close,
+      resume: () => {
+        if (startedAt === null) startedAt = nowRef.current();
+      },
+    });
+    return () => {
+      untrack();
+      close();
     };
   }, [postId, active, contentType, surface, impressionSource, openView]);
 }

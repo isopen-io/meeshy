@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
 import {
-  KEEPALIVE_BATCH_CAP,
   SOCIAL_EVENTS_BATCH_CAP,
   SOCIAL_EVENTS_PENDING_CAP,
   createSocialEventsEmitter,
@@ -304,32 +303,6 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
   });
 });
 
-describe('la fermeture de la page ne perd plus rien (W3)', () => {
-  test('un flush de sortie part en keepalive, pour un compte comme pour un visiteur', async () => {
-    for (const credential of [{ kind: 'registered', token: 't' } as Credential, null]) {
-      const { recorder, requests } = recorderWith(credential);
-      recorder.record(impression(1));
-      await recorder.flush({ keepalive: true });
-      expect(requests).toHaveLength(1);
-      expect(requests[0]?.keepalive).toBe(true);
-    }
-  });
-
-  test('un flush ordinaire ne demande pas keepalive', async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    recorder.record(impression(1));
-    await recorder.flush();
-    expect(requests[0]?.keepalive).toBeUndefined();
-  });
-
-  test(`un lot keepalive est coupé à ${KEEPALIVE_BATCH_CAP} — le navigateur refuse un corps keepalive de plus de 64 Kio`, async () => {
-    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
-    for (let n = 0; n < KEEPALIVE_BATCH_CAP + 10; n += 1) recorder.record(impression(n));
-    await recorder.flush({ keepalive: true });
-    expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(KEEPALIVE_BATCH_CAP);
-  });
-});
-
 describe('l’engagement d’ouverture `open` voyage à part (#10483)', () => {
   const opening: SocialEvent = { type: 'open', postId: OID(9), origin: 'feed' };
   const statusBy = (open: number) => {
@@ -406,5 +379,48 @@ describe('l’engagement d’ouverture `open` voyage à part (#10483)', () => {
     recorder.record({ type: 'view', postId: OID(2), provenance: 'listing', origin: 'profile' });
     await recorder.flush();
     expect(requests[0]?.body).toEqual({ events: [{ type: 'view', postId: OID(2), provenance: 'listing', origin: 'profile' }] });
+  });
+});
+
+describe('ce qui reste en file quand la page s’en va se reprend au prochain chargement (#10519)', () => {
+  test('`snapshot()` rend la file dans l’ordre, lot en vol compris', async () => {
+    let release: (verdict: SendVerdict) => void = () => undefined;
+    let calls = 0;
+    const emitter = createSocialEventsEmitter({
+      send: () => {
+        calls += 1;
+        return calls === 1 ? new Promise<SendVerdict>((resolve) => { release = resolve; }) : Promise.resolve('sent');
+      },
+      schedule: () => undefined,
+    });
+    emitter.record(impression(1));
+    const inFlight = emitter.flush();
+    emitter.record({ type: 'view', postId: OID(1), durationMs: 4000 });
+    expect(emitter.snapshot()).toEqual([impression(1), { type: 'view', postId: OID(1), durationMs: 4000 }]);
+    release('sent');
+    await inFlight;
+    expect(emitter.snapshot()).toEqual([]);
+  });
+
+  test('`restore()` remet les événements repris AVANT les nouveaux et arme un envoi', async () => {
+    const sent: (readonly SocialEvent[])[] = [];
+    const clock = manualScheduler();
+    const emitter = createSocialEventsEmitter({ send: async (events) => { sent.push(events); return 'sent'; }, schedule: clock.schedule });
+    emitter.record(impression(2));
+    clock.fire();
+    await settle();
+    emitter.record(impression(3));
+    emitter.restore([impression(1)]);
+    expect(emitter.snapshot()).toEqual([impression(1), impression(3)]);
+    expect(clock.armed()).toBe(1);
+    clock.fire();
+    await settle();
+    expect(sent[1]).toEqual([impression(1), impression(3)]);
+  });
+
+  test('`restore()` garde la borne de la file', () => {
+    const emitter = createSocialEventsEmitter({ send: async () => 'sent', schedule: () => undefined });
+    emitter.restore(Array.from({ length: SOCIAL_EVENTS_PENDING_CAP + 10 }, (_, n) => impression(n)));
+    expect(emitter.pending()).toBe(SOCIAL_EVENTS_PENDING_CAP);
   });
 });

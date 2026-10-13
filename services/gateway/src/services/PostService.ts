@@ -32,6 +32,7 @@ import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
+import { repostSnapshotStoryEffects } from './posts/repostCreditChips';
 import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
@@ -278,6 +279,17 @@ export class PostService {
           visibilityUserIds: (sourcePost.visibilityUserIds ?? []) as string[],
         };
       }
+
+      // #10497 — même loi que la copie de `repostPost` : la puce « Reposté de
+      // @auteur » ne survit que d'une source PUBLIC. Appliquée AVANT toute
+      // lecture du canvas, donc aussi aux traductions, aux signaux et au réel.
+      data = {
+        ...data,
+        storyEffects: repostSnapshotStoryEffects(
+          data.storyEffects as Prisma.InputJsonValue | undefined,
+          sourceVisibility,
+        ) as Record<string, unknown> | undefined,
+      };
     }
 
     // Règle produit (directive user 2026-08-02, étendue par la directive durée
@@ -2082,7 +2094,10 @@ export class PostService {
         }
 
         snapshotMedia = duplicatedMedia;
-        snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
+        snapshotStoryEffects = repostSnapshotStoryEffects(
+          original.storyEffects as Prisma.InputJsonValue | undefined,
+          original.visibility as string | null | undefined,
+        );
 
         // STATUS carries its text in `content` (the mood caption); STORY carries
         // its text inside `storyEffects` (rendered on the canvas). Inherit the

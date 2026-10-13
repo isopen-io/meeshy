@@ -38,6 +38,7 @@ import { openSession } from './open-session';
 import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
 import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { currentSessionOf } from '../../services/auth/current-session';
+import { adoptProvenSession } from '../../services/auth/session-adoption';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -219,19 +220,20 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // Le claim `sid` (voir `services/auth/session-jwt.ts`) permet enfin de
       // NOMMER au lieu de compter. Deux régimes, et un seul est permanent :
       const sid = decoded.sid;
+      let attenteAdoption: Date | null = null;
 
       if (sid) {
         // Régime NOMINAL — le jeton dit sa session ; c'est celle-là, et aucune
         // autre, qui décide. `userId` est dans le `where` : sans lui, un `sid`
         // valide appartenant à un AUTRE compte suffirait à passer la garde.
         //
-        // Le filtre s'arrête à `isValid`, comme la règle de compte qu'il
-        // remplace : y ajouter `expiresAt` resserrerait au-delà de l'issue et
-        // déconnecterait des porteurs que #4213 laissait passer. Ce
-        // durcissement se mesure à part.
+        // #10328 — `expiresAt` aussi : le REST refuse une session échue, et
+        // la renouveler ici ferait boucler le client (401 → refresh → 401).
+        // Le balayage (`cleanupExpiredSessions`) l'invalidait déjà à son
+        // passage ; seul l'intervalle entre l'échéance et le balayage change.
         const sessionNommee = await context.prisma.userSession.findFirst({
-          where: { id: sid, userId: decoded.userId, isValid: true },
-          select: { id: true },
+          where: { id: sid, userId: decoded.userId, isValid: true, expiresAt: { gt: new Date() } },
+          select: { id: true, adoptedExpiresAt: true },
         });
 
         if (!sessionNommee) {
@@ -241,6 +243,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           });
           return refuseSession(decoded.userId);
         }
+        attenteAdoption = sessionNommee.adoptedExpiresAt ?? null;
       } else {
         // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
         //
@@ -307,6 +310,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // `sessionToken`. S'il n'en envoie aucun, le jeton reste anonyme et le
       // butoir daté reste sa seule échéance — il ne se ré-arme pas, la
       // fermeture de fenêtre ne dépendant pas du jeton.
+      // #10477 — renouveler, c'est se servir de la session : une session
+      // prouvée par un lien et encore en attente est adoptée ici, après toutes
+      // les preuves, avant l'émission du jeton neuf.
+      if (sid && attenteAdoption) {
+        await adoptProvenSession(context.prisma, { sessionId: sid, adoptedExpiresAt: attenteAdoption, now: new Date() });
+      }
+
       const newToken = authService.generateToken(user, sid ?? activeSession?.id);
 
       // #9610 — la version, le build et la plateforme se relèvent à chaque
@@ -333,6 +343,9 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           where: { id: activeSession.id },
           data: {
             expiresAt: nextExpiresAt,
+            // #10477 — l'échéance glissée vaut adoption : aucune attente ne
+            // doit survivre pour la raccourcir ensuite.
+            adoptedExpiresAt: null,
             // P7-3 : le champ du modèle UserSession est `lastActivityAt` —
             // `lastActiveAt` (champ du modèle User) levait
             // PrismaClientValidationError sur CHAQUE refresh, avalée par le

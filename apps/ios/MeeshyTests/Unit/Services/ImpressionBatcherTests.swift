@@ -192,3 +192,48 @@ extension ImpressionBatcherTests {
                        "seules les clés préfixées impressions sont purgées")
     }
 }
+
+/// #10398 — un paquet refusé pour de bon (4xx hors 408/429, ou réponse 2xx
+/// illisible) était réinséré, renvoyé, refusé encore : la surface ne
+/// comptait plus jamais rien. Le refus permanent se jette ; la panne se garde.
+extension ImpressionBatcherTests {
+
+    func test_aChunkRejectedWith400_isDroppedInsteadOfBlockingTheSurface() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResult = .failure(APIError.serverError(400, "body/events must NOT have more than 200 items"))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1,
+                       "un refus permanent ne se rejoue pas — sinon la file ne se vide jamais")
+    }
+
+    func test_aRejectedChunk_doesNotTakeTheNextChunkWithIt() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResultsQueue = [
+            .failure(APIError.serverError(400, nil)),
+            .success(SocialEventsReceipt(recorded: 50, rejected: 0)),
+        ]
+        (0..<250).forEach { sut.record("p\($0)") }
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventBatches.map(\.count), [200, 50],
+                       "le paquet suivant part quand même")
+    }
+
+    func test_aChunkRejectedWith429_isKeptForTheNextAttempt() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResult = .failure(APIError.serverError(429, nil))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventBatches.map { $0.map(\.postId) }, [["p1"], ["p1"]])
+    }
+}
