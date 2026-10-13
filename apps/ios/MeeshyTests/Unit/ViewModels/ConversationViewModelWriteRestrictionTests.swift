@@ -121,7 +121,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
 
         XCTAssertFalse(sent)
         XCTAssertNil(fx.sut.learnedWriteRestriction, "un refus temporaire ne ferme pas le composeur")
-        let states = try fx.pool.read { db in try String.fetchAll(db, sql: "SELECT state FROM messages") }
+        let states = try await fx.pool.read { db in try String.fetchAll(db, sql: "SELECT state FROM messages") }
         XCTAssertEqual(states, ["failed"], "la bulle reste, renvoyable d'un geste")
     }
 
