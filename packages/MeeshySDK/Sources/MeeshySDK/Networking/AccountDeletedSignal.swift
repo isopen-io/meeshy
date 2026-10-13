@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - « Ce compte a été supprimé » (#10482, contrat passerelle #10264)
 //
@@ -96,7 +97,27 @@ nonisolated public enum AccountDeletedSignal {
         return namedAccount
     }
 
+    /// Les comptes signalés dont le retrait n'est pas encore fait : marqués
+    /// AVANT que la notification ne parte, depuis n'importe quel contexte, pour
+    /// qu'aucun refus arrivé entre-temps n'invite à se reconnecter au compte.
+    private static let awaitingRetirement = OSAllocatedUnfairLock<Set<String>>(initialState: [])
+
+    public static func isAwaitingRetirement(_ accountId: String) -> Bool {
+        awaitingRetirement.withLock { $0.contains(accountId) }
+    }
+
+    static func retirementDone(_ accountId: String) {
+        _ = awaitingRetirement.withLock { $0.remove(accountId) }
+    }
+
+    #if DEBUG
+    static func forgetAwaitingRetirementForTesting() {
+        awaitingRetirement.withLock { $0.removeAll() }
+    }
+    #endif
+
     public static func signal(accountId: String, center: NotificationCenter = .default) {
+        _ = awaitingRetirement.withLock { $0.insert(accountId) }
         center.post(name: .meeshyAccountDeleted, object: nil, userInfo: [accountKey: accountId])
     }
 

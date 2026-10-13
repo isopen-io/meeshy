@@ -3067,7 +3067,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // la session qu'on vient de revoquer. Le `reason` sert l'avis d'avant la reconnexion (#9612).
         socket.on("auth:session-revoked") { [weak self] data, _ in
             let reason = SessionRevocationReason.fromSocketPayload(data)
-            self?.signalAccountDeleted(sessionRevokedPayload: data)
+            if self?.signalAccountDeleted(sessionRevokedPayload: data) != nil { return } // #10482 — retrait, pas « session fermée »
             Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
             Task { @MainActor in
                 AuthManager.shared.handleSessionRevoked(reason: reason)

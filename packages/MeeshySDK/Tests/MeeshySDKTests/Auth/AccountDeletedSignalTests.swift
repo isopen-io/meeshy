@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import MeeshySDK
 
 /// #10482 — la passerelle dit « ce compte est supprimé » (#10264) par
@@ -50,6 +51,8 @@ final class AccountDeletedSignalTests: XCTestCase {
         AuthManager.shared.isAuthenticated = originalIsAuthenticated
         AuthManager.shared.savedAccounts = originalSavedAccounts
         APIClient.shared.authToken = originalAuthToken
+        AuthManager.shared.acknowledgeSessionRevocationNotice()
+        AccountDeletedSignal.forgetAwaitingRetirementForTesting()
         AccountDeletedStubProtocol.reset()
         try await super.tearDown()
     }
@@ -301,6 +304,62 @@ final class AccountDeletedSignalTests: XCTestCase {
         XCTAssertTrue(AuthManager.retirementLeavesTheOpenSession(retiredUserId: "user-a", activeUserId: "user-a"))
         XCTAssertFalse(AuthManager.retirementLeavesTheOpenSession(retiredUserId: "user-a", activeUserId: "user-b"))
         XCTAssertFalse(AuthManager.retirementLeavesTheOpenSession(retiredUserId: "user-a", activeUserId: nil))
+    }
+
+    // MARK: - Un compte supprimé ne s'annonce pas « session fermée »
+
+    private final class Count: @unchecked Sendable {
+        var value = 0
+    }
+
+    func test_requireReauthentication_forADeletedAccount_doesNotInviteToSignBackIn() throws {
+        let auth = AuthManager.shared
+        try seedAccounts(active: "user-gone", others: [])
+        let invalidations = Count()
+        let subscription = auth.sessionInvalidated.sink { invalidations.value += 1 }
+        defer { subscription.cancel() }
+        AccountDeletedSignal.signal(accountId: "user-gone", center: NotificationCenter())
+
+        auth.requireReauthentication(userId: "user-gone", generation: auth.sessionGeneration)
+
+        XCTAssertEqual(invalidations.value, 0, "on n'invite pas à se reconnecter à un compte supprimé")
+        XCTAssertTrue(auth.isAuthenticated, "c'est le retrait qui démonte la session")
+    }
+
+    func test_requireReauthentication_forAnAccountNotDeleted_stillInvitesToSignBackIn() throws {
+        let auth = AuthManager.shared
+        try seedAccounts(active: "user-alive", others: [])
+        let invalidations = Count()
+        let subscription = auth.sessionInvalidated.sink { invalidations.value += 1 }
+        defer { subscription.cancel() }
+        AccountDeletedSignal.signal(accountId: "user-other-gone", center: NotificationCenter())
+
+        auth.requireReauthentication(userId: "user-alive", generation: auth.sessionGeneration)
+
+        XCTAssertEqual(invalidations.value, 1)
+        XCTAssertFalse(auth.isAuthenticated)
+    }
+
+    func test_handleSessionRevoked_forADeletedAccount_showsNoClosedSessionNotice() throws {
+        let auth = AuthManager.shared
+        try seedAccounts(active: "user-purged", others: [])
+        AccountDeletedSignal.signal(accountId: "user-purged", center: NotificationCenter())
+
+        auth.handleSessionRevoked(reason: .logoutAllDevices)
+
+        XCTAssertNil(auth.sessionRevocationNotice, "« session fermée » ne dit pas « compte supprimé »")
+        XCTAssertTrue(auth.isAuthenticated)
+    }
+
+    func test_retire_clearsTheMarkOfTheRetiredAccount() async throws {
+        let auth = AuthManager.shared
+        try seedAccounts(active: "user-b", others: ["user-retired"])
+        AccountDeletedSignal.signal(accountId: "user-retired", center: NotificationCenter())
+        XCTAssertTrue(AccountDeletedSignal.isAwaitingRetirement("user-retired"))
+
+        _ = await auth.retireDeletedAccount(userId: "user-retired")
+
+        XCTAssertFalse(AccountDeletedSignal.isAwaitingRetirement("user-retired"))
     }
 
     func test_retire_somethingThatIsNotAnIdentifier_touchesNothing() async throws {

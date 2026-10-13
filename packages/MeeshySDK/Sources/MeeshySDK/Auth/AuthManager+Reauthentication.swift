@@ -36,6 +36,9 @@ extension AuthManager {
     /// `generation` est celle de la session sous laquelle la requête refusée
     /// est partie (`sessionGeneration` lue AVANT l'appel).
     func requireReauthentication(userId: String, generation: UInt64) {
+        // #10482 — un compte que la passerelle a dit supprimé n'est pas une
+        // session à rouvrir : son retrait la démonte, sans inviter à se reconnecter.
+        guard !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
         guard Self.reauthenticationApplies(
             refusedUserId: userId,
             refusedGeneration: generation,

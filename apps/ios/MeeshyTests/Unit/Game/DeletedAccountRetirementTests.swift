@@ -1,5 +1,5 @@
 import XCTest
-import MeeshySDK
+@testable import MeeshySDK
 @testable import Meeshy
 
 /// #10482 — un compte que la passerelle dit supprimé quitte l'appareil : le
@@ -10,17 +10,29 @@ import MeeshySDK
 @MainActor
 final class DeletedAccountRetirementTests: XCTestCase {
 
+    /// Un signal marque le compte « en attente de retrait » pour tout le
+    /// processus : la marque ne doit pas survivre au témoin.
+    override func tearDown() async throws {
+        AccountDeletedSignal.forgetAwaitingRetirementForTesting()
+        try await super.tearDown()
+    }
+
     @MainActor
     private final class RetiringDouble: DeletedAccountRetiring {
         nonisolated deinit {}
         var retired: [String] = []
         var succeeds = true
         var onRetire: (() -> Void)?
+        var sessionsIssued: [String: Date] = [:]
 
         func retireDeletedAccount(userId: String) async -> Bool {
             retired.append(userId)
             onRetire?()
             return succeeds
+        }
+
+        func sessionIssuedAt(for userId: String) -> Date? {
+            sessionsIssued[userId]
         }
     }
 
@@ -41,10 +53,12 @@ final class DeletedAccountRetirementTests: XCTestCase {
     private func makeSUT(
         base: URL,
         defaults: UserDefaults,
-        sessionResolved: @escaping DeletedAccountRetirement.SessionResolution = {}
+        sessionResolved: @escaping DeletedAccountRetirement.SessionResolution = {},
+        now: Date = Date(timeIntervalSince1970: 1_000)
     ) -> (sut: DeletedAccountRetirement, accounts: RetiringDouble) {
         let accounts = RetiringDouble()
-        let sut = DeletedAccountRetirement(accounts: accounts, gameBase: base, defaults: defaults, sessionResolved: sessionResolved)
+        let sut = DeletedAccountRetirement(
+            accounts: accounts, gameBase: base, defaults: defaults, sessionResolved: sessionResolved, now: { now })
         return (sut, accounts)
     }
 
@@ -163,5 +177,82 @@ final class DeletedAccountRetirementTests: XCTestCase {
         await fulfillment(of: [retired], timeout: 0.5)
         XCTAssertTrue(accounts.retired.isEmpty)
         XCTAssertTrue(exists(ada))
+    }
+
+    // MARK: - La note est datée
+
+    func test_replayPending_anAccountSignedInAgainSinceTheNote_isNoLongerRetired() async throws {
+        let base = makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let ada = try seedNotebook(of: "user-a", base: base)
+        let defaults = makeDefaults()
+        let (first, failing) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 1_000))
+        failing.succeeds = false
+        _ = await first.retire("user-a")
+        XCTAssertEqual(first.pending, ["user-a"])
+        let (sut, accounts) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 3_000))
+        accounts.sessionsIssued["user-a"] = Date(timeIntervalSince1970: 2_000)
+
+        await sut.replayPending()
+
+        XCTAssertTrue(accounts.retired.isEmpty, "un compte reconnecté depuis la note n'est plus retiré par elle")
+        XCTAssertTrue(sut.pending.isEmpty, "la note est abandonnée")
+        XCTAssertTrue(exists(ada.appendingPathComponent("moment-story.jpg")))
+    }
+
+    func test_replayPending_aSessionOlderThanTheNote_stillRetires() async throws {
+        let base = makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        _ = try seedNotebook(of: "user-a", base: base)
+        let defaults = makeDefaults()
+        let (first, failing) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 1_000))
+        failing.succeeds = false
+        _ = await first.retire("user-a")
+        let (sut, accounts) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 3_000))
+        accounts.sessionsIssued["user-a"] = Date(timeIntervalSince1970: 500)
+
+        await sut.replayPending()
+
+        XCTAssertEqual(accounts.retired, ["user-a"])
+        XCTAssertFalse(exists(GamePhotoNotebook.accountFolder(userId: "user-a", base: base)))
+        XCTAssertTrue(sut.pending.isEmpty)
+    }
+
+    // MARK: - Une écriture en vol ne ressuscite pas le jeu
+
+    func test_replayPending_reErasesTheGameOfARetiredAccountRecreatedByALateWrite() async throws {
+        let base = makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        _ = try seedNotebook(of: "user-a", base: base)
+        let bob = try seedNotebook(of: "user-b", base: base)
+        let defaults = makeDefaults()
+        let (first, _) = makeSUT(base: base, defaults: defaults)
+        _ = await first.retire("user-a")
+        let late = try seedNotebook(of: "user-a", base: base)
+        let (sut, accounts) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 5_000))
+
+        await sut.replayPending()
+
+        XCTAssertFalse(exists(late), "le dossier recréé par une écriture en vol est réeffacé au lancement")
+        XCTAssertFalse(exists(GamePhotoNotebook.accountFolder(userId: "user-a", base: base)))
+        XCTAssertTrue(exists(bob.appendingPathComponent("moment-story.jpg")), "le jeu d'un autre compte reste intact")
+        XCTAssertTrue(accounts.retired.isEmpty, "un compte enterré n'est pas retiré une seconde fois")
+    }
+
+    func test_replayPending_aRetiredAccountSignedInAgain_keepsItsNewGame() async throws {
+        let base = makeBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        _ = try seedNotebook(of: "user-a", base: base)
+        let defaults = makeDefaults()
+        let (first, _) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 1_000))
+        _ = await first.retire("user-a")
+        let fresh = try seedNotebook(of: "user-a", base: base)
+        let (sut, accounts) = makeSUT(base: base, defaults: defaults, now: Date(timeIntervalSince1970: 5_000))
+        accounts.sessionsIssued["user-a"] = Date(timeIntervalSince1970: 2_000)
+
+        await sut.replayPending()
+
+        XCTAssertTrue(exists(fresh), "le jeu d'un compte repris depuis son retrait est le sien")
+        XCTAssertNil(sut.buried["user-a"], "sa tombe est levée")
     }
 }
