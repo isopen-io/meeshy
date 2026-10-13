@@ -64,6 +64,45 @@ nonisolated extension CallFrameRenderer {
         return ((floors + texts + [ground]).min() ?? ground) - bottom
     }
 
+    static func nameItems(_ stage: CallFrameStage) -> [CallFrameNameItem] {
+        stage.boxes.compactMap { box -> CallFrameNameItem? in
+            guard stage.people.indices.contains(box.index) else { return nil }
+            let person = stage.people[box.index]
+            let lines = CallFrameText.personLines(person, show: stage.look.names.show)
+            return lines.isEmpty ? nil : CallFrameNameItem(box: box, person: person, lines: lines)
+        }
+    }
+
+    static func namesInFoot(_ names: CallFrameNames, slot: CallFrameSlotStyle) -> Bool {
+        names.style == .caption && (slot.card?.foot ?? 0) > 0.08
+    }
+
+    /// Les noms qui se posent SOUS leur case (légende, banderole, étiquette) — quand la place le permet.
+    static func namesSitBelow(_ names: CallFrameNames, slot: CallFrameSlotStyle) -> Bool {
+        names.show != .none && !namesInFoot(names, slot: slot) && [.caption, .ribbon, .tag].contains(names.style)
+    }
+
+    /// La hauteur qu'un bloc de `lines` lignes demande sous sa case.
+    static func roomNeededBelow(_ style: CallFrameNameStyle, lines: Int, px: CGFloat) -> CGFloat {
+        blockHeight(lines, px) * (style == .caption ? 1.35 : 1.9)
+    }
+
+    /// La place que la géométrie doit laisser sous chaque case pour que ses noms n'y couvrent jamais
+    /// un visage : la plus grande qu'un nom puisse demander à cette toile, zéro s'ils se posent ailleurs.
+    static func nameRoom(_ look: CallFrameLook, unit: CGFloat) -> CGFloat {
+        guard namesSitBelow(look.names, slot: look.slot) else { return 0 }
+        return roomNeededBelow(look.names.style, lines: look.names.show == .both ? 2 : 1, px: unit * nameShare)
+    }
+
+    /// Chaque nom tient-il SOUS sa case ? Sinon tous se replient dans la case, sur un fond (`paintPlate`).
+    static func namesFitBelow(_ stage: CallFrameStage, plan: CallFrameTextPlan) -> Bool {
+        let names = stage.look.names
+        guard namesSitBelow(names, slot: stage.look.slot) else { return false }
+        return nameItems(stage).allSatisfy { item in
+            roomBelow(stage, plan: plan, item.box) >= roomNeededBelow(names.style, lines: item.lines.count, px: namePx(stage, item.box))
+        }
+    }
+
     static func paintNames(_ context: CGContext, stage: CallFrameStage, plan: CallFrameTextPlan, fonts: CallFrameFontBook) {
         let names = stage.look.names
         let slot = stage.look.slot
@@ -72,17 +111,10 @@ nonisolated extension CallFrameRenderer {
             paintList(context, stage: stage, plan: plan, fonts: fonts)
             return
         }
-        let items = stage.boxes.compactMap { box -> CallFrameNameItem? in
-            guard stage.people.indices.contains(box.index) else { return nil }
-            let person = stage.people[box.index]
-            let lines = CallFrameText.personLines(person, show: names.show)
-            return lines.isEmpty ? nil : CallFrameNameItem(box: box, person: person, lines: lines)
-        }
-        let inFoot = names.style == .caption && (slot.card?.foot ?? 0) > 0.08
-        let outside = !inFoot && (names.style == .caption || names.style == .ribbon || names.style == .tag)
-        let roomy = outside && items.allSatisfy { item in
-            roomBelow(stage, plan: plan, item.box) >= blockHeight(item.lines.count, namePx(stage, item.box)) * (names.style == .caption ? 1.35 : 1.9)
-        }
+        let items = nameItems(stage)
+        let inFoot = namesInFoot(names, slot: slot)
+        let outside = namesSitBelow(names, slot: slot)
+        let roomy = namesFitBelow(stage, plan: plan)
         items.forEach { item in
             let px = namePx(stage, item.box)
             if inFoot, let card = slot.card {
