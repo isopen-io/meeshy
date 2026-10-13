@@ -498,6 +498,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
             do {
                 try await authService.logoutThrowing(token: token)
                 return
+            } catch let error as MeeshyError {
+                // #10463 — un 401 dit que CE jeton ne vaut plus rien : sa session
+                // est déjà close ou invalide. Le réessayer ne fermerait rien.
+                if case .auth = error {
+                    Logger.auth.info("Server logout refused the token: its session is already closed")
+                    return
+                }
+                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
             } catch {
                 Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
             }
