@@ -1,5 +1,9 @@
 import type { ConsentState } from '@meeshy/shared/types/social-events-v2';
+import { calculateAge } from '@meeshy/shared/utils/age';
 import { compact } from './contentEvents';
+
+/** L'âge du consentement numérique en France (RGPD art. 8, loi Informatique et Libertés art. 45). */
+export const DIGITAL_CONSENT_AGE = 15;
 
 /**
  * CE QU'UN ÉVÉNEMENT A LE DROIT DE GARDER de son auteur (#10499 § 6, revue de
@@ -30,8 +34,8 @@ type ConsentPrisma = {
   readonly user?: {
     readonly findUnique: (args: {
       where: { id: string };
-      select: { analyticsConsentAt: true; dataProcessingConsentAt: true };
-    }) => Promise<{ analyticsConsentAt: Date | null; dataProcessingConsentAt: Date | null } | null>;
+      select: { analyticsConsentAt: true; dataProcessingConsentAt: true; birthDate: true };
+    }) => Promise<{ analyticsConsentAt: Date | null; dataProcessingConsentAt: Date | null; birthDate?: Date | null } | null>;
   };
 };
 
@@ -49,10 +53,12 @@ export async function readAnalyticsStanding(
   try {
     const row = await prisma.user?.findUnique({
       where: { id: userId },
-      select: { analyticsConsentAt: true, dataProcessingConsentAt: true },
+      select: { analyticsConsentAt: true, dataProcessingConsentAt: true, birthDate: true },
     });
     // L'analyse est l'ENFANT du traitement des données (`CONSENT_PARENT`) : sans son parent, elle ne vaut rien.
-    return row?.analyticsConsentAt && row.dataProcessingConsentAt ? 'granted' : 'not_granted';
+    if (!row?.analyticsConsentAt || !row.dataProcessingConsentAt) return 'not_granted';
+    // R8 : sous l'âge du consentement numérique (15 ans en France), aucun profilage, même consenti.
+    return row.birthDate && calculateAge(row.birthDate) < DIGITAL_CONSENT_AGE ? 'not_granted' : 'granted';
   } catch {
     return 'not_granted';
   }

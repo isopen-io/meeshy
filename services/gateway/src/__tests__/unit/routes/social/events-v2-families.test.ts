@@ -443,3 +443,17 @@ describe('O1 — aucun identifiant qui relie, sur une ligne sans acteur', () => 
     await h.app.close();
   });
 });
+
+describe('R8 — un compte déclaré mineur de moins de 15 ans n’est jamais profilé', () => {
+  it('consentement posé, 14 ans déclarés ⇒ rangé sans acteur', async () => {
+    const h = await harness({ consentedUserIds: [READER] });
+    const birthDate = new Date(Date.now() - 14 * 365.25 * 86_400_000);
+    (h.prisma.user.findUnique as jest.Mock<any>).mockResolvedValue({
+      analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01'), birthDate,
+    });
+    await sendReachV2(h.app, [share(POST)], account, CONTEXT);
+
+    expect(h.contentEvents[0].actorKind).toBe('none');
+    await h.app.close();
+  });
+});

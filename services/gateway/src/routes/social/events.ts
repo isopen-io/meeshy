@@ -665,9 +665,14 @@ export function registerSocialEventRoutes(
 
       const comptage = lot.counting.slice(0, admis);
       const v2Admis = v2.slice(0, Math.max(0, admis - comptage.length));
-      const standing: AnalyticsStanding = acteur.kind === 'user'
-        ? await readAnalyticsStanding(prisma as never, acteur.userId, lot.context.consent)
-        : 'anonymous';
+      // Le consentement ne se lit que si une écriture en dépend (une impression
+      // ou un événement v2) : un lot de vues d'un ancien client n'en coûte aucune.
+      const consentCompte = v2Admis.length > 0 || comptage.some(({ event }) => event.type === 'impression');
+      const standing: AnalyticsStanding = acteur.kind === 'anonymous'
+        ? 'anonymous'
+        : consentCompte
+          ? await readAnalyticsStanding(prisma as never, acteur.userId, lot.context.consent)
+          : 'not_granted';
 
       const comptes = await ingestSocialEvents(deps, comptage.map(({ event }) => event), acteur, {
         context: lot.context,
