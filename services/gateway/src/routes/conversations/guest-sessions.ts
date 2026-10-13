@@ -98,7 +98,9 @@ export async function endGuestSession(params: GuestSessionParams): Promise<EndGu
   });
   announceConversationLanguageChange({ kind: 'departure', conversationId: participant.conversationId });
 
-  const shareLinkId = participant.anonymousSession?.shareLinkId;
+  // #10468 — la place se libère sur le lien qui l'a comptée, lu comme aux
+  // autres portes : la colonne d'abord, la session embarquée en repli.
+  const shareLinkId = guestShareLinkId(participant);
   if (shareLinkId) {
     await prisma.conversationShareLink.update({
       where: { id: shareLinkId },

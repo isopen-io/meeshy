@@ -666,6 +666,52 @@ describe('DELETE /guest-sessions/me', () => {
   });
 });
 
+/**
+ * #10468 — la sortie d'un invité décrémentait `currentConcurrentUsers` sur la
+ * seule session embarquée : un invité dont seule la COLONNE porte le lien ne
+ * libérait jamais sa place, et un invité dont les deux divergent la libérait
+ * sur un autre lien que celui qui l'avait compté. Même lecture que les autres
+ * portes : `guestShareLinkId`.
+ */
+describe('DELETE /guest-sessions/me — la place se libère sur le lien lu par la colonne d\'abord (#10468)', () => {
+  const OTHER_LINK_DB_ID = '507f1f77bcf86cd799439033';
+  const leave = (app: FastifyInstance) =>
+    app.inject({ method: 'DELETE', url: '/guest-sessions/me', headers: { 'x-session-token': SESSION_TOKEN } });
+
+  it('lien porté par la seule COLONNE ⇒ la place se libère sur ce lien', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', conversationId: CONV_ID, isActive: true, shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { profile: {}, session: {} },
+    });
+
+    const res = await leave(app);
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith({
+      where: { id: SHARE_LINK_DB_ID },
+      data: { currentConcurrentUsers: { decrement: 1 } },
+    });
+  });
+
+  it('colonne et session divergent ⇒ la COLONNE fait foi', async () => {
+    const app = await buildApp();
+    (app as any).prisma.participant.findFirst.mockResolvedValueOnce({
+      id: 'p1', conversationId: CONV_ID, isActive: true, shareLinkId: SHARE_LINK_DB_ID,
+      anonymousSession: { shareLinkId: OTHER_LINK_DB_ID, profile: {}, session: {} },
+    });
+
+    await leave(app);
+    await app.close();
+
+    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledTimes(1);
+    expect((app as any).prisma.conversationShareLink.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SHARE_LINK_DB_ID } })
+    );
+  });
+});
+
 // ─── #9708 — l'entrée et la sortie par lien sont annoncées à la composition linguistique ──
 
 describe('#9708 — une porte de lien annonce chaque arrivée et chaque départ', () => {

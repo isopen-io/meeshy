@@ -165,71 +165,115 @@ export async function revokeShareLinkGuests(
   // lève ne prive plus de leur annonce et de leur éviction les invités DÉJÀ
   // passés à inactif (la reprise ne les retrouverait plus), et un lien sans
   // limite d'usage ne sature plus le pool de connexions.
-  const { written: guests, failure } = await deactivateGuests(prisma, candidates, revokedAt);
+  const { written: guests, rejected, failure } = await deactivateGuests(prisma, candidates, revokedAt);
+  const failures: unknown[] = failure ? [failure.reason] : [];
 
-  if (guests.length === 0) {
-    if (failure) throw failure.reason;
-    return [];
+  // #10468 — une écriture REJETÉE peut avoir été validée en base (réponse
+  // perdue après le commit) : l'invité est inactif, la reprise ne le retrouve
+  // plus, et rien ne l'aurait évincé. Celui que la relecture trouve inactif
+  // avec CE `leftAt` est évincé — sans annonce, l'auteur de l'écriture
+  // n'étant pas établi avec certitude.
+  const recovered = await settle(failures, () => readCommittedRejections(prisma, rejected, revokedAt));
+  const evicted = [...guests, ...(recovered ?? [])];
+
+  // Les caches tombent AVANT tout `await` sur le vivant : une annonce ou une
+  // éviction qui échoue plus loin ne laisse plus l'invité écrire dans le fil
+  // pendant 30 s (recherche REST) ou 5 min (appartenance).
+  for (const guest of evicted) {
+    invalidateParticipantLookup(guest.id, guest.conversationId);
+    manager?.invalidateParticipantCache?.(guest.id, guest.conversationId);
   }
 
   // Un lien n'a qu'une conversation, mais l'effectif se lit sur la ligne de
   // CHAQUE invité plutôt que sur un paramètre : une ligne pendante ne peut
   // alors pas faire annoncer un départ dans le fil d'à côté.
-  const conversationIds = [...new Set(guests.map(guest => guest.conversationId))];
-
-  for (const conversationId of conversationIds) {
-    announceConversationLanguageChange({ kind: 'departure', conversationId });
-    const remaining: ReadonlyArray<MemberCountAudienceTarget> = await prisma.participant.findMany({
-      where: { conversationId, isActive: true },
-      select: { id: true, userId: true, role: true, user: { select: { role: true } } },
-    });
-
-    for (const guest of guests.filter(candidate => candidate.conversationId === conversationId)) {
-      emitConversationMemberCountEvent({
-        io,
-        conversationId,
-        participants: remaining,
-        event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
-        payload: {
-          conversationId,
-          // `participantId` TOUJOURS, `userId` NUL sans compte — un invité de
-          // lien n'a aucune ligne `User`, et ce champ-là en DÉCLARE une.
-          participantId: guest.id,
-          userId: null,
-          displayName: guest.displayName,
-          leftAt: revokedAt.toISOString(),
-        },
-        memberCount: remaining.length,
-      });
-    }
+  for (const conversationId of [...new Set(guests.map(guest => guest.conversationId))]) {
+    await settle(failures, () => announceDepartures({ prisma, io, conversationId, guests, revokedAt }));
   }
 
-  for (const guest of guests) {
-    // Le cache de recherche REST (30 s) laisserait sinon l'invité écrire dans
-    // le fil pendant toute sa fenêtre — même invalidation que les quatre
-    // chemins de fin d'appartenance.
-    invalidateParticipantLookup(guest.id, guest.conversationId);
-
-    await endConversationMembership({
-      io,
-      manager,
-      conversationId: guest.conversationId,
-      // Room personnelle : `Participant.id` pour un invité de lien partagé —
-      // la même clé que celle du registre des partages (`SocketUser.id`).
-      userId: guest.id,
-    });
-
-    if (io) {
-      const sockets = await io.in(ROOMS.user(guest.id)).fetchSockets();
-      for (const socket of sockets) socket.disconnect(true);
-    }
+  // #10468 — invité par invité : l'échec de l'un (délai inter-nœuds de
+  // `fetchSockets` sur l'adaptateur Redis) ne laisse plus les suivants dans
+  // la room, dans l'appel et connectés.
+  for (const guest of evicted) {
+    await settle(failures, () =>
+      endConversationMembership({
+        io,
+        manager,
+        conversationId: guest.conversationId,
+        // Room personnelle : `Participant.id` pour un invité de lien partagé —
+        // la même clé que celle du registre des partages (`SocketUser.id`).
+        userId: guest.id,
+      })
+    );
+    await settle(failures, () => disconnectGuest(io, guest.id));
   }
 
   // L'appelant garde le lien ouvert sur un échec : la reprise retrouve les
   // invités restés actifs, et eux seuls.
-  if (failure) throw failure.reason;
+  if (failures.length > 0) throw failures[0];
 
   return guests.map(guest => guest.id);
+}
+
+async function settle<T>(failures: unknown[], step: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await step();
+  } catch (error) {
+    failures.push(error);
+    return undefined;
+  }
+}
+
+async function announceDepartures(params: {
+  readonly prisma: PrismaClient;
+  readonly io: GuestSocketRegistry | null | undefined;
+  readonly conversationId: string;
+  readonly guests: ReadonlyArray<RevocationCandidate>;
+  readonly revokedAt: Date;
+}): Promise<void> {
+  const { prisma, io, conversationId, guests, revokedAt } = params;
+  announceConversationLanguageChange({ kind: 'departure', conversationId });
+  const remaining: ReadonlyArray<MemberCountAudienceTarget> = await prisma.participant.findMany({
+    where: { conversationId, isActive: true },
+    select: { id: true, userId: true, role: true, user: { select: { role: true } } },
+  });
+
+  for (const guest of guests.filter(candidate => candidate.conversationId === conversationId)) {
+    emitConversationMemberCountEvent({
+      io,
+      conversationId,
+      participants: remaining,
+      event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
+      payload: {
+        conversationId,
+        // `participantId` TOUJOURS, `userId` NUL sans compte — un invité de
+        // lien n'a aucune ligne `User`, et ce champ-là en DÉCLARE une.
+        participantId: guest.id,
+        userId: null,
+        displayName: guest.displayName,
+        leftAt: revokedAt.toISOString(),
+      },
+      memberCount: remaining.length,
+    });
+  }
+}
+
+async function disconnectGuest(io: GuestSocketRegistry | null | undefined, guestId: string): Promise<void> {
+  if (!io) return;
+  const sockets = await io.in(ROOMS.user(guestId)).fetchSockets();
+  for (const socket of sockets) socket.disconnect(true);
+}
+
+async function readCommittedRejections(
+  prisma: PrismaClient,
+  rejected: ReadonlyArray<RevocationCandidate>,
+  revokedAt: Date
+): Promise<ReadonlyArray<RevocationCandidate>> {
+  if (rejected.length === 0) return [];
+  return prisma.participant.findMany({
+    where: { id: { in: rejected.map(guest => guest.id) }, isActive: false, leftAt: revokedAt },
+    select: { id: true, conversationId: true, displayName: true },
+  });
 }
 
 /** Écritures concurrentes au plus — entre 25 et 50 (#10464). */
@@ -241,7 +285,11 @@ async function deactivateGuests(
   prisma: PrismaClient,
   candidates: ReadonlyArray<RevocationCandidate>,
   revokedAt: Date
-): Promise<{ written: ReadonlyArray<RevocationCandidate>; failure: PromiseRejectedResult | undefined }> {
+): Promise<{
+  written: ReadonlyArray<RevocationCandidate>;
+  rejected: ReadonlyArray<RevocationCandidate>;
+  failure: PromiseRejectedResult | undefined;
+}> {
   const batches = Array.from(
     { length: Math.ceil(candidates.length / REVOCATION_WRITE_BATCH) },
     (_unused, index) => candidates.slice(index * REVOCATION_WRITE_BATCH, (index + 1) * REVOCATION_WRITE_BATCH)
@@ -266,6 +314,7 @@ async function deactivateGuests(
       const outcome = outcomes[index];
       return outcome.status === 'fulfilled' && outcome.value.count > 0;
     }),
+    rejected: candidates.filter((_guest, index) => outcomes[index].status === 'rejected'),
     failure: outcomes.find((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected'),
   };
 }

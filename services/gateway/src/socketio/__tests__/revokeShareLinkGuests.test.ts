@@ -172,6 +172,9 @@ describe('revokeShareLinkGuests', () => {
     });
 
     expect(order).toEqual([
+      // #10468 — le cache d'appartenance tombe avant tout `await` : une
+      // éviction qui échoue plus loin ne laisse plus l'invité écrire 5 min.
+      `invalidate:${GUEST_A}:${CONV_ID}`,
       `end-live-location:${CONV_ID}:${GUEST_A}`,
       `end-call:${CONV_ID}:${GUEST_A}`,
       `leave:${ROOMS.user(GUEST_A)}:${ROOMS.conversation(CONV_ID)}`,
@@ -432,5 +435,160 @@ describe('revokeShareLinkGuests', () => {
     expect(peak).toBeGreaterThan(1);
     expect(prisma.participant.updateMany).toHaveBeenCalledTimes(guests.length);
     expect(revoked).toHaveLength(guests.length);
+  });
+
+  /**
+   * #10468 — un double de Prisma qui TIENT des lignes et ÉVALUE les trois
+   * lectures de l'unité : les candidats (lien, actifs), la relecture des
+   * écritures rejetées (`id in`, inactives, `leftAt` exact) et l'effectif
+   * restant. `commitThenThrow` simule l'écriture validée en base dont la
+   * réponse s'est perdue (coupure réseau après le commit).
+   */
+  type Row = { id: string; conversationId: string; displayName: string; isActive: boolean; leftAt: Date | null };
+
+  function makeRowsPrisma(rows: Row[], faults: { commitThenThrow?: string; failWrite?: string; failRemaining?: boolean } = {}) {
+    const pick = ({ id, conversationId, displayName }: Row) => ({ id, conversationId, displayName });
+    return {
+      participant: {
+        findMany: jest.fn<any>(async ({ where }: any) => {
+          if (where?.OR) return rows.filter(row => row.isActive).map(pick);
+          if (where?.id?.in) {
+            return rows
+              .filter(row => where.id.in.includes(row.id) && row.isActive === where.isActive && row.leftAt?.getTime() === where.leftAt?.getTime())
+              .map(pick);
+          }
+          if (faults.failRemaining) throw new Error('remaining read failed');
+          return [];
+        }),
+        updateMany: jest.fn<any>(async ({ where, data }: any) => {
+          if (where.id === faults.failWrite) throw new Error('write failed before commit');
+          const row = rows.find(candidate => candidate.id === where.id && candidate.isActive === where.isActive);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          if (where.id === faults.commitThenThrow) throw new Error('socket closed after commit');
+          return { count: 1 };
+        }),
+      },
+    };
+  }
+
+  const guestRow = (id: string): Row => ({ id, conversationId: CONV_ID, displayName: id, isActive: true, leftAt: null });
+
+  function makeFailingIo(order: string[], failFetchFor: string) {
+    const broadcast: any = { emit: jest.fn<any>(), to: jest.fn<any>(() => broadcast) };
+    return {
+      to: jest.fn<any>(() => broadcast),
+      in: jest.fn<any>((room: string) => ({
+        fetchSockets: jest.fn<any>(async () => {
+          if (room === ROOMS.user(failFetchFor)) throw new Error('timeout reached while waiting for fetchSockets response');
+          return [{
+            leave: jest.fn<any>((left: string) => { order.push(`leave:${room}:${left}`); }),
+            disconnect: jest.fn<any>(() => { order.push(`disconnect:${room}`); }),
+          }];
+        }),
+      })),
+    };
+  }
+
+  // Le témoin de l'audit adversarial de #10464, inversé.
+  it("l'éviction d'un invité qui lève ne prive pas les suivants de la leur : sortis, déconnectés, caches invalidés, puis l'erreur relancée", async () => {
+    const rows = [GUEST_A, GUEST_B, 'participant-guest-c'].map(guestRow);
+    const prisma = makeRowsPrisma(rows);
+    for (const row of rows) cacheParticipant(row.id, CONV_ID, { id: row.id, conversationId: CONV_ID, isActive: true });
+    const order: string[] = [];
+    const manager = makeManager(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io: makeFailingIo(order, GUEST_A), manager, shareLinkId: LINK_ID })
+    ).rejects.toThrow('fetchSockets');
+
+    expect(rows.every(row => !row.isActive)).toBe(true);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_B)}`);
+    expect(order).toContain(`disconnect:${ROOMS.user('participant-guest-c')}`);
+    expect(order).toContain(`leave:${ROOMS.user(GUEST_B)}:${ROOMS.conversation(CONV_ID)}`);
+    expect(order).toContain(`end-call:${CONV_ID}:participant-guest-c`);
+    for (const row of rows) {
+      expect(getCachedParticipant(row.id, CONV_ID)).toBeUndefined();
+      expect(manager.invalidateParticipantCache).toHaveBeenCalledWith(row.id, CONV_ID);
+    }
+  });
+
+  it("le cache de chaque invité tombe avant tout `await` : un échec de l'annonce n'empêche ni l'invalidation ni l'éviction", async () => {
+    const rows = [GUEST_A, GUEST_B].map(guestRow);
+    const prisma = makeRowsPrisma(rows, { failRemaining: true });
+    for (const row of rows) cacheParticipant(row.id, CONV_ID, { id: row.id, conversationId: CONV_ID, isActive: true });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+    const manager = makeManager(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager, shareLinkId: LINK_ID })
+    ).rejects.toThrow('remaining read failed');
+
+    for (const row of rows) {
+      expect(getCachedParticipant(row.id, CONV_ID)).toBeUndefined();
+      expect(manager.invalidateParticipantCache).toHaveBeenCalledWith(row.id, CONV_ID);
+      expect(order).toContain(`disconnect:${ROOMS.user(row.id)}`);
+    }
+  });
+
+  it("une écriture validée en base dont la réponse s'est perdue est rattrapée : l'invité est évincé sans être annoncé, puis l'erreur relancée", async () => {
+    const revokedAt = new Date('2026-10-13T09:00:00.000Z');
+    const rows = [guestRow(GUEST_A)];
+    const prisma = makeRowsPrisma(rows, { commitThenThrow: GUEST_A });
+    cacheParticipant(GUEST_A, CONV_ID, { id: GUEST_A, conversationId: CONV_ID, isActive: true });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID, revokedAt })
+    ).rejects.toThrow('socket closed after commit');
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: { in: [GUEST_A] }, isActive: false, leftAt: revokedAt },
+    }));
+    expect(emitConversationMemberCountEvent).not.toHaveBeenCalled();
+    expect(order).toContain(`end-call:${CONV_ID}:${GUEST_A}`);
+    expect(order).toContain(`disconnect:${ROOMS.user(GUEST_A)}`);
+    expect(getCachedParticipant(GUEST_A, CONV_ID)).toBeUndefined();
+
+    const retried = await revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID });
+    expect(retried).toEqual([]);
+  });
+
+  it("une écriture rejetée AVANT le commit n'évince personne : l'invité reste actif pour la reprise", async () => {
+    const rows = [guestRow(GUEST_A)];
+    const prisma = makeRowsPrisma(rows, { failWrite: GUEST_A });
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    await expect(
+      revokeShareLinkGuests({ prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID })
+    ).rejects.toThrow('write failed before commit');
+
+    expect(order).toEqual([]);
+    expect(rows[0].isActive).toBe(true);
+  });
+
+  it("une écriture rejetée sur un invité qu'une AUTRE révocation a désactivé (autre `leftAt`) ne l'évince pas une seconde fois", async () => {
+    const rows = [{ ...guestRow(GUEST_A), isActive: false, leftAt: new Date('2026-10-13T08:00:00.000Z') }];
+    const prisma = makeRowsPrisma([]);
+    prisma.participant.findMany.mockImplementation(async ({ where }: any) =>
+      where?.OR
+        ? [{ id: GUEST_A, conversationId: CONV_ID, displayName: GUEST_A }]
+        : rows.filter(row => where?.id?.in?.includes(row.id) && row.leftAt?.getTime() === where.leftAt?.getTime())
+    );
+    prisma.participant.updateMany.mockRejectedValue(new Error('socket closed'));
+    const order: string[] = [];
+    const { io } = makeIo(order);
+
+    await expect(
+      revokeShareLinkGuests({
+        prisma: prisma as never, io, manager: makeManager(order), shareLinkId: LINK_ID,
+        revokedAt: new Date('2026-10-13T09:00:00.000Z'),
+      })
+    ).rejects.toThrow('socket closed');
+
+    expect(order).toEqual([]);
   });
 });
