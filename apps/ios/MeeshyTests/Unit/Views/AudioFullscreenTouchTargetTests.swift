@@ -97,10 +97,9 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
 
     func test_translateControl_reachesTheFortyFourPointFloor() throws {
         let source = try strippedSource()
-        let near = try window(after: "Image(systemName: \"translate\")", in: source, span: 560)
         XCTAssertTrue(
-            near.contains(".frame(width: 44, height: 44)") && near.contains(".contentShape(Circle())"),
-            "The translate control must expose a 44 pt hit region."
+            source.contains("FullscreenChromeDisc(systemImage: \"translate\""),
+            "The translate control is the shared chrome disc (36 pt visible, 44 pt target)."
         )
     }
 
@@ -118,8 +117,8 @@ final class AudioFullscreenTouchTargetTests: XCTestCase {
         XCTAssertEqual(FullscreenChromeMetrics.discDiameter, 36,
                        "The shared disc keeps the 36 pt size the two pills had.")
         XCTAssertEqual(
-            source.components(separatedBy: ".frame(width: 26, height: 26)").count - 1, 1,
-            "The 26 pt translate pill must keep its frozen size — it overflows its row if it scales."
+            source.components(separatedBy: ".frame(width: 26, height: 26)").count - 1, 0,
+            "The 26 pt translate pill is gone (#10568) — it was lost at the foot of the screen; the shared disc replaces it."
         )
     }
 

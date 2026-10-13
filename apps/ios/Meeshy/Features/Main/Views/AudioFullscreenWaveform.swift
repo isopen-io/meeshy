@@ -20,18 +20,17 @@ import MeeshyUI
 /// `AVAudioPlayer.currentTime` est un déplacement à coût nul, donc l'écoute
 /// suit le doigt image par image, et relâcher ne fait que conclure.
 ///
-/// **Depuis #10568, la bande ne vole plus le balayage des pages.** Elle vivait
-/// dans son propre défilement horizontal (120 barres de 3 pt dépassent toujours
-/// la largeur d'un téléphone) sous un `DragGesture(minimumDistance: 0)` : un
-/// balayage parti de l'onde — le milieu de l'écran — déplaçait la lecture au
-/// lieu de tourner la page. Trois choses changent :
+/// **Depuis #10568, la bande n'a plus de défilement à elle.** Elle vivait dans
+/// son propre `ScrollView` horizontal (120 barres de 3 pt dépassent toujours la
+/// largeur d'un téléphone), imbriqué dans le pager, avec un `scrollTo` animé
+/// par barre franchie. Trois choses changent :
 ///
 /// 1. l'onde TIENT dans sa largeur — les amplitudes sont ramenées au nombre de
 ///    barres que la bande peut peindre (`resample`, le pic de chaque paquet),
 ///    donc plus de défilement imbriqué ni de `scrollTo` animé par barre ;
 /// 2. elle se peint en UN `Canvas`, pas en cent vingt vues ;
-/// 3. toucher saute à un point, POSER le doigt puis glisser parcourt ; un
-///    balayage franc appartient au pager.
+/// 3. sur la bande, le doigt déplace le curseur — toucher saute à un point,
+///    glisser parcourt ; le balayage des pages vit partout ailleurs.
 struct AudioFullscreenWaveform: View {
 
     /// Les amplitudes analysées. Vide ⇒ la bande se peint depuis son motif de
@@ -53,8 +52,6 @@ struct AudioFullscreenWaveform: View {
     nonisolated static let barWidth: CGFloat = 3
     nonisolated static let spacing: CGFloat = 2
     private static let height: CGFloat = 80
-    /// Le temps que le doigt reste posé avant que la bande prenne le geste.
-    private static let holdToScrub: Double = 0.15
 
     /// Le nombre de barres que `width` peut peindre sans déborder.
     nonisolated static func barCount(forWidth width: CGFloat) -> Int {
@@ -99,11 +96,7 @@ struct AudioFullscreenWaveform: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture(coordinateSpace: .local) { location in
-                seek(to: location.x, in: width)
-                HapticFeedback.light()
-            }
-            .simultaneousGesture(scrubGesture(width: width))
+            .gesture(scrubGesture(width: width))
         }
         .frame(height: Self.height)
     }
@@ -113,23 +106,20 @@ struct AudioFullscreenWaveform: View {
         onSeek(max(0, min(1, x / width)))
     }
 
-    /// **Le doigt POSÉ emmène l'écoute avec lui.**
+    /// **Le doigt emmène l'écoute avec lui.**
     ///
     /// `onChanged` déplace RÉELLEMENT la lecture, il ne se contente pas de
     /// bouger un curseur : c'est ce que « on voit le recul sur la waveform »
     /// demande, et ce que la directive « gestes progressifs et annulables »
-    /// impose. L'appui qui précède laisse au pager le balayage franc : un doigt
-    /// qui part avant `holdToScrub` fait échouer l'appui, et la page tourne.
+    /// impose. `minimumDistance: 0` couvre le toucher ET le parcours : sur la
+    /// bande, le doigt déplace le curseur (directive porteur du 2026-10-13) ;
+    /// partout ailleurs, il tourne la page.
     ///
     /// Une seule haptique, à la levée : en émettre une par image de geste
     /// ferait vibrer l'appareil en continu.
     private func scrubGesture(width: CGFloat) -> some Gesture {
-        LongPressGesture(minimumDuration: Self.holdToScrub)
-            .sequenced(before: DragGesture(minimumDistance: 0))
-            .onChanged { value in
-                guard case .second(true, let drag?) = value else { return }
-                seek(to: drag.location.x, in: width)
-            }
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in seek(to: value.location.x, in: width) }
             .onEnded { _ in HapticFeedback.light() }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 // MARK: - L'écoute, lue là où elle se peint (#10568)
@@ -68,5 +69,60 @@ struct AudioFullscreenPlaybackScope<Content: View>: View {
         var body: some View {
             content(AudioFullscreenPlaybackSnapshot(player: player, attachmentId: attachmentId), player.speed)
         }
+    }
+}
+
+// MARK: - La transcription ne se refait qu'au changement de segment (#10568)
+
+/// **Le karaoké avance par SEGMENT, pas par tick.**
+///
+/// La transcription recevait `currentTime` : dix fois par seconde, ses
+/// centaines de mots — un bouton chacun, mesurés un à un par la mise en page
+/// en flux — étaient réévalués et remesurés pour une surbrillance qui ne bouge
+/// qu'une à trois fois par seconde. Le rapport système de l'iPhone du porteur
+/// (2026-10-13) montrait 59 % de CPU en moyenne, dans le rendu.
+///
+/// Le segment actif se résout ICI, à chaque tick, à coût négligeable ; la vue
+/// se compare sur lui, et SwiftUI ne la refait que lorsqu'il change.
+struct AudioFullscreenTranscript: View, Equatable {
+    let segments: [TranscriptionDisplaySegment]
+    let activeIndex: Int?
+    let accentColor: String
+    let maxHeight: CGFloat
+    let onSeek: (Double) -> Void
+
+    init(segments: [TranscriptionDisplaySegment],
+         playback: AudioFullscreenPlaybackSnapshot,
+         accentColor: String,
+         maxHeight: CGFloat,
+         onSeek: @escaping (Double) -> Void) {
+        self.segments = segments
+        self.activeIndex = AudioPlayerView.activeSegmentIndex(segments: segments,
+                                                              currentTime: playback.currentTime,
+                                                              progress: playback.progress,
+                                                              isPlaying: playback.isPlaying)
+        self.accentColor = accentColor
+        self.maxHeight = maxHeight
+        self.onSeek = onSeek
+    }
+
+    static func == (lhs: AudioFullscreenTranscript, rhs: AudioFullscreenTranscript) -> Bool {
+        lhs.activeIndex == rhs.activeIndex
+            && lhs.accentColor == rhs.accentColor
+            && lhs.maxHeight == rhs.maxHeight
+            && lhs.segments.count == rhs.segments.count
+            && lhs.segments.first?.id == rhs.segments.first?.id
+    }
+
+    var body: some View {
+        var view = MediaTranscriptionView(segments: segments,
+                                          currentTime: 0,
+                                          accentColor: accentColor,
+                                          maxHeight: maxHeight,
+                                          isPlaying: activeIndex != nil,
+                                          fitsContent: true,
+                                          onSeek: onSeek)
+        view.resolvedActiveIndex = .some(activeIndex)
+        return view
     }
 }

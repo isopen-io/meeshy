@@ -130,6 +130,21 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertLessThanOrEqual(AudioFullscreenPaging.settleDelay, 0.2, "au-delà, la piste paraît en retard sur la page")
     }
 
+    // MARK: - Fermer d'un glissement ne dispute pas le balayage (#10568)
+
+    func test_dismiss_armsOnlyForAFrankDownwardDrag() {
+        XCTAssertTrue(AudioFullscreenDismissRule.arms(velocity: CGVector(dx: 40, dy: 300)))
+        XCTAssertFalse(AudioFullscreenDismissRule.arms(velocity: CGVector(dx: 300, dy: 40)), "un balayage de page")
+        XCTAssertFalse(AudioFullscreenDismissRule.arms(velocity: CGVector(dx: 250, dy: 300)), "un balayage en biais reste un balayage")
+        XCTAssertFalse(AudioFullscreenDismissRule.arms(velocity: CGVector(dx: 0, dy: -300)), "vers le haut")
+    }
+
+    func test_dismiss_concludesOnDistanceOrOnMomentum() {
+        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 130, predicted: 130))
+        XCTAssertTrue(AudioFullscreenDismissRule.dismisses(translation: 60, predicted: 320))
+        XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 60, predicted: 100))
+    }
+
     // MARK: - L'onde tient dans sa largeur (#10568)
 
     func test_waveform_barCount_fitsTheWidth() {

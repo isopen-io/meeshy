@@ -229,7 +229,7 @@ struct AudioFullscreenView: View {
                     page(index: index, item: item)
                 }
                 .offset(y: dragOffset)
-                .gesture(verticalDismissGesture)
+                .modifier(AudioFullscreenDismissDrag(offset: $dragOffset, onDismiss: dismissDownward))
                 .opacity(isDismissing ? 0 : 1)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
                 .adaptiveOnChange(of: currentPageID) { _, newID in
@@ -514,28 +514,6 @@ struct AudioFullscreenView: View {
     }
 
     // MARK: - Vertical Dismiss Gesture
-
-    private var verticalDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 40)
-            .onChanged { value in
-                let vertical = value.translation.height
-                if vertical > 0, abs(vertical) > abs(value.translation.width) {
-                    dragOffset = vertical * 0.6
-                }
-            }
-            .onEnded { value in
-                // Seul un glissement qui a DÉPLACÉ l'écran peut le fermer : un
-                // balayage de page en biais ne doit pas le faire à sa place.
-                guard dragOffset > 0 else { return }
-                if value.translation.height > 120 || value.predictedEndTranslation.height > 300 {
-                    dismissDownward()
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        dragOffset = 0
-                    }
-                }
-            }
-    }
 
     private func dismissDownward() {
         let currentItem = currentSource

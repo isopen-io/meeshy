@@ -78,6 +78,11 @@ public struct MediaTranscriptionView: View {
     /// défile qu'au-delà. Défaut `false` : la carte occupe toute la hauteur
     /// permise, comme avant.
     public var fitsContent: Bool = false
+    /// Le segment actif DÉJÀ résolu par l'hôte (`.some(index)`, `index` pouvant
+    /// être `nil` à l'arrêt). L'hôte qui le fournit peut se comparer sur lui et
+    /// ne refaire la transcription qu'au changement de segment, au lieu de la
+    /// refaire à chaque tick de `currentTime`. `nil` ⇒ résolu ici, comme avant.
+    public var resolvedActiveIndex: Int?? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
@@ -100,7 +105,8 @@ public struct MediaTranscriptionView: View {
     /// `AudioPlayerView` : timing réel si disponible, sinon repli proportionnel
     /// sur `progress`. Source unique de vérité du karaoké (détail ET réel).
     private var activeIndex: Int? {
-        AudioPlayerView.activeSegmentIndex(
+        if let resolvedActiveIndex { return resolvedActiveIndex }
+        return AudioPlayerView.activeSegmentIndex(
             segments: segments,
             currentTime: currentTime,
             progress: progress,

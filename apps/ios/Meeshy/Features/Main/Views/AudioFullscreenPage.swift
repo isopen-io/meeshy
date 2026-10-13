@@ -255,13 +255,9 @@ struct AudioFullscreenPage: View, Equatable {
                         .frame(minHeight: AudioFullscreenLayout.minTranscript, maxHeight: .infinity, alignment: .top)
                         .layoutPriority(-1)
                     captionAndLanguages
-                        .fullscreenChromeVisibility(chromeVisible)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                if !offer.isEmpty {
-                    FullscreenActionRail { actionButtons }
-                        .fullscreenChromeVisibility(chromeVisible)
-                }
+                if !offer.isEmpty { actionRail }
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.sm)
@@ -282,7 +278,6 @@ struct AudioFullscreenPage: View, Equatable {
             VStack(spacing: MeeshySpacing.md) {
                 transcriptBlock(maxHeight: layout.transcriptMaxHeight)
                 bottomBar
-                    .fullscreenChromeVisibility(chromeVisible)
             }
             .frame(maxWidth: .infinity)
         }
@@ -533,10 +528,19 @@ struct AudioFullscreenPage: View, Equatable {
         HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
             captionAndLanguages
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if !offer.isEmpty {
-                FullscreenActionRail { actionButtons }
-            }
+            if !offer.isEmpty { actionRail }
         }
+    }
+
+    /// **Le rail et les langues restent à l'écran, et se voient** (porteur,
+    /// 2026-10-13) : seuls la barre du haut et le transport s'effacent pendant
+    /// l'écoute. Un verre nu sur le fond uni d'un vocal ne se détachait pas —
+    /// le rail se pose sur une plaque à la teinte de la conversation.
+    private var actionRail: some View {
+        FullscreenActionRail { actionButtons }
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(MeeshyColors.controlFill(isDark: isDark)))
+            .overlay(Capsule().stroke(accent.opacity(isDark ? 0.55 : 0.4), lineWidth: 1))
     }
 
     private var captionAndLanguages: some View {
