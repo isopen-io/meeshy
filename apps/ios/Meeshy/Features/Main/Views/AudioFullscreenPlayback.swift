@@ -89,12 +89,24 @@ struct AudioFullscreenTranscript: View, Equatable {
     let activeIndex: Int?
     let accentColor: String
     let maxHeight: CGFloat
+    let fontSize: CGFloat
+    /// Des paroles posées à même le fond, sur toute la hauteur offerte — ou la
+    /// carte qui épouse son texte (paysage).
+    let asLyrics: Bool
+    /// Ce que l'en-tête et le pied recouvrent du défilement, et où se pose le
+    /// mot en cours (paroles seulement).
+    let insets: EdgeInsets
+    let anchor: UnitPoint
     let onSeek: (Double) -> Void
 
     init(segments: [TranscriptionDisplaySegment],
          playback: AudioFullscreenPlaybackSnapshot,
          accentColor: String,
          maxHeight: CGFloat,
+         fontSize: CGFloat,
+         asLyrics: Bool,
+         insets: EdgeInsets = EdgeInsets(),
+         anchor: UnitPoint = .center,
          onSeek: @escaping (Double) -> Void) {
         self.segments = segments
         self.activeIndex = AudioPlayerView.activeSegmentIndex(segments: segments,
@@ -103,6 +115,10 @@ struct AudioFullscreenTranscript: View, Equatable {
                                                               isPlaying: playback.isPlaying)
         self.accentColor = accentColor
         self.maxHeight = maxHeight
+        self.fontSize = fontSize
+        self.asLyrics = asLyrics
+        self.insets = insets
+        self.anchor = anchor
         self.onSeek = onSeek
     }
 
@@ -110,6 +126,10 @@ struct AudioFullscreenTranscript: View, Equatable {
         lhs.activeIndex == rhs.activeIndex
             && lhs.accentColor == rhs.accentColor
             && lhs.maxHeight == rhs.maxHeight
+            && lhs.fontSize == rhs.fontSize
+            && lhs.asLyrics == rhs.asLyrics
+            && lhs.insets == rhs.insets
+            && lhs.anchor == rhs.anchor
             && lhs.segments.count == rhs.segments.count
             && lhs.segments.first?.id == rhs.segments.first?.id
     }
@@ -120,9 +140,13 @@ struct AudioFullscreenTranscript: View, Equatable {
                                           accentColor: accentColor,
                                           maxHeight: maxHeight,
                                           isPlaying: activeIndex != nil,
-                                          fitsContent: true,
+                                          fontSize: fontSize,
+                                          fitsContent: !asLyrics,
                                           onSeek: onSeek)
         view.resolvedActiveIndex = .some(activeIndex)
+        view.showsBackground = !asLyrics
+        view.contentInsets = insets
+        view.activeAnchor = anchor
         return view
     }
 }

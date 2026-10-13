@@ -145,22 +145,60 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 60, predicted: 100))
     }
 
-    // MARK: - L'onde tient dans sa largeur (#10568)
+    // MARK: - Le cadran : le spectre en cercle et son curseur (#10568)
 
-    func test_waveform_barCount_fitsTheWidth() {
-        let count = AudioFullscreenWaveform.barCount(forWidth: 366)
-        let occupied = CGFloat(count) * AudioFullscreenWaveform.barWidth + CGFloat(count - 1) * AudioFullscreenWaveform.spacing
-        XCTAssertLessThanOrEqual(occupied, 366)
-        XCTAssertGreaterThan(occupied, 366 - AudioFullscreenWaveform.barWidth - AudioFullscreenWaveform.spacing)
-        XCTAssertEqual(AudioFullscreenWaveform.barCount(forWidth: 0), 1)
+    func test_dial_fraction_readsTheAngleFromTheTop_clockwise() {
+        let size = CGSize(width: 200, height: 200)
+        XCTAssertEqual(AudioFullscreenDialRule.fraction(at: CGPoint(x: 100, y: 0), in: size), 0, accuracy: 0.001)
+        XCTAssertEqual(AudioFullscreenDialRule.fraction(at: CGPoint(x: 200, y: 100), in: size), 0.25, accuracy: 0.001)
+        XCTAssertEqual(AudioFullscreenDialRule.fraction(at: CGPoint(x: 100, y: 200), in: size), 0.5, accuracy: 0.001)
+        XCTAssertEqual(AudioFullscreenDialRule.fraction(at: CGPoint(x: 0, y: 100), in: size), 0.75, accuracy: 0.001)
     }
 
-    func test_waveform_resample_keepsThePeakOfEachBucket() {
+    func test_dial_scrubbed_neverJumpsOverTheTop() {
+        XCTAssertEqual(AudioFullscreenDialRule.scrubbed(from: 0.95, to: 0.03), 1, "la fin ne relance pas le début")
+        XCTAssertEqual(AudioFullscreenDialRule.scrubbed(from: 0.04, to: 0.97), 0, "le début ne saute pas à la fin")
+        XCTAssertEqual(AudioFullscreenDialRule.scrubbed(from: 0.40, to: 0.55), 0.55)
+    }
+
+    func test_dial_resample_keepsThePeakOfEachBucket() {
         let samples: [Float] = [0.1, 0.9, 0.2, 0.3, 0.8, 0.4]
-        XCTAssertEqual(AudioFullscreenWaveform.resample(samples, to: 3), [0.9, 0.3, 0.8])
-        XCTAssertEqual(AudioFullscreenWaveform.resample(samples, to: 6), samples)
-        XCTAssertEqual(AudioFullscreenWaveform.resample([], to: 4), [])
-        XCTAssertEqual(AudioFullscreenWaveform.resample([0.5, 0.7], to: 4).count, 4, "moins d'échantillons que de barres : chaque barre en reçoit un")
+        XCTAssertEqual(AudioFullscreenDialRule.resample(samples, to: 3), [0.9, 0.3, 0.8])
+        XCTAssertEqual(AudioFullscreenDialRule.resample(samples, to: 6), samples)
+        XCTAssertEqual(AudioFullscreenDialRule.resample([], to: 4), [])
+        XCTAssertEqual(AudioFullscreenDialRule.resample([0.5, 0.7], to: 4).count, 4, "moins d'échantillons que de barres : chaque barre en reçoit un")
+    }
+
+    func test_dial_pulse_isStillWhenPaused_andBreathesWhilePlaying() {
+        XCTAssertEqual(AudioFullscreenDialRule.pulse(bar: 3, progress: 0.2, time: 12.3, isPlaying: false), 1)
+        let breaths = (0..<20).map { AudioFullscreenDialRule.pulse(bar: 3, progress: 0.2, time: Double($0) * 0.07, isPlaying: true) }
+        XCTAssertGreaterThan(breaths.max() ?? 0, breaths.min() ?? 0)
+        XCTAssertTrue(breaths.allSatisfy { $0 > 0.5 && $0 < 1.5 })
+    }
+
+    // MARK: - Les paroles se lisent de loin (directive porteur 2026-10-13)
+
+    func test_lyrics_areScaledFromTheFormerBody_onALargePhone_andFitASmallOne() {
+        let large = (AudioFullscreenLayout.baseTranscriptSize * AudioFullscreenLayout.lyricScale).rounded()
+        XCTAssertEqual(AudioFullscreenLayout.lyricScale, 2.4, accuracy: 0.001, "quatre fois, puis « diminue de 0,4 »")
+        XCTAssertEqual(AudioFullscreenLayout.lyricSize(forWidth: 440), large)
+        let small = AudioFullscreenLayout.lyricSize(forWidth: 320)
+        XCTAssertLessThan(small, large)
+        XCTAssertGreaterThan(small, AudioFullscreenLayout.baseTranscriptSize)
+    }
+
+    /// Les paroles défilent SOUS l'en-tête et le pied : le mot en cours se pose
+    /// dans la bande restée libre, jamais sous le flou.
+    func test_lyrics_theCurrentWordLandsInTheFreeBand_neverUnderTheFrost() {
+        let anchor = AudioFullscreenLayout.lyricAnchor(header: 440, footer: 70, height: 860)
+        XCTAssertGreaterThan(anchor * 860, 440)
+        XCTAssertLessThan(anchor * 860, 860 - 70)
+        XCTAssertEqual(AudioFullscreenLayout.lyricAnchor(header: 0, footer: 0, height: 0), 0.5)
+    }
+
+    func test_bottomRow_clearsTheHomeIndicator_evenWhenTheContainerAnnouncesNoInset() {
+        XCTAssertGreaterThanOrEqual(AudioFullscreenLayout.bottomInset(safeArea: 0), 34)
+        XCTAssertGreaterThan(AudioFullscreenLayout.bottomInset(safeArea: 34), 34)
     }
 
     // MARK: - Le chrome s'efface pendant l'écoute, jamais sous VoiceOver

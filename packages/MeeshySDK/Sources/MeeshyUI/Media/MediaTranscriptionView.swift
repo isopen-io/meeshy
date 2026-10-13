@@ -18,9 +18,12 @@ struct FlowLayout: Layout {
             subviews: subviews
         )
         for (index, position) in result.positions.enumerated() {
+            let natural = subviews[index].sizeThatFits(.unspecified)
             subviews[index].place(
                 at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y),
-                proposal: .unspecified
+                proposal: natural.width > bounds.width
+                    ? ProposedViewSize(width: bounds.width, height: nil)
+                    : .unspecified
             )
         }
     }
@@ -36,7 +39,13 @@ struct FlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            var size = subview.sizeThatFits(.unspecified)
+            // Un segment plus large que la ligne (un mot en très grand corps,
+            // ou tout le texte en un seul segment) se mesure SUR la ligne : il
+            // s'y replie ou s'y réduit, au lieu de déborder et d'être rogné.
+            if maxWidth.isFinite, size.width > maxWidth {
+                size = subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
             if x + size.width > maxWidth && x > 0 {
                 x = 0
                 y += rowHeight + spacing
@@ -83,6 +92,15 @@ public struct MediaTranscriptionView: View {
     /// ne refaire la transcription qu'au changement de segment, au lieu de la
     /// refaire à chaque tick de `currentTime`. `nil` ⇒ résolu ici, comme avant.
     public var resolvedActiveIndex: Int?? = nil
+    /// La carte derrière le texte. `false` pour des paroles posées à même le
+    /// fond de l'écran.
+    public var showsBackground: Bool = true
+    /// Marges du CONTENU défilant : le texte commence sous un en-tête posé
+    /// par-dessus et peut défiler dessous, au lieu d'être coupé à son bord.
+    public var contentInsets: EdgeInsets = EdgeInsets()
+    /// Où le segment actif se pose quand le texte le suit. Le centre par
+    /// défaut ; l'hôte qui recouvre le haut du défilement vise plus bas.
+    public var activeAnchor: UnitPoint = .center
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
@@ -120,7 +138,7 @@ public struct MediaTranscriptionView: View {
                 flowTranscription
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)
-                    .background(transcriptionBackground)
+                    .background(showsBackground ? transcriptionBackground : nil)
                 scrollingTranscription
             }
         } else {
@@ -134,13 +152,14 @@ public struct MediaTranscriptionView: View {
                 flowTranscription
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.sm)
+                    .padding(contentInsets)
             }
             .frame(maxHeight: maxHeight)
-            .background(transcriptionBackground)
+            .background(showsBackground ? transcriptionBackground : nil)
             .adaptiveOnChange(of: activeIndex) { _, idx in
                 if let idx = idx {
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("segment-\(idx)", anchor: .center)
+                        proxy.scrollTo("segment-\(idx)", anchor: activeAnchor)
                     }
                 }
             }
@@ -174,6 +193,7 @@ public struct MediaTranscriptionView: View {
         } label: {
             Text(segment.text + " ")
                 .font(.system(size: fontSize, weight: isActive ? .bold : .regular))
+                .minimumScaleFactor(0.5)
                 .foregroundColor(segmentColor(isActive: isActive, isPast: isPast))
                 .padding(.horizontal, isActive ? 3 : 0)
                 .padding(.vertical, isActive ? 1 : 0)
