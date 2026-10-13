@@ -189,6 +189,9 @@ public protocol PostServiceProviding: Sendable {
     /// surcharge pas reste conforme, et ÉCHOUE plutôt que de prétendre avoir
     /// compté.
     func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt
+    /// `POST /social/events` pour un lot v2 DÉJÀ encodé (`SocialEventsV2Wire
+    /// .body`) — jamais mêlé à un comptage (#10500). Défaut ci-dessous.
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt
     /// `POST /posts/from-attachment` — publie une pièce jointe DÉJÀ reçue en
     /// conversation, sans la retélécharger ni la réenvoyer : le fichier est
     /// déjà sur le stockage, le serveur le duplique côté post.
@@ -208,6 +211,10 @@ public protocol PostServiceProviding: Sendable {
 public extension PostServiceProviding {
     func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
+    }
+
+    func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        throw APIError.serverError(501, "recordSocialEventsV2 not implemented by \(Self.self)")
     }
 
     /// Défaut : un conformeur qui ne publie pas depuis une pièce jointe (tous
@@ -954,6 +961,17 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         guard !events.isEmpty else { return SocialEventsReceipt(recorded: 0, rejected: 0) }
         let body = try SocialEventsBody.encoded(events)
         let response: APIResponse<SocialEventsReceipt> = try await api.requestWithHeaders(
+            SocialEndpoint.events,
+            method: "POST",
+            body: body,
+            queryItems: nil,
+            headers: credential.headers
+        )
+        return response.data
+    }
+
+    public func recordSocialEventsV2(body: Data, credential: SocialEventsCredential) async throws -> SocialEventsV2Receipt {
+        let response: APIResponse<SocialEventsV2Receipt> = try await api.requestWithHeaders(
             SocialEndpoint.events,
             method: "POST",
             body: body,
