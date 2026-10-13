@@ -1,3 +1,4 @@
+import { usePlaybackTelemetry } from '@/lib/telemetry/playback-session';
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -98,6 +99,7 @@ export type ReelPageProps = {
 };
 
 function ReelPlayable({
+  postId,
   media,
   tag,
   mode,
@@ -106,6 +108,7 @@ function ReelPlayable({
   language,
   onSoundBlocked,
 }: {
+  readonly postId: string;
   readonly media: FeedCardMedia;
   readonly tag: 'video' | 'audio';
   readonly mode: Exclude<ReelPageMode, 'far'>;
@@ -131,6 +134,7 @@ function ReelPlayable({
   useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
   const bar = useRef<HTMLSpanElement | null>(null);
   useFrameProgress({ media: element, playing: status === 'playing', bar });
+  usePlaybackTelemetry({ element, active, target: { kind: 'reel', id: postId }, mediaId: media.id, surface: 'reels' });
 
   return (
     <>
@@ -261,7 +265,7 @@ function ReelStage({
     return mode === 'far' ? (
       <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
     ) : (
-      <ReelPlayable media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
+      <ReelPlayable postId={model.id} media={stage.media} tag={stage.kind} mode={mode} soundOn={soundOn} accent={accent} language={language} onSoundBlocked={onSoundBlocked} />
     );
   }
   if (stage.kind === 'images') {
