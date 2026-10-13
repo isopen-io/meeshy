@@ -791,6 +791,7 @@ struct ThemedFeedOverlay: View {
                 feedHeader(scrollOffset: offset)
             }
         }
+        .tracksOutboundLinks(surface: SocialSurface(.feed))
         // Drapeau `Router.pendingOpenFeedComposer` (accès rapide « Publier un
         // post », 2026-08-21) : consommé à l'apparition ET quand il se lève
         // pendant que le flux est déjà là.
@@ -880,6 +881,7 @@ struct ThemedFeedOverlay: View {
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             Task { await impressions.flushNow() }
+            ListingScrollTracker.feed.finish()
         }
         .sheet(item: $shareableLink) { link in
             // Same TrackingLink share sheet as FeedView — every external

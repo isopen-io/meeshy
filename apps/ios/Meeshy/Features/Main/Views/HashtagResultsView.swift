@@ -45,6 +45,8 @@ struct HashtagResultsView: View {
         }
         .navigationTitle("#\(viewModel.tag)")
         .task { await viewModel.load() }
+        .onAppear { SocialEventsV2Reporter.shared.emit(DiscoveryTelemetry.visit(.hashtagVisit, target: .hashtag(viewModel.tag), surface: SocialSurface(.hashtag))) }
+        .tracksOutboundLinks(surface: SocialSurface(.hashtag))
         .onDisappear { Task { await viewModel.flushImpressions() } }
     }
 }

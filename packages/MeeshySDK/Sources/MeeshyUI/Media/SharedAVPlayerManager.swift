@@ -29,7 +29,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Couper le son clôt le visionnage en cours : ce qui suit n'est plus la
     /// même consommation, et la trace doit pouvoir le dire.
     @Published public var isMuted: Bool = false {
-        didSet { applyMuteState() }
+        didSet { applyMuteState(); qoeObserver?.noteMuteToggled() }
     }
 
     /// Intention de mute PAR SURFACE, orthogonale à `isMuted` (la préférence
@@ -185,6 +185,25 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Posée APRÈS `load()` par les surfaces : `load()` appelle `cleanup()`, et
     /// tout ce qu'on pose AVANT lui est à la merci de ce nettoyage — c'est
     /// exactement le défaut que `attachmentId` a payé une fois.
+    /// #10504 — la qualité de lecture d'un contenu SOCIAL, déclarée par la
+    /// surface APRÈS `load()` (comme la consommation servie). Une vidéo de
+    /// conversation n'en déclare aucune : rien n'est mesuré.
+    private var qoeObserver: PlaybackQoEObserver?
+
+    public func setPlaybackSubject(_ subject: PlaybackQoESubject?) {
+        guard qoeObserver?.subject != subject else { return }
+        finishPlaybackQoE(reason: .swiped)
+        guard let subject, let player else { return }
+        qoeObserver = PlaybackQoEObserver(subject: subject, player: player, mutedAtStart: effectiveMuted)
+    }
+
+    /// Le résumé UNIQUE de la session, émis à sa fin.
+    public func finishPlaybackQoE(reason: PlaybackSummary.ExitReason) {
+        guard let observer = qoeObserver else { return }
+        qoeObserver = nil
+        if let event = observer.finish(reason: reason) { SocialEventsV2Hub.shared.emit(event) }
+    }
+
     public func setServedConsumption(
         _ consumption: MeeshyMediaConsumption?, for attachmentId: String
     ) {
@@ -473,6 +492,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     private func performSeek(to seconds: Double, precise: Bool) {
+        qoeObserver?.noteSeek()
         let time = CMTime(seconds: seconds, preferredTimescale: 600)
         let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.5, preferredTimescale: 600)
         player?.seek(to: time, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] _ in
@@ -979,6 +999,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// updates », et SwiftUI abandonnait ses rendus : fil VIERGE au
     /// défilement (#6977, jumeau de `AudioPlaybackManager.resetState`).
     private func cleanup() {
+        finishPlaybackQoE(reason: sessionReachedEnd ? .completed : .swiped)
         // L'utilisateur quitte pendant la lecture : le visionnage en cours n'est
         // ni terminé ni mis en pause. Clos et envoyé AVANT toute remise à zéro,
         // sans quoi il serait perdu — ou pire, recollé à la vidéo suivante.

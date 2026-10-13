@@ -25,6 +25,8 @@ public enum SocialEventsV2Wire {
 
     public static func isoString(_ date: Date) -> String { formatter.string(from: date) }
 
+    public static func date(fromISO text: String) -> Date? { formatter.date(from: text) }
+
     /// Une fraction 0…1 à deux décimales.
     public static func fraction(_ value: Double) -> Double {
         guard value.isFinite else { return 0 }

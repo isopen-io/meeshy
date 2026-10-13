@@ -20,7 +20,8 @@ final class SocialEventsV2ReporterTests: XCTestCase {
 
     private func makeReporter(
         service: MockPostService,
-        identity: SocialEventsV2Identity? = SocialEventsV2Identity(owner: "u1", credential: .account)
+        identity: SocialEventsV2Identity? = SocialEventsV2Identity(owner: "u1", credential: .account),
+        inbox: SocialNotificationInbox = SocialNotificationInbox(fileURL: nil)
     ) -> SocialEventsV2Reporter {
         SocialEventsV2Reporter(
             outbox: SocialEventsV2Outbox(dbPath: nil, clock: { Self.epoch }),
@@ -29,6 +30,7 @@ final class SocialEventsV2ReporterTests: XCTestCase {
             identity: { identity },
             now: { Self.epoch },
             flushInterval: .seconds(3_600),
+            inbox: inbox,
             observesLifecycle: false
         )
     }
@@ -57,6 +59,24 @@ final class SocialEventsV2ReporterTests: XCTestCase {
         let context = service.recordedSocialEventsV2Bodies.first?["context"] as? [String: Any]
         XCTAssertEqual(context?["appSessionId"] as? String, "sess-1")
         XCTAssertEqual(context?["schemaVersion"] as? Int, 2)
+    }
+
+    /// #10507 — l'extension de notification dépose « reçue » dans la boîte du
+    /// groupe d'app, sans réseau ; l'app la vide au premier lot.
+    func test_theNotificationExtensionInbox_isDrainedIntoTheFirstBatch() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("inbox-\(UUID().uuidString).jsonl")
+        let inbox = SocialNotificationInbox(fileURL: file)
+        let received = try XCTUnwrap(SocialNotificationEvents.event(.received, userInfo: ["notificationId": "n1", "type": "post_like", "postId": "p9"], at: Self.epoch))
+        inbox.append(received)
+        let service = MockPostService()
+        let reporter = makeReporter(service: service, inbox: inbox)
+
+        await reporter.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventsV2Types, ["notification"])
+        let event = (service.recordedSocialEventsV2Bodies.first?["events"] as? [[String: Any]])?.first
+        XCTAssertEqual(event?["eventId"] as? String, received.eventId)
+        XCTAssertTrue(inbox.drain().isEmpty, "la boîte est vide après le lot")
     }
 
     func test_a400_dropsTheV2Queue_andSleeps() async {

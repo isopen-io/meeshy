@@ -74,6 +74,24 @@ public actor SocialEventsV2Outbox {
             guard let data = try? SocialEventsV2Wire.encode(event) else { return nil }
             return (event.eventId, data, event.occurredAt.timeIntervalSince1970)
         }
+        return await insert(rows, owner: owner)
+    }
+
+    /// Des événements DÉJÀ encodés (la boîte de l'extension de notification) :
+    /// identifiant et heure relus dans l'événement lui-même.
+    @discardableResult
+    public func enqueue(encoded payloads: [Data], owner: String) async -> Int {
+        let rows: [(String, Data, Double)] = payloads.compactMap { data in
+            guard data.count <= SocialEventsV2Wire.maxEventBytes,
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = object["eventId"] as? String, !id.isEmpty,
+                  let occurred = (object["occurredAt"] as? String).flatMap(SocialEventsV2Wire.date(fromISO:)) else { return nil }
+            return (id, data, occurred.timeIntervalSince1970)
+        }
+        return await insert(rows, owner: owner)
+    }
+
+    private func insert(_ rows: [(String, Data, Double)], owner: String) async -> Int {
         guard !rows.isEmpty else { return 0 }
         do {
             return try await db.write { db -> Int in

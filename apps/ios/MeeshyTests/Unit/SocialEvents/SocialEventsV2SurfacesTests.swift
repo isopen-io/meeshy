@@ -83,6 +83,45 @@ final class SocialEventsV2SurfacesTests: XCTestCase {
         XCTAssertEqual(sink.emitted.count, 1)
     }
 
+    // MARK: - Liens et découverte (#10505)
+
+    func test_anOutboundLink_sendsOnlyItsRegistrableDomain() throws {
+        let url = try XCTUnwrap(URL(string: "https://www.lemonde.fr/international/article/2026/10/13/x.html?utm_source=meeshy#top"))
+        let event = try XCTUnwrap(OutboundLinkEvents.event(for: url, surface: SocialSurface(.feed)))
+        XCTAssertEqual(event.action, "outbound_click")
+        XCTAssertEqual(event.target, SocialTarget(kind: .link, id: "lemonde.fr"))
+        let body = try XCTUnwrap(try SocialEventsV2Wire.encode(event))
+        let text = try XCTUnwrap(String(data: body, encoding: .utf8))
+        XCTAssertFalse(text.contains("international"), "le chemin ne part pas")
+        XCTAssertFalse(text.contains("utm_source"), "la requête ne part pas")
+    }
+
+    func test_aMeeshyTrackingLink_isFollowed_anInternalLinkIsNothing() throws {
+        let tracked = OutboundLinkEvents.event(for: try XCTUnwrap(URL(string: "https://meeshy.me/l/AbC123")), surface: nil)
+        XCTAssertEqual(tracked?.action, "tracking_link_followed")
+        XCTAssertEqual(tracked?.target?.id, "AbC123")
+        XCTAssertNil(OutboundLinkEvents.event(for: try XCTUnwrap(URL(string: "https://meeshy.me/u/alice")), surface: nil))
+        XCTAssertNil(OutboundLinkEvents.event(for: try XCTUnwrap(URL(string: "mailto:a@b.c")), surface: nil))
+    }
+
+    func test_aSearch_sendsItsLength_neverItsText() throws {
+        let event = try XCTUnwrap(DiscoveryTelemetry.searchSubmitted(searchId: "s-1", query: "  Aminata Diallo ", peopleCount: 3))
+        let text = try XCTUnwrap(String(data: try XCTUnwrap(try SocialEventsV2Wire.encode(event)), encoding: .utf8))
+        XCTAssertFalse(text.lowercased().contains("aminata"))
+        guard case .discovery(let discovery) = event.payload else { return XCTFail("pas une découverte") }
+        XCTAssertEqual(discovery.queryLength, 14)
+        XCTAssertEqual(discovery.resultCount, 3)
+        XCTAssertNil(DiscoveryTelemetry.searchSubmitted(searchId: "s-2", query: "   ", peopleCount: 0))
+    }
+
+    func test_aTappedProfileResult_carriesItsPosition_andOwnProfileIsNoVisit() {
+        let tap = DiscoveryTelemetry.profileResultTapped(searchId: "s-1", userId: "u7", position: 2)
+        XCTAssertEqual(tap.listing?.position, 2)
+        XCTAssertEqual(tap.listing?.rankingSource, .search)
+        XCTAssertNil(DiscoveryTelemetry.profileVisit("me", viewerId: "me"))
+        XCTAssertEqual(DiscoveryTelemetry.profileVisit("u7", viewerId: "me")?.action, "profile_visit")
+    }
+
     // MARK: - Carrousel
 
     func test_aCarousel_reportsItsDepthOnClose_andNothingIfUntouched() throws {

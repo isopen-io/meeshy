@@ -69,7 +69,7 @@ public protocol PlaybackQoEProviding: Sendable {
 public struct PlaybackQoEAccumulator: PlaybackQoEProviding, Equatable {
     public let playbackId: String
     public let mediaId: String
-    public let mediaDurationMs: Int?
+    public private(set) var mediaDurationMs: Int?
     public let mutedAtStart: Bool
     public let captionsOn: Bool
 
@@ -130,6 +130,13 @@ public struct PlaybackQoEAccumulator: PlaybackQoEProviding, Equatable {
     }
 
     public mutating func noteSeek() { seeks += 1 }
+
+    /// La durée connue après coup (élément chargé) : elle ne remplace pas une
+    /// durée déjà déclarée.
+    public mutating func noteDuration(ms: Int) {
+        guard mediaDurationMs == nil, ms > 0 else { return }
+        mediaDurationMs = ms
+    }
 
     /// Une boucle de réel : la passe précédente est allée au bout.
     public mutating func noteLoop() {

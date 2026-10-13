@@ -497,6 +497,7 @@ final class DependencyContainer {
                     // #10500 — la file v2 et l'approximation des contenus
                     // affichés appartiennent au compte sortant.
                     await SocialEventsV2Outbox.shared.purgeAll()
+                    SocialNotificationInbox.shared.purge()
                     await MainActor.run { RecentDisplayCaptureSource.shared.reset() }
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,

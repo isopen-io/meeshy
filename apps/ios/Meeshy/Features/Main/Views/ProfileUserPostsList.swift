@@ -262,6 +262,10 @@ struct ProfileUserPostsList: View {
         .padding(.top, MeeshySpacing.sm)
         .padding(.bottom, MeeshySpacing.xxl)
         .task { await viewModel.loadInitial() }
+        .onAppear {
+            if let visit = DiscoveryTelemetry.profileVisit(userId, viewerId: AuthManager.shared.currentUser?.id) { SocialEventsV2Reporter.shared.emit(visit) }
+        }
+        .tracksOutboundLinks(surface: SocialSurface(.profile))
         // Flush au niveau LISTE. Posé sur le `ForEach`, ce modificateur était
         // appliqué à CHAQUE carte générée : toute carte quittant l'écran
         // annulait le minuteur de groupement et postait un lot d'un seul id —

@@ -28,8 +28,9 @@ struct SocialEventsV2Identity: Equatable {
         if let userId = AuthManager.shared.currentUser?.id, !userId.isEmpty {
             return SocialEventsV2Identity(owner: userId, credential: .account)
         }
-        let token = VisitorReachReporter.liveToken()
-        guard !token.isEmpty else { return nil }
+        // Un jeton DÉJÀ détenu seulement : la télémétrie ne fabrique jamais
+        // de clé visiteur à elle seule.
+        guard let token = VisitorReachReporter.liveKnownTokens().first, !token.isEmpty else { return nil }
         return SocialEventsV2Identity(owner: "visitor:" + PendingVisitorEvent.identity(of: token), credential: .visitor(token))
     }
 }
@@ -98,6 +99,7 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
     private let identity: @MainActor () -> SocialEventsV2Identity?
     private let now: @MainActor () -> Date
     private let flushInterval: Duration
+    private let inbox: SocialNotificationInbox
 
     private(set) var gate = SocialEventsV2Gate()
     private(set) var sampling: [String: Double] = [:]
@@ -113,6 +115,7 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
         identity: @escaping @MainActor () -> SocialEventsV2Identity? = { SocialEventsV2Identity.live() },
         now: @escaping @MainActor () -> Date = { Date() },
         flushInterval: Duration = .seconds(10),
+        inbox: SocialNotificationInbox = .shared,
         observesLifecycle: Bool = true
     ) {
         self.outbox = outbox
@@ -121,6 +124,7 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
         self.identity = identity
         self.now = now
         self.flushInterval = flushInterval
+        self.inbox = inbox
         if observesLifecycle { subscribeToAppLifecycle() }
     }
 
@@ -161,6 +165,10 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
         await enqueueChain?.value
         queuedSinceFlush = 0
         guard gate.isOpen(at: now()), let identity = identity() else { return }
+        if identity.credential == .account {
+            let received = inbox.drain()
+            if !received.isEmpty { await outbox.enqueue(encoded: received, owner: identity.owner) }
+        }
         let context = contextProvider.context(at: now(), sampling: sampling)
         let credential = identity.credential
         let service = postService
