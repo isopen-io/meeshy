@@ -11,7 +11,7 @@ import { SWIPED_REEL, entryAttribution, openLinkSearch, openOriginOfSurface, vie
  * de suivi, un lien de partage, un lien venu d'ailleurs, ou rien.
  */
 const OWN = 'https://meeshy.me';
-const of = (query: string, referrer = '') => viewProvenanceOf(new URLSearchParams(query), referrer, OWN);
+const of = (query: string, referrer = '') => viewProvenanceOf(new URLSearchParams(query), referrer, [OWN, 'https://localhost']);
 
 describe('viewProvenanceOf — la provenance d’une vue', () => {
   test('ouvert d’un tap dans le fil ⇒ listing, origine feed', () => {
@@ -41,6 +41,7 @@ describe('viewProvenanceOf — la provenance d’une vue', () => {
   test('sans référent ⇒ direct ; le référent de Meeshy lui-même ⇒ direct', () => {
     expect(of('')).toEqual({ provenance: 'direct' });
     expect(of('', `${OWN}/feed`)).toEqual({ provenance: 'direct' });
+    expect(of('', 'https://localhost/feed')).toEqual({ provenance: 'direct' });
   });
 
   test('une marque INCONNUE ne s’invente pas en origine : le reste de la loi décide', () => {

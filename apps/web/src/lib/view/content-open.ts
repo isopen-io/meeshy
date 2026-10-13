@@ -40,10 +40,10 @@ export function entryAttribution(entry: ViewAttribution, next: ViewAttribution):
   };
 }
 
-function isForeignReferrer(referrer: string, ownOrigin: string): boolean {
+function isForeignReferrer(referrer: string, ownOrigins: readonly string[]): boolean {
   if (referrer === '') return false;
   try {
-    return new URL(referrer).origin !== ownOrigin;
+    return !ownOrigins.includes(new URL(referrer).origin);
   } catch {
     return false;
   }
@@ -52,15 +52,17 @@ function isForeignReferrer(referrer: string, ownOrigin: string): boolean {
 /**
  * La provenance d'une vue d'écran détail. `referrer` n'est à fournir que pour
  * l'écran d'ATTERRISSAGE (`document.referrer` est celui du chargement de la
- * page, jamais d'une navigation dans l'application).
+ * page, jamais d'une navigation dans l'application). `ownOrigins` : les
+ * origines de Meeshy (publique et celle de la page) — un référent qui en vient
+ * n'est pas « ailleurs ».
  */
-export function viewProvenanceOf(search: URLSearchParams, referrer: string, ownOrigin: string): ViewAttribution {
+export function viewProvenanceOf(search: URLSearchParams, referrer: string, ownOrigins: readonly string[]): ViewAttribution {
   const from = search.get(OPENED_FROM_PARAM);
   if (from === 'notification') return { provenance: 'notification' };
   if (from === 'tracking_link') return { provenance: 'tracking_link' };
   if (isOpenOrigin(from)) return { provenance: 'listing', origin: from };
   if ((search.get('via') ?? '') !== '') return { provenance: 'shared_link' };
-  if (isForeignReferrer(referrer, ownOrigin)) return { provenance: 'external' };
+  if (isForeignReferrer(referrer, ownOrigins)) return { provenance: 'external' };
   return { provenance: 'direct' };
 }
 

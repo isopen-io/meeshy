@@ -12,6 +12,7 @@ import {
   type ImpressionSource,
   type SocialEvent,
 } from '@/lib/api/social-events';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage } from '@/lib/storage';
 
@@ -273,15 +274,18 @@ export const arrival = {
   },
 };
 
+function ownOrigins(): readonly string[] {
+  if (typeof window === 'undefined') return [];
+  return [publicWebOrigin(window.location.origin), window.location.origin];
+}
+
 /**
  * La provenance d'un écran détail, lue UNE fois à son montage : c'est
  * l'adresse par laquelle il est entré, pas celle où il en sera dans dix gestes.
  */
 export function useViewAttribution(): ViewAttribution {
   const [search] = useSearch();
-  const [attribution] = useState(() =>
-    viewProvenanceOf(search, arrival.referrer(), typeof window === 'undefined' ? '' : window.location.origin),
-  );
+  const [attribution] = useState(() => viewProvenanceOf(search, arrival.referrer(), ownOrigins()));
   return attribution;
 }
 
