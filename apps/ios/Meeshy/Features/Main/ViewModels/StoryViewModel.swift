@@ -454,6 +454,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// #9804 — registre durable des vues, distinct de l'instantané du tray.
     var viewedLedger: StoryViewedLedgerProviding = StoryViewedLedger.shared
 
+    /// #10399 — l'impression d'une story est DURABLE comme sa vue : persistée,
+    /// rejouée à la relance, vidée en sortie de lecteur et en arrière-plan.
+    /// UNE file partagée par toutes les instances (une clé de persistance par
+    /// file) ; les tests en injectent une isolée.
+    static let sharedStoryImpressions = ImpressionBatcher(source: "story")
+    lazy var storyImpressions: ImpressionBatcher = StoryViewModel.sharedStoryImpressions
+
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {

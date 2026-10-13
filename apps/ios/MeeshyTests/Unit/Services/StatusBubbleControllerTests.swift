@@ -101,3 +101,32 @@ final class StatusBubbleControllerTests: XCTestCase {
         )
     }
 }
+
+/// #10397 — la bulle est la seule surface iOS où un mood s'affiche ; elle
+/// enregistrait sa vue mais jamais son impression.
+extension StatusBubbleControllerTests {
+
+    func test_show_recordsOneImpressionPerOpening_ofTheShownMood() {
+        let sut = makeSUT()
+        let original = sut.recordImpression
+        defer { sut.recordImpression = original }
+        let recorded = RecordedImpressions()
+        sut.recordImpression = { recorded.ids.append($0) }
+        let entry = StatusEntry(
+            id: "mood-1", userId: "user1", username: "testuser", avatarColor: "#FF0000",
+            moodEmoji: "happy", content: "Hello status", audioUrl: nil,
+            createdAt: Date(), expiresAt: Date().addingTimeInterval(86400)
+        )
+
+        sut.show(entry: entry, anchor: .zero)
+        sut.dismiss()
+        sut.show(entry: entry, anchor: .zero)
+
+        XCTAssertEqual(recorded.ids, ["mood-1", "mood-1"])
+    }
+}
+
+@MainActor
+private final class RecordedImpressions {
+    var ids: [String] = []
+}

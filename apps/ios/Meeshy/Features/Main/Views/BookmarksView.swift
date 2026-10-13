@@ -35,7 +35,9 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
-    @StateObject private var impressions = ImpressionBatcher(source: "profile")
+    /// Compté en `profile` côté serveur, mais persisté sous SA clé : la
+    /// grille du profil partage la même source et écrasait cette file (#10398).
+    @StateObject private var impressions = ImpressionBatcher(source: "profile", storageScope: "profile.bookmarks")
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.
@@ -72,6 +74,7 @@ struct BookmarksView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadBookmarks() }
+        .onDisappear { Task { await impressions.flushNow() } }
         .fullScreenCover(isPresented: Binding(
             get: { storyAuthorUserId != nil },
             set: { if !$0 { storyAuthorUserId = nil } }
