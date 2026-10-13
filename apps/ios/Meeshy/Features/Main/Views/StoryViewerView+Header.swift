@@ -184,6 +184,10 @@ struct StoryHeaderView: View {
     /// aussi ce qui tient l'aperçu du composer hors du menu : il monte le
     /// lecteur SANS conteneur, donc sans hôte de présentation.
     @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+    /// L'humeur de la personne dont on ouvre le profil, et son toucher (#10529) —
+    /// les résolveurs de la racine, hérités par la visionneuse et sa feuille.
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     /// Le menu « … » ouvert fait BOUCLER la story (#9821) : l'en-tête le dit au
     /// lecteur, qui seul survit aux ticks de la barre.
     @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
@@ -374,6 +378,8 @@ struct StoryHeaderView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
