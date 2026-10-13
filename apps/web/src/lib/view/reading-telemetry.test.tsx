@@ -187,6 +187,26 @@ describe('FeedPostCard — la carte compte son impression, quel que soit l’éc
     expect(calls()).toEqual([{ type: 'impression', postId: REEL_STUDIO.id, source: 'profile', surface: 'profile' }]);
   });
 
+  test('le même post qui réapparaît trois fois au défilement ⇒ trois impressions (règle du porteur, #10483)', async () => {
+    mount(<FeedPostCard model={cardModel()} />);
+    for (let pass = 0; pass < 3; pass += 1) {
+      show();
+      await wait(IMPRESSION_DWELL_MS + 50);
+      show(0);
+    }
+    expect(calls().filter((e) => e.type === 'impression')).toHaveLength(3);
+  });
+
+  test('un re-rendu de la carte restée à l’écran ne compte rien de plus', async () => {
+    mount(<FeedPostCard model={cardModel()} />);
+    show();
+    await wait(IMPRESSION_DWELL_MS + 50);
+    act(() => root?.render(<FeedPostCard model={cardModel()} />));
+    act(() => root?.render(<FeedPostCard model={cardModel()} />));
+    await wait(IMPRESSION_DWELL_MS + 50);
+    expect(calls().filter((e) => e.type === 'impression')).toHaveLength(1);
+  });
+
   test('la carte du DÉTAIL n’observe rien : le détail compte la sienne à l’ouverture', () => {
     mount(<FeedPostCard model={cardModel()} isDetail />);
     expect(live()).toHaveLength(0);
@@ -222,6 +242,16 @@ describe('useReadingSession — le détail, le réel actif et la story', () => {
     expect(closing[0]).toEqual({ type: 'view', postId: POST.id, durationMs: 7_500, surface: 'detail' });
     expect(closing[1]).toMatchObject({ type: 'dwell', postId: POST.id, contentType: 'POST', surface: 'detail', dwellMs: 7_500, completed: false });
     expect((closing[1] as { sessionId: string }).sessionId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  test('le même post ouvert deux fois ⇒ deux vues d’ouverture ; un re-rendu pendant la lecture n’en ajoute aucune', () => {
+    mount(<SessionProbe postId={POST.id} active clock={() => 0} openView />);
+    act(() => root?.render(<SessionProbe postId={POST.id} active clock={() => 1} openView />));
+    act(() => root?.unmount());
+    root = null;
+    mount(<SessionProbe postId={POST.id} active clock={() => 0} openView />);
+    const opens = calls().filter((e) => e.type === 'view' && e.durationMs === undefined);
+    expect(opens).toHaveLength(2);
   });
 
   test('openView faux (la story d’un compte, déjà vue par son propre chemin) : pas de seconde vue d’ouverture', () => {

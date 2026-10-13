@@ -313,7 +313,12 @@ function demandes() {
 /** JUMEAU de `resolveTarget()` + son repli de tap (`pushTapTarget()`). */
 function resolvePushTarget(data) {
   const postId = texte(data.postId);
-  if (postId !== '') return { route: surfaceSociale(data), params: { post: postId }, search: {} };
+  if (postId !== '') {
+    const surface = surfaceSociale(data);
+    /* `?from=notification` (#10483) — le détail compte son impression en
+       `notification`, comme le lien de la liste (`TargetLink`). */
+    return { route: surface, params: { post: postId }, search: surface === 'post' ? { from: 'notification' } : {} };
+  }
 
   const conversationId = texte(data.conversationId);
   if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId }, search: {} };

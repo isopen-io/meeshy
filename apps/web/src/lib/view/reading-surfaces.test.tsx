@@ -2,16 +2,21 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { ActiveMembersStack } from '@/components/active-members-stack';
 import { AuthorAvatar } from '@/components/author-avatar';
 import { Avatar } from '@/components/avatar';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { MoodQuote, StoryCitationCard } from '@/components/message-body-blocks';
 import { TargetLink } from '@/components/notification-row';
+import { LensRow } from '@/components/lens-row';
 import { ReelPage } from '@/components/reel-page';
 import { StoryRail } from '@/components/story-rail';
+import { ThreadHeader } from '@/components/thread-header';
+import { TypingRosterCell } from '@/components/typing-roster-cell';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { REEL_STUDIO } from '@/lib/api/fixtures-reels';
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from '@/lib/api/http';
+import type { Conversation } from '@/lib/api/types';
 import { createSocialEventsRecorder, type SocialEvent } from '@/lib/api/social-events';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
@@ -28,9 +33,6 @@ import {
 } from './reading-telemetry';
 import { withMoods, type StoryTrayGroup } from './story-tray';
 import { AuthorMoodsContext, type MoodOf } from './use-author-moods';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 /**
  * CHAQUE AFFICHAGE EST COMPTÉ, AVEC OU SANS COMPTE (#10483) — les surfaces
@@ -158,14 +160,25 @@ describe('les tuiles de stories comptent leur impression (W4)', () => {
 });
 
 describe('l’humeur d’un avatar compte son impression (W4)', () => {
-  test('visible une seconde ⇒ impression `status` depuis `mood_avatar`, une fois par montage', async () => {
+  test('chaque apparition à l’écran est une impression `status` depuis `mood_avatar` — c’est un listage', async () => {
     mount(<Avatar initials="IB" color="#000" size={40} mood="☕" moodPostId="m-ines" />);
     show();
     await dwell();
     hide();
     show();
     await dwell();
-    expect(impressions()).toEqual([{ type: 'impression', postId: 'm-ines', source: 'status', surface: 'mood_avatar' }]);
+    const seen = { type: 'impression', postId: 'm-ines', source: 'status', surface: 'mood_avatar' };
+    expect(impressions()).toEqual([seen, seen]);
+  });
+
+  test('un re-rendu sans réapparition ne compte rien', async () => {
+    mount(<Avatar initials="IB" color="#000" size={40} mood="☕" moodPostId="m-ines" />);
+    show();
+    await dwell();
+    act(() => root?.render(<Avatar initials="IB" color="#111" size={40} mood="☕" moodPostId="m-ines" />));
+    act(() => root?.render(<Avatar initials="IB" color="#222" size={40} mood="☕" moodPostId="m-ines" />));
+    await dwell();
+    expect(impressions()).toHaveLength(1);
   });
 
   test('un avatar sans humeur, ou sans post d’humeur connu, n’observe rien', () => {
@@ -189,12 +202,80 @@ describe('l’humeur d’un auteur dans un fil compte son impression (W4)', () =
     expect(impressions()).toEqual([{ type: 'impression', postId: 'm-ines', source: 'status', surface: 'mood_avatar' }]);
   });
 
-  test('chaque avatar qui peint une humeur lui passe son post (`moodPostId`)', () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const read = (file: string) => readFileSync(join(here, '..', '..', file), 'utf8');
-    for (const file of ['components/thread-header.tsx', 'components/typing-roster-cell.tsx', 'components/active-members-stack.tsx', 'components/lens-row.tsx', 'routes/conversations.tsx']) {
-      expect({ file, wired: /moodPostId/i.test(read(file)) }).toEqual({ file, wired: true });
-    }
+  const moodOfInes: MoodOf = Object.assign((id: string | undefined) => (id === 'u-ines' ? '☕' : undefined), {
+    postOf: (id: string | undefined) => (id === 'u-ines' ? 'm-ines' : undefined),
+  });
+  const inesMood = { type: 'impression', postId: 'm-ines', source: 'status', surface: 'mood_avatar' };
+  const direct = {
+    id: 'c-direct',
+    type: 'direct',
+    title: '',
+    status: 'active',
+    visibility: 'private',
+    isActive: true,
+    memberCount: 2,
+    participants: [
+      { id: 'p-moi', userId: 'u-moi', user: { id: 'u-moi', username: 'moi', displayName: 'Moi' } },
+      { id: 'p-ines', userId: 'u-ines', user: { id: 'u-ines', username: 'ines', displayName: 'Inès B' } },
+    ],
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+  } as unknown as Conversation;
+
+  const shownWithin = async (node: React.ReactNode) => {
+    mount(<AuthorMoodsContext.Provider value={moodOfInes}>{node}</AuthorMoodsContext.Provider>);
+    show();
+    await dwell();
+    return impressions();
+  };
+
+  test('la pile des membres actifs d’un groupe ⇒ l’humeur d’Inès compte', async () => {
+    expect(await shownWithin(
+      <ActiveMembersStack accent="#08f" members={[{ id: 'u-ines', name: 'Inès B', username: 'ines', avatar: undefined, count: 2 }]} />,
+    )).toContainEqual(inesMood);
+  });
+
+  test('la cellule de frappe ⇒ l’humeur du meneur compte', async () => {
+    expect(await shownWithin(
+      <TypingRosterCell typists={[{ userId: 'u-ines', displayName: 'Inès B', expiresAt: 0 }]} accent="#08f" flat={false} />,
+    )).toContainEqual(inesMood);
+  });
+
+  test('l’en-tête d’un direct ⇒ l’humeur du pair compte', async () => {
+    expect(await shownWithin(
+      <ThreadHeader
+        title="Inès B"
+        accent="#08f"
+        conversation={direct}
+        viewerId="u-moi"
+        group={false}
+        otherUnread={0}
+        expanded={false}
+        onToggleExpanded={() => {}}
+        currentRowTitle=""
+        isAuto
+        readingMenuRows={[]}
+        onSelectReadingMode={() => {}}
+        onResetReadingModeToAuto={() => {}}
+      />,
+    )).toContainEqual(inesMood);
+  });
+
+  test('la ligne d’un direct dans la liste ⇒ l’humeur du pair compte', async () => {
+    expect(await shownWithin(
+      <LensRow
+        conversation={direct}
+        languages={['fr']}
+        viewerId="u-moi"
+        flags={{ isPinned: false, isMuted: false, isArchived: false }}
+        unreadCount={0}
+        onRowAction={() => {}}
+        interfaceLanguage="fr"
+        now={() => NOW.getTime()}
+        peerMood="☕"
+        peerMoodPostId="m-ines"
+      />,
+    )).toContainEqual(inesMood);
   });
 });
 

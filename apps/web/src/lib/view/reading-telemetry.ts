@@ -149,34 +149,27 @@ export function observeImpression(
 
 /**
  * La référence à poser sur une carte : une impression `source` par
- * apparition, dite depuis l'écran `surface` (#10483 § 8). `source === null`
- * ou `postId` absent ⇒ rien n'est observé. `oncePerMount` : un contenu qui
- * reste monté ne recompte pas à chaque retour à l'écran (l'humeur d'un
- * avatar, répétée de bulle en bulle). Aucun état React : la carte ne se
- * re-rend pas pour être observée.
+ * APPARITION, dite depuis l'écran `surface` (#10483 § 8). Règle de comptage
+ * du porteur : chaque listage compte, un aller-retour de défilement comme
+ * l'humeur d'un avatar répétée de bulle en bulle — mais jamais un simple
+ * re-rendu (la référence est stable tant que ses primitives le sont).
+ * `source === null` ou `postId` absent ⇒ rien n'est observé. Aucun état
+ * React : la carte ne se re-rend pas pour être observée.
  */
 export function useImpressionRef(
   postId: string | undefined,
   source: ImpressionSource | null,
   surface?: ContentSurface,
-  options: { readonly oncePerMount?: boolean } = {},
 ): (node: Element | null) => void {
   const stop = useRef<(() => void) | null>(null);
-  const counted = useRef<Set<string>>(new Set());
-  const once = options.oncePerMount === true;
   return useCallback((node: Element | null) => {
     stop.current?.();
     stop.current = null;
     if (node === null || postId === undefined || postId === '' || source === null) return;
-    if (once && counted.current.has(postId)) return;
     stop.current = observeImpression(node, () => {
-      if (once) {
-        if (counted.current.has(postId)) return;
-        counted.current.add(postId);
-      }
       readingTelemetry.record({ type: 'impression', postId, source, ...(surface === undefined ? {} : { surface }) });
     });
-  }, [postId, source, surface, once]);
+  }, [postId, source, surface]);
 }
 
 /** Deux références posées sur le MÊME nœud (la story d'une tuile ET son humeur). */

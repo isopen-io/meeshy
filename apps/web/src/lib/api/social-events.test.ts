@@ -202,29 +202,84 @@ describe('createSocialEventsRecorder — un compte, un visiteur', () => {
     expect(sent).toEqual([{ type: 'view', postId: OID(1), durationMs: 4000 }]);
   });
 
-  test('un visiteur ne compte qu’une ouverture par contenu et par onglet', async () => {
+  test('chaque ouverture d’un visiteur est une vue : le même contenu ouvert deux fois ⇒ deux vues', async () => {
     const { recorder, requests } = recorderWith(null);
     recorder.record({ type: 'view', postId: OID(7) });
     recorder.record({ type: 'view', postId: OID(7) });
     await recorder.flush();
-    expect((requests[0]?.body as { events: SocialEvent[] }).events).toHaveLength(1);
+    const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+    expect(sent).toEqual([{ type: 'view', postId: OID(7) }, { type: 'view', postId: OID(7) }]);
   });
 
-  test('un visiteur ne recompte pas l’impression d’un même contenu dans la fenêtre de 30 minutes', async () => {
-    let t = 0;
-    const { transport, requests } = recordingTransport();
-    const recorder = createSocialEventsRecorder({
-      transport, credential: () => null, visitorKey: () => 'visitor_abc', schedule: () => undefined, now: () => t,
-    });
+  test('chaque listage d’un visiteur est une impression : le même post listé trois fois ⇒ trois impressions', async () => {
+    const { recorder, requests } = recorderWith(null);
     recorder.record(impression(1));
-    t = 29 * 60_000;
     recorder.record(impression(1));
-    await recorder.flush();
-    t = 31 * 60_000;
     recorder.record(impression(1));
     await recorder.flush();
     const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
-    expect(sent).toEqual([impression(1), impression(1)]);
+    expect(sent).toEqual([impression(1), impression(1), impression(1)]);
+  });
+
+  test('un compte compte aussi chaque listage et chaque ouverture, sans fenêtre', async () => {
+    const { recorder, requests } = recorderWith({ kind: 'registered', token: 't' });
+    recorder.record(impression(1));
+    recorder.record(impression(1));
+    recorder.record({ type: 'view', postId: OID(1) });
+    recorder.record({ type: 'view', postId: OID(1) });
+    await recorder.flush();
+    const sent = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events);
+    expect(sent).toEqual([impression(1), impression(1), { type: 'view', postId: OID(1) }, { type: 'view', postId: OID(1) }]);
+  });
+
+  test('vue en panne (503) et impression refusée par un ancien serveur (403) : seule la vue repart, l’impression n’est jamais rejouée', async () => {
+    const requests: HttpRequest[] = [];
+    let viewStatus = 503;
+    const transport = {
+      request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+        requests.push(request);
+        const kind = (request.body as { events: SocialEvent[] }).events[0]?.type;
+        const status = kind === 'impression' ? 403 : viewStatus;
+        return (status === 200 ? { ok: true, data: { recorded: 1, rejected: 0 } } : { ok: false, status, error: 'x' }) as ApiResult<T>;
+      },
+    } as unknown as HttpTransport;
+    const recorder = createSocialEventsRecorder({
+      transport, credential: () => null, visitorKey: () => 'visitor_abc', schedule: () => undefined,
+    });
+    recorder.record({ type: 'impression', postId: OID(1), source: 'detail' });
+    recorder.record({ type: 'view', postId: OID(1) });
+    await recorder.flush();
+    expect(recorder.pending()).toBe(1);
+    viewStatus = 200;
+    await recorder.flush();
+    expect(recorder.pending()).toBe(0);
+    const kinds = requests.map((r) => (r.body as { events: SocialEvent[] }).events.map((e) => e.type).join(','));
+    expect(kinds.filter((k) => k === 'impression')).toHaveLength(1);
+    expect(kinds.filter((k) => k === 'view')).toHaveLength(2);
+  });
+
+  test('vue écrite et impression en panne : seule l’impression repart, la vue n’est pas recomptée', async () => {
+    const requests: HttpRequest[] = [];
+    let impressionStatus = 503;
+    const transport = {
+      request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+        requests.push(request);
+        const kind = (request.body as { events: SocialEvent[] }).events[0]?.type;
+        const status = kind === 'impression' ? impressionStatus : 200;
+        return (status === 200 ? { ok: true, data: { recorded: 1, rejected: 0 } } : { ok: false, status, error: 'x' }) as ApiResult<T>;
+      },
+    } as unknown as HttpTransport;
+    const recorder = createSocialEventsRecorder({
+      transport, credential: () => null, visitorKey: () => 'visitor_abc', schedule: () => undefined,
+    });
+    recorder.record({ type: 'impression', postId: OID(1), source: 'detail' });
+    recorder.record({ type: 'view', postId: OID(1) });
+    await recorder.flush();
+    impressionStatus = 200;
+    await recorder.flush();
+    const views = requests.flatMap((r) => (r.body as { events: SocialEvent[] }).events).filter((e) => e.type === 'view');
+    expect(views).toHaveLength(1);
+    expect(recorder.pending()).toBe(0);
   });
 
   test('l’invité d’un lien parle sous SON jeton : aucune clé de visiteur n’est posée par-dessus', async () => {

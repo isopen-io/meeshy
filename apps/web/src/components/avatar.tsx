@@ -496,7 +496,7 @@ function MoodBadge({
   readonly outline: MoodOutline | undefined;
   readonly size: number;
 }) {
-  const impressionRef = useImpressionRef(postId, 'status', 'mood_avatar', { oncePerMount: true });
+  const impressionRef = useImpressionRef(postId, 'status', 'mood_avatar');
   const wasHere = useRef(here);
   const settled = useRef(false);
   const rendered = useRef(here);
