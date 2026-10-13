@@ -96,6 +96,58 @@ final class AudioFullscreenRulesTests: XCTestCase {
                                                           ids: ["a", "b"]))
     }
 
+    /// #10568 — la piste que l'écran vient de demander ne le ramène pas en
+    /// arrière : seule une piste que le LECTEUR a choisie fait tourner les pages.
+    func test_pageToFollow_theTrackTheScreenJustRequested_neverPullsItBack() {
+        XCTAssertNil(AudioFullscreenSequence.pageToFollow(activeAttachmentId: "b",
+                                                          currentPageId: "c",
+                                                          ids: ["a", "b", "c"],
+                                                          requestedByScreen: "b"))
+    }
+
+    func test_pageToFollow_aTrackThePlayerChose_isFollowedEvenAfterAScreenRequest() {
+        let page = AudioFullscreenSequence.pageToFollow(activeAttachmentId: "c",
+                                                        currentPageId: "b",
+                                                        ids: ["a", "b", "c"],
+                                                        requestedByScreen: "b")
+        XCTAssertEqual(page, "c")
+    }
+
+    // MARK: - Ce qu'un balayage coûte (#10568)
+
+    func test_paging_rendersThePageAndItsTwoNeighbours_nothingBeyond() {
+        XCTAssertTrue(AudioFullscreenPaging.renders(index: 4, current: 4))
+        XCTAssertTrue(AudioFullscreenPaging.renders(index: 3, current: 4))
+        XCTAssertTrue(AudioFullscreenPaging.renders(index: 5, current: 4))
+        XCTAssertFalse(AudioFullscreenPaging.renders(index: 2, current: 4))
+        XCTAssertFalse(AudioFullscreenPaging.renders(index: 6, current: 4))
+    }
+
+    func test_paging_theEntryPagePlaysAtOnce_aTurnedPageWaitsToSettle() {
+        XCTAssertEqual(AudioFullscreenPaging.playbackDelay(turnedTo: false), 0)
+        XCTAssertEqual(AudioFullscreenPaging.playbackDelay(turnedTo: true), AudioFullscreenPaging.settleDelay)
+        XCTAssertGreaterThan(AudioFullscreenPaging.settleDelay, 0)
+        XCTAssertLessThanOrEqual(AudioFullscreenPaging.settleDelay, 0.2, "au-delà, la piste paraît en retard sur la page")
+    }
+
+    // MARK: - L'onde tient dans sa largeur (#10568)
+
+    func test_waveform_barCount_fitsTheWidth() {
+        let count = AudioFullscreenWaveform.barCount(forWidth: 366)
+        let occupied = CGFloat(count) * AudioFullscreenWaveform.barWidth + CGFloat(count - 1) * AudioFullscreenWaveform.spacing
+        XCTAssertLessThanOrEqual(occupied, 366)
+        XCTAssertGreaterThan(occupied, 366 - AudioFullscreenWaveform.barWidth - AudioFullscreenWaveform.spacing)
+        XCTAssertEqual(AudioFullscreenWaveform.barCount(forWidth: 0), 1)
+    }
+
+    func test_waveform_resample_keepsThePeakOfEachBucket() {
+        let samples: [Float] = [0.1, 0.9, 0.2, 0.3, 0.8, 0.4]
+        XCTAssertEqual(AudioFullscreenWaveform.resample(samples, to: 3), [0.9, 0.3, 0.8])
+        XCTAssertEqual(AudioFullscreenWaveform.resample(samples, to: 6), samples)
+        XCTAssertEqual(AudioFullscreenWaveform.resample([], to: 4), [])
+        XCTAssertEqual(AudioFullscreenWaveform.resample([0.5, 0.7], to: 4).count, 4, "moins d'échantillons que de barres : chaque barre en reçoit un")
+    }
+
     // MARK: - Le chrome s'efface pendant l'écoute, jamais sous VoiceOver
 
     func test_autoHideDelay_whilePlaying_withChromeVisible_isTheSharedDelay() {
@@ -132,6 +184,23 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertEqual(layout.arrangement, .stacked)
         XCTAssertGreaterThanOrEqual(layout.heroDiameter, AudioFullscreenLayout.minHero)
         XCTAssertLessThanOrEqual(layout.heroDiameter, AudioFullscreenLayout.maxHero)
+    }
+
+    /// #10568 — du plus petit iPhone au plus grand, la page empilée tient dans
+    /// la hauteur utile : rien sous l'encoche, rien sous la barre d'accueil.
+    func test_layout_stacked_fitsTheUsableHeight_fromTheSmallestPhoneToTheLargest() {
+        for size in [CGSize(width: 375, height: 647), CGSize(width: 393, height: 759), CGSize(width: 430, height: 860)] {
+            let layout = AudioFullscreenLayout.resolve(for: size)
+            XCTAssertEqual(layout.arrangement, .stacked)
+            XCTAssertLessThanOrEqual(AudioFullscreenLayout.stackedMinimumHeight(heroDiameter: layout.heroDiameter),
+                                     size.height, "\(size) : la page déborde")
+        }
+    }
+
+    func test_layout_stacked_theHeroGrowsWithTheRoomLeft() {
+        let small = AudioFullscreenLayout.resolve(for: CGSize(width: 375, height: 647))
+        let large = AudioFullscreenLayout.resolve(for: CGSize(width: 430, height: 860))
+        XCTAssertLessThan(small.heroDiameter, large.heroDiameter)
     }
 
     func test_layout_landscapePhone_isSideBySide() {

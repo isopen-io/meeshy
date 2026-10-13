@@ -88,19 +88,25 @@ extension AudioFullscreenPage {
 
     @ViewBuilder
     func transcriptBlock(maxHeight: CGFloat) -> some View {
-        if !displaySegments.isEmpty {
-            MediaTranscriptionView(
-                segments: displaySegments,
-                currentTime: player.attachmentId == attachment.id ? player.currentTime : 0,
-                accentColor: currentLangColorHex,
-                maxHeight: maxHeight,
-                isPlaying: player.isPlaying && player.attachmentId == attachment.id,
-                progress: player.attachmentId == attachment.id ? player.progress : 0,
-                onSeek: { time in
-                    onChromeInteraction()
-                    player.seekToTime(time)
-                }
-            )
+        // Les segments se bâtissent une fois par rendu de la PAGE, pas à chaque
+        // tick de lecture (#10568) : seule la portée relit le moteur.
+        let segments = displaySegments
+        let languageColor = currentLangColorHex
+        if !segments.isEmpty {
+            playback { snapshot, _ in
+                MediaTranscriptionView(
+                    segments: segments,
+                    currentTime: snapshot.currentTime,
+                    accentColor: languageColor,
+                    maxHeight: maxHeight,
+                    isPlaying: snapshot.isPlaying,
+                    progress: snapshot.progress,
+                    onSeek: { time in
+                        onChromeInteraction()
+                        player.seekToTime(time)
+                    }
+                )
+            }
         } else {
             transcriptionEmptyState
                 .frame(maxHeight: maxHeight)
