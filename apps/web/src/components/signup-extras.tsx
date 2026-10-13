@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import { PasswordInput } from '@/components/password-input';
-import { inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
+import type { InviterHero } from '@/components/signup-inviter-hero';
+import { inviterCardOf, inviterName, validateReferralCode, type ReferralValidation } from '@/lib/api/affiliate';
 import type { ApiResult } from '@/lib/api/http';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PASSWORD_MIN } from '@/lib/signup-form';
 import { isReferralCodeShaped, normalizeReferralCode, referralCodeFromLocation } from '@/lib/view/referral-code';
+import { forgetReferralInviter, recallReferralInviter, rememberReferralInviter } from '@/lib/view/referral-inviter';
 import { recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 
 /**
@@ -143,30 +145,55 @@ export function useSignupReferral(deps: SignupReferralDeps) {
   });
   const [isOpen, setOpen] = useState(() => code !== '');
   const [status, setStatus] = useState<ReferralStatus>({ kind: 'idle' });
+  /** LE CADRE « QUI M'INVITE » (#10559) : la mémoire d'abord, le squelette
+   * seulement sans elle ; un silence du réseau ne retire pas ce qu'on savait. */
+  const [hero, setHero] = useState<InviterHero>(() => {
+    if (!isReferralCodeShaped(code)) return { kind: 'none' };
+    const card = recallReferralInviter(code);
+    return card === null ? { kind: 'pending' } : { kind: 'shown', card };
+  });
 
   async function check() {
     const normalized = normalizeReferralCode(code);
     if (!isReferralCodeShaped(normalized)) {
       setStatus({ kind: 'idle' });
+      setHero({ kind: 'none' });
       return;
     }
     setStatus({ kind: 'checking' });
     const result = await deps.validate(normalized);
     if (!result.ok) {
       setStatus({ kind: 'idle' });
+      setHero((current) => (current.kind === 'pending' ? { kind: 'none' } : current));
       return;
     }
     setStatus(result.data.isValid ? { kind: 'valid', inviter: inviterName(result.data) } : { kind: 'invalid' });
+    const card = inviterCardOf(result.data);
+    if (card === null) {
+      forgetReferralInviter();
+      setHero({ kind: 'none' });
+      return;
+    }
+    rememberReferralInviter(normalized, card);
+    setHero({ kind: 'shown', card });
   }
+
+  /** Arriver AVEC un code le vérifie sans attendre qu'on quitte son champ. */
+  useEffect(() => {
+    if (code !== '') void check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une fois, pour le code d'arrivée
+  }, []);
 
   return {
     code,
     isOpen,
     status,
+    hero,
     open: () => setOpen(true),
     type: (value: string) => {
       setCode(value);
       setStatus({ kind: 'idle' });
+      setHero({ kind: 'none' });
     },
     check,
   };

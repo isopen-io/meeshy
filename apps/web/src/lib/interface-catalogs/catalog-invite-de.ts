@@ -4,6 +4,7 @@ const de = {
   'invite.brand': 'Meeshy',
   'invite.loading': 'Einladung wird geöffnet…',
   'invite.inviter.named': '{name} lädt dich ein',
+  'invite.inviter.onMeeshy': '{name} lädt dich zu Meeshy ein',
   'invite.inviter.unnamed': 'Du bist eingeladen, beizutreten',
   'invite.inviter.message': 'Nachricht von {name}',
   'invite.group.fallbackTitle': 'Eine Meeshy-Unterhaltung',

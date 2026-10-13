@@ -22,6 +22,7 @@ import {
   useSignupReferral,
   type SignupReferralDeps,
 } from '@/components/signup-extras';
+import { SignupInviterHero } from '@/components/signup-inviter-hero';
 import { SignupIdentityCard, type SignupCodeDeps } from '@/components/signup-identity-card';
 import { SignupPhoneGlass, phoneRefusalMessage } from '@/components/signup-phone-glass';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
@@ -341,6 +342,7 @@ export default function SignupScreen({
       <PublicHeader language={interfaceLanguage} leading={<AuthCloseChip to="login" search={loginSearch} />} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6" data-signup-phase={phase}>
+        <SignupInviterHero language={interfaceLanguage} hero={referral.hero} />
         <form id="signup-form" onSubmit={handlePrimary} noValidate>
           <div className="grid gap-2 pt-2 pb-6">
             <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>

@@ -11,6 +11,7 @@ const fr = {
   'invite.brand': 'Meeshy',
   'invite.loading': 'Ouverture de l’invitation…',
   'invite.inviter.named': '{name} t’invite',
+  'invite.inviter.onMeeshy': '{name} t’invite sur Meeshy',
   'invite.inviter.unnamed': 'Tu es invité à rejoindre',
   'invite.inviter.message': 'Message de {name}',
   'invite.group.fallbackTitle': 'Une conversation Meeshy',
