@@ -35,7 +35,7 @@ struct BookmarksView: View {
     @State private var storyAuthorUserId: String?
     @State private var filter: BookmarkFilter = .all
 
-    @StateObject private var impressions = ImpressionBatcher(source: "profile")
+    @StateObject private var impressions = ImpressionBatcher(source: "profile", surface: .bookmarks)
 
     /// Facette de tri de l'écran. `nonisolated` sur le TYPE : `CaseIterable` et
     /// `Identifiable` sont exercés hors du MainActor par le `ForEach` du picker.

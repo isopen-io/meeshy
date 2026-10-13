@@ -593,7 +593,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // composeur, et `StoryViewerView+Content.swift` (−53) et `StoryViewerView.swift`
     // (−1) perdent ce qu'elle remplace ; `StoryViewerView+Canvas.swift` (−1) gagne
     // l'état de la prise vocale en resserrant un doc-comment. Les hôtes RESTENT en dette.
-    private static let legacyLineCeiling = 35_721
+    //
+    // #10483 — 35 721 → 35 550 (−171). Le contexte d'une notification touchée
+    // (`NotificationNavContext`, ses trois constructeurs) quitte `RootView.swift`
+    // pour `RootView+NotificationNavContext.swift` (−172) avant que la racine ne
+    // gagne le marquage de la source d'ouverture (+1). L'hôte RESTE en dette.
+    private static let legacyLineCeiling = 35_550
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

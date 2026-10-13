@@ -107,6 +107,40 @@ struct PostServiceSocialEventsTests {
     }
 }
 
+@Suite("ReachImpressionCollector — les affichages d'une surface du SDK")
+@MainActor
+struct ReachImpressionCollectorTests {
+
+    private func receiptStub() throws -> APIResponse<SocialEventsReceipt> {
+        let data = Data(#"{"success":true,"data":{"recorded":2,"rejected":0}}"#.utf8)
+        return try JSONDecoder().decode(APIResponse<SocialEventsReceipt>.self, from: data)
+    }
+
+    @Test func flush_sendsOneBatch_withSourceAndSurface() async throws {
+        let api = MockAPIClient()
+        api.stub("/social/events", result: try receiptStub())
+        let sut = ReachImpressionCollector(source: "search", surface: .sound, postService: PostService(api: api))
+
+        sut.record("p1")
+        sut.record("p2")
+        await sut.flushNow()
+
+        #expect(api.requestCount == 1)
+        let events = try #require(api.lastRequest?.bodyJSON?["events"] as? [[String: Any]])
+        #expect(events.map { $0["postId"] as? String } == ["p1", "p2"])
+        #expect(events.allSatisfy { $0["source"] as? String == "search" && $0["surface"] as? String == "sound" })
+    }
+
+    @Test func flush_withNothingDisplayed_sendsNothing() async {
+        let api = MockAPIClient()
+        let sut = ReachImpressionCollector(source: "search", surface: .sound, postService: PostService(api: api))
+
+        await sut.flushNow()
+
+        #expect(api.requestCount == 0)
+    }
+}
+
 @Suite("VisitorReaderKey — la clé d'un lecteur sans compte")
 struct VisitorReaderKeyTests {
 

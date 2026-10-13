@@ -50,6 +50,10 @@ class PostDetailViewModel: ObservableObject {
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     let offlineQueue: OfflineQueueing
+    private let openSources: DetailOpenSourceProviding
+    /// Les posts dont l'ouverture est déjà comptée par CETTE instance (#10483) :
+    /// le `.task` du détail se relance au retour d'un écran poussé.
+    private var countedOpenPostIds: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Persistence Layer
@@ -60,8 +64,10 @@ class PostDetailViewModel: ObservableObject {
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
-        socialSocket: any SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared,
+        openSources: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
+        self.openSources = openSources
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
@@ -138,12 +144,17 @@ class PostDetailViewModel: ObservableObject {
     /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
     /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
     /// portée par `viewPost` appelé séparément à l'ouverture.
+    ///
+    /// Une ouverture se compte à la PREMIÈRE apparition de l'instance, pas à
+    /// chaque relance du `.task` (#10483) ; ouverte depuis une notification,
+    /// elle porte la source `notification`.
     func registerDetailOpen(_ postId: String) async {
+        guard countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
         }
-        try? await postService.recordImpression(postId: postId, source: "detail")
+        try? await postService.recordImpression(postId: postId, source: openSources.consumeSource(for: postId))
     }
 
     private func refreshPost(_ postId: String) async {

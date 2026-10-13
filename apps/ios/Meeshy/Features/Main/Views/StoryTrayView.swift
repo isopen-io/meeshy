@@ -41,6 +41,9 @@ struct StoryTrayView: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — chaque story dont l'anneau apparaît est un affichage, compté
+    /// une fois par montage du rail.
+    @StateObject private var railImpressions = OncePerMountImpressions(batcher: SharedImpressionBatchers.storyRail)
     /// La hauteur de la bande — la réserve `FloatingButtonSafeZone.storyBand`
     /// la dégage des bulles flottantes (#9363), et doit la contenir.
     static let trayHeight: CGFloat = 120
@@ -61,6 +64,7 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: Self.trayHeight)
+        .onDisappear { Task { await railImpressions.flushNow() } }
         .myStoriesSheet(
             isPresented: $showMyStories,
             followUp: $myStoriesFollowUp,
@@ -202,6 +206,7 @@ struct StoryTrayView: View {
         // U1 — source de la transition zoom : la bulle « devient » le viewer
         // (id = userId du groupe, apparié au sourceID du cover RootView).
         .zoomTransitionSource(id: group.id, in: zoomNamespace)
+        .onAppear { railImpressions.record(StoryRailReach.displayedStoryIds(of: group)) }
     }
 
     /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
@@ -705,6 +710,9 @@ struct PinnedStoryTrailBand: View {
     @State private var myStoriesFollowUp = DeferredSheetFollowUp<MyStoriesFollowUp>()
     /// Session d'édition d'une story publiée (composer en mode édition).
     @State private var editingStorySession: StoryEditSession?
+    /// #10483 — la mini-trail compte ses anneaux comme la grande trail, dans
+    /// la même file partagée.
+    @StateObject private var railImpressions = OncePerMountImpressions(batcher: SharedImpressionBatchers.storyRail)
 
     // Le rythme de la bascule titre → trail appartient au header : lui fait
     // disparaître le titre sur exactement la même courbe. Deux jeux de
@@ -762,6 +770,7 @@ struct PinnedStoryTrailBand: View {
                 .frame(height: Self.bandHeight * reveal, alignment: .top)
                 .clipped()
                 .allowsHitTesting(reveal > 0.6)
+                .onDisappear { Task { await railImpressions.flushNow() } }
                 .sheet(item: $selectedProfileUser) { user in
                     UserProfileSheet(
                         user: user,
@@ -857,6 +866,7 @@ struct PinnedStoryTrailBand: View {
                     )
                     // U1 inc.2 — la mini-trail épinglée zoome aussi.
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
+                    .onAppear { railImpressions.record(StoryRailReach.displayedStoryIds(of: group)) }
                 }
             }
             .padding(.leading, MeeshySpacing.lg)

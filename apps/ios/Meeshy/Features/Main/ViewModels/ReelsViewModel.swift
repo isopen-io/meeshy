@@ -93,6 +93,9 @@ final class ReelsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let service: PostServiceProviding
     private let cache: ReelFeedCacheReading
+    /// #10483 — l'impression d'un réel porte sa surface (`reels`) ; la source
+    /// `feed` reste celle du compteur historique. Groupée et persistée.
+    private lazy var impressions = ImpressionBatcher(source: "feed", surface: .reels, postService: service)
 
     /// Same key `FeedViewModel` writes the main feed under — the reel pager
     /// reuses that cache so a cold-start launch shares the feed's offline data.
@@ -618,6 +621,11 @@ final class ReelsViewModel: ObservableObject {
         // apparition : revenir sur un réel déjà vu est une nouvelle impression.
         // La déduplication de session qui vivait ici plafonnait le compteur à 1
         // par réel et par lancement d'app.
-        Task { try? await service.recordImpression(postId: id, source: "feed") }
+        impressions.record(id)
+    }
+
+    /// Le lecteur se ferme : les impressions en attente partent.
+    func flushImpressions() async {
+        await impressions.flushNow()
     }
 }

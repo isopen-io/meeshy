@@ -42,6 +42,10 @@ final class ImpressionBatcher: ObservableObject {
     static let storageKeyPrefix = "meeshy.impressions.pending."
 
     private let source: String
+    /// #10483 — OÙ le contenu est apparu. Présente, le lot part par la porte
+    /// unique `POST /social/events` (qui seule la porte) et la file a sa
+    /// propre clé : deux surfaces d'une même source ne s'écrasent plus.
+    private let surface: ReachSurface?
     private let postService: PostServiceProviding
     private let flushDelay: TimeInterval
     private let defaults: UserDefaults
@@ -57,15 +61,17 @@ final class ImpressionBatcher: ObservableObject {
 
     init(
         source: String,
+        surface: ReachSurface? = nil,
         postService: PostServiceProviding = PostService.shared,
         flushDelay: TimeInterval = 3,
         defaults: UserDefaults = .standard
     ) {
         self.source = source
+        self.surface = surface
         self.postService = postService
         self.flushDelay = flushDelay
         self.defaults = defaults
-        self.storageKey = Self.storageKeyPrefix + source
+        self.storageKey = Self.storageKey(source: source, surface: surface)
         self.pending = defaults.stringArray(forKey: storageKey) ?? []
         subscribeToAppLifecycle()
         // Rejeu de ce qu'une session tuée a laissé en attente. Sans ce
@@ -110,12 +116,49 @@ final class ImpressionBatcher: ObservableObject {
         pending.removeAll()
         persist()
         do {
-            try await postService.recordImpressions(postIds: batch, source: source)
+            try await send(batch)
+        } catch let unsent as UnsentImpressions {
+            pending.insert(contentsOf: unsent.postIds, at: 0)
+            persist()
+            Self.logger.debug("impression flush partially failed (rest kept for retry): \(unsent.cause.localizedDescription, privacy: .public)")
         } catch {
             pending.insert(contentsOf: batch, at: 0)
             persist()
             Self.logger.debug("impression flush failed (kept for retry): \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    /// La clé d'une surface prolonge celle de sa source : une file sans
+    /// surface garde la clé qu'elle avait avant #10483.
+    static func storageKey(source: String, surface: ReachSurface?) -> String {
+        storageKeyPrefix + source + (surface.map { ".\($0.rawValue)" } ?? "")
+    }
+
+    /// Le plafond d'un lot de `POST /social/events`.
+    static let socialEventsCap = 200
+
+    private func send(_ batch: [String]) async throws {
+        guard let surface else {
+            try await postService.recordImpressions(postIds: batch, source: source)
+            return
+        }
+        for start in stride(from: 0, to: batch.count, by: Self.socialEventsCap) {
+            let chunk = batch[start..<min(start + Self.socialEventsCap, batch.count)]
+            do {
+                _ = try await postService.recordSocialEvents(
+                    chunk.map { SocialEvent.impression(postId: $0, source: source, surface: surface) },
+                    credential: .account
+                )
+            } catch {
+                throw UnsentImpressions(postIds: Array(batch[start...]), cause: error)
+            }
+        }
+    }
+
+    /// Les paquets déjà acceptés ne repartent pas : seul le reste revient en file.
+    nonisolated private struct UnsentImpressions: Error {
+        let postIds: [String]
+        let cause: Error
     }
 
     private func persist() {

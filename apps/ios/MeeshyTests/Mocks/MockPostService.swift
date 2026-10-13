@@ -231,6 +231,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var recordEngagementCallCount = 0
     var lastRecordEngagementSessions: [EngagementSession]?
 
+    /// #10483 — la porte `POST /social/events` : chaque lot reçu, dans l'ordre,
+    /// et l'identité sous laquelle il est parti. La file de résultats est
+    /// consommée en priorité, une entrée par appel.
+    var recordSocialEventsCallCount = 0
+    var recordedSocialEventBatches: [[SocialEvent]] = []
+    var recordedSocialEventsCredentials: [SocialEventsCredential] = []
+    var recordSocialEventsResult: Result<SocialEventsReceipt, Error> = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
+    var recordSocialEventsResultsQueue: [Result<SocialEventsReceipt, Error>] = []
+    var recordedSocialEvents: [SocialEvent] { recordedSocialEventBatches.flatMap { $0 } }
+
     // MARK: - Protocol Conformance
 
     func getFeed(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -684,6 +694,16 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastRecordEngagementSessions = sessions
     }
 
+    func recordSocialEvents(_ events: [SocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
+        recordSocialEventsCallCount += 1
+        recordedSocialEventBatches.append(events)
+        recordedSocialEventsCredentials.append(credential)
+        if !recordSocialEventsResultsQueue.isEmpty {
+            return try recordSocialEventsResultsQueue.removeFirst().get()
+        }
+        return try recordSocialEventsResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -832,5 +852,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
         recordEngagementCallCount = 0
         lastRecordEngagementSessions = nil
+
+        recordSocialEventsCallCount = 0
+        recordedSocialEventBatches = []
+        recordedSocialEventsCredentials = []
+        recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 0, rejected: 0))
+        recordSocialEventsResultsQueue = []
     }
 }
