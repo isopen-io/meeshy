@@ -25,7 +25,7 @@ import { attestedSocketAddress } from '../utils/attested-address';
 import { resolveTrustProxy } from '../../config/trust-proxy';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { loadGuestShareLinkExpiry, shareLinkHasExpired } from '../../services/shareLinkReadGate';
-import { GuestLinkWatch, refuseExpiredGuestLink } from './guestLinkWatch';
+import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './guestLinkWatch';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -507,6 +507,16 @@ export class AuthHandler {
     });
 
     if (!participant) {
+      // #10449 — une ligne MORTE (désactivée, bannie) dit le code du 410 REST ;
+      // un jeton sans ligne garde la réponse nue, rien n'est confirmé.
+      const deadParticipation = await this.prisma.participant.findFirst({
+        where: { sessionTokenHash: tokenHash, type: 'anonymous' },
+        select: { id: true },
+      });
+      if (deadParticipation) {
+        refuseRevokedGuest(socket);
+        return;
+      }
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
       socket.disconnect(true);
       return;

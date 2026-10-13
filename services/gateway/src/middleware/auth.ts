@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
+import { participationEstVivante } from '../routes/conversations/utils/access-control';
 import { guestShareLinkHasExpired, refuseExpiredShareLink, ShareLinkExpiredError } from '../services/shareLinkReadGate';
 import { sendUnauthorized, sendForbidden } from '../utils/response';
 import { getCacheStore } from '../services/CacheStore';
@@ -583,6 +584,7 @@ export class AuthMiddleware {
           language: true,
           permissions: true,
           isActive: true,
+          bannedAt: true,
           isOnline: true,
           lastActiveAt: true,
           nickname: true,
@@ -599,8 +601,8 @@ export class AuthMiddleware {
       // jeton VALIDE sur un participant DÉSACTIVÉ. Lui rendre le même 401 nu
       // qu'à un jeton inventé l'envoie retenter indéfiniment un geste qui ne
       // peut pas aboutir — et prive l'opérateur qui reçoit son signalement du
-      // seul fait qui explique la panne.
-      if (participant.isActive === false) {
+      // seul fait qui explique la panne. Banni encore actif : même réponse (#10449).
+      if (!participationEstVivante(participant)) {
         throw new GuestAccessRevokedError();
       }
 

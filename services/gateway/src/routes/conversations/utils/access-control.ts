@@ -36,6 +36,16 @@ export const PARTICIPATION_VIVANTE = {
 } as const;
 
 /**
+ * `PARTICIPATION_VIVANTE` jugée sur une ligne DÉJÀ lue — pour une porte qui
+ * doit distinguer une participation MORTE (désactivée ou bannie) d'une ligne
+ * absente, et ne peut donc pas filtrer dans son `where` (#10449). Même règle :
+ * active (`true`, pas seulement « non fausse ») et `bannedAt` nul ou absent.
+ */
+export function participationEstVivante(row: { readonly isActive?: boolean | null; readonly bannedAt?: Date | null }): boolean {
+  return row.isActive === true && row.bannedAt == null;
+}
+
+/**
  * The two identities an auth context can name a `Participant` row with.
  *
  * `userId` is NOT a `User.id` for everyone: the anonymous branch of

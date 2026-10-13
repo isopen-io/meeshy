@@ -48,6 +48,21 @@ function guestRow(): MongoDocument {
   };
 }
 
+/**
+ * #10449 — un AUTRE invité, vivant, entré par le même lien dans la même
+ * conversation. Il garde la relecture honnête : une relecture qui ne
+ * chercherait qu'« une participation vivante » sans l'`id` de CET invité le
+ * trouverait, et garderait le retiré connecté.
+ */
+function otherGuestRow(): MongoDocument {
+  return {
+    ...guestRow(),
+    id: '507f1f77bcf86cd799439044',
+    sessionTokenHash: hashSessionToken('anon-session-other'),
+    displayName: 'Autre invité',
+  };
+}
+
 function buildHandler(world: World) {
   const prisma = {
     participant: {
@@ -312,7 +327,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('une participation DÉSACTIVÉE après la connexion coupe le socket avec GUEST_ACCESS_REVOKED', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -326,7 +341,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('une participation BANNIE (encore active) coupe le socket avec GUEST_ACCESS_REVOKED', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -339,7 +354,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('un lien SUPPRIMÉ dont l’invité a été désactivé (nettoyage admin) n’est plus lu comme ouvert', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID, expiresAt: new Date(NOW.getTime() + HOUR) }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -353,7 +368,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('un lien échu ET une participation désactivée disent « lien expiré », la cause première', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -367,7 +382,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('une participation ILLISIBLE à la relecture coupe le socket SANS code de fin d’accès', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -381,7 +396,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
   });
 
   it('une participation vivante et un lien ouvert réarment sans couper', async () => {
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -391,21 +406,50 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
     expect(socket.disconnect).not.toHaveBeenCalled();
   });
 
-  it('refuse à la (re)connexion la session d’un invité BANNI encore actif', async () => {
-    const world: World = { participants: [{ ...guestRow(), bannedAt: new Date(NOW.getTime() - HOUR) }], links: [{ id: LINK_ID }], linkReadFails: false };
+  it('refuse à la (re)connexion la session d’un invité BANNI encore actif, avec GUEST_ACCESS_REVOKED (#10449)', async () => {
+    const world: World = { participants: [{ ...guestRow(), bannedAt: new Date(NOW.getTime() - HOUR) }, otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler, connectedUsers } = buildHandler(world);
     const socket = guestSocket();
 
     await handler.handleTokenAuthentication(socket as never);
 
+    expect(revokedError(socket)).toHaveLength(1);
     expect(socket.disconnect).toHaveBeenCalledWith(true);
     expect(joinedConversationRoom(socket)).toBe(false);
     expect(connectedUsers.size).toBe(0);
   });
 
+  it('refuse à la (re)connexion la session d’un invité DÉSACTIVÉ, avec GUEST_ACCESS_REVOKED : le code du 410 REST (#10449)', async () => {
+    const world: World = { participants: [{ ...guestRow(), isActive: false }, otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(revokedError(socket)).toHaveLength(1);
+    expect(expiredError(socket)).toHaveLength(0);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(joinedConversationRoom(socket)).toBe(false);
+    expect(connectedUsers.size).toBe(0);
+  });
+
+  it('un jeton sans AUCUNE ligne garde la réponse d’avant : erreur sans code, rien n’est confirmé (#10449)', async () => {
+    const world: World = { participants: [otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const { handler, connectedUsers } = buildHandler(world);
+    const socket = guestSocket();
+
+    await handler.handleTokenAuthentication(socket as never);
+
+    expect(revokedError(socket)).toHaveLength(0);
+    const errors = socket.emit.mock.calls.filter(([event]) => event === 'error');
+    expect(errors).toEqual([['error', { message: 'Anonymous session not found' }]]);
+    expect(socket.disconnect).toHaveBeenCalledWith(true);
+    expect(connectedUsers.size).toBe(0);
+  });
+
   it('la cadence de relecture porte une gigue de ±20 % : au plus tôt à 4 minutes', async () => {
     jest.spyOn(Math, 'random').mockReturnValue(0);
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
@@ -420,7 +464,7 @@ describe('AuthHandler — la relecture d’un invité vérifie aussi sa particip
 
   it('la cadence de relecture porte une gigue de ±20 % : au plus tard à 6 minutes', async () => {
     jest.spyOn(Math, 'random').mockReturnValue(0.999999);
-    const world: World = { participants: [guestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
+    const world: World = { participants: [guestRow(), otherGuestRow()], links: [{ id: LINK_ID }], linkReadFails: false };
     const { handler } = buildHandler(world);
     const socket = guestSocket();
 
