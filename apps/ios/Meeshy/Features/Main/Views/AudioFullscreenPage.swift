@@ -165,7 +165,8 @@ struct AudioFullscreenPage: View, Equatable {
     func playback<Content: View>(
         @ViewBuilder _ content: @escaping (AudioFullscreenPlaybackSnapshot, PlaybackSpeed) -> Content
     ) -> some View {
-        AudioFullscreenPlaybackScope(player: player, attachmentId: attachment.id, isLive: isActive, content: content)
+        AudioFullscreenPlaybackScope(player: player, attachmentId: attachment.id, restingDuration: metadataDuration,
+                                     isLive: isActive, content: content)
     }
 
     private var metadataDuration: TimeInterval { Double(attachment.duration ?? 0) / 1000.0 }

@@ -155,6 +155,27 @@ final class AudioFullscreenRulesTests: XCTestCase {
         XCTAssertFalse(AudioFullscreenDismissRule.dismisses(translation: 80, velocity: -1_200, height: 900))
     }
 
+    // MARK: - Une page au repos garde son curseur
+
+    func test_restingPage_showsTheRememberedPosition() {
+        let resting = AudioFullscreenPlaybackSnapshot.resting(savedPosition: 12, duration: 48)
+
+        XCTAssertEqual(resting.progress, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(resting.currentTime, 12)
+        XCTAssertEqual(resting.duration, 48)
+        XCTAssertFalse(resting.isPlaying)
+    }
+
+    func test_restingPage_withNothingRemembered_restsAtZero() {
+        XCTAssertEqual(AudioFullscreenPlaybackSnapshot.resting(savedPosition: nil, duration: 48), .idle)
+        XCTAssertEqual(AudioFullscreenPlaybackSnapshot.resting(savedPosition: 12, duration: 0), .idle, "durée inconnue")
+        XCTAssertEqual(AudioFullscreenPlaybackSnapshot.resting(savedPosition: 60, duration: 48), .idle, "position hors de la piste")
+    }
+
+    func test_restingPage_keepsItsLoadingState() {
+        XCTAssertTrue(AudioFullscreenPlaybackSnapshot.resting(savedPosition: 12, duration: 48, isLoading: true).isLoading)
+    }
+
     // MARK: - Le cadran : le spectre en cercle et son curseur (#10568)
 
     func test_dial_fraction_readsTheAngleFromTheTop_clockwise() {
