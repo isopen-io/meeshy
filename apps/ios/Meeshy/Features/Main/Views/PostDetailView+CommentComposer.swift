@@ -76,6 +76,10 @@ extension PostDetailView {
                 || CommentQuotationStore.shared.quotation(for: postId) != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
+            // Le panneau « + » retient la scène comme le clavier (#10544) :
+            // dit AVANT qu'il ne se monte, relâché quand il se referme.
+            onShowAttachments: { sceneMeasures = sceneMeasures.recordingInputPanel(open: true) },
+            onAttachmentsVisibilityChange: { sceneMeasures = sceneMeasures.recordingInputPanel(open: $0) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
