@@ -277,7 +277,8 @@ struct FocalRow: View {
                         isAgentAuthored: input.isAgentAuthored,
                         isAgentGrammarEnabled: input.showsAgentGrammar
                     ),
-                    onOpenProfile: actions.onOpenProfile
+                    onOpenProfile: actions.onOpenProfile,
+                    onMoodTap: actions.onMoodTap
                 )
                 .opacity(input.isFocused ? 0 : 1)
             }
@@ -1093,6 +1094,7 @@ struct FocalRow: View {
                 isAgentGrammarEnabled: input.showsAgentGrammar
                 ),
                 onOpenProfile: actions.onOpenProfile,
+                onMoodTap: actions.onMoodTap,
                 avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
                 nameSize: FocalMetrics.FocusStrip.identityNameSize,
                 fillsWidth: false
