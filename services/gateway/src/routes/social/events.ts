@@ -576,7 +576,14 @@ export function socialEventsRateLimitKey(request: FastifyRequest): string {
 export const ACCOUNT_SOCIAL_EVENTS_BUDGET = 120;
 
 /**
- * Débits du compte (ACCOUNT_SOCIAL_EVENTS_BUDGET/min) et du lecteur anonyme (60/min par clé de lecteur),
+ * Le débit d'un lecteur anonyme en REQUÊTES : la somme de ses deux seaux
+ * d'événements (comptage et v2), pour que soixante lots de défilement ne
+ * ferment pas la porte à la vue qui suit.
+ */
+export const ANONYMOUS_REQUEST_BUDGET = 2 * ANONYMOUS_READER_BUDGET;
+
+/**
+ * Débits du compte (ACCOUNT_SOCIAL_EVENTS_BUDGET/min) et du lecteur anonyme (ANONYMOUS_REQUEST_BUDGET/min par clé de lecteur),
  * sur la MÊME route ; `max` est une FONCTION pour cela.
  *
  *  - `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut à
@@ -589,7 +596,7 @@ export const ACCOUNT_SOCIAL_EVENTS_BUDGET = 120;
  */
 export const socialEventsRateLimit = {
   max: (request: FastifyRequest) =>
-    ((request as UnifiedAuthRequest).authContext?.registeredUser ? ACCOUNT_SOCIAL_EVENTS_BUDGET : ANONYMOUS_READER_BUDGET),
+    ((request as UnifiedAuthRequest).authContext?.registeredUser ? ACCOUNT_SOCIAL_EVENTS_BUDGET : ANONYMOUS_REQUEST_BUDGET),
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
   skipOnError: false,
@@ -658,13 +665,18 @@ export function registerSocialEventRoutes(
       const ignored = lot.ignored + lot.v2.length - v2.length;
       const total = lot.counting.length + v2.length;
 
-      const admis = acteur.kind === 'anonymous'
-        ? await admitAnonymousEvents(fastify, request, acteur, total)
-        : total;
+      // Deux seaux (`AnonymousBudgetScope`) : le défilement d'un visiteur ne fait jamais refuser ses vues.
+      const [comptageAdmis, v2Quota] = acteur.kind === 'anonymous'
+        ? await Promise.all([
+          admitAnonymousEvents(fastify, request, acteur, lot.counting.length, 'counting'),
+          admitAnonymousEvents(fastify, request, acteur, v2.length, 'v2'),
+        ])
+        : [lot.counting.length, v2.length];
+      const admis = comptageAdmis + v2Quota;
       if (admis === 0 && total > 0) return refuseAnonymousBudget(reply);
 
-      const comptage = lot.counting.slice(0, admis);
-      const v2Admis = v2.slice(0, Math.max(0, admis - comptage.length));
+      const comptage = lot.counting.slice(0, comptageAdmis);
+      const v2Admis = v2.slice(0, v2Quota);
       // Le consentement ne se lit que si une écriture en dépend (une impression
       // ou un événement v2) : un lot de vues d'un ancien client n'en coûte aucune.
       const consentCompte = v2Admis.length > 0 || comptage.some(({ event }) => event.type === 'impression');

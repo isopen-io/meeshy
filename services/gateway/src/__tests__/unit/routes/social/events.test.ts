@@ -411,11 +411,11 @@ describe('critère 7.3 — la clé anonyme est la clé de LECTEUR (#10483), jama
     expect(a).toBe(b);
   });
 
-  it('un compte a 120 requêtes par minute — la porte unique reçoit tout ce que six portes se partageaient', () => {
+  it('un compte a 120 requêtes par minute ; un visiteur aussi, la somme de ses deux seaux (comptage et v2)', () => {
     const compte = socialEventsRateLimit.max(requete({ userId: USER_ID, postId: VISIBLE_ID }));
     const visiteur = socialEventsRateLimit.max(requete({ sessionToken: 'jeton-a', postId: VISIBLE_ID }));
     expect(compte).toBe(120);
-    expect(visiteur).toBe(60);
+    expect(visiteur).toBe(120);
   });
 });
 

@@ -95,6 +95,21 @@ async function guestParticipantIdByToken(prisma: GuestLookupPrisma, sessionToken
  */
 export const ANONYMOUS_READER_BUDGET = 60;
 export const ANONYMOUS_ADDRESS_BUDGET = 600;
+
+/**
+ * Deux SEAUX par lecteur, jamais un : le COMPTAGE (vue, ouverture,
+ * impression — #10483) et le COMPORTEMENT v2 (défilement, lecture, capture…
+ * — #10499). Un visiteur qui défile émet bien plus d'événements v2 que de
+ * vues : partager le seau ferait refuser ses vues par son propre défilement,
+ * et un affichage cesserait d'être compté. Un refus v2 n'entame jamais le
+ * comptage, et inversement ; les plafonds sont du même ordre.
+ */
+export type AnonymousBudgetScope = 'counting' | 'v2';
+
+const BUDGETS: Readonly<Record<AnonymousBudgetScope, { readonly prefix: string; readonly reader: number; readonly address: number }>> = {
+  counting: { prefix: 'social:events:anon', reader: ANONYMOUS_READER_BUDGET, address: ANONYMOUS_ADDRESS_BUDGET },
+  v2: { prefix: 'social:events:anon:v2', reader: ANONYMOUS_READER_BUDGET, address: ANONYMOUS_ADDRESS_BUDGET },
+};
 const WINDOW_MS = 60_000;
 const MEMORY_COUNTERS_MAX = 50_000;
 
@@ -148,13 +163,15 @@ export async function admitAnonymousEvents(
   request: FastifyRequest,
   reader: AnonymousReader,
   events: number,
+  scope: AnonymousBudgetScope = 'counting',
 ): Promise<number> {
   if (events <= 0) return 0;
   const now = Date.now();
   const fingerprint = addressFingerprintOf({ ip: request.ip, now });
+  const budget = BUDGETS[scope];
   const limits = [
-    { key: `social:events:anon:reader:${reader.readerKey}`, max: ANONYMOUS_READER_BUDGET },
-    { key: `social:events:anon:address:${fingerprint}`, max: ANONYMOUS_ADDRESS_BUDGET },
+    { key: `${budget.prefix}:reader:${reader.readerKey}`, max: budget.reader },
+    { key: `${budget.prefix}:address:${fingerprint}`, max: budget.address },
   ] as const;
 
   const redis = (fastify as { redis?: WeightedRedis | null }).redis ?? null;

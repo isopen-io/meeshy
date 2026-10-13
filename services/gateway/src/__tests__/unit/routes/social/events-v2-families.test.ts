@@ -224,6 +224,32 @@ describe('anonymes — les types admis, rangés sans session', () => {
   });
 });
 
+describe('anonymes — le défilement n’entame jamais le comptage', () => {
+  it('61 événements v2 d’un visiteur : 60 rangés, 1 refusé, et sa vue suivante COMPTE', async () => {
+    const h = await harness();
+    const lot = Array.from({ length: 61 }, () => scrollListing());
+    const v2 = await sendReachV2(h.app, lot, visitorHeader('defile'), CONTEXT);
+    const vue = await sendReachV2(h.app, [{ type: 'view', postId: POST }], visitorHeader('defile'));
+
+    expect(dataOf(v2)).toMatchObject({ recorded: 60, rejected: 1 });
+    expect(vue.statusCode).toBe(200);
+    expect(dataOf(vue)).toMatchObject({ recorded: 1, rejected: 0 });
+    expect(h.store.read(POST)).toMatchObject({ viewCount: 1, anonymousViewCount: 1 });
+    await h.app.close();
+  });
+
+  it('un comptage épuisé ne coupe pas la v2, et inversement', async () => {
+    const h = await harness();
+    const vues = Array.from({ length: 60 }, () => ({ type: 'impression', postId: POST }));
+    await sendReachV2(h.app, vues, visitorHeader('compte'));
+    const v2 = await sendReachV2(h.app, [scrollListing()], visitorHeader('compte'), CONTEXT);
+
+    expect(dataOf(v2)).toMatchObject({ recorded: 1, rejected: 0 });
+    expect(h.store.read(POST)?.impressionCount).toBe(60);
+    await h.app.close();
+  });
+});
+
 describe('capture d’écran — QU’une capture a eu lieu, jamais ce qu’elle montre', () => {
   it('les cibles visibles hors audience sont retirées, la capture est rangée', async () => {
     const h = await harness();
