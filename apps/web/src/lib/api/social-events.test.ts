@@ -408,3 +408,83 @@ describe('l’engagement d’ouverture `open` voyage à part (#10483)', () => {
     expect(requests[0]?.body).toEqual({ events: [{ type: 'view', postId: OID(2), provenance: 'listing', origin: 'profile' }] });
   });
 });
+
+describe('l’enveloppe v2 sur les événements de comptage (#10500)', () => {
+  const CONTEXT = {
+    schemaVersion: 2 as const,
+    sentAt: '2026-10-13T10:00:00.000Z',
+    appSessionId: 'sess-1',
+    platform: 'web' as const,
+    appVersion: '2.13.0',
+    os: { name: 'android', version: '14.1' },
+    deviceClass: 'phone' as const,
+    network: { type: 'wifi' as const },
+    uiLanguage: 'fr',
+    deviceLocale: 'en-US',
+    consent: 'unknown' as const,
+    capabilities: ['scroll' as const],
+    sampling: { scroll: 1, playback: 1, visibility: 1 },
+  };
+
+  function enveloped(credential: Credential | null, statuses: number[]) {
+    const requests: HttpRequest[] = [];
+    const transport = {
+      request: async <T>(request: HttpRequest): Promise<ApiResult<T>> => {
+        requests.push(request);
+        const status = statuses.shift() ?? 200;
+        return (status === 200 ? { ok: true, data: { recorded: 1, rejected: 0 } } : { ok: false, status, error: 'x' }) as ApiResult<T>;
+      },
+    } as unknown as HttpTransport;
+    let n = 0;
+    const recorder = createSocialEventsRecorder({
+      transport,
+      credential: () => credential,
+      visitorKey: () => 'visitor_abc',
+      schedule: () => undefined,
+      stamp: () => ({ eventId: `evt-${(n += 1)}`, occurredAt: '2026-10-13T09:59:00.000Z' }),
+      context: () => CONTEXT,
+    });
+    return { recorder, requests };
+  }
+
+  const eventsOf = (request: HttpRequest | undefined) => (request?.body as { events: SocialEvent[] }).events;
+
+  test('chaque événement reçoit son eventId et son heure à la MISE EN FILE', async () => {
+    const { recorder, requests } = enveloped({ kind: 'registered', token: 't' }, []);
+    recorder.record(impression(1));
+    recorder.record({ type: 'view', postId: OID(1) });
+    await recorder.flush();
+    expect(eventsOf(requests[0])).toEqual([
+      { ...impression(1), eventId: 'evt-1', occurredAt: '2026-10-13T09:59:00.000Z' },
+      { type: 'view', postId: OID(1), eventId: 'evt-2', occurredAt: '2026-10-13T09:59:00.000Z' },
+    ]);
+  });
+
+  test('l’eventId est IDENTIQUE après un 503 et le renvoi — la passerelle reconnaît le rejeu', async () => {
+    const { recorder, requests } = enveloped({ kind: 'registered', token: 't' }, [503, 200]);
+    recorder.record(impression(1));
+    await recorder.flush();
+    await recorder.flush();
+    expect(requests).toHaveLength(2);
+    expect(eventsOf(requests[0])[0]?.eventId).toBe('evt-1');
+    expect(eventsOf(requests[1])[0]?.eventId).toBe('evt-1');
+  });
+
+  test('le contexte part UNE fois par requête, au niveau du lot', async () => {
+    const { recorder, requests } = enveloped({ kind: 'registered', token: 't' }, []);
+    recorder.record(impression(1));
+    recorder.record(impression(2));
+    await recorder.flush();
+    const body = requests[0]?.body as { events: SocialEvent[]; context: unknown };
+    expect(body.context).toEqual(CONTEXT);
+    expect(body.events.every((event) => !('context' in event))).toBe(true);
+  });
+
+  test('un VISITEUR envoie le contexte réduit : ni session, ni OS, ni locale', async () => {
+    const { recorder, requests } = enveloped(null, []);
+    recorder.record({ type: 'view', postId: OID(3) });
+    await recorder.flush();
+    const context = (requests[0]?.body as { context: Record<string, unknown> }).context;
+    expect(context).toEqual({ schemaVersion: 2, sentAt: CONTEXT.sentAt, platform: 'web', uiLanguage: 'fr', capabilities: ['scroll'], sampling: CONTEXT.sampling });
+  });
+});

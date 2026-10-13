@@ -3,6 +3,8 @@ import type { ContentSurface } from '@meeshy/shared/types/content-surfaces';
 import type { OpenOrigin, ViewProvenance } from '@meeshy/shared/types/content-reach';
 
 import type { ApiResult, Credential, HttpRequest, HttpTransport } from './http';
+import { visitorContextOf, type SocialEventsContext } from './social-events-context';
+import type { ImpressionVisibility, ListingContext, EventTargetRef } from './social-events-v2-types';
 
 /**
  * **LA TÉLÉMÉTRIE DE LECTURE DU WEB** (#10401) — l'émetteur UNIQUE des
@@ -68,7 +70,15 @@ export type { ContentSurface, OpenOrigin, ViewProvenance };
 
 export type DwellContentType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 
-export type SocialEvent =
+/**
+ * L'ENVELOPPE v2 (#10500) — posée à la MISE EN FILE, jamais à l'envoi :
+ * `eventId` reste le même d'une tentative à l'autre (la passerelle reconnaît
+ * le rejeu), `occurredAt` dit quand c'est arrivé, pas quand c'est parti.
+ * Facultative : un serveur antérieur la retire en silence.
+ */
+export type EventEnvelope = { readonly eventId?: string; readonly occurredAt?: string };
+
+export type SocialEvent = EventEnvelope & (
   | {
       readonly type: 'view';
       readonly postId: string;
@@ -77,8 +87,17 @@ export type SocialEvent =
       readonly provenance?: ViewProvenance;
       readonly origin?: OpenOrigin;
     }
-  | { readonly type: 'open'; readonly postId: string; readonly origin?: OpenOrigin }
-  | { readonly type: 'impression'; readonly postId: string; readonly source: ImpressionSource; readonly surface?: ContentSurface }
+  | { readonly type: 'open'; readonly postId: string; readonly origin?: OpenOrigin; readonly listing?: ListingContext }
+  | {
+      readonly type: 'impression';
+      readonly postId: string;
+      readonly source: ImpressionSource;
+      readonly surface?: ContentSurface;
+      /** v2 (#10501) — facultatifs, retirés par un serveur antérieur. */
+      readonly target?: EventTargetRef;
+      readonly listing?: ListingContext;
+      readonly visibility?: ImpressionVisibility;
+    }
   | {
       readonly type: 'dwell';
       readonly sessionId: string;
@@ -90,7 +109,8 @@ export type SocialEvent =
       readonly watchMs?: number;
       readonly mediaDurationMs?: number;
       readonly completed: boolean;
-    };
+    }
+);
 
 /** `sent` : écrit · `retry` : panne transitoire, garder · `drop` : refus définitif. */
 export type SendVerdict = 'sent' | 'retry' | 'drop';
@@ -131,10 +151,13 @@ export function normalizeSocialEvent(event: SocialEvent): SocialEvent {
   return event;
 }
 
+export type EnvelopeStamp = () => { readonly eventId: string; readonly occurredAt: string };
+
 export function createSocialEventsEmitter(deps: {
   readonly send: (events: readonly SocialEvent[], options: FlushOptions) => Promise<SendOutcome>;
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
+  readonly stamp?: EnvelopeStamp;
 }): SocialEventsEmitter {
   const flushDelayMs = deps.flushDelayMs ?? 4000;
   let queue: readonly SocialEvent[] = [];
@@ -151,7 +174,8 @@ export function createSocialEventsEmitter(deps: {
   }
 
   function record(event: SocialEvent): void {
-    const next = [...queue, normalizeSocialEvent(event)];
+    const stamped = deps.stamp === undefined || event.eventId !== undefined ? event : { ...event, ...deps.stamp() };
+    const next = [...queue, normalizeSocialEvent(stamped)];
     queue = next.length > SOCIAL_EVENTS_PENDING_CAP ? next.slice(next.length - SOCIAL_EVENTS_PENDING_CAP) : next;
     arm();
   }
@@ -195,6 +219,8 @@ export type SocialEventsTransportDeps = {
   readonly visitorKey: () => string;
   /** Une réponse qui n'arrive jamais (changement d'identité en vol) ne bloque pas la file. */
   readonly timeoutMs?: number;
+  /** Le contexte de lot (#10500), relu à CHAQUE requête — son `sentAt` en dépend. */
+  readonly context?: () => SocialEventsContext;
 };
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -209,7 +235,18 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
 
 /** L'identité d'un appel : le crédential de la session (compte), ou celle
  * d'un visiteur figée à l'enregistrement. */
-type CallIdentity = Pick<HttpRequest, 'credential' | 'headers'>;
+type CallIdentity = Pick<HttpRequest, 'credential' | 'headers'> & { readonly visitor?: boolean };
+
+/** Le corps d'une requête : les événements, et le contexte du lot une fois — réduit pour un visiteur. */
+export function eventsBody<E>(
+  events: readonly E[],
+  context: (() => SocialEventsContext) | undefined,
+  visitor: boolean,
+): { readonly events: readonly E[]; readonly context?: unknown } {
+  if (context === undefined) return { events };
+  const full = context();
+  return { events, context: visitor ? visitorContextOf(full) : full };
+}
 
 function postEvents(
   deps: SocialEventsTransportDeps,
@@ -222,9 +259,10 @@ function postEvents(
       .request<{ readonly recorded: number; readonly rejected: number }>({
         method: 'POST',
         path: socialEndpoints.events,
-        body: { events },
+        body: eventsBody(events, deps.context, identity.visitor === true),
         ...(options.keepalive === true ? { keepalive: true } : {}),
-        ...identity,
+        ...('credential' in identity ? { credential: identity.credential } : {}),
+        ...(identity.headers === undefined ? {} : { headers: identity.headers }),
       })
       .then(verdictOf),
     deps.timeoutMs ?? 20_000,
@@ -280,9 +318,9 @@ type VisitorLane = { readonly key: string; readonly identity: () => CallIdentity
 
 function visitorLaneOf(credential: Credential | null, deps: SocialEventsTransportDeps): VisitorLane {
   if (credential !== null && credential.kind === 'anonymous') {
-    return { key: `guest:${credential.sessionToken}`, identity: () => ({ credential }) };
+    return { key: `guest:${credential.sessionToken}`, identity: () => ({ credential, visitor: true }) };
   }
-  return { key: 'visitor', identity: () => ({ credential: null, headers: { 'X-Session-Token': deps.visitorKey() } }) };
+  return { key: 'visitor', identity: () => ({ credential: null, headers: { 'X-Session-Token': deps.visitorKey() }, visitor: true }) };
 }
 
 /**
@@ -294,10 +332,12 @@ function visitorLaneOf(credential: Credential | null, deps: SocialEventsTranspor
 export function createSocialEventsRecorder(deps: SocialEventsTransportDeps & {
   readonly schedule: (run: () => void, delayMs: number) => void;
   readonly flushDelayMs?: number;
+  readonly stamp?: EnvelopeStamp;
 }) {
   const cadence = {
     schedule: deps.schedule,
     ...(deps.flushDelayMs === undefined ? {} : { flushDelayMs: deps.flushDelayMs }),
+    ...(deps.stamp === undefined ? {} : { stamp: deps.stamp }),
   };
   const account = createSocialEventsEmitter({ send: sendAccountBatch(deps), ...cadence });
   const lanes = new Map<string, SocialEventsEmitter>();

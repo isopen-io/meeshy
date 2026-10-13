@@ -120,12 +120,7 @@ describe('socialEventsContext — un objet par requête', () => {
   test('un VISITEUR ne porte que plateforme et langue d’interface : ni session, ni OS, ni réseau, ni locale (O2, R4)', () => {
     const full: SocialEventsContext = socialEventsContext(BASE, () => 0);
     const visitor = visitorContextOf(full);
-    expect(visitor).not.toHaveProperty('appSessionId');
-    expect(visitor).not.toHaveProperty('deviceLocale');
-    expect(visitor).not.toHaveProperty('network');
-    expect(visitor).not.toHaveProperty('os');
-    expect(visitor).not.toHaveProperty('deviceClass');
-    expect(visitor).not.toHaveProperty('appVersion');
+    expect(Object.keys(visitor).sort()).toEqual(['capabilities', 'platform', 'sampling', 'schemaVersion', 'sentAt', 'uiLanguage']);
     expect(visitor.platform).toBe('web');
     expect(visitor.uiLanguage).toBe('fr');
   });
