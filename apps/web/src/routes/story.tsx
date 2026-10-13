@@ -954,7 +954,7 @@ export default function StoryScreen() {
           />
 
           <CommentsSheetPortal host={commentsHost} risesWithComposer />
-          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
+          <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} anonymousViewCount={currentStory?.anonymousViewCount} />
         </div>
       ) : null}
       {invitation.dialog}

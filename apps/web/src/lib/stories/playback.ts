@@ -173,6 +173,8 @@ export type StoryPlaybackStory = {
    * jamais la longueur de sa propre page (`PublicationViewersSheet`, note
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
+  /** Les vues SANS compte (#10483), un agrégat — « et N visiteurs » sous la liste. */
+  readonly anonymousViewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
   readonly metadata?: unknown;
