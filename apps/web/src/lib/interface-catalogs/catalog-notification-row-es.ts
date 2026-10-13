@@ -6,7 +6,6 @@ const esNotificationRow = {
   'notifications.row.kind.story': 'Historia',
   'notifications.row.kind.reel': 'Reel',
   'notifications.row.kind.mood': 'Estado de ánimo',
-  'notifications.row.kind.status': 'Estado',
   'notifications.row.kind.post': 'Publicación',
   'notifications.row.media.photo': '📷 Foto',
   'notifications.row.media.video': '🎥 Vídeo',

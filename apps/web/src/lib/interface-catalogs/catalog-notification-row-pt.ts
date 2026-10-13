@@ -6,7 +6,6 @@ const ptNotificationRow = {
   'notifications.row.kind.story': 'Story',
   'notifications.row.kind.reel': 'Reel',
   'notifications.row.kind.mood': 'Humor',
-  'notifications.row.kind.status': 'Status',
   'notifications.row.kind.post': 'Publicação',
   'notifications.row.media.photo': '📷 Foto',
   'notifications.row.media.video': '🎥 Vídeo',
