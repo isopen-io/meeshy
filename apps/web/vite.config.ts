@@ -735,6 +735,13 @@ export default defineConfig({
                    flou que la caméra ne fait pas — jamais à l'installation. */
                 'assets/video-effects-segmentation-*.js',
                 'assets/vision_wasm_*',
+                /* LES NOMS DE RECHERCHE DES EMOJIS (#10531) — sept langues,
+                   une trentaine de Ko chacune, dont un lecteur ne lit qu'une
+                   et seulement s'il CHERCHE un emoji : jamais à
+                   l'installation. La table des emojis, elle, reste précachée
+                   (la feuille s'ouvre hors ligne ; seule sa recherche demande
+                   le réseau la première fois). */
+                'assets/emoji-names-*.js',
               ],
               /**
                * Chargés EN TÊTE du service worker généré, donc leurs écouteurs

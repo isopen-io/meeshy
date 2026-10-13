@@ -153,7 +153,8 @@ export function MoodGrid({
 /**
  * **UN AUTRE EMOJI QUE CEUX PROPOSÉS** (#10527) — la porte vers la feuille
  * d'emojis du dépôt (`ComposerEmojiSheet`, celle du composeur et des
- * commentaires, sur la grille des réactions). HORS du `radiogroup` : ce
+ * commentaires : tous les emojis, par catégories, avec recherche et récents
+ * depuis #10531). HORS du `radiogroup` : ce
  * bouton n'est pas un treizième choix, il en ouvre d'autres.
  */
 export function MoodMoreButton({

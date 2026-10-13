@@ -643,7 +643,7 @@
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #9899, NON ARBITREE",
-        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 3,59 Ko -- la file de traduction de l'appareil, son cache et le partage scelle de ce qu'elle livre (#9898, #9899, `lib/device-translation/runtime.ts`). Charge par `import()` depuis `use-device-translation.ts` APRES le consentement : le fil ne l'importe jamais statiquement. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-10 (`bun run build` puis gzip -9) : 3,59 Ko -- la file de traduction de l'appareil, son cache et le partage scelle de ce qu'elle livre (#9898, #9899, `lib/device-translation/runtime.ts`). Charge par `import()` depuis `use-device-translation.ts` APRES le consentement : le fil ne l'importe jamais statiquement. Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "device_translation_consent": {
@@ -794,7 +794,7 @@
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #6361, NON ARBITREE",
-        "source": "Mesure du 2026-09-14 : 3 941 o gzip -9 pour assets/share-link-new-<hash>.js -- l'ECRAN de creation (routes/share-link-new.tsx) et ses PIECES (routes/share-link-form.tsx : sections, bascules, limites, choix de la conversation). Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-14 : 3 941 o gzip -9 pour assets/share-link-new-<hash>.js -- l'ECRAN de creation (routes/share-link-new.tsx) et ses PIECES (routes/share-link-form.tsx : sections, bascules, limites, choix de la conversation). Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "link_gestures": {
@@ -887,7 +887,7 @@
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #8727, NON ARBITREE",
-        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9, zlib) : 3 362 o pour les SEPT catalogues de ce qu'une notification dit (20 cles `notifications.row.*` / `notifications.quick.*` / `notifications.banner.*`), de 0,43 Ko (en) a 0,53 Ko (ar). Charges avec l'ecran /notifications (`routes/route-table.tsx`) et avec la banniere in-app (`components/shell.tsx`) seulement ; un lecteur n'en telecharge qu'UN. POURQUOI UN CATALOGUE A PART : les ajouter aux catalogues d'interface les portait a 168,68 Ko pour un plafond de 168. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-09-30 (`bun run build` puis gzip -9, zlib) : 3 362 o pour les SEPT catalogues de ce qu'une notification dit (20 cles `notifications.row.*` / `notifications.quick.*` / `notifications.banner.*`), de 0,43 Ko (en) a 0,53 Ko (ar). Charges avec l'ecran /notifications (`routes/route-table.tsx`) et avec la banniere in-app (`components/shell.tsx`) seulement ; un lecteur n'en telecharge qu'UN. POURQUOI UN CATALOGUE A PART : les ajouter aux catalogues d'interface les portait a 168,68 Ko pour un plafond de 168. Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "notification_toast": {
@@ -950,7 +950,7 @@
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #9727, NON ARBITREE",
-        "source": "Mesure du 2026-10-09 (`bun run build` puis gzip -9) : 3,03 Ko pour les SEPT catalogues de la feuille « Vues » enrichie (cles `viewerEngagement.*` : ce que chaque personne a fait, le detail d une personne, l etat vide et le refus d une publication). Charges AVEC la feuille (`preparePublicationViewersSheet`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-09 (`bun run build` puis gzip -9) : 3,03 Ko pour les SEPT catalogues de la feuille « Vues » enrichie (cles `viewerEngagement.*` : ce que chaque personne a fait, le detail d une personne, l etat vide et le refus d une publication). Charges AVEC la feuille (`preparePublicationViewersSheet`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "interface_catalogs_world_participant_card": {
@@ -968,7 +968,7 @@
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #10102, NON ARBITREE",
-        "source": "Mesure du 2026-10-11 (construction de recette a part, `measure-weight`, gzip -9) : 3,75 Ko pour la feuille de la fiche d un participant de World Wide (projection de la fiche, lignes, etats, decodeur zod/mini du contrat). Chargee au premier toucher d un auteur par l equipe, jamais avant. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-11 (construction de recette a part, `measure-weight`, gzip -9) : 3,75 Ko pour la feuille de la fiche d un participant de World Wide (projection de la fiche, lignes, etats, decodeur zod/mini du contrat). Chargee au premier toucher d un auteur par l equipe, jamais avant. Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "interface_catalogs_message_pieces": {
@@ -1016,13 +1016,57 @@
         "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive`) : 1,15 Ko pour les SEPT catalogues de la creation d une humeur (quatre cles `status.compose.more` et `status.compose.bare.*` : la porte vers les autres emojis et la question « sans un petit mot ? »), charges avec l ecran `/status/new` (`routes/route-table.tsx`) et jamais au demarrage -- les catalogues d interface sont a 189,85 Ko pour un plafond de 190. Arrondi au Ko SUPERIEUR (2)."
       }
     },
+    "emoji_picker_sheet": {
+      "pattern": "^assets/emoji-picker-sheet-[A-Za-z0-9_-]+\\.js$",
+      "kb": {
+        "value": 5,
+        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 4,04 Ko pour la feuille d emojis complete (`components/emoji-picker-sheet.tsx` : rangee de categories, recherche, recents, grille au clavier ; `lib/emoji/emoji-catalogue.ts`, `emoji-support.ts`, `emoji-grid-keys.ts`, `lib/emoji-recents.ts`, et le chargeur de ses libelles `lib/i18n-emoji-picker-catalog.ts`, qui voyage avec elle par `prepareEmojiPickerSheet`). Elle remplace la grille des vingt (`emoji-grid`, 0,25 Ko). Pas de `dynamic_only` ICI : ses deux hotes l importent statiquement, et ce sont EUX qui ne s atteignent que par import() (`emoji_sheet_hosts`). Arrondi au Ko SUPERIEUR (5)."
+      }
+    },
+    "emoji_sheet_hosts": {
+      "pattern": "^assets/(reaction-sheet|composer-emoji-sheet)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 1,
+        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 0,5 Ko pour les DEUX hotes de la feuille d emojis (`components/reaction-sheet.tsx`, `components/composer-emoji-sheet.tsx`). `dynamic_only` : le fil (`routes/thread-sheets.tsx`), le composeur, les commentaires et l humeur (`components/composer-sheets-lazy.ts`) ne les atteignent que par import() -- la feuille d emojis ne pese ni sur le chunk « thread » (`ReactionSheet` en SORT avec ce lot ; 40,65 Ko avant comme apres) ni sur la premiere peinture (86,78 -> 86,77 Ko)."
+      }
+    },
+    "emoji_table": {
+      "pattern": "^assets/emoji-table-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 5,9 Ko pour la table GENEREE des 1 906 emojis d Unicode Emoji 16.0 (`lib/emoji/emoji-table.ts`, par `scripts/generate-emojis.mjs` : neuf categories, un palier de version par emoji, sans variante de teinte), chargee par import() a l ouverture de la feuille. Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
+      }
+    },
+    "emoji_names": {
+      "pattern": "^assets/emoji-names-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 220,
+        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 210,43 Ko pour les SEPT fichiers de noms de recherche (CLDR 47 : nom et mots-cles de chaque emoji ; ar 39,1 · it 36,1 · fr 30,5 · de 30,4 · pt 29,5 · en 25,0 · es 21,0 Ko), generes par `scripts/generate-emojis.mjs`. Un lecteur n en charge qu UN (sa langue d interface), a sa PREMIERE recherche d emoji, jamais a l ouverture de la feuille ; ils sont HORS du precache du service worker (`vite.config.ts`, `globIgnores`). Arrondi + marge pour une montee de version du CLDR."
+      }
+    },
+    "interface_catalogs_emoji_picker": {
+      "pattern": "^assets/catalog-emoji-picker-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #10531, NON ARBITREE",
+        "source": "Mesure du 2026-10-13 (`bun run build` puis `node scripts/measure-weight.mjs`, gzip -9, sur un export `git archive` de dev e05bd6c398 avec le lot) : 2,88 Ko pour les SEPT catalogues de la feuille d emojis (dix-neuf cles `emojiPicker.*` : dix categories, la recherche et ses etats, les deux sections de l onglet Recents), charges avec la feuille (`prepareEmojiPickerSheet`) et jamais au demarrage -- les catalogues d interface sont a 189,85 Ko pour un plafond de 190, inchanges par ce lot. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge."
+      }
+    },
     "interface_catalogs_sounds_mine": {
       "pattern": "^assets/catalog-sounds-mine-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
         "value": 5,
         "status": "CIBLE -- MESUREE PAR #9848, NON ARBITREE",
-        "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 3,44 Ko gzip -9 pour les SEPT catalogues de « Mes sons » (cles `soundsMine.*` : l ecran `/me/sounds`, son etat vide, son erreur, le retrait d un son et sa confirmation). Sortis du catalogue d interface, qu ils avaient porte a 183,9 Ko sur dev (plafond 182) ; charges par l ecran (`SoundsMineScreen`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (4) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-10 (`bun run build` puis `node scripts/measure-weight.mjs`) : 3,44 Ko gzip -9 pour les SEPT catalogues de « Mes sons » (cles `soundsMine.*` : l ecran `/me/sounds`, son etat vide, son erreur, le retrait d un son et sa confirmation). Sortis du catalogue d interface, qu ils avaient porte a 183,9 Ko sur dev (plafond 182) ; charges par l ecran (`SoundsMineScreen`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. Arrondi au Ko SUPERIEUR (5)."
       }
     },
     "interface_catalogs_device_translation": {
