@@ -28,7 +28,8 @@ jest.mock('../../../../services/PresenceVisibilityService', () => ({
 }));
 
 import { searchUsers } from '../../../../routes/users/preferences';
-import { readSearchId } from '../../../../services/social/searchFingerprint';
+import { createHmac } from 'crypto';
+import { issueSearchId, readSearchId } from '../../../../services/social/searchFingerprint';
 import { redactReaderFileUrl } from '../../../../utils/redact-reader-file-url';
 
 const MOI = '507f1f77bcf86cd799439011';
@@ -120,5 +121,49 @@ describe('SEARCH_FINGERPRINT_SECRET — fail-closed sans casser la recherche', (
     } finally {
       process.env = env;
     }
+  });
+});
+
+describe('le searchId est OPAQUE : l’empreinte y voyage chiffrée, jamais en clair', () => {
+  const SECRET = 'a'.repeat(64);
+  const longestCommonRun = (a: string, b: string): number => {
+    const lengths = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+    return [...a].reduce((best, ca, i) => [...b].reduce((inner, cb, j) => {
+      lengths[i + 1][j + 1] = ca === cb ? lengths[i][j] + 1 : 0;
+      return Math.max(inner, lengths[i + 1][j + 1]);
+    }, best), 0);
+  };
+
+  it('deux recherches identiques ⇒ deux searchId sans sous-chaîne commune de plus de 8 caractères, mais la même empreinte rangée', () => {
+    const a = issueSearchId('Alice Martin', SECRET) as string;
+    const b = issueSearchId('alice  martin', SECRET) as string;
+
+    expect(longestCommonRun(a, b)).toBeLessThanOrEqual(8);
+    expect(readSearchId(a, SECRET)?.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+    expect(readSearchId(a, SECRET)?.fingerprint).toBe(readSearchId(b, SECRET)?.fingerprint);
+  });
+
+  it('le searchId ne contient ni l’empreinte rangée, ni aucun HMAC du texte sous le secret', () => {
+    const id = issueSearchId('Alice Martin', SECRET) as string;
+    const fingerprint = readSearchId(id, SECRET)?.fingerprint as string;
+    const hmacs = ['search-query:alice martin', 'alice martin', 'Alice Martin']
+      .map((text) => createHmac('sha256', SECRET).update(text).digest('hex'));
+
+    expect(id).not.toContain(fingerprint);
+    expect(id).not.toContain(fingerprint.slice(0, 16));
+    hmacs.forEach((digest) => expect(id).not.toContain(digest.slice(0, 16)));
+  });
+
+  it('un searchId altéré d’un seul caractère, tronqué ou d’une autre clé ⇒ rejeté', () => {
+    const id = issueSearchId('Alice Martin', SECRET) as string;
+    const flipped = `${id.slice(0, 30)}${id[30] === '0' ? '1' : '0'}${id.slice(31)}`;
+
+    expect(readSearchId(flipped, SECRET)).toBeUndefined();
+    expect(readSearchId(id.slice(0, -2), SECRET)).toBeUndefined();
+    expect(readSearchId(id, 'b'.repeat(64))).toBeUndefined();
+  });
+
+  it('l’ancien format lisible `nonce.empreinte.signature` n’est plus accepté', () => {
+    expect(readSearchId(`0123456789abcdef.${'a'.repeat(32)}.0123456789abcdef`, SECRET)).toBeUndefined();
   });
 });
