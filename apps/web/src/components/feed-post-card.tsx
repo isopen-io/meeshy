@@ -1,3 +1,4 @@
+import { prismOf } from '@/lib/telemetry/card-context';
 import { useContentScrollTelemetry } from '@/lib/telemetry/content-scroll';
 import type { ListingContext } from '@/lib/api/social-events-v2-types';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -641,9 +642,11 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
   // L'IMPRESSION DE LA CARTE (#10401) — une par apparition, posée ICI pour
   // que tout écran qui monte la carte (fil, profils, hashtag, favoris) compte
   // sans rien câbler. Le détail compte la sienne (`detail`) à l'ouverture.
+  const prism = prismOf(model.text);
   const impressionRef = useImpressionRef(model.id, isDetail ? null : impressionSource, impressionSurface, {
     ...(listing === undefined ? {} : { listing }),
     targetKind: model.isReel ? 'reel' : 'post',
+    ...(prism === undefined ? {} : { prism }),
   });
   /* LE TAP OUVRE DEPUIS CE LISTING (#10483) — l'engagement `open` et
      `?from=<origine>` ; la fiche elle-même n'ouvre rien. */

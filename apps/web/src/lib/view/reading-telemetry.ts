@@ -13,7 +13,7 @@ import {
   type SocialEvent,
 } from '@/lib/api/social-events';
 import { createSocialEventsV2Recorder, type SocialEventsV2Recorder } from '@/lib/api/social-events-v2';
-import type { ImpressionVisibility, ListingContext, SocialEventV2Input, TargetKind } from '@/lib/api/social-events-v2-types';
+import type { ImpressionVisibility, ListingContext, PrismContext, SocialEventV2Input, TargetKind } from '@/lib/api/social-events-v2-types';
 import { publicWebOrigin } from '@/lib/links/public-origin';
 import { hasNavigatedInApp, useSearch } from '@/lib/router';
 import { safeLocalStorage } from '@/lib/storage';
@@ -21,6 +21,7 @@ import { safeLocalStorage } from '@/lib/storage';
 import type { OpenOrigin } from '@meeshy/shared/types/content-reach';
 
 import { openLinkSearch, viewFieldsOf, viewProvenanceOf, type ViewAttribution } from './content-open';
+import { cardContextOf, negativeOf, rememberCard } from '@/lib/telemetry/card-context';
 import { noteListingItem } from '@/lib/telemetry/listing-registry';
 
 import { liveSocialEventsContext } from './telemetry-context';
@@ -222,6 +223,8 @@ export type ImpressionOptions = {
   readonly targetKind?: TargetKind;
   /** Une vidéo qui joue n'est visible au sens MRC qu'après 2 s. */
   readonly kind?: ViewabilityKind;
+  /** Ce que le Prisme sert sur la carte (#10502) — relu par les gestes. */
+  readonly prism?: PrismContext;
 };
 
 const targetKindOf = (source: ImpressionSource): TargetKind => (source === 'story' ? 'story' : source === 'status' ? 'status' : 'post');
@@ -247,7 +250,10 @@ export function useImpressionRef(
   options: ImpressionOptions = {},
 ): (node: Element | null) => void {
   const stop = useRef<(() => void) | null>(null);
-  const { listing, targetKind, kind } = options;
+  const { listing, targetKind, kind, prism } = options;
+  const displayedLanguage = prism?.displayedLanguage;
+  const originalLanguage = prism?.originalLanguage;
+  const translated = prism?.translated;
   const feedRequestId = listing?.feedRequestId;
   const position = listing?.position;
   const rankingSource = listing?.rankingSource;
@@ -267,6 +273,11 @@ export function useImpressionRef(
           };
     const target = { kind: targetKind ?? targetKindOf(source), id: postId };
     const placed = { ...(surface === undefined ? {} : { surface }), ...(listed === undefined ? {} : { listing: listed }) };
+    const served: PrismContext | undefined =
+      displayedLanguage === undefined || translated === undefined
+        ? undefined
+        : { displayedLanguage, ...(originalLanguage === undefined ? {} : { originalLanguage }), translated, ...(translated ? { translationSource: 'server' as const } : {}) };
+    rememberCard(postId, { targetKind: target.kind, ...placed, ...(served === undefined ? {} : { prism: served }), shownAt: Date.now() });
     let impressionEventId: string | null = null;
     const stopImpression = observeImpression(
       node,
@@ -294,7 +305,7 @@ export function useImpressionRef(
       stopImpression();
       stopTracking();
     };
-  }, [postId, source, surface, targetKind, kind, feedRequestId, position, rankingSource, listingSessionId]);
+  }, [postId, source, surface, targetKind, kind, feedRequestId, position, rankingSource, listingSessionId, displayedLanguage, originalLanguage, translated]);
 }
 
 /** Deux références posées sur le MÊME nœud (la story d'une tuile ET son humeur). */
@@ -302,6 +313,17 @@ export function useMergedRefs(...refs: readonly ((node: Element | null) => void)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useCallback((node: Element | null) => refs.forEach((ref) => ref(node)), refs);
 }
+
+/**
+ * LE PASSAGE ÉCLAIR (#10503) — un réel ou une story quitté en moins d'une
+ * seconde est un signal négatif IMPLICITE (`negative/quick_skip`), dérivé
+ * ici, au seul site qui connaît la durée de la séance.
+ */
+export const QUICK_SKIP_MS = 1000;
+const QUICK_SKIP_KINDS: ReadonlySet<DwellContentType> = new Set(['REEL', 'STORY']);
+
+const sessionTargetKindOf = (contentType: DwellContentType): TargetKind =>
+  contentType === 'REEL' ? 'reel' : contentType === 'STORY' ? 'story' : contentType === 'STATUS' ? 'status' : 'post';
 
 /**
  * **UNE SÉANCE DE LECTURE** — un contenu ouvert en plein (détail d'un post,
@@ -341,8 +363,13 @@ export function useReadingSession(params: {
     const provenance = attribution === undefined ? {} : viewFieldsOf(attribution(postId));
     if (impressionSource !== null) readingTelemetry.record({ type: 'impression', postId, source: impressionSource, surface });
     if (openView) readingTelemetry.record({ type: 'view', postId, surface, ...provenance });
+    const targetKind = sessionTargetKindOf(contentType);
+    if (cardContextOf(postId)?.surface !== surface) rememberCard(postId, { targetKind, surface, shownAt: Date.now() });
     return () => {
       const dwellMs = Math.max(0, nowRef.current() - startedAt);
+      if (QUICK_SKIP_KINDS.has(contentType) && dwellMs < QUICK_SKIP_MS) {
+        readingTelemetry.recordV2(negativeOf(postId, 'quick_skip', { visibleMs: Math.round(dwellMs) }));
+      }
       readingTelemetry.record({ type: 'view', postId, durationMs: dwellMs, surface, ...provenance });
       readingTelemetry.record({
         type: 'dwell',

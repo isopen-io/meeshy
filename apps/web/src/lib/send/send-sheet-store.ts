@@ -1,3 +1,4 @@
+import type { ShareDestination } from '@/lib/api/social-events-v2-types';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { SendPayload } from './send-sheet-plan';
@@ -27,7 +28,8 @@ export type SendSheetRequest = {
    * lien » : l'entrée y accroche son compteur (`POST /posts/:id/share`).
    * Jamais à l'ouverture, jamais sur un envoi refusé.
    */
-  readonly onShared?: () => void;
+  /** #10502 — par où le partage est parti (conversation, publication, lien copié, feuille du système). */
+  readonly onShared?: (destination?: ShareDestination) => void;
 };
 
 export type SendSheetState = {
