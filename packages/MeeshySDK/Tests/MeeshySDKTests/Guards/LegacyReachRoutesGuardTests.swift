@@ -20,7 +20,7 @@ import XCTest
 final class LegacyReachRoutesGuardTests: XCTestCase {
 
     private static let endpointCase = #"\.(byPostIdView|byPostIdImpression|byPostIdAnonymousView|byPostIdDownloads|engagementBatch|impressionsBatch)\b"#
-    private static let literalPath = #""[^"\n]*posts/[^"\n]*/(impression|impressions/batch|engagement/batch|anonymous-view|downloads|view)(\?[^"\n]*)?""#
+    private static let literalPath = #""[^"\n]*posts/(?:[^"\n]*/)?(impression|impressions/batch|engagement/batch|anonymous-view|downloads|view)(\?[^"\n]*)?""#
 
     private static let skippedDirectories: Set<String> = [
         "Build", "DerivedData", "SourcePackages", "Pods", ".build", "fastlane", "node_modules",
