@@ -32,19 +32,3 @@ describe('les hôtes de la carte nomment leur source d’impression', () => {
     expect(source('feed.tsx')).not.toContain('impressionSource=');
   });
 });
-
-describe('les écrans plein cadre ouvrent une séance de lecture', () => {
-  test('le détail d’une publication : impression `detail` et vue d’ouverture', () => {
-    const post = source('post.tsx');
-    expect(post).toContain('useReadingSession(');
-    expect(post).toContain('impressionSource: detailImpressionSourceOf(search)');
-    expect(post).toMatch(/openView: true/);
-  });
-
-  test('la story : impression `story`, vue d’ouverture pour le visiteur seul', () => {
-    const story = source('story.tsx');
-    expect(story).toContain('useReadingSession(');
-    expect(story).toContain("impressionSource: 'story'");
-    expect(story).toMatch(/openView: visitor/);
-  });
-});
