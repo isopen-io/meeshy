@@ -880,6 +880,8 @@ const it = {
   'story.action.reply': 'Rispondi',
   'story.action.forward': 'Invia',
   'story.action.repost': 'Ripubblica',
+  'story.viewer.repost': 'Ripubblicazione',
+  'story.viewer.repostOf': 'Ripubblicato da @{handle}',
   'story.action.views': 'Visualizzazioni',
   'story.action.share': 'Condividi',
   'story.action.save': 'Salva',

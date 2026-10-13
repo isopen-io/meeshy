@@ -51,6 +51,7 @@ import {
   stableGroupOrder,
   storyEffectsBackgroundOf,
   storyMediaUrl,
+  storyRepostCredit,
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
@@ -671,6 +672,9 @@ export default function StoryScreen() {
      story : la fiche de soi n'offre aucun geste relationnel. */
   const authorName = group === undefined ? '' : authorLabel(group);
   const authorUsername = group?.author?.username;
+  /* LE CRÉDIT D'UNE REPUBLICATION (#10524) — après la date, jamais dans le
+     canvas, comme `StoryViewerView+Header.swift`. */
+  const repostCredit = currentStory === undefined ? null : storyRepostCredit(currentStory);
   const identity: ViewerIdentityModel | null =
     group === undefined || currentStory === undefined
       ? null
@@ -683,6 +687,16 @@ export default function StoryScreen() {
             iso: new Date(currentStory.createdAt).toISOString(),
             label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale),
           },
+          ...(repostCredit === null
+            ? {}
+            : {
+                repost: {
+                  handle: repostCredit.handle,
+                  label: repostCredit.handle === null
+                    ? translate(interfaceLanguage, 'story.viewer.repost')
+                    : translate(interfaceLanguage, 'story.viewer.repostOf', { handle: repostCredit.handle }),
+                },
+              }),
         };
 
   return (

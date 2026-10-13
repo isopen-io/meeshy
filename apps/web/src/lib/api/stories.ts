@@ -257,6 +257,8 @@ export type StoryFeedPost = {
     readonly id: string;
     readonly storyEffects?: unknown;
     readonly media?: readonly StoryTrayMedia[] | null;
+    /** L'auteur de la source : le crédit de l'en-tête (`storyRepostCredit`, #10524). */
+    readonly author?: { readonly username?: string | null; readonly displayName?: string | null } | null;
   } | null;
 };
 
