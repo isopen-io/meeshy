@@ -12,7 +12,7 @@ const f = {
   'admin.group.moderation': 'Modération',
   'admin.group.growth': 'Croissance',
   'admin.group.scales': 'Barèmes',
-  'admin.group.operations': 'Opérations',
+  'admin.group.operations': 'Système',
 
   'admin.kit.breadcrumb': 'Fil d’Ariane',
   'admin.kit.retry': 'Réessayer',
