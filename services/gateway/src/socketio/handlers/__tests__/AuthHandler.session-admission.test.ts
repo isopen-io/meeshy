@@ -26,7 +26,7 @@ const NOW = new Date('2026-10-13T10:00:00.000Z');
 type Session = { id: string; isValid: boolean; expiresAt: Date } | null;
 
 function harness(session: Session | Error) {
-  const findFirst = jest.fn(async () => {
+  const findFirst = jest.fn(async (_query: unknown) => {
     if (session instanceof Error) throw session;
     return session;
   });

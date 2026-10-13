@@ -27,6 +27,7 @@ import { revokeShareLinkGuests, type GuestSocketRegistry } from './revokeShareLi
 import { shareLinkActiveGuestsWhere } from './shareLinkGuestsWhere';
 import type { DepartedMemberEphemeralState } from './endConversationMembership';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'CloseShareLinkRevokingGuests' });
 
@@ -86,7 +87,12 @@ async function runWithRetries(
   if (await runPendingGuestRevocation(params)) return;
   const delay = DEFERRED_REVOCATION_RETRY_MS[attempt];
   if (delay === undefined) return;
-  const timer = setTimeout(() => detachTask(() => runWithRetries(params, attempt + 1)), delay);
+  const timer = guardedTimeout({
+    name: 'deferred-guest-revocation-retry',
+    run: () => runWithRetries(params, attempt + 1),
+    afterMs: delay,
+    logger,
+  });
   timer.unref?.();
 }
 

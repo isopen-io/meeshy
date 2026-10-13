@@ -66,7 +66,7 @@ const live = (): Session => ({ isValid: true, expiresAt: new Date(Date.now() + 3
 function prismaWith(session: Session | Error) {
   return {
     userSession: {
-      findFirst: jest.fn(async () => {
+      findFirst: jest.fn(async (_query: unknown) => {
         if (session instanceof Error) throw session;
         return session;
       }),
