@@ -783,13 +783,13 @@ struct FeedView: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
                 // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
+                router.openPostDetail(post, from: .feed)
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
@@ -877,15 +877,15 @@ struct FeedView: View {
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
                         ReelsPresenter.shared.present(
                             posts: viewModel.posts,
-                            startId: post.id
+                            startId: post.id, from: .feed
                         )
                     }
                 } else {
-                    router.push(.postDetail(post.id, post))
+                    router.openPostDetail(post, from: .feed)
                 }
             },
             onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
+                router.openPostDetail(id: repostId, from: .feed)
             },
             onDelete: isOwnPost ? { postId in
                 Task { await viewModel.deletePost(postId) }

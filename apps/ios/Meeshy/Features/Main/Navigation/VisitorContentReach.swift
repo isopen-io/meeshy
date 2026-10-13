@@ -20,30 +20,35 @@ final class VisitorContentReach: ObservableObject {
     // d'une tâche. Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    static let impressionSource = "detail"
     /// Le plafond de durée que la porte accepte (5 minutes).
     static let maxDurationMs = 300_000
 
     private let reporter: VisitorReachReporting
+    private let entries: DetailOpenSourceProviding
     private let clock: () -> Date
-    private var current: (postId: String, since: Date)?
+    private var current: (postId: String, since: Date, entry: ContentEntry)?
 
     init(
         reporter: VisitorReachReporting = VisitorReachReporter.shared,
+        entries: DetailOpenSourceProviding = DetailOpenSources.shared,
         clock: @escaping () -> Date = Date.init
     ) {
         self.reporter = reporter
+        self.entries = entries
         self.clock = clock
     }
 
     /// L'écran a changé d'état. Seul le PREMIER service d'un contenu compte :
-    /// un « Réessayer » qui rend le même post ne le recompte pas.
+    /// un « Réessayer » qui rend le même post ne le recompte pas. L'entrée (le
+    /// lien de suivi, le lien `?via=`, le lien venu d'ailleurs) est celle que
+    /// le routeur des liens a marquée ; les deux vues la portent.
     func stateChanged(_ state: VisitorContentState) {
         guard case .served(let post, _) = state, current?.postId != post.id else { return }
-        current = (post.id, clock())
+        let entry = entries.consumeEntry(for: post.id)
+        current = (post.id, clock(), entry)
         reporter.record([
-            .impression(postId: post.id, source: Self.impressionSource, surface: .visitor),
-            .view(postId: post.id, durationMs: nil, surface: .visitor),
+            .impression(postId: post.id, source: entry.detailImpressionSource, surface: .visitor),
+            .view(postId: post.id, durationMs: nil, surface: .visitor, entry: entry),
         ])
     }
 
@@ -53,7 +58,7 @@ final class VisitorContentReach: ObservableObject {
         self.current = nil
         let elapsedMs = Int(max(0, clock().timeIntervalSince(current.since)) * 1000)
         reporter.record([
-            .view(postId: current.postId, durationMs: min(elapsedMs, Self.maxDurationMs), surface: .visitor),
+            .view(postId: current.postId, durationMs: min(elapsedMs, Self.maxDurationMs), surface: .visitor, entry: current.entry),
         ])
         await reporter.flushNow()
     }

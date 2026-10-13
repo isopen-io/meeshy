@@ -32,20 +32,51 @@ final class VisitorContentReachTests: XCTestCase {
 
     func test_load_publicPost_sendsImpressionAndView() {
         let reporter = MockVisitorReachReporter()
-        let sut = VisitorContentReach(reporter: reporter)
+        let sut = VisitorContentReach(reporter: reporter, entries: DetailOpenSources())
 
         sut.stateChanged(.pending)
         sut.stateChanged(served("p1"))
 
         XCTAssertEqual(reporter.recorded, [
             .impression(postId: "p1", source: "detail", surface: .visitor),
-            .view(postId: "p1", durationMs: nil, surface: .visitor),
+            .view(postId: "p1", durationMs: nil, surface: .visitor, entry: .direct),
+        ], "Sans référent, la vue est `direct`.")
+    }
+
+    /// Un `/l/<jeton>` résolu par le routeur des liens : la vue d'ouverture ET
+    /// celle de sortie portent `tracking_link`, l'impression garde `shared_link`.
+    func test_load_fromATrackingLink_bothViewsCarryTrackingLink() async {
+        let reporter = MockVisitorReachReporter()
+        let entries = DetailOpenSources()
+        entries.mark("p1", entry: .trackingLink)
+        var now = Date(timeIntervalSince1970: 1_000)
+        let sut = VisitorContentReach(reporter: reporter, entries: entries, clock: { now })
+
+        sut.stateChanged(served("p1"))
+        now = now.addingTimeInterval(2)
+        await sut.left()
+
+        XCTAssertEqual(reporter.recorded, [
+            .impression(postId: "p1", source: "shared_link", surface: .visitor),
+            .view(postId: "p1", durationMs: nil, surface: .visitor, entry: .trackingLink),
+            .view(postId: "p1", durationMs: 2_000, surface: .visitor, entry: .trackingLink),
         ])
+    }
+
+    func test_load_fromAViaLink_viewCarriesSharedLink() {
+        let reporter = MockVisitorReachReporter()
+        let entries = DetailOpenSources()
+        entries.mark("p1", entry: .sharedLink)
+        let sut = VisitorContentReach(reporter: reporter, entries: entries)
+
+        sut.stateChanged(served("p1"))
+
+        XCTAssertEqual(reporter.recorded.last, .view(postId: "p1", durationMs: nil, surface: .visitor, entry: .sharedLink))
     }
 
     func test_load_refusedOrFailed_sendsNothing() {
         let reporter = MockVisitorReachReporter()
-        let sut = VisitorContentReach(reporter: reporter)
+        let sut = VisitorContentReach(reporter: reporter, entries: DetailOpenSources())
 
         sut.stateChanged(.refused)
         sut.stateChanged(.failed)
@@ -55,7 +86,7 @@ final class VisitorContentReachTests: XCTestCase {
 
     func test_load_sameContentServedTwice_countsOnce() {
         let reporter = MockVisitorReachReporter()
-        let sut = VisitorContentReach(reporter: reporter)
+        let sut = VisitorContentReach(reporter: reporter, entries: DetailOpenSources())
 
         sut.stateChanged(served("p1"))
         sut.stateChanged(.pending)
@@ -67,19 +98,19 @@ final class VisitorContentReachTests: XCTestCase {
     func test_disappear_sendsViewWithDuration() async {
         let reporter = MockVisitorReachReporter()
         var now = Date(timeIntervalSince1970: 1_000)
-        let sut = VisitorContentReach(reporter: reporter, clock: { now })
+        let sut = VisitorContentReach(reporter: reporter, entries: DetailOpenSources(), clock: { now })
         sut.stateChanged(served("p1"))
 
         now = now.addingTimeInterval(4.2)
         await sut.left()
 
-        XCTAssertEqual(reporter.recorded.last, .view(postId: "p1", durationMs: 4_200, surface: .visitor))
+        XCTAssertEqual(reporter.recorded.last, .view(postId: "p1", durationMs: 4_200, surface: .visitor, entry: .direct))
         XCTAssertEqual(reporter.flushCount, 1)
     }
 
     func test_disappear_withoutServedContent_sendsNothing() async {
         let reporter = MockVisitorReachReporter()
-        let sut = VisitorContentReach(reporter: reporter)
+        let sut = VisitorContentReach(reporter: reporter, entries: DetailOpenSources())
 
         await sut.left()
 
@@ -141,6 +172,30 @@ final class VisitorContentReachTests: XCTestCase {
         XCTAssertEqual(service.recordSocialEventsCallCount, 2, "Le 403 ne se rejoue pas.")
         XCTAssertTrue(sut.pendingEvents.isEmpty)
         XCTAssertNil(defaults.data(forKey: VisitorReachReporter.storageKey))
+    }
+
+    /// L'engagement d'ouverture d'un visiteur part dans SA requête : un serveur
+    /// qui ne connaît pas `open` (400) le retire sans rejeu, la vue est comptée.
+    func test_open_travelsAlone_andItsRefusalKeepsTheView() async {
+        let service = MockPostService()
+        service.recordSocialEventsResultsQueue = [
+            .success(SocialEventsReceipt(recorded: 1, rejected: 0)),
+            .failure(MeeshyError.server(statusCode: 400, message: "invalid")),
+        ]
+        let sut = makeReporter(service: service)
+        sut.record([
+            .open(postId: "p1", origin: .feed),
+            .view(postId: "p1", durationMs: nil, surface: .visitor, entry: .listing(.feed)),
+        ])
+
+        await sut.flushNow()
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventBatches, [
+            [.view(postId: "p1", durationMs: nil, surface: .visitor, entry: .listing(.feed))],
+            [.open(postId: "p1", origin: .feed)],
+        ])
+        XCTAssertTrue(sut.pendingEvents.isEmpty, "Le 400 des `open` ne se rejoue pas.")
     }
 
     func test_offline_persistsAndFlushesOnReconnect() async {

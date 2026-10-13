@@ -210,3 +210,33 @@ struct SocialEventsDispatchTests {
         #expect(!SocialEventsDispatch.isPermanentRefusal(MeeshyError.network(.noConnection)))
     }
 }
+
+@Suite("MarkStoryViewedPayload — la vue d'une story garde son entrée dans la file durable")
+struct MarkStoryViewedPayloadEntryTests {
+
+    @Test func entry_roundTripsThroughTheOutboxPayload() throws {
+        let payload = MarkStoryViewedPayload(clientMutationId: "c1", storyId: "s1", entry: .listing(.storyRail))
+
+        let decoded = try JSONDecoder().decode(MarkStoryViewedPayload.self, from: JSONEncoder().encode(payload))
+
+        #expect(decoded.entry == .listing(.storyRail))
+        #expect(decoded.provenance == "listing")
+        #expect(decoded.origin == "story_rail")
+    }
+
+    /// Une ligne écrite avant #10483 n'a pas les clés : elle se décode, sans entrée.
+    @Test func formerRow_decodesWithoutEntry() throws {
+        let data = Data(#"{"clientMutationId":"c1","storyId":"s1"}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(MarkStoryViewedPayload.self, from: data)
+
+        #expect(decoded.storyId == "s1")
+        #expect(decoded.entry == nil)
+    }
+
+    @Test func unknownProvenance_readsAsNoEntry() throws {
+        let data = Data(#"{"clientMutationId":"c1","storyId":"s1","provenance":"carrier_pigeon"}"#.utf8)
+
+        #expect(try JSONDecoder().decode(MarkStoryViewedPayload.self, from: data).entry == nil)
+    }
+}

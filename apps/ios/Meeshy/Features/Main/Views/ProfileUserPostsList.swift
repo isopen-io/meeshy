@@ -499,53 +499,6 @@ struct ProfileUserPostsList: View {
     }
 }
 
-// MARK: - Profile posts opener (shared host-side navigation)
-//
-// Centralizes how a host (any sheet presenting `ProfileUserPostsList`) opens a
-// tapped post or reel: dismiss the profile sheet first, then navigate at the
-// root. Reels present the immersive overlay — which lives behind the sheet, so
-// it must come up AFTER the dismiss settles (hence the small delay). Posts push
-// the detail route via RootView's existing `pushNavigateToRoute` listener, so
-// hosts without a `Router` in scope (audio fullscreen, comments sheet) work too.
-@MainActor
-enum ProfilePostsOpener {
-    static func openReel(_ reel: FeedPost, in reels: [FeedPost], dismiss: @escaping () -> Void) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            HapticFeedback.medium()
-            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
-        }
-    }
-
-    static func openPost(_ post: FeedPost, dismiss: @escaping () -> Void) {
-        dismiss()
-        NotificationCenter.default.post(
-            name: Notification.Name("pushNavigateToRoute"),
-            object: "postDetail:\(post.id)"
-        )
-    }
-}
-
-/// Ce que fait un tap d'ouverture dans la liste d'un profil : amener le
-/// contenu à sa destination, rien d'autre. Chaque tap ouvre — aucune fenêtre ne
-/// tait une réouverture — et la vue est comptée par la destination (#10483).
-struct ProfilePostOpening {
-    let onOpenPost: ((FeedPost) -> Void)?
-    let onOpenReel: ((_ reel: FeedPost, _ reels: [FeedPost]) -> Void)?
-
-    func openPost(_ post: FeedPost) {
-        onOpenPost?(post)
-    }
-
-    func openReel(_ post: FeedPost, in reels: [FeedPost]) {
-        guard let onOpenReel else {
-            onOpenPost?(post)
-            return
-        }
-        onOpenReel(post, reels)
-    }
-}
-
 @MainActor
 final class ProfileUserPostsViewModel: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -616,7 +569,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
     /// Groupement, persistance et flush (sortie d'écran / arrière-plan /
     /// relance) portés par `ImpressionBatcher`.
-    private lazy var impressions = ImpressionBatcher(source: "profile")
+    private lazy var impressions = ImpressionBatcher(source: "profile", surface: .profile, postService: postService)
 
     private var cancellables = Set<AnyCancellable>()
 

@@ -447,12 +447,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// durable (`.markStoryViewed`, anchor = storyId pour le coalescing) au
     /// lieu du POST fire-and-forget historique — le « vu » survit à un
     /// kill/offline et se rejoue FIFO au reconnect via OutboxDispatcher.
-    var markViewedOutboxEnqueuer: @MainActor (String) async throws -> Void = { storyId in
-        try await StoryViewModel.enqueueMarkStoryViewed(storyId)
+    var markViewedOutboxEnqueuer: @MainActor (String, ContentEntry) async throws -> Void = { storyId, entry in
+        try await StoryViewModel.enqueueMarkStoryViewed(storyId, entry: entry)
     }
 
     /// #9804 — registre durable des vues, distinct de l'instantané du tray.
     var viewedLedger: StoryViewedLedgerProviding = StoryViewedLedger.shared
+
+    /// #10483 — les marques d'entrée posées par les portes du lecteur (tap du
+    /// rail, notification, lien) ; la vue de la story les porte.
+    var storyViewEntries: DetailOpenSourceProviding = DetailOpenSources.shared
 
     // MARK: - Lookup Methods
 

@@ -145,20 +145,23 @@ class PostDetailViewModel: ObservableObject {
     /// and-forget), impression puis vue.
     ///
     /// Une ouverture se compte à la PREMIÈRE apparition de l'instance, pas à
-    /// chaque relance du `.task` (#10483) ; ouverte depuis une notification,
-    /// elle porte la source `notification`.
+    /// chaque relance du `.task` (#10483). Son ENTRÉE (la marque posée par la
+    /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
+    /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
         guard countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
         }
-        try? await postService.recordImpression(postId: postId, source: openSources.consumeSource(for: postId))
-        // #10483 — `viewCount` est le TOTAL des vues : chaque ouverture en
-        // compte une, sous la même garde que l'impression (une relance du
-        // `.task` n'est pas une ouverture). Les vues uniques sont comptées
-        // côté serveur.
-        try? await postService.viewPost(postId: postId, duration: nil)
+        let entry = openSources.consumeEntry(for: postId)
+        try? await postService.recordImpression(postId: postId, source: entry.detailImpressionSource)
+        // `viewCount` est le TOTAL des vues : chaque ouverture en compte une,
+        // sous la même garde que l'impression, et porte par où elle est venue.
+        _ = try? await postService.recordSocialEvents(
+            [.view(postId: postId, durationMs: nil, surface: .detail, entry: entry)],
+            credential: .account
+        )
     }
 
     private func refreshPost(_ postId: String) async {

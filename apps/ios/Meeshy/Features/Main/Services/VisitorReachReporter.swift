@@ -37,7 +37,7 @@ nonisolated struct PendingVisitorEvent: Codable, Equatable {
 /// réseau).
 ///
 /// Deux règles propres au lecteur sans compte :
-/// - les VUES et les IMPRESSIONS partent en deux requêtes. Un serveur antérieur
+/// - les VUES, les IMPRESSIONS et les OUVERTURES partent en requêtes séparées. Un serveur antérieur
 ///   à #10483 refuse (403) tout lot anonyme qui contient une impression : la
 ///   vue, qu'il sait compter, ne doit pas tomber avec elle ;
 /// - un refus définitif (403, 401, 4xx hors débit) retire le lot SANS rejeu —
@@ -156,7 +156,9 @@ final class VisitorReachReporter: VisitorReachReporting {
         persist()
     }
 
-    /// Une requête par identité et par nature, dans l'ordre d'arrivée.
+    /// Une requête par identité et par nature, dans l'ordre d'arrivée. Les
+    /// engagements d'ouverture (`open`) ont la leur : un serveur qui ne les
+    /// connaît pas refuse leur requête, jamais celle des vues.
     static func requests(for batch: [PendingVisitorEvent]) -> [[PendingVisitorEvent]] {
         let identities = batch.map(\.identity).reduce(into: [String]()) { order, identity in
             if !order.contains(identity) { order.append(identity) }
@@ -165,20 +167,13 @@ final class VisitorReachReporter: VisitorReachReporting {
             let mine = batch.filter { $0.identity == identity }
             let views = mine.filter { if case .view = $0.event { return true } else { return false } }
             let impressions = mine.filter { if case .impression = $0.event { return true } else { return false } }
-            return [views, impressions].filter { !$0.isEmpty }
+            let opens = mine.filter { $0.event.isOpen }
+            return [views, impressions, opens].filter { !$0.isEmpty }
         }
     }
 
     static func isPermanentRefusal(_ error: Error) -> Bool {
-        guard let meeshyError = error as? MeeshyError else { return false }
-        switch meeshyError {
-        case .forbidden, .auth, .rejected:
-            return true
-        case .server(let statusCode, _):
-            return (400..<500).contains(statusCode) && ![408, 429].contains(statusCode)
-        default:
-            return false
-        }
+        SocialEventsDispatch.isPermanentRefusal(error)
     }
 
     private func scheduleFlush() {

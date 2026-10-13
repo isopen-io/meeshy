@@ -49,7 +49,7 @@ final class StoryViewedMarkingTests: XCTestCase {
     private func makeSUT(storyIds: [String]? = nil) -> (sut: StoryViewerView, enqueued: () -> [String]) {
         let recorder = Recorder()
         let vm = StoryViewModel(postService: MockPostService())
-        vm.markViewedOutboxEnqueuer = { id in
+        vm.markViewedOutboxEnqueuer = { id, _ in
             await MainActor.run { recorder.ids.append(id) }
         }
         let ids = storyIds ?? [serverStoryId(0), serverStoryId(1)]
@@ -163,7 +163,7 @@ final class StoryViewedMarkingTests: XCTestCase {
     func test_pendingStoryId_isStillMarkedViewedLocally() async {
         let pending = "pending_\(UUID().uuidString)"
         let vm = StoryViewModel(postService: MockPostService())
-        vm.markViewedOutboxEnqueuer = { _ in }
+        vm.markViewedOutboxEnqueuer = { _, _ in }
         vm.storyGroups = [StoryGroup(id: "author-1", username: "alice",
                                      avatarColor: "#6366F1", avatarURL: nil,
                                      stories: [makeStory(id: pending)])]
@@ -247,7 +247,7 @@ final class StoryViewedMarkingTests: XCTestCase {
                             recorder: Recorder = Recorder()) -> StoryViewModel {
         let vm = StoryViewModel(storyService: service, postService: MockPostService())
         vm.viewedLedger = StoryViewedLedger(userDefaults: ledgerDefaults)
-        vm.markViewedOutboxEnqueuer = { id in
+        vm.markViewedOutboxEnqueuer = { id, _ in
             await MainActor.run { recorder.ids.append(id) }
         }
         return vm

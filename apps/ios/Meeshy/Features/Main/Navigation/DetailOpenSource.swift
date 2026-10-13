@@ -1,18 +1,40 @@
 import Foundation
+import MeeshySDK
 
-// MARK: - D'où vient l'ouverture d'un détail (#10483)
+// MARK: - Par où un écran détail est arrivé (#10483)
 
-/// **Ouvrir un post depuis une notification n'est pas l'ouvrir depuis le fil.**
+/// **Ouvrir un post depuis une notification n'est pas l'ouvrir depuis le fil,
+/// ni depuis un lien de suivi.**
 ///
-/// L'impression d'ouverture du détail portait toujours la source `detail`,
-/// si bien qu'aucune impression `notification` n'existait : la portée des
-/// notifications était invisible. Le routeur de notification MARQUE le post
-/// qu'il ouvre ; le détail CONSOMME la marque à sa première apparition. La
-/// marque vit une minute — un tap de notification qui n'aboutit pas sur le
-/// détail (story, réel) ne déteint pas sur une ouverture ultérieure.
+/// La porte qui AMÈNE un écran détail (le tap d'un listing, le routeur de
+/// notification, le routeur des liens) MARQUE le contenu qu'elle ouvre de son
+/// entrée (`ContentEntry`) ; l'écran détail (détail de post, lecteur de réels,
+/// lecteur de story, écran visiteur) CONSOMME la marque à sa première
+/// apparition et la porte sur sa vue. Sans marque, l'entrée est `direct`.
+///
+/// La marque vit une minute — une porte qui n'aboutit pas sur l'écran attendu
+/// ne déteint pas sur une ouverture ultérieure — et ne se lit qu'une fois.
 protocol DetailOpenSourceProviding: AnyObject {
-    @MainActor func markOpenedFromNotification(_ postId: String)
-    @MainActor func consumeSource(for postId: String) -> String
+    @MainActor func mark(_ postId: String, entry: ContentEntry)
+    /// La marque encore valide du contenu, consommée ; `nil` sans marque.
+    @MainActor func consumeMarkedEntry(for postId: String) -> ContentEntry?
+}
+
+extension DetailOpenSourceProviding {
+    /// L'entrée du contenu, consommée ; `direct` sans marque.
+    @MainActor func consumeEntry(for postId: String) -> ContentEntry {
+        consumeMarkedEntry(for: postId) ?? .direct
+    }
+
+    @MainActor func markOpenedFromNotification(_ postId: String) {
+        mark(postId, entry: .notification)
+    }
+
+    /// La source de l'impression d'ouverture du détail (`detail`,
+    /// `notification`, `shared_link`) — la marque est consommée.
+    @MainActor func consumeSource(for postId: String) -> String {
+        consumeEntry(for: postId).detailImpressionSource
+    }
 }
 
 @MainActor
@@ -27,22 +49,22 @@ final class DetailOpenSources: DetailOpenSourceProviding {
     static let detailSource = "detail"
 
     private let clock: () -> Date
-    private var marks: [String: Date] = [:]
+    private var marks: [String: (entry: ContentEntry, at: Date)] = [:]
 
     init(clock: @escaping () -> Date = Date.init) {
         self.clock = clock
     }
 
-    func markOpenedFromNotification(_ postId: String) {
+    func mark(_ postId: String, entry: ContentEntry) {
         guard !postId.isEmpty else { return }
-        marks[postId] = clock()
+        marks[postId] = (entry, clock())
     }
 
-    func consumeSource(for postId: String) -> String {
+    func consumeMarkedEntry(for postId: String) -> ContentEntry? {
         defer { marks[postId] = nil }
-        guard let markedAt = marks[postId], clock().timeIntervalSince(markedAt) <= Self.markLifetime else {
-            return Self.detailSource
+        guard let mark = marks[postId], clock().timeIntervalSince(mark.at) <= Self.markLifetime else {
+            return nil
         }
-        return Self.notificationSource
+        return mark.entry
     }
 }

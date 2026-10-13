@@ -200,10 +200,11 @@ struct BookmarksView: View {
         if post.isReel {
             ReelsPresenter.shared.present(
                 posts: FeedPost.reels(from: viewModel.posts),
-                startId: post.id
+                startId: post.id,
+                from: .bookmarks
             )
         } else {
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .bookmarks)
         }
     }
 

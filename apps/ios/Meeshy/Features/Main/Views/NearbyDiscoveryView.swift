@@ -209,7 +209,7 @@ struct NearbyDiscoveryView: View {
                             distanceMeters: viewModel.distanceMeters(for: post.id)
                         ) {
                             HapticFeedback.light()
-                            router.push(.postDetail(post.id, post))
+                            router.openPostDetail(post, from: .nearby)
                         }
                         .onAppear {
                             impressions.record(post.id)
@@ -420,7 +420,7 @@ struct NearbyDiscoveryView: View {
     private func selectedPostCard(_ post: FeedPost) -> some View {
         Button {
             HapticFeedback.light()
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .nearby)
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(

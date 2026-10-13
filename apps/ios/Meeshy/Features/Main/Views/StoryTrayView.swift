@@ -197,7 +197,10 @@ struct StoryTrayView: View {
     private func storyRingCell(for group: StoryGroup) -> some View {
         StoryRingCell(
             group: group,
-            onViewStory: { presentStory(userId: group.id) },
+            onViewStory: {
+                ContentOpenReporter.shared.openStory(of: group)
+                presentStory(userId: group.id)
+            },
             onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
             moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
             onMoodTap: statusViewModel.moodTapHandler(for: group.id)
@@ -862,7 +865,10 @@ struct PinnedStoryTrailBand: View {
                         group: group,
                         context: .storyTrayCompact,
                         showsUsername: false,
-                        onViewStory: { presentStory(userId: group.id) },
+                        onViewStory: {
+                            ContentOpenReporter.shared.openStory(of: group)
+                            presentStory(userId: group.id)
+                        },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) },
                         moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                         onMoodTap: statusViewModel.moodTapHandler(for: group.id)

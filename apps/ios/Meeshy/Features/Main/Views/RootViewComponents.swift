@@ -516,13 +516,13 @@ struct ThemedFeedOverlay: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
             },
             onTapGlyph: {
                 // Le logo Réel ouvre la page détail du poste (thread complet),
                 // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
+                router.openPostDetail(post, from: .feed)
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
@@ -532,7 +532,7 @@ struct ThemedFeedOverlay: View {
                 SharedAVPlayerManager.shared.pause()
                 HapticFeedback.medium()
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
+                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
                 }
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
@@ -601,10 +601,10 @@ struct ThemedFeedOverlay: View {
                 togglePostBookmark(postId: postId)
             },
             onTapPost: { post in
-                router.push(.postDetail(post.id, post))
+                router.openPostDetail(post, from: .feed)
             },
             onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
+                router.openPostDetail(id: repostId, from: .feed)
             },
             onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.deletePost(postId) }

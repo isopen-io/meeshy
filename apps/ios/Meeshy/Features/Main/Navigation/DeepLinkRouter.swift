@@ -490,6 +490,9 @@ final class DeepLinkRouter: ObservableObject {
     private let isAuthenticated: @MainActor () -> Bool
     private let hasResolvedSession: @MainActor () -> Bool
     private let dialConversationCall: @MainActor (String, Bool) -> Void
+    /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
+    /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
+    private let entries: DetailOpenSourceProviding
 
     init(
         drafts: DraftStore = .shared,
@@ -498,8 +501,10 @@ final class DeepLinkRouter: ObservableObject {
         hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
         dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
             Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
-        }
+        },
+        entries: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
+        self.entries = entries
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
@@ -525,6 +530,9 @@ final class DeepLinkRouter: ObservableObject {
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
             let destination = Self.trackedDestination(for: resolved, token: token)
+            if let contentId = Self.contentId(of: destination) {
+                self.entries.mark(contentId, entry: .trackingLink)
+            }
             self.trackedLinkOrigin = TrackedLinkOrigin(token: token, link: destination)
             self.pendingDeepLink = destination
         }
@@ -647,9 +655,29 @@ final class DeepLinkRouter: ObservableObject {
             return false
         case let destination:
             guard let link = Self.link(for: destination) else { return false }
+            if let contentId = Self.contentId(of: link) {
+                entries.mark(contentId, entry: Self.entry(forLaunchURL: url))
+            }
             pendingDeepLink = link
             return true
         }
+    }
+
+    /// Le contenu qu'un lien amène sur un écran détail (post, story, réel).
+    static func contentId(of link: DeepLink) -> String? {
+        switch link {
+        case .postDetail(let id), .storyDetail(let id), .reel(let id): return id
+        default: return nil
+        }
+    }
+
+    /// L'entrée d'un contenu ouvert par le système : un lien de partage
+    /// Meeshy porte `?via=` ; un lien web sans marque vient d'ailleurs ; le
+    /// schéma `meeshy://` (widget, raccourci) n'a pas de référent.
+    static func entry(forLaunchURL url: URL) -> ContentEntry {
+        if DeepLinkParser.queryValue("via", in: url) != nil { return .sharedLink }
+        let scheme = url.scheme?.lowercased()
+        return scheme == "https" || scheme == "http" ? .external : .direct
     }
 
     /// Sans compte, l'invitation MÉMORISE son code et ouvre l'inscription, qui
