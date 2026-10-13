@@ -691,9 +691,24 @@ extension ProgressionConceptModel {
         return max(0, mint.price - mint.missingPoints)
     }
 
-    /// TÉMOIN ROUGE (#10540) : la loi n'est pas encore écrite — aucune phrase. Les témoins de la phrase d'état tombent.
     static func state(_ concept: ProgressionConcept, progress: EngagementProgress, game: GameBlock?) -> String? {
-        nil
+        switch concept {
+        case .level: levelState(progress, game)
+        case .points: pointsState(progress, game)
+        case .meesh: meeshState(progress, game)
+        case .glory: gloryState(game)
+        case .flame: flameState(progress, game)
+        case .missions: missionsState(game)
+        case .league: leagueState(game)
+        case .season: seasonState(game)
+        case .prestige: prestigeState(game)
+        case .elans: elansState(progress)
+        case .badges: countedState(.badges, done: progress.badgesEarned, total: progress.badgesTotal)
+        case .defis: countedState(.defis, done: defisDone(progress), total: defisTotal(progress))
+        case .succes: countedState(.succes, done: progress.unlockedAchievementCount, total: progress.achievements.count)
+        case .showcase: showcaseState(game)
+        case .atlas: atlasState(game)
+        }
     }
 
     private static func levelState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
