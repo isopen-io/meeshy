@@ -170,7 +170,7 @@ public struct MediaTranscriptionView: View {
 
     private var flowTranscription: some View {
         FlowLayout(spacing: 0) {
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+            ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
                 segmentSpan(segment, index: index)
                     .id("segment-\(index)")
             }
