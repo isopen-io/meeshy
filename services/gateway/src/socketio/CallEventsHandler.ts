@@ -38,6 +38,7 @@ import { announceRecordingArrival, registerCallRecordingEvents } from './call-re
 import { evictStaleSameUserSockets } from './call-room-eviction';
 import { DISCONNECT_GRACE_MS, GRACE_EXTENSION_MS, MAX_GRACE_EXTENSIONS, alreadyActiveCallDetails, isCallRevenant } from './call-rejoin';
 import { forceLeaveSparesLiveCall } from './call-force-leave-scope';
+import { departedMemberParticipantWhere } from './departed-member-participant-where';
 import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
@@ -859,10 +860,10 @@ export class CallEventsHandler {
    * la seule phrase qui dise « c'est TOI qu'on sort » plutôt que « un pair
    * s'en va », et la seule room que l'éviction ne touche pas.
    *
-   * La recherche s'appuie sur `participant: { userId, conversationId }` et
-   * n'exige AUCUN `isActive` : la ligne vient d'être passée à `false` par la
-   * route appelante, et la lire ainsi reproduirait le silence même qu'on
-   * corrige.
+   * La recherche lit la colonne de la clé (`userId` d'un inscrit, `id` d'un
+   * invité de lien, #10469) et n'exige AUCUN `isActive` : la route appelante
+   * vient de passer la ligne à `false`, et l'exiger reproduirait le silence
+   * même qu'on corrige.
    *
    * Ne rejette JAMAIS : l'appelant est une route qui a déjà commis son
    * écriture (bannissement, départ, retrait) et dont le succès ne doit pas
@@ -879,10 +880,7 @@ export class CallEventsHandler {
       // Audit C5 — `{leftAt: null}` seul manque les documents Mongo dont le
       // champ n'a jamais été écrit ; même paire que le chemin disconnect.
       const participations = await this.prisma.callParticipant.findMany({
-        where: {
-          OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-          participant: { userId, conversationId }
-        },
+        where: { OR: [{ leftAt: null }, { leftAt: { isSet: false } }], participant: departedMemberParticipantWhere(conversationId, userId) },
         include: { callSession: true }
       });
 
