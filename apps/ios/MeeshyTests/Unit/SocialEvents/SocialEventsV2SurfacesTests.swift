@@ -122,6 +122,21 @@ final class SocialEventsV2SurfacesTests: XCTestCase {
         XCTAssertEqual(DiscoveryTelemetry.profileVisit("u7", viewerId: "me")?.action, "profile_visit")
     }
 
+    /// Revue de conformité R1 — la recherche de personnes est mesurée : le
+    /// manifeste le déclare, liée au compte, pour l'analyse, sans traçage.
+    func test_thePrivacyManifest_declaresSearchHistory_linked_forAnalytics_withoutTracking() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/PrivacyInfo.xcprivacy")
+        let plist = try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+        XCTAssertEqual(plist["NSPrivacyTracking"] as? Bool, false)
+        let types = try XCTUnwrap(plist["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        let search = try XCTUnwrap(types.first { $0["NSPrivacyCollectedDataType"] as? String == "NSPrivacyCollectedDataTypeSearchHistory" })
+        XCTAssertEqual(search["NSPrivacyCollectedDataTypeLinked"] as? Bool, true)
+        XCTAssertEqual(search["NSPrivacyCollectedDataTypeTracking"] as? Bool, false)
+        XCTAssertEqual(search["NSPrivacyCollectedDataTypePurposes"] as? [String], ["NSPrivacyCollectedDataTypePurposeAnalytics"])
+    }
+
     // MARK: - Carrousel
 
     func test_aCarousel_reportsItsDepthOnClose_andNothingIfUntouched() throws {
