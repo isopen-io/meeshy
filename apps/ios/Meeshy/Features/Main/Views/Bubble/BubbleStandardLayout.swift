@@ -617,7 +617,7 @@ struct BubbleStandardLayout: View {
                     placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                     accentColor: contactColor,
                     senderName: content.senderName
-                )
+                ).closesForConversationOpening(.place)
             }
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
@@ -631,7 +631,7 @@ struct BubbleStandardLayout: View {
                 address: item.place.address,
                 accentColor: contactColor,
                 senderName: content.senderName
-            )
+            ).closesForConversationOpening(.place)
         }
     }
 

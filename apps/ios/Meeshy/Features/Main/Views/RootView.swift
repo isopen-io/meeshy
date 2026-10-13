@@ -821,6 +821,12 @@ struct RootView: View {
     /// conversations.
     private func openSocialContent(_ ctx: NotificationNavContext, postId: String) {
         DetailOpenSources.shared.markOpenedFromNotification(postId)
+        // Story, réel ou feuille en cours : le routeur les referme d'abord, par
+        // le site des conversations (#10543) — la cible ne s'ouvre plus dessous.
+        router.clearPresentedSurfaces { _ in showSocialContent(ctx, postId: postId) }
+    }
+
+    private func showSocialContent(_ ctx: NotificationNavContext, postId: String) {
         switch socialSurface(ctx, postId: postId) {
         case .reel:
             // The user tapped a notification about a réel — it must land on the
@@ -942,41 +948,9 @@ struct RootView: View {
                 }
                 return
             }
-
-            switch socialSurface(ctx, postId: postId) {
-            case .reel:
-                // The user tapped a notification about a réel — it must land on
-                // the réel in the immersive viewer, never on the story target
-                // screen (which would resolve an unrelated story) nor on the
-                // flat post detail.
-                openReelFromNotification(
-                    postId: postId,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                )
-
-            case .story:
-                // Phase G — ephemeral entities route to the notification target
-                // screen, which redirects into the viewer (comments overlay /
-                // reactions sheet) or surfaces the expired empty state when the
-                // content is gone.
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: ctx.storyIntent,
-                    context: ctx.storyContext,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                ))
-
-            case .post:
-                router.push(.postDetail(
-                    postId,
-                    nil,
-                    showComments: ctx.opensComments,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                ))
-            }
+            // Le MÊME site que la mention hors conversation : la surface en
+            // cours se referme, puis la cible s'ouvre (#10543).
+            openSocialContent(ctx, postId: postId)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
             // Un palier annoncé ouvre le tableau de bord qui le RESTITUE

@@ -59,6 +59,7 @@ struct ContactCardView: View, Equatable {
         .fullScreenCover(isPresented: $isShowingDetail) {
             ContactCardDetailSheet(model: model, accentHex: accentHex)
                 .clearCoverBackground()
+                .closesForConversationOpening(.contactCard)
         }
     }
 

@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// Le registre des surfaces présentées (#10539) : ce qui se referme devant une
@@ -182,5 +183,124 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
     func test_composerYield_seededOrAtelierDoor_retains() {
         XCTAssertEqual(ComposerConversationYield.decide(.preservesStoredDraft), .retains)
         XCTAssertEqual(ComposerConversationYield.decide(.disabled), .retains)
+    }
+
+    // MARK: - L'atelier de story ne retient plus (#10543)
+
+    func test_composerYield_atelierThatWritesItsDraft_closes() {
+        XCTAssertEqual(ComposerConversationYield.decide(.disabled, atelierWritesItsDraft: true), .closes)
+        XCTAssertEqual(ComposerConversationYield.decide(.preservesStoredDraft, atelierWritesItsDraft: true), .closes)
+    }
+
+    func test_atelierWritesItsDraft_mountedAndArmed_isTrue() {
+        XCTAssertTrue(ComposerConversationYield.atelierWritesItsDraft(
+            mounted: .atelier, exitIsArmed: true, returnsToConversation: false))
+    }
+
+    func test_atelierWritesItsDraft_unarmedOrOtherSurfaceOrRetouch_isFalse() {
+        XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
+            mounted: .atelier, exitIsArmed: false, returnsToConversation: false))
+        XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
+            mounted: .atelier, exitIsArmed: true, returnsToConversation: true))
+        for mounted in ComposerMountedView.allCases where mounted != .atelier {
+            XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
+                mounted: mounted, exitIsArmed: true, returnsToConversation: false), "\(mounted)")
+        }
+    }
+
+    func test_close_armedAtelier_writesItsDraftBeforeClosing() {
+        let trigger = ComposerPublishTrigger()
+        var events: [String] = []
+        trigger.armExit {
+            events.append("brouillon écrit")
+            events.append("atelier refermé")
+        }
+
+        ComposerConversationYield.close(atelierWritesItsDraft: true, trigger: trigger) {
+            events.append("meuble refermé sans brouillon")
+        }
+
+        XCTAssertEqual(events, ["brouillon écrit", "atelier refermé"])
+    }
+
+    func test_close_atelierNotArmed_closesByTheHost() {
+        let trigger = ComposerPublishTrigger()
+        var hostCloses = 0
+
+        ComposerConversationYield.close(atelierWritesItsDraft: true, trigger: trigger) { hostCloses += 1 }
+
+        XCTAssertEqual(hostCloses, 1)
+    }
+
+    func test_close_blankDoor_neverPressesTheAtelierExit() {
+        let trigger = ComposerPublishTrigger()
+        var atelierExits = 0
+        var hostCloses = 0
+        trigger.armExit { atelierExits += 1 }
+
+        ComposerConversationYield.close(atelierWritesItsDraft: false, trigger: trigger) { hostCloses += 1 }
+
+        XCTAssertEqual(atelierExits, 0)
+        XCTAssertEqual(hostCloses, 1)
+    }
+
+    // MARK: - Une fenêtre ne referme que ses surfaces (#10543)
+
+    func test_clearForConversation_surfaceOfAnotherWindow_staysPresented() {
+        let registry = PresentedSurfaceRegistry()
+        let here = PresentedSurfaceScope()
+        let elsewhere = PresentedSurfaceScope()
+        var closed: [String] = []
+        var openings: [Bool] = []
+        _ = registry.declare(.storyViewer, scope: here, answer: { .closes }, close: { closed.append("ici") })
+        _ = registry.declare(.sheet, scope: elsewhere, answer: { .closes }, close: { closed.append("ailleurs") })
+
+        registry.clearForConversation(in: here) { openings.append($0) }
+
+        XCTAssertEqual(closed, ["ici"])
+        XCTAssertEqual(openings, [true])
+        XCTAssertEqual(registry.declaredKinds, [.sheet])
+    }
+
+    func test_clearForConversation_surfaceWithoutAWindow_closesForAnyWindow() {
+        let registry = PresentedSurfaceRegistry()
+        var closed = 0
+        _ = registry.declare(.place, scope: nil, answer: { .closes }, close: { closed += 1 })
+
+        registry.clearForConversation(in: PresentedSurfaceScope()) { _ in }
+
+        XCTAssertEqual(closed, 1)
+        XCTAssertTrue(registry.declaredKinds.isEmpty)
+    }
+
+    func test_clearForConversation_retainerInAnotherWindow_doesNotDeferThisOne() {
+        let registry = PresentedSurfaceRegistry()
+        let here = PresentedSurfaceScope()
+        var openings: [Bool] = []
+        _ = registry.declare(.game, scope: PresentedSurfaceScope(), answer: { .retains }, close: {})
+
+        registry.clearForConversation(in: here) { openings.append($0) }
+
+        XCTAssertEqual(openings, [false])
+        XCTAssertEqual(registry.declaredKinds, [.game])
+    }
+
+    func test_retire_retainerOfAWindow_resumesOnlyThatWindowOpening() {
+        let registry = PresentedSurfaceRegistry()
+        let here = PresentedSurfaceScope()
+        let elsewhere = PresentedSurfaceScope()
+        var opened: [String] = []
+        let game = registry.declare(.game, scope: here, answer: { .retains }, close: {})
+        let composer = registry.declare(.composer, scope: elsewhere, answer: { .retains }, close: {})
+        registry.clearForConversation(in: here) { _ in opened.append("ici") }
+        registry.clearForConversation(in: elsewhere) { _ in opened.append("ailleurs") }
+
+        registry.retire(game)
+
+        XCTAssertEqual(opened, ["ici"])
+
+        registry.retire(composer)
+
+        XCTAssertEqual(opened, ["ici", "ailleurs"])
     }
 }

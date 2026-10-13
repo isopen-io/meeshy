@@ -53,6 +53,8 @@ struct GamePhotoFlowView: View {
         // Plein écran noir : les contrôles système (sélecteur de format, interrupteurs, feuilles) suivent le
         // schéma SOMBRE quelle que soit l'apparence de l'appareil, sinon leur texte se perd sur le noir (#10294).
         .environment(\.colorScheme, .dark)
+        // Une prise en cours ne se perd pas : l'écran RETIENT, la conversation s'ouvre à sa fermeture (#10543).
+        .retainsAgainstConversationOpening(.game)
     }
 
     private var closeButton: some View {

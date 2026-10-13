@@ -162,7 +162,7 @@ struct ConversationInfoSheet: View {
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: [link.url])
         }
-        .withStatusBubble()
+        .withStatusBubble().closesForConversationOpening(.sheet)
     }
 
     // MARK: - Sheet Background

@@ -172,6 +172,10 @@ struct iPadSheetsLayer: ViewModifier {
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
                 }
             }
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
@@ -182,6 +186,7 @@ struct iPadSheetsLayer: ViewModifier {
                     .environmentObject(statusViewModel)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             // Aperçu de conversation (appui long / tirage sur un toast). La
             // feuille crée un environnement neuf : réinjecter ce que la
@@ -200,6 +205,7 @@ struct iPadSheetsLayer: ViewModifier {
                 .environmentObject(storyViewerCoordinator)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
+                .closesForConversationOpening(.sheet)
             }
     }
 }
@@ -355,5 +361,9 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // les liens de sa légende et de ses commentaires (#9075). Ici plutôt
             // que sur `iPadRootView.body` : plafond de profondeur (24).
             .inAppLinks(router: router)
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }
