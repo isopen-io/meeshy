@@ -7,11 +7,14 @@
  * elles. Le fond et la bordure restent bord à bord. `NO_CHROME_RESERVE` ⇒ la
  * géométrie canonique (fixture de parité web ↔ iOS).
  *
- * Module sans dépendance : le mode Montage le charge avec l'écran d'appel,
- * sans tirer les peintres des cadres hors de leur chunk.
+ * Ne vit que dans l'atelier des cadres (`call_frame_studio`) : le mode
+ * Montage ne lui remet que ses mesures d'écran (`FrameChrome`, un type).
  */
 
 export type FrameChromeReserve = { readonly top: number; readonly bottom: number };
+
+/** Les contrôles mesurés sur l'écran : sa taille, et les hauteurs en pixels CSS qu'ils couvrent depuis le haut et depuis le bas. */
+export type FrameChrome = { readonly viewport: { readonly width: number; readonly height: number }; readonly top: number; readonly bottom: number };
 
 type Box = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 

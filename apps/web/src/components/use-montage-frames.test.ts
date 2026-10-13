@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
-import { chromeReserveOnScreen } from '@/lib/calls/frames/frame-chrome-reserve';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { montageChromeReserve } from './use-montage-frames';
+import { montageChrome } from './use-montage-frames';
 
 /**
  * LES BANDES DES COMMANDES DU MODE MONTAGE, MESURÉES (#10481) — en haut
@@ -16,11 +15,11 @@ const placed = (element: Element, top: number, height: number): Element => {
   return element;
 };
 
-describe('montageChromeReserve', () => {
+describe('montageChrome', () => {
   beforeAll(() => ensureHappyDomRegistered());
   afterAll(async () => releaseHappyDomIfRegistered());
 
-  const screen = { viewport: { width: 440, height: 956 }, canvas: { width: 540, height: 960 } };
+  const viewport = { width: 440, height: 956 };
 
   const controlsWith = (status: 'shown' | 'empty') => {
     const controls = document.createElement('div');
@@ -39,16 +38,14 @@ describe('montageChromeReserve', () => {
   };
 
   test('un statut vide ne compte pas : la bande basse part de la première commande visible', () => {
-    const reserve = montageChromeReserve({ stage: stage(), controls: controlsWith('empty'), ...screen });
-    expect(reserve).toEqual(chromeReserveOnScreen({ ...screen, top: 62, bottom: 956 - 650 }));
-    expect(reserve.bottom).toBeGreaterThan(0);
+    expect(montageChrome({ stage: stage(), controls: controlsWith('empty'), viewport })).toEqual({ viewport, top: 62, bottom: 956 - 650 });
   });
 
   test('un statut affiché couvre, lui', () => {
-    expect(montageChromeReserve({ stage: stage(), controls: controlsWith('shown'), ...screen })).toEqual(chromeReserveOnScreen({ ...screen, top: 62, bottom: 956 - 606 }));
+    expect(montageChrome({ stage: stage(), controls: controlsWith('shown'), viewport })).toEqual({ viewport, top: 62, bottom: 956 - 606 });
   });
 
   test('sans commandes mesurées, aucune bande', () => {
-    expect(montageChromeReserve({ stage: null, controls: null, ...screen })).toEqual({ top: 0, bottom: 0 });
+    expect(montageChrome({ stage: null, controls: null, viewport })).toBeNull();
   });
 });

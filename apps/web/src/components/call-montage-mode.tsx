@@ -7,7 +7,6 @@ import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Siz
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
-import { NO_CHROME_RESERVE } from '@/lib/calls/frames/frame-chrome-reserve';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
@@ -17,7 +16,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
-import { browserCircle, montageChromeReserve, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
+import { browserCircle, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
 
 /**
  * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
@@ -165,8 +164,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     if (atelier === null || shown === null || chosen === null) return;
     const stage = scene.current();
     const reserved = tier === 'preview' && !studio.recording && atelier.servesCall(chosen);
-    const reserve = reserved ? montageChromeReserve({ stage, controls: controls.current, viewport: viewport(), canvas: previewSize }) : NO_CHROME_RESERVE;
-    paintFramed(canvas, stage, atelier, chosen, shown, tier, reserve);
+    paintFramed(canvas, stage, atelier, chosen, shown, tier, reserved ? montageChrome({ stage, controls: controls.current, viewport: viewport() }) : null);
   };
   const paintRef = useRef(paintChoice);
   paintRef.current = paintChoice;

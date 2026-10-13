@@ -203,7 +203,7 @@ describe('CallMontageMode — les cadres', () => {
       { ...plain, id: 'jovial.photo.duo', motif: 'jovial.photo', name: 'Photo', surfaces: ['capture' as const] },
       { ...plain, id: 'jovial.direct.duo', motif: 'jovial.direct', name: 'Direct', surfaces: ['capture' as const, 'live' as const] },
     ];
-    const drawn: Array<{ readonly id: string; readonly tier: string; readonly reserve: unknown }> = [];
+    const drawn: Array<{ readonly id: string; readonly tier: string; readonly chrome: unknown }> = [];
     const original = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'getContext');
     Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', { configurable: true, value: () => recorder().context });
     const measured = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
@@ -211,21 +211,22 @@ describe('CallMontageMode — les cadres', () => {
     const spied: FrameStudioModule = {
       createFrameStudio: (options) => {
         const real = module.createFrameStudio({ ...(options ?? {}), frames: pair, fonts: undefined });
-        return { ...real, draw: (context, frame, shot, tier) => (drawn.push({ id: frame.id, tier, reserve: shot.reserve }), real.draw(context, frame, shot, tier)) };
+        return { ...real, draw: (context, frame, shot, tier) => (drawn.push({ id: frame.id, tier, chrome: shot.chrome }), real.draw(context, frame, shot, tier)) };
       },
     };
     const view = await mount(duo, { module: spied });
-    const lastPreview = (id: string) => drawn.filter((entry) => entry.id === id && entry.tier === 'preview').at(-1)?.reserve as { top: number; bottom: number } | undefined;
+    const previews = (id: string) => drawn.filter((entry) => entry.id === id && entry.tier === 'preview');
     await view.press('[data-call-frame-mood="jovial"]');
-    expect(lastPreview('jovial.photo.duo')).toEqual({ top: 0, bottom: 0 });
+    expect(previews('jovial.photo.duo').length).toBeGreaterThan(0);
+    expect(previews('jovial.photo.duo').every((entry) => entry.chrome === undefined)).toBe(true);
     await view.press('[data-carousel-item="jovial.direct.duo"]');
-    expect(lastPreview('jovial.direct.duo')?.bottom).toBeGreaterThan(0);
-    expect(drawn.filter((entry) => entry.tier === 'thumb').every((entry) => entry.reserve === undefined || (entry.reserve as { bottom: number }).bottom === 0)).toBe(true);
+    expect(previews('jovial.direct.duo').at(-1)?.chrome).toEqual({ viewport: { width: 390, height: 844 }, top: 0, bottom: 844 - 600 });
+    expect(drawn.filter((entry) => entry.tier === 'thumb').every((entry) => entry.chrome === undefined)).toBe(true);
     await view.press('[data-carousel-item="jovial.direct.duo"]');
     await view.press('[data-carousel-item="jovial.direct.duo"]');
     const still = drawn.filter((entry) => entry.tier === 'still');
     expect(still.length).toBeGreaterThan(0);
-    expect(still.every((entry) => entry.reserve === undefined)).toBe(true);
+    expect(still.every((entry) => entry.chrome === undefined)).toBe(true);
     view.done();
     if (original === undefined) delete (HTMLCanvasElement.prototype as { getContext?: unknown }).getContext;
     else Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', original);

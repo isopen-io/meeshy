@@ -2,7 +2,7 @@ import { describeFrameUsage, type FrameUsageLabel, type FrameUseContext } from '
 
 import type { Size } from '../call-montage-shapes';
 import { captureFrames } from './frame-catalogue';
-import type { FrameChromeReserve } from './frame-chrome-reserve';
+import { chromeReserveOnScreen, type FrameChrome } from './frame-chrome-reserve';
 import { CALL_FRAME_USES, CAPTURE_FRAME_USES, frameUsageOf, framesFor, moodsFor, offeredFor, reconcileFrame } from './frame-filter';
 import { loadFrameFonts } from './frame-fonts';
 import { paintFrame, type FrameFace } from './frame-paint';
@@ -54,14 +54,14 @@ export function frameFaces(people: readonly FramePerson[], tiles: readonly Frame
 
 /**
  * Ce qu'une image d'un cadre peint : les personnes, leurs visages (même ordre), les textes, la taille de la toile —
- * et, pour un aperçu affiché sous des contrôles, leurs bandes (#10481) ; la photo (`still`) l'ignore et part pleine.
+ * et, pour un aperçu affiché sous des contrôles, ces contrôles mesurés à l'écran (#10481) ; la photo (`still`) les ignore et part pleine.
  */
 export type FrameShot = {
   readonly people: readonly FramePerson[];
   readonly faces: readonly (FrameFace | null)[];
   readonly texts: FrameTexts;
   readonly size: Size;
-  readonly reserve?: FrameChromeReserve;
+  readonly chrome?: FrameChrome;
 };
 
 /** `thumb` et `preview` réutilisent leurs couches ; `still` (la photo) se peint entière. */
@@ -120,7 +120,8 @@ export function createFrameStudio(options: StudioOptions = {}): FrameStudio {
     servesCall: (frame) => offeredFor([frame], CALL_FRAME_USES).length > 0,
     faces: frameFaces,
     draw: (context, frame, shot, tier) => {
-      const layers = tier === 'still' ? null : caches[tier].get(frame, shot.people, shot.size, shot.texts, shot.reserve);
+      const reserve = shot.chrome === undefined ? undefined : chromeReserveOnScreen({ ...shot.chrome, canvas: shot.size });
+      const layers = tier === 'still' ? null : caches[tier].get(frame, shot.people, shot.size, shot.texts, reserve);
       if (layers === null) paintFrame(context, frame, shot.people, shot.faces, shot.texts, shot.size);
       else composeFrame(context, layers, shot.faces);
     },
